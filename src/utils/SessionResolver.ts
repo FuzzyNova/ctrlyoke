@@ -1,4 +1,5 @@
 import { PromptFile, PromptItem, Harness } from "../types/FlightPathTypes";
+import { SESSION_ID_SENTINELS } from "../types/DashboardConstants";
 import { PropertyResolver } from "./PropertyResolver";
 import { Log } from "./Log";
 
@@ -73,21 +74,25 @@ export class SessionResolver {
    *
    * Resolution order:
    * 1. If resumeSession=false → undefined (new session)
-   * 2. If sessionId is number → resolve from referenced prompt
-   * 3. If sessionId is string → use directly
-   * 4. Otherwise → auto-resume from previous prompt (same harness)
+   * 2. If sessionId is "finalPrompt" sentinel → return finalPromptSessionId (prior loop's session)
+   * 3. If sessionId is number → resolve from referenced prompt
+   * 4. If sessionId is string → use directly
+   * 5. Otherwise → auto-resume from previous prompt (same harness)
    *
    * @param prompt The prompt to resolve session for
    * @param promptIndex Current prompt's index in queue (0-based)
    * @param allPrompts All prompts in queue (with runtime metadata)
    * @param workflow Workflow file for workflow-level defaults (optional)
+   * @param finalPromptSessionId Session ID from the previous finalPrompt loop iteration.
+   *   Only used when sessionId is the "finalPrompt" sentinel.
    * @returns Resolved session ID or undefined for new session
    */
   static resolve(
     prompt: PromptItem,
     promptIndex: number,
     allPrompts: PromptItem[],
-    workflow?: PromptFile
+    workflow?: PromptFile,
+    finalPromptSessionId?: string
   ): string | undefined {
     const resolved = workflow
       ? PropertyResolver.resolve(prompt, workflow)
@@ -101,7 +106,21 @@ export class SessionResolver {
     // 2. Use resolved sessionId (includes workflow-level sessionId via PropertyResolver)
     const resolvedSessionId = resolved?.sessionId;
     if (resolvedSessionId !== undefined) {
-      // 2a. Numeric reference (prompt number)
+      // 2a. "finalPrompt" sentinel — resume the previous finalPrompt loop's session
+      if (resolvedSessionId === SESSION_ID_SENTINELS.FINAL_PROMPT) {
+        if (finalPromptSessionId) {
+          Log.debug(
+            `✅ Resuming finalPrompt loop session: ${finalPromptSessionId}`
+          );
+        } else {
+          Log.debug(
+            `ℹ️ sessionId "finalPrompt": no prior loop session, starting new session`
+          );
+        }
+        return finalPromptSessionId;
+      }
+
+      // 2b. Numeric reference (prompt number)
       if (typeof resolvedSessionId === "number") {
         return this.resolveNumericReference(
           prompt,
@@ -112,7 +131,7 @@ export class SessionResolver {
         );
       }
 
-      // 2b. Exact session ID string
+      // 2c. Exact session ID string
       return resolvedSessionId;
     }
 

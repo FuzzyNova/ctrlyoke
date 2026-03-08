@@ -309,6 +309,18 @@ export const QUEUE_POSITION = {
 } as const;
 
 // ============================================================================
+// SESSION ID SENTINELS - Special sessionId values with reserved meanings
+// ============================================================================
+export const SESSION_ID_SENTINELS = {
+  /**
+   * Resume the session established by the previous finalPrompt loop iteration.
+   * On the first iteration (no prior session) a new session is started.
+   * Only meaningful on a finalPrompt item.
+   */
+  FINAL_PROMPT: "finalPrompt",
+} as const;
+
+// ============================================================================
 // PROMPT PROPERTY NAMES - Single source of truth for PromptItem properties
 // Used by dashboard.js to access prompt properties consistently
 // ============================================================================

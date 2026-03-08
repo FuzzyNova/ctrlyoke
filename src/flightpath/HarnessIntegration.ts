@@ -184,6 +184,9 @@ export abstract class HarnessIntegration {
       resolvedProperties?: ResolvedProperties; // Resolved properties from PropertyResolver
       workflowFile?: PromptFile; // For session resolution
       promptQueue?: PromptQueue; // For runtime metadata persistence
+      /** Session ID from the previous finalPrompt loop iteration. Consumed by SessionResolver
+       *  when sessionId is the "finalPrompt" sentinel; ignored for regular queue prompts. */
+      finalPromptSessionId?: string;
     }
   ): Promise<boolean>;
 

@@ -1549,6 +1549,7 @@ export class CliIntegration extends HarnessIntegration {
       resolvedProperties?: ResolvedProperties;
       workflowFile?: PromptFile;
       promptQueue?: PromptQueue;
+      finalPromptSessionId?: string;
     }
   ): Promise<boolean> {
     try {
@@ -1559,7 +1560,8 @@ export class CliIntegration extends HarnessIntegration {
         prompt,
         workflowContext?.promptIndex ?? 0,
         workflowContext?.allPrompts ?? [prompt],
-        workflowContext?.workflowFile
+        workflowContext?.workflowFile,
+        workflowContext?.finalPromptSessionId
       );
 
       // Resolve execution properties (harness, model, agent)

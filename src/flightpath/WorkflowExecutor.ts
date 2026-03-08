@@ -366,6 +366,12 @@ export class WorkflowExecutor {
         resolvedProperties,
         workflowFile,
         promptQueue: this.promptQueue,
+        finalPromptSessionId:
+          target.kind === "finalPrompt"
+            ? (workflowFile.finalPrompt?._runtime?.sessionId as
+                | string
+                | undefined)
+            : undefined,
       },
       async () => {
         if (target.kind === "queue") {
@@ -714,6 +720,7 @@ export class WorkflowExecutor {
       resolvedProperties?: ResolvedProperties;
       workflowFile?: PromptFile;
       promptQueue?: PromptQueue;
+      finalPromptSessionId?: string;
     },
     onPromptSent?: () => Promise<void>
   ): Promise<{ responseText: string; duration: number } | null> {
@@ -928,6 +935,12 @@ export class WorkflowExecutor {
           resolvedProperties: { ...resolvedProperties, resumeSession: true },
           workflowFile,
           promptQueue: this.promptQueue,
+          finalPromptSessionId:
+            target.kind === "finalPrompt"
+              ? (workflowFile.finalPrompt?._runtime?.sessionId as
+                  | string
+                  | undefined)
+              : undefined,
         }
       );
 

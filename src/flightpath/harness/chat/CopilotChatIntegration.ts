@@ -393,6 +393,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       promptQueue?: PromptQueue;
+      finalPromptSessionId?: string;
     }
   ): Promise<boolean> {
     try {
@@ -899,6 +900,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       promptQueue?: PromptQueue;
+      finalPromptSessionId?: string;
     }
   ): Promise<string> {
     const promptText = workflowContext

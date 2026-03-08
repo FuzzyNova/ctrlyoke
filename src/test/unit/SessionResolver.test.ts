@@ -524,4 +524,103 @@ suite("SessionResolver Tests", () => {
       );
     });
   });
+
+  suite('resolve - "finalPrompt" sentinel', () => {
+    const workflow: PromptFile = {
+      prompts: [],
+      resumeSession: true,
+    };
+
+    test("should return finalPromptSessionId when sentinel is used and prior session exists", () => {
+      const prompt: PromptItem = {
+        prompt: "finalPrompt text",
+        sessionId: "finalPrompt",
+      };
+      const priorSessionId = "550e8400-e29b-41d4-a716-446655440000";
+
+      const sessionId = SessionResolver.resolve(
+        prompt,
+        0,
+        [prompt],
+        workflow,
+        priorSessionId
+      );
+      assert.strictEqual(sessionId, priorSessionId);
+    });
+
+    test("should return undefined when sentinel is used but no prior session (first iteration)", () => {
+      const prompt: PromptItem = {
+        prompt: "finalPrompt text",
+        sessionId: "finalPrompt",
+      };
+
+      const sessionId = SessionResolver.resolve(
+        prompt,
+        0,
+        [prompt],
+        workflow,
+        undefined
+      );
+      assert.strictEqual(sessionId, undefined);
+    });
+
+    test("should return undefined when resumeSession=false even with sentinel and prior session", () => {
+      const noResumeWorkflow: PromptFile = {
+        prompts: [],
+        resumeSession: false,
+      };
+      const prompt: PromptItem = {
+        prompt: "finalPrompt text",
+        sessionId: "finalPrompt",
+      };
+
+      const sessionId = SessionResolver.resolve(
+        prompt,
+        0,
+        [prompt],
+        noResumeWorkflow,
+        "some-prior-session"
+      );
+      assert.strictEqual(sessionId, undefined);
+    });
+
+    test("should ignore finalPromptSessionId when sessionId is not the sentinel", () => {
+      const exactId = "660e8400-e29b-41d4-a716-446655440000";
+      const prompt: PromptItem = {
+        prompt: "finalPrompt text",
+        sessionId: exactId,
+        resumeSession: true,
+      };
+
+      const sessionId = SessionResolver.resolve(
+        prompt,
+        0,
+        [prompt],
+        workflow,
+        "should-be-ignored"
+      );
+      assert.strictEqual(sessionId, exactId);
+    });
+
+    test("should use sentinel from workflow-level sessionId", () => {
+      const workflowWithSentinel: PromptFile = {
+        prompts: [],
+        sessionId: "finalPrompt",
+        resumeSession: true,
+      };
+      const prompt: PromptItem = {
+        prompt: "finalPrompt text",
+      };
+      const priorSessionId = "770e8400-e29b-41d4-a716-446655440000";
+
+      const sessionId = SessionResolver.resolve(
+        prompt,
+        0,
+        [prompt],
+        workflowWithSentinel,
+        priorSessionId
+      );
+      assert.strictEqual(sessionId, priorSessionId);
+    });
+  });
 });
