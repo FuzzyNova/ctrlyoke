@@ -13,6 +13,7 @@ import { AgentExpander } from "../../../utils/AgentExpander";
 import { CliOutputFormatter } from "../shared/CliOutputFormatter";
 import { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import { ResolvedProperties } from "../../../utils/PropertyResolver";
+import type { PromptQueue } from "../../PromptQueue";
 
 /**
  * GitHub Copilot Chat Integration - UI automation with session file monitoring.
@@ -391,6 +392,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       allPrompts: PromptItem[];
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
+      promptQueue?: PromptQueue;
     }
   ): Promise<boolean> {
     try {
@@ -896,6 +898,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       allPrompts: PromptItem[];
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
+      promptQueue?: PromptQueue;
     }
   ): Promise<string> {
     const promptText = workflowContext
@@ -904,8 +907,10 @@ export class CopilotChatIntegration extends HarnessIntegration {
           workflowContext.promptIndex,
           workflowContext.allPrompts,
           workflowContext.resolvedProperties?.allowDynamicExtension,
-          workflowContext.resolvedProperties?.agent, // Pass resolved agent for prompt prepending
-          workflowContext.resolvedProperties?.skills // Pass resolved skills for frontmatter injection
+          workflowContext.resolvedProperties?.agent,
+          workflowContext.resolvedProperties?.skills,
+          workflowContext.resolvedProperties?.priorContext,
+          workflowContext.promptQueue?.getFinalPromptResponseTexts()
         )
       : await this.buildPromptText(prompt);
 

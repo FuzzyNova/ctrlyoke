@@ -385,6 +385,24 @@ export class WorkflowExecutor {
 
     const { responseText, duration } = result;
 
+    // Store response text for priorContext injection in subsequent prompts.
+    if (target.kind === "queue") {
+      // Queue prompts: store on _runtime for "all" / "previous" / array-index access
+      if (!prompt._runtime) {
+        prompt._runtime = { startedAt: Date.now() };
+      }
+      prompt._runtime.responseText = responseText;
+      await this.promptQueue.persistRuntimeMetadata(target.stepIndex, {
+        responseText,
+      });
+    } else {
+      // finalPrompt loops: store indexed by loopIndex for "finalPromptAll" / "finalPromptPrevious"
+      await this.promptQueue.storeFinalPromptResponseText(
+        target.loopIndex,
+        responseText
+      );
+    }
+
     await this.updateDashboardWithResponse(
       context,
       integration,

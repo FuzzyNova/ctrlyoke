@@ -1,5 +1,5 @@
 import * as path from "path";
-import { PromptItem, PromptFile } from "../types/FlightPathTypes";
+import { PromptItem, PromptFile, PriorContext } from "../types/FlightPathTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import {
   CliResult,
@@ -25,6 +25,15 @@ import type { PromptQueue } from "./PromptQueue";
 interface SubscriptionContainer {
   readonly subscriptions: Array<{ dispose(): void }>;
 }
+
+/** A single context item ready for XML serialization by insertPriorContext. */
+type PriorContextItem = {
+  index: number;
+  name?: string;
+  text: string;
+  /** "finalPrompt" when the item originates from a finalPrompt loop (not a queue prompt). */
+  type?: "finalPrompt";
+};
 
 /**
  * Harness initialization status
@@ -348,6 +357,125 @@ export abstract class HarnessIntegration {
     return `${skillContent}\n\n${expandedPrompt}`;
   }
 
+
+  /**
+   * Gather prior prompt response texts based on the priorContext field.
+   *
+   * Queue-prompt keywords ("all", "previous", number[]) resolve against allPrompts._runtime.responseText.
+   * finalPrompt keywords ("finalPromptAll", "finalPromptPrevious") resolve against finalPromptResponseTexts.
+   *
+   * Prompts/loops with no captured output are silently skipped.
+   *
+   * @param priorContext The resolved priorContext value
+   * @param allPrompts All queue prompts in the workflow
+   * @param currentIndex 0-based index of the prompt being built
+   * @param finalPromptResponseTexts Per-loop finalPrompt response texts (indexed by loopIndex)
+   */
+  private gatherPriorContextItems(
+    priorContext: PriorContext,
+    allPrompts: PromptItem[],
+    currentIndex: number,
+    finalPromptResponseTexts: string[] = []
+  ): PriorContextItem[] {
+    if (priorContext === "none") {
+      return [];
+    }
+
+    // finalPrompt-specific keywords
+    if (priorContext === "finalPromptAll") {
+      const items = finalPromptResponseTexts
+        .map((text, i) => ({ index: i, text, type: "finalPrompt" as const }))
+        .filter((item) => item.text.length > 0);
+      if (items.length === 0 && finalPromptResponseTexts.length > 0) {
+        Log.debug(
+          `priorContext: no captured finalPrompt response text available yet`
+        );
+      }
+      return items;
+    }
+
+    if (priorContext === "finalPromptPrevious") {
+      const lastIndex = finalPromptResponseTexts.length - 1;
+      if (lastIndex < 0) {
+        return [];
+      }
+      const text = finalPromptResponseTexts[lastIndex];
+      if (!text) {
+        return [];
+      }
+      return [{ index: lastIndex, text, type: "finalPrompt" as const }];
+    }
+
+    // Queue-prompt keywords
+    let targetIndices: number[];
+
+    if (priorContext === "all") {
+      targetIndices = Array.from({ length: currentIndex }, (_, i) => i);
+    } else if (priorContext === "previous") {
+      targetIndices = currentIndex > 0 ? [currentIndex - 1] : [];
+    } else {
+      // Array of 1-based prompt numbers → 0-based indices, validated
+      const outOfRange: number[] = [];
+      targetIndices = priorContext
+        .map((n) => n - 1) // convert to 0-based
+        .filter((i) => {
+          if (i >= 0 && i < currentIndex) {
+            return true;
+          }
+          outOfRange.push(i + 1); // convert back to 1-based for logging
+          return false;
+        });
+
+      if (outOfRange.length > 0) {
+        Log.warn(
+          `priorContext: indices [${outOfRange.join(", ")}] are out of range for prompt ${currentIndex + 1} ` +
+            `(only ${currentIndex} prompt(s) have run). Skipping.`
+        );
+      }
+    }
+
+    const items = targetIndices
+      .map((i) => ({
+        index: i,
+        name: allPrompts[i]?.name,
+        text: allPrompts[i]?._runtime?.responseText ?? "",
+      }))
+      .filter((item) => item.text.length > 0);
+
+    if (items.length === 0 && targetIndices.length > 0) {
+      Log.debug(
+        `priorContext: no captured response text found for any specified prompts at index ${currentIndex + 1}`
+      );
+    }
+
+    return items;
+  }
+
+  /**
+   * Format gathered context items as an XML block and prepend to prompt text.
+   * finalPrompt loop items carry type="finalPrompt" on the <step> element.
+   * Result is inserted BEFORE the user's prompt text.
+   */
+  private insertPriorContext(
+    promptText: string,
+    contextItems: PriorContextItem[]
+  ): string {
+    if (contextItems.length === 0) {
+      return promptText;
+    }
+
+    const steps = contextItems
+      .map((item) => {
+        const typeAttr = item.type ? ` type="${item.type}"` : "";
+        const nameAttr = item.name ? ` name="${item.name}"` : "";
+        return `<step index="${item.index + 1}"${typeAttr}${nameAttr}>\n${item.text.trim()}\n</step>`;
+      })
+      .join("\n");
+
+    const contextBlock = `<priorContext>\n${steps}\n</priorContext>`;
+    return `${contextBlock}\n\n${promptText}`;
+  }
+
   /**
    * Build prompt with dynamic queue instructions if needed
    * @param prompt The prompt item
@@ -356,7 +484,9 @@ export abstract class HarnessIntegration {
    * @param allowDynamicExtension Whether to enable dynamic queue extension
    * @param resolvedAgent Resolved agent path for prompt prepending
    * @param resolvedSkills Resolved skill paths for frontmatter injection
-   * @returns Prompt text with optional MCP tool instructions
+   * @param resolvedPriorContext Prior context injection setting
+   * @param finalPromptResponseTexts Per-loop finalPrompt response texts (for "finalPromptAll"/"finalPromptPrevious")
+   * @returns Prompt text with optional prior context and MCP tool instructions
    */
   protected async buildPromptWithInstructions(
     prompt: PromptItem,
@@ -364,7 +494,9 @@ export abstract class HarnessIntegration {
     allPrompts: PromptItem[],
     allowDynamicExtension?: boolean,
     resolvedAgent?: string,
-    resolvedSkills?: string[]
+    resolvedSkills?: string[],
+    resolvedPriorContext?: PriorContext,
+    finalPromptResponseTexts?: string[]
   ): Promise<string> {
     // Build base prompt text (with attachments, agent, and skill instructions)
     let promptText = await this.buildPromptText(
@@ -372,6 +504,26 @@ export abstract class HarnessIntegration {
       resolvedAgent,
       resolvedSkills
     );
+
+    // Inject prior context if specified
+    if (resolvedPriorContext !== undefined && resolvedPriorContext !== "none") {
+      const contextItems = this.gatherPriorContextItems(
+        resolvedPriorContext,
+        allPrompts,
+        promptIndex,
+        finalPromptResponseTexts ?? []
+      );
+      if (contextItems.length > 0) {
+        promptText = this.insertPriorContext(promptText, contextItems);
+        const isFinalPromptContext =
+          resolvedPriorContext === "finalPromptAll" ||
+          resolvedPriorContext === "finalPromptPrevious";
+        Log.debug(
+          `🔗 Injecting ${isFinalPromptContext ? "finalPrompt" : "prior"} context for prompt ${promptIndex + 1}: ` +
+            `${contextItems.length} step(s) from indices [${contextItems.map((c) => c.index + 1).join(", ")}]`
+        );
+      }
+    }
 
     // Check if we should inject dynamic queue instructions
     const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();

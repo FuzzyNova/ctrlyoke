@@ -866,6 +866,32 @@ export class PromptQueue {
    * @returns Number of new prompts added, or -1 if reload failed
    */
   /**
+   * Persist partial runtime metadata updates for a specific prompt.
+   * Merges `updates` into the prompt's existing `_runtime` and flushes to the working file.
+   * This is the single write path for storing responseText and other per-prompt runtime data.
+   *
+   * @param promptIndex 0-based prompt index
+   * @param updates Partial metadata to merge into existing _runtime
+   */
+  async persistRuntimeMetadata(
+    promptIndex: number,
+    updates: Partial<import("../types/FlightPathTypes").PromptRuntimeMetadata>
+  ): Promise<void> {
+    const prompt = this.state.prompts[promptIndex];
+    if (!prompt) {
+      return;
+    }
+
+    prompt._runtime = {
+      startedAt: Date.now(),
+      ...prompt._runtime,
+      ...updates,
+    };
+
+    await this.updateWorkingFile();
+  }
+
+  /**
    * Reload and merge queue from working file (for Dynamic Queue feature)
    * This method reads the working file, identifies new prompts, and appends them
    * @param parser PromptFileParser instance (no longer needed, kept for compatibility)
@@ -1272,12 +1298,50 @@ export class PromptQueue {
 
   /**
    * Persist runtime state for workflow-level finalPrompt execution.
+   * responseTexts accumulated via storeFinalPromptResponseText are preserved
+   * when the incoming runtime does not explicitly include them.
    */
   public async setFinalPromptRuntime(
     runtime: FinalPromptRuntimeState | undefined
   ): Promise<void> {
-    this.finalPromptRuntime = runtime ? { ...runtime } : undefined;
+    if (runtime) {
+      const existingResponseTexts = this.finalPromptRuntime?.responseTexts;
+      this.finalPromptRuntime = {
+        ...runtime,
+        responseTexts: runtime.responseTexts ?? existingResponseTexts,
+      };
+    } else {
+      this.finalPromptRuntime = undefined;
+    }
     await this.updateWorkingFile();
+  }
+
+  /**
+   * Store the response text from a single finalPrompt loop execution.
+   * Merges into the existing finalPromptRuntime.responseTexts array and flushes to disk.
+   *
+   * @param loopIndex 0-based loop index (from ExecutionTarget.loopIndex)
+   * @param text Plain-text AI response from this loop
+   */
+  public async storeFinalPromptResponseText(
+    loopIndex: number,
+    text: string
+  ): Promise<void> {
+    if (!this.finalPromptRuntime) {
+      return;
+    }
+    const responseTexts = [...(this.finalPromptRuntime.responseTexts ?? [])];
+    responseTexts[loopIndex] = text;
+    this.finalPromptRuntime = { ...this.finalPromptRuntime, responseTexts };
+    await this.updateWorkingFile();
+  }
+
+  /**
+   * Get all finalPrompt loop response texts accumulated so far.
+   * Returns a copy indexed by loopIndex (0-based); missing loops are empty strings.
+   */
+  public getFinalPromptResponseTexts(): string[] {
+    return [...(this.finalPromptRuntime?.responseTexts ?? [])];
   }
 
   /**

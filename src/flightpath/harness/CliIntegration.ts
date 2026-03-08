@@ -1578,14 +1578,16 @@ export class CliIntegration extends HarnessIntegration {
         }
       }
 
-      // Build prompt with optional dynamic queue instructions, agent, and skills
+      // Build prompt with optional dynamic queue instructions, agent, skills, and prior context
       const finalPromptText = await this.buildPromptWithInstructions(
         prompt,
         workflowContext?.promptIndex ?? 0,
         workflowContext?.allPrompts ?? [prompt],
         resolvedProperties?.allowDynamicExtension,
-        resolvedProperties?.agent, // Pass resolved agent for prompt prepending
-        resolvedProperties?.skills // Pass resolved skills for frontmatter injection
+        resolvedProperties?.agent,
+        resolvedProperties?.skills,
+        resolvedProperties?.priorContext,
+        workflowContext?.promptQueue?.getFinalPromptResponseTexts()
       );
 
       this.lastFullPrompt = finalPromptText;

@@ -7,6 +7,25 @@ import {
 } from "./DashboardConstants";
 
 /**
+ * Controls which prior prompt outputs are injected into the current prompt as context.
+ *
+ * - "all": Inject all previously-completed prompt outputs
+ * - "previous": Inject only the immediately preceding prompt's output
+ * - "none": Explicit no-op (same as omitting the field)
+ * - number[]: Inject specific prompt outputs by 1-based prompt number (e.g., [1, 3])
+ *
+ * Context is injected as an XML block before the user's prompt text.
+ * Note: When used with resumeSession:true, context may be duplicated — this is accepted behavior.
+ */
+export type PriorContext =
+  | "all"
+  | "previous"
+  | "none"
+  | "finalPromptAll"
+  | "finalPromptPrevious"
+  | number[];
+
+/**
  * Harness/Agent framework selection
  * (The AI framework/tool used for execution, not the model provider)
  */
@@ -55,6 +74,10 @@ export interface ExecutionProperties {
    * - undefined: Inherit from workflow-level end condition (if configured)
    */
   endCondition?: EndCondition | null;
+
+  /** Controls injection of prior prompt outputs into this prompt's text.
+   *  See PriorContext type for valid values. Omitting the field = no injection. */
+  priorContext?: PriorContext;
 }
 
 export interface PromptFile extends ExecutionProperties {
@@ -72,6 +95,9 @@ export interface FinalPromptRuntimeState {
   status?: StepStatus;
   startedAt?: number;
   completedAt?: number;
+  /** Response texts from each finalPrompt loop execution, indexed by loopIndex (0-based).
+   *  Used by priorContext "finalPromptAll" and "finalPromptPrevious" keywords. */
+  responseTexts?: string[];
 }
 
 /**
@@ -133,6 +159,11 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
 
   /** Retry count if applicable */
   retryCount?: number;
+
+  /** The plain-text AI response from this prompt's execution.
+   *  Stored here to enable priorContext injection in subsequent prompts.
+   *  Also persists across pause/resume cycles via the working file. */
+  responseText?: string;
 }
 
 export interface EndCondition {

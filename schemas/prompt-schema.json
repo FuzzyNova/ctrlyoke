@@ -127,6 +127,26 @@
         },
         "endCondition": {
           "$ref": "#/definitions/endCondition"
+        },
+        "priorContext": {
+          "description": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior outputs; 'previous' injects the immediately preceding output; 'none' disables injection; an array of integers ([1, 3]) injects specific prompts by 1-based index. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation).",
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": ["all", "previous", "none", "finalPromptAll", "finalPromptPrevious"],
+              "description": "Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately preceding queue prompt output, 'none' = no injection, 'finalPromptAll' = all previous finalPrompt loop outputs, 'finalPromptPrevious' = immediately preceding finalPrompt loop output"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "1-based prompt number"
+              },
+              "minItems": 1,
+              "description": "Specific prior prompt numbers to include (1-based, e.g. [1, 3] includes prompts 1 and 3)"
+            }
+          ]
         }
       }
     },
@@ -204,6 +224,10 @@
             "retryCount": {
               "type": "number",
               "description": "Number of retry attempts for this prompt"
+            },
+            "responseText": {
+              "type": "string",
+              "description": "Plain-text AI response from this prompt's execution. Written automatically during workflow execution. Used by the priorContext feature to inject prior prompt outputs."
             }
           },
           "required": ["startedAt"]
@@ -264,6 +288,11 @@
             "completedAt": {
               "type": "number",
               "description": "Timestamp when finalPrompt execution completed"
+            },
+            "responseTexts": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Response texts from each finalPrompt loop execution, indexed by loop number (0-based). Written automatically during workflow execution. Used by the priorContext 'finalPromptAll' and 'finalPromptPrevious' keywords."
             }
           },
           "required": ["phase", "loopCount"],

@@ -84,6 +84,10 @@ export class ValidationUtils {
         type: ["string", "number"] as any, // Allow both string and number for session IDs
         nullable: true,
       },
+      priorContext: {
+        // PriorContext = "all" | "previous" | "none" | number[]
+        // AJV JSONSchemaType cannot express this union natively, so use 'as any'
+      } as any,
       _runtime: {
         type: "object",
         properties: {
@@ -91,6 +95,7 @@ export class ValidationUtils {
           startedAt: { type: "number" },
           completedAt: { type: "number", nullable: true },
           retryCount: { type: "number", nullable: true },
+          responseText: { type: "string", nullable: true },
           // Runtime can also inherit ExecutionProperties
           harness: {
             type: "string",
@@ -119,6 +124,9 @@ export class ValidationUtils {
             required: ["script", "returns"],
             nullable: true,
           },
+          priorContext: {
+            // PriorContext = "all" | "previous" | "none" | number[]
+          } as any,
         },
         required: ["startedAt"],
         nullable: true,

@@ -3,6 +3,7 @@ import {
   PromptItem,
   Harness,
   EndCondition,
+  PriorContext,
 } from "../types/FlightPathTypes";
 import { ConfigurationUtils } from "./ConfigurationUtils";
 
@@ -34,6 +35,9 @@ export interface ResolvedProperties {
 
   /** End condition validation - undefined if not specified */
   endCondition?: EndCondition;
+
+  /** Controls injection of prior prompt outputs - undefined means no injection */
+  priorContext?: PriorContext;
 }
 
 /**
@@ -83,6 +87,7 @@ export class PropertyResolver {
       ),
       sessionId: this.resolveSessionId(prompt, workflow),
       endCondition: this.resolveEndCondition(prompt, workflow),
+      priorContext: this.resolvePriorContext(prompt, workflow),
     };
   }
 
@@ -348,6 +353,39 @@ export class PropertyResolver {
     }
 
     // 3. No fallback - end conditions are explicit
+    return undefined;
+  }
+
+  /**
+   * Resolve priorContext with two-tier precedence.
+   *
+   * Precedence order:
+   * 1. Prompt-level override (prompt.priorContext)
+   * 2. Workflow-level default (workflow.priorContext)
+   * 3. No fallback (returns undefined if not specified)
+   *
+   * Note: priorContext is NOT inherited from VS Code settings.
+   * It must be explicitly defined at the prompt or workflow level.
+   *
+   * @param prompt The prompt to resolve priorContext for
+   * @param workflow The parent workflow file
+   * @returns Resolved PriorContext or undefined
+   */
+  private static resolvePriorContext(
+    prompt: PromptItem,
+    workflow: PromptFile
+  ): PriorContext | undefined {
+    // 1. Prompt-level override (highest priority)
+    if (prompt.priorContext !== undefined) {
+      return prompt.priorContext;
+    }
+
+    // 2. Workflow-level default
+    if (workflow.priorContext !== undefined) {
+      return workflow.priorContext;
+    }
+
+    // 3. No fallback
     return undefined;
   }
 
