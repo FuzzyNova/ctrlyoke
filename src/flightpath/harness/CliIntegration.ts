@@ -1119,8 +1119,6 @@ export class CliIntegration extends HarnessIntegration {
       onStdout: options.onStdout,
     });
 
-    // Always emit response complete when process exits (success, error, or cancelled)
-    this.responseCompleteEmitter.fire("Process exited");
     Log.info("✅ Process exited - execution complete");
 
     return result;

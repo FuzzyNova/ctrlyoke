@@ -30,6 +30,8 @@ interface SubscriptionContainer {
 type PriorContextItem = {
   index: number;
   name?: string;
+  /** The prompt text that was sent for this step. Absent for finalPrompt loop items. */
+  prompt?: string;
   text: string;
   /** "finalPrompt" when the item originates from a finalPrompt loop (not a queue prompt). */
   type?: "finalPrompt";
@@ -441,6 +443,7 @@ export abstract class HarnessIntegration {
       .map((i) => ({
         index: i,
         name: allPrompts[i]?.name,
+        prompt: allPrompts[i]?.prompt,
         text: allPrompts[i]?._runtime?.responseText ?? "",
       }))
       .filter((item) => item.text.length > 0);
@@ -471,7 +474,11 @@ export abstract class HarnessIntegration {
       .map((item) => {
         const typeAttr = item.type ? ` type="${item.type}"` : "";
         const nameAttr = item.name ? ` name="${item.name}"` : "";
-        return `<step index="${item.index + 1}"${typeAttr}${nameAttr}>\n${item.text.trim()}\n</step>`;
+        const promptSection = item.prompt
+          ? `<prompt>\n${item.prompt.trim()}\n</prompt>\n`
+          : "";
+        const responseSection = `<response>\n${item.text.trim()}\n</response>`;
+        return `<step index="${item.index + 1}"${typeAttr}${nameAttr}>\n${promptSection}${responseSection}\n</step>`;
       })
       .join("\n");
 

@@ -395,12 +395,19 @@ export class CliLogMonitor {
   static extractTextFromEvents(output: UniversalCliOutput): string {
     const textParts: string[] = [];
     for (const event of output.events) {
-      if (
-        event.type === CLI_EVENT_TYPES.TEXT &&
-        event.data &&
-        "text" in event.data
-      ) {
-        textParts.push(event.data.text);
+      if (!event.data) {
+        continue;
+      }
+      if (event.type === CLI_EVENT_TYPES.TEXT && "text" in event.data) {
+        textParts.push(event.data.text as string);
+      } else if (event.type === CLI_EVENT_TYPES.THINKING && "text" in event.data) {
+        textParts.push(`\n[Thinking]\n${(event.data as { text: string }).text}\n[/Thinking]`);
+      } else if (event.type === CLI_EVENT_TYPES.FILE_WRITE && "path" in event.data) {
+        textParts.push(`\n[Created: ${(event.data as { path: string }).path}]`);
+      } else if (event.type === CLI_EVENT_TYPES.FILE_EDIT && "path" in event.data) {
+        textParts.push(`\n[Edited: ${(event.data as { path: string }).path}]`);
+      } else if (event.type === CLI_EVENT_TYPES.FILE_DELETE && "path" in event.data) {
+        textParts.push(`\n[Deleted: ${(event.data as { path: string }).path}]`);
       }
     }
     return textParts.join("");

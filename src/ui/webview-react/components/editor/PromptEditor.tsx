@@ -229,6 +229,27 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         result.allowDynamicExtension = null;
       }
 
+      // Skills
+      if (properties.skills && properties.skills.length > 0) {
+        result.skills = properties.skills;
+      } else if (includeNullsForDefaults) {
+        result.skills = null;
+      }
+
+      // Prior Context
+      if (properties.priorContext !== undefined) {
+        result.priorContext = properties.priorContext;
+      } else if (includeNullsForDefaults) {
+        result.priorContext = null;
+      }
+
+      // Additional Args
+      if (properties.additionalArgs) {
+        result.additionalArgs = properties.additionalArgs;
+      } else if (includeNullsForDefaults) {
+        result.additionalArgs = null;
+      }
+
       // End Condition - Three-state logic:
       // - undefined (not included) = inherit from workflow
       // - null (explicitly set) = disable end condition (override workflow)

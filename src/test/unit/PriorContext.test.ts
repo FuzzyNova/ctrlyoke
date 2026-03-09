@@ -54,7 +54,7 @@ class TestHarness extends HarnessIntegration {
 
   public exposeInsert(
     promptText: string,
-    contextItems: { index: number; name?: string; text: string; type?: "finalPrompt" }[]
+    contextItems: { index: number; name?: string; prompt?: string; text: string; type?: "finalPrompt" }[]
   ) {
     return (this as any).insertPriorContext(promptText, contextItems);
   }
@@ -113,8 +113,10 @@ suite("gatherPriorContextItems", () => {
     assert.strictEqual(items[0].index, 0);
     assert.strictEqual(items[0].text, "r1");
     assert.strictEqual(items[0].name, "Step 1");
+    assert.strictEqual(items[0].prompt, "p1");
     assert.strictEqual(items[1].index, 1);
     assert.strictEqual(items[1].text, "r2");
+    assert.strictEqual(items[1].prompt, "p2");
   });
 
   test("filters prompts with no responseText for 'all'", () => {
@@ -259,9 +261,8 @@ suite("insertPriorContext", () => {
     const items = [{ index: 0, name: "Analyze", text: "Finding A" }];
     const result = harness.exposeInsert("Implement fixes.", items);
     assert.ok(result.startsWith("<priorContext>"));
-    assert.ok(
-      result.includes('<step index="1" name="Analyze">\nFinding A\n</step>')
-    );
+    assert.ok(result.includes('<step index="1" name="Analyze">'));
+    assert.ok(result.includes("<response>\nFinding A\n</response>"));
     assert.ok(result.endsWith("Implement fixes."));
     assert.ok(result.includes("</priorContext>\n\nImplement fixes."));
   });
@@ -280,7 +281,7 @@ suite("insertPriorContext", () => {
   test("omits name attribute when prompt has no name", () => {
     const items = [{ index: 0, text: "result" }];
     const result = harness.exposeInsert("Task.", items);
-    assert.ok(result.includes('<step index="1">\n'));
+    assert.ok(result.includes('<step index="1">'));
     assert.ok(!result.includes('name='));
   });
 
@@ -293,7 +294,7 @@ suite("insertPriorContext", () => {
   test("trims whitespace from context text", () => {
     const items = [{ index: 0, text: "  trimmed response  " }];
     const result = harness.exposeInsert("Task.", items);
-    assert.ok(result.includes("trimmed response"));
+    assert.ok(result.includes("<response>\ntrimmed response\n</response>"));
     assert.ok(!result.includes("  trimmed response  "));
   });
 
@@ -302,6 +303,7 @@ suite("insertPriorContext", () => {
     const result = harness.exposeInsert("Do work.", items);
     assert.ok(result.includes('type="finalPrompt"'));
     assert.ok(result.includes('<step index="1" type="finalPrompt">'));
+    assert.ok(result.includes("<response>\norchestrator output\n</response>"));
   });
 
   test("omits type attribute for regular queue prompt items", () => {
@@ -309,6 +311,27 @@ suite("insertPriorContext", () => {
     const result = harness.exposeInsert("Do work.", items);
     assert.ok(!result.includes("type="));
     assert.ok(result.includes('<step index="1" name="Step 1">'));
+  });
+
+  test("includes <prompt> tag when prompt text is provided", () => {
+    const items = [{ index: 0, prompt: "What is the plan?", text: "The plan is X" }];
+    const result = harness.exposeInsert("Now execute.", items);
+    assert.ok(result.includes("<prompt>\nWhat is the plan?\n</prompt>"));
+    assert.ok(result.includes("<response>\nThe plan is X\n</response>"));
+  });
+
+  test("omits <prompt> tag when no prompt text is provided", () => {
+    const items = [{ index: 0, text: "response only" }];
+    const result = harness.exposeInsert("Task.", items);
+    assert.ok(!result.includes("<prompt>"));
+    assert.ok(result.includes("<response>\nresponse only\n</response>"));
+  });
+
+  test("trims whitespace from prompt text", () => {
+    const items = [{ index: 0, prompt: "  hello  ", text: "world" }];
+    const result = harness.exposeInsert("Task.", items);
+    assert.ok(result.includes("<prompt>\nhello\n</prompt>"));
+    assert.ok(!result.includes("  hello  "));
   });
 });
 
