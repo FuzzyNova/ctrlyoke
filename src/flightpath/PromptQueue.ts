@@ -164,6 +164,16 @@ export class PromptQueue {
   }
 
   /**
+   * Clear only the working file path reference without affecting prompts or other state.
+   * Used when the working file has been deleted externally (e.g., removed from history)
+   * so that ensureEphemeralWorkingFile() will create a fresh one on the next write.
+   */
+  clearWorkingFilePath(): void {
+    this.state.workingFilePath = undefined;
+    this.emitStateChange();
+  }
+
+  /**
    * Load prompts into the queue
    * @param promptFile Complete workflow file with prompts and workflow-level properties
    * @param workingFilePath Optional path to working file (source of truth)

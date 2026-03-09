@@ -1180,6 +1180,18 @@ export class WorkflowInstance {
     Log.debug("Workflow state cleared");
   }
 
+  /**
+   * Clear only the stale working file path without wiping prompts or currentPromptFile.
+   * Used when the working file is deleted externally (removed from history) so that
+   * ensureEphemeralWorkingFile() will create a fresh one on the next property write or run.
+   */
+  clearWorkingFilePath(): void {
+    this.promptQueue.clearWorkingFilePath();
+    Log.debug(
+      `[inst:${this.id.slice(0, 8)}] clearWorkingFilePath: stale working file path cleared`
+    );
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Queue operations
   // ─────────────────────────────────────────────────────────────────────────

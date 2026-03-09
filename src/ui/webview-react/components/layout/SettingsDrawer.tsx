@@ -694,35 +694,6 @@ export const SettingsPanel: React.FC<{
             )}
           </FormField>
 
-          {/* Prior Context */}
-          <FormField
-            label="Prior Context"
-            htmlFor="settings-prior-context"
-            description="Inject prior prompt outputs into each prompt's text before sending to the AI"
-            setAsDefaultButton={
-              <SetAsDefaultButton
-                property="priorContext"
-                show={isDifferentFromGlobal("priorContext")}
-                onSetDefault={() =>
-                  handleSetAsDefault(
-                    "priorContext",
-                    workflowProperties.priorContext
-                  )
-                }
-              />
-            }
-          >
-            <PriorContextSelect
-              id="settings-prior-context"
-              value={effectivePriorContext}
-              onChange={handlePriorContextChange}
-              priorPrompts={prompts.map((p, i) => ({
-                number: i + 1,
-                name: p.name,
-              }))}
-            />
-          </FormField>
-
           {/* Additional Args */}
           <FormField
             label="Additional Args"
@@ -749,6 +720,35 @@ export const SettingsPanel: React.FC<{
               onChange={(e) => handleAdditionalArgsChange(e.target.value)}
               placeholder="e.g. --effort high --max-turns 10"
               className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
+            />
+          </FormField>
+
+          {/* Prior Context */}
+          <FormField
+            label="Prior Context"
+            htmlFor="settings-prior-context"
+            description="Inject prior prompt outputs into each prompt's text before sending to the AI"
+            setAsDefaultButton={
+              <SetAsDefaultButton
+                property="priorContext"
+                show={isDifferentFromGlobal("priorContext")}
+                onSetDefault={() =>
+                  handleSetAsDefault(
+                    "priorContext",
+                    workflowProperties.priorContext
+                  )
+                }
+              />
+            }
+          >
+            <PriorContextSelect
+              id="settings-prior-context"
+              value={effectivePriorContext}
+              onChange={handlePriorContextChange}
+              priorPrompts={prompts.map((p, i) => ({
+                number: i + 1,
+                name: p.name,
+              }))}
             />
           </FormField>
 

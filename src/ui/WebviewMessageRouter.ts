@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import {
   MESSAGE_TYPES,
   LOG_LEVELS,
@@ -343,7 +344,20 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY, async (message) => {
       const { filePath } = message;
       if (filePath) {
+        const currentWorkingFilePath =
+          this.getManager()?.getQueueState()?.workingFilePath;
         await this.serializer.handleRemoveWorkflowHistory(filePath);
+        // If the deleted file was the currently viewed working file, clear the stale
+        // path reference so ensureEphemeralWorkingFile() creates a fresh one on next
+        // write. We do NOT do a full clearWorkflow() to avoid wiping the user's prompts
+        // or currentPromptFile (the source .yaml/.prompt.md still exists on disk).
+        if (
+          currentWorkingFilePath &&
+          path.normalize(filePath).toLowerCase() ===
+            path.normalize(currentWorkingFilePath).toLowerCase()
+        ) {
+          this.getManager()?.clearWorkingFilePath();
+        }
       }
     });
 

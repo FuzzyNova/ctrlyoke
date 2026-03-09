@@ -765,6 +765,10 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().getQueueState();
   }
 
+  clearWorkingFilePath(): void {
+    this.getActiveInstance().clearWorkingFilePath();
+  }
+
   /**
    * Get the PromptQueue of the currently active workflow instance.
    * Returns null if no instance exists yet.
