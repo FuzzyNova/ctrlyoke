@@ -620,6 +620,7 @@
             "gemini-2.5-pro",
             "gpt-4.1",
             "oswe-vscode-prime",
+            "gpt-5.4",
             "gpt-5.2",
             "auto"
           ],
@@ -816,10 +817,12 @@
           "order": 410,
           "type": "string",
           "enum": [
+            "gpt-5.3-codex",
+            "gpt-5.4",
             "gpt-5.2-codex",
             "gpt-5.1-codex-max",
-            "gpt-5.1-codex-mini",
-            "gpt-5.2"
+            "gpt-5.2",
+            "gpt-5.1-codex-mini"
           ],
           "enumDescriptions": [
             "GPT-5.1 Codex Max - Most capable for deep reasoning",

@@ -55,6 +55,7 @@ export const COPILOT_MODELS: Record<string, string> = {
   "gemini-2.5-pro": "Gemini 2.5 Pro",
   "gpt-4.1": "GPT-4.1",
   "oswe-vscode-prime": "Raptor Mini",
+  "gpt-5.4": "GPT 5.4",
   "gpt-5.2": "Gpt 5.2",
   auto: "Auto",
 };
@@ -134,25 +135,29 @@ export const CLAUDE_CLI_MODEL_LABELS: Record<string, string> = {
  * See: https://docs.openai.com/codex
  */
 export const CODEX_CLI_MODELS = [
+  "gpt-5.3-codex",
+  "gpt-5.4",
   "gpt-5.2-codex",
   "gpt-5.1-codex-max",
-  "gpt-5.1-codex-mini",
   "gpt-5.2",
+  "gpt-5.1-codex-mini",
 ] as const;
 
 /**
  * Default model for Codex CLI
  */
-export const CODEX_CLI_DEFAULT_MODEL = "gpt-5.2-codex" as const;
+export const CODEX_CLI_DEFAULT_MODEL = "gpt-5.3-codex" as const;
 
 /**
  * Codex CLI model display names
  */
 export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {
+  "gpt-5.3-codex": "GPT 5.3 Codex",
+  "gpt-5.4": "GPT 5.4",
   "gpt-5.2-codex": "GPT 5.2 Codex",
   "gpt-5.1-codex-max": "GPT 5.1 Codex Max",
-  "gpt-5.1-codex-mini": "GPT 5.1 Codex Mini",
   "gpt-5.2": "GPT 5.2",
+  "gpt-5.1-codex-mini": "GPT 5.1 Codex Mini",
 };
 
 // Derived exports for convenience

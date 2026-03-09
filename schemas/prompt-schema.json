@@ -42,7 +42,9 @@
               "$ref": "#/definitions/runtimeMetadata"
             }
           },
-          "required": ["prompts"]
+          "required": [
+            "prompts"
+          ]
         }
       ]
     }
@@ -91,6 +93,7 @@
             "gpt-5.2",
             "gpt-5.2-codex",
             "gpt-5.3-codex",
+            "gpt-5.4",
             "grok-code-fast-1",
             "haiku",
             "opus",
@@ -114,7 +117,10 @@
           "description": "Enable dynamic queue extension for this prompt. When true: CLI modes (copilot-cli, claude-cli, codex-cli) pass MCP server configuration to enable flightpath_append_queue and flightpath_queue_status tools. Chat mode injects instructions to use these tools via Language Model Tools API. When false, no MCP config or instructions are provided. When omitted, defaults to true for last prompt only (when no other prompts have explicit flags)."
         },
         "sessionId": {
-          "type": ["string", "number"],
+          "type": [
+            "string",
+            "number"
+          ],
           "description": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalPrompt\" (resume the session established by the previous finalPrompt loop iteration — on the first iteration a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution."
         },
         "skills": {
@@ -182,7 +188,9 @@
               "description": "Per-prompt runtime execution metadata (optional, added automatically during execution)"
             }
           },
-          "required": ["prompt"]
+          "required": [
+            "prompt"
+          ]
         }
       ]
     },
@@ -216,7 +224,10 @@
           "description": "Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry."
         }
       },
-      "required": ["script", "returns"]
+      "required": [
+        "script",
+        "returns"
+      ]
     },
     "promptRuntimeMetadata": {
       "type": "object",
@@ -244,7 +255,9 @@
               "description": "Plain-text AI response from this prompt's execution. Written automatically during workflow execution. Used by the priorContext feature to inject prior prompt outputs."
             }
           },
-          "required": ["startedAt"]
+          "required": [
+            "startedAt"
+          ]
         }
       ]
     },
@@ -276,7 +289,10 @@
           "properties": {
             "phase": {
               "type": "string",
-              "enum": ["queue", "finalPrompt"],
+              "enum": [
+                "queue",
+                "finalPrompt"
+              ],
               "description": "Current workflow execution phase"
             },
             "loopCount": {
@@ -305,15 +321,23 @@
             },
             "responseTexts": {
               "type": "array",
-              "items": { "type": "string" },
+              "items": {
+                "type": "string"
+              },
               "description": "Response texts from each finalPrompt loop execution, indexed by loop number (0-based). Written automatically during workflow execution. Used by the priorContext 'finalPromptAll' and 'finalPromptPrevious' keywords."
             }
           },
-          "required": ["phase", "loopCount"],
+          "required": [
+            "phase",
+            "loopCount"
+          ],
           "additionalProperties": false
         }
       },
-      "required": ["currentIndex", "executionState"],
+      "required": [
+        "currentIndex",
+        "executionState"
+      ],
       "additionalProperties": false
     }
   }
