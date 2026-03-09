@@ -26,7 +26,7 @@ export type ToolClassification =
  * **Harness-specific tool name variations handled:**
  * - Bash/shell: `bash`, `shell`, `powershell`, `command`, `execute_command`, `run_command`, `shell_command`
  * - File read: `read`, `read_file`, `view`, `cat`
- * - File write: `write`, `write_file`, `create_file`
+ * - File write: `write`, `write_file`, `create`, `create_file`
  * - File edit: `edit`, `edit_file`, `modify_file`, `replace_string_in_file`, `multiedit`, `apply_patch`
  * - File delete: `delete`, `delete_file`, `remove_file`, `rm`
  * - Web search: `web_search`, `search`, `webfetch`
@@ -69,6 +69,7 @@ export class CliEventMapper {
   private static readonly FILE_WRITE_TOOLS = new Set([
     "write",
     "write_file",
+    "create",
     "create_file",
   ]);
 

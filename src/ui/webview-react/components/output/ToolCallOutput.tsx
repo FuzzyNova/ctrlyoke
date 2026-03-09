@@ -212,9 +212,10 @@ export const FileEditOutput: React.FC<FileEditOutputProps> = ({
     return "Edited";
   };
 
-  // Generate diff lines
+  // Generate diff lines — show whenever data is available, regardless of lifecycle stage.
+  // Copilot sends old_str/new_str in tool.execution_start so data is ready immediately;
+  // Claude sends a structuredPatch in tool_result which replaces the inline diff on completion.
   const getDiffLines = (): DiffLine[] => {
-    if (status === OPERATION_STATUS.INITIATED) return [];
     if (structuredPatch && structuredPatch.length > 0) {
       return parseUnifiedDiff(structuredPatch);
     }

@@ -171,20 +171,16 @@ export class PromptFileLoader {
       const workingFile =
         await this.promptQueue.readWorkingFile(workingFilePath);
 
-      // Check if prompts exist
-      if (!workingFile.prompts || workingFile.prompts.length === 0) {
-        Log.error("Working file has no prompts");
-        return;
-      }
-
-      // Validate prompts
-      const validation = this.promptFileParser.validatePromptItems(
-        workingFile.prompts
-      );
-      if (!validation.valid) {
-        const errorMessage = validation.errors.join(",");
-        Log.error("Working file validation failed:", errorMessage);
-        throw new Error(`Working file validation failed: ${errorMessage}`);
+      // Validate prompts (only if there are prompts to validate)
+      if (workingFile.prompts?.length) {
+        const validation = this.promptFileParser.validatePromptItems(
+          workingFile.prompts
+        );
+        if (!validation.valid) {
+          const errorMessage = validation.errors.join(",");
+          Log.error("Working file validation failed:", errorMessage);
+          throw new Error(`Working file validation failed: ${errorMessage}`);
+        }
       }
 
       const queueState = this.promptQueue.getState();
@@ -200,7 +196,7 @@ export class PromptFileLoader {
         // Scenario 1: Loading a different session (resume/auto-load)
         // Clear queue and restore full state including completed prompts, currentIndex, etc.
         Log.debug(
-          `Restoring session from working file (${workingFile.prompts.length} prompts, mode: ${mode}, isAutoLoad: ${isAutoLoad})`
+          `Restoring session from working file (${workingFile.prompts?.length ?? 0} prompts, mode: ${mode}, isAutoLoad: ${isAutoLoad})`
         );
         await this.promptQueue.restoreFromWorkingFile(
           workingFilePath,
@@ -256,7 +252,7 @@ export class PromptFileLoader {
       }
 
       Log.debug(
-        `Reloaded ${workingFile.prompts.length} prompts from working file`
+        `Reloaded ${workingFile.prompts?.length ?? 0} prompts from working file`
       );
     } catch (error) {
       Log.error("Failed to reload working file:", error);

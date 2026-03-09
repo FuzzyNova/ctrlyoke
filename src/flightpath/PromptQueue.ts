@@ -210,23 +210,21 @@ export class PromptQueue {
       // Read the working file
       const workingFile = await this.readWorkingFile(workingFilePath);
 
-      if (!workingFile.prompts || workingFile.prompts.length === 0) {
-        throw new Error("Working file has no prompts");
-      }
-
       const runtime = workingFile._runtime;
       this.finalPromptRuntime = runtime?.finalPrompt;
 
+      const prompts = workingFile.prompts ?? [];
+
       // Build completedIndices from per-prompt _runtime.completedAt (source of truth).
       // Fall back to currentIndex boundary for old working files that lack per-prompt _runtime.
-      const hasPerPromptTracking = workingFile.prompts.some(
+      const hasPerPromptTracking = prompts.some(
         (p) => p._runtime?.completedAt !== undefined
       );
 
       const completedIndices = new Set<string>();
       if (hasPerPromptTracking) {
         // New format: use per-prompt completedAt
-        workingFile.prompts.forEach((p, i) => {
+        prompts.forEach((p, i) => {
           if (p._runtime?.completedAt !== undefined) {
             completedIndices.add(String(i));
           }
@@ -239,11 +237,11 @@ export class PromptQueue {
         for (let i = 0; i < runtime.currentIndex; i++) {
           completedIndices.add(String(i));
           // Self-heal: write completedAt back so next save uses new format
-          if (workingFile.prompts[i]) {
-            workingFile.prompts[i]._runtime = {
-              ...workingFile.prompts[i]._runtime,
+          if (prompts[i]) {
+            prompts[i]._runtime = {
+              ...prompts[i]._runtime,
               startedAt:
-                workingFile.prompts[i]._runtime?.startedAt ??
+                prompts[i]._runtime?.startedAt ??
                 (workingFile.startedAt || Date.now()),
               completedAt: workingFile.startedAt
                 ? workingFile.startedAt + 1
@@ -274,7 +272,7 @@ export class PromptQueue {
       this.state = {
         currentIndex: runtime?.currentIndex || 0,
         status: executionState,
-        prompts: workingFile.prompts.map((prompt) => ({
+        prompts: prompts.map((prompt) => ({
           ...prompt,
           // Backward compatibility: _runtime is optional, old files won't have it
           // The spread operator preserves _runtime if it exists
@@ -293,7 +291,7 @@ export class PromptQueue {
       this.workflowFile = workingFile;
 
       // Rebuild results array with proper status based on completion state
-      this.state.results = workingFile.prompts.map((prompt, index) => {
+      this.state.results = prompts.map((prompt, index) => {
         let status: (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 
         // Check if this prompt was completed (per-prompt completedAt is authoritative)
@@ -336,11 +334,11 @@ export class PromptQueue {
         (p) => p._runtime
       ).length;
       Log.info(
-        `Restored queue from working file: ${workingFile.prompts.length} prompts, ` +
+        `Restored queue from working file: ${prompts.length} prompts, ` +
           `currentIndex=${this.state.currentIndex}, ` +
           `completed=${this.state.completedIndices.size}, ` +
           `status=${this.state.status}, ` +
-          `_runtime: ${promptsWithRuntime}/${workingFile.prompts.length} prompts`
+          `_runtime: ${promptsWithRuntime}/${prompts.length} prompts`
       );
     } catch (error) {
       Log.error("Failed to restore from working file:", error as Error);
