@@ -261,6 +261,7 @@ export class WebviewSettingsSync {
         allowDynamicExtension: workingFile.allowDynamicExtension,
         endCondition: workingFile.endCondition,
         priorContext: workingFile.priorContext,
+        additionalArgs: workingFile.additionalArgs,
       };
 
       this.postMessage({
@@ -354,7 +355,7 @@ export class WebviewSettingsSync {
     }
 
     if (!manager.getQueueState()?.workingFilePath) {
-      await manager.ensureEphemeralWorkingFile();
+      await manager.ensureEphemeralWorkingFile({ skipPopulateDefaults: true });
     }
 
     if (!manager.getQueueState()?.workingFilePath) {

@@ -813,6 +813,12 @@ export class WorkflowInstance {
     continueFromCurrent: boolean = false
   ): Promise<void> {
     if (!this.currentPromptFile) {
+      const queueState = this.promptQueue.getState();
+      Log.debug(
+        `[inst:${this.id.slice(0, 8)}] executeLoadedPromptFile: currentPromptFile is null — ` +
+          `workingFilePath=${queueState.workingFilePath ?? "(none)"}, ` +
+          `prompts=${queueState.prompts.length}, status=${queueState.status}`
+      );
       this.platform.warn(
         "No prompt file loaded. Use 'Change' button to select a file first."
       );
@@ -1323,7 +1329,7 @@ export class WorkflowInstance {
    *
    * Idempotent: returns immediately if a working file already exists.
    */
-  public async ensureEphemeralWorkingFile(): Promise<void> {
+  public async ensureEphemeralWorkingFile(options?: { skipPopulateDefaults?: boolean }): Promise<void> {
     if (this.promptQueue.getState().workingFilePath) {
       return;
     }
@@ -1347,9 +1353,25 @@ export class WorkflowInstance {
       );
       Log.info(`✅ Eagerly created working file: ${workingFilePath}`);
 
-      const defaults = PromptFileLoader.populateSettingsDefaults({});
-      if (Object.keys(defaults).length > 0) {
-        await this.promptQueue.updateWorkingFileProperties(defaults);
+      // Keep currentPromptFile in sync so executeLoadedPromptFile doesn't
+      // fail with "No prompt file loaded" when the user runs an ephemeral
+      // prompt after changing a workflow property (harness, model, etc.)
+      // before adding any prompts.
+      if (!this.currentPromptFile) {
+        this.currentPromptFile = {
+          filePath: workingFilePath,
+          promptFile: { prompts: [] },
+        };
+        Log.debug(
+          `[inst:${this.id.slice(0, 8)}] ensureEphemeralWorkingFile: set currentPromptFile → ${path.basename(workingFilePath)}`
+        );
+      }
+
+      if (!options?.skipPopulateDefaults) {
+        const defaults = PromptFileLoader.populateSettingsDefaults({});
+        if (Object.keys(defaults).length > 0) {
+          await this.promptQueue.updateWorkingFileProperties(defaults);
+        }
       }
     } catch (error) {
       Log.error("Failed to eagerly create working file:", error);

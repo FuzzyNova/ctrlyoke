@@ -867,8 +867,8 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().updateFinalPromptInQueue(finalPrompt);
   }
 
-  async ensureEphemeralWorkingFile(): Promise<void> {
-    return this.getActiveInstance().ensureEphemeralWorkingFile();
+  async ensureEphemeralWorkingFile(options?: { skipPopulateDefaults?: boolean }): Promise<void> {
+    return this.getActiveInstance().ensureEphemeralWorkingFile(options);
   }
 
   async deletePromptFromQueue(index: number): Promise<void> {
