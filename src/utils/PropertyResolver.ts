@@ -40,7 +40,7 @@ export interface ResolvedProperties {
   priorContext?: PriorContext;
 
   /** Extra CLI flags appended to FlightPath's standard argument set - undefined if not specified */
-  appendArgs?: string;
+  additionalArgs?: string;
 }
 
 /**
@@ -91,7 +91,7 @@ export class PropertyResolver {
       sessionId: this.resolveSessionId(prompt, workflow),
       endCondition: this.resolveEndCondition(prompt, workflow),
       priorContext: this.resolvePriorContext(prompt, workflow),
-      appendArgs: this.resolveAppendArgs(prompt, workflow),
+      additionalArgs: this.resolveAdditionalArgs(prompt, workflow, harness),
     };
   }
 
@@ -394,36 +394,42 @@ export class PropertyResolver {
   }
 
   /**
-   * Resolve appendArgs with three-tier precedence.
+   * Resolve additionalArgs with three-tier precedence.
    *
    * Precedence order:
-   * 1. Prompt-level override (prompt.appendArgs)
-   * 2. Workflow-level default (workflow.appendArgs)
-   * 3. VS Code setting (flightpath.cliAppendArgs)
+   * 1. Prompt-level override (prompt.additionalArgs)
+   * 2. Workflow-level default (workflow.additionalArgs)
+   * 3. VS Code setting for the resolved harness (flightpath.<harness>AdditionalArgs)
    *
    * Empty string at any level is treated as "not set" — falls through to the next tier.
    *
-   * @param prompt The prompt to resolve appendArgs for
+   * @param prompt The prompt to resolve additionalArgs for
    * @param workflow The parent workflow file
-   * @returns Resolved appendArgs string or undefined
+   * @param harness The resolved harness (used to pick the correct VS Code setting)
+   * @returns Resolved additionalArgs string or undefined
    */
-  private static resolveAppendArgs(
+  private static resolveAdditionalArgs(
     prompt: PromptItem,
-    workflow: PromptFile
+    workflow: PromptFile,
+    harness: Harness
   ): string | undefined {
     // 1. Prompt-level override (highest priority)
-    if (prompt.appendArgs !== undefined && prompt.appendArgs !== "") {
-      return prompt.appendArgs;
+    if (prompt.additionalArgs !== undefined && prompt.additionalArgs !== "") {
+      return prompt.additionalArgs;
     }
 
     // 2. Workflow-level default
-    if (workflow.appendArgs !== undefined && workflow.appendArgs !== "") {
-      return workflow.appendArgs;
+    if (
+      workflow.additionalArgs !== undefined &&
+      workflow.additionalArgs !== ""
+    ) {
+      return workflow.additionalArgs;
     }
 
-    // 3. VS Code setting fallback
-    const globalAppendArgs = ConfigurationUtils.getCliAppendArgs();
-    return globalAppendArgs || undefined;
+    // 3. VS Code setting fallback (harness-specific)
+    const globalAdditionalArgs =
+      ConfigurationUtils.getAdditionalArgsForHarness(harness);
+    return globalAdditionalArgs || undefined;
   }
 
   /**

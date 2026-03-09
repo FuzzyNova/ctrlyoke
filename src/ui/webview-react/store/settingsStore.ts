@@ -49,6 +49,7 @@ export interface GlobalSettings {
   harness: HarnessId;
   model: string;
   harnessDefaultModels: Record<string, string>;
+  harnessDefaultAdditionalArgs: Record<string, string>;
   agent: string;
   skills: string[];
   executionMode: "interactive" | "headless";
@@ -78,7 +79,7 @@ export interface WorkflowProperties {
     retryPrompt?: string;
   } | null;
   priorContext?: PriorContext;
-  appendArgs?: string;
+  additionalArgs?: string;
 }
 
 /**
@@ -181,6 +182,7 @@ const initialGlobalSettings: GlobalSettings = {
   harness: HARNESS_IDS.COPILOT_CLI as HarnessId,
   model: "claude-sonnet-4.5",
   harnessDefaultModels: {},
+  harnessDefaultAdditionalArgs: {},
   agent: "",
   skills: [],
   executionMode: "interactive",

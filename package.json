@@ -663,13 +663,6 @@
           "description": "[Debug] Log raw CLI output for debugging",
           "markdownDescription": "**Debug Mode.** Log raw unparsed output from all CLI harnesses (Copilot, Claude, Codex) to the Output panel. Useful for debugging parser issues. **Warning:** Extremely verbose, only enable when troubleshooting."
         },
-        "flightpath.cliAppendArgs": {
-          "order": 201.8,
-          "type": "string",
-          "default": "",
-          "description": "[CLI Modes] Extra CLI flags appended to FlightPath's standard argument set",
-          "markdownDescription": "**CLI Modes Only.** Extra CLI flags appended to FlightPath's standard argument set. FlightPath continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before tool permission args. Prompt-level and workflow-level `appendArgs` take precedence over this global setting. Ignored for `copilot-chat`. Example: `--effort high --max-turns 10`"
-        },
         "flightpath.showCliCommand": {
           "order": 202,
           "type": "boolean",
@@ -785,6 +778,13 @@
           "description": "[Copilot CLI] Additional directories to allow access (beyond workspace)",
           "markdownDescription": "**Copilot CLI Only.** List of additional directory paths that Copilot CLI can access. Workspace folders are automatically included."
         },
+        "flightpath.copilotCliAdditionalArgs": {
+          "order": 304,
+          "type": "string",
+          "default": "",
+          "description": "[Copilot CLI] Extra CLI flags appended to FlightPath's standard argument set",
+          "markdownDescription": "**Copilot CLI Only.** Extra CLI flags appended to FlightPath's standard argument set. FlightPath continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before tool permission args. Prompt-level and workflow-level `additionalArgs` take precedence over this global setting. Example: `--autopilot --log-level debug`"
+        },
         "flightpath.claudeCliModel": {
           "order": 400,
           "type": "string",
@@ -804,6 +804,13 @@
           "default": "sonnet",
           "description": "[Claude CLI] Default AI model",
           "markdownDescription": "**Claude CLI Only.** Default AI model for Claude Code CLI. **Sonnet** (default) provides the best balance of speed and capability. Prompts can override this with `\"model\": \"opus\"` or `\"model\": \"haiku\"`."
+        },
+        "flightpath.claudeCliAdditionalArgs": {
+          "order": 401,
+          "type": "string",
+          "default": "",
+          "description": "[Claude CLI] Extra CLI flags appended to FlightPath's standard argument set",
+          "markdownDescription": "**Claude CLI Only.** Extra CLI flags appended to FlightPath's standard argument set. FlightPath continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before tool permission args. Prompt-level and workflow-level `additionalArgs` take precedence over this global setting. Example: `--effort high --max-turns 10`"
         },
         "flightpath.codexCliModel": {
           "order": 410,
@@ -830,6 +837,13 @@
           "type": "string",
           "default": "anthropic/claude-sonnet-4-6",
           "description": "[OpenCode CLI] Model for OpenCode CLI in provider/model format (e.g. anthropic/claude-sonnet-4-6). Run 'opencode models' to see available models for your configured providers."
+        },
+        "flightpath.openCodeCliAdditionalArgs": {
+          "order": 421,
+          "type": "string",
+          "default": "",
+          "description": "[OpenCode CLI] Extra CLI flags appended to FlightPath's standard argument set",
+          "markdownDescription": "**OpenCode CLI Only.** Extra CLI flags appended to FlightPath's standard argument set. FlightPath continues to manage model, session, and output format flags normally. Prompt-level and workflow-level `additionalArgs` take precedence over this global setting. Example: `--thinking true --variant fast`"
         },
         "flightpath.codexSandboxMode": {
           "order": 411,
@@ -877,6 +891,13 @@
           "description": "[Codex CLI] Additional writable directories",
           "markdownDescription": "**Codex CLI Only.** Additional directories Codex can write to when `codexSandboxMode` is **workspace-write**. Only applies when `cliToolPermissions` is **custom** and `codexSandboxMode` is **workspace-write**."
         },
+        "flightpath.codexCliAdditionalArgs": {
+          "order": 414,
+          "type": "string",
+          "default": "",
+          "description": "[Codex CLI] Extra CLI flags appended to FlightPath's standard argument set",
+          "markdownDescription": "**Codex CLI Only.** Extra CLI flags appended to FlightPath's standard argument set (exec-tier only). FlightPath continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before tool permission args. Prompt-level and workflow-level `additionalArgs` take precedence over this global setting. Example: `--skip-git-repo-check -c model_reasoning_effort=high`"
+        },
         "flightpath.defaultMaxRetries": {
           "order": 500,
           "type": "number",
@@ -896,7 +917,13 @@
         "flightpath.priorContext": {
           "order": 545,
           "type": "string",
-          "enum": ["none", "previous", "all", "finalPromptAll", "finalPromptPrevious"],
+          "enum": [
+            "none",
+            "previous",
+            "all",
+            "finalPromptAll",
+            "finalPromptPrevious"
+          ],
           "enumDescriptions": [
             "No prior context injection (default)",
             "Inject the previous prompt's output",

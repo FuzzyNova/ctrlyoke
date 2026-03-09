@@ -138,9 +138,9 @@ export class CopilotCliProvider implements ICliProvider {
       Log.debug("🔧 FlightPath MCP tools auto-approved");
     }
 
-    // Extra CLI flags from appendArgs (injected before tool permission args)
+    // Extra CLI flags from additionalArgs (injected before tool permission args)
     const appendTokens = parseArgString(
-      workflowContext?.resolvedProperties?.appendArgs ?? ""
+      workflowContext?.resolvedProperties?.additionalArgs ?? ""
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
@@ -385,7 +385,10 @@ export class CopilotCliProvider implements ICliProvider {
       );
 
       // Write to temp directory — use unique name per execution to avoid parallel workflow collisions
-      const configPath = this.getMcpConfigFilePath(workingFilePath, workspaceRoot)!;
+      const configPath = this.getMcpConfigFilePath(
+        workingFilePath,
+        workspaceRoot
+      )!;
       await fs.mkdir(path.dirname(configPath), { recursive: true });
       await fs.writeFile(configPath, configJson, "utf-8");
 
@@ -505,7 +508,9 @@ export class CopilotCliProvider implements ICliProvider {
    * This is the permanent architecture — session ID is not available until the final
    * `result` event, so real-time log tailing during execution is not feasible.
    */
-  async augmentParsedOutput(output: UniversalCliOutput): Promise<UniversalCliOutput> {
+  async augmentParsedOutput(
+    output: UniversalCliOutput
+  ): Promise<UniversalCliOutput> {
     // Plain-text mode: token data comes from stderr stats in parseTokenCounts(), not needed here.
     if (output.metadata.rawTextOutput) {
       return output;
@@ -513,7 +518,9 @@ export class CopilotCliProvider implements ICliProvider {
 
     const sessionId = output.metadata.sessionId;
     if (!sessionId) {
-      Log.debug(`[CopilotCliProvider] augmentParsedOutput: no sessionId in parsed metadata`);
+      Log.debug(
+        `[CopilotCliProvider] augmentParsedOutput: no sessionId in parsed metadata`
+      );
       return output;
     }
 
@@ -522,7 +529,8 @@ export class CopilotCliProvider implements ICliProvider {
       return output;
     }
 
-    const truncation = await CopilotLogParser.extractTruncationDataFromLog(sessionId);
+    const truncation =
+      await CopilotLogParser.extractTruncationDataFromLog(sessionId);
     const outputTokens = output.metadata.usage?.outputTokens ?? 0;
 
     if (truncation) {
@@ -549,9 +557,12 @@ export class CopilotCliProvider implements ICliProvider {
     // Fallback: session.truncation only fires when there is enough prior context
     // (short/first prompts may not emit it). The process log always contains
     // CompactionProcessor utilization lines which carry the same data.
-    const processCtx = await this.logParser.extractContextFromProcessLog(sessionId);
+    const processCtx =
+      await this.logParser.extractContextFromProcessLog(sessionId);
     if (!processCtx) {
-      Log.debug(`[CopilotCliProvider] No context window data available for session ${sessionId}`);
+      Log.debug(
+        `[CopilotCliProvider] No context window data available for session ${sessionId}`
+      );
       return output;
     }
 

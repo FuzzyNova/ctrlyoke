@@ -159,11 +159,11 @@ export class ClaudeCliProvider implements ICliProvider {
       );
     }
 
-    // Extra CLI flags from appendArgs (injected before tool permission args).
+    // Extra CLI flags from additionalArgs (injected before tool permission args).
     // IMPORTANT: Must come before tool permissions — Claude's --disallowedTools is variadic
     // and will consume any flags that follow it.
     const appendTokens = parseArgString(
-      workflowContext?.resolvedProperties?.appendArgs ?? ""
+      workflowContext?.resolvedProperties?.additionalArgs ?? ""
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);
@@ -339,7 +339,10 @@ export class ClaudeCliProvider implements ICliProvider {
       );
 
       // Write to temp directory — use unique name per execution to avoid parallel workflow collisions
-      const configPath = this.getMcpConfigFilePath(workingFilePath, workspaceRoot)!;
+      const configPath = this.getMcpConfigFilePath(
+        workingFilePath,
+        workspaceRoot
+      )!;
       await fs.mkdir(path.dirname(configPath), { recursive: true });
       await fs.writeFile(configPath, configJson, "utf-8");
 

@@ -143,9 +143,9 @@ export class CodexCliProvider implements ICliProvider {
       });
     }
 
-    // Extra CLI flags from appendArgs (injected before tool permission args)
+    // Extra CLI flags from additionalArgs (injected before tool permission args)
     const appendTokens = parseArgString(
-      workflowContext?.resolvedProperties?.appendArgs ?? ""
+      workflowContext?.resolvedProperties?.additionalArgs ?? ""
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);

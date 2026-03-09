@@ -67,15 +67,15 @@ export class OpenCodeCliProvider implements ICliProvider {
   /** The fully-qualified model ID used for the most-recently started execution (e.g. "anthropic/claude-sonnet-4-6"). */
   private resolvedCurrentModel: string = "anthropic/claude-sonnet-4-6";
 
-  readonly responseParser: IResponseParser = new OpenCodeResponseParser(
-    () => getOpenCodeContextWindowSize(this.resolvedCurrentModel)
+  readonly responseParser: IResponseParser = new OpenCodeResponseParser(() =>
+    getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );
   readonly notificationMonitor: INotificationMonitor =
     new OpenCodeNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new OpenCodeToolPermissionMapper();
-  readonly logParser = new OpenCodeLogParser(
-    () => getOpenCodeContextWindowSize(this.resolvedCurrentModel)
+  readonly logParser = new OpenCodeLogParser(() =>
+    getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );
 
   /** Path of the plugin file written for the current interactive execution (for cleanup) */
@@ -169,9 +169,9 @@ export class OpenCodeCliProvider implements ICliProvider {
       await this.deployCompletionPlugin(workspaceRoot);
     }
 
-    // Extra CLI flags from appendArgs (appended before prompt positional arg)
+    // Extra CLI flags from additionalArgs (appended before prompt positional arg)
     const appendTokens = parseArgString(
-      workflowContext?.resolvedProperties?.appendArgs ?? ""
+      workflowContext?.resolvedProperties?.additionalArgs ?? ""
     );
     if (appendTokens.length > 0) {
       args.push(...appendTokens);

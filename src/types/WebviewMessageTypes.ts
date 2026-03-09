@@ -199,7 +199,7 @@ export interface PromptItem {
   allowDynamicExtension?: boolean;
   endCondition?: EndConditionConfig | null;
   priorContext?: import("./FlightPathTypes").PriorContext;
-  appendArgs?: string;
+  additionalArgs?: string;
   _runtime?: {
     harness?: string;
     model?: string;
@@ -596,6 +596,7 @@ export interface GlobalSettingsUpdatedMessage {
     harness: HarnessId;
     model: string;
     harnessDefaultModels?: Record<HarnessId, string>;
+    harnessDefaultAdditionalArgs?: Record<HarnessId, string>;
     agent: string;
     skills?: string[];
     executionMode: ExecutionMode;

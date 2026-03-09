@@ -73,6 +73,25 @@ function getModelSettingKeyForHarness(harness: Harness): string {
 }
 
 /**
+ * Get the settings key for harness-specific additional args
+ * Internal helper for ConfigurationUtils
+ */
+function getAdditionalArgsSettingKeyForHarness(harness: Harness): string {
+  switch (harness) {
+    case Harness.CopilotCli:
+      return "copilotCliAdditionalArgs";
+    case Harness.ClaudeCli:
+      return "claudeCliAdditionalArgs";
+    case Harness.CodexCli:
+      return "codexCliAdditionalArgs";
+    case Harness.OpenCodeCli:
+      return "openCodeCliAdditionalArgs";
+    default:
+      return "copilotCliAdditionalArgs";
+  }
+}
+
+/**
  * Configuration utility functions for FlightPath settings.
  * Centralizes all VS Code settings access for consistency and testability.
  */
@@ -383,11 +402,16 @@ export const ConfigurationUtils = {
   // ============================================================
 
   /**
-   * Get extra CLI flags to append to FlightPath's standard argument set (global fallback).
-   * Prompt-level and workflow-level appendArgs take precedence via PropertyResolver.
+   * Get extra CLI flags to append for a specific harness (global fallback).
+   * Prompt-level and workflow-level additionalArgs take precedence via PropertyResolver.
+   * copilot-chat is not a CLI harness and returns "".
    */
-  getCliAppendArgs(): string {
-    return getConfig().get<string>("cliAppendArgs", "");
+  getAdditionalArgsForHarness(harness: Harness): string {
+    if (harness === Harness.CopilotChat) {
+      return "";
+    }
+    const key = getAdditionalArgsSettingKeyForHarness(harness);
+    return getConfig().get<string>(key, "");
   },
 
   /**
@@ -552,6 +576,17 @@ export const ConfigurationUtils = {
   async setModelForHarness(harness: Harness, model: string): Promise<void> {
     const settingKey = getModelSettingKeyForHarness(harness);
     await this.updateSetting(settingKey, model);
+  },
+
+  /**
+   * Set the default additional args for a specific harness
+   */
+  async setAdditionalArgsForHarness(
+    harness: Harness,
+    args: string
+  ): Promise<void> {
+    const settingKey = getAdditionalArgsSettingKeyForHarness(harness);
+    await this.updateSetting(settingKey, args);
   },
 
   /**

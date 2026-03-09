@@ -379,6 +379,11 @@ export class WebviewSettingsSync {
   ): Promise<void> {
     if (property === "model" && harness) {
       await ConfigurationUtils.setModelForHarness(harness as Harness, value);
+    } else if (property === "additionalArgs" && harness) {
+      await ConfigurationUtils.setAdditionalArgsForHarness(
+        harness as Harness,
+        value ?? ""
+      );
     } else if (property === "agent") {
       await ConfigurationUtils.setDefaultAgent(value || "");
     } else if (property === "skills") {
@@ -443,10 +448,19 @@ export class WebviewSettingsSync {
       [HARNESS_IDS.OPENCODE_CLI]: this.getModelForHarness(Harness.OpenCodeCli),
     };
 
+    const harnessDefaultAdditionalArgs = {
+      [HARNESS_IDS.COPILOT_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(Harness.CopilotCli),
+      [HARNESS_IDS.COPILOT_CHAT]: "",
+      [HARNESS_IDS.CLAUDE_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(Harness.ClaudeCli),
+      [HARNESS_IDS.CODEX_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(Harness.CodexCli),
+      [HARNESS_IDS.OPENCODE_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(Harness.OpenCodeCli),
+    };
+
     return {
       harness,
       model,
       harnessDefaultModels,
+      harnessDefaultAdditionalArgs,
       agent,
       skills,
       executionMode,

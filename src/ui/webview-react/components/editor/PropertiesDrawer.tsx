@@ -365,21 +365,21 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             />
           </div>
 
-          {/* Row 6: Append Args (full width) */}
+          {/* Row 6: Additional Args (full width) */}
           <div className="flex flex-col gap-1">
             <label
               htmlFor="prop-append-args"
               className="text-xs font-medium text-foreground"
               title="Extra CLI flags appended to FlightPath's standard argument set. Only applies to CLI harnesses."
             >
-              Append Args
+              Additional Args
             </label>
             <input
               type="text"
               id="prop-append-args"
-              value={properties.appendArgs ?? ""}
+              value={properties.additionalArgs ?? ""}
               onChange={(e) =>
-                setProperty("appendArgs", e.target.value || undefined)
+                setProperty("additionalArgs", e.target.value || undefined)
               }
               placeholder="e.g. --effort high --max-turns 10"
               className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"

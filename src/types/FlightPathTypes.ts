@@ -83,7 +83,7 @@ export interface ExecutionProperties {
    * FlightPath continues to manage model, permissions, workspace dirs, and session flags normally.
    * Tokens are injected before the tool permission args. Applies only to CLI harnesses; ignored for copilot-chat.
    * Example: "--effort high --max-turns 10" */
-  appendArgs?: string;
+  additionalArgs?: string;
 }
 
 export interface PromptFile extends ExecutionProperties {

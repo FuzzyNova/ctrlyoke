@@ -179,6 +179,12 @@ export const SettingsPanel: React.FC<{
           globalSettings.harnessDefaultModels[effectiveHarness]
         );
       }
+      if (property === "additionalArgs") {
+        // Compare against the harness-specific default
+        const harnessDefault =
+          globalSettings.harnessDefaultAdditionalArgs[effectiveHarness] ?? "";
+        return workflowValue !== (harnessDefault || undefined);
+      }
       // Array comparison for skills — compare against global default skills
       if (property === "skills") {
         return (
@@ -241,6 +247,20 @@ export const SettingsPanel: React.FC<{
           value: defaultModel,
         });
       }
+
+      // Always update additionalArgs to the global default for the new harness
+      const globalDefaultAdditionalArgs =
+        settingsStore.globalSettings.harnessDefaultAdditionalArgs[harness] ??
+        "";
+      settingsStore.updateWorkflowProperty(
+        "additionalArgs",
+        globalDefaultAdditionalArgs || undefined
+      );
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+        property: "additionalArgs",
+        value: globalDefaultAdditionalArgs || undefined,
+      });
     },
     [vscode, getModelsForHarness]
   );
@@ -365,14 +385,17 @@ export const SettingsPanel: React.FC<{
     [vscode]
   );
 
-  const handleAppendArgsChange = useCallback(
+  const handleAdditionalArgsChange = useCallback(
     (value: string) => {
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("appendArgs", value || undefined);
+      settingsStore.updateWorkflowProperty(
+        "additionalArgs",
+        value || undefined
+      );
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "appendArgs",
+        property: "additionalArgs",
         value: value || undefined,
       });
     },
@@ -451,12 +474,13 @@ export const SettingsPanel: React.FC<{
   );
 
   const handleSetAsDefault = useCallback(
-    (property: string, value: unknown) => {
+    (property: string, value: unknown, harness?: string) => {
       vscode.postMessage({
         type: MESSAGE_TYPES.SET_AS_DEFAULT,
         property,
         value,
-        harness: property === "model" ? effectiveHarness : undefined,
+        harness:
+          harness ?? (property === "model" ? effectiveHarness : undefined),
       });
     },
     [vscode, effectiveHarness]
@@ -699,17 +723,30 @@ export const SettingsPanel: React.FC<{
             />
           </FormField>
 
-          {/* Append Args */}
+          {/* Additional Args */}
           <FormField
-            label="Append Args"
+            label="Additional Args"
             htmlFor="settings-append-args"
             description="Extra CLI flags appended to FlightPath's standard argument set. Only applies to CLI harnesses."
+            setAsDefaultButton={
+              <SetAsDefaultButton
+                property="additionalArgs"
+                show={isDifferentFromGlobal("additionalArgs")}
+                onSetDefault={() =>
+                  handleSetAsDefault(
+                    "additionalArgs",
+                    workflowProperties.additionalArgs,
+                    effectiveHarness
+                  )
+                }
+              />
+            }
           >
             <input
               type="text"
               id="settings-append-args"
-              value={workflowProperties.appendArgs ?? ""}
-              onChange={(e) => handleAppendArgsChange(e.target.value)}
+              value={workflowProperties.additionalArgs ?? ""}
+              onChange={(e) => handleAdditionalArgsChange(e.target.value)}
               placeholder="e.g. --effort high --max-turns 10"
               className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
             />
