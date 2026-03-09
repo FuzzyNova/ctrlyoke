@@ -383,6 +383,14 @@ export const ConfigurationUtils = {
   // ============================================================
 
   /**
+   * Get extra CLI flags to append to FlightPath's standard argument set (global fallback).
+   * Prompt-level and workflow-level appendArgs take precedence via PropertyResolver.
+   */
+  getCliAppendArgs(): string {
+    return getConfig().get<string>("cliAppendArgs", "");
+  },
+
+  /**
    * Get allowed tools for CLI operations (shared between Copilot and Claude)
    */
   getCliAllowedTools(): string[] {

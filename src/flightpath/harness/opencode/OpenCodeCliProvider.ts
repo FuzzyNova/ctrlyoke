@@ -14,6 +14,7 @@ import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getOpenCodeContextWindowSize } from "../../../utils/ModelRegistry";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { parseArgString } from "../../../utils/CliArgParser";
 import type { PromptItem } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
@@ -166,6 +167,15 @@ export class OpenCodeCliProvider implements ICliProvider {
     // Interactive mode: deploy the completion detection plugin
     if (isInteractive && workspaceRoot) {
       await this.deployCompletionPlugin(workspaceRoot);
+    }
+
+    // Extra CLI flags from appendArgs (appended before prompt positional arg)
+    const appendTokens = parseArgString(
+      workflowContext?.resolvedProperties?.appendArgs ?? ""
+    );
+    if (appendTokens.length > 0) {
+      args.push(...appendTokens);
+      Log.info(`Extra CLI args applied (${appendTokens.length} tokens)`);
     }
 
     return args;

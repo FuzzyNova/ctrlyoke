@@ -153,6 +153,10 @@
               "description": "Specific prior prompt numbers to include (1-based, e.g. [1, 3] includes prompts 1 and 3)"
             }
           ]
+        },
+        "appendArgs": {
+          "type": "string",
+          "description": "Extra CLI flags appended to FlightPath's standard argument set. FlightPath continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies only to CLI harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli). Ignored for copilot-chat. Example: \"--effort high --max-turns 10\""
         }
       }
     },

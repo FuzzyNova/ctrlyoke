@@ -199,6 +199,7 @@ export interface PromptItem {
   allowDynamicExtension?: boolean;
   endCondition?: EndConditionConfig | null;
   priorContext?: import("./FlightPathTypes").PriorContext;
+  appendArgs?: string;
   _runtime?: {
     harness?: string;
     model?: string;

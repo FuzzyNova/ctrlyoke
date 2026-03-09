@@ -89,6 +89,7 @@ export class ValidationUtils {
         // PriorContext = "all" | "previous" | "none" | number[]
         // AJV JSONSchemaType cannot express this union natively, so use 'as any'
       } as any,
+      appendArgs: { type: "string", nullable: true },
       _runtime: {
         type: "object",
         properties: {
@@ -129,6 +130,7 @@ export class ValidationUtils {
           priorContext: {
             // PriorContext = "all" | "previous" | "none" | number[]
           } as any,
+          appendArgs: { type: "string", nullable: true },
         },
         required: ["startedAt"],
         nullable: true,

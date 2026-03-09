@@ -38,6 +38,9 @@ export interface ResolvedProperties {
 
   /** Controls injection of prior prompt outputs - undefined means no injection */
   priorContext?: PriorContext;
+
+  /** Extra CLI flags appended to FlightPath's standard argument set - undefined if not specified */
+  appendArgs?: string;
 }
 
 /**
@@ -88,6 +91,7 @@ export class PropertyResolver {
       sessionId: this.resolveSessionId(prompt, workflow),
       endCondition: this.resolveEndCondition(prompt, workflow),
       priorContext: this.resolvePriorContext(prompt, workflow),
+      appendArgs: this.resolveAppendArgs(prompt, workflow),
     };
   }
 
@@ -387,6 +391,39 @@ export class PropertyResolver {
     return globalDefault !== "none"
       ? (globalDefault as PriorContext)
       : undefined;
+  }
+
+  /**
+   * Resolve appendArgs with three-tier precedence.
+   *
+   * Precedence order:
+   * 1. Prompt-level override (prompt.appendArgs)
+   * 2. Workflow-level default (workflow.appendArgs)
+   * 3. VS Code setting (flightpath.cliAppendArgs)
+   *
+   * Empty string at any level is treated as "not set" — falls through to the next tier.
+   *
+   * @param prompt The prompt to resolve appendArgs for
+   * @param workflow The parent workflow file
+   * @returns Resolved appendArgs string or undefined
+   */
+  private static resolveAppendArgs(
+    prompt: PromptItem,
+    workflow: PromptFile
+  ): string | undefined {
+    // 1. Prompt-level override (highest priority)
+    if (prompt.appendArgs !== undefined && prompt.appendArgs !== "") {
+      return prompt.appendArgs;
+    }
+
+    // 2. Workflow-level default
+    if (workflow.appendArgs !== undefined && workflow.appendArgs !== "") {
+      return workflow.appendArgs;
+    }
+
+    // 3. VS Code setting fallback
+    const globalAppendArgs = ConfigurationUtils.getCliAppendArgs();
+    return globalAppendArgs || undefined;
   }
 
   /**

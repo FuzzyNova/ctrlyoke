@@ -22,6 +22,7 @@ import {
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { parseArgString } from "../../../utils/CliArgParser";
 import type { PromptItem } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
@@ -135,6 +136,15 @@ export class CopilotCliProvider implements ICliProvider {
       // Auto-approve FlightPath MCP tools (FlightPath is the orchestrator)
       args.push("--allow-tool", "flightpath");
       Log.debug("🔧 FlightPath MCP tools auto-approved");
+    }
+
+    // Extra CLI flags from appendArgs (injected before tool permission args)
+    const appendTokens = parseArgString(
+      workflowContext?.resolvedProperties?.appendArgs ?? ""
+    );
+    if (appendTokens.length > 0) {
+      args.push(...appendTokens);
+      Log.info(`Extra CLI args applied (${appendTokens.length} tokens)`);
     }
 
     // Tool permissions (only for headless mode - interactive mode lets user approve interactively)

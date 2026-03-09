@@ -365,6 +365,20 @@ export const SettingsPanel: React.FC<{
     [vscode]
   );
 
+  const handleAppendArgsChange = useCallback(
+    (value: string) => {
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty("appendArgs", value || undefined);
+
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+        property: "appendArgs",
+        value: value || undefined,
+      });
+    },
+    [vscode]
+  );
+
   const handlePriorContextChange = useCallback(
     (value: PriorContext | undefined) => {
       const settingsStore = useSettingsStore.getState();
@@ -682,6 +696,22 @@ export const SettingsPanel: React.FC<{
                 number: i + 1,
                 name: p.name,
               }))}
+            />
+          </FormField>
+
+          {/* Append Args */}
+          <FormField
+            label="Append Args"
+            htmlFor="settings-append-args"
+            description="Extra CLI flags appended to FlightPath's standard argument set. Only applies to CLI harnesses."
+          >
+            <input
+              type="text"
+              id="settings-append-args"
+              value={workflowProperties.appendArgs ?? ""}
+              onChange={(e) => handleAppendArgsChange(e.target.value)}
+              placeholder="e.g. --effort high --max-turns 10"
+              className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
             />
           </FormField>
 

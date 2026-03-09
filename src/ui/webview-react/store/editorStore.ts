@@ -31,6 +31,7 @@ export interface PropertyValues {
   allowDynamicExtension: string; // "default" | "yes" | "no"
   endCondition?: EndConditionConfig | null;
   priorContext?: PriorContext; // undefined = inherit/default
+  appendArgs?: string; // "" or raw arg string
 }
 
 /**
@@ -46,6 +47,7 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
   sessionId: "",
   allowDynamicExtension: "default",
   endCondition: undefined, // undefined = inherit from workflow
+  appendArgs: undefined,
 };
 
 export const END_CONDITION_DEFAULTS: EndConditionConfig = {
@@ -308,6 +310,7 @@ export const useEditorStore = create<
             : "no",
       endCondition: promptData.endCondition ?? null,
       priorContext: promptData.priorContext,
+      appendArgs: promptData.appendArgs ?? undefined,
     };
 
     const isFinalPromptTarget = index < 0;
@@ -625,6 +628,11 @@ export const useEditorStore = create<
     // Add priorContext if set
     if (properties.priorContext !== undefined) {
       result.priorContext = properties.priorContext;
+    }
+
+    // Add appendArgs if non-empty
+    if (properties.appendArgs) {
+      result.appendArgs = properties.appendArgs;
     }
 
     return result;

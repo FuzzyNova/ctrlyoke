@@ -78,6 +78,7 @@ export interface WorkflowProperties {
     retryPrompt?: string;
   } | null;
   priorContext?: PriorContext;
+  appendArgs?: string;
 }
 
 /**
