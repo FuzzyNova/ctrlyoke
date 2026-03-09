@@ -21,7 +21,6 @@ import {
   CODEX_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import { Harness } from "../types/FlightPathTypes";
-import type { EndCondition } from "../types/FlightPathTypes";
 import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import { AgentDiscovery } from "../utils/AgentDiscovery";
 import type { AgentInfo } from "../utils/AgentDiscovery";
@@ -83,16 +82,6 @@ export class WebviewSettingsSync {
     },
   };
 
-  // Pending workflow properties (set before workflow is created)
-  private pendingWorkflowProperties: {
-    harness?: string;
-    model?: string;
-    agent?: string;
-    resumeSession?: boolean;
-    sessionId?: string | number;
-    allowDynamicExtension?: boolean;
-    endCondition?: EndCondition | null;
-  } = {};
 
   // Validation constants
   private static readonly VALID_HARNESSES = [
@@ -360,35 +349,27 @@ export class WebviewSettingsSync {
     value: any
   ): Promise<void> {
     const manager = this.getManager();
-    const hasWorkingFile = manager?.getQueueState()?.workingFilePath;
-
-    if (!hasWorkingFile) {
-      // Store in pending properties until working file exists
-      if (value === undefined) {
-        delete (this.pendingWorkflowProperties as Record<string, unknown>)[
-          property
-        ];
-      } else {
-        (this.pendingWorkflowProperties as Record<string, unknown>)[property] =
-          value;
-      }
-
-      this.postMessage({
-        type: MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE,
-        workflowProperties: this.pendingWorkflowProperties,
-      });
+    if (!manager) {
       return;
     }
 
-    // Working file exists: Update it directly
-    if (manager) {
-      await manager.updateWorkingFileProperties(
-        { [property]: value },
-        { allowDeletes: value === undefined }
-      );
-
-      await this.sendWorkflowPropertiesToSettings();
+    if (!manager.getQueueState()?.workingFilePath) {
+      await manager.ensureEphemeralWorkingFile();
     }
+
+    if (!manager.getQueueState()?.workingFilePath) {
+      Log.warn(
+        `handleUpdateWorkflowProperty: no workspace, cannot persist "${property}"`
+      );
+      return;
+    }
+
+    await manager.updateWorkingFileProperties(
+      { [property]: value },
+      { allowDeletes: value === undefined }
+    );
+
+    await this.sendWorkflowPropertiesToSettings();
   }
 
   async handleSetAsDefault(
@@ -432,32 +413,6 @@ export class WebviewSettingsSync {
     // scoped getConfiguration("flightpath"), so it expects a relative key.
     const relativeKey = key.slice("flightpath.".length);
     await ConfigurationUtils.updateSetting(relativeKey, value);
-  }
-
-  // ============================================================================
-  // Pending Workflow Properties
-  // ============================================================================
-
-  /**
-   * Apply pending workflow properties that were set before a working file existed.
-   * Called after a workflow file is selected/created.
-   */
-  async applyPendingWorkflowProperties(): Promise<void> {
-    if (Object.keys(this.pendingWorkflowProperties).length === 0) {
-      return;
-    }
-
-    const manager = this.getManager();
-    if (!manager) {
-      return;
-    }
-
-    await manager.updateWorkingFileProperties(this.pendingWorkflowProperties, {
-      ensureHarnessAndModel: true,
-    });
-
-    this.pendingWorkflowProperties = {};
-    await this.sendWorkflowPropertiesToSettings();
   }
 
   // ============================================================================

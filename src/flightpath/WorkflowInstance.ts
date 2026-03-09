@@ -1303,6 +1303,47 @@ export class WorkflowInstance {
     return this.promptQueue.updateWorkingFileProperties(properties, options);
   }
 
+  /**
+   * Eagerly create a working file for a new ephemeral workflow the moment the
+   * user first changes any workflow-level property (harness, model, finalPrompt,
+   * etc.) before adding any prompts. This eliminates the need for a
+   * pendingWorkflowProperties cache — every property write goes straight to disk.
+   *
+   * Idempotent: returns immediately if a working file already exists.
+   */
+  public async ensureEphemeralWorkingFile(): Promise<void> {
+    if (this.promptQueue.getState().workingFilePath) {
+      return;
+    }
+
+    const workspaceFolderPath =
+      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    if (!workspaceFolderPath) {
+      return;
+    }
+
+    const displayName =
+      this.workflowName ||
+      this.promptQueue.getState().workflowName ||
+      "new-workflow";
+
+    try {
+      const workingFilePath = await this.promptQueue.createWorkingFile(
+        displayName,
+        [],
+        workspaceFolderPath
+      );
+      Log.info(`✅ Eagerly created working file: ${workingFilePath}`);
+
+      const defaults = PromptFileLoader.populateSettingsDefaults({});
+      if (Object.keys(defaults).length > 0) {
+        await this.promptQueue.updateWorkingFileProperties(defaults);
+      }
+    } catch (error) {
+      Log.error("Failed to eagerly create working file:", error);
+    }
+  }
+
   async updatePromptInQueue(
     index: number,
     text: string,
@@ -1328,6 +1369,8 @@ export class WorkflowInstance {
   async updateFinalPromptInQueue(
     finalPrompt: PromptItem | null
   ): Promise<void> {
+    await this.ensureEphemeralWorkingFile();
+
     if (finalPrompt) {
       const normalized: PromptItem = {
         prompt: finalPrompt.prompt,
@@ -2097,10 +2140,6 @@ export class WorkflowInstance {
           originalFilePath
         );
         Log.info(`✅ Created working file: ${workingFilePath}`);
-
-        if (this.dashboardSink) {
-          await this.dashboardSink.applyPendingWorkflowProperties();
-        }
       } catch (error) {
         Log.error("Failed to create working file:", error);
       }

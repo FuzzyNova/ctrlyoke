@@ -282,9 +282,6 @@ window.vscodeApi = acquireVsCodeApi();
       finalPromptPhase: finalPromptRuntime?.phase ?? null,
     });
 
-    // Apply any pending workflow properties (set before workflow creation)
-    await this.settingsSync.applyPendingWorkflowProperties();
-
     // Extract and send workflow properties to settings panel
     await this.settingsSync.sendWorkflowPropertiesToSettings();
   }
@@ -716,13 +713,6 @@ window.vscodeApi = acquireVsCodeApi();
     await this.flightPathManager.clearWorkflow();
     this.updateFileSelected("New Workflow", [], undefined);
     Log.info("Workflow cleared, ready for new prompts");
-  }
-
-  /**
-   * Apply pending workflow properties. Public because WorkflowInstance calls this.
-   */
-  async applyPendingWorkflowProperties(): Promise<void> {
-    await this.settingsSync.applyPendingWorkflowProperties();
   }
 
   /**

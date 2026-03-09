@@ -104,7 +104,7 @@ export class PromptFileLoader {
             // not explicitly specified in the source file. This ensures the working
             // file always has explicit values so the SettingsDrawer stays in sync
             // with the actual configuration (no implicit fallback to global settings).
-            const defaults = this.populateSettingsDefaults(updates);
+            const defaults = PromptFileLoader.populateSettingsDefaults(updates);
 
             if (Object.keys(defaults).length > 0) {
               await this.promptQueue.updateWorkingFileProperties(defaults);
@@ -308,7 +308,7 @@ export class PromptFileLoader {
    * Build an object of default values from VS Code settings for any
    * ExecutionProperties not already provided in `explicitValues`.
    */
-  private populateSettingsDefaults(
+  static populateSettingsDefaults(
     explicitValues: Record<string, unknown>
   ): Record<string, unknown> {
     const effectiveHarness =

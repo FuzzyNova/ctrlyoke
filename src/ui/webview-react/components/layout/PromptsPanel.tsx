@@ -118,7 +118,7 @@ export const PromptsPanel: React.FC<{
     const result: PromptOverride[] = [];
 
     // agent — show basename only
-    if (prompt.agent !== undefined) {
+    if (prompt.agent != null) {
       const basename = prompt.agent.replace(/.*[\\/]/, "");
       result.push({
         label: `agent: ${basename}`,
@@ -127,7 +127,7 @@ export const PromptsPanel: React.FC<{
     }
 
     // skills — show count
-    if (prompt.skills !== undefined && prompt.skills.length > 0) {
+    if (prompt.skills != null && prompt.skills.length > 0) {
       result.push({
         label: `skills: ${prompt.skills.length}`,
         title: prompt.skills.join(", "),

@@ -121,7 +121,6 @@ suite("WorkflowInstance finalPrompt replay", () => {
         statusMessageCalls.push({ stepIndex, message, severity });
       },
       notifyWorkflowStateReset: () => {},
-      applyPendingWorkflowProperties: async () => {},
     };
 
     const instance = new WorkflowInstance(

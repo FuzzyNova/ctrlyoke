@@ -863,6 +863,10 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().updateFinalPromptInQueue(finalPrompt);
   }
 
+  async ensureEphemeralWorkingFile(): Promise<void> {
+    return this.getActiveInstance().ensureEphemeralWorkingFile();
+  }
+
   async deletePromptFromQueue(index: number): Promise<void> {
     return this.getActiveInstance().deletePromptFromQueue(index);
   }
