@@ -3,6 +3,7 @@ import { STEP_STATUS, type StepStatus } from "../../types/messages";
 
 interface StatusIconProps {
   status: StepStatus;
+  disabled?: boolean;
   className?: string;
 }
 
@@ -14,10 +15,14 @@ interface StatusIconProps {
  */
 export const StatusIcon: React.FC<StatusIconProps> = ({
   status,
+  disabled = false,
   className = "",
 }) => {
   // Map status to codicon class name and color
   const getIconConfig = (): { icon: string; colorClass: string } => {
+    if (disabled) {
+      return { icon: "codicon-circle-slash", colorClass: "text-description-fg" };
+    }
     switch (status) {
       case STEP_STATUS.PENDING:
         return {
@@ -62,7 +67,7 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
   return (
     <i
       className={`codicon ${icon} ${colorClass} text-sm ${className}`}
-      aria-label={status}
+      aria-label={disabled ? "disabled" : status}
     />
   );
 };

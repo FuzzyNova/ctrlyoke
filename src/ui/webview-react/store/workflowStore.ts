@@ -637,8 +637,12 @@ export const useWorkflowStore = create<
       totalSteps: prompts.length,
       executionState: EXECUTION_STATES.IDLE,
       currentStep: 0,
-      // cliOutputs, retryStates, statusMessages, streamingChunks, historyOutputs
-      // are intentionally preserved so the run history and output panel are unaffected.
+      finalPromptStatus: null,
+      finalPromptLoopCount: 0,
+      finalPromptPhase: null,
+      // cliOutputs, retryStates, statusMessages, streamingChunks, historyOutputs,
+      // finalPromptOutputs, finalPromptStatusMessages are intentionally preserved
+      // so the run history and output panel are unaffected.
     })),
 
   clearRuntimeStateFromStep: (startStep) =>

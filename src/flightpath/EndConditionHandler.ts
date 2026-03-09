@@ -274,7 +274,7 @@ export class EndConditionHandler {
         prompt: retryPromptText,
         model: prompt.model,
         endCondition: prompt.endCondition, // Keep same end condition
-        resumeSession: true, // IMPORTANT: Retries must use same chat session
+        resumeSession: prompt.endCondition?.resumeSessionOnRetry ?? true, // Retries continue in same session unless resumeSessionOnRetry is explicitly false
       };
 
       // Update workflow progress to show retry

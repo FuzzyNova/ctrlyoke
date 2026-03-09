@@ -60,8 +60,8 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
   latestOutput,
   overrides,
 }) => {
-  const effectiveStatus: StepStatus = status ?? "pending";
   const hasFinalPrompt = !!finalPrompt;
+  const effectiveStatus: StepStatus = hasFinalPrompt ? (status ?? "pending") : "pending";
 
   return (
     <div className="border-t border-panel-border bg-sidebar-bg flex-shrink-0">
@@ -132,7 +132,7 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
           }
         }}
       >
-        <StatusIcon status={effectiveStatus} />
+        <StatusIcon status={effectiveStatus} disabled={!hasFinalPrompt} />
         <span className="text-[11px] font-semibold uppercase tracking-wide">
           Final Prompt
         </span>

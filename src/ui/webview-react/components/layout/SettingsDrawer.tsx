@@ -149,7 +149,7 @@ export const SettingsPanel: React.FC<{
   }, [workflowProperties.endCondition]);
 
   // Narrow detection for footer toggle buttons
-  const [footerRef, isFooterNarrow] = useElementNarrow<HTMLDivElement>(200);
+  const [footerRef, isFooterNarrow] = useElementNarrow<HTMLDivElement>(300);
 
   // Get current effective values
   const effectiveHarness = getEffectiveHarness();
@@ -416,7 +416,7 @@ export const SettingsPanel: React.FC<{
   );
 
   const handleEndConditionFieldChange = useCallback(
-    (field: string, value: string | number) => {
+    (field: string, value: string | number | boolean) => {
       const currentEndCondition = workflowProperties.endCondition || {};
       const updatedEndCondition = {
         ...currentEndCondition,
@@ -656,36 +656,6 @@ export const SettingsPanel: React.FC<{
             )}
           </FormField>
 
-          {/* Allow Dynamic Extension */}
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2 mt-1">
-              <input
-                type="checkbox"
-                id="settings-dynamic-ext"
-                checked={effectiveAllowDynamicExtension}
-                onChange={(e) => handleDynamicExtensionChange(e.target.checked)}
-                className="w-4 h-4 accent-focus-border cursor-pointer"
-              />
-              <label
-                htmlFor="settings-dynamic-ext"
-                className="text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
-                title="Allow harness to extend the workflow queue. \n This will add Flightpath's MCP configuration to the harness, which exposes functions for extending and querying the workflow queue."
-              >
-                Allow Dynamic Extension
-              </label>
-              <SetAsDefaultButton
-                property="allowDynamicExtension"
-                show={isDifferentFromGlobal("allowDynamicExtension")}
-                onSetDefault={() =>
-                  handleSetAsDefault(
-                    "allowDynamicExtension",
-                    workflowProperties.allowDynamicExtension
-                  )
-                }
-              />
-            </div>
-          </div>
-
           {/* Prior Context */}
           <FormField
             label="Prior Context"
@@ -696,7 +666,10 @@ export const SettingsPanel: React.FC<{
                 property="priorContext"
                 show={isDifferentFromGlobal("priorContext")}
                 onSetDefault={() =>
-                  handleSetAsDefault("priorContext", workflowProperties.priorContext)
+                  handleSetAsDefault(
+                    "priorContext",
+                    workflowProperties.priorContext
+                  )
                 }
               />
             }
@@ -713,7 +686,7 @@ export const SettingsPanel: React.FC<{
           </FormField>
 
           {/* Resume Session & Session ID */}
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col">
             {/* Row 1: Checkbox + label + set as default */}
             <div className="flex items-center gap-2 mt-1">
               <input
@@ -746,7 +719,7 @@ export const SettingsPanel: React.FC<{
             <div
               className={`transition-all duration-300 ${
                 effectiveResumeSession
-                  ? "max-h-[40px] opacity-100"
+                  ? "max-h-[40px] opacity-100 mt-1"
                   : "max-h-0 opacity-0 overflow-hidden"
               }`}
             >
@@ -764,6 +737,36 @@ export const SettingsPanel: React.FC<{
             </div>
           </div>
 
+          {/* Allow Dynamic Extension */}
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                type="checkbox"
+                id="settings-dynamic-ext"
+                checked={effectiveAllowDynamicExtension}
+                onChange={(e) => handleDynamicExtensionChange(e.target.checked)}
+                className="w-4 h-4 accent-focus-border cursor-pointer"
+              />
+              <label
+                htmlFor="settings-dynamic-ext"
+                className="text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
+                title="Allow harness to extend the workflow queue. \n This will add Flightpath's MCP configuration to the harness, which exposes functions for extending and querying the workflow queue."
+              >
+                Allow Dynamic Extension
+              </label>
+              <SetAsDefaultButton
+                property="allowDynamicExtension"
+                show={isDifferentFromGlobal("allowDynamicExtension")}
+                onSetDefault={() =>
+                  handleSetAsDefault(
+                    "allowDynamicExtension",
+                    workflowProperties.allowDynamicExtension
+                  )
+                }
+              />
+            </div>
+          </div>
+
           {/* End Condition Section */}
           {/* Enable checkbox */}
           <div className="flex items-center gap-2">
@@ -772,7 +775,7 @@ export const SettingsPanel: React.FC<{
               id="settings-end-condition-enabled"
               checked={endConditionEnabled}
               onChange={(e) => handleEndConditionToggle(e.target.checked)}
-              className="w-4 h-4 accent-focus-border cursor-pointer"
+              className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
             />
             <label
               htmlFor="settings-end-condition-enabled"
@@ -897,6 +900,29 @@ export const SettingsPanel: React.FC<{
                 }
                 className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none"
               />
+            </div>
+
+            {/* Resume Session on Retry */}
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                type="checkbox"
+                id="settings-end-resume-session-on-retry"
+                checked={(endCondition as any).resumeSessionOnRetry ?? true}
+                onChange={(e) =>
+                  handleEndConditionFieldChange(
+                    "resumeSessionOnRetry",
+                    e.target.checked
+                  )
+                }
+                className="w-4 h-4 accent-focus-border cursor-pointer"
+              />
+              <label
+                htmlFor="settings-end-resume-session-on-retry"
+                className="text-[11px] font-semibold text-description-fg cursor-pointer"
+                title="When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
+              >
+                Resume Session on Retry
+              </label>
             </div>
           </div>
         </div>

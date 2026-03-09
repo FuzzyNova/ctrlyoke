@@ -107,8 +107,8 @@ definitions:
         description: >-
           Whether to resume the existing chat session for this prompt. When omitted, defaults to the
           flightpath.resumeExistingSession setting (default: false). Set to true to continue in the
-          existing session for context continuity. Retries always use the same session regardless of
-          this setting.
+          existing session for context continuity. Retries continue in the same session by default;
+          set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.
       allowDynamicExtension:
         type: boolean
         description: >-
@@ -225,6 +225,11 @@ definitions:
         description: >-
           Template for retry prompt with placeholders: {scriptOutput}, {errorOutput},
           {expectedValue}, {actualValue}, {retryCount}, {maxRetries}
+      resumeSessionOnRetry:
+        type: boolean
+        description: >-
+          Whether retries continue in the same session. Default: true (retries resume the existing
+          session for context continuity). Set to false to start a fresh session for each retry.
     required:
       - script
       - returns

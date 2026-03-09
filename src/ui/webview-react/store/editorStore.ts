@@ -14,6 +14,7 @@ export interface EndConditionConfig {
   timeout?: number;
   maxRetries?: number;
   retryPrompt?: string;
+  resumeSessionOnRetry?: boolean;
 }
 
 /**

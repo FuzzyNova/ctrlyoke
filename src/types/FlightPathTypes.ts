@@ -172,6 +172,7 @@ export interface EndCondition {
   timeout?: number;
   maxRetries?: number; // Maximum number of retry attempts (default: 0)
   retryPrompt?: string; // Template with placeholders for retry messages
+  resumeSessionOnRetry?: boolean; // Resume the same session for retries (default: true). Set false to start a fresh session for each retry.
 }
 
 export interface QueueState {

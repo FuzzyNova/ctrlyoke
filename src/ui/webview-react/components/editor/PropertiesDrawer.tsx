@@ -516,6 +516,32 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     Use {"{error}"} placeholder for validation error message
                   </span>
                 </div>
+
+                {/* Row 4: Resume Session on Retry */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="prop-end-resume-session-on-retry"
+                    checked={
+                      properties.endCondition?.resumeSessionOnRetry ?? true
+                    }
+                    onChange={(e) =>
+                      updateEndConditionField(
+                        "resumeSessionOnRetry",
+                        e.target.checked
+                      )
+                    }
+                    disabled={!properties.endCondition}
+                    className="w-4 h-4 accent-focus-border cursor-pointer disabled:opacity-50"
+                  />
+                  <label
+                    htmlFor="prop-end-resume-session-on-retry"
+                    className="text-xs font-medium text-foreground cursor-pointer"
+                    title="When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
+                  >
+                    Resume Session on Retry
+                  </label>
+                </div>
               </div>
             </div>
           </div>

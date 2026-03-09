@@ -351,6 +351,7 @@ export const END_CONDITION_PROPERTIES = {
   TIMEOUT: "timeout",
   MAX_RETRIES: "maxRetries",
   RETRY_PROMPT: "retryPrompt",
+  RESUME_SESSION_ON_RETRY: "resumeSessionOnRetry",
 } as const;
 
 // ============================================================================
