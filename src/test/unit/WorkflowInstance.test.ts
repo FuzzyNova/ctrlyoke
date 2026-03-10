@@ -219,3 +219,69 @@ suite("WorkflowInstance finalPrompt replay", () => {
     ]);
   });
 });
+
+suite("WorkflowInstance eager working file creation", () => {
+  test("deduplicates concurrent ensureEphemeralWorkingFile calls", async () => {
+    const platform = new MockPlatform();
+
+    const dashboardSink: any = {
+      updateFileSelected: async () => {},
+      updateSessionRestored: async () => {},
+      updateExecutionStarted: () => {},
+      notifyRunHistoryUpdated: () => {},
+      updateProgress: () => {},
+      updateExecutionState: () => {},
+      updateStepStatus: () => {},
+      updateRetryAttempt: () => {},
+      updateCliOutput: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: () => {},
+      updatePromptsExtended: () => {},
+      updatePromptDeleted: () => {},
+      updateFinalPrompt: () => {},
+      updateFinalPromptStatus: () => {},
+      updateFinalPromptOutput: () => {},
+      updateStatusMessage: () => {},
+      notifyWorkflowStateReset: () => {},
+    };
+
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    let createCallCount = 0;
+    let resolveCreate!: (value: string) => void;
+    const createPromise = new Promise<string>((resolve) => {
+      resolveCreate = resolve;
+    });
+
+    (instance.promptQueue as any).getState = () => ({
+      workingFilePath: undefined,
+      workflowName: undefined,
+    });
+    (instance.promptQueue as any).createWorkingFile = async () => {
+      createCallCount += 1;
+      return createPromise;
+    };
+    (instance.promptQueue as any).updateWorkingFileProperties = async () =>
+      null;
+
+    const firstEnsure = instance.ensureEphemeralWorkingFile({
+      initialProperties: { harness: Harness.ClaudeCli },
+    });
+    const secondEnsure = instance.ensureEphemeralWorkingFile({
+      initialProperties: { model: "sonnet" },
+    });
+
+    resolveCreate("mock-working-file.flightpath.json");
+    await Promise.all([firstEnsure, secondEnsure]);
+
+    assert.strictEqual(createCallCount, 1);
+  });
+});

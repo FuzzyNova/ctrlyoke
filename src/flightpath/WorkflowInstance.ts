@@ -125,6 +125,8 @@ export class WorkflowInstance {
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
   /** Race-condition guard: prevents duplicate workflow starts */
   startPending: boolean = false;
+  /** Deduplicates overlapping eager working-file creation requests */
+  private ensureWorkingFilePromise: Promise<void> | undefined;
   /** Tracks prompt count to detect MCP-triggered merges */
   private lastKnownPromptCount: number = 0;
   /** Heartbeat interval for the process lock file (cleared in finally + dispose) */
@@ -1331,7 +1333,31 @@ export class WorkflowInstance {
    * Idempotent: returns immediately if a working file already exists.
    */
   public async ensureEphemeralWorkingFile(options?: {
-    skipPopulateDefaults?: boolean;
+    /**
+     * Properties the caller is about to write explicitly.
+     * Passed to populateSettingsDefaults so they influence dependent lookups
+     * (e.g. harness change → correct model default) without being overwritten
+     * by the defaults computation.
+     */
+    initialProperties?: Record<string, unknown>;
+  }): Promise<void> {
+    if (this.promptQueue.getState().workingFilePath) {
+      return;
+    }
+
+    if (!this.ensureWorkingFilePromise) {
+      this.ensureWorkingFilePromise = this.doEnsureEphemeralWorkingFile(
+        options
+      ).finally(() => {
+        this.ensureWorkingFilePromise = undefined;
+      });
+    }
+
+    await this.ensureWorkingFilePromise;
+  }
+
+  private async doEnsureEphemeralWorkingFile(options?: {
+    initialProperties?: Record<string, unknown>;
   }): Promise<void> {
     if (this.promptQueue.getState().workingFilePath) {
       return;
@@ -1346,7 +1372,7 @@ export class WorkflowInstance {
     const displayName =
       this.workflowName ||
       this.promptQueue.getState().workflowName ||
-      "new-workflow";
+      "new workflow";
 
     try {
       const workingFilePath = await this.promptQueue.createWorkingFile(
@@ -1370,11 +1396,29 @@ export class WorkflowInstance {
         );
       }
 
-      if (!options?.skipPopulateDefaults) {
-        const defaults = PromptFileLoader.populateSettingsDefaults({});
-        if (Object.keys(defaults).length > 0) {
-          await this.promptQueue.updateWorkingFileProperties(defaults);
-        }
+      // Notify the webview so the WorkflowStatus header transitions from
+      // "No workflow loaded" to showing the new workflow name.
+      if (this.dashboardSink) {
+        const workflowName =
+          this.promptQueue.getState().workflowName || displayName;
+        await this.dashboardSink.updateFileSelected(
+          workingFilePath,
+          [],
+          workflowName
+        );
+      }
+
+      // Populate VS Code defaults, using initialProperties as "already-set" so
+      // dependent lookups work correctly (e.g. harness change → correct model).
+      // onlyIfUndefined ensures concurrent calls don't overwrite each other's
+      // defaults; the caller's explicit write (after this) always wins.
+      const explicitValues = options?.initialProperties ?? {};
+      const defaults =
+        PromptFileLoader.populateSettingsDefaults(explicitValues);
+      if (Object.keys(defaults).length > 0) {
+        await this.promptQueue.updateWorkingFileProperties(defaults, {
+          onlyIfUndefined: true,
+        });
       }
     } catch (error) {
       Log.error("Failed to eagerly create working file:", error);
@@ -2185,6 +2229,19 @@ export class WorkflowInstance {
           originalFilePath
         );
         Log.info(`✅ Created working file: ${workingFilePath}`);
+
+        // Populate all execution properties from VS Code settings so the
+        // working file always has explicit values for every workflow-level
+        // setting, making it the sole source of truth regardless of the
+        // user's VS Code defaults on any machine. onlyIfUndefined ensures
+        // any properties already written (e.g. from ensureEphemeralWorkingFile)
+        // are not overwritten.
+        const defaults = PromptFileLoader.populateSettingsDefaults({});
+        if (Object.keys(defaults).length > 0) {
+          await this.promptQueue.updateWorkingFileProperties(defaults, {
+            onlyIfUndefined: true,
+          });
+        }
       } catch (error) {
         Log.error("Failed to create working file:", error);
       }

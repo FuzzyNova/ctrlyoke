@@ -873,7 +873,9 @@ export class WorkflowOrchestrator {
     );
   }
 
-  async ensureEphemeralWorkingFile(options?: { skipPopulateDefaults?: boolean }): Promise<void> {
+  async ensureEphemeralWorkingFile(options?: {
+    initialProperties?: Record<string, unknown>;
+  }): Promise<void> {
     return this.getActiveInstance().ensureEphemeralWorkingFile(options);
   }
 

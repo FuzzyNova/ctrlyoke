@@ -336,6 +336,9 @@ export class PromptFileLoader {
       defaults.allowDynamicExtension =
         ConfigurationUtils.getDynamicQueueConfig().enabled;
     }
+    if (explicitValues.priorContext === undefined) {
+      defaults.priorContext = ConfigurationUtils.getPriorContext();
+    }
 
     return defaults;
   }

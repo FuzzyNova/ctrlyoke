@@ -206,25 +206,37 @@ export const SettingsPanel: React.FC<{
     [workflowProperties, globalSettings, effectiveHarness]
   );
 
+  const postWorkflowPropertiesUpdate = useCallback(
+    (updates: Partial<WorkflowProperties>) => {
+      const settingsStore = useSettingsStore.getState();
+
+      for (const [property, value] of Object.entries(updates)) {
+        settingsStore.updateWorkflowProperty(
+          property as keyof WorkflowProperties,
+          value as WorkflowProperties[keyof WorkflowProperties]
+        );
+      }
+
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTIES,
+        properties: updates,
+      });
+    },
+    [vscode]
+  );
+
   // ============================================================================
   // HANDLERS
   // ============================================================================
 
   const handleHarnessChange = useCallback(
     (harness: string) => {
-      // Optimistic update (like vanilla implementation)
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("harness", harness);
-
-      vscode.postMessage({
-        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "harness",
-        value: harness,
-      });
 
       // Update model dropdown options for new harness (like old implementation)
       // Get models for the new harness
       const newHarnessModels = getModelsForHarness(harness as any);
+      const updates: Partial<WorkflowProperties> = { harness };
 
       // Always update model to the global default for the new harness
       if (newHarnessModels.length > 0) {
@@ -237,32 +249,18 @@ export const SettingsPanel: React.FC<{
           ? globalDefaultForHarness
           : newHarnessModels[0].value;
 
-        // Update model optimistically
-        settingsStore.updateWorkflowProperty("model", defaultModel);
-
-        // Send model update to extension
-        vscode.postMessage({
-          type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-          property: "model",
-          value: defaultModel,
-        });
+        updates.model = defaultModel;
       }
 
       // Always update additionalArgs to the global default for the new harness
       const globalDefaultAdditionalArgs =
         settingsStore.globalSettings.harnessDefaultAdditionalArgs[harness] ??
         "";
-      settingsStore.updateWorkflowProperty(
-        "additionalArgs",
-        globalDefaultAdditionalArgs || undefined
-      );
-      vscode.postMessage({
-        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "additionalArgs",
-        value: globalDefaultAdditionalArgs || undefined,
-      });
+      updates.additionalArgs = globalDefaultAdditionalArgs || undefined;
+
+      postWorkflowPropertiesUpdate(updates);
     },
-    [vscode, getModelsForHarness]
+    [getModelsForHarness, postWorkflowPropertiesUpdate]
   );
 
   const handleModelChange = useCallback(
@@ -326,27 +324,19 @@ export const SettingsPanel: React.FC<{
 
   const handleResumeSessionChange = useCallback(
     (checked: boolean) => {
-      // Optimistic update
-      const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("resumeSession", checked);
+      const updates: Partial<WorkflowProperties> = {
+        resumeSession: checked,
+      };
 
-      vscode.postMessage({
-        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "resumeSession",
-        value: checked,
-      });
       // Clear session ID when resume is disabled
       if (!checked) {
         setSessionIdInput("");
-        settingsStore.updateWorkflowProperty("sessionId", undefined);
-        vscode.postMessage({
-          type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-          property: "sessionId",
-          value: undefined,
-        });
+        updates.sessionId = undefined;
       }
+
+      postWorkflowPropertiesUpdate(updates);
     },
-    [vscode]
+    [postWorkflowPropertiesUpdate]
   );
 
   const handleSessionIdChange = useCallback(

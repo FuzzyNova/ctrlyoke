@@ -27,6 +27,8 @@ import type { WorkflowSerializer } from "./WorkflowSerializer";
  * Each handler function is registered in the dispatch table at construction time.
  */
 export class WebviewMessageRouter {
+  private routeQueue: Promise<void> = Promise.resolve();
+
   private readonly handlers: Map<
     string,
     (message: any) => void | Promise<void>
@@ -46,6 +48,14 @@ export class WebviewMessageRouter {
    * Route a webview message to the appropriate handler.
    */
   async route(message: any): Promise<void> {
+    this.routeQueue = this.routeQueue.then(() =>
+      this.routeSingleMessage(message)
+    );
+
+    await this.routeQueue;
+  }
+
+  private async routeSingleMessage(message: any): Promise<void> {
     try {
       const handler = this.handlers.get(message.type);
       if (handler) {
@@ -258,6 +268,10 @@ export class WebviewMessageRouter {
         message.property,
         message.value
       );
+    });
+
+    table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTIES, (message) => {
+      this.settingsSync.handleUpdateWorkflowProperties(message.properties);
     });
 
     table.set(MESSAGE_TYPES.SET_AS_DEFAULT, (message) => {

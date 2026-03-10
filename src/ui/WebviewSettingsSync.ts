@@ -82,7 +82,6 @@ export class WebviewSettingsSync {
     },
   };
 
-
   // Validation constants
   private static readonly VALID_HARNESSES = [
     HARNESS_IDS.COPILOT_CLI,
@@ -349,26 +348,39 @@ export class WebviewSettingsSync {
     property: string,
     value: any
   ): Promise<void> {
+    await this.handleUpdateWorkflowProperties({ [property]: value });
+  }
+
+  async handleUpdateWorkflowProperties(
+    properties: Record<string, unknown>
+  ): Promise<void> {
+    if (Object.keys(properties).length === 0) {
+      return;
+    }
+
     const manager = this.getManager();
     if (!manager) {
       return;
     }
 
     if (!manager.getQueueState()?.workingFilePath) {
-      await manager.ensureEphemeralWorkingFile({ skipPopulateDefaults: true });
+      await manager.ensureEphemeralWorkingFile({
+        initialProperties: properties,
+      });
     }
 
     if (!manager.getQueueState()?.workingFilePath) {
       Log.warn(
-        `handleUpdateWorkflowProperty: no workspace, cannot persist "${property}"`
+        `handleUpdateWorkflowProperties: no workspace, cannot persist keys [${Object.keys(properties).join(", ")}]`
       );
       return;
     }
 
-    await manager.updateWorkingFileProperties(
-      { [property]: value },
-      { allowDeletes: value === undefined }
-    );
+    await manager.updateWorkingFileProperties(properties, {
+      allowDeletes: Object.values(properties).some(
+        (propertyValue) => propertyValue === undefined
+      ),
+    });
 
     await this.sendWorkflowPropertiesToSettings();
   }
@@ -450,11 +462,18 @@ export class WebviewSettingsSync {
     };
 
     const harnessDefaultAdditionalArgs = {
-      [HARNESS_IDS.COPILOT_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(Harness.CopilotCli),
+      [HARNESS_IDS.COPILOT_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
+        Harness.CopilotCli
+      ),
       [HARNESS_IDS.COPILOT_CHAT]: "",
-      [HARNESS_IDS.CLAUDE_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(Harness.ClaudeCli),
-      [HARNESS_IDS.CODEX_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(Harness.CodexCli),
-      [HARNESS_IDS.OPENCODE_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(Harness.OpenCodeCli),
+      [HARNESS_IDS.CLAUDE_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
+        Harness.ClaudeCli
+      ),
+      [HARNESS_IDS.CODEX_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
+        Harness.CodexCli
+      ),
+      [HARNESS_IDS.OPENCODE_CLI]:
+        ConfigurationUtils.getAdditionalArgsForHarness(Harness.OpenCodeCli),
     };
 
     return {
