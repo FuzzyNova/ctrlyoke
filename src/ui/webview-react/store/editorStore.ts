@@ -4,6 +4,12 @@ import type { PromptItem } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type { PriorContext } from "../types/messages";
 
+/** Property is inherited from workflow/settings when undefined. */
+export type Inheritable<T> = T | undefined;
+
+/** Property can inherit (undefined), be explicitly disabled (null), or set to a custom value. */
+export type Disableable<T> = T | null | undefined;
+
 /**
  * End condition configuration
  * All fields optional except script to match PromptItem.endCondition
@@ -22,16 +28,16 @@ export interface EndConditionConfig {
  * Matches PROMPT_PROPERTIES from DashboardConstants
  */
 export interface PropertyValues {
-  harness: string; // "default" | harness ID
-  model: string; // "default" | model ID
-  agent: string | null | undefined; // undefined = Default, null = None, string = specific
-  skills: string[] | null | undefined; // undefined = Default, null = None, string[] = specific (empty array allowed transiently in custom mode)
-  resumeSession: string; // "default" | "yes" | "no"
-  sessionId: string; // "" or session ID or prompt number reference
-  allowDynamicExtension: string; // "default" | "yes" | "no"
+  harness: Inheritable<string>;         // undefined = inherit, string = harness ID
+  model: Inheritable<string>;           // undefined = inherit, string = model ID
+  agent: Disableable<string>;           // undefined = inherit, null = none, string = path
+  skills: Disableable<string[]>;        // undefined = inherit, null = none, string[] = specific (empty array allowed transiently in custom mode)
+  resumeSession: Inheritable<boolean>;  // undefined = inherit, true = yes, false = no
+  sessionId: string;                    // "" or session ID or prompt number reference
+  allowDynamicExtension: Inheritable<boolean>; // undefined = inherit, true = yes, false = no
   endCondition?: EndConditionConfig | null;
-  priorContext?: PriorContext; // undefined = inherit/default
-  additionalArgs?: string | null; // undefined = inherit, null = explicitly none, string = custom args
+  priorContext?: PriorContext;           // undefined = inherit/default
+  additionalArgs: Disableable<string>;  // undefined = inherit, null = none, string = custom args
 }
 
 /**
@@ -39,13 +45,13 @@ export interface PropertyValues {
  * Mirrors PROPERTY_DEFAULTS from state-manager.js
  */
 export const PROPERTY_DEFAULTS: PropertyValues = {
-  harness: "default",
-  model: "default",
+  harness: undefined,
+  model: undefined,
   agent: undefined,
   skills: undefined,
-  resumeSession: "default",
+  resumeSession: undefined,
   sessionId: "",
-  allowDynamicExtension: "default",
+  allowDynamicExtension: undefined,
   endCondition: undefined, // undefined = inherit from workflow
   additionalArgs: undefined,
 };
@@ -290,30 +296,17 @@ export const useEditorStore = create<
 
     // Extract properties from prompt data
     const properties: PropertyValues = {
-      harness: promptData.harness ?? "default",
-      model: promptData.model ?? "default",
+      harness: promptData.harness,
+      model: promptData.model,
       agent: promptData.agent,
       skills: promptData.skills,
-      resumeSession:
-        promptData.resumeSession === undefined
-          ? "default"
-          : promptData.resumeSession
-            ? "yes"
-            : "no",
+      resumeSession: promptData.resumeSession,
       sessionId:
         promptData.sessionId !== undefined ? String(promptData.sessionId) : "",
-      allowDynamicExtension:
-        promptData.allowDynamicExtension === undefined
-          ? "default"
-          : promptData.allowDynamicExtension
-            ? "yes"
-            : "no",
+      allowDynamicExtension: promptData.allowDynamicExtension,
       endCondition: promptData.endCondition ?? null,
       priorContext: promptData.priorContext,
-      additionalArgs:
-        promptData.additionalArgs !== undefined
-          ? promptData.additionalArgs
-          : undefined,
+      additionalArgs: promptData.additionalArgs,
     };
 
     const isFinalPromptTarget = index < 0;
@@ -594,12 +587,12 @@ export const useEditorStore = create<
     }
 
     // Add harness if not default
-    if (properties.harness !== "default") {
+    if (properties.harness !== undefined) {
       result.harness = properties.harness;
     }
 
     // Add model if not default
-    if (properties.model !== "default") {
+    if (properties.model !== undefined) {
       result.model = properties.model;
     }
 
@@ -613,14 +606,14 @@ export const useEditorStore = create<
       result.skills = properties.skills;
     }
 
-    // Add resumeSession if not default
-    if (properties.resumeSession !== "default") {
-      result.resumeSession = properties.resumeSession === "yes";
+    // Add resumeSession if overridden
+    if (properties.resumeSession !== undefined) {
+      result.resumeSession = properties.resumeSession;
     }
 
-    // Add allowDynamicExtension if not default
-    if (properties.allowDynamicExtension !== "default") {
-      result.allowDynamicExtension = properties.allowDynamicExtension === "yes";
+    // Add allowDynamicExtension if overridden
+    if (properties.allowDynamicExtension !== undefined) {
+      result.allowDynamicExtension = properties.allowDynamicExtension;
     }
 
     // Add end condition if configured

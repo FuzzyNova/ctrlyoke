@@ -190,14 +190,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       const clearProperties: string[] = [];
 
       // Harness
-      if (properties.harness !== "default") {
+      if (properties.harness !== undefined) {
         result.harness = properties.harness;
       } else if (includeNullsForDefaults) {
         clearProperties.push("harness");
       }
 
       // Model
-      if (properties.model !== "default") {
+      if (properties.model !== undefined) {
         result.model = properties.model;
       } else if (includeNullsForDefaults) {
         clearProperties.push("model");
@@ -213,8 +213,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       }
 
       // Resume Session
-      if (properties.resumeSession !== "default") {
-        result.resumeSession = properties.resumeSession === "yes";
+      if (properties.resumeSession !== undefined) {
+        result.resumeSession = properties.resumeSession;
       } else if (includeNullsForDefaults) {
         clearProperties.push("resumeSession");
       }
@@ -233,9 +233,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       }
 
       // Allow Dynamic Extension
-      if (properties.allowDynamicExtension !== "default") {
-        result.allowDynamicExtension =
-          properties.allowDynamicExtension === "yes";
+      if (properties.allowDynamicExtension !== undefined) {
+        result.allowDynamicExtension = properties.allowDynamicExtension;
       } else if (includeNullsForDefaults) {
         clearProperties.push("allowDynamicExtension");
       }

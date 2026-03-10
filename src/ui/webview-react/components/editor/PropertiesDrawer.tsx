@@ -85,10 +85,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   }, [properties.endCondition]);
 
   // Get models for current harness
-  const currentHarness =
-    properties.harness === "default"
-      ? globalSettings.harness
-      : (properties.harness as HarnessId);
+  const currentHarness = (properties.harness ?? globalSettings.harness) as HarnessId;
   const models = getModelsForHarness(currentHarness);
   const modelNamespace = modelNamespaceForHarness(currentHarness);
   const agentMode =
@@ -106,9 +103,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 
   // Handle harness change - also reset model to default
   const handleHarnessChange = (newHarness: string) => {
-    setProperty("harness", newHarness);
+    setProperty("harness", newHarness === "default" ? undefined : newHarness);
     // Reset model when harness changes
-    setProperty("model", "default");
+    setProperty("model", undefined);
   };
 
   const handleAgentModeChange = (mode: string) => {
@@ -188,11 +185,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 htmlFor="prop-harness"
                 className="text-xs font-medium text-foreground"
               >
-                {`Harness${harnessCategory(properties.harness) === "cli" ? " (CLI)" : harnessCategory(properties.harness) === "chat" ? " (Chat)" : ""}`}
+                {`Harness${harnessCategory(properties.harness ?? "") === "cli" ? " (CLI)" : harnessCategory(properties.harness ?? "") === "chat" ? " (Chat)" : ""}`}
               </label>
               <HarnessDropdown
                 id="prop-harness"
-                value={properties.harness}
+                value={properties.harness ?? "default"}
                 onChange={handleHarnessChange}
                 showDefault={true}
                 showStatus={false}
@@ -219,8 +216,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               </label>
               <CustomSelect
                 id="prop-model"
-                value={properties.model}
-                onChange={(v) => setProperty("model", v)}
+                value={properties.model ?? "default"}
+                onChange={(v) => setProperty("model", v === "default" ? undefined : v)}
                 options={[
                   { value: "default", label: "Default" },
                   ...(models.length === 0
@@ -386,8 +383,19 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               </label>
               <CustomSelect
                 id="prop-allow-dynamic"
-                value={properties.allowDynamicExtension}
-                onChange={(v) => setProperty("allowDynamicExtension", v)}
+                value={
+                  properties.allowDynamicExtension === undefined
+                    ? "default"
+                    : properties.allowDynamicExtension
+                      ? "yes"
+                      : "no"
+                }
+                onChange={(v) =>
+                  setProperty(
+                    "allowDynamicExtension",
+                    v === "default" ? undefined : v === "yes"
+                  )
+                }
                 options={[
                   { value: "default", label: "Default" },
                   {
@@ -410,8 +418,19 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               </label>
               <CustomSelect
                 id="prop-resume-session"
-                value={properties.resumeSession}
-                onChange={(v) => setProperty("resumeSession", v)}
+                value={
+                  properties.resumeSession === undefined
+                    ? "default"
+                    : properties.resumeSession
+                      ? "yes"
+                      : "no"
+                }
+                onChange={(v) =>
+                  setProperty(
+                    "resumeSession",
+                    v === "default" ? undefined : v === "yes"
+                  )
+                }
                 options={[
                   { value: "default", label: "Default" },
                   { value: "yes", label: "Yes - Resume previous session" },
@@ -425,7 +444,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
           {/* Row 4: Session ID (full width, animated, visible only when resume session is "yes") */}
           <div
             className={`transition-all duration-300 ${
-              properties.resumeSession === "yes"
+              properties.resumeSession === true
                 ? "max-h-[60px] opacity-100"
                 : "max-h-0 opacity-0 overflow-hidden"
             }`}
