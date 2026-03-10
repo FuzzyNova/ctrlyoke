@@ -586,7 +586,9 @@ export const ConfigurationUtils = {
     args: string
   ): Promise<void> {
     const settingKey = getAdditionalArgsSettingKeyForHarness(harness);
-    await this.updateSetting(settingKey, args);
+    // Pass undefined to remove the VS Code setting entirely when args is
+    // empty — avoids leaving a "" entry in settings.json.
+    await this.updateSetting(settingKey, args || undefined);
   },
 
   /**

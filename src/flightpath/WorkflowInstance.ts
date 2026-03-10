@@ -693,6 +693,33 @@ export class WorkflowInstance {
   }
 
   /**
+   * Keep the in-memory prompt file aligned with the queue after dashboard/appends.
+   * This avoids relying on the working-file watcher for local writes, which is
+   * intentionally muted in idle/completed states to preserve the dashboard view.
+   */
+  private syncCurrentPromptFileFromQueue(filePathOverride?: string): void {
+    const nextFilePath =
+      filePathOverride ??
+      this.currentPromptFile?.filePath ??
+      this.promptQueue.getState().workingFilePath;
+
+    if (!nextFilePath) {
+      return;
+    }
+
+    const workflowFile = this.promptQueue.getWorkflowFile();
+    this.currentPromptFile = {
+      filePath: nextFilePath,
+      promptFile: {
+        ...workflowFile,
+        prompts: this.promptQueue.getState().prompts.map((prompt) => ({
+          ...prompt,
+        })),
+      },
+    };
+  }
+
+  /**
    * Set up a file watcher for the given file path (for WorkflowOrchestrator draft prompt setup).
    */
   initializeFileWatcher(filePath: string): void {
@@ -832,10 +859,12 @@ export class WorkflowInstance {
 
     const prevQueueState = this.promptQueue.getState();
     // Only COMPLETED workflows count as having "completed" steps for append-continuation.
-    // STOPPED workflows should restart from the beginning when Run is pressed (not continue).
+    // Use actual per-step completion status rather than prompts.length because
+    // append-and-run keeps the queue in COMPLETED long enough to add new pending
+    // prompts before execution restarts.
     const prevCompletedCount =
       prevQueueState.status === EXECUTION_STATES.COMPLETED
-        ? prevQueueState.prompts.length
+        ? this.promptQueue.getCompletedCount()
         : 0;
 
     const { promptFile } = this.currentPromptFile;
@@ -1263,6 +1292,7 @@ export class WorkflowInstance {
 
       const source = `User append (${position}): ${path.basename(filePath)}`;
       await this.promptQueue.appendPrompts(parsed.prompts, source, position);
+      this.syncCurrentPromptFileFromQueue(filePath);
 
       if (this.dashboardSink) {
         const updatedState = this.promptQueue.getState();
@@ -1606,6 +1636,7 @@ export class WorkflowInstance {
         position,
         shouldRun
       );
+      this.syncCurrentPromptFileFromQueue();
 
       if (this.dashboardSink) {
         const updatedState = this.promptQueue.getState();

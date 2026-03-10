@@ -180,10 +180,11 @@ export const SettingsPanel: React.FC<{
         );
       }
       if (property === "additionalArgs") {
-        // Compare against the harness-specific default
+        // Compare against the harness-specific default, treating empty string,
+        // null, and undefined as equivalent — all mean "no args"
         const harnessDefault =
           globalSettings.harnessDefaultAdditionalArgs[effectiveHarness] ?? "";
-        return workflowValue !== (harnessDefault || undefined);
+        return (workflowValue || "") !== (harnessDefault || "");
       }
       // Array comparison for skills — compare against global default skills
       if (property === "skills") {
@@ -252,11 +253,13 @@ export const SettingsPanel: React.FC<{
         updates.model = defaultModel;
       }
 
-      // Always update additionalArgs to the global default for the new harness
+      // Always update additionalArgs to the global default for the new harness.
+      // Use the empty string directly (not undefined) so JSON serialization
+      // preserves the value and the extension receives the clear instruction.
       const globalDefaultAdditionalArgs =
         settingsStore.globalSettings.harnessDefaultAdditionalArgs[harness] ??
         "";
-      updates.additionalArgs = globalDefaultAdditionalArgs || undefined;
+      updates.additionalArgs = globalDefaultAdditionalArgs;
 
       postWorkflowPropertiesUpdate(updates);
     },
@@ -378,15 +381,15 @@ export const SettingsPanel: React.FC<{
   const handleAdditionalArgsChange = useCallback(
     (value: string) => {
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty(
-        "additionalArgs",
-        value || undefined
-      );
+      // Store the empty string explicitly (not undefined) so the extension
+      // receives the update and "Set as Default" can appear when the field
+      // is cleared while a non-empty VS Code default exists.
+      settingsStore.updateWorkflowProperty("additionalArgs", value);
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "additionalArgs",
-        value: value || undefined,
+        value: value,
       });
     },
     [vscode]

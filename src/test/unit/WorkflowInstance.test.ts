@@ -285,3 +285,131 @@ suite("WorkflowInstance eager working file creation", () => {
     assert.strictEqual(createCallCount, 1);
   });
 });
+
+suite("WorkflowInstance append-and-continue", () => {
+  test("syncs currentPromptFile before rerunning a completed ephemeral workflow", async () => {
+    const platform = new MockPlatform();
+
+    const dashboardSink: any = {
+      updateFileSelected: async () => {},
+      updateSessionRestored: async () => {},
+      updateExecutionStarted: () => {},
+      notifyRunHistoryUpdated: () => {},
+      updateProgress: () => {},
+      updateExecutionState: () => {},
+      updateStepStatus: () => {},
+      updateRetryAttempt: () => {},
+      updateCliOutput: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: () => {},
+      updatePromptsExtended: () => {},
+      updatePromptDeleted: () => {},
+      updateFinalPrompt: () => {},
+      updateFinalPromptStatus: () => {},
+      updateFinalPromptOutput: () => {},
+      updateStatusMessage: () => {},
+      notifyWorkflowStateReset: () => {},
+    };
+
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    instance.promptQueue.loadPrompts({
+      prompts: [{ prompt: "first prompt" }],
+    });
+    (instance.promptQueue as any).state.status = EXECUTION_STATES.COMPLETED;
+    (instance.promptQueue as any).state.results[0].status =
+      STEP_STATUS.COMPLETED;
+
+    instance.setCurrentPromptFile("ephemeral.prompt.md", {
+      prompts: [{ prompt: "first prompt" }],
+    });
+
+    let promptCountSeenByRun = 0;
+    (instance as any).executeLoadedPromptFile = async () => {
+      promptCountSeenByRun =
+        (instance as any).currentPromptFile?.promptFile.prompts?.length ?? 0;
+    };
+
+    await instance.executeEphemeralPrompt("follow-up prompt", {}, "run");
+
+    assert.strictEqual(promptCountSeenByRun, 2);
+    assert.strictEqual(
+      (instance as any).currentPromptFile?.promptFile.prompts?.length,
+      2
+    );
+  });
+
+  test("treats completed queue with appended pending prompt as continuation", async () => {
+    const platform = new MockPlatform();
+
+    let executionStartedArgs: any[] | undefined;
+    const dashboardSink: any = {
+      updateFileSelected: async () => {},
+      updateSessionRestored: async () => {},
+      updateExecutionStarted: (...args: any[]) => {
+        executionStartedArgs = args;
+      },
+      notifyRunHistoryUpdated: () => {},
+      updateProgress: () => {},
+      updateExecutionState: () => {},
+      updateStepStatus: () => {},
+      updateRetryAttempt: () => {},
+      updateCliOutput: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: () => {},
+      updatePromptsExtended: () => {},
+      updatePromptDeleted: () => {},
+      updateFinalPrompt: () => {},
+      updateFinalPromptStatus: () => {},
+      updateFinalPromptOutput: () => {},
+      updateStatusMessage: () => {},
+      notifyWorkflowStateReset: () => {},
+    };
+
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    instance.promptQueue.loadPrompts({
+      prompts: [{ prompt: "completed prompt" }, { prompt: "appended prompt" }],
+    });
+    (instance.promptQueue as any).state.status = EXECUTION_STATES.COMPLETED;
+    (instance.promptQueue as any).state.results[0].status =
+      STEP_STATUS.COMPLETED;
+    (instance.promptQueue as any).state.results[1].status = STEP_STATUS.PENDING;
+
+    instance.setCurrentPromptFile("workflow.prompt.md", {
+      prompts: [{ prompt: "completed prompt" }, { prompt: "appended prompt" }],
+    });
+
+    let restartCalled = false;
+    (instance.promptQueue as any).restart = async () => {
+      restartCalled = true;
+    };
+    (instance as any).startWorkflowExecution = async () => {};
+
+    await (instance as any).executeLoadedPromptFile();
+
+    assert.strictEqual(restartCalled, false);
+    assert.deepStrictEqual(executionStartedArgs, [
+      "workflow.prompt.md",
+      2,
+      true,
+      1,
+    ]);
+  });
+});
