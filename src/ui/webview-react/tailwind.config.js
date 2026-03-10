@@ -219,5 +219,13 @@ module.exports = {
         mono: ["var(--vscode-editor-font-family)", "monospace"],
       },
     },
+    // Override Tailwind's default border color (white) so that unsuffixed border
+    // utilities like border-l, border-r, border-t, border-b use the VS Code
+    // panel border variable instead.
+    borderColor: ({ theme }) => ({
+      ...theme("colors"),
+      DEFAULT:
+        "var(--vscode-panel-border, var(--vscode-widget-border, rgba(128,128,128,0.35)))",
+    }),
   },
 };

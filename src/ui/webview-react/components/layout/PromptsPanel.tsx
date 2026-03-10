@@ -107,11 +107,10 @@ export const PromptsPanel: React.FC<{
 
   // Compute the prompt-level property overrides to surface as chips.
   //
-  // A property is shown whenever it is explicitly set at the prompt level
-  // (the field is not undefined), regardless of whether the value matches
-  // the inherited workflow/global default. This gives a reliable "this
-  // prompt has been customised" signal that doesn't change based on what
-  // the workflow-level settings happen to be.
+  // A property is shown when it is explicitly set at the prompt level AND
+  // it meaningfully differs from (or adds to) the inherited workflow/global
+  // default. Redundant chips — e.g. "ec: disabled" when the workflow is
+  // already disabled — are suppressed so overrides reflect actual differences.
   const getPromptOverrides = (
     prompt: (typeof prompts)[0]
   ): PromptOverride[] => {
@@ -180,10 +179,17 @@ export const PromptsPanel: React.FC<{
       });
     }
 
-    // endCondition — show whenever set (including null = explicitly disabled)
+    // endCondition — only show "ec: disabled" if the workflow actually has an
+    // active end condition to override. If the workflow is already disabled/unset,
+    // the chip is redundant (the prompt value matches the inherited default).
     if (prompt.endCondition !== undefined) {
       if (prompt.endCondition === null) {
-        result.push({ label: "ec: disabled" });
+        const workflowHasActiveEndCondition =
+          workflowProperties.endCondition != null &&
+          Boolean(workflowProperties.endCondition.script);
+        if (workflowHasActiveEndCondition) {
+          result.push({ label: "ec: disabled" });
+        }
       } else if (prompt.endCondition.script) {
         const script = prompt.endCondition.script;
         const basename = script.replace(/.*[\\/]/, "");

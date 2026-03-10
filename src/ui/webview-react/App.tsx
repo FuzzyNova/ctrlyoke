@@ -636,7 +636,7 @@ function App() {
 
   if (isMobile) {
     return (
-      <div className="h-screen w-full flex flex-col bg-editor-bg text-foreground">
+      <div className="h-screen w-full flex flex-col bg-editor-bg text-foreground border-l border-r">
         <Header />
 
         {allMobileCollapsed ? (
