@@ -186,6 +186,8 @@ export interface HarnessDropdownProps {
   onChange: (value: string) => void;
   /** Show a "Default" sentinel option above the groups (for per-prompt overrides). */
   showDefault?: boolean;
+  /** Label for the "Default" sentinel option. Defaults to "Default". */
+  defaultLabel?: string;
   /** Show availability status dots. Default true. Pass false in PropertiesDrawer. */
   showStatus?: boolean;
   /** Required when showStatus is true. */
@@ -205,6 +207,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   value,
   onChange,
   showDefault = false,
+  defaultLabel,
   showStatus = true,
   harnessStatus,
   hiddenValues = [],
@@ -252,7 +255,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   // ── Derived display label for the trigger button ──────────────────────────
   const triggerLabel =
     value === "default"
-      ? "Default"
+      ? (defaultLabel ?? "Default")
       : (HARNESS_DISPLAY_NAMES[value as HarnessId] ?? value);
 
   const triggerStatus =
@@ -345,7 +348,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
                 onClick={() => handleSelect("default")}
                 className="flex-1 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit"
               >
-                Default
+                {defaultLabel ?? "Default"}
               </button>
             </div>
           )}

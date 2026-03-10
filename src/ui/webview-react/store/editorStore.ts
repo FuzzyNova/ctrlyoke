@@ -73,6 +73,16 @@ export interface SavedNewPromptState {
   properties: PropertyValues;
 }
 
+/**
+ * Returns a stable string key for a selection target, used to index pendingEdits.
+ * Only valid for edit-mode targets (queue / finalPrompt).
+ */
+function selectionTargetKey(target: EditorSelectionTarget): string {
+  if (target.kind === "queue") return `queue:${target.index}`;
+  if (target.kind === "finalPrompt") return "finalPrompt";
+  return "";
+}
+
 export type EditorSelectionTarget =
   | { kind: "newPrompt" }
   | { kind: "queue"; index: number }
@@ -87,6 +97,12 @@ interface EditorState {
   selectedPromptIndex: number | null; // null = new prompt mode, number = editing existing
   originalPromptData: PromptItem | null; // For Cancel/revert functionality
   savedNewPromptState: SavedNewPromptState | null; // Saved state when switching to edit mode
+  /**
+   * Local-memory cache of unsaved edits for each prompt, keyed by selectionTargetKey().
+   * Populated when the user navigates away from a prompt without pressing Update.
+   * Cleared when the user presses Update (via cancelEdit) or Cancel.
+   */
+  pendingEdits: Record<string, SavedNewPromptState>;
   hasActiveQueue: boolean; // Whether a workflow is currently loaded
 
   // Editor content
@@ -116,6 +132,12 @@ interface EditorActions {
   enterNewPromptMode: () => void;
   enterEditMode: (index: number, promptData: PromptItem) => void;
   cancelEdit: () => void;
+  /**
+   * Saves current edit state to pendingEdits and returns to new prompt mode.
+   * Unlike cancelEdit, this preserves unsaved changes so the user can return
+   * to the prompt and continue editing.
+   */
+  deselect: () => void;
 
   // Content updates
   setPromptText: (text: string) => void;
@@ -139,6 +161,9 @@ interface EditorActions {
 
   // Queue state
   setHasActiveQueue: (hasQueue: boolean) => void;
+
+  // Pending edit cache
+  clearAllPendingEdits: () => void;
 
   // Dirty state
   setDirty: (dirty: boolean) => void;
@@ -181,6 +206,7 @@ const initialState: EditorState = {
   selectedPromptIndex: null,
   originalPromptData: null,
   savedNewPromptState: null,
+  pendingEdits: {},
   hasActiveQueue: false,
   promptText: "",
   promptName: "",
@@ -282,9 +308,22 @@ export const useEditorStore = create<
 
   enterEditMode: (index, promptData) => {
     const state = get();
+    const newPendingEdits = { ...state.pendingEdits };
 
-    // Save current new prompt state if we're in new prompt mode
-    // Empty text is a valid state that should be restored on cancel
+    // When switching away from an edit-mode prompt, save its current editor
+    // state so the user can return to it without losing unsaved changes.
+    if (state.selectionTarget.kind !== "newPrompt") {
+      const key = selectionTargetKey(state.selectionTarget);
+      newPendingEdits[key] = {
+        promptText: state.promptText,
+        promptName: state.promptName,
+        properties: state.properties,
+      };
+    }
+
+    // Save current new-prompt state when first entering edit mode.
+    // Preserve the existing savedNewPromptState when switching between edit modes
+    // so the user's new-prompt draft survives multiple prompt switches.
     const savedNewPromptState: SavedNewPromptState | null =
       state.selectionTarget.kind === "newPrompt"
         ? {
@@ -292,10 +331,17 @@ export const useEditorStore = create<
             promptName: state.promptName,
             properties: state.properties,
           }
-        : null;
+        : state.savedNewPromptState;
 
-    // Extract properties from prompt data
-    const properties: PropertyValues = {
+    const isFinalPromptTarget = index < 0;
+    const newTarget: EditorSelectionTarget = isFinalPromptTarget
+      ? { kind: "finalPrompt" }
+      : { kind: "queue", index };
+
+    // Restore a pending (unsaved) edit if one exists for this prompt, otherwise
+    // load the prompt data from the workflow.
+    const pendingEdit = newPendingEdits[selectionTargetKey(newTarget)];
+    const propertiesFromData: PropertyValues = {
       harness: promptData.harness,
       model: promptData.model,
       agent: promptData.agent,
@@ -309,26 +355,31 @@ export const useEditorStore = create<
       additionalArgs: promptData.additionalArgs,
     };
 
-    const isFinalPromptTarget = index < 0;
-
     set({
-      selectionTarget: isFinalPromptTarget
-        ? { kind: "finalPrompt" }
-        : { kind: "queue", index },
+      selectionTarget: newTarget,
       selectedPromptIndex: isFinalPromptTarget ? null : index,
       originalPromptData: promptData,
       savedNewPromptState,
-      promptText: promptData.prompt,
-      promptName: promptData.name ?? "",
-      properties,
-      isDirty: false,
+      promptText: pendingEdit ? pendingEdit.promptText : promptData.prompt,
+      promptName: pendingEdit ? pendingEdit.promptName : (promptData.name ?? ""),
+      properties: pendingEdit ? pendingEdit.properties : propertiesFromData,
+      isDirty: pendingEdit ? true : false,
       validationErrors: {},
+      pendingEdits: newPendingEdits,
     });
   },
 
   cancelEdit: () => {
     const state = get();
     const { savedNewPromptState } = state;
+
+    // Clear the pending edit for the prompt we're leaving — the user either
+    // pressed Update (official save) or Cancel (discard), so local memory
+    // for this prompt is no longer needed.
+    const newPendingEdits = { ...state.pendingEdits };
+    if (state.selectionTarget.kind !== "newPrompt") {
+      delete newPendingEdits[selectionTargetKey(state.selectionTarget)];
+    }
 
     if (savedNewPromptState) {
       // Restore saved new prompt state (what was typed before switching to edit mode)
@@ -342,6 +393,7 @@ export const useEditorStore = create<
         savedNewPromptState: null,
         isDirty: savedNewPromptState.promptText.length > 0,
         validationErrors: {},
+        pendingEdits: newPendingEdits,
       });
     } else {
       // Try to restore from VS Code persistent state
@@ -360,6 +412,7 @@ export const useEditorStore = create<
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
           validationErrors: {},
+          pendingEdits: newPendingEdits,
         });
       } else {
         // State was restored, just clear edit mode flags and validation errors
@@ -369,6 +422,62 @@ export const useEditorStore = create<
           originalPromptData: null,
           savedNewPromptState: null,
           validationErrors: {},
+          pendingEdits: newPendingEdits,
+        });
+      }
+    }
+  },
+
+  deselect: () => {
+    const state = get();
+    if (state.selectionTarget.kind === "newPrompt") return;
+
+    // Save current edit state into pendingEdits so the user can return later.
+    const newPendingEdits = { ...state.pendingEdits };
+    const key = selectionTargetKey(state.selectionTarget);
+    newPendingEdits[key] = {
+      promptText: state.promptText,
+      promptName: state.promptName,
+      properties: state.properties,
+    };
+
+    const { savedNewPromptState } = state;
+    if (savedNewPromptState) {
+      set({
+        selectionTarget: { kind: "newPrompt" },
+        selectedPromptIndex: null,
+        originalPromptData: null,
+        promptText: savedNewPromptState.promptText,
+        promptName: savedNewPromptState.promptName,
+        properties: savedNewPromptState.properties,
+        savedNewPromptState: null,
+        isDirty: savedNewPromptState.promptText.length > 0,
+        validationErrors: {},
+        pendingEdits: newPendingEdits,
+      });
+    } else {
+      const vscode = getVsCodeApi();
+      const restored = get().restoreFromVsCodeState(vscode);
+      if (!restored) {
+        set({
+          selectionTarget: { kind: "newPrompt" },
+          selectedPromptIndex: null,
+          originalPromptData: null,
+          promptText: "",
+          promptName: "",
+          properties: { ...PROPERTY_DEFAULTS },
+          isDirty: false,
+          validationErrors: {},
+          pendingEdits: newPendingEdits,
+        });
+      } else {
+        set({
+          selectionTarget: { kind: "newPrompt" },
+          selectedPromptIndex: null,
+          originalPromptData: null,
+          savedNewPromptState: null,
+          validationErrors: {},
+          pendingEdits: newPendingEdits,
         });
       }
     }
@@ -447,6 +556,12 @@ export const useEditorStore = create<
   // ============================================================================
 
   setHasActiveQueue: (hasQueue) => set({ hasActiveQueue: hasQueue }),
+
+  // ============================================================================
+  // PENDING EDIT CACHE
+  // ============================================================================
+
+  clearAllPendingEdits: () => set({ pendingEdits: {} }),
 
   // ============================================================================
   // DIRTY STATE
@@ -548,6 +663,7 @@ export const useEditorStore = create<
       selectedPromptIndex: null,
       originalPromptData: null,
       savedNewPromptState: null,
+      pendingEdits: {},
       promptText: "",
       promptName: "",
       properties: { ...PROPERTY_DEFAULTS },
@@ -557,6 +673,7 @@ export const useEditorStore = create<
 
   resetToDefaults: () =>
     set({
+      pendingEdits: {},
       promptText: "",
       promptName: "",
       properties: { ...PROPERTY_DEFAULTS },

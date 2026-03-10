@@ -14,6 +14,7 @@ import {
 import {
   CustomSelect,
   HarnessDropdown,
+  HARNESS_DISPLAY_NAMES,
   harnessCategory,
   PriorContextSelect,
 } from "../shared";
@@ -29,7 +30,7 @@ interface PropertiesDrawerProps {
 /**
  * SkillsSelect — Hybrid dropdown for the prompt-level skills property.
  *
- * Top section: "Default (inherit from workflow)" and "None" keywords.
+ * Top section: "Default (X)" and "None" keywords where X is the resolved inherited value.
  * Below a divider: checkbox list of available skills.
  * Selecting a keyword clears the array selection; toggling checkboxes
  * switches to custom array mode (matching the PriorContextSelect pattern).
@@ -38,8 +39,9 @@ const SkillsSelect: React.FC<{
   value: string[] | null | undefined;
   onChange: (v: string[] | null | undefined) => void;
   availableSkills: Array<{ name: string; description?: string }>;
+  defaultLabel?: string;
   dropdownMaxHeight?: string;
-}> = ({ value, onChange, availableSkills, dropdownMaxHeight = "60vh" }) => {
+}> = ({ value, onChange, availableSkills, defaultLabel, dropdownMaxHeight = "60vh" }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -63,7 +65,7 @@ const SkillsSelect: React.FC<{
 
   let buttonLabel: string;
   if (value === undefined) {
-    buttonLabel = "Default (inherit from workflow)";
+    buttonLabel = defaultLabel ?? "Default";
   } else if (value === null) {
     buttonLabel = "None";
   } else if (selectedSkills.length === 0) {
@@ -109,7 +111,7 @@ const SkillsSelect: React.FC<{
             const isSelected =
               k === "default" ? value === undefined : value === null;
             const label =
-              k === "default" ? "Default (inherit from workflow)" : "None";
+              k === "default" ? (defaultLabel ?? "Default") : "None";
             return (
               <button
                 key={k}
@@ -206,6 +208,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     availableAgents,
     availableSkills,
     globalSettings,
+    workflowProperties,
     getModelsForHarness,
   } = useSettingsStore();
   const { hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
@@ -221,6 +224,59 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       name: p.name,
     }));
   })();
+
+  // ── Resolved "Default (X)" labels ────────────────────────────────────────
+  // Each label shows what value the prompt will actually use when set to Default,
+  // resolving through the three-tier chain: prompt → workflow → global settings.
+
+  const resolvedHarness = (workflowProperties.harness ?? globalSettings.harness) as HarnessId;
+  const defaultHarnessLabel = `Default (${HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness})`;
+
+  const resolvedModels = getModelsForHarness(resolvedHarness);
+  const resolvedModelValue =
+    workflowProperties.model ??
+    globalSettings.harnessDefaultModels[resolvedHarness] ??
+    globalSettings.model;
+  const resolvedModelLabel =
+    resolvedModels.find((m) => m.value === resolvedModelValue)?.label ?? resolvedModelValue;
+  const defaultModelLabel = `Default (${resolvedModelLabel || "None"})`;
+
+  const resolvedAgent =
+    workflowProperties.agent === undefined
+      ? globalSettings.agent
+      : workflowProperties.agent;
+  const resolvedAgentName =
+    !resolvedAgent
+      ? "None"
+      : (availableAgents.find((a) => a.path === resolvedAgent || a.name === resolvedAgent)?.name ??
+          resolvedAgent);
+  const defaultAgentLabel = `Default (${resolvedAgentName})`;
+
+  const resolvedSkills =
+    workflowProperties.skills === undefined
+      ? (globalSettings.skills ?? [])
+      : (workflowProperties.skills ?? []);
+  const defaultSkillsLabel =
+    resolvedSkills.length === 0
+      ? "Default (None)"
+      : resolvedSkills.length <= 2
+        ? `Default (${resolvedSkills.join(", ")})`
+        : `Default (${resolvedSkills.slice(0, 2).join(", ")} +${resolvedSkills.length - 2})`;
+
+  const resolvedAdditionalArgs =
+    workflowProperties.additionalArgs === undefined
+      ? (globalSettings.harnessDefaultAdditionalArgs[resolvedHarness] ?? "")
+      : workflowProperties.additionalArgs;
+  const defaultAdditionalArgsLabel =
+    !resolvedAdditionalArgs ? "Default (None)" : `Default (${resolvedAdditionalArgs})`;
+
+  const resolvedResumeSession =
+    workflowProperties.resumeSession ?? globalSettings.resumeSession;
+  const defaultResumeSessionLabel = `Default (${resolvedResumeSession ? "Yes" : "No"})`;
+
+  const resolvedAllowDynamic =
+    workflowProperties.allowDynamicExtension ?? globalSettings.allowDynamicExtension;
+  const defaultAllowDynamicLabel = `Default (${resolvedAllowDynamic ? "Yes" : "No"})`;
 
   // End condition expanded state
   const [endConditionExpanded, setEndConditionExpanded] = useState(
@@ -294,6 +350,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 value={properties.harness ?? "default"}
                 onChange={handleHarnessChange}
                 showDefault={true}
+                defaultLabel={defaultHarnessLabel}
                 showStatus={false}
                 hiddenValues={
                   hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? []
@@ -323,7 +380,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   setProperty("model", v === "default" ? undefined : v)
                 }
                 options={[
-                  { value: "default", label: "Default" },
+                  { value: "default", label: defaultModelLabel },
                   ...(models.length === 0
                     ? [
                         {
@@ -378,10 +435,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   }
                 }}
                 options={[
-                  {
-                    value: "default",
-                    label: "Default (inherit from workflow)",
-                  },
+                  { value: "default", label: defaultAgentLabel },
                   { value: "none", label: "None" },
                   ...availableAgents.map((agent) => ({
                     value: agent.path,
@@ -418,12 +472,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   name: s.name,
                   description: s.description || undefined,
                 }))}
+                defaultLabel={defaultSkillsLabel}
                 dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
             </div>
           </div>
 
-          {/* Row 3: Additional Args + Prior Context */}
+          {/* Row 3: Additional Args + Resume Session (with paired Session ID) */}
           <div className="grid grid-cols-2 gap-4">
             {/* Additional Args — mode select + paired text input */}
             <div className="flex flex-col gap-1">
@@ -458,7 +513,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   }
                 }}
                 options={[
-                  { value: "default", label: "Default (inherit)" },
+                  { value: "default", label: defaultAdditionalArgsLabel },
                   { value: "none", label: "None (override to empty)" },
                   { value: "custom", label: "Custom" },
                 ]}
@@ -488,60 +543,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               </div>
             </div>
 
-            {/* Prior Context */}
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="prop-prior-context"
-                className="text-xs font-medium text-foreground"
-                title="Inject prior prompt outputs into this prompt's text before sending to the AI"
-              >
-                Prior Context
-              </label>
-              <PriorContextSelect
-                id="prop-prior-context"
-                value={properties.priorContext}
-                onChange={(v) => setProperty("priorContext", v)}
-                showDefault
-                priorPrompts={priorPrompts}
-                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
-              />
-            </div>
-          </div>
-
-          {/* Row 4: Allow Dynamic Extension + Resume Session (with paired Session ID) */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Allow Dynamic Extension */}
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="prop-allow-dynamic"
-                className="text-xs font-medium text-foreground"
-              >
-                Allow Dynamic Ext.
-              </label>
-              <CustomSelect
-                id="prop-allow-dynamic"
-                value={
-                  properties.allowDynamicExtension === undefined
-                    ? "default"
-                    : properties.allowDynamicExtension
-                      ? "yes"
-                      : "no"
-                }
-                onChange={(v) =>
-                  setProperty(
-                    "allowDynamicExtension",
-                    v === "default" ? undefined : v === "yes"
-                  )
-                }
-                options={[
-                  { value: "default", label: "Default" },
-                  { value: "yes", label: "Yes - Allow AI to extend" },
-                  { value: "no", label: "No - Disable" },
-                ]}
-                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
-              />
-            </div>
-
             {/* Resume Session — paired control with Session ID below */}
             <div className="flex flex-col gap-1">
               <label
@@ -566,7 +567,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   )
                 }
                 options={[
-                  { value: "default", label: "Default" },
+                  { value: "default", label: defaultResumeSessionLabel },
                   { value: "yes", label: "Yes - Resume previous" },
                   { value: "no", label: "No - New session" },
                 ]}
@@ -589,6 +590,60 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Row 4: Prior Context + Allow Dynamic Extension */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Prior Context */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="prop-prior-context"
+                className="text-xs font-medium text-foreground"
+                title="Inject prior prompt outputs into this prompt's text before sending to the AI"
+              >
+                Prior Context
+              </label>
+              <PriorContextSelect
+                id="prop-prior-context"
+                value={properties.priorContext}
+                onChange={(v) => setProperty("priorContext", v)}
+                showDefault
+                priorPrompts={priorPrompts}
+                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+              />
+            </div>
+
+            {/* Allow Dynamic Extension */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="prop-allow-dynamic"
+                className="text-xs font-medium text-foreground"
+              >
+                Allow Dynamic Ext.
+              </label>
+              <CustomSelect
+                id="prop-allow-dynamic"
+                value={
+                  properties.allowDynamicExtension === undefined
+                    ? "default"
+                    : properties.allowDynamicExtension
+                      ? "yes"
+                      : "no"
+                }
+                onChange={(v) =>
+                  setProperty(
+                    "allowDynamicExtension",
+                    v === "default" ? undefined : v === "yes"
+                  )
+                }
+                options={[
+                  { value: "default", label: defaultAllowDynamicLabel },
+                  { value: "yes", label: "Yes - Allow AI to extend" },
+                  { value: "no", label: "No - Disable" },
+                ]}
+                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+              />
             </div>
           </div>
 

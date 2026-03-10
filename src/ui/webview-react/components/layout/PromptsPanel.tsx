@@ -62,7 +62,7 @@ export const PromptsPanel: React.FC<{
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === "cli";
-  const { selectionTarget, selectPrompt, selectFinalPrompt } = useEditorStore();
+  const { selectionTarget, selectPrompt, selectFinalPrompt, deselect } = useEditorStore();
   const { workflowProperties, globalSettings } = useSettingsStore();
   const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
 
@@ -423,7 +423,16 @@ export const PromptsPanel: React.FC<{
       </div>
 
       {/* Prompt list */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div
+        className="flex-1 overflow-y-auto min-h-0"
+        onClick={(e) => {
+          // Deselect the current prompt when clicking blank space in the list.
+          // Only fire when the click target is this container itself (not a child).
+          if (e.target === e.currentTarget) {
+            deselect();
+          }
+        }}
+      >
         {prompts.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full p-6 text-center">
             <p className="text-xs italic text-description-fg">

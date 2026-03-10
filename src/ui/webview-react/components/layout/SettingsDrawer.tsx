@@ -716,6 +716,53 @@ export const SettingsPanel: React.FC<{
             />
           </FormField>
 
+          {/* Resume Session & Session ID */}
+          <FormField
+            label="Resume Session"
+            htmlFor="settings-resume-session"
+            description="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number)."
+            setAsDefaultButton={
+              <SetAsDefaultButton
+                property="resumeSession"
+                show={isDifferentFromGlobal("resumeSession")}
+                onSetDefault={() =>
+                  handleSetAsDefault(
+                    "resumeSession",
+                    workflowProperties.resumeSession
+                  )
+                }
+              />
+            }
+          >
+            <CustomSelect
+              id="settings-resume-session"
+              value={effectiveResumeSession ? "yes" : "no"}
+              onChange={(v) => handleResumeSessionChange(v === "yes")}
+              options={[
+                { value: "no", label: "No - New session" },
+                { value: "yes", label: "Yes - Resume previous" },
+              ]}
+            />
+            {/* Session ID input — visible only when resume session is enabled */}
+            <div
+              className={`transition-all duration-300 ${
+                effectiveResumeSession
+                  ? "max-h-[40px] opacity-100 mt-1"
+                  : "max-h-0 opacity-0 overflow-hidden"
+              }`}
+            >
+              <input
+                type="text"
+                id="settings-session-id"
+                value={sessionIdInput}
+                onChange={(e) => handleSessionIdChange(e.target.value)}
+                placeholder="Enter session ID or prompt number"
+                className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border h-7"
+                title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
+              />
+            </div>
+          </FormField>
+
           {/* Prior Context */}
           <FormField
             label="Prior Context"
@@ -745,75 +792,12 @@ export const SettingsPanel: React.FC<{
             />
           </FormField>
 
-          {/* Resume Session & Session ID */}
-          <div className="flex flex-col">
-            {/* Row 1: Checkbox + label + set as default */}
-            <div className="flex items-center gap-2 mt-1">
-              <input
-                type="checkbox"
-                id="settings-resume-session"
-                checked={effectiveResumeSession}
-                onChange={(e) => handleResumeSessionChange(e.target.checked)}
-                className="w-4 h-4 accent-focus-border cursor-pointer"
-              />
-              <label
-                htmlFor="settings-resume-session"
-                className="text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
-                title="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number)."
-              >
-                Resume Session
-              </label>
-              <SetAsDefaultButton
-                property="resumeSession"
-                show={isDifferentFromGlobal("resumeSession")}
-                onSetDefault={() =>
-                  handleSetAsDefault(
-                    "resumeSession",
-                    workflowProperties.resumeSession
-                  )
-                }
-              />
-            </div>
-
-            {/* Row 2: Session ID input (animated, visible only when resume session is enabled) */}
-            <div
-              className={`transition-all duration-300 ${
-                effectiveResumeSession
-                  ? "max-h-[40px] opacity-100 mt-1"
-                  : "max-h-0 opacity-0 overflow-hidden"
-              }`}
-            >
-              <div className="flex items-center gap-2 min-w-0 mt-1">
-                <input
-                  type="text"
-                  id="settings-session-id"
-                  value={sessionIdInput}
-                  onChange={(e) => handleSessionIdChange(e.target.value)}
-                  placeholder="Enter session ID or prompt number"
-                  className="min-w-0 w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border h-7"
-                  title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
-                />
-              </div>
-            </div>
-          </div>
-
           {/* Allow Dynamic Extension */}
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2 mt-1">
-              <input
-                type="checkbox"
-                id="settings-dynamic-ext"
-                checked={effectiveAllowDynamicExtension}
-                onChange={(e) => handleDynamicExtensionChange(e.target.checked)}
-                className="w-4 h-4 accent-focus-border cursor-pointer"
-              />
-              <label
-                htmlFor="settings-dynamic-ext"
-                className="text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
-                title="Allow harness to extend the workflow queue. \n This will add Flightpath's MCP configuration to the harness, which exposes functions for extending and querying the workflow queue."
-              >
-                Allow Dynamic Extension
-              </label>
+          <FormField
+            label="Allow Dynamic Extension"
+            htmlFor="settings-dynamic-ext"
+            description="Allow harness to extend the workflow queue. This will add FlightPath's MCP configuration to the harness, which exposes functions for extending and querying the workflow queue."
+            setAsDefaultButton={
               <SetAsDefaultButton
                 property="allowDynamicExtension"
                 show={isDifferentFromGlobal("allowDynamicExtension")}
@@ -824,8 +808,18 @@ export const SettingsPanel: React.FC<{
                   )
                 }
               />
-            </div>
-          </div>
+            }
+          >
+            <CustomSelect
+              id="settings-dynamic-ext"
+              value={effectiveAllowDynamicExtension ? "yes" : "no"}
+              onChange={(v) => handleDynamicExtensionChange(v === "yes")}
+              options={[
+                { value: "no", label: "No - Disable" },
+                { value: "yes", label: "Yes - Allow AI to extend" },
+              ]}
+            />
+          </FormField>
 
           {/* End Condition Section */}
           {/* Enable checkbox */}
