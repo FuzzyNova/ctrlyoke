@@ -201,23 +201,24 @@ export class CodexCliProvider implements ICliProvider {
       }
     }
 
-    // Session management - use resolved property if available
-    const shouldStartNewSession = !(resolvedResumeSession ?? false);
+    // Session management
+    const shouldResume = CliProviderUtils.shouldResumeSession(
+      resolvedResumeSession,
+      sessionId
+    );
     Log.debug(
-      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
+      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, sessionId=${sessionId ?? "none"}, shouldResume=${shouldResume}`
     );
 
-    if (!shouldStartNewSession && sessionId) {
+    if (shouldResume) {
       // Resume existing session: codex [exec] [--json] ... resume <session-id>
       args.push("resume");
-      args.push(sessionId);
+      args.push(sessionId!);
       Log.debug(`✅ Added resume subcommand with session: ${sessionId}`);
-    } else if (!shouldStartNewSession) {
+    } else if (resolvedResumeSession && !sessionId) {
       Log.debug(`⚠️ Resume requested but no session ID available`);
     } else {
-      Log.debug(
-        `🆕 Starting new session (resolved shouldStartNewSession=${shouldStartNewSession})`
-      );
+      Log.debug(`🆕 Starting new session`);
     }
 
     // Note: Prompt is NOT included here - it's a positional argument

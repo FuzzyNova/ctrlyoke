@@ -12,8 +12,31 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
  * **Single source of truth for:**
  * - Workspace directory resolution (`getWorkspaceDirs`)
  * - MCP configuration injection (`buildMcpConfigBlock`)
+ * - Session resume decision (`shouldResumeSession`)
  */
 export class CliProviderUtils {
+  /**
+   * Determine whether to resume a session for this prompt execution.
+   *
+   * Single source of truth for the resume decision across all CLI providers.
+   * A session is resumed only when:
+   * 1. The `resumeSession` property is explicitly true for this prompt, AND
+   * 2. A session ID from a prior turn is available to resume.
+   *
+   * This prevents accidentally resuming a session when `resumeSession` is
+   * false (or unset) just because a stale session ID is present in state.
+   *
+   * @param resolvedResumeSession - Resolved value of the `resumeSession` property
+   * @param sessionId - Session ID from a prior turn, if any
+   * @returns true only when both conditions are satisfied
+   */
+  static shouldResumeSession(
+    resolvedResumeSession: boolean | undefined,
+    sessionId: string | undefined
+  ): boolean {
+    return (resolvedResumeSession ?? false) && !!sessionId;
+  }
+
   /**
    * Get workspace directories for --add-dir arguments
    *

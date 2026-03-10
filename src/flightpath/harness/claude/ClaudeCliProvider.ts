@@ -139,24 +139,26 @@ export class ClaudeCliProvider implements ICliProvider {
       });
     }
 
-    // Session management - use resolved property if available
-    const shouldStartNewSession = !(resolvedResumeSession ?? false);
-    Log.debug(
-      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
-    );
     // Session management: Resume with explicit session ID only
     // NOTE: We don't use the `-c` flag (continue most recent session) because:
     // 1. It's global across all projects, not workspace-specific
     // 2. Could accidentally resume a session from a different project
     // 3. No guarantee which session it will resume if user has multiple Claude instances
-    // Instead, we only resume when we have an explicit session ID from workflow state.
-    if (sessionId) {
-      args.push("-r", sessionId);
+    // Instead, we only resume when resumeSession is true AND we have an explicit session ID.
+    const shouldResume = CliProviderUtils.shouldResumeSession(
+      resolvedResumeSession,
+      sessionId
+    );
+    Log.debug(
+      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, sessionId=${sessionId ?? "none"}, shouldResume=${shouldResume}`
+    );
+    if (shouldResume) {
+      args.push("-r", sessionId!);
       Log.debug(`✅ Added resume flag: -r ${sessionId}`);
+    } else if (resolvedResumeSession && !sessionId) {
+      Log.debug(`⚠️ Resume requested but no session ID available`);
     } else {
-      Log.debug(
-        `🆕 Starting new session (no explicit sessionId, resumeSession=${!shouldStartNewSession})`
-      );
+      Log.debug(`🆕 Starting new session`);
     }
 
     // Extra CLI flags from additionalArgs (injected before tool permission args).

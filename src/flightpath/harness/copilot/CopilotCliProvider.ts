@@ -192,18 +192,21 @@ export class CopilotCliProvider implements ICliProvider {
     // AgentExpander reads the agent file and injects <agentInstructions> into the prompt.
     // No --agent CLI flag needed; this works with all providers (Copilot, Claude, Codex).
 
-    // Session resumption - use resolved property if available
-    const shouldStartNewSession = !(resolvedResumeSession ?? false);
-    Log.debug(
-      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
+    // Session resumption
+    const shouldResume = CliProviderUtils.shouldResumeSession(
+      resolvedResumeSession,
+      sessionId
     );
-    if (!shouldStartNewSession && sessionId) {
-      args.push("--resume", sessionId);
+    Log.debug(
+      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, sessionId=${sessionId ?? "none"}, shouldResume=${shouldResume}`
+    );
+    if (shouldResume) {
+      args.push("--resume", sessionId!);
       Log.debug(`✅ Added resume flag: --resume ${sessionId}`);
-    } else if (shouldStartNewSession) {
-      Log.debug(
-        `🆕 Starting new session (resolved shouldStartNewSession=${shouldStartNewSession})`
-      );
+    } else if (resolvedResumeSession && !sessionId) {
+      Log.debug(`⚠️ Resume requested but no session ID available`);
+    } else {
+      Log.debug(`🆕 Starting new session`);
     }
 
     Log.debug(`🔧 CLI arguments: ${JSON.stringify(args)}`);

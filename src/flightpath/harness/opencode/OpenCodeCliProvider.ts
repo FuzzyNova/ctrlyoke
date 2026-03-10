@@ -150,18 +150,21 @@ export class OpenCodeCliProvider implements ICliProvider {
     // NOTE: We do NOT use -c (continue last session) because:
     // 1. It's global across all projects, not workspace-specific
     // 2. Could accidentally resume a session from a different project
-    const shouldResume = resolvedResumeSession ?? false;
+    const shouldResume = CliProviderUtils.shouldResumeSession(
+      resolvedResumeSession,
+      sessionId
+    );
     Log.debug(
-      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, sessionId=${sessionId}`
+      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, sessionId=${sessionId ?? "none"}, shouldResume=${shouldResume}`
     );
 
-    if (shouldResume && sessionId) {
-      args.push("-s", sessionId);
+    if (shouldResume) {
+      args.push("-s", sessionId!);
       Log.debug(`✅ Added resume flag: -s ${sessionId}`);
+    } else if (resolvedResumeSession && !sessionId) {
+      Log.debug(`⚠️ Resume requested but no session ID available`);
     } else {
-      Log.debug(
-        `🆕 Starting new session (shouldResume=${shouldResume}, sessionId=${sessionId ?? "none"})`
-      );
+      Log.debug(`🆕 Starting new session`);
     }
 
     // Interactive mode: deploy the completion detection plugin
