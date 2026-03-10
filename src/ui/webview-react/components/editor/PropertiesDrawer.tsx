@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   useEditorStore,
   END_CONDITION_DEFAULTS,
@@ -13,7 +13,6 @@ import {
 } from "../../types/dropdownNamespaces";
 import {
   CustomSelect,
-  MultiCheckboxDropdown,
   HarnessDropdown,
   harnessCategory,
   PriorContextSelect,
@@ -28,17 +27,168 @@ interface PropertiesDrawerProps {
 }
 
 /**
+ * SkillsSelect — Hybrid dropdown for the prompt-level skills property.
+ *
+ * Top section: "Default (inherit from workflow)" and "None" keywords.
+ * Below a divider: checkbox list of available skills.
+ * Selecting a keyword clears the array selection; toggling checkboxes
+ * switches to custom array mode (matching the PriorContextSelect pattern).
+ */
+const SkillsSelect: React.FC<{
+  value: string[] | null | undefined;
+  onChange: (v: string[] | null | undefined) => void;
+  availableSkills: Array<{ name: string; description?: string }>;
+  dropdownMaxHeight?: string;
+}> = ({ value, onChange, availableSkills, dropdownMaxHeight = "60vh" }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [isOpen]);
+
+  const selectedSkills = Array.isArray(value) ? value : [];
+
+  let buttonLabel: string;
+  if (value === undefined) {
+    buttonLabel = "Default (inherit from workflow)";
+  } else if (value === null) {
+    buttonLabel = "None";
+  } else if (selectedSkills.length === 0) {
+    buttonLabel = "None selected";
+  } else if (selectedSkills.length <= 2) {
+    buttonLabel = selectedSkills.join(", ");
+  } else {
+    buttonLabel = `${selectedSkills.slice(0, 2).join(", ")} +${selectedSkills.length - 2}`;
+  }
+
+  const toggleSkill = (name: string) => {
+    const current = Array.isArray(value) ? value : [];
+    const updated = current.includes(name)
+      ? current.filter((s) => s !== name)
+      : [...current, name];
+    onChange(updated);
+  };
+
+  return (
+    <div className="relative inline-block w-full" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7"
+      >
+        <span className="truncate">{buttonLabel}</span>
+        <i
+          className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-[10px] flex-shrink-0 ml-1`}
+        />
+      </button>
+
+      <div
+        className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top flex flex-col ${
+          isOpen
+            ? "opacity-100 translate-y-0 visible"
+            : "opacity-0 -translate-y-1 invisible pointer-events-none"
+        }`}
+        style={{ maxHeight: dropdownMaxHeight }}
+      >
+        <div className="overflow-y-auto min-h-0 flex-1">
+          {/* Keyword options */}
+          {(["default", "none"] as const).map((k) => {
+            const isSelected =
+              k === "default" ? value === undefined : value === null;
+            const label =
+              k === "default" ? "Default (inherit from workflow)" : "None";
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => {
+                  onChange(k === "default" ? undefined : null);
+                  setIsOpen(false);
+                }}
+                className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
+                  isSelected
+                    ? "bg-dropdown-selected-bg text-list-active-fg"
+                    : "hover:bg-list-hover-bg cursor-pointer"
+                }`}
+              >
+                <i
+                  className={`codicon codicon-check text-[10px] flex-shrink-0 ${
+                    isSelected ? "visible" : "invisible"
+                  }`}
+                />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+
+          {/* Skills checkbox section */}
+          {availableSkills.length > 0 && (
+            <>
+              <div className="border-t border-dropdown-border" />
+              <div className="px-2 py-1 text-[10px] text-description-fg uppercase font-semibold tracking-wide">
+                Select skills:
+              </div>
+              {availableSkills.map((skill) => {
+                const isChecked = selectedSkills.includes(skill.name);
+                return (
+                  <button
+                    key={skill.name}
+                    type="button"
+                    onClick={() => toggleSkill(skill.name)}
+                    className={`w-full px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none ${
+                      isChecked
+                        ? "bg-dropdown-selected-bg text-list-active-fg"
+                        : "hover:bg-list-hover-bg cursor-pointer"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {}}
+                      className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+                      tabIndex={-1}
+                    />
+                    <span className="flex flex-col min-w-0">
+                      <span className="font-medium truncate">{skill.name}</span>
+                      {skill.description && (
+                        <span className="text-[10px] text-description-fg truncate">
+                          {skill.description}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
  * PropertiesDrawer - Slide-up panel for prompt properties
  *
- * Features:
- * - Harness dropdown (from settingsStore)
- * - Model dropdown (dynamic based on harness)
- * - Agent dropdown
- * - Resume Session dropdown and Session ID input
- * - Allow Dynamic Extension dropdown
- * - End Condition section (collapsible)
- *   - Enable checkbox
- *   - Script, Returns, Timeout, Max Retries, Retry Prompt fields
+ * Layout (two-column grid throughout, matching SettingsDrawer ordering):
+ * - Row 1: Harness + Model
+ * - Row 2: Agent + Skills
+ * - Row 3: Additional Args + Prior Context
+ * - Row 4: Allow Dynamic Extension + Resume Session (with paired Session ID)
+ * - End Condition section (full width)
  */
 export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   isOpen,
@@ -56,15 +206,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     availableAgents,
     availableSkills,
     globalSettings,
-    getModelsForHarness: getModelsForHarness,
+    getModelsForHarness,
   } = useSettingsStore();
   const { hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
     useUiStore();
   const prompts = useWorkflowStore((s) => s.prompts);
 
   // Build prior prompt list for priorContext custom selection.
-  // For an existing prompt at index N, valid priors are prompts 0..N-1.
-  // For a new prompt (null), all existing prompts are valid priors.
   const priorPrompts = (() => {
     const limit =
       selectedPromptIndex === null ? prompts.length : selectedPromptIndex;
@@ -85,62 +233,16 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   }, [properties.endCondition]);
 
   // Get models for current harness
-  const currentHarness = (properties.harness ?? globalSettings.harness) as HarnessId;
+  const currentHarness = (
+    properties.harness ?? globalSettings.harness
+  ) as HarnessId;
   const models = getModelsForHarness(currentHarness);
   const modelNamespace = modelNamespaceForHarness(currentHarness);
-  const agentMode =
-    properties.agent === undefined
-      ? "default"
-      : properties.agent === null
-        ? "none"
-        : "custom";
-  const skillsMode =
-    properties.skills === undefined
-      ? "default"
-      : properties.skills === null
-        ? "none"
-        : "custom";
 
   // Handle harness change - also reset model to default
   const handleHarnessChange = (newHarness: string) => {
     setProperty("harness", newHarness === "default" ? undefined : newHarness);
-    // Reset model when harness changes
     setProperty("model", undefined);
-  };
-
-  const handleAgentModeChange = (mode: string) => {
-    if (mode === "default") {
-      setProperty("agent", undefined);
-      return;
-    }
-
-    if (mode === "none") {
-      setProperty("agent", null);
-      return;
-    }
-
-    const fallbackAgent =
-      typeof properties.agent === "string" && properties.agent
-        ? properties.agent
-        : availableAgents[0]?.path;
-    setProperty("agent", fallbackAgent ?? null);
-  };
-
-  const handleSkillsModeChange = (mode: string) => {
-    if (mode === "default") {
-      setProperty("skills", undefined);
-      return;
-    }
-
-    if (mode === "none") {
-      setProperty("skills", null);
-      return;
-    }
-
-    setProperty(
-      "skills",
-      Array.isArray(properties.skills) ? properties.skills : []
-    );
   };
 
   // Handle end condition enable/disable
@@ -217,7 +319,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <CustomSelect
                 id="prop-model"
                 value={properties.model ?? "default"}
-                onChange={(v) => setProperty("model", v === "default" ? undefined : v)}
+                onChange={(v) =>
+                  setProperty("model", v === "default" ? undefined : v)
+                }
                 options={[
                   { value: "default", label: "Default" },
                   ...(models.length === 0
@@ -236,7 +340,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 namespace={modelNamespace}
                 hiddenValues={hiddenDropdownOptions[modelNamespace] ?? []}
                 onHideOption={(v) => hideDropdownOption(modelNamespace, v)}
-                onUnhideOption={(v) => unhideDropdownOption(modelNamespace, v)}
+                onUnhideOption={(v) =>
+                  unhideDropdownOption(modelNamespace, v)
+                }
                 nonHideableValues={["default", ""]}
                 dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
@@ -245,7 +351,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 
           {/* Row 2: Agent + Skills */}
           <div className="grid grid-cols-2 gap-4">
-            {/* Agent */}
+            {/* Agent — single flat dropdown: Default / None / each agent */}
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="prop-agent"
@@ -254,16 +360,33 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 Agent
               </label>
               <CustomSelect
-                id="prop-agent-mode"
-                value={agentMode}
-                onChange={handleAgentModeChange}
+                id="prop-agent"
+                value={
+                  properties.agent === undefined
+                    ? "default"
+                    : properties.agent === null
+                      ? "none"
+                      : properties.agent
+                }
+                onChange={(v) => {
+                  if (v === "default") {
+                    setProperty("agent", undefined);
+                  } else if (v === "none") {
+                    setProperty("agent", null);
+                  } else {
+                    setProperty("agent", v);
+                  }
+                }}
                 options={[
                   {
                     value: "default",
                     label: "Default (inherit from workflow)",
                   },
                   { value: "none", label: "None" },
-                  { value: "custom", label: "Custom" },
+                  ...availableAgents.map((agent) => ({
+                    value: agent.path,
+                    label: agent.name,
+                  })),
                 ]}
                 namespace={DROPDOWN_NAMESPACES.AGENT}
                 hiddenValues={
@@ -275,46 +398,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 onUnhideOption={(v) =>
                   unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
                 }
-                nonHideableValues={["default", "none", "custom"]}
+                nonHideableValues={["default", "none"]}
                 dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
-              {agentMode === "custom" && (
-                <CustomSelect
-                  id="prop-agent"
-                  value={
-                    typeof properties.agent === "string" ? properties.agent : ""
-                  }
-                  onChange={(v) => setProperty("agent", v || null)}
-                  options={
-                    availableAgents.length === 0
-                      ? [
-                          {
-                            value: "",
-                            label: "No agents available",
-                            disabled: true,
-                          },
-                        ]
-                      : availableAgents.map((agent) => ({
-                          value: agent.path,
-                          label: agent.name,
-                        }))
-                  }
-                  namespace={DROPDOWN_NAMESPACES.AGENT}
-                  hiddenValues={
-                    hiddenDropdownOptions[DROPDOWN_NAMESPACES.AGENT] ?? []
-                  }
-                  onHideOption={(v) =>
-                    hideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
-                  }
-                  onUnhideOption={(v) =>
-                    unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
-                  }
-                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
-                />
-              )}
             </div>
 
-            {/* Skills */}
+            {/* Skills — hybrid dropdown with Default/None keywords + checkbox list */}
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="prop-skills"
@@ -322,56 +411,104 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               >
                 Skills
               </label>
+              <SkillsSelect
+                value={properties.skills as string[] | null | undefined}
+                onChange={(v) => setProperty("skills", v)}
+                availableSkills={availableSkills.map((s) => ({
+                  name: s.name,
+                  description: s.description || undefined,
+                }))}
+                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+              />
+            </div>
+          </div>
+
+          {/* Row 3: Additional Args + Prior Context */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Additional Args — mode select + paired text input */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="prop-additional-args-mode"
+                className="text-xs font-medium text-foreground"
+                title="Extra CLI flags appended to FlightPath's standard argument set. Only applies to CLI harnesses."
+              >
+                Additional Args
+              </label>
               <CustomSelect
-                id="prop-skills-mode"
-                value={skillsMode}
-                onChange={handleSkillsModeChange}
+                id="prop-additional-args-mode"
+                value={
+                  properties.additionalArgs === undefined
+                    ? "default"
+                    : properties.additionalArgs === null
+                      ? "none"
+                      : "custom"
+                }
+                onChange={(v) => {
+                  if (v === "default") {
+                    setProperty("additionalArgs", undefined);
+                  } else if (v === "none") {
+                    setProperty("additionalArgs", null);
+                  } else {
+                    setProperty(
+                      "additionalArgs",
+                      typeof properties.additionalArgs === "string"
+                        ? properties.additionalArgs
+                        : ""
+                    );
+                  }
+                }}
                 options={[
-                  {
-                    value: "default",
-                    label: "Default (inherit from workflow)",
-                  },
-                  { value: "none", label: "None" },
+                  { value: "default", label: "Default (inherit)" },
+                  { value: "none", label: "None (override to empty)" },
                   { value: "custom", label: "Custom" },
                 ]}
                 dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
-              {skillsMode === "custom" && (
-                <MultiCheckboxDropdown
-                  id="prop-skills"
-                  selectedValues={
-                    Array.isArray(properties.skills) ? properties.skills : []
+              <div
+                className={`transition-all duration-300 ${
+                  typeof properties.additionalArgs === "string"
+                    ? "max-h-[60px] opacity-100"
+                    : "max-h-0 opacity-0 overflow-hidden"
+                }`}
+              >
+                <input
+                  type="text"
+                  id="prop-additional-args"
+                  value={
+                    typeof properties.additionalArgs === "string"
+                      ? properties.additionalArgs
+                      : ""
                   }
-                  onChange={(v) => setProperty("skills", v)}
-                  options={availableSkills.map((s) => ({
-                    value: s.name,
-                    label: s.name,
-                    description: s.description || undefined,
-                  }))}
-                  placeholder="Choose skills"
-                  namespace={DROPDOWN_NAMESPACES.SKILLS}
-                  hiddenValues={
-                    hiddenDropdownOptions[DROPDOWN_NAMESPACES.SKILLS] ?? []
+                  onChange={(e) =>
+                    setProperty("additionalArgs", e.target.value)
                   }
-                  onHideOption={(v) =>
-                    hideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
-                  }
-                  onUnhideOption={(v) =>
-                    unhideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
-                  }
-                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+                  placeholder="e.g. --effort high"
+                  className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                 />
-              )}
-              {Array.isArray(properties.skills) &&
-                properties.skills.length > 0 && (
-                  <p className="text-[10px] text-description-fg">
-                    Active: {properties.skills.join(", ")}
-                  </p>
-                )}
+              </div>
+            </div>
+
+            {/* Prior Context */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="prop-prior-context"
+                className="text-xs font-medium text-foreground"
+                title="Inject prior prompt outputs into this prompt's text before sending to the AI"
+              >
+                Prior Context
+              </label>
+              <PriorContextSelect
+                id="prop-prior-context"
+                value={properties.priorContext}
+                onChange={(v) => setProperty("priorContext", v)}
+                showDefault
+                priorPrompts={priorPrompts}
+                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+              />
             </div>
           </div>
 
-          {/* Row 3: Allow Dynamic Extension + Resume Session */}
+          {/* Row 4: Allow Dynamic Extension + Resume Session (with paired Session ID) */}
           <div className="grid grid-cols-2 gap-4">
             {/* Allow Dynamic Extension */}
             <div className="flex flex-col gap-1">
@@ -379,7 +516,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 htmlFor="prop-allow-dynamic"
                 className="text-xs font-medium text-foreground"
               >
-                Allow Dynamic Extension
+                Allow Dynamic Ext.
               </label>
               <CustomSelect
                 id="prop-allow-dynamic"
@@ -398,17 +535,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 }
                 options={[
                   { value: "default", label: "Default" },
-                  {
-                    value: "yes",
-                    label: "Yes - Allow AI to extend workflow",
-                  },
-                  { value: "no", label: "No - Disable dynamic extension" },
+                  { value: "yes", label: "Yes - Allow AI to extend" },
+                  { value: "no", label: "No - Disable" },
                 ]}
                 dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
             </div>
 
-            {/* Resume Session */}
+            {/* Resume Session — paired control with Session ID below */}
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="prop-resume-session"
@@ -433,121 +567,29 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 }
                 options={[
                   { value: "default", label: "Default" },
-                  { value: "yes", label: "Yes - Resume previous session" },
-                  { value: "no", label: "No - Start new session" },
+                  { value: "yes", label: "Yes - Resume previous" },
+                  { value: "no", label: "No - New session" },
                 ]}
                 dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
-            </div>
-          </div>
-
-          {/* Row 4: Session ID (full width, animated, visible only when resume session is "yes") */}
-          <div
-            className={`transition-all duration-300 ${
-              properties.resumeSession === true
-                ? "max-h-[60px] opacity-100"
-                : "max-h-0 opacity-0 overflow-hidden"
-            }`}
-          >
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="prop-session-id"
-                className="text-xs font-medium text-foreground"
+              {/* Session ID — expands directly below, no label */}
+              <div
+                className={`transition-all duration-300 ${
+                  properties.resumeSession === true
+                    ? "max-h-[60px] opacity-100"
+                    : "max-h-0 opacity-0 overflow-hidden"
+                }`}
               >
-                Session ID
-              </label>
-              <input
-                type="text"
-                id="prop-session-id"
-                value={properties.sessionId}
-                onChange={(e) => setProperty("sessionId", e.target.value)}
-                placeholder="Enter session ID or prompt number (e.g., 1, 2)"
-                className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-              />
+                <input
+                  type="text"
+                  id="prop-session-id"
+                  value={properties.sessionId}
+                  onChange={(e) => setProperty("sessionId", e.target.value)}
+                  placeholder="Session ID or prompt number (e.g., 1)"
+                  className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                />
+              </div>
             </div>
-          </div>
-
-          {/* Row 5: Prior Context (full width) */}
-          <div className="flex flex-col gap-1">
-            <label
-              htmlFor="prop-prior-context"
-              className="text-xs font-medium text-foreground"
-              title="Inject prior prompt outputs into this prompt's text before sending to the AI"
-            >
-              Prior Context
-            </label>
-            <PriorContextSelect
-              id="prop-prior-context"
-              value={properties.priorContext}
-              onChange={(v) => setProperty("priorContext", v)}
-              showDefault
-              priorPrompts={priorPrompts}
-              dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
-            />
-          </div>
-
-          {/* Row 6: Additional Args mode (full width) */}
-          <div className="flex flex-col gap-1">
-            <label
-              htmlFor="prop-additional-args-mode"
-              className="text-xs font-medium text-foreground"
-              title="Extra CLI flags appended to FlightPath's standard argument set. Only applies to CLI harnesses."
-            >
-              Additional Args
-            </label>
-            <CustomSelect
-              id="prop-additional-args-mode"
-              value={
-                properties.additionalArgs === undefined
-                  ? "default"
-                  : properties.additionalArgs === null
-                    ? "none"
-                    : "custom"
-              }
-              onChange={(v) => {
-                if (v === "default") {
-                  setProperty("additionalArgs", undefined);
-                } else if (v === "none") {
-                  setProperty("additionalArgs", null);
-                } else {
-                  // "custom" — preserve existing string or start with empty
-                  setProperty(
-                    "additionalArgs",
-                    typeof properties.additionalArgs === "string"
-                      ? properties.additionalArgs
-                      : ""
-                  );
-                }
-              }}
-              options={[
-                { value: "default", label: "Default (inherit from workflow)" },
-                { value: "none", label: "None (override to empty)" },
-                { value: "custom", label: "Custom" },
-              ]}
-              dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
-            />
-          </div>
-
-          {/* Row 6b: Additional Args text input (animated, visible only when "custom") */}
-          <div
-            className={`transition-all duration-300 ${
-              typeof properties.additionalArgs === "string"
-                ? "max-h-[60px] opacity-100"
-                : "max-h-0 opacity-0 overflow-hidden"
-            }`}
-          >
-            <input
-              type="text"
-              id="prop-additional-args"
-              value={
-                typeof properties.additionalArgs === "string"
-                  ? properties.additionalArgs
-                  : ""
-              }
-              onChange={(e) => setProperty("additionalArgs", e.target.value)}
-              placeholder="e.g. --effort high --max-turns 10"
-              className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
-            />
           </div>
 
           {/* End Condition Section (Full Width) */}
@@ -693,7 +735,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       updateEndConditionField("retryPrompt", e.target.value)
                     }
                     disabled={!properties.endCondition}
-                    placeholder="Validation failed: {error}&#10;&#10;Please fix the issues."
+                    placeholder={"Validation failed: {error}\n\nPlease fix the issues."}
                     rows={3}
                     className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50 resize-y"
                   />

@@ -216,150 +216,123 @@ export abstract class HarnessIntegration {
   abstract getIntegrationMode(): string;
 
   /**
-   * Build prompt text from prompt item
-   * Common logic for extracting prompt text, expanding context references,
-   * prepending agent instructions, and inserting skill instructions.
+   * Build prompt text from prompt item.
+   * Assembles in the canonical section order (without priorContext or criticalInstruction):
+   *   <skillInstructions> → <agentInstructions> → <attachment> blocks → user prompt
+   *
+   * Used by CopilotChatIntegration when building temp files for attachment.
+   * For the full prompt sent to AI (including priorContext and injected instructions),
+   * see buildPromptWithInstructions.
    *
    * @param prompt The prompt item to build text for
-   * @param resolvedAgent Optional resolved agent name to prepend instructions for
-   * @param resolvedSkills Optional resolved skill names to insert as <skillInstructions>
+   * @param resolvedAgent Optional resolved agent name
+   * @param resolvedSkills Optional resolved skill names
    */
   protected async buildPromptText(
     prompt: PromptItem,
     resolvedAgent?: string,
     resolvedSkills?: string[]
   ): Promise<string> {
-    // Check if auto-attachment is enabled
-    const autoAttach = ConfigurationUtils.shouldAutoAttachFiles();
+    const userPromptText = prompt.prompt.trim();
+    const workspaceRoot = this.getWorkspaceRoot();
 
-    // User's prompt text is already in final form with all context variables
-    const promptText = prompt.prompt.trim();
+    // Expand context references to get just the attachment section
+    const attachmentSection = await this.expandContextOnly(userPromptText);
 
-    // Expand context references if enabled
-    let expandedText: string;
-    if (autoAttach) {
-      const workspaceRoot = this.getWorkspaceRoot();
-      if (!workspaceRoot) {
-        Log.warn("No workspace root, skipping context expansion");
-        expandedText = promptText;
-      } else {
-        const expander = new ContextExpander(workspaceRoot);
-        expandedText = await expander.expandContext(promptText);
+    // Build skill block
+    const skillContent = resolvedSkills?.length
+      ? await this.expandSkillBlock(resolvedSkills, workspaceRoot)
+      : null;
+
+    // Build agent block
+    const agentContent = resolvedAgent
+      ? await this.expandAgentBlock(resolvedAgent, workspaceRoot)
+      : null;
+
+    // Assemble: skills → agent → attachments → userPrompt
+    const sections: string[] = [];
+    if (skillContent) {
+      sections.push(skillContent);
+    }
+    if (agentContent) {
+      sections.push(`<agentInstructions>\n${agentContent}\n</agentInstructions>`);
+    }
+    if (attachmentSection) {
+      sections.push(attachmentSection);
+    }
+    sections.push(userPromptText);
+
+    return sections.join("\n\n");
+  }
+
+  /**
+   * Expand context references in the prompt and return ONLY the attachment XML section.
+   * Returns an empty string if auto-attachment is disabled, no workspace is available,
+   * or no file references are found in the prompt.
+   */
+  private async expandContextOnly(userPromptText: string): Promise<string> {
+    if (!ConfigurationUtils.shouldAutoAttachFiles()) {
+      return "";
+    }
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      Log.warn("No workspace root, skipping context expansion");
+      return "";
+    }
+    try {
+      const expander = new ContextExpander(workspaceRoot);
+      const expanded = await expander.expandContext(userPromptText);
+      if (expanded === userPromptText) {
+        return ""; // No attachments were added
       }
+      // ContextExpander returns: `${attachmentsSection}\n\n${promptText}`
+      // Strip the trailing "\n\n" + userPromptText to isolate the attachment section.
+      const suffix = "\n\n" + userPromptText;
+      if (expanded.endsWith(suffix)) {
+        return expanded.slice(0, -suffix.length);
+      }
+      Log.warn("Unexpected ContextExpander output format, skipping attachments");
+      return "";
+    } catch (error) {
+      Log.error("Error expanding context:", error);
+      return "";
+    }
+  }
+
+  /**
+   * Expand skill names to a <skillInstructions> block.
+   * Returns null if no skills are provided or none resolve.
+   */
+  private async expandSkillBlock(
+    resolvedSkills: string[],
+    workspaceRoot: string | undefined
+  ): Promise<string | null> {
+    const content = await SkillExpander.expandSkills(resolvedSkills, workspaceRoot);
+    if (content) {
+      Log.debug(`🎯 Skills [${resolvedSkills.join(", ")}] instructions added to prompt`);
     } else {
-      expandedText = promptText;
-    }
-
-    // Agent expansion - prepend agent instructions if specified
-    if (resolvedAgent) {
-      const workspaceRoot = this.getWorkspaceRoot();
-      const agentContent = await AgentExpander.expandAgent(
-        resolvedAgent,
-        workspaceRoot
+      Log.warn(
+        `⚠️ No skills resolved from [${resolvedSkills.join(", ")}], continuing without skills`
       );
-      if (agentContent) {
-        expandedText = this.insertAgentInstructions(expandedText, agentContent);
-        Log.debug(`🤖 Agent "${resolvedAgent}" instructions added to prompt`);
-      } else {
-        Log.warn(
-          `⚠️ Agent "${resolvedAgent}" not found, continuing without agent`
-        );
-      }
     }
-
-    // Skill expansion - insert skill frontmatter if specified
-    if (resolvedSkills && resolvedSkills.length > 0) {
-      const workspaceRoot = this.getWorkspaceRoot();
-      const skillContent = await SkillExpander.expandSkills(
-        resolvedSkills,
-        workspaceRoot
-      );
-      if (skillContent) {
-        expandedText = this.insertSkillInstructions(expandedText, skillContent);
-        Log.debug(
-          `🎯 Skills [${resolvedSkills.join(", ")}] instructions added to prompt`
-        );
-      } else {
-        Log.warn(
-          `⚠️ No skills resolved from [${resolvedSkills.join(", ")}], continuing without skills`
-        );
-      }
-    }
-
-    return expandedText;
+    return content;
   }
 
   /**
-   * Insert agent instructions between attachment blocks and user prompt.
-   *
-   * Final structure:
-   *   [<attachment> blocks] → <agentInstructions> → [user prompt]
-   *
-   * Positioning rationale:
-   * - Attachments FIRST: provide context/files the agent may reference
-   * - Agent instructions SECOND: defines role and how to use the context
-   * - User prompt LAST: gets maximum LLM attention (positioned last)
-   *
-   * This matches GitHub Copilot's <modeInstructions> pattern.
+   * Expand an agent name to its file content for use in <agentInstructions>.
+   * Returns null if the agent is not found.
    */
-  private insertAgentInstructions(
-    expandedPrompt: string,
-    agentContent: string
-  ): string {
-    const ATTACHMENT_CLOSE_TAG = "</attachment>";
-    const lastAttachmentEnd = expandedPrompt.lastIndexOf(ATTACHMENT_CLOSE_TAG);
-
-    if (lastAttachmentEnd === -1) {
-      // No attachments - prepend agent before entire prompt
-      return `<agentInstructions>\n${agentContent}\n</agentInstructions>\n\n${expandedPrompt}`;
+  private async expandAgentBlock(
+    resolvedAgent: string,
+    workspaceRoot: string | undefined
+  ): Promise<string | null> {
+    const content = await AgentExpander.expandAgent(resolvedAgent, workspaceRoot);
+    if (content) {
+      Log.debug(`🤖 Agent "${resolvedAgent}" instructions added to prompt`);
+    } else {
+      Log.warn(`⚠️ Agent "${resolvedAgent}" not found, continuing without agent`);
     }
-
-    // Split at end of last attachment and insert agent between attachments and user prompt
-    const afterAttachmentTag = lastAttachmentEnd + ATTACHMENT_CLOSE_TAG.length;
-    const attachmentSection = expandedPrompt.substring(0, afterAttachmentTag);
-    const userPromptSection = expandedPrompt.substring(afterAttachmentTag);
-
-    return `${attachmentSection}\n\n<agentInstructions>\n${agentContent}\n</agentInstructions>\n\n${userPromptSection.trim()}`;
-  }
-
-  /**
-   * Insert skill instructions after agent instructions (or after attachments if no agent).
-   *
-   * Final structure:
-   *   [<attachment> blocks] → <agentInstructions> (if agent) → <skillInstructions> → [user prompt]
-   *
-   * Positioning logic:
-   * 1. If agentInstructions present: insert after </agentInstructions>
-   * 2. Else if attachment blocks present: insert after last </attachment>
-   * 3. Else: prepend before entire prompt
-   */
-  private insertSkillInstructions(
-    expandedPrompt: string,
-    skillContent: string
-  ): string {
-    const AGENT_CLOSE_TAG = "</agentInstructions>";
-    const ATTACHMENT_CLOSE_TAG = "</attachment>";
-
-    // 1. Try to insert after agent instructions
-    const agentEnd = expandedPrompt.lastIndexOf(AGENT_CLOSE_TAG);
-    if (agentEnd !== -1) {
-      const afterAgent = agentEnd + AGENT_CLOSE_TAG.length;
-      const before = expandedPrompt.substring(0, afterAgent);
-      const after = expandedPrompt.substring(afterAgent).trimStart();
-      return `${before}\n\n${skillContent}\n\n${after}`;
-    }
-
-    // 2. Try to insert after last attachment
-    const lastAttachmentEnd = expandedPrompt.lastIndexOf(ATTACHMENT_CLOSE_TAG);
-    if (lastAttachmentEnd !== -1) {
-      const afterAttachment = lastAttachmentEnd + ATTACHMENT_CLOSE_TAG.length;
-      const before = expandedPrompt.substring(0, afterAttachment);
-      const after = expandedPrompt.substring(afterAttachment).trimStart();
-      return `${before}\n\n${skillContent}\n\n${after}`;
-    }
-
-    // 3. Prepend before entire prompt
-    return `${skillContent}\n\n${expandedPrompt}`;
+    return content;
   }
 
 
@@ -458,18 +431,10 @@ export abstract class HarnessIntegration {
   }
 
   /**
-   * Format gathered context items as an XML block and prepend to prompt text.
+   * Build the <priorContext> XML block from gathered context items.
    * finalPrompt loop items carry type="finalPrompt" on the <step> element.
-   * Result is inserted BEFORE the user's prompt text.
    */
-  private insertPriorContext(
-    promptText: string,
-    contextItems: PriorContextItem[]
-  ): string {
-    if (contextItems.length === 0) {
-      return promptText;
-    }
-
+  private buildPriorContextXml(contextItems: PriorContextItem[]): string {
     const steps = contextItems
       .map((item) => {
         const typeAttr = item.type ? ` type="${item.type}"` : "";
@@ -482,21 +447,39 @@ export abstract class HarnessIntegration {
       })
       .join("\n");
 
-    const contextBlock = `<priorContext>\n${steps}\n</priorContext>`;
-    return `${contextBlock}\n\n${promptText}`;
+    return `<priorContext>\n${steps}\n</priorContext>`;
   }
 
   /**
-   * Build prompt with dynamic queue instructions if needed
+   * Build the <priorContext> XML block and prepend it to promptText.
+   * Kept for backward compatibility with tests that call this via (this as any).
+   */
+  private insertPriorContext(
+    promptText: string,
+    contextItems: PriorContextItem[]
+  ): string {
+    if (contextItems.length === 0) {
+      return promptText;
+    }
+    return `${this.buildPriorContextXml(contextItems)}\n\n${promptText}`;
+  }
+
+  /**
+   * Build the fully assembled prompt for sending to AI.
+   *
+   * Section order (canonical):
+   *   <skillInstructions> → <agentInstructions> → <priorContext>
+   *   → <attachment> blocks → <criticalInstruction> → user prompt
+   *
    * @param prompt The prompt item
    * @param promptIndex Current prompt index
    * @param allPrompts All prompts in the workflow
    * @param allowDynamicExtension Whether to enable dynamic queue extension
-   * @param resolvedAgent Resolved agent path for prompt prepending
-   * @param resolvedSkills Resolved skill paths for frontmatter injection
+   * @param resolvedAgent Resolved agent name for prompt prepending
+   * @param resolvedSkills Resolved skill names for frontmatter injection
    * @param resolvedPriorContext Prior context injection setting
    * @param finalPromptResponseTexts Per-loop finalPrompt response texts (for "finalPromptAll"/"finalPromptPrevious")
-   * @returns Prompt text with optional prior context and MCP tool instructions
+   * @returns Fully assembled prompt text
    */
   protected async buildPromptWithInstructions(
     prompt: PromptItem,
@@ -508,14 +491,25 @@ export abstract class HarnessIntegration {
     resolvedPriorContext?: PriorContext,
     finalPromptResponseTexts?: string[]
   ): Promise<string> {
-    // Build base prompt text (with attachments, agent, and skill instructions)
-    let promptText = await this.buildPromptText(
-      prompt,
-      resolvedAgent,
-      resolvedSkills
-    );
+    const userPromptText = prompt.prompt.trim();
+    const workspaceRoot = this.getWorkspaceRoot();
 
-    // Inject prior context if specified
+    // 1. Attachment section (file/directory context references)
+    const attachmentSection = await this.expandContextOnly(userPromptText);
+
+    // 2. Skill block
+    const skillContent =
+      resolvedSkills?.length
+        ? await this.expandSkillBlock(resolvedSkills, workspaceRoot)
+        : null;
+
+    // 3. Agent block
+    const agentContent = resolvedAgent
+      ? await this.expandAgentBlock(resolvedAgent, workspaceRoot)
+      : null;
+
+    // 4. Prior context block
+    let priorContextBlock = "";
     if (resolvedPriorContext !== undefined && resolvedPriorContext !== "none") {
       const contextItems = this.gatherPriorContextItems(
         resolvedPriorContext,
@@ -524,7 +518,7 @@ export abstract class HarnessIntegration {
         finalPromptResponseTexts ?? []
       );
       if (contextItems.length > 0) {
-        promptText = this.insertPriorContext(promptText, contextItems);
+        priorContextBlock = this.buildPriorContextXml(contextItems);
         const isFinalPromptContext =
           resolvedPriorContext === "finalPromptAll" ||
           resolvedPriorContext === "finalPromptPrevious";
@@ -535,59 +529,68 @@ export abstract class HarnessIntegration {
       }
     }
 
-    // Check if we should inject dynamic queue instructions
+    // 5. Dynamic queue instruction (injected just before user prompt)
     const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
     const shouldEnableDynamicExtension =
       allowDynamicExtension ?? dynamicQueueConfig.enabled;
 
-    if (!shouldEnableDynamicExtension) {
-      return promptText; // Dynamic queue disabled
-    }
+    let criticalInstruction = "";
+    if (shouldEnableDynamicExtension) {
+      const shouldInject = shouldInjectExtensionInstructions(
+        prompt,
+        promptIndex,
+        allPrompts,
+        dynamicQueueConfig.dynamicExtensionOnLastPrompt,
+        shouldEnableDynamicExtension
+      );
 
-    // Check if this prompt should get extension instructions
-    const shouldInject = shouldInjectExtensionInstructions(
-      prompt,
-      promptIndex,
-      allPrompts,
-      dynamicQueueConfig.dynamicExtensionOnLastPrompt,
-      shouldEnableDynamicExtension
-    );
+      if (shouldInject) {
+        // Get integration mode to determine instruction format
+        const integrationMode = this.getIntegrationMode();
+        void integrationMode; // reserved for per-harness customization
 
-    if (!shouldInject) {
-      return promptText; // No instructions for this prompt
-    }
+        const { maxQueueSize, maxWorkflowExecutionTime, unlimitedMode } =
+          dynamicQueueConfig;
+        const currentSize = allPrompts.length;
+        const currentIndex = promptIndex + 1; // 1-based for display
+        const totalPrompts = allPrompts.length;
+        const maxSizeDisplay = unlimitedMode
+          ? "unlimited"
+          : maxQueueSize.toString();
+        const maxTimeDisplay =
+          unlimitedMode || maxWorkflowExecutionTime === -1
+            ? "unlimited"
+            : `${maxWorkflowExecutionTime}s`;
 
-    // Get integration mode to determine instruction format
-    const integrationMode = this.getIntegrationMode();
-
-    // Get dynamic queue config for instruction template
-    const { maxQueueSize, maxWorkflowExecutionTime, unlimitedMode } =
-      dynamicQueueConfig;
-
-    // Calculate current stats
-    const currentSize = allPrompts.length;
-    const currentIndex = promptIndex + 1; // 1-based for display
-    const totalPrompts = allPrompts.length;
-
-    // Build concise instruction (tool schemas provide usage details)
-    const maxSizeDisplay = unlimitedMode
-      ? "unlimited"
-      : maxQueueSize.toString();
-    const maxTimeDisplay =
-      unlimitedMode || maxWorkflowExecutionTime === -1
-        ? "unlimited"
-        : `${maxWorkflowExecutionTime}s`;
-
-    const instructions = `<criticalInstruction>
+        criticalInstruction = `<criticalInstruction>
 FlightPath workflow: Step ${currentIndex}/${totalPrompts} (${currentSize}/${maxSizeDisplay} prompts, ${maxTimeDisplay} max time)
 
 You have access to flightpath_queue_status and flightpath_append_queue tools. Use them if you need additional steps to complete this task. Only extend the queue if truly necessary.
-</criticalInstruction>
+</criticalInstruction>`;
+      }
+    }
 
-`;
+    // Assemble in canonical order:
+    //   skills → agent → priorContext → attachments → criticalInstruction → userPrompt
+    const sections: string[] = [];
+    if (skillContent) {
+      sections.push(skillContent);
+    }
+    if (agentContent) {
+      sections.push(`<agentInstructions>\n${agentContent}\n</agentInstructions>`);
+    }
+    if (priorContextBlock) {
+      sections.push(priorContextBlock);
+    }
+    if (attachmentSection) {
+      sections.push(attachmentSection);
+    }
+    if (criticalInstruction) {
+      sections.push(criticalInstruction);
+    }
+    sections.push(userPromptText);
 
-    // Prepend instructions to prompt
-    return instructions + promptText;
+    return sections.join("\n\n");
   }
 
   /**

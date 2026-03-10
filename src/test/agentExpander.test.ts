@@ -29,9 +29,10 @@ function frontmatterHasField(content: string, field: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Pure replication of the private HarnessIntegration.insertAgentInstructions
-// method so it can be tested without importing the extension class (which
-// pulls in vscode).  The algorithm must be kept in sync with the original.
+// Standalone implementation of the agent insertion logic (formerly
+// HarnessIntegration.insertAgentInstructions).  The canonical ordering is now
+// handled by buildPromptWithInstructions/buildPromptText via explicit section
+// assembly; these tests verify the insertion helper's behaviour in isolation.
 // ---------------------------------------------------------------------------
 const ATTACHMENT_CLOSE_TAG = "</attachment>";
 
