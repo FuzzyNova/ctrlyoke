@@ -407,10 +407,16 @@ export class WebviewMessageRouter {
       return;
     }
 
-    const { index, text, properties, promptName } = message;
+    const { index, text, properties, clearProperties, promptName } = message;
 
     try {
-      await manager.updatePromptInQueue(index, text, properties, promptName);
+      await manager.updatePromptInQueue(
+        index,
+        text,
+        properties,
+        promptName,
+        clearProperties
+      );
     } catch (error) {
       Log.error("Failed to update prompt:", error);
       vscode.window.showErrorMessage(
@@ -427,7 +433,10 @@ export class WebviewMessageRouter {
     }
 
     try {
-      await manager.updateFinalPromptInQueue(message.finalPrompt ?? null);
+      await manager.updateFinalPromptInQueue(
+        message.finalPrompt ?? null,
+        message.clearProperties
+      );
     } catch (error) {
       Log.error("Failed to update finalPrompt:", error);
       vscode.window.showErrorMessage(

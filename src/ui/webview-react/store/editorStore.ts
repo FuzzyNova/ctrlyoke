@@ -24,14 +24,14 @@ export interface EndConditionConfig {
 export interface PropertyValues {
   harness: string; // "default" | harness ID
   model: string; // "default" | model ID
-  agent: string; // "" or path to agent file
-  skills: string[]; // [] or array of skill names
+  agent: string | null | undefined; // undefined = Default, null = None, string = specific
+  skills: string[] | null | undefined; // undefined = Default, null = None, string[] = specific (empty array allowed transiently in custom mode)
   resumeSession: string; // "default" | "yes" | "no"
   sessionId: string; // "" or session ID or prompt number reference
   allowDynamicExtension: string; // "default" | "yes" | "no"
   endCondition?: EndConditionConfig | null;
   priorContext?: PriorContext; // undefined = inherit/default
-  additionalArgs?: string; // "" or raw arg string
+  additionalArgs?: string | null; // undefined = inherit, null = explicitly none, string = custom args
 }
 
 /**
@@ -41,8 +41,8 @@ export interface PropertyValues {
 export const PROPERTY_DEFAULTS: PropertyValues = {
   harness: "default",
   model: "default",
-  agent: "",
-  skills: [],
+  agent: undefined,
+  skills: undefined,
   resumeSession: "default",
   sessionId: "",
   allowDynamicExtension: "default",
@@ -292,8 +292,8 @@ export const useEditorStore = create<
     const properties: PropertyValues = {
       harness: promptData.harness ?? "default",
       model: promptData.model ?? "default",
-      agent: promptData.agent ?? "",
-      skills: promptData.skills ?? [],
+      agent: promptData.agent,
+      skills: promptData.skills,
       resumeSession:
         promptData.resumeSession === undefined
           ? "default"
@@ -310,7 +310,10 @@ export const useEditorStore = create<
             : "no",
       endCondition: promptData.endCondition ?? null,
       priorContext: promptData.priorContext,
-      additionalArgs: promptData.additionalArgs ?? undefined,
+      additionalArgs:
+        promptData.additionalArgs !== undefined
+          ? promptData.additionalArgs
+          : undefined,
     };
 
     const isFinalPromptTarget = index < 0;
@@ -600,13 +603,13 @@ export const useEditorStore = create<
       result.model = properties.model;
     }
 
-    // Add agent if provided
-    if (properties.agent) {
+    // Add agent when explicitly overridden
+    if (properties.agent !== undefined) {
       result.agent = properties.agent;
     }
 
-    // Add skills if non-empty
-    if (properties.skills && properties.skills.length > 0) {
+    // Add skills when explicitly overridden
+    if (properties.skills !== undefined) {
       result.skills = properties.skills;
     }
 
@@ -630,8 +633,10 @@ export const useEditorStore = create<
       result.priorContext = properties.priorContext;
     }
 
-    // Add additionalArgs if non-empty
-    if (properties.additionalArgs) {
+    // Add additionalArgs - three-state: undefined = inherit, null = explicitly none, string = custom
+    if (properties.additionalArgs === null) {
+      result.additionalArgs = null;
+    } else if (properties.additionalArgs) {
       result.additionalArgs = properties.additionalArgs;
     }
 

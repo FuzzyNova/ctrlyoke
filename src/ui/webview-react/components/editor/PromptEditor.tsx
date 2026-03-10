@@ -176,36 +176,47 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
   // Get property values for sending to extension
   // includeNullsForDefaults: if true, send null for default values to clear overrides
+  // Returns two separate collections:
+  //   properties    — values to set in PromptItem (null is stored as-is, e.g. additionalArgs: null)
+  //   clearProperties — keys to delete from PromptItem (set to undefined), used when the user
+  //                     switches a property back to "Default / inherit from workflow"
+  //
+  // This separation is required because null has distinct meanings for three-state properties:
+  //   - null in `properties`    → "explicitly none/disabled" (stored as null in PromptItem)
+  //   - key in `clearProperties` → "inherit from workflow/settings" (key removed from PromptItem)
   const getPropertyValues = useCallback(
     (includeNullsForDefaults = false) => {
       const result: Record<string, unknown> = {};
+      const clearProperties: string[] = [];
 
       // Harness
       if (properties.harness !== "default") {
         result.harness = properties.harness;
       } else if (includeNullsForDefaults) {
-        result.harness = null;
+        clearProperties.push("harness");
       }
 
       // Model
       if (properties.model !== "default") {
         result.model = properties.model;
       } else if (includeNullsForDefaults) {
-        result.model = null;
+        clearProperties.push("model");
       }
 
       // Agent
-      if (properties.agent && properties.agent !== "") {
+      if (properties.agent === null) {
+        result.agent = null;
+      } else if (typeof properties.agent === "string" && properties.agent) {
         result.agent = properties.agent;
       } else if (includeNullsForDefaults) {
-        result.agent = null;
+        clearProperties.push("agent");
       }
 
       // Resume Session
       if (properties.resumeSession !== "default") {
         result.resumeSession = properties.resumeSession === "yes";
       } else if (includeNullsForDefaults) {
-        result.resumeSession = null;
+        clearProperties.push("resumeSession");
       }
 
       // Session ID - Parse as number if it's a numeric reference
@@ -218,7 +229,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           result.sessionId = trimmed;
         }
       } else if (includeNullsForDefaults) {
-        result.sessionId = null;
+        clearProperties.push("sessionId");
       }
 
       // Allow Dynamic Extension
@@ -226,54 +237,51 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         result.allowDynamicExtension =
           properties.allowDynamicExtension === "yes";
       } else if (includeNullsForDefaults) {
-        result.allowDynamicExtension = null;
+        clearProperties.push("allowDynamicExtension");
       }
 
       // Skills
-      if (properties.skills && properties.skills.length > 0) {
-        result.skills = properties.skills;
-      } else if (includeNullsForDefaults) {
+      if (properties.skills === null) {
         result.skills = null;
+      } else if (Array.isArray(properties.skills)) {
+        result.skills = properties.skills.length > 0 ? properties.skills : null;
+      } else if (includeNullsForDefaults) {
+        clearProperties.push("skills");
       }
 
       // Prior Context
       if (properties.priorContext !== undefined) {
         result.priorContext = properties.priorContext;
       } else if (includeNullsForDefaults) {
-        result.priorContext = null;
+        clearProperties.push("priorContext");
       }
 
-      // Additional Args
-      if (properties.additionalArgs) {
+      // Additional Args — three-state:
+      //   null   → "explicitly none" (stored as null, stops three-tier resolution)
+      //   string → custom args
+      //   key in clearProperties → "Default / inherit" (key removed from PromptItem)
+      if (properties.additionalArgs === null) {
+        result.additionalArgs = null;
+      } else if (properties.additionalArgs) {
         result.additionalArgs = properties.additionalArgs;
       } else if (includeNullsForDefaults) {
-        result.additionalArgs = null;
+        clearProperties.push("additionalArgs");
       }
 
-      // End Condition - Three-state logic:
-      // - undefined (not included) = inherit from workflow
-      // - null (explicitly set) = disable end condition (override workflow)
-      // - object (with values) = specific end condition (override workflow)
+      // End Condition — three-state:
+      //   object  → specific end condition
+      //   null in properties → checked but empty (treated as "clear" via coerce on backend)
+      //   key in clearProperties → unchecked, clear back to inherit
       if (properties.endCondition !== undefined) {
-        // Checkbox is checked (endCondition is not undefined)
-        // Check if required fields are filled
         const script = properties.endCondition?.script?.trim() || "";
         const returns = properties.endCondition?.returns?.trim() || "";
-
-        // If checked but required fields empty, send null to explicitly disable
-        if (!script || !returns) {
-          result.endCondition = null;
-        } else {
-          // Build end condition with filled fields
-          result.endCondition = properties.endCondition;
-        }
+        result.endCondition =
+          !script || !returns ? null : properties.endCondition;
       } else if (includeNullsForDefaults) {
-        // When updating, send null to clear overrides
-        result.endCondition = null;
+        clearProperties.push("endCondition");
       }
-      // else: undefined, omit from result (inherit from workflow)
 
-      return result;
+      return { properties: result, clearProperties };
     },
     [properties]
   );
@@ -284,7 +292,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       const text = promptText.trim();
       if (!text) return;
 
-      const propertyValues = getPropertyValues();
+      const { properties: propertyValues } = getPropertyValues();
       let finalAction = action;
 
       // Determine final action based on execution state
@@ -339,8 +347,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     const text = promptText.trim();
     if (!text) return;
 
-    // Include nulls for default values to clear overrides
-    const propertyValues = getPropertyValues(true);
+    const { properties: propertyValues, clearProperties } =
+      getPropertyValues(true);
 
     if (selectionTarget.kind === "queue") {
       vscode.postMessage({
@@ -348,6 +356,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         index: selectionTarget.index,
         text,
         properties: propertyValues,
+        clearProperties,
         promptName: promptName.trim(),
       });
     } else if (selectionTarget.kind === "finalPrompt") {
@@ -358,6 +367,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           ...(promptName.trim() ? { name: promptName.trim() } : {}),
           prompt: text,
         },
+        clearProperties,
       });
     } else {
       return;

@@ -53,11 +53,21 @@ export interface ExecutionProperties {
   /** AI model to use */
   model?: string;
 
-  /** Custom agent file (.agent.md) */
-  agent?: string;
+  /**
+   * Custom agent file (.agent.md).
+   * - string: explicit agent override
+   * - null: explicitly disable inherited agent
+   * - undefined: inherit from workflow/settings
+   */
+  agent?: string | null;
 
-  /** Skills to attach (frontmatter-only progressive disclosure via <skillInstructions>) */
-  skills?: string[];
+  /**
+   * Skills to attach (frontmatter-only progressive disclosure via <skillInstructions>).
+   * - string[]: explicit skill selection
+   * - null: explicitly disable inherited skills
+   * - undefined: inherit from workflow/settings
+   */
+  skills?: string[] | null;
 
   /** Resume existing chat session (default: false, start new session) */
   resumeSession?: boolean;
@@ -82,8 +92,13 @@ export interface ExecutionProperties {
   /** Extra CLI flags appended to FlightPath's standard argument set.
    * FlightPath continues to manage model, permissions, workspace dirs, and session flags normally.
    * Tokens are injected before the tool permission args. Applies only to CLI harnesses; ignored for copilot-chat.
-   * Example: "--effort high --max-turns 10" */
-  additionalArgs?: string;
+   * Example: "--effort high --max-turns 10"
+   *
+   * - string: Use these additional args (overrides workflow and settings)
+   * - null: Explicitly disable additional args (even if workflow/settings define some)
+   * - undefined: Inherit from workflow, then settings
+   */
+  additionalArgs?: string | null;
 }
 
 export interface PromptFile extends ExecutionProperties {

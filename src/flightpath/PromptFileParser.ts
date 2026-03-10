@@ -338,12 +338,18 @@ export class PromptFileParser {
     if (source.harness !== undefined) promptItem.harness = source.harness;
     if (source.model !== undefined) promptItem.model = source.model;
     if (source.agent !== undefined) promptItem.agent = source.agent;
+    if (source.skills !== undefined) promptItem.skills = source.skills;
     if (source.resumeSession !== undefined)
       promptItem.resumeSession = source.resumeSession;
+    if (source.sessionId !== undefined) promptItem.sessionId = source.sessionId;
     if (source.allowDynamicExtension !== undefined)
       promptItem.allowDynamicExtension = source.allowDynamicExtension;
     if (source.endCondition !== undefined)
       promptItem.endCondition = source.endCondition;
+    if (source.priorContext !== undefined)
+      promptItem.priorContext = source.priorContext;
+    if (source.additionalArgs !== undefined)
+      promptItem.additionalArgs = source.additionalArgs;
 
     return promptItem;
   }
@@ -426,12 +432,18 @@ export class PromptFileParser {
     if (parsed.harness !== undefined) promptFile.harness = parsed.harness;
     if (parsed.model !== undefined) promptFile.model = parsed.model;
     if (parsed.agent !== undefined) promptFile.agent = parsed.agent;
+    if (parsed.skills !== undefined) promptFile.skills = parsed.skills;
     if (parsed.resumeSession !== undefined)
       promptFile.resumeSession = parsed.resumeSession;
+    if (parsed.sessionId !== undefined) promptFile.sessionId = parsed.sessionId;
     if (parsed.allowDynamicExtension !== undefined)
       promptFile.allowDynamicExtension = parsed.allowDynamicExtension;
     if (parsed.endCondition !== undefined)
       promptFile.endCondition = parsed.endCondition;
+    if (parsed.priorContext !== undefined)
+      promptFile.priorContext = parsed.priorContext;
+    if (parsed.additionalArgs !== undefined)
+      promptFile.additionalArgs = parsed.additionalArgs;
   }
 
   /**

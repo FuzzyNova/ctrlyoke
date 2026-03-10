@@ -851,20 +851,26 @@ export class WorkflowOrchestrator {
     index: number,
     text: string,
     properties: unknown,
-    promptName?: string
+    promptName?: string,
+    clearProperties?: string[]
   ): Promise<void> {
     return this.getActiveInstance().updatePromptInQueue(
       index,
       text,
       properties,
-      promptName
+      promptName,
+      clearProperties
     );
   }
 
   async updateFinalPromptInQueue(
-    finalPrompt: PromptItem | null
+    finalPrompt: PromptItem | null,
+    clearProperties?: string[]
   ): Promise<void> {
-    return this.getActiveInstance().updateFinalPromptInQueue(finalPrompt);
+    return this.getActiveInstance().updateFinalPromptInQueue(
+      finalPrompt,
+      clearProperties
+    );
   }
 
   async ensureEphemeralWorkingFile(options?: { skipPopulateDefaults?: boolean }): Promise<void> {

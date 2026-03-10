@@ -42,9 +42,7 @@
               "$ref": "#/definitions/runtimeMetadata"
             }
           },
-          "required": [
-            "prompts"
-          ]
+          "required": ["prompts"]
         }
       ]
     }
@@ -104,9 +102,16 @@
           ]
         },
         "agent": {
-          "type": "string",
-          "description": "Custom agent to use for this prompt. Specify ONLY the agent name without file extensions (e.g., 'flightpath-orchestrator' for file 'flightpath-orchestrator.agent.md'). The agent's instructions will be prepended to your prompt using <agentInstructions> tags. Agents are discovered from .github/agents/, .claude/agents/, or user prompts directory. Works with all providers (Copilot CLI, Claude CLI, Codex CLI, Copilot Chat).",
-          "pattern": "^[a-zA-Z0-9-_]+$"
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9-_]+$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Custom agent to use for this prompt. Specify ONLY the agent name without file extensions (e.g., 'flightpath-orchestrator' for file 'flightpath-orchestrator.agent.md'). The agent's instructions will be prepended to your prompt using <agentInstructions> tags. Agents are discovered from .github/agents/, .claude/agents/, or user prompts directory. Works with all providers (Copilot CLI, Claude CLI, Codex CLI, Copilot Chat). Use null to explicitly disable inherited agent selection."
         },
         "resumeSession": {
           "type": "boolean",
@@ -117,22 +122,30 @@
           "description": "Enable dynamic queue extension for this prompt. When true: CLI modes (copilot-cli, claude-cli, codex-cli) pass MCP server configuration to enable flightpath_append_queue and flightpath_queue_status tools. Chat mode injects instructions to use these tools via Language Model Tools API. When false, no MCP config or instructions are provided. When omitted, defaults to true for last prompt only (when no other prompts have explicit flags)."
         },
         "sessionId": {
-          "type": [
-            "string",
-            "number"
-          ],
+          "type": ["string", "number"],
           "description": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalPrompt\" (resume the session established by the previous finalPrompt loop iteration — on the first iteration a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution."
         },
         "skills": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "pattern": "^[a-zA-Z0-9-_]+$"
-          },
-          "description": "List of skill names to attach to this prompt. Only the skill frontmatter is attached (progressive disclosure) — the harness reads the full SKILL.md when using the skill. Skills are discovered from .claude/skills/ directories (workspace and user home). Prompt-level skills replace workflow-level skills (no merging)."
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9-_]+$"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "List of skill names to attach to this prompt. Only the skill frontmatter is attached (progressive disclosure) — the harness reads the full SKILL.md when using the skill. Skills are discovered from .claude/skills/ directories (workspace and user home). Prompt-level skills replace workflow-level skills (no merging). Use null to explicitly disable inherited skills."
         },
         "endCondition": {
-          "$ref": "#/definitions/endCondition"
+          "oneOf": [
+            { "$ref": "#/definitions/endCondition" },
+            { "type": "null" }
+          ],
+          "description": "End condition validation to run after this prompt completes. Use null to explicitly disable end condition inheritance from the workflow level (even if the workflow defines one). Omitting this field inherits the workflow-level end condition (if any)."
         },
         "priorContext": {
           "description": "Controls injection of prior prompt outputs into this prompt's text before sending to the AI. 'all' injects all prior outputs; 'previous' injects the immediately preceding output; 'none' disables injection; an array of integers ([1, 3]) injects specific prompts by 1-based index. When omitted, no context is injected. Note: combining with resumeSession:true may duplicate context (accepted limitation).",
@@ -161,8 +174,8 @@
           ]
         },
         "additionalArgs": {
-          "type": "string",
-          "description": "Additional CLI flags appended to FlightPath's standard argument set. FlightPath continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies only to CLI harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli). Ignored for copilot-chat. Example: \"--effort high --max-turns 10\""
+          "oneOf": [{ "type": "string" }, { "type": "null" }],
+          "description": "Additional CLI flags appended to FlightPath's standard argument set. FlightPath continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies only to CLI harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli). Ignored for copilot-chat. Use null at prompt level to explicitly disable additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\""
         }
       }
     },
@@ -188,9 +201,7 @@
               "description": "Per-prompt runtime execution metadata (optional, added automatically during execution)"
             }
           },
-          "required": [
-            "prompt"
-          ]
+          "required": ["prompt"]
         }
       ]
     },
@@ -224,10 +235,7 @@
           "description": "Whether retries continue in the same session. Default: true (retries resume the existing session for context continuity). Set to false to start a fresh session for each retry."
         }
       },
-      "required": [
-        "script",
-        "returns"
-      ]
+      "required": ["script", "returns"]
     },
     "promptRuntimeMetadata": {
       "type": "object",
@@ -255,9 +263,7 @@
               "description": "Plain-text AI response from this prompt's execution. Written automatically during workflow execution. Used by the priorContext feature to inject prior prompt outputs."
             }
           },
-          "required": [
-            "startedAt"
-          ]
+          "required": ["startedAt"]
         }
       ]
     },
@@ -278,7 +284,6 @@
             "stopped",
             "cancelling",
             "completed",
-            "cancelled",
             "error"
           ],
           "description": "Current execution state"
@@ -289,10 +294,7 @@
           "properties": {
             "phase": {
               "type": "string",
-              "enum": [
-                "queue",
-                "finalPrompt"
-              ],
+              "enum": ["queue", "finalPrompt"],
               "description": "Current workflow execution phase"
             },
             "loopCount": {
@@ -327,17 +329,11 @@
               "description": "Response texts from each finalPrompt loop execution, indexed by loop number (0-based). Written automatically during workflow execution. Used by the priorContext 'finalPromptAll' and 'finalPromptPrevious' keywords."
             }
           },
-          "required": [
-            "phase",
-            "loopCount"
-          ],
+          "required": ["phase", "loopCount"],
           "additionalProperties": false
         }
       },
-      "required": [
-        "currentIndex",
-        "executionState"
-      ],
+      "required": ["currentIndex", "executionState"],
       "additionalProperties": false
     }
   }

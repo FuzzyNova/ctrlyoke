@@ -18,10 +18,10 @@ export interface ResolvedProperties {
   /** AI model to use (always resolved) */
   model: string;
 
-  /** Custom agent file (.agent.md) - undefined if not specified */
+  /** Custom agent file (.agent.md) - undefined if not specified or explicitly disabled */
   agent?: string;
 
-  /** Skills to attach - undefined if not specified */
+  /** Skills to attach - undefined if not specified or explicitly disabled */
   skills?: string[];
 
   /** Resume existing chat session (always resolved, defaults to setting) */
@@ -165,7 +165,9 @@ export class PropertyResolver {
    * 2. Workflow-level default (workflow.agent)
    * 3. VS Code setting (flightpath.defaultAgent)
    *
-   * Note: Returns undefined if no agent is specified at any level.
+   * Note: Both null and empty string are treated as explicit "no agent" and stop
+   * further resolution. The resolved value remains undefined because downstream
+   * integrations only need to know whether an agent should be applied.
    *
    * @param prompt The prompt to resolve agent for
    * @param workflow The parent workflow file
@@ -177,12 +179,12 @@ export class PropertyResolver {
   ): string | undefined {
     // 1. Prompt-level override (highest priority)
     if (prompt.agent !== undefined) {
-      return prompt.agent;
+      return prompt.agent || undefined;
     }
 
     // 2. Workflow-level default
     if (workflow.agent !== undefined) {
-      return workflow.agent;
+      return workflow.agent || undefined;
     }
 
     // 3. VS Code setting fallback
@@ -199,6 +201,8 @@ export class PropertyResolver {
    * 3. VS Code setting (flightpath.defaultSkills)
    *
    * Note: Prompt-level skills REPLACE workflow-level skills (prompt wins entirely).
+   * Null and empty arrays are treated as explicit "no skills" and stop further
+   * resolution, while the resolved value remains undefined.
    *
    * @param prompt The prompt to resolve skills for
    * @param workflow The parent workflow file
@@ -210,12 +214,16 @@ export class PropertyResolver {
   ): string[] | undefined {
     // 1. Prompt-level override (highest priority)
     if (prompt.skills !== undefined) {
-      return prompt.skills.length > 0 ? prompt.skills : undefined;
+      return Array.isArray(prompt.skills) && prompt.skills.length > 0
+        ? prompt.skills
+        : undefined;
     }
 
     // 2. Workflow-level default
-    if (workflow.skills !== undefined && workflow.skills.length > 0) {
-      return workflow.skills;
+    if (workflow.skills !== undefined) {
+      return Array.isArray(workflow.skills) && workflow.skills.length > 0
+        ? workflow.skills
+        : undefined;
     }
 
     // 3. VS Code setting fallback
@@ -398,7 +406,13 @@ export class PropertyResolver {
    *
    * Precedence order:
    * 1. Prompt-level override (prompt.additionalArgs)
+   *    - string: Use these args (highest priority)
+   *    - null: Explicitly disabled — stop here, return undefined (no args)
+   *    - undefined: Fall through to next tier
    * 2. Workflow-level default (workflow.additionalArgs)
+   *    - string: Use these args
+   *    - null: Explicitly disabled — stop here, return undefined
+   *    - undefined: Fall through to next tier
    * 3. VS Code setting for the resolved harness (flightpath.<harness>AdditionalArgs)
    *
    * Empty string at any level is treated as "not set" — falls through to the next tier.
@@ -414,15 +428,20 @@ export class PropertyResolver {
     harness: Harness
   ): string | undefined {
     // 1. Prompt-level override (highest priority)
-    if (prompt.additionalArgs !== undefined && prompt.additionalArgs !== "") {
+    if (prompt.additionalArgs !== undefined) {
+      // null means "explicitly disabled" — stop resolution, return undefined (no args)
+      if (prompt.additionalArgs === null || prompt.additionalArgs === "") {
+        return undefined;
+      }
       return prompt.additionalArgs;
     }
 
     // 2. Workflow-level default
-    if (
-      workflow.additionalArgs !== undefined &&
-      workflow.additionalArgs !== ""
-    ) {
+    if (workflow.additionalArgs !== undefined) {
+      // null means "explicitly disabled" — stop resolution, return undefined
+      if (workflow.additionalArgs === null || workflow.additionalArgs === "") {
+        return undefined;
+      }
       return workflow.additionalArgs;
     }
 

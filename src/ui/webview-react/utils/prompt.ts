@@ -49,8 +49,8 @@ export interface RawPrompt {
   prompt: string;
   harness?: string;
   model?: string;
-  agent?: string;
-  skills?: string[];
+  agent?: string | null;
+  skills?: string[] | null;
   resumeSession?: boolean;
   sessionId?: string | number;
   allowDynamicExtension?: boolean;
@@ -88,9 +88,9 @@ export interface PromptItem {
   /** Model override */
   model?: string;
   /** Agent file path */
-  agent?: string;
+  agent?: string | null;
   /** Skill names to attach (progressive disclosure) */
-  skills?: string[];
+  skills?: string[] | null;
   /** Whether to resume previous session */
   resumeSession?: boolean;
   /** Specific session ID to use */
@@ -155,6 +155,7 @@ export function createPromptItem(
     harness: prompt.harness,
     model: prompt.model,
     agent: prompt.agent,
+    skills: prompt.skills,
     resumeSession: prompt.resumeSession,
     sessionId: prompt.sessionId,
     allowDynamicExtension: prompt.allowDynamicExtension,
@@ -179,6 +180,7 @@ export function promptItemToRaw(item: PromptItem): RawPrompt {
   if (item.harness !== undefined) raw.harness = item.harness;
   if (item.model !== undefined) raw.model = item.model;
   if (item.agent !== undefined) raw.agent = item.agent;
+  if (item.skills !== undefined) raw.skills = item.skills;
   if (item.resumeSession !== undefined) raw.resumeSession = item.resumeSession;
   if (item.sessionId !== undefined) raw.sessionId = item.sessionId;
   if (item.allowDynamicExtension !== undefined)

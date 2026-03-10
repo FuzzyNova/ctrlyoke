@@ -66,8 +66,8 @@ export interface GlobalSettings {
 export interface WorkflowProperties {
   harness?: string;
   model?: string;
-  agent?: string;
-  skills?: string[];
+  agent?: string | null;
+  skills?: string[] | null;
   resumeSession?: boolean;
   sessionId?: string | number; // UUID string or prompt number reference
   allowDynamicExtension?: boolean;
@@ -79,7 +79,7 @@ export interface WorkflowProperties {
     retryPrompt?: string;
   } | null;
   priorContext?: PriorContext;
-  additionalArgs?: string;
+  additionalArgs?: string | null;
 }
 
 /**
@@ -267,7 +267,9 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
 
     getEffectiveSkills: () => {
       const { workflowProperties, globalSettings } = get();
-      return workflowProperties.skills ?? globalSettings.skills ?? [];
+      return workflowProperties.skills === undefined
+        ? (globalSettings.skills ?? [])
+        : (workflowProperties.skills ?? []);
     },
 
     // ============================================================================
@@ -344,7 +346,9 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
 
     getEffectiveAgent: () => {
       const { workflowProperties, globalSettings } = get();
-      return workflowProperties.agent ?? globalSettings.agent;
+      return workflowProperties.agent === undefined
+        ? globalSettings.agent
+        : (workflowProperties.agent ?? "");
     },
 
     getEffectiveResumeSession: () => {

@@ -117,8 +117,13 @@ export const PromptsPanel: React.FC<{
   ): PromptOverride[] => {
     const result: PromptOverride[] = [];
 
-    // agent — show basename only
-    if (prompt.agent != null) {
+    // agent — show basename only, or explicit none when disabled
+    if (prompt.agent === null) {
+      result.push({
+        label: "agent: none",
+        title: "agent explicitly disabled",
+      });
+    } else if (prompt.agent != null) {
       const basename = prompt.agent.replace(/.*[\\/]/, "");
       result.push({
         label: `agent: ${basename}`,
@@ -126,8 +131,13 @@ export const PromptsPanel: React.FC<{
       });
     }
 
-    // skills — show count
-    if (prompt.skills != null && prompt.skills.length > 0) {
+    // skills — show count, or explicit none when disabled
+    if (prompt.skills === null) {
+      result.push({
+        label: "skills: none",
+        title: "skills explicitly disabled",
+      });
+    } else if (prompt.skills != null && prompt.skills.length > 0) {
       result.push({
         label: `skills: ${prompt.skills.length}`,
         title: prompt.skills.join(", "),

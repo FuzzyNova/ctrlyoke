@@ -91,12 +91,59 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       : (properties.harness as HarnessId);
   const models = getModelsForHarness(currentHarness);
   const modelNamespace = modelNamespaceForHarness(currentHarness);
+  const agentMode =
+    properties.agent === undefined
+      ? "default"
+      : properties.agent === null
+        ? "none"
+        : "custom";
+  const skillsMode =
+    properties.skills === undefined
+      ? "default"
+      : properties.skills === null
+        ? "none"
+        : "custom";
 
   // Handle harness change - also reset model to default
   const handleHarnessChange = (newHarness: string) => {
     setProperty("harness", newHarness);
     // Reset model when harness changes
     setProperty("model", "default");
+  };
+
+  const handleAgentModeChange = (mode: string) => {
+    if (mode === "default") {
+      setProperty("agent", undefined);
+      return;
+    }
+
+    if (mode === "none") {
+      setProperty("agent", null);
+      return;
+    }
+
+    const fallbackAgent =
+      typeof properties.agent === "string" && properties.agent
+        ? properties.agent
+        : availableAgents[0]?.path;
+    setProperty("agent", fallbackAgent ?? null);
+  };
+
+  const handleSkillsModeChange = (mode: string) => {
+    if (mode === "default") {
+      setProperty("skills", undefined);
+      return;
+    }
+
+    if (mode === "none") {
+      setProperty("skills", null);
+      return;
+    }
+
+    setProperty(
+      "skills",
+      Array.isArray(properties.skills) ? properties.skills : []
+    );
   };
 
   // Handle end condition enable/disable
@@ -210,15 +257,16 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 Agent
               </label>
               <CustomSelect
-                id="prop-agent"
-                value={properties.agent}
-                onChange={(v) => setProperty("agent", v)}
+                id="prop-agent-mode"
+                value={agentMode}
+                onChange={handleAgentModeChange}
                 options={[
-                  { value: "", label: "None" },
-                  ...availableAgents.map((agent) => ({
-                    value: agent.path,
-                    label: agent.name,
-                  })),
+                  {
+                    value: "default",
+                    label: "Default (inherit from workflow)",
+                  },
+                  { value: "none", label: "None" },
+                  { value: "custom", label: "Custom" },
                 ]}
                 namespace={DROPDOWN_NAMESPACES.AGENT}
                 hiddenValues={
@@ -230,8 +278,43 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 onUnhideOption={(v) =>
                   unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
                 }
+                nonHideableValues={["default", "none", "custom"]}
                 dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
+              {agentMode === "custom" && (
+                <CustomSelect
+                  id="prop-agent"
+                  value={
+                    typeof properties.agent === "string" ? properties.agent : ""
+                  }
+                  onChange={(v) => setProperty("agent", v || null)}
+                  options={
+                    availableAgents.length === 0
+                      ? [
+                          {
+                            value: "",
+                            label: "No agents available",
+                            disabled: true,
+                          },
+                        ]
+                      : availableAgents.map((agent) => ({
+                          value: agent.path,
+                          label: agent.name,
+                        }))
+                  }
+                  namespace={DROPDOWN_NAMESPACES.AGENT}
+                  hiddenValues={
+                    hiddenDropdownOptions[DROPDOWN_NAMESPACES.AGENT] ?? []
+                  }
+                  onHideOption={(v) =>
+                    hideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
+                  }
+                  onUnhideOption={(v) =>
+                    unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
+                  }
+                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+                />
+              )}
             </div>
 
             {/* Skills */}
@@ -242,33 +325,52 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               >
                 Skills
               </label>
-              <MultiCheckboxDropdown
-                id="prop-skills"
-                selectedValues={properties.skills}
-                onChange={(v) => setProperty("skills", v)}
-                options={availableSkills.map((s) => ({
-                  value: s.name,
-                  label: s.name,
-                  description: s.description || undefined,
-                }))}
-                placeholder="None (inherit from workflow)"
-                namespace={DROPDOWN_NAMESPACES.SKILLS}
-                hiddenValues={
-                  hiddenDropdownOptions[DROPDOWN_NAMESPACES.SKILLS] ?? []
-                }
-                onHideOption={(v) =>
-                  hideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
-                }
-                onUnhideOption={(v) =>
-                  unhideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
-                }
+              <CustomSelect
+                id="prop-skills-mode"
+                value={skillsMode}
+                onChange={handleSkillsModeChange}
+                options={[
+                  {
+                    value: "default",
+                    label: "Default (inherit from workflow)",
+                  },
+                  { value: "none", label: "None" },
+                  { value: "custom", label: "Custom" },
+                ]}
                 dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
-              {properties.skills.length > 0 && (
-                <p className="text-[10px] text-description-fg">
-                  Active: {properties.skills.join(", ")}
-                </p>
+              {skillsMode === "custom" && (
+                <MultiCheckboxDropdown
+                  id="prop-skills"
+                  selectedValues={
+                    Array.isArray(properties.skills) ? properties.skills : []
+                  }
+                  onChange={(v) => setProperty("skills", v)}
+                  options={availableSkills.map((s) => ({
+                    value: s.name,
+                    label: s.name,
+                    description: s.description || undefined,
+                  }))}
+                  placeholder="Choose skills"
+                  namespace={DROPDOWN_NAMESPACES.SKILLS}
+                  hiddenValues={
+                    hiddenDropdownOptions[DROPDOWN_NAMESPACES.SKILLS] ?? []
+                  }
+                  onHideOption={(v) =>
+                    hideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
+                  }
+                  onUnhideOption={(v) =>
+                    unhideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
+                  }
+                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+                />
               )}
+              {Array.isArray(properties.skills) &&
+                properties.skills.length > 0 && (
+                  <p className="text-[10px] text-description-fg">
+                    Active: {properties.skills.join(", ")}
+                  </p>
+                )}
             </div>
           </div>
 
@@ -365,24 +467,67 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             />
           </div>
 
-          {/* Row 6: Additional Args (full width) */}
+          {/* Row 6: Additional Args mode (full width) */}
           <div className="flex flex-col gap-1">
             <label
-              htmlFor="prop-append-args"
+              htmlFor="prop-additional-args-mode"
               className="text-xs font-medium text-foreground"
               title="Extra CLI flags appended to FlightPath's standard argument set. Only applies to CLI harnesses."
             >
               Additional Args
             </label>
+            <CustomSelect
+              id="prop-additional-args-mode"
+              value={
+                properties.additionalArgs === undefined
+                  ? "default"
+                  : properties.additionalArgs === null
+                    ? "none"
+                    : "custom"
+              }
+              onChange={(v) => {
+                if (v === "default") {
+                  setProperty("additionalArgs", undefined);
+                } else if (v === "none") {
+                  setProperty("additionalArgs", null);
+                } else {
+                  // "custom" — preserve existing string or start with empty
+                  setProperty(
+                    "additionalArgs",
+                    typeof properties.additionalArgs === "string"
+                      ? properties.additionalArgs
+                      : ""
+                  );
+                }
+              }}
+              options={[
+                { value: "default", label: "Default (inherit from workflow)" },
+                { value: "none", label: "None (override to empty)" },
+                { value: "custom", label: "Custom" },
+              ]}
+              dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+            />
+          </div>
+
+          {/* Row 6b: Additional Args text input (animated, visible only when "custom") */}
+          <div
+            className={`transition-all duration-300 ${
+              typeof properties.additionalArgs === "string"
+                ? "max-h-[60px] opacity-100"
+                : "max-h-0 opacity-0 overflow-hidden"
+            }`}
+          >
             <input
               type="text"
-              id="prop-append-args"
-              value={properties.additionalArgs ?? ""}
-              onChange={(e) =>
-                setProperty("additionalArgs", e.target.value || undefined)
+              id="prop-additional-args"
+              value={
+                typeof properties.additionalArgs === "string"
+                  ? properties.additionalArgs
+                  : ""
               }
+              onChange={(e) => setProperty("additionalArgs", e.target.value)}
               placeholder="e.g. --effort high --max-turns 10"
-              className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+              className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
             />
           </div>
 

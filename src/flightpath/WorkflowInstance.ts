@@ -11,6 +11,7 @@ import {
   QueueState,
   Harness,
   EndCondition,
+  PriorContext,
   EXECUTION_STATES,
   WorkingFile,
   WorkflowSummary,
@@ -1329,7 +1330,9 @@ export class WorkflowInstance {
    *
    * Idempotent: returns immediately if a working file already exists.
    */
-  public async ensureEphemeralWorkingFile(options?: { skipPopulateDefaults?: boolean }): Promise<void> {
+  public async ensureEphemeralWorkingFile(options?: {
+    skipPopulateDefaults?: boolean;
+  }): Promise<void> {
     if (this.promptQueue.getState().workingFilePath) {
       return;
     }
@@ -1382,12 +1385,14 @@ export class WorkflowInstance {
     index: number,
     text: string,
     properties: unknown,
-    promptName?: string
+    promptName?: string,
+    clearProperties?: string[]
   ): Promise<void> {
     const updates: Partial<PromptItem> = {
       prompt: text,
       ...(promptName !== undefined && { name: promptName || undefined }),
       ...this.buildPromptItemProperties(properties),
+      ...this.buildClearUpdates(clearProperties),
     };
     await this.promptQueue.updatePrompt(index, updates);
     if (this.dashboardSink) {
@@ -1401,7 +1406,8 @@ export class WorkflowInstance {
   }
 
   async updateFinalPromptInQueue(
-    finalPrompt: PromptItem | null
+    finalPrompt: PromptItem | null,
+    clearProperties?: string[]
   ): Promise<void> {
     await this.ensureEphemeralWorkingFile();
 
@@ -1410,6 +1416,7 @@ export class WorkflowInstance {
         prompt: finalPrompt.prompt,
         ...(finalPrompt.name ? { name: finalPrompt.name } : {}),
         ...this.buildPromptItemProperties(finalPrompt as unknown),
+        ...this.buildClearUpdates(clearProperties),
       };
       this.promptQueue.updateWorkflowProperty("finalPrompt", normalized);
       await this.promptQueue.updateWorkingFileProperties({
@@ -2134,7 +2141,11 @@ export class WorkflowInstance {
       }
     }
 
-    await this.startWorkflowExecution(undefined, historyFilePath, workingFilePath);
+    await this.startWorkflowExecution(
+      undefined,
+      historyFilePath,
+      workingFilePath
+    );
   }
 
   private async initializeNewWorkflow(
@@ -2264,9 +2275,21 @@ export class WorkflowInstance {
     return words.length > 0 ? words.join("-") : "ephemeral-prompt";
   }
 
+  /** Produces `{ key: undefined }` entries for each key in clearProperties, which
+   *  when spread into a Partial<PromptItem> removes those fields from the stored prompt. */
+  private buildClearUpdates(clearProperties?: string[]): Partial<PromptItem> {
+    if (!clearProperties?.length) return {};
+    return Object.fromEntries(
+      clearProperties.map((key) => [key, undefined])
+    ) as Partial<PromptItem>;
+  }
+
   private buildPromptItemProperties(properties: unknown): Partial<PromptItem> {
     const props = properties as Record<string, unknown>;
-    // null means "delete the property" (set to undefined); absent key means "leave unchanged"
+    // For non-nullable properties: null coerces to undefined (removes key from PromptItem).
+    // For tri-state nullable properties like agent, skills, and additionalArgs,
+    // null is stored as-is to represent an explicit "none/disabled" override.
+    // "Clear to inherit" is handled separately via buildClearUpdates / clearProperties.
     const coerce = <T>(v: unknown): T | undefined =>
       v === null ? undefined : (v as T);
 
@@ -2275,7 +2298,9 @@ export class WorkflowInstance {
         harness: coerce<Harness>(props.harness),
       }),
       ...(props?.model !== undefined && { model: coerce<string>(props.model) }),
-      ...(props?.agent !== undefined && { agent: coerce<string>(props.agent) }),
+      ...(props?.agent !== undefined && {
+        agent: props.agent as string | null,
+      }),
       ...(props?.resumeSession !== undefined && {
         resumeSession: coerce<boolean>(props.resumeSession),
       }),
@@ -2287,6 +2312,18 @@ export class WorkflowInstance {
       }),
       ...(props?.endCondition !== undefined && {
         endCondition: coerce<EndCondition>(props.endCondition),
+      }),
+      ...(props?.skills !== undefined && {
+        skills: props.skills as string[] | null,
+      }),
+      ...(props?.priorContext !== undefined && {
+        priorContext: coerce<PriorContext>(props.priorContext),
+      }),
+      // additionalArgs is three-state: null = explicitly disabled, string = custom, undefined = inherit.
+      // Do NOT coerce null to undefined — null must be preserved in PromptItem so the working
+      // file retains the "explicitly none" override and the PropertyResolver stops resolution.
+      ...(props?.additionalArgs !== undefined && {
+        additionalArgs: props.additionalArgs as string | null,
       }),
     };
   }

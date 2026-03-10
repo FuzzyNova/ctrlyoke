@@ -192,14 +192,14 @@ export interface PromptItem {
   prompt: string;
   harness?: string;
   model?: string;
-  agent?: string;
-  skills?: string[];
+  agent?: string | null;
+  skills?: string[] | null;
   resumeSession?: boolean;
   sessionId?: string | number;
   allowDynamicExtension?: boolean;
   endCondition?: EndConditionConfig | null;
   priorContext?: import("./FlightPathTypes").PriorContext;
-  additionalArgs?: string;
+  additionalArgs?: string | null;
   _runtime?: {
     harness?: string;
     model?: string;
