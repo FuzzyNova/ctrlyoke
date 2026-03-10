@@ -1579,7 +1579,7 @@ export class WorkflowInstance {
             `queueStatusNow=${this.promptQueue.getState().status}`
         );
         if (isIdle || isCompleted || isStopped) {
-          await this.executeLoadedPromptFile(undefined, true);
+          await this.executeLoadedPromptFile();
         }
         Log.debug(
           `Send prompt (run, position=${position}): ${text.substring(0, 50)}...`

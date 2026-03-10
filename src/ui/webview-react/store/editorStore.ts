@@ -28,16 +28,16 @@ export interface EndConditionConfig {
  * Matches PROMPT_PROPERTIES from DashboardConstants
  */
 export interface PropertyValues {
-  harness: Inheritable<string>;         // undefined = inherit, string = harness ID
-  model: Inheritable<string>;           // undefined = inherit, string = model ID
-  agent: Disableable<string>;           // undefined = inherit, null = none, string = path
-  skills: Disableable<string[]>;        // undefined = inherit, null = none, string[] = specific (empty array allowed transiently in custom mode)
-  resumeSession: Inheritable<boolean>;  // undefined = inherit, true = yes, false = no
-  sessionId: string;                    // "" or session ID or prompt number reference
+  harness: Inheritable<string>; // undefined = inherit, string = harness ID
+  model: Inheritable<string>; // undefined = inherit, string = model ID
+  agent: Disableable<string>; // undefined = inherit, null = none, string = path
+  skills: Disableable<string[]>; // undefined = inherit, null = none, string[] = specific (empty array allowed transiently in custom mode)
+  resumeSession: Inheritable<boolean>; // undefined = inherit, true = yes, false = no
+  sessionId: string; // "" or session ID or prompt number reference
   allowDynamicExtension: Inheritable<boolean>; // undefined = inherit, true = yes, false = no
   endCondition?: EndConditionConfig | null;
-  priorContext?: PriorContext;           // undefined = inherit/default
-  additionalArgs: Disableable<string>;  // undefined = inherit, null = none, string = custom args
+  priorContext?: PriorContext; // undefined = inherit/default
+  additionalArgs: Disableable<string>; // undefined = inherit, null = none, string = custom args
 }
 
 /**
