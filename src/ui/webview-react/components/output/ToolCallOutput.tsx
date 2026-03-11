@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, memo, useState, useEffect, useRef } from "react";
 import {
   truncate,
   extractKeyParameters,
@@ -17,6 +17,7 @@ import {
   highlightLines,
   injectHljsStyles,
 } from "@utils/hljsUtils";
+import { useUiStore } from "@store/uiStore";
 
 // Ensure VS Code-themed HLJS stylesheet is in <head> (idempotent)
 injectHljsStyles();
@@ -103,71 +104,190 @@ const DIFF_LINE_STYLES = {
 } as const;
 
 interface DiffViewProps {
-  lines: DiffLine[];
+  /** Raw old file content (full-file edit path) */
+  oldContent?: string;
+  /** Raw new file content (full-file edit path) */
+  newContent?: string;
+  /** Pre-computed unified diff hunks (patch path, e.g. from Claude) */
+  structuredPatch?: Array<{
+    oldStart: number;
+    oldLines: number;
+    newStart: number;
+    newLines: number;
+    lines: string[];
+  }>;
   /** hljs language id inferred from the file path (e.g. "typescript") */
   language?: string;
+  /**
+   * When true the diff renders collapsed (summary header only).
+   * Can be overridden per-instance by the user clicking the expand button.
+   */
+  globallyCollapsed: boolean;
   className?: string;
 }
 
 /**
- * DiffView renders a unified diff with line numbers, color-coded changes,
- * and per-line syntax highlighting via highlight.js.
+ * DiffView — lazy, collapsible diff renderer.
  *
- * Row backgrounds (green / red) communicate add / remove.
- * The +/- prefix retains its diff colour.
- * Token colours from hljs show through on the code content.
+ * Performance design:
+ * - **Collapsed (default)**: renders a single summary line.  Zero DOM nodes for
+ *   diff lines, zero HLJS calls — the main render path is O(1).
+ * - **Expanded**: diff lines are computed via useMemo (gated on expand), then
+ *   HLJS highlighting runs in a useEffect so it never blocks the initial paint.
+ *   The component shows plain (un-highlighted) diff lines immediately and
+ *   upgrades to coloured output once HLJS finishes.
+ *
+ * The global `diffsCollapsed` flag from uiStore sets the initial state.
+ * Each instance can be expanded/collapsed independently regardless of the
+ * global toggle — the global toggle only resets instances that haven't been
+ * interacted with (i.e. the user-override takes priority).
  */
 const DiffView: React.FC<DiffViewProps> = ({
-  lines,
+  oldContent,
+  newContent,
+  structuredPatch,
   language,
+  globallyCollapsed,
   className = "",
 }) => {
-  // Highlight all lines as a single block so that multi-line constructs
-  // (block comments, template literals, etc.) are recognised across line
-  // boundaries. splitHighlightedHtml then gives us one fragment per line.
-  const highlightedLines = useMemo(() => {
-    if (lines.length === 0) return [];
-    const combined = lines.map((l) => l.content).join("\n");
-    return highlightLines(combined, language);
-  }, [lines, language]);
+  // Track whether the user has manually toggled this instance.
+  // When null → follow globallyCollapsed; when boolean → user override.
+  const userOverride = useRef<boolean | null>(null);
+  const [isExpanded, setIsExpanded] = useState(!globallyCollapsed);
 
-  if (lines.length === 0) return null;
+  // When the global flag changes (e.g. user clicks "Expand all diffs"),
+  // apply it only if the user hasn't manually interacted with this instance.
+  useEffect(() => {
+    if (userOverride.current === null) {
+      setIsExpanded(!globallyCollapsed);
+    }
+  }, [globallyCollapsed]);
+
+  const handleToggle = () => {
+    const next = !isExpanded;
+    userOverride.current = next;
+    setIsExpanded(next);
+  };
+
+  // Compute diff lines lazily — only when expanded.
+  // This avoids running Diff.diffLines() (O(N*D)) and parseUnifiedDiff() for
+  // every file edit at mount time.
+  const diffLines = useMemo((): DiffLine[] => {
+    if (!isExpanded) return [];
+    if (structuredPatch && structuredPatch.length > 0) {
+      return parseUnifiedDiff(structuredPatch);
+    }
+    if (oldContent && newContent) {
+      return generateDiffLines(oldContent, newContent);
+    }
+    return [];
+  }, [isExpanded, structuredPatch, oldContent, newContent]);
+
+  // Derive a quick line-count estimate for the summary badge without computing
+  // the full diff. For structured patches we count hunk lines; for full-file
+  // pairs we just count the larger file.
+  const estimatedLineCount = useMemo(() => {
+    if (structuredPatch && structuredPatch.length > 0) {
+      return structuredPatch.reduce((acc, h) => acc + h.lines.length, 0);
+    }
+    if (oldContent || newContent) {
+      const oldLines = oldContent ? oldContent.split("\n").length : 0;
+      const newLines = newContent ? newContent.split("\n").length : 0;
+      return oldLines + newLines;
+    }
+    return 0;
+  }, [structuredPatch, oldContent, newContent]);
+
+  const hasDiff = estimatedLineCount > 0;
+
+  // Async HLJS highlighting — runs in useEffect so it never blocks the paint.
+  // When diffLines changes (expand) we kick off highlighting and set the result
+  // once it's done. Until then, plain (un-highlighted) text is shown.
+  const [highlightedLines, setHighlightedLines] = useState<string[]>([]);
+  const highlightVersion = useRef(0); // prevents stale async result from landing
+
+  useEffect(() => {
+    if (diffLines.length === 0) {
+      setHighlightedLines([]);
+      return;
+    }
+    const version = ++highlightVersion.current;
+    // Run HLJS in a macrotask so the browser can paint the un-highlighted
+    // diff lines first, keeping the expand interaction responsive.
+    const id = setTimeout(() => {
+      const combined = diffLines.map((l) => l.content).join("\n");
+      const result = highlightLines(combined, language);
+      if (highlightVersion.current === version) {
+        setHighlightedLines(result);
+      }
+    }, 0);
+    return () => clearTimeout(id);
+  }, [diffLines, language]);
+
+  if (!hasDiff) return null;
 
   return (
-    <div
-      className={`my-2 ml-6 font-mono text-[11px] rounded-[3px] overflow-x-auto overflow-y-hidden border border-vscode-border bg-vscode-bg ${className}`}
-    >
-      {lines.map((line, index) => {
-        const styles = DIFF_LINE_STYLES[line.type] || DIFF_LINE_STYLES.context;
-        const highlighted = highlightedLines[index] ?? "";
+    <div className={`my-2 ml-6 font-mono text-[11px] ${className}`}>
+      {/* Summary / toggle header */}
+      <button
+        type="button"
+        onClick={handleToggle}
+        className="flex items-center gap-1.5 text-[10px] text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit] mb-1"
+        title={isExpanded ? "Collapse diff" : "Expand diff"}
+      >
+        <i
+          className={`codicon codicon-chevron-right text-[10px] transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
+        />
+        <span>
+          {isExpanded ? "Hide" : "Show"} diff
+          {!isExpanded && estimatedLineCount > 0 && (
+            <span className="ml-1 opacity-60">
+              (~{estimatedLineCount} lines)
+            </span>
+          )}
+        </span>
+      </button>
 
-        return (
-          <div
-            key={index}
-            className={`flex items-baseline whitespace-pre font-inherit leading-[1.4] py-px ${styles.bg}`}
-          >
-            <span
-              className={`inline-block w-10 text-right px-1.5 select-none text-[10px] opacity-60 shrink-0 text-diff-line-num ${styles.lineNumColor}`}
-            >
-              {line.type !== "added" ? line.oldLineNum : ""}
-            </span>
-            <span
-              className={`inline-block w-10 text-right px-1.5 select-none text-[10px] opacity-60 shrink-0 text-diff-line-num border-r border-diff-line-num mr-2 ${styles.lineNumColor}`}
-            >
-              {line.type !== "removed" ? line.newLineNum : ""}
-            </span>
-            {/* prefix: keep diff colour; content: hljs token colours */}
-            <span
-              className={`flex-1 min-w-0 py-0.5 pr-2 overflow-visible whitespace-pre`}
-            >
-              <span className={`font-bold ${styles.contentColor}`}>
-                {styles.prefix}
-              </span>
-              <span dangerouslySetInnerHTML={{ __html: highlighted }} />
-            </span>
-          </div>
-        );
-      })}
+      {/* Diff lines — only mounted when expanded */}
+      {isExpanded && diffLines.length > 0 && (
+        <div className="rounded-[3px] overflow-x-auto overflow-y-hidden border border-vscode-border bg-vscode-bg">
+          {diffLines.map((line, index) => {
+            const styles =
+              DIFF_LINE_STYLES[line.type] || DIFF_LINE_STYLES.context;
+            const highlighted = highlightedLines[index] ?? "";
+
+            return (
+              <div
+                key={index}
+                className={`flex items-baseline whitespace-pre font-inherit leading-[1.4] py-px ${styles.bg}`}
+              >
+                <span
+                  className={`inline-block w-10 text-right px-1.5 select-none text-[10px] opacity-60 shrink-0 text-diff-line-num ${styles.lineNumColor}`}
+                >
+                  {line.type !== "added" ? line.oldLineNum : ""}
+                </span>
+                <span
+                  className={`inline-block w-10 text-right px-1.5 select-none text-[10px] opacity-60 shrink-0 text-diff-line-num border-r border-diff-line-num mr-2 ${styles.lineNumColor}`}
+                >
+                  {line.type !== "removed" ? line.newLineNum : ""}
+                </span>
+                <span
+                  className={`flex-1 min-w-0 py-0.5 pr-2 overflow-visible whitespace-pre`}
+                >
+                  <span className={`font-bold ${styles.contentColor}`}>
+                    {styles.prefix}
+                  </span>
+                  {highlighted ? (
+                    <span dangerouslySetInnerHTML={{ __html: highlighted }} />
+                  ) : (
+                    <span className={styles.contentColor}>{line.content}</span>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
@@ -193,56 +313,59 @@ interface FileEditOutputProps {
 }
 
 /**
- * FileEditOutput renders a file edit operation with diff visualization
+ * FileEditOutput renders a file edit operation with diff visualization.
+ *
+ * The raw diff inputs are passed directly to DiffView which owns all
+ * expensive computation (diff generation + HLJS) lazily behind an expand gate.
+ * This component itself does zero diff work at render time.
  */
-export const FileEditOutput: React.FC<FileEditOutputProps> = ({
-  path,
-  status,
-  oldContent,
-  newContent,
-  structuredPatch,
-  error,
-  className = "",
-}) => {
-  const dotStatus = fileOpDotStatus(status);
+export const FileEditOutput = memo<FileEditOutputProps>(
+  ({
+    path,
+    status,
+    oldContent,
+    newContent,
+    structuredPatch,
+    error,
+    className = "",
+  }) => {
+    const dotStatus = fileOpDotStatus(status);
+    const diffsCollapsed = useUiStore((s) => s.diffsCollapsed);
 
-  const getActionLabel = (): string => {
-    if (status === OPERATION_STATUS.INITIATED) return "Editing";
-    if (status === OPERATION_STATUS.FAILED) return "Edit failed:";
-    return "Edited";
-  };
+    const getActionLabel = (): string => {
+      if (status === OPERATION_STATUS.INITIATED) return "Editing";
+      if (status === OPERATION_STATUS.FAILED) return "Edit failed:";
+      return "Edited";
+    };
 
-  // Generate diff lines — show whenever data is available, regardless of lifecycle stage.
-  // Copilot sends old_str/new_str in tool.execution_start so data is ready immediately;
-  // Claude sends a structuredPatch in tool_result which replaces the inline diff on completion.
-  const getDiffLines = (): DiffLine[] => {
-    if (structuredPatch && structuredPatch.length > 0) {
-      return parseUnifiedDiff(structuredPatch);
-    }
-    if (oldContent && newContent) {
-      return generateDiffLines(oldContent, newContent);
-    }
-    return [];
-  };
+    const hasDiffData =
+      (structuredPatch && structuredPatch.length > 0) ||
+      (oldContent && newContent);
 
-  const diffLines = getDiffLines();
-
-  return (
-    <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
-      <div className={TOOL_CALL_LINE}>
-        <ToolDot status={dotStatus} />
-        <span>{getActionLabel()}</span>
-        <FilePath path={path} />
-        {error && status === OPERATION_STATUS.FAILED && (
-          <span className="text-bash-status-error">— {error}</span>
+    return (
+      <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
+        <div className={TOOL_CALL_LINE}>
+          <ToolDot status={dotStatus} />
+          <span>{getActionLabel()}</span>
+          <FilePath path={path} />
+          {error && status === OPERATION_STATUS.FAILED && (
+            <span className="text-bash-status-error">— {error}</span>
+          )}
+        </div>
+        {hasDiffData && (
+          <DiffView
+            oldContent={oldContent}
+            newContent={newContent}
+            structuredPatch={structuredPatch}
+            language={getLanguageFromPath(path)}
+            globallyCollapsed={diffsCollapsed}
+          />
         )}
       </div>
-      {diffLines.length > 0 && (
-        <DiffView lines={diffLines} language={getLanguageFromPath(path)} />
-      )}
-    </div>
-  );
-};
+    );
+  }
+);
+FileEditOutput.displayName = "FileEditOutput";
 
 // ============================================================================
 // File Write Output Component

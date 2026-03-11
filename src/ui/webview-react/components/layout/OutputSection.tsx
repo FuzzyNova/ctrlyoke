@@ -36,29 +36,42 @@ interface OutputMessage {
  * - Export to markdown
  * - Empty state display
  * - Streaming indicator support
+ *
+ * Performance notes:
+ * - Uses granular Zustand selectors so streaming chunk updates only cause
+ *   the streaming CliOutput row to re-render, not the entire list.
+ * - CliOutput rows for completed steps are wrapped with React.memo so they
+ *   skip reconciliation when their props haven't changed.
  */
 export const OutputSection: React.FC = () => {
-  const {
-    fileName,
-    executionState,
-    currentStep,
-    totalSteps,
-    cliOutputs,
-    finalPromptOutputs,
-    statusMessages,
-    finalPromptStatusMessages,
-    streamingChunks,
-    historyOutputs,
-  } = useWorkflowStore();
-  const {
-    outputCollapsed,
-    toggleOutputCollapse,
-    isViewingHistory,
-    viewingRunIndex,
-    availableRuns,
-    runTimestamps,
-    runStates,
-  } = useUiStore();
+  // ── Granular store selectors ───────────────────────────────────────────────
+  // Each selector is independent so only the relevant slice of state triggers
+  // a re-render of this component.
+  const fileName = useWorkflowStore((s) => s.fileName);
+  const executionState = useWorkflowStore((s) => s.executionState);
+  const currentStep = useWorkflowStore((s) => s.currentStep);
+  const totalSteps = useWorkflowStore((s) => s.totalSteps);
+  const cliOutputs = useWorkflowStore((s) => s.cliOutputs);
+  const finalPromptOutputs = useWorkflowStore((s) => s.finalPromptOutputs);
+  const statusMessages = useWorkflowStore((s) => s.statusMessages);
+  const finalPromptStatusMessages = useWorkflowStore(
+    (s) => s.finalPromptStatusMessages
+  );
+  // streamingChunks changes on every token — keep it isolated so the
+  // auto-scroll effect doesn't require rebuilding allMessages.
+  const streamingChunks = useWorkflowStore((s) => s.streamingChunks);
+  const historyOutputs = useWorkflowStore((s) => s.historyOutputs);
+
+  const outputCollapsed = useUiStore((s) => s.outputCollapsed);
+  const toggleOutputCollapse = useUiStore((s) => s.toggleOutputCollapse);
+  const isViewingHistory = useUiStore((s) => s.isViewingHistory);
+  const viewingRunIndex = useUiStore((s) => s.viewingRunIndex);
+  const availableRuns = useUiStore((s) => s.availableRuns);
+  const runTimestamps = useUiStore((s) => s.runTimestamps);
+  const runStates = useUiStore((s) => s.runStates);
+  const diffsCollapsed = useUiStore((s) => s.diffsCollapsed);
+  const toggleDiffsCollapsed = useUiStore((s) => s.toggleDiffsCollapsed);
+
   const outputRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const autoscrollEnabled = useRef(true);
@@ -134,7 +147,9 @@ export const OutputSection: React.FC = () => {
     finalPromptStatusMessages,
   ]);
 
-  // Build chronologically sorted list of all messages
+  // Build chronologically sorted list of all messages.
+  // This memo depends on stepsToRender (not streamingChunks), so it only
+  // rebuilds when actual output records change — not on every streaming token.
   const allMessages = useMemo((): OutputMessage[] => {
     const messages: OutputMessage[] = [];
 
@@ -195,7 +210,10 @@ export const OutputSection: React.FC = () => {
     autoscrollEnabled.current = atBottom;
   }, []);
 
-  // Auto-scroll effect
+  // Auto-scroll effect.
+  // We watch both allMessages (new output records) and streamingChunks
+  // (tokens arriving for the current streaming item) so the view follows
+  // the growing content in real time without rebuilding allMessages each tick.
   useEffect(() => {
     if (autoscrollEnabled.current && outputRef.current) {
       isProgrammaticScroll.current = true;
@@ -250,6 +268,10 @@ export const OutputSection: React.FC = () => {
 
   // Check if there's any output
   const hasOutput = allMessages.length > 0;
+
+  const isExecutionActive =
+    executionState === EXECUTION_STATES.RUNNING ||
+    executionState === EXECUTION_STATES.CANCELLING;
 
   if (outputCollapsed) {
     return (
@@ -318,6 +340,17 @@ export const OutputSection: React.FC = () => {
                 }
               }}
             />
+          )}
+          {hasOutput && (
+            <button
+              className="icon-btn py-0 px-2"
+              title={diffsCollapsed ? "Expand all diffs" : "Collapse all diffs"}
+              onClick={toggleDiffsCollapsed}
+            >
+              <i
+                className={`codicon codicon-sm ${diffsCollapsed ? "codicon-diff" : "codicon-diff-ignored"}`}
+              />
+            </button>
           )}
           <button
             className="icon-btn py-0 px-2"
@@ -397,13 +430,13 @@ export const OutputSection: React.FC = () => {
               );
             } else {
               const cliData = item.data as CliOutputType;
+              // Only pass the streaming chunk for queue-type steps.
+              // This prop changes on every token, but React.memo on CliOutput
+              // ensures only the row with a non-empty chunk re-renders.
               const streamingChunk =
                 item.target.kind === "queue"
                   ? streamingChunks[item.target.index] || ""
                   : "";
-              const isExecutionActive =
-                executionState === EXECUTION_STATES.RUNNING ||
-                executionState === EXECUTION_STATES.CANCELLING;
               return (
                 <React.Fragment key={`cli-${index}`}>
                   {isFirstForStep && (

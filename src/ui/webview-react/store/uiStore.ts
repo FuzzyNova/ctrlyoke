@@ -105,6 +105,10 @@ interface UiState {
   outputCollapsed: boolean;
   editorCollapsed: boolean;
 
+  // Diff display — when true all DiffView instances render collapsed (summary only),
+  // keeping the DOM lean for runs with many large file edits.
+  diffsCollapsed: boolean;
+
   // Persisted panel sizes — restored to useRef on mount, written back on resize
   lastDesktopSizes: PanelSizes;
   lastMobileSizes: PanelSizes;
@@ -169,6 +173,7 @@ interface UiActions {
   setPromptsCollapsed: (collapsed: boolean) => void;
   setOutputCollapsed: (collapsed: boolean) => void;
   setEditorCollapsed: (collapsed: boolean) => void;
+  toggleDiffsCollapsed: () => void;
 
   // Panel sizes (persisted, written from App.tsx resize handlers)
   setLastDesktopSizes: (sizes: Partial<PanelSizes>) => void;
@@ -250,6 +255,7 @@ const initialState: UiState = {
   finalPromptFooterExpanded: false,
   outputCollapsed: false,
   editorCollapsed: false,
+  diffsCollapsed: true, // collapsed by default to keep the DOM lean
   lastDesktopSizes: { ...DEFAULT_DESKTOP_SIZES },
   lastMobileSizes: { ...DEFAULT_MOBILE_SIZES },
   propertiesDrawerOpen: false,
@@ -284,6 +290,7 @@ const persistedFields = [
   "hiddenDropdownOptions",
   "lastDesktopSizes",
   "lastMobileSizes",
+  "diffsCollapsed",
 ] as const;
 
 export const useUiStore = create<UiState & UiActions>()(
@@ -317,6 +324,9 @@ export const useUiStore = create<UiState & UiActions>()(
       setOutputCollapsed: (collapsed) => set({ outputCollapsed: collapsed }),
 
       setEditorCollapsed: (collapsed) => set({ editorCollapsed: collapsed }),
+
+      toggleDiffsCollapsed: () =>
+        set((state) => ({ diffsCollapsed: !state.diffsCollapsed })),
 
       // ============================================================================
       // PANEL SIZES
