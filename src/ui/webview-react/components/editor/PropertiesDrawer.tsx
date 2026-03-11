@@ -41,7 +41,13 @@ const SkillsSelect: React.FC<{
   availableSkills: Array<{ name: string; description?: string }>;
   defaultLabel?: string;
   dropdownMaxHeight?: string;
-}> = ({ value, onChange, availableSkills, defaultLabel, dropdownMaxHeight = "60vh" }) => {
+}> = ({
+  value,
+  onChange,
+  availableSkills,
+  defaultLabel,
+  dropdownMaxHeight = "60vh",
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -229,7 +235,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   // Each label shows what value the prompt will actually use when set to Default,
   // resolving through the three-tier chain: prompt → workflow → global settings.
 
-  const resolvedHarness = (workflowProperties.harness ?? globalSettings.harness) as HarnessId;
+  const resolvedHarness = (workflowProperties.harness ??
+    globalSettings.harness) as HarnessId;
   const defaultHarnessLabel = `Default (${HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness})`;
 
   const resolvedModels = getModelsForHarness(resolvedHarness);
@@ -238,18 +245,19 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     globalSettings.harnessDefaultModels[resolvedHarness] ??
     globalSettings.model;
   const resolvedModelLabel =
-    resolvedModels.find((m) => m.value === resolvedModelValue)?.label ?? resolvedModelValue;
+    resolvedModels.find((m) => m.value === resolvedModelValue)?.label ??
+    resolvedModelValue;
   const defaultModelLabel = `Default (${resolvedModelLabel || "None"})`;
 
   const resolvedAgent =
     workflowProperties.agent === undefined
       ? globalSettings.agent
       : workflowProperties.agent;
-  const resolvedAgentName =
-    !resolvedAgent
-      ? "None"
-      : (availableAgents.find((a) => a.path === resolvedAgent || a.name === resolvedAgent)?.name ??
-          resolvedAgent);
+  const resolvedAgentName = !resolvedAgent
+    ? "None"
+    : (availableAgents.find(
+        (a) => a.path === resolvedAgent || a.name === resolvedAgent
+      )?.name ?? resolvedAgent);
   const defaultAgentLabel = `Default (${resolvedAgentName})`;
 
   const resolvedSkills =
@@ -267,15 +275,17 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     workflowProperties.additionalArgs === undefined
       ? (globalSettings.harnessDefaultAdditionalArgs[resolvedHarness] ?? "")
       : workflowProperties.additionalArgs;
-  const defaultAdditionalArgsLabel =
-    !resolvedAdditionalArgs ? "Default (None)" : `Default (${resolvedAdditionalArgs})`;
+  const defaultAdditionalArgsLabel = !resolvedAdditionalArgs
+    ? "Default (None)"
+    : `Default (${resolvedAdditionalArgs})`;
 
   const resolvedResumeSession =
     workflowProperties.resumeSession ?? globalSettings.resumeSession;
   const defaultResumeSessionLabel = `Default (${resolvedResumeSession ? "Yes" : "No"})`;
 
   const resolvedAllowDynamic =
-    workflowProperties.allowDynamicExtension ?? globalSettings.allowDynamicExtension;
+    workflowProperties.allowDynamicExtension ??
+    globalSettings.allowDynamicExtension;
   const defaultAllowDynamicLabel = `Default (${resolvedAllowDynamic ? "Yes" : "No"})`;
 
   // End condition expanded state
@@ -289,9 +299,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   }, [properties.endCondition]);
 
   // Get models for current harness
-  const currentHarness = (
-    properties.harness ?? globalSettings.harness
-  ) as HarnessId;
+  const currentHarness = (properties.harness ??
+    globalSettings.harness) as HarnessId;
   const models = getModelsForHarness(currentHarness);
   const modelNamespace = modelNamespaceForHarness(currentHarness);
 
@@ -341,7 +350,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="prop-harness"
-                className="text-xs font-medium text-foreground"
+                className="text-[11px] font-semibold uppercase text-description-fg"
               >
                 {`Harness${harnessCategory(properties.harness ?? "") === "cli" ? " (CLI)" : harnessCategory(properties.harness ?? "") === "chat" ? " (Chat)" : ""}`}
               </label>
@@ -369,7 +378,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="prop-model"
-                className="text-xs font-medium text-foreground"
+                className="text-[11px] font-semibold uppercase text-description-fg"
               >
                 Model
               </label>
@@ -397,9 +406,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 namespace={modelNamespace}
                 hiddenValues={hiddenDropdownOptions[modelNamespace] ?? []}
                 onHideOption={(v) => hideDropdownOption(modelNamespace, v)}
-                onUnhideOption={(v) =>
-                  unhideDropdownOption(modelNamespace, v)
-                }
+                onUnhideOption={(v) => unhideDropdownOption(modelNamespace, v)}
                 nonHideableValues={["default", ""]}
                 dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
@@ -412,7 +419,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="prop-agent"
-                className="text-xs font-medium text-foreground"
+                className="text-[11px] font-semibold uppercase text-description-fg"
               >
                 Agent
               </label>
@@ -461,7 +468,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="prop-skills"
-                className="text-xs font-medium text-foreground"
+                className="text-[11px] font-semibold uppercase text-description-fg"
               >
                 Skills
               </label>
@@ -484,7 +491,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="prop-additional-args-mode"
-                className="text-xs font-medium text-foreground"
+                className="text-[11px] font-semibold uppercase text-description-fg"
                 title="Extra CLI flags appended to FlightPath's standard argument set. Only applies to CLI harnesses."
               >
                 Additional Args
@@ -547,7 +554,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="prop-resume-session"
-                className="text-xs font-medium text-foreground"
+                className="text-[11px] font-semibold uppercase text-description-fg"
               >
                 Resume Session
               </label>
@@ -599,7 +606,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="prop-prior-context"
-                className="text-xs font-medium text-foreground"
+                className="text-[11px] font-semibold uppercase text-description-fg"
                 title="Inject prior prompt outputs into this prompt's text before sending to the AI"
               >
                 Prior Context
@@ -618,7 +625,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="prop-allow-dynamic"
-                className="text-xs font-medium text-foreground"
+                className="text-[11px] font-semibold uppercase text-description-fg"
               >
                 Allow Dynamic Ext.
               </label>
@@ -790,7 +797,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       updateEndConditionField("retryPrompt", e.target.value)
                     }
                     disabled={!properties.endCondition}
-                    placeholder={"Validation failed: {error}\n\nPlease fix the issues."}
+                    placeholder={
+                      "Validation failed: {error}\n\nPlease fix the issues."
+                    }
                     rows={3}
                     className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50 resize-y"
                   />
