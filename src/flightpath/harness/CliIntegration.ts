@@ -345,8 +345,8 @@ export class CliIntegration extends HarnessIntegration {
     );
 
     // Format references per provider convention. Default is "@path" (most CLIs); override via formatFileReference().
-    const fileReferences = relativePaths.map((rp) =>
-      this.provider.formatFileReference?.(rp) ?? `@${rp}`
+    const fileReferences = relativePaths.map(
+      (rp) => this.provider.formatFileReference?.(rp) ?? `@${rp}`
     );
 
     return {
@@ -474,11 +474,11 @@ export class CliIntegration extends HarnessIntegration {
     try {
       // Print a separator for multi-prompt workflows so users see the boundary
       if (workflowContext && workflowContext.promptIndex > 0) {
-        console.log(`\n${"─".repeat(52)}`);
-        console.log(
+        Log.info(`\n${"─".repeat(52)}`);
+        Log.info(
           `Prompt ${workflowContext.promptIndex + 1} / ${workflowContext.allPrompts.length}`
         );
-        console.log();
+        Log.info("\n");
       }
 
       // Use simple prompt directly when possible; fall back to temp file for

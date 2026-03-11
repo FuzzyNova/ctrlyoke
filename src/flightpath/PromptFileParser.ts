@@ -46,7 +46,7 @@ export class PromptFileParser {
       if (this.platform) {
         this.platform.error("FlightPath: Failed to load validation schema");
       } else {
-        console.error("FlightPath: Failed to load validation schema");
+        Log.error("FlightPath: Failed to load validation schema");
       }
     }
   }
@@ -106,7 +106,7 @@ export class PromptFileParser {
           `FlightPath: Failed to parse ${path.basename(filePath)}: ${error}`
         );
       } else {
-        console.error(
+        Log.error(
           `FlightPath: Failed to parse ${path.basename(filePath)}: ${error}`
         );
       }
@@ -145,7 +145,7 @@ export class PromptFileParser {
           `FlightPath: Failed to read ${path.basename(filePath)}: ${error}`
         );
       } else {
-        console.error(
+        Log.error(
           `FlightPath: Failed to read ${path.basename(filePath)}: ${error}`
         );
       }

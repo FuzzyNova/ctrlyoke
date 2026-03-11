@@ -1,11 +1,20 @@
 .vscode/**
 .vscode-test/**
+
+# Exclude all build output, then whitelist only what the extension needs
 out/**
 !out/extension.js
+!out/mcp-server.js
 !out/templates/**
 !out/schemas/**
+!out/ui/**
+!out/scripts/**
+
+# Dependencies and source
 node_modules/**
 src/**
+
+# TypeScript / build config
 .gitignore
 .yarnrc
 esbuild.js
@@ -24,3 +33,24 @@ prompts/**
 .github/**
 DEVELOPMENT.md
 images/README.md
+
+# Source schemas (compiled copies ship in out/schemas/**)
+schemas/**
+
+# Root-level build scripts (not needed at runtime)
+scripts/**
+
+# Archive of old vanilla-JS webview (replaced by React)
+archive/**
+
+# Contributor/AI tooling files
+AGENTS.md
+CLAUDE.md
+CHORES.md
+
+# Prettier config
+.prettierrc.json
+.prettierignore
+
+# FlightPath workspace data (user-generated at runtime, not part of extension)
+.flightpath/**

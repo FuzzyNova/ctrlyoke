@@ -243,10 +243,6 @@ export class CopilotCliProvider implements ICliProvider {
     const message = `Model "${requestedModel}" not supported by Copilot CLI. Using default: ${defaultModel}`;
     Log.warn(`⚠️ ${message}`);
 
-    console.warn(
-      `FlightPath: ${message}\n\nCLI-supported models: ${supportedModels.join(", ")}`
-    );
-
     return defaultModel;
   }
 

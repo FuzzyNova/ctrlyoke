@@ -245,9 +245,6 @@ export class CodexCliProvider implements ICliProvider {
     // Model not supported - warn user and fallback
     const message = `Model "${requestedModel}" not supported by Codex CLI. Using default: ${defaultModel}`;
     Log.warn(`⚠️ ${message}`);
-    console.warn(
-      `FlightPath: ${message}\n\nCodex-supported models: ${CODEX_CLI_MODELS.join(", ")}`
-    );
 
     return defaultModel;
   }

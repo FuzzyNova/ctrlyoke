@@ -227,8 +227,6 @@ export class ClaudeCliProvider implements ICliProvider {
     Log.warn(`⚠️ ${message}`);
     Log.warn(`   Accepted formats: ${supportedFormats}`);
 
-    console.warn(`FlightPath: ${message}`);
-
     const defaultFullName = getClaudeModelName(defaultModel);
     return defaultFullName || defaultModel;
   }

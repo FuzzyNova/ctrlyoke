@@ -1,8 +1,8 @@
 # FlightPath v0.1.0 Release Plan
 
 **Created:** March 11, 2026  
-**Status:** NOT_STARTED  
-**Target:** VS Code Marketplace public release
+**Status:** IN_PROGRESS  
+**Target:** VS Code Marketplace public release + npm CLI package
 
 ---
 
@@ -20,40 +20,36 @@ These will either prevent publishing outright or break the extension for all use
 
 ### 1.1 Fix `.vscodeignore` — Webview Bundle Is Missing From VSIX
 
-**Priority: CRITICAL** | **Effort: 30 minutes**
+**Priority: CRITICAL** | **Status: DONE** | **Effort: 30 minutes**
 
-The `.vscodeignore` excludes `out/**` but only whitelists `out/extension.js`, `out/templates/**`, and `out/schemas/**`. The React dashboard webview bundle is built to `out/ui/webview-react/` (confirmed in `src/ui/webview-react/vite.config.ts`) and is **not whitelisted**. This means any published VSIX will load a blank/broken dashboard.
+The `.vscodeignore` excluded `out/**` but only whitelisted `out/extension.js`, `out/templates/**`, and `out/schemas/**`. The React dashboard webview bundle built to `out/ui/webview-react/` and the CLI hook scripts in `out/scripts/**` were missing, causing a blank dashboard for any published VSIX.
 
-**Required change to `.vscodeignore`:**
+**Decision: MCP server ships with the VS Code extension; CLI is a separate npm package.**
+
+- `out/mcp-server.js` — **whitelisted** (`!out/mcp-server.js`). The MCP server must be co-located with the extension so VS Code can launch it via the `flightpath-mcp` bin entry.
+- `out/cli.js` — **excluded** (stays out of VSIX). The `flightpath` CLI is published separately to npm (see Phase 7). Users install it independently via `npm install -g flightpath`.
+
+**Changes applied to `.vscodeignore`:**
 
 ```
-# Current state:
-out/**
-!out/extension.js
-!out/templates/**
-!out/schemas/**
-
-# Add:
+# Whitelisted (added):
+!out/mcp-server.js
 !out/ui/**
 !out/scripts/**
-```
 
-> **Note on `out/cli.js` and `out/mcp-server.js`:** The CLI binary and MCP server binary are also excluded. Since they are listed in `package.json` under `"bin"`, they will not be executable when installed from the marketplace. If CLI-mode and MCP functionality should work post-install, these must also be whitelisted. Verify whether they are expected to run from the marketplace install or only from a local npm install.
-
-**Also add exclusions for files currently shipping unnecessarily:**
-
-```
+# Excluded junk (added):
 archive/**
-CHORES.md
 AGENTS.md
 CLAUDE.md
-.github/**     # (already excluded? verify)
-scripts/**     # root-level build scripts, not needed at runtime
-schemas/**     # source schemas are redundant; out/schemas/** is already included
+CHORES.md
+schemas/**        # source schemas; compiled copies ship in out/schemas/**
+scripts/**        # root-level build scripts, not needed at runtime
 .prettierrc.json
 .prettierignore
 .flightpath/**
 ```
+
+> `.github/**` was already excluded in the original file.
 
 ---
 
@@ -134,10 +130,13 @@ vsce package      # builds the .vsix
 
 Review the `vsce ls` output and confirm:
 
-- `archive/` files are NOT listed (after 1.1 fix)
-- `out/ui/webview-react/` files ARE listed (after 1.1 fix)
+- `archive/` files are NOT listed ✅ (fixed in 1.1)
+- `out/ui/webview-react/` files ARE listed ✅ (fixed in 1.1)
+- `out/scripts/` files ARE listed ✅ (fixed in 1.1)
+- `out/mcp-server.js` IS listed ✅ (fixed in 1.1 — MCP ships with extension)
+- `out/cli.js` is NOT listed ✅ (CLI is a separate npm package — see Phase 7)
 - `src/` files are NOT listed (already excluded)
-- Sensitive files (`.env`, `AGENTS.md`, `CLAUDE.md`) are NOT listed
+- Sensitive files (`.env`, `AGENTS.md`, `CLAUDE.md`, `CHORES.md`) are NOT listed ✅ (fixed in 1.1)
 
 ---
 
@@ -365,36 +364,179 @@ jobs:
 
 ---
 
+## Phase 7 — Publish `flightpath` CLI to npm
+
+The `flightpath` CLI (`out/cli.js`) is excluded from the VS Code extension VSIX. It is a standalone tool that users install globally via npm:
+
+```bash
+npm install -g flightpath
+```
+
+This phase covers preparing and publishing the CLI as its own npm package.
+
+### 7.1 Decide: Separate Package or Unified Package?
+
+**Two options:**
+
+**Option A — Single `package.json` (current structure):**  
+The CLI and extension share one `package.json`. `npm publish` would publish the entire repo as both the VS Code extension binary and the npm CLI. This is unusual and can confuse npm users who expect a lean CLI install (not 80 MB of extension + node_modules).
+
+**Option B — Dedicated `cli/` package (recommended):**  
+Extract the CLI into `packages/cli/package.json` with its own name (`flightpath`), `bin`, `main`, and `dependencies`. The extension stays at the root. This cleanly separates the two distribution channels.
+
+> **Decision needed:** Choose Option A or B before proceeding.
+
+### 7.2 Prepare the CLI Package
+
+If using Option A (simplest for v0.1.0):
+
+- Verify `package.json` `"name"` and `"version"` are correct for npm publishing
+- Add `"files"` field to `package.json` to limit what npm publishes (npm uses `files` the same way VS Code uses `.vscodeignore`):
+  ```json
+  "files": [
+    "out/cli.js",
+    "out/cli.js.map",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ]
+  ```
+- Confirm `"bin": { "flightpath": "./out/cli.js" }` is correct (it already exists in `package.json`)
+- Add `"preferGlobal": true` (cosmetic hint, not enforced)
+- The `"main"` field points to `./out/extension.js` (VS Code extension entry). For npm CLI-only use, this is harmless but can be confusing — document this in a note
+
+If using Option B (separate package):
+
+- Create `packages/cli/package.json` with minimal fields
+- Copy/symlink `out/cli.js` into the CLI package output on build
+- Update `scripts` in root `package.json` to build and publish the CLI package separately
+
+### 7.3 Create a npm Account / Verify Access
+
+- Ensure you have an npm account at https://www.npmjs.com
+- Check if `flightpath` is available as a package name: `npm search flightpath`
+- If the name is taken, consider `@nhickster/flightpath` (scoped) or `flightpath-cli`
+- Log in: `npm login`
+
+### 7.4 Test the CLI Package Locally
+
+```bash
+# Build the CLI
+npm run build:prod
+
+# Pack and inspect what would be published
+npm pack --dry-run
+
+# Install locally to test
+npm pack
+npm install -g ./flightpath-0.1.0.tgz
+flightpath --help
+```
+
+Verify the CLI works for basic commands after a fresh global install (no extension or repo context).
+
+### 7.5 Publish to npm
+
+```bash
+npm publish --access public
+```
+
+Or for a scoped package:
+
+```bash
+npm publish --access public  # required for scoped packages
+```
+
+### 7.6 Verify the npm Listing
+
+- Visit `https://www.npmjs.com/package/flightpath` (or scoped URL)
+- Confirm `npm install -g flightpath` works in a clean environment
+- Run `flightpath --help` and verify the version matches `0.1.0`
+
+### 7.7 Update README with npm Install Instructions
+
+Add to the README (CLI section):
+
+````md
+## CLI Installation
+
+The FlightPath CLI is available as a standalone npm package:
+
+```bash
+npm install -g flightpath
+```
+````
+
+The CLI is separate from the VS Code extension. Install the extension from the VS Code Marketplace for the dashboard UI and workflow orchestration.
+
+````
+
+### 7.8 CI/CD for CLI Releases (Optional)
+
+Wire up GitHub Actions to publish the CLI to npm on tag:
+
+```yaml
+# .github/workflows/npm-release.yml
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  npm-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run build:prod
+      - run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+````
+
+---
+
 ## Summary Checklist
 
-| #       | Item                                                            | Phase | Effort | Blocker? |
-| ------- | --------------------------------------------------------------- | ----- | ------ | -------- |
-| 1.1     | Fix `.vscodeignore` (webview bundle missing)                    | 1     | 30 min | **YES**  |
-| 1.2     | Populate CHANGELOG for v0.1.0                                   | 1     | 2–4 hr | **YES**  |
-| 1.3     | Verify production build end-to-end                              | 1     | 1–2 hr | **YES**  |
-| 2.1     | Create/verify Azure DevOps publisher                            | 2     | 30 min | **YES**  |
-| 2.2     | Generate PAT                                                    | 2     | 15 min | **YES**  |
-| 2.3     | Install vsce + login                                            | 2     | 15 min | **YES**  |
-| 2.4     | Verify `vsce ls` output                                         | 2     | 15 min | **YES**  |
-| 3.1     | README review and polish                                        | 3     | 1–2 hr | No       |
-| 3.2     | Marketplace metadata in package.json                            | 3     | 30 min | No       |
-| 3.3     | Add screenshots/GIF                                             | 3     | 1–2 hr | No       |
-| 3.4     | Verify GitHub repo is public                                    | 3     | 5 min  | No       |
-| 4.1     | Delete dead `CliTerminalFormatter.ts`                           | 4     | 5 min  | No       |
-| 4.2     | Relocate `chat-log-investigation.ts`                            | 4     | 10 min | No       |
-| 4.3     | Fix `console.*` bypassing log system                            | 4     | 1 hr   | No       |
-| 4.4     | Fix webview `console.log` in `useVsCodeApi.ts`                  | 4     | 15 min | No       |
-| 4.5     | Sync stale model lists                                          | 4     | 1–2 hr | No       |
-| 4.6     | Remove dead exports from `ModelConstants.ts`                    | 4     | 15 min | No       |
-| 4.7     | Collapse duplicate function pairs in `ModelRegistry.ts`         | 4     | 15 min | No       |
-| 4.8     | Update stale `FlightPathManager` comment references             | 4     | 30 min | No       |
-| 4.9     | Clean up unimplemented message types in `DashboardConstants.ts` | 4     | 30 min | No       |
-| 4.10    | Delete `archive/` directory                                     | 4     | 5 min  | No       |
-| 5.1–5.4 | Publish + verify + optional featured listing                    | 5     | 1 hr   | —        |
-| 6.1–6.3 | Post-release: GitHub Release, Open VSX, CI/CD                   | 6     | 2–3 hr | —        |
+| #       | Item                                                            | Phase | Effort | Blocker? | Status  |
+| ------- | --------------------------------------------------------------- | ----- | ------ | -------- | ------- |
+| 1.1     | Fix `.vscodeignore` (webview bundle missing)                    | 1     | 30 min | **YES**  | ✅ DONE |
+| 1.2     | Populate CHANGELOG for v0.1.0                                   | 1     | 2–4 hr | **YES**  |         |
+| 1.3     | Verify production build end-to-end                              | 1     | 1–2 hr | **YES**  |         |
+| 2.1     | Create/verify Azure DevOps publisher                            | 2     | 30 min | **YES**  |         |
+| 2.2     | Generate PAT                                                    | 2     | 15 min | **YES**  |         |
+| 2.3     | Install vsce + login                                            | 2     | 15 min | **YES**  |         |
+| 2.4     | Verify `vsce ls` output                                         | 2     | 15 min | **YES**  |         |
+| 3.1     | README review and polish                                        | 3     | 1–2 hr | No       |         |
+| 3.2     | Marketplace metadata in package.json                            | 3     | 30 min | No       |         |
+| 3.3     | Add screenshots/GIF                                             | 3     | 1–2 hr | No       |         |
+| 3.4     | Verify GitHub repo is public                                    | 3     | 5 min  | No       |         |
+| 4.1     | Delete dead `CliTerminalFormatter.ts`                           | 4     | 5 min  | No       |         |
+| 4.2     | Relocate `chat-log-investigation.ts`                            | 4     | 10 min | No       |         |
+| 4.3     | Fix `console.*` bypassing log system                            | 4     | 1 hr   | No       |         |
+| 4.4     | Fix webview `console.log` in `useVsCodeApi.ts`                  | 4     | 15 min | No       |         |
+| 4.5     | Sync stale model lists                                          | 4     | 1–2 hr | No       |         |
+| 4.6     | Remove dead exports from `ModelConstants.ts`                    | 4     | 15 min | No       |         |
+| 4.7     | Collapse duplicate function pairs in `ModelRegistry.ts`         | 4     | 15 min | No       |         |
+| 4.8     | Update stale `FlightPathManager` comment references             | 4     | 30 min | No       |         |
+| 4.9     | Clean up unimplemented message types in `DashboardConstants.ts` | 4     | 30 min | No       |         |
+| 4.10    | Delete `archive/` directory                                     | 4     | 5 min  | No       |         |
+| 5.1–5.4 | Publish extension + verify + optional featured listing          | 5     | 1 hr   | —        |         |
+| 6.1–6.3 | Post-release: GitHub Release, Open VSX, CI/CD                   | 6     | 2–3 hr | —        |         |
+| 7.1     | Decide single vs. separate CLI package structure                | 7     | 30 min | **YES**  |         |
+| 7.2     | Prepare CLI package (`files` field or separate package)         | 7     | 1–2 hr | **YES**  |         |
+| 7.3     | Verify npm account + package name availability                  | 7     | 15 min | **YES**  |         |
+| 7.4     | Test CLI package locally with `npm pack`                        | 7     | 30 min | **YES**  |         |
+| 7.5     | Publish CLI to npm                                              | 7     | 15 min | **YES**  |         |
+| 7.6     | Verify npm listing and global install                           | 7     | 15 min | **YES**  |         |
+| 7.7     | Update README with npm install instructions                     | 7     | 15 min | No       |         |
+| 7.8     | CI/CD for CLI npm releases (optional)                           | 7     | 1–2 hr | No       |         |
 
-**Estimated total for blockers only (Phases 1–2):** ~5–8 hours  
-**Estimated total including recommended polish and cleanup (Phases 1–4):** ~12–18 hours
+**Estimated total for VS Code extension blockers only (Phases 1–2):** ~5–8 hours  
+**Estimated total including recommended polish and cleanup (Phases 1–4):** ~12–18 hours  
+**Estimated total for CLI npm publish (Phase 7, blockers only):** ~3–4 hours
 
 ---
 

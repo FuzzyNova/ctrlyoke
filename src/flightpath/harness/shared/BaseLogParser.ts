@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { BaseCliEvent, ILogParser } from "./interfaces/ILogParser";
 import { UniversalCliOutput } from "../../../types/CliOutputTypes";
+import { Log } from "../../../utils/Log";
 
 /**
  * Abstract base class for CLI harness log parsers
@@ -294,7 +295,7 @@ export abstract class BaseLogParser implements ILogParser {
           entries.push(entry);
         } catch (error) {
           // Log parse errors but continue processing
-          console.error(
+          Log.error(
             `[BaseLogParser] Failed to parse JSON line: ${trimmed.substring(0, 100)}...`,
             error
           );
@@ -372,16 +373,16 @@ export abstract class BaseLogParser implements ILogParser {
           try {
             callback(entry);
           } catch (error) {
-            console.error("[BaseLogParser] Callback error:", error);
+            Log.error("[BaseLogParser] Callback error:", error);
           }
         }
       } catch (error) {
-        console.error("[BaseLogParser] Error reading new lines:", error);
+        Log.error("[BaseLogParser] Error reading new lines:", error);
       }
     });
 
     watcher.on("error", (error) => {
-      console.error("[BaseLogParser] File watcher error:", error);
+      Log.error("[BaseLogParser] File watcher error:", error);
     });
 
     return watcher;
@@ -466,7 +467,7 @@ export abstract class BaseLogParser implements ILogParser {
 
       return candidates.map((c) => c.path);
     } catch (error) {
-      console.error(
+      Log.error(
         `[BaseLogParser] Error finding session logs in ${logDirectory}:`,
         error
       );
