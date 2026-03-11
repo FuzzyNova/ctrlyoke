@@ -1,5 +1,4 @@
 import * as fs from "fs/promises";
-import { Log } from "./Log";
 
 const LOCK_FILE_EXTENSION = ".lock";
 const LOCK_TIMEOUT_MS = 5000;
@@ -62,7 +61,11 @@ async function releaseLock(lockPath: string): Promise<void> {
   } catch (error) {
     // Ignore ENOENT (already deleted by another process) but log other errors
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      Log.warn(`[FileLockUtils] Failed to release lock ${lockPath}: ${error}`);
+      // always use console.warn here instead of importing Log since file lock utils is used by mcp server
+      // which doesn't have access to the vscode logging infrastructure
+      console.warn(
+        `[FileLockUtils] Failed to release lock ${lockPath}: ${error}`
+      );
     }
   }
 }
