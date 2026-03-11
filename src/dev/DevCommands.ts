@@ -790,21 +790,6 @@ export function registerDevCommands(context: vscode.ExtensionContext): void {
     })
   );
 
-  // DEBUG: Investigate chat log access (temporary diagnostic command)
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "flightpath.investigateChatLogs",
-      async () => {
-        const { runAllInvestigations } =
-          await import("../test/chat-log-investigation");
-        await runAllInvestigations(context);
-        vscode.window.showInformationMessage(
-          "Chat log investigation complete! Check the console for results."
-        );
-      }
-    )
-  );
-
   // Debug: Show current document language ID
   context.subscriptions.push(
     vscode.commands.registerCommand("flightpath.showLanguageId", () => {
@@ -877,11 +862,6 @@ export function registerDevCommands(context: vscode.ExtensionContext): void {
           label: "$(list-unordered) List All VS Code Commands",
           description: "Dump all commands → docs/reference/VSCODE_COMMANDS.md",
           command: "flightpath.listAllCommands",
-        },
-        {
-          label: "$(search) Investigate Chat Logs",
-          description: "Run chat log access diagnostics",
-          command: "flightpath.investigateChatLogs",
         },
         {
           label: "$(symbol-text) Show Language ID",

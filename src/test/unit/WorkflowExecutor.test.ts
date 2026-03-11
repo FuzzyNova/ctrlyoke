@@ -112,7 +112,6 @@ function makeContext(
     showCliOutput: false,
     dynamicQueueConfig: {
       enabled: true,
-      dynamicExtensionOnLastPrompt: true,
       maxQueueSize: 100,
       maxWorkflowExecutionTime: 3600,
       unlimitedMode: false,

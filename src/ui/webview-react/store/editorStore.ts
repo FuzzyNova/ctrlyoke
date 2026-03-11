@@ -361,7 +361,9 @@ export const useEditorStore = create<
       originalPromptData: promptData,
       savedNewPromptState,
       promptText: pendingEdit ? pendingEdit.promptText : promptData.prompt,
-      promptName: pendingEdit ? pendingEdit.promptName : (promptData.name ?? ""),
+      promptName: pendingEdit
+        ? pendingEdit.promptName
+        : (promptData.name ?? ""),
       properties: pendingEdit ? pendingEdit.properties : propertiesFromData,
       isDirty: pendingEdit ? true : false,
       validationErrors: {},
@@ -612,7 +614,7 @@ export const useEditorStore = create<
       return;
     }
 
-    const persistedState = {
+    const editorState = {
       editorText: state.promptText,
       promptName: state.promptName,
       selectionTarget: { kind: "newPrompt" as const },
@@ -620,13 +622,23 @@ export const useEditorStore = create<
       properties: state.properties,
     };
 
-    vscode.setState(persistedState);
+    // Merge under "editorState" key to coexist with other vscode state consumers
+    // (e.g. uiStore's Zustand persist storage uses "flightpath-ui-state" key).
+    const root = vscode.getState() ?? {};
+    vscode.setState({ ...root, editorState });
   },
 
   restoreFromVsCodeState: (vscode) => {
-    const persistedState = vscode.getState();
+    const root = vscode.getState();
 
-    if (!persistedState) {
+    if (!root) {
+      return false;
+    }
+
+    // Support both namespaced (new) and legacy (root-level) formats for migration.
+    const persistedState = root.editorState ?? root;
+
+    if (!persistedState || typeof persistedState !== "object") {
       return false;
     }
 

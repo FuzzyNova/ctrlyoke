@@ -1,6 +1,59 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import {
+  persist,
+  createJSONStorage,
+  type StateStorage,
+} from "zustand/middleware";
+import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type { WorkflowSummary } from "../types/messages";
+import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
+
+// ============================================================================
+// VS Code State Storage Adapter
+// ============================================================================
+
+/**
+ * Raw StateStorage adapter backed by the VS Code webview state API.
+ *
+ * Unlike localStorage, vscode.getState()/setState() persists across VS Code
+ * restarts for sidebar webview views — VS Code serializes the state when the
+ * extension host shuts down and restores it when the view is next opened.
+ *
+ * The adapter stores Zustand's serialized blob under a namespaced key within
+ * the shared vscode state object, so it coexists safely with editorStore's
+ * data which is written directly to the root vscode state.
+ */
+const vsCodeRawStorage: StateStorage = {
+  getItem(name: string): string | null {
+    try {
+      const vscode = getVsCodeApi();
+      const root = vscode.getState() ?? {};
+      const value = root[name];
+      return typeof value === "string" ? value : null;
+    } catch {
+      return null;
+    }
+  },
+  setItem(name: string, value: string): void {
+    try {
+      const vscode = getVsCodeApi();
+      const root = vscode.getState() ?? {};
+      vscode.setState({ ...root, [name]: value });
+    } catch {
+      // Swallow — best-effort persistence
+    }
+  },
+  removeItem(name: string): void {
+    try {
+      const vscode = getVsCodeApi();
+      const root = vscode.getState() ?? {};
+      const { [name]: _removed, ...rest } = root as Record<string, unknown>;
+      vscode.setState(rest);
+    } catch {
+      // Swallow
+    }
+  },
+};
 
 /**
  * Template information for new workflow modal
@@ -32,17 +85,29 @@ export interface RecentWorkflow {
   lastUsed: number;
 }
 
+/** Panel size snapshot (percentage values) for desktop or mobile layout */
+export interface PanelSizes {
+  prompts: number;
+  output: number;
+  editor: number;
+  settings: number;
+}
+
 /**
  * UI state - Layout, visibility, and modal states
  */
 interface UiState {
-  // Dropdown hide feature — persisted to localStorage
+  // Dropdown hide feature — persisted to vscode state
   hiddenDropdownOptions: Record<string, string[]>; // namespace → hidden value[]
   // Section collapse states
   promptsCollapsed: boolean;
   finalPromptFooterExpanded: boolean;
   outputCollapsed: boolean;
   editorCollapsed: boolean;
+
+  // Persisted panel sizes — restored to useRef on mount, written back on resize
+  lastDesktopSizes: PanelSizes;
+  lastMobileSizes: PanelSizes;
 
   // Drawer state
   propertiesDrawerOpen: boolean;
@@ -104,6 +169,10 @@ interface UiActions {
   setPromptsCollapsed: (collapsed: boolean) => void;
   setOutputCollapsed: (collapsed: boolean) => void;
   setEditorCollapsed: (collapsed: boolean) => void;
+
+  // Panel sizes (persisted, written from App.tsx resize handlers)
+  setLastDesktopSizes: (sizes: Partial<PanelSizes>) => void;
+  setLastMobileSizes: (sizes: Partial<PanelSizes>) => void;
 
   // Drawer toggles
   togglePropertiesDrawer: () => void;
@@ -181,6 +250,8 @@ const initialState: UiState = {
   finalPromptFooterExpanded: false,
   outputCollapsed: false,
   editorCollapsed: false,
+  lastDesktopSizes: { ...DEFAULT_DESKTOP_SIZES },
+  lastMobileSizes: { ...DEFAULT_MOBILE_SIZES },
   propertiesDrawerOpen: false,
   settingsCollapsed: true,
   selectedOutputStep: null,
@@ -203,7 +274,7 @@ const initialState: UiState = {
   runStates: [],
 };
 
-// Fields to persist to localStorage
+// Fields to persist via vscode.getState()/setState()
 const persistedFields = [
   "promptsCollapsed",
   "outputCollapsed",
@@ -211,6 +282,8 @@ const persistedFields = [
   "settingsCollapsed",
   "defaultTemplateId",
   "hiddenDropdownOptions",
+  "lastDesktopSizes",
+  "lastMobileSizes",
 ] as const;
 
 export const useUiStore = create<UiState & UiActions>()(
@@ -244,6 +317,20 @@ export const useUiStore = create<UiState & UiActions>()(
       setOutputCollapsed: (collapsed) => set({ outputCollapsed: collapsed }),
 
       setEditorCollapsed: (collapsed) => set({ editorCollapsed: collapsed }),
+
+      // ============================================================================
+      // PANEL SIZES
+      // ============================================================================
+
+      setLastDesktopSizes: (sizes) =>
+        set((state) => ({
+          lastDesktopSizes: { ...state.lastDesktopSizes, ...sizes },
+        })),
+
+      setLastMobileSizes: (sizes) =>
+        set((state) => ({
+          lastMobileSizes: { ...state.lastMobileSizes, ...sizes },
+        })),
 
       // ============================================================================
       // DRAWER TOGGLES
@@ -450,7 +537,7 @@ export const useUiStore = create<UiState & UiActions>()(
     }),
     {
       name: "flightpath-ui-state",
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => vsCodeRawStorage),
       // Only persist specific fields (layout preferences)
       partialize: (state) =>
         Object.fromEntries(

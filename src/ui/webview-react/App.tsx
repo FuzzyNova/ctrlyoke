@@ -12,6 +12,8 @@ import { WebviewLog } from "@utils/logger";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES } from "@/types/messages";
+// uiStore uses vscode.getState()/setState() as its persist storage (see uiStore.ts),
+// so collapse states are restored synchronously before the first render.
 import {
   PANEL_COLLAPSED_SIZE_DEFAULT,
   PANEL_COLLAPSED_SIZE_SIDEBAR,
@@ -19,8 +21,6 @@ import {
   PANEL_MIN_SIZE_SMALL,
   PANEL_MIN_SIZE_CENTER,
   PANEL_MAX_SIZE_SIDEBAR,
-  DEFAULT_DESKTOP_SIZES,
-  DEFAULT_MOBILE_SIZES,
   PANEL_KEYS,
   SEPARATOR_HORIZONTAL,
   SEPARATOR_VERTICAL,
@@ -37,7 +37,9 @@ import {
 function App() {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
-  const [uiLayoutReady, setUiLayoutReady] = useState(false);
+  // uiStore hydrates synchronously from vscode.getState() on store creation,
+  // so the persisted collapse state is available on the first render.
+  const [uiLayoutReady] = useState(true);
 
   // Panel imperative refs for programmatic collapse/expand
   const settingsRef = useRef<PanelImperativeHandle>(null);
@@ -58,28 +60,33 @@ function App() {
   const horizontalInitializedRef = useRef(false);
   // Track last expanded sizes per layout — restored when re-expanding, captured
   // during drag.  Grouped by layout to keep the 8 values organized.
-  const lastDesktopSizes = useRef({ ...DEFAULT_DESKTOP_SIZES });
-  const lastMobileSizes = useRef({ ...DEFAULT_MOBILE_SIZES });
+  // Initialized from persisted store values so sizes survive VS Code restarts.
+  const lastDesktopSizes = useRef({
+    ...useUiStore.getState().lastDesktopSizes,
+  });
+  const lastMobileSizes = useRef({
+    ...useUiStore.getState().lastMobileSizes,
+  });
   // Flag: true when Group just remounted from both-collapsed, false after forced resize
   const needsForcedResize = useRef(false);
   // Flag: true during forced resize operation to prevent onResize from saving wrong values
   const isForcingResize = useRef(false);
   // Desktop mount defaults — used when desktop Group remounts (e.g. mobile → desktop).
-  // Updated from saved sizes to restore the user's layout after mobile detour.
+  // Initialized from persisted sizes so the layout is restored on VS Code restart.
   const desktopMountDefaults = useRef({
-    prompts: String(DEFAULT_DESKTOP_SIZES.prompts),
-    settings: String(DEFAULT_DESKTOP_SIZES.settings),
+    prompts: String(lastDesktopSizes.current.prompts),
+    settings: String(lastDesktopSizes.current.settings),
   });
   const wasMobileRef = useRef(isMobile);
   // Gates mobile onResize until useLayoutEffect has synced persisted state
   const mobileInitializedRef = useRef(false);
-  // Mobile mount defaults — recomputed on layout transition and on
-  // all-collapsed → some-open transition within mobile.
+  // Mobile mount defaults — initialized from persisted sizes; recomputed on
+  // layout transition and on all-collapsed → some-open transition within mobile.
   const mobileMountDefaults = useRef({
-    prompts: String(DEFAULT_MOBILE_SIZES.prompts),
-    output: String(DEFAULT_MOBILE_SIZES.output),
-    editor: String(DEFAULT_MOBILE_SIZES.editor),
-    settings: String(DEFAULT_MOBILE_SIZES.settings),
+    prompts: String(lastMobileSizes.current.prompts),
+    output: String(lastMobileSizes.current.output),
+    editor: String(lastMobileSizes.current.editor),
+    settings: String(lastMobileSizes.current.settings),
   });
 
   const getMobilePanelSnapshot = () => ({
@@ -122,62 +129,6 @@ function App() {
   const setOutputCollapsed = useUiStore((s) => s.setOutputCollapsed);
   const editorCollapsed = useUiStore((s) => s.editorCollapsed);
   const setEditorCollapsed = useUiStore((s) => s.setEditorCollapsed);
-
-  // Restore persisted layout from VS Code webview state.
-  useLayoutEffect(() => {
-    try {
-      const persisted = vscode.getState()?.uiLayout;
-      if (persisted && typeof persisted === "object") {
-        if (typeof persisted.promptsCollapsed === "boolean") {
-          setPromptsCollapsed(persisted.promptsCollapsed);
-        }
-        if (typeof persisted.outputCollapsed === "boolean") {
-          setOutputCollapsed(persisted.outputCollapsed);
-        }
-        if (typeof persisted.editorCollapsed === "boolean") {
-          setEditorCollapsed(persisted.editorCollapsed);
-        }
-        if (typeof persisted.settingsCollapsed === "boolean") {
-          setSettingsCollapsed(persisted.settingsCollapsed);
-        }
-      }
-    } catch (error) {
-      WebviewLog.warn(
-        `[LAYOUT][RESTORE] failed: ${error instanceof Error ? error.message : String(error)}`
-      );
-    } finally {
-      setUiLayoutReady(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Persist collapsed state into VS Code webview state so it survives VS Code restarts.
-  useEffect(() => {
-    if (!uiLayoutReady) return;
-    try {
-      const current = vscode.getState() ?? {};
-      vscode.setState({
-        ...current,
-        uiLayout: {
-          promptsCollapsed,
-          outputCollapsed,
-          editorCollapsed,
-          settingsCollapsed,
-        },
-      });
-    } catch (error) {
-      WebviewLog.warn(
-        `[LAYOUT][PERSIST] failed: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  }, [
-    uiLayoutReady,
-    vscode,
-    promptsCollapsed,
-    outputCollapsed,
-    editorCollapsed,
-    settingsCollapsed,
-  ]);
 
   // Stable mount defaults — only recomputed on the both-collapsed → one-open
   // transition (i.e. when the vertical Group remounts).  Keeping defaultSize
@@ -692,8 +643,9 @@ function App() {
                   mobilePromptsRef.current?.isCollapsed() ?? false;
                 const size =
                   mobilePromptsRef.current?.getSize().asPercentage ?? null;
-                if (!isCollapsed) {
-                  if (size != null) lastMobileSizes.current.prompts = size;
+                if (!isCollapsed && size != null) {
+                  lastMobileSizes.current.prompts = size;
+                  useUiStore.getState().setLastMobileSizes({ prompts: size });
                 }
                 if (isCollapsed !== promptsCollapsed) {
                   setPromptsCollapsed(isCollapsed);
@@ -718,8 +670,9 @@ function App() {
                   mobileOutputRef.current?.isCollapsed() ?? false;
                 const size =
                   mobileOutputRef.current?.getSize().asPercentage ?? null;
-                if (!isCollapsed) {
-                  if (size != null) lastMobileSizes.current.output = size;
+                if (!isCollapsed && size != null) {
+                  lastMobileSizes.current.output = size;
+                  useUiStore.getState().setLastMobileSizes({ output: size });
                 }
                 if (isCollapsed !== outputCollapsed) {
                   setOutputCollapsed(isCollapsed);
@@ -744,8 +697,9 @@ function App() {
                   mobileEditorRef.current?.isCollapsed() ?? false;
                 const size =
                   mobileEditorRef.current?.getSize().asPercentage ?? null;
-                if (!isCollapsed) {
-                  if (size != null) lastMobileSizes.current.editor = size;
+                if (!isCollapsed && size != null) {
+                  lastMobileSizes.current.editor = size;
+                  useUiStore.getState().setLastMobileSizes({ editor: size });
                 }
                 if (isCollapsed !== editorCollapsed) {
                   setEditorCollapsed(isCollapsed);
@@ -770,8 +724,9 @@ function App() {
                   mobileSettingsRef.current?.isCollapsed() ?? false;
                 const size =
                   mobileSettingsRef.current?.getSize().asPercentage ?? null;
-                if (!isCollapsed) {
-                  if (size != null) lastMobileSizes.current.settings = size;
+                if (!isCollapsed && size != null) {
+                  lastMobileSizes.current.settings = size;
+                  useUiStore.getState().setLastMobileSizes({ settings: size });
                 }
                 if (isCollapsed !== settingsCollapsed) {
                   setSettingsCollapsed(isCollapsed);
@@ -815,7 +770,10 @@ function App() {
             const isCollapsed = promptsRef.current?.isCollapsed() ?? false;
             if (!isCollapsed) {
               const size = promptsRef.current?.getSize().asPercentage;
-              if (size != null) lastDesktopSizes.current.prompts = size;
+              if (size != null) {
+                lastDesktopSizes.current.prompts = size;
+                useUiStore.getState().setLastDesktopSizes({ prompts: size });
+              }
             }
             if (isCollapsed !== promptsCollapsed) {
               setPromptsCollapsed(isCollapsed);
@@ -869,8 +827,12 @@ function App() {
                     !editorCollapsed &&
                     !isForcingResize.current
                   ) {
-                    lastDesktopSizes.current.output =
+                    const newSize =
                       currentSize ?? lastDesktopSizes.current.output;
+                    lastDesktopSizes.current.output = newSize;
+                    useUiStore
+                      .getState()
+                      .setLastDesktopSizes({ output: newSize });
                   }
                   setOutputCollapsed(outputCollapsed);
                 }}
@@ -902,9 +864,12 @@ function App() {
                     !outputCollapsed &&
                     !isForcingResize.current
                   ) {
-                    lastDesktopSizes.current.editor =
+                    const newSize =
                       currentSize ?? lastDesktopSizes.current.editor;
-                  } else if (isForcingResize.current) {
+                    lastDesktopSizes.current.editor = newSize;
+                    useUiStore
+                      .getState()
+                      .setLastDesktopSizes({ editor: newSize });
                   }
                   setEditorCollapsed(editorCollapsed);
                 }}
@@ -931,7 +896,10 @@ function App() {
             const isCollapsed = settingsRef.current?.isCollapsed() ?? false;
             if (!isCollapsed) {
               const size = settingsRef.current?.getSize().asPercentage;
-              if (size != null) lastDesktopSizes.current.settings = size;
+              if (size != null) {
+                lastDesktopSizes.current.settings = size;
+                useUiStore.getState().setLastDesktopSizes({ settings: size });
+              }
             }
             if (isCollapsed !== settingsCollapsed) {
               setSettingsCollapsed(isCollapsed);

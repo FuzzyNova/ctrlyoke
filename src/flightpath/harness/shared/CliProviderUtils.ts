@@ -123,9 +123,6 @@ export class CliProviderUtils {
     } = require("../../../utils/PromptIdentity");
     const shouldInject = shouldInjectExtensionInstructions(
       prompt,
-      workflowContext.promptIndex,
-      workflowContext.allPrompts,
-      dynamicQueueConfig.dynamicExtensionOnLastPrompt,
       allowDynamicExtension
     );
 
@@ -139,7 +136,8 @@ export class CliProviderUtils {
     const additionalEnv: Record<string, string> = {
       FLIGHTPATH_MAX_QUEUE_SIZE: dynamicQueueConfig.maxQueueSize.toString(),
       FLIGHTPATH_UNLIMITED_MODE: dynamicQueueConfig.unlimitedMode.toString(),
-      FLIGHTPATH_DIAGNOSTIC_LOGS: ConfigurationUtils.isDiagnosticLogsEnabled().toString(),
+      FLIGHTPATH_DIAGNOSTIC_LOGS:
+        ConfigurationUtils.isDiagnosticLogsEnabled().toString(),
     };
 
     const mcpArgs = await getMcpConfigArgs(
