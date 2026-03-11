@@ -168,7 +168,8 @@ src/
 │   │   └── chat/                 # CopilotChatIntegration + session monitoring
 │   └── orchestration/            # PromptFileLoader, PromptFileWatcher,
 │                                 # TemplateImporter, WorkflowCommandHandler,
-│                                 # WorkspaceSessionManager, OutputHistoryManager
+│                                 # WorkspaceSessionManager, OutputHistoryManager,
+│                                 # WorkspaceInitializer
 ├── scripts/                      # Hook/notify scripts (plain Node.js CJS, not bundled)
 ├── templates/                    # Built-in workflow/agent templates
 ├── types/                        # Core types and shared constants
@@ -193,11 +194,12 @@ The extension creates and manages `.flightpath/` in each workspace:
 .flightpath/
 ├── .queue/        # Working files (runtime state for active workflows)
 ├── .history/      # Per-run output history snapshots
-├── .working/      # Session ID persistence across restarts
 ├── scripts/       # User validation scripts (end conditions)
 ├── prompts/       # Draft prompts (*.prompt.md)
 ├── templates/     # User workflow templates
 ├── workflows/     # Ready-to-run workflows
+├── agents/        # Custom agent files (*.agent.md)
+├── skills/        # Custom skill files
 ├── temp/          # Temp files for prompt passing and hooks
 └── logs/          # Hook/notify debug logs
 ```

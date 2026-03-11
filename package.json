@@ -164,6 +164,12 @@
         "title": "Queue Prompt File",
         "category": "FlightPath",
         "icon": "$(insert)"
+      },
+      {
+        "command": "flightpath.initWorkspace",
+        "title": "Initialize Workspace",
+        "category": "FlightPath",
+        "icon": "$(folder-opened)"
       }
     ],
     "keybindings": [
@@ -670,6 +676,13 @@
           "default": false,
           "description": "[Debug] Log raw CLI output for debugging",
           "markdownDescription": "**Debug Mode.** Log raw unparsed output from all CLI harnesses (Copilot, Claude, Codex) to the Output panel. Useful for debugging parser issues. **Warning:** Extremely verbose, only enable when troubleshooting."
+        },
+        "flightpath.enableDiagnosticLogs": {
+          "order": 201.6,
+          "type": "boolean",
+          "default": false,
+          "description": "[Support] Write diagnostic logs to .flightpath/logs/ for troubleshooting",
+          "markdownDescription": "**Support Mode.** Write diagnostic log files to `.flightpath/logs/` in your workspace. Enable this when troubleshooting issues or when asked by support. Logs include FlightPath extension activity, MCP server events, and CLI hook invocations. Log files older than 7 days are automatically cleaned up."
         },
         "flightpath.showCliCommand": {
           "order": 202,

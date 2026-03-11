@@ -191,8 +191,12 @@ export class TempFileManager {
   }
 
   /**
-   * Clean up orphaned temp files older than 24 hours
-   * Called on extension activation to prevent temp directory bloat
+   * Clean up orphaned temp files older than 24 hours.
+   * Called on extension activation to prevent temp directory bloat.
+   *
+   * Cleans two categories:
+   * - Top-level prompt files (*.prompt.md) and MCP config files
+   * - Notification JSON files in subdirectories (claude-notifications/, copilot-notifications/, etc.)
    *
    * @returns Number of files cleaned up
    */
@@ -208,35 +212,40 @@ export class TempFileManager {
         return 0;
       }
 
-      // Read directory contents
-      const files = await fs.promises.readdir(this.tempDir);
+      const entries = await fs.promises.readdir(this.tempDir, {
+        withFileTypes: true,
+      });
       const now = Date.now();
 
-      // Process each file
-      for (const file of files) {
-        // Only process known temp file types: prompt files and MCP config files
-        const isTempFile =
-          file.endsWith(this.PROMPT_EXTENSION) ||
-          file.startsWith(this.MCP_CONFIG_PREFIX);
-        if (!isTempFile) {
-          continue;
-        }
-
-        const filePath = path.join(this.tempDir, file);
-
-        try {
-          // Get file stats
-          const stats = await fs.promises.stat(filePath);
-
-          // Delete if older than max age
-          if (now - stats.mtimeMs > this.MAX_FILE_AGE_MS) {
-            await fs.promises.unlink(filePath);
-            cleanedCount++;
-            Log.info(`🗑️ Cleaned up orphaned temp file: ${file}`);
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          // Clean notification subdirectories (claude-notifications/, copilot-notifications/, etc.)
+          const subdir = path.join(this.tempDir, entry.name);
+          cleanedCount += await this.cleanupOrphanedNotificationDir(
+            subdir,
+            now
+          );
+        } else {
+          // Only process known top-level temp file types
+          const file = entry.name;
+          const isTempFile =
+            file.endsWith(this.PROMPT_EXTENSION) ||
+            file.startsWith(this.MCP_CONFIG_PREFIX);
+          if (!isTempFile) {
+            continue;
           }
-        } catch (err) {
-          // File might have been deleted already - ignore
-          Log.warn(`Failed to process temp file ${file}: ${err}`);
+
+          const filePath = path.join(this.tempDir, file);
+          try {
+            const stats = await fs.promises.stat(filePath);
+            if (now - stats.mtimeMs > this.MAX_FILE_AGE_MS) {
+              await fs.promises.unlink(filePath);
+              cleanedCount++;
+              Log.info(`🗑️ Cleaned up orphaned temp file: ${file}`);
+            }
+          } catch (err) {
+            Log.warn(`Failed to process temp file ${file}: ${err}`);
+          }
         }
       }
     } catch (err) {
@@ -244,6 +253,42 @@ export class TempFileManager {
       Log.error(`Temp file cleanup failed: ${err}`);
     }
 
+    return cleanedCount;
+  }
+
+  /**
+   * Clean up orphaned JSON notification files in a notification subdirectory.
+   * Only deletes files older than MAX_FILE_AGE_MS to avoid interfering with
+   * any concurrently running workflows.
+   */
+  private async cleanupOrphanedNotificationDir(
+    dirPath: string,
+    now: number
+  ): Promise<number> {
+    let cleanedCount = 0;
+    try {
+      const files = await fs.promises.readdir(dirPath);
+      for (const file of files) {
+        if (!file.endsWith(".json")) {
+          continue;
+        }
+        const filePath = path.join(dirPath, file);
+        try {
+          const stats = await fs.promises.stat(filePath);
+          if (now - stats.mtimeMs > this.MAX_FILE_AGE_MS) {
+            await fs.promises.unlink(filePath);
+            cleanedCount++;
+            Log.info(
+              `🗑️ Cleaned up orphaned notification file: ${path.basename(dirPath)}/${file}`
+            );
+          }
+        } catch (err) {
+          Log.warn(`Failed to process notification file ${file}: ${err}`);
+        }
+      }
+    } catch (err) {
+      Log.warn(`Failed to clean notification dir ${dirPath}: ${err}`);
+    }
     return cleanedCount;
   }
 

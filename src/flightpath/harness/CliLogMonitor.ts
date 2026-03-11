@@ -340,6 +340,17 @@ export class CliLogMonitor {
                 }
 
                 void handleCompletion("Stop hook");
+              } else if (
+                !result.completed &&
+                sessionId &&
+                this.deps.notificationMonitor!.cleanupNotificationFiles
+              ) {
+                // Cancelled, timed out, or completed via another path — clean up
+                // the -start.json file that was left by waitForSessionStart().
+                await this.deps.notificationMonitor!.cleanupNotificationFiles(
+                  sessionId,
+                  notifyDir
+                );
               }
             } catch (error) {
               Log.debug(`Notification monitoring error: ${error}`);

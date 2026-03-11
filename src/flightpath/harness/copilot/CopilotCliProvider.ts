@@ -291,6 +291,17 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   /**
+   * Return additional file paths to delete after workflow cleanup.
+   *
+   * Copilot writes flightpath.json to .github/hooks/ for interactive mode
+   * completion detection. It is auto-generated each run, so clean it up
+   * after the workflow finishes (consistent with OpenCode plugin cleanup).
+   */
+  getAdditionalCleanupFilePaths(workspaceRoot: string): string[] {
+    return [path.join(workspaceRoot, ".github", "hooks", "flightpath.json")];
+  }
+
+  /**
    * Create the sessionEnd hook file for Copilot
    */
   private async createHookFile(

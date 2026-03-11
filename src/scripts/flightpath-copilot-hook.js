@@ -44,10 +44,11 @@ const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 const {
+  isDiagnosticLogsEnabled,
   getDebugLogPath,
-  getTempLogPath,
   createLogger,
   getLogsDirFromNotifyDir,
+  getWorkspaceRootFromNotifyDir,
 } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-copilot-hook";
@@ -57,15 +58,16 @@ let debugLog = createLogger(null); // Will be re-initialized after parsing argum
  * Main handler function
  */
 function main() {
-  // Try to initialize debug logging as early as possible
-  // ALWAYS get a log file somewhere (fallback to temp if notifyDir is missing)
+  // Initialize debug logging only when diagnostic logs are enabled.
+  // Check the workspace flag file (.flightpath/.diagnostic-logs) to decide.
   const notifyDir = process.argv[2];
   try {
     if (notifyDir) {
-      const logsDir = getLogsDirFromNotifyDir(notifyDir);
-      debugLog = createLogger(getDebugLogPath(logsDir, SCRIPT_NAME));
-    } else {
-      debugLog = createLogger(getTempLogPath(SCRIPT_NAME));
+      const workspaceRoot = getWorkspaceRootFromNotifyDir(notifyDir);
+      if (isDiagnosticLogsEnabled(workspaceRoot)) {
+        const logsDir = getLogsDirFromNotifyDir(notifyDir);
+        debugLog = createLogger(getDebugLogPath(logsDir, SCRIPT_NAME));
+      }
     }
     debugLog("🚀 Hook script invoked", {
       argv: process.argv,
@@ -74,8 +76,7 @@ function main() {
       env_keys: Object.keys(process.env),
     });
   } catch (err) {
-    // Last resort fallback
-    debugLog = createLogger(getTempLogPath(SCRIPT_NAME));
+    // Ignore errors — logger stays as no-op
   }
 
   // Arguments: node <script> <notifyDir> <hookType>

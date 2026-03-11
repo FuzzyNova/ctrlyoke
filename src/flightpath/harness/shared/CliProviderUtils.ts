@@ -135,10 +135,11 @@ export class CliProviderUtils {
 
     const mcpServerPath = path.join(extensionPath, "out/mcp-server.js");
 
-    // Pass queue limits to MCP server via env vars so it enforces the same settings
+    // Pass queue limits and diagnostic logging flag to MCP server via env vars
     const additionalEnv: Record<string, string> = {
       FLIGHTPATH_MAX_QUEUE_SIZE: dynamicQueueConfig.maxQueueSize.toString(),
       FLIGHTPATH_UNLIMITED_MODE: dynamicQueueConfig.unlimitedMode.toString(),
+      FLIGHTPATH_DIAGNOSTIC_LOGS: ConfigurationUtils.isDiagnosticLogsEnabled().toString(),
     };
 
     const mcpArgs = await getMcpConfigArgs(

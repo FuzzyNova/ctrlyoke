@@ -16,6 +16,8 @@ import { TempFileManager } from "./utils/TempFileManager";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
 import { Log } from "./utils/Log";
 import { saveIfDirty } from "./utils/FileSystemUtils";
+import { WorkspaceInitializer } from "./flightpath/orchestration/WorkspaceInitializer";
+import { PATH_CONSTANTS } from "./utils/ConfigurationUtils";
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: FlightPathWebviewProvider;
@@ -159,10 +161,37 @@ export async function activate(context: vscode.ExtensionContext) {
       Log.warn("FlightPath: Model registry initialization failed:", err);
     });
 
-    // Clean up orphaned temp prompt files (from previous sessions)
+    // Initialize workspace and clean up orphaned temp files
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
       const workspaceRoot = workspaceFolders[0].uri.fsPath;
+
+      // Auto-initialize .flightpath directory on first run
+      WorkspaceInitializer.initializeIfNeeded(workspaceRoot)
+        .then((isNew) => {
+          if (isNew) {
+            vscode.window
+              .showInformationMessage(
+                `FlightPath: Workspace initialized! A ${PATH_CONSTANTS.FLIGHTPATH_DIR}/ directory has been created with your workflows, prompts, and scripts folders.`,
+                "Reveal Folder"
+              )
+              .then((choice) => {
+                if (choice === "Reveal Folder") {
+                  vscode.commands.executeCommand(
+                    "revealFileInOS",
+                    vscode.Uri.file(
+                      path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR)
+                    )
+                  );
+                }
+              });
+          }
+        })
+        .catch((err) => {
+          Log.warn("FlightPath: Workspace initialization failed:", err);
+        });
+
+      // Clean up orphaned temp prompt files (from previous sessions)
       const tempMgr = new TempFileManager(workspaceRoot);
       tempMgr.cleanupOrphanedFiles().then((count) => {
         if (count > 0) {
@@ -573,6 +602,30 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
+  // Initialize Workspace command (manual reinit for existing users)
+  const initWorkspaceCommand = vscode.commands.registerCommand(
+    "flightpath.initWorkspace",
+    async () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showErrorMessage(
+          "FlightPath: No workspace folder open. Open a folder first."
+        );
+        return;
+      }
+      try {
+        await WorkspaceInitializer.reinitialize(workspaceFolders[0].uri.fsPath);
+        vscode.window.showInformationMessage(
+          `FlightPath: Workspace initialized — ${PATH_CONSTANTS.FLIGHTPATH_DIR}/ directories and .gitignore are up to date.`
+        );
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `FlightPath: Workspace initialization failed: ${err}`
+        );
+      }
+    }
+  );
+
   // Add all production commands to subscriptions
   context.subscriptions.push(
     openPanelCommand,
@@ -597,7 +650,8 @@ function registerCommands(context: vscode.ExtensionContext) {
     showOutputPanelCommand,
     createDraftPromptCommand,
     openFileWithSelectionCommand,
-    clearWorkflowCommand
+    clearWorkflowCommand,
+    initWorkspaceCommand
   );
 
   // Register development commands (only in dev mode)

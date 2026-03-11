@@ -118,6 +118,15 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Check if diagnostic file logging is enabled.
+   * When true, FlightPath writes log files to .flightpath/logs/ in production builds.
+   * Dev builds always write log files regardless of this setting.
+   */
+  isDiagnosticLogsEnabled(): boolean {
+    return getConfig().get<boolean>("enableDiagnosticLogs", false);
+  },
+
+  /**
    * Check if prompt files should open in the second editor group
    */
   shouldOpenPromptsInSecondGroup(): boolean {

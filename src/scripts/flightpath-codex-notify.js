@@ -26,8 +26,8 @@
 const fs = require("fs");
 const path = require("path");
 const {
+  isDiagnosticLogsEnabled,
   getDebugLogPath,
-  getTempLogPath,
   createLogger,
 } = require("./flightpath-hook-utils");
 
@@ -38,20 +38,16 @@ let debugLog = createLogger(null); // Will be re-initialized after parsing notif
  * Main handler function
  */
 function main() {
-  // Try to initialize debug logging as early as possible
-  // ALWAYS get a log file somewhere (fallback to temp if JSON parse fails or cwd is missing)
+  // Initialize debug logging only when diagnostic logs are enabled.
+  // The workspace is available from the notification's cwd field.
   let notificationJson = process.argv[2];
   try {
     if (notificationJson) {
       const notification = JSON.parse(notificationJson);
-      if (notification.cwd) {
+      if (notification.cwd && isDiagnosticLogsEnabled(notification.cwd)) {
         const logsDir = path.join(notification.cwd, ".flightpath", "logs");
         debugLog = createLogger(getDebugLogPath(logsDir, SCRIPT_NAME));
-      } else {
-        debugLog = createLogger(getTempLogPath(SCRIPT_NAME));
       }
-    } else {
-      debugLog = createLogger(getTempLogPath(SCRIPT_NAME));
     }
     debugLog("🚀 Codex notify script invoked", {
       argv: process.argv,
@@ -59,8 +55,7 @@ function main() {
       cwd: process.cwd(),
     });
   } catch (err) {
-    // Last resort fallback (JSON parse failed)
-    debugLog = createLogger(getTempLogPath(SCRIPT_NAME));
+    // Ignore errors — logger stays as no-op
   }
 
   // Codex passes notification as first argument (JSON string)

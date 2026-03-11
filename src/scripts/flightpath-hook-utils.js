@@ -10,6 +10,28 @@ const path = require("path");
 const os = require("os");
 
 /**
+ * Check whether diagnostic file logging is enabled for a workspace.
+ * The extension writes `.flightpath/.diagnostic-logs` when
+ * `flightpath.enableDiagnosticLogs` is true. Hook scripts check this file
+ * because they cannot read VS Code settings directly.
+ *
+ * @param {string|null} workspaceDir - Workspace root (parent of .flightpath/).
+ *   Pass null to skip the check (returns false).
+ * @returns {boolean} True if the flag file exists.
+ */
+function isDiagnosticLogsEnabled(workspaceDir) {
+  if (!workspaceDir) {
+    return false;
+  }
+  try {
+    const flagPath = path.join(workspaceDir, ".flightpath", ".diagnostic-logs");
+    return fs.existsSync(flagPath);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get debug log file path in a specified logs directory.
  * Ensures the logs directory exists before returning the path.
  *
@@ -79,9 +101,23 @@ function getLogsDirFromNotifyDir(notifyDir) {
   return path.join(flightpathDir, "logs");
 }
 
+/**
+ * Derive the workspace root from a notification directory path.
+ * Notification directories follow the pattern: <workspace>/.flightpath/temp/<harness>-notifications
+ * This navigates up 3 levels to reach the workspace root.
+ *
+ * @param {string} notifyDir - The notification directory path
+ * @returns {string} Path to the workspace root
+ */
+function getWorkspaceRootFromNotifyDir(notifyDir) {
+  return path.join(notifyDir, "..", "..", "..");
+}
+
 module.exports = {
+  isDiagnosticLogsEnabled,
   getDebugLogPath,
   getTempLogPath,
   createLogger,
   getLogsDirFromNotifyDir,
+  getWorkspaceRootFromNotifyDir,
 };

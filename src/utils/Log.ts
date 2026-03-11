@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { IS_DEV_MODE } from "./BuildConfig";
+import { ConfigurationUtils } from "./ConfigurationUtils";
 
 /**
  * Log levels in order from most verbose (TRACE) to least verbose (ERROR), plus OFF.
@@ -19,6 +20,12 @@ export enum LogLevel {
   OFF = 5, // No logging
 }
 
+/** Max age for log files before cleanup removes them (7 days). */
+const LOG_CLEANUP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Name of the flag file written to .flightpath/ when diagnostic logging is on. */
+const DIAGNOSTIC_FLAG_FILE = ".diagnostic-logs";
+
 export class Log {
   private static outputChannel: vscode.OutputChannel;
   private static logLevel: LogLevel = LogLevel.INFO;
@@ -27,11 +34,13 @@ export class Log {
   private static cliMode = false;
   /** Log file path used in CLI mode. */
   private static cliLogFilePath: string | undefined;
+  /** Cached workspace root for flag file management (VS Code mode only). */
+  private static workspaceRoot: string | undefined;
 
   /**
-   * Initialize logging. In dev builds, automatically uses TRACE level.
-   * In production builds, reads from VS Code's log level setting and listens for changes.
-   * The logLevel parameter is ignored in VS Code context (use vscode.env.logLevel instead).
+   * Initialize logging. In dev builds, automatically uses TRACE level and writes
+   * log files unconditionally. In production builds, reads from VS Code's log level
+   * setting and only writes log files when `flightpath.enableDiagnosticLogs` is true.
    */
   static initialize(
     context: vscode.ExtensionContext,
@@ -40,23 +49,39 @@ export class Log {
     this.outputChannel = vscode.window.createOutputChannel("FlightPath");
     context.subscriptions.push(this.outputChannel);
 
+    this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
     if (IS_DEV_MODE) {
       // Dev builds: show everything including trace logs
       this.logLevel = LogLevel.TRACE;
-
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (workspaceRoot) {
-        const logDir = path.join(workspaceRoot, ".flightpath", "logs");
-        fs.mkdirSync(logDir, { recursive: true });
-        this.logFilePath = path.join(logDir, `flightpath-${Date.now()}.log`);
-        fs.writeFileSync(this.logFilePath, ""); // truncate on each session start
-      }
+      this.openLogFile();
     } else {
       // Production: respect VS Code's log level setting
       this.logLevel = Log.fromVSCodeLogLevel(vscode.env.logLevel);
       context.subscriptions.push(
         vscode.env.onDidChangeLogLevel((level) => {
           Log.logLevel = Log.fromVSCodeLogLevel(level);
+        })
+      );
+
+      // Enable/disable file logging based on diagnostic setting
+      if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
+        this.openLogFile();
+        this.writeDiagnosticFlagFile(true);
+      }
+
+      // React to setting changes at runtime
+      context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration((e) => {
+          if (e.affectsConfiguration("flightpath.enableDiagnosticLogs")) {
+            const enabled = ConfigurationUtils.isDiagnosticLogsEnabled();
+            if (enabled && !this.logFilePath) {
+              this.openLogFile();
+            } else if (!enabled) {
+              this.logFilePath = undefined;
+            }
+            this.writeDiagnosticFlagFile(enabled);
+          }
         })
       );
     }
@@ -83,9 +108,86 @@ export class Log {
       fs.mkdirSync(logDir, { recursive: true });
       this.cliLogFilePath = path.join(logDir, `flightpath-cli-${Date.now()}.log`);
       fs.writeFileSync(this.cliLogFilePath, ""); // create / truncate
+      this.cleanupOldLogs(logDir);
     } catch {
       // Proceed without file logging if directory creation fails
       this.cliLogFilePath = undefined;
+    }
+  }
+
+  /**
+   * Open a new timestamped log file in .flightpath/logs/.
+   * Called on initialization (dev always, prod when diagnostic logging enabled).
+   */
+  private static openLogFile(): void {
+    if (!this.workspaceRoot) {
+      return;
+    }
+    const logDir = path.join(this.workspaceRoot, ".flightpath", "logs");
+    try {
+      fs.mkdirSync(logDir, { recursive: true });
+      this.logFilePath = path.join(logDir, `flightpath-${Date.now()}.log`);
+      fs.writeFileSync(this.logFilePath, ""); // truncate on each session start
+      this.cleanupOldLogs(logDir);
+    } catch {
+      this.logFilePath = undefined;
+    }
+  }
+
+  /**
+   * Write or remove the `.flightpath/.diagnostic-logs` flag file.
+   * Hook scripts check this file to decide whether to write debug logs.
+   */
+  private static writeDiagnosticFlagFile(enabled: boolean): void {
+    if (!this.workspaceRoot) {
+      return;
+    }
+    const flagPath = path.join(
+      this.workspaceRoot,
+      ".flightpath",
+      DIAGNOSTIC_FLAG_FILE
+    );
+    try {
+      if (enabled) {
+        const flightpathDir = path.join(this.workspaceRoot, ".flightpath");
+        fs.mkdirSync(flightpathDir, { recursive: true });
+        fs.writeFileSync(flagPath, "");
+      } else {
+        fs.unlinkSync(flagPath);
+      }
+    } catch {
+      // Best-effort: ignore if .flightpath/ doesn't exist or file already gone
+    }
+  }
+
+  /**
+   * Delete log files older than LOG_CLEANUP_MAX_AGE_MS in the given directory.
+   * Best-effort: silently ignores failures.
+   */
+  private static cleanupOldLogs(logDir: string): void {
+    try {
+      const files = fs.readdirSync(logDir);
+      const now = Date.now();
+      for (const file of files) {
+        if (!file.startsWith("flightpath-") || !file.endsWith(".log")) {
+          continue;
+        }
+        // Skip the single-file hook debug logs — hooks manage those themselves
+        if (file.includes("-debug.log")) {
+          continue;
+        }
+        const filePath = path.join(logDir, file);
+        try {
+          const stats = fs.statSync(filePath);
+          if (now - stats.mtimeMs > LOG_CLEANUP_MAX_AGE_MS) {
+            fs.unlinkSync(filePath);
+          }
+        } catch {
+          // Ignore per-file errors
+        }
+      }
+    } catch {
+      // Ignore cleanup errors entirely
     }
   }
 
@@ -180,8 +282,12 @@ export class Log {
     if (this.outputChannel) {
       this.outputChannel.appendLine(message);
     }
-    if (IS_DEV_MODE && this.logFilePath) {
-      fs.appendFileSync(this.logFilePath, message + "\n");
+    if (this.logFilePath) {
+      try {
+        fs.appendFileSync(this.logFilePath, message + "\n");
+      } catch {
+        // Ignore file write errors
+      }
     }
   }
 
@@ -193,8 +299,12 @@ export class Log {
     if (this.outputChannel) {
       this.outputChannel.append(message);
     }
-    if (IS_DEV_MODE && this.logFilePath) {
-      fs.appendFileSync(this.logFilePath, message);
+    if (this.logFilePath) {
+      try {
+        fs.appendFileSync(this.logFilePath, message);
+      } catch {
+        // Ignore file write errors
+      }
     }
   }
 
@@ -228,9 +338,13 @@ export class Log {
     if (IS_DEV_MODE) {
       // Also log to console for development
       console.log(`FlightPath ${logEntry}`);
+    }
 
-      if (this.logFilePath) {
+    if (this.logFilePath) {
+      try {
         fs.appendFileSync(this.logFilePath, logEntry + "\n");
+      } catch {
+        // Ignore file write errors
       }
     }
   }

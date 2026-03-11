@@ -40,22 +40,33 @@ const FLIGHTPATH_DIR = ".flightpath";
 const LOGS_DIR = "logs";
 const QUEUE_DIR = ".queue";
 
-// Initialize log file
+// Initialize log file only when diagnostic logging is explicitly enabled.
+// FLIGHTPATH_DIAGNOSTIC_LOGS=true is passed by the extension when
+// flightpath.enableDiagnosticLogs is on. NODE_ENV=development enables it in dev.
 const workspaceRoot = process.env.FLIGHTPATH_WORKSPACE || process.cwd();
-const logDir = path.join(workspaceRoot, FLIGHTPATH_DIR, LOGS_DIR);
-const logFile = path.join(logDir, `flightpath-mcp-${Date.now()}.log`);
+const diagnosticLogsEnabled =
+  process.env.FLIGHTPATH_DIAGNOSTIC_LOGS === "true" ||
+  process.env.NODE_ENV === "development";
 
-// Ensure log directory exists
-try {
-  fsSync.mkdirSync(logDir, { recursive: true });
-} catch (error) {
-  // Ignore errors, will fail on first log write if directory can't be created
+let logFile: string | null = null;
+if (diagnosticLogsEnabled) {
+  const logDir = path.join(workspaceRoot, FLIGHTPATH_DIR, LOGS_DIR);
+  try {
+    fsSync.mkdirSync(logDir, { recursive: true });
+    logFile = path.join(logDir, `flightpath-mcp-${Date.now()}.log`);
+  } catch {
+    // Proceed without file logging if directory creation fails
+  }
 }
 
 /**
- * Log to file (TUI captures stderr, so we write to .flightpath/logs/)
+ * Log to file (TUI captures stderr, so we write to .flightpath/logs/).
+ * No-op when diagnostic logging is disabled.
  */
 function log(...args: any[]) {
+  if (!logFile) {
+    return;
+  }
   const timestamp = new Date().toISOString();
   const message = `[${timestamp}] ${args
     .map((arg) =>
@@ -65,9 +76,8 @@ function log(...args: any[]) {
 
   try {
     fsSync.appendFileSync(logFile, message, "utf8");
-  } catch (error) {
-    // Fallback to stderr if file write fails
-    console.error(message.trim());
+  } catch {
+    // Ignore file write errors silently
   }
 }
 
