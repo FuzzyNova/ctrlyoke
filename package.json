@@ -490,19 +490,6 @@
             "Plan → Implement → Review → Docs → Commit"
           ]
         },
-        "flightpath.enableContextAwareness": {
-          "order": 15,
-          "type": "boolean",
-          "default": true,
-          "description": "Enable context-aware prompt generation"
-        },
-        "flightpath.autoAttachFiles": {
-          "order": 16,
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically attach files referenced with #file: syntax",
-          "markdownDescription": "Automatically process `#file:` references in prompts and attach file content as XML. Disable to send prompts as-is without automatic file attachment."
-        },
         "flightpath.respectGitignoreForCompletions": {
           "order": 17,
           "type": "boolean",
@@ -768,6 +755,7 @@
             "claude-opus-4.5",
             "claude-sonnet-4",
             "gemini-3-pro-preview",
+            "gpt-5.4",
             "gpt-5.3-codex",
             "gpt-5.2-codex",
             "gpt-5.2",
@@ -971,13 +959,6 @@
           "default": false,
           "description": "[Dynamic Queue] Allow AI to extend workflow by adding prompts during execution",
           "markdownDescription": "Allow the AI to extend the workflow by adding prompts to the `.flightpath.json` file during execution. This enables adaptive autonomous workflows where the AI can break down complex tasks dynamically."
-        },
-        "flightpath.dynamicExtensionOnLastPrompt": {
-          "order": 601,
-          "type": "boolean",
-          "default": true,
-          "description": "[Dynamic Queue] Allow extension on last prompt when no explicit flags are set",
-          "markdownDescription": "When dynamic queues are enabled, allow extension on the last prompt when no explicit `allowDynamicExtension` flags are set. Disable this if your last prompt should never extend the queue (e.g., 'commit changes')."
         },
         "flightpath.maxQueueSize": {
           "order": 602,

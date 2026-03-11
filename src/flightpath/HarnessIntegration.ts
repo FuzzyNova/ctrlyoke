@@ -255,7 +255,9 @@ export abstract class HarnessIntegration {
       sections.push(skillContent);
     }
     if (agentContent) {
-      sections.push(`<agentInstructions>\n${agentContent}\n</agentInstructions>`);
+      sections.push(
+        `<agentInstructions>\n${agentContent}\n</agentInstructions>`
+      );
     }
     if (attachmentSection) {
       sections.push(attachmentSection);
@@ -267,13 +269,9 @@ export abstract class HarnessIntegration {
 
   /**
    * Expand context references in the prompt and return ONLY the attachment XML section.
-   * Returns an empty string if auto-attachment is disabled, no workspace is available,
-   * or no file references are found in the prompt.
+   * Returns an empty string if no workspace is available or no file references are found.
    */
   private async expandContextOnly(userPromptText: string): Promise<string> {
-    if (!ConfigurationUtils.shouldAutoAttachFiles()) {
-      return "";
-    }
     const workspaceRoot = this.getWorkspaceRoot();
     if (!workspaceRoot) {
       Log.warn("No workspace root, skipping context expansion");
@@ -291,7 +289,9 @@ export abstract class HarnessIntegration {
       if (expanded.endsWith(suffix)) {
         return expanded.slice(0, -suffix.length);
       }
-      Log.warn("Unexpected ContextExpander output format, skipping attachments");
+      Log.warn(
+        "Unexpected ContextExpander output format, skipping attachments"
+      );
       return "";
     } catch (error) {
       Log.error("Error expanding context:", error);
@@ -307,9 +307,14 @@ export abstract class HarnessIntegration {
     resolvedSkills: string[],
     workspaceRoot: string | undefined
   ): Promise<string | null> {
-    const content = await SkillExpander.expandSkills(resolvedSkills, workspaceRoot);
+    const content = await SkillExpander.expandSkills(
+      resolvedSkills,
+      workspaceRoot
+    );
     if (content) {
-      Log.debug(`🎯 Skills [${resolvedSkills.join(", ")}] instructions added to prompt`);
+      Log.debug(
+        `🎯 Skills [${resolvedSkills.join(", ")}] instructions added to prompt`
+      );
     } else {
       Log.warn(
         `⚠️ No skills resolved from [${resolvedSkills.join(", ")}], continuing without skills`
@@ -326,15 +331,19 @@ export abstract class HarnessIntegration {
     resolvedAgent: string,
     workspaceRoot: string | undefined
   ): Promise<string | null> {
-    const content = await AgentExpander.expandAgent(resolvedAgent, workspaceRoot);
+    const content = await AgentExpander.expandAgent(
+      resolvedAgent,
+      workspaceRoot
+    );
     if (content) {
       Log.debug(`🤖 Agent "${resolvedAgent}" instructions added to prompt`);
     } else {
-      Log.warn(`⚠️ Agent "${resolvedAgent}" not found, continuing without agent`);
+      Log.warn(
+        `⚠️ Agent "${resolvedAgent}" not found, continuing without agent`
+      );
     }
     return content;
   }
-
 
   /**
    * Gather prior prompt response texts based on the priorContext field.
@@ -505,7 +514,8 @@ export abstract class HarnessIntegration {
     // When the setting is enabled and this prompt resumes an existing session,
     // the harness already has those instructions from the first message.
     const omitAgentsAndSkills =
-      isResumedSession && ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume();
+      isResumedSession &&
+      ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume();
 
     if (omitAgentsAndSkills) {
       Log.debug(
@@ -555,9 +565,6 @@ export abstract class HarnessIntegration {
     if (shouldEnableDynamicExtension) {
       const shouldInject = shouldInjectExtensionInstructions(
         prompt,
-        promptIndex,
-        allPrompts,
-        dynamicQueueConfig.dynamicExtensionOnLastPrompt,
         shouldEnableDynamicExtension
       );
 
@@ -594,7 +601,9 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
       sections.push(skillContent);
     }
     if (agentContent) {
-      sections.push(`<agentInstructions>\n${agentContent}\n</agentInstructions>`);
+      sections.push(
+        `<agentInstructions>\n${agentContent}\n</agentInstructions>`
+      );
     }
     if (priorContextBlock) {
       sections.push(priorContextBlock);

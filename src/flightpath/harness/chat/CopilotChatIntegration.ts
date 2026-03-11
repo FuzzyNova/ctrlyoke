@@ -783,16 +783,9 @@ export class CopilotChatIntegration extends HarnessIntegration {
     resolvedAgent?: string,
     resolvedSkills?: string[]
   ): Promise<string> {
-    // Check if auto-attachment is enabled
-    const autoAttach = ConfigurationUtils.shouldAutoAttachFiles();
-
     // Check if native attachments are enabled for chat mode
     const useNativeAttachments =
       ConfigurationUtils.shouldUseChatNativeAttachments();
-
-    if (!autoAttach) {
-      return prompt.prompt.trim();
-    }
 
     if (useNativeAttachments) {
       // Native attachments: use VS Code commands to attach files directly.

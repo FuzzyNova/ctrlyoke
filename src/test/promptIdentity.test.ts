@@ -84,173 +84,61 @@ suite("PromptIdentity Tests", () => {
   });
 
   suite("shouldInjectExtensionInstructions", () => {
-    test("should return true when allowDynamicExtension is explicitly true", () => {
-      const prompts: PromptItem[] = [
-        { prompt: "First", allowDynamicExtension: true },
-        { prompt: "Second" },
-      ];
+    test("should return true when prompt allowDynamicExtension is explicitly true", () => {
       assert.strictEqual(
-        shouldInjectExtensionInstructions(prompts[0], 0, prompts, true),
+        shouldInjectExtensionInstructions({
+          prompt: "First",
+          allowDynamicExtension: true,
+        }),
         true
       );
     });
 
-    test("should return false when allowDynamicExtension is explicitly false", () => {
-      const prompts: PromptItem[] = [
-        { prompt: "First", allowDynamicExtension: false },
-      ];
+    test("should return false when prompt allowDynamicExtension is explicitly false", () => {
       assert.strictEqual(
-        shouldInjectExtensionInstructions(prompts[0], 0, prompts, true),
+        shouldInjectExtensionInstructions({
+          prompt: "First",
+          allowDynamicExtension: false,
+        }),
         false
       );
     });
 
-    test("should return true for last prompt when no explicit flags exist", () => {
-      const prompts: PromptItem[] = [
-        { prompt: "First" },
-        { prompt: "Second" },
-        { prompt: "Last" },
-      ];
-      // Last prompt (index 2) should get instructions
+    test("should return false when prompt has no allowDynamicExtension flag", () => {
       assert.strictEqual(
-        shouldInjectExtensionInstructions(prompts[2], 2, prompts, true),
-        true
-      );
-    });
-
-    test("should return false for non-last prompts when no explicit flags", () => {
-      const prompts: PromptItem[] = [
-        { prompt: "First" },
-        { prompt: "Second" },
-        { prompt: "Last" },
-      ];
-      // First prompt (index 0) should NOT get instructions
-      assert.strictEqual(
-        shouldInjectExtensionInstructions(prompts[0], 0, prompts, true),
-        false
-      );
-      // Second prompt (index 1) should NOT get instructions
-      assert.strictEqual(
-        shouldInjectExtensionInstructions(prompts[1], 1, prompts, true),
+        shouldInjectExtensionInstructions({ prompt: "Last" }),
         false
       );
     });
 
-    test("should respect dynamicExtensionOnLastPrompt=false setting", () => {
-      const prompts: PromptItem[] = [{ prompt: "Last" }];
-      // Even though it's the last prompt, setting is false
+    test("should return false when global allowDynamicExtension is false, even with prompt-level true", () => {
       assert.strictEqual(
-        shouldInjectExtensionInstructions(prompts[0], 0, prompts, false),
-        false
-      );
-    });
-
-    test("should not auto-inject on last prompt if any prompt has explicit flag", () => {
-      const prompts: PromptItem[] = [
-        { prompt: "First", allowDynamicExtension: true },
-        { prompt: "Last" }, // No explicit flag, but First has one
-      ];
-      // Last prompt should NOT auto-inject because First has an explicit flag
-      assert.strictEqual(
-        shouldInjectExtensionInstructions(prompts[1], 1, prompts, true),
-        false
-      );
-    });
-
-    test("should handle single prompt workflow", () => {
-      const prompts: PromptItem[] = [{ prompt: "Only prompt" }];
-      assert.strictEqual(
-        shouldInjectExtensionInstructions(prompts[0], 0, prompts, true),
-        true
-      );
-    });
-
-    test("should handle explicit false on last prompt with true on first", () => {
-      const prompts: PromptItem[] = [
-        { prompt: "First", allowDynamicExtension: true },
-        { prompt: "Last", allowDynamicExtension: false },
-      ];
-      // First should inject, Last should not
-      assert.strictEqual(
-        shouldInjectExtensionInstructions(prompts[0], 0, prompts, true),
-        true
-      );
-      assert.strictEqual(
-        shouldInjectExtensionInstructions(prompts[1], 1, prompts, true),
-        false
-      );
-    });
-
-    suite("new path: global allowDynamicExtension parameter", () => {
-      function makePrompt(
-        index: number,
-        overrides?: Partial<PromptItem>
-      ): PromptItem {
-        return { prompt: `Prompt ${index}`, ...overrides };
-      }
-
-      test("should return false when global allowDynamicExtension=false regardless of prompt flags", () => {
-        const prompts = [makePrompt(0), makePrompt(1), makePrompt(2)];
-        // Last prompt, dynamicExtensionOnLastPrompt=true, but global=false
-        assert.strictEqual(
-          shouldInjectExtensionInstructions(
-            prompts[2],
-            2,
-            prompts,
-            true,
-            false
-          ),
+        shouldInjectExtensionInstructions(
+          { prompt: "First", allowDynamicExtension: true },
           false
-        );
-      });
+        ),
+        false
+      );
+    });
 
-      test("should return true when prompt.allowDynamicExtension=true and global=true", () => {
-        const prompts = [makePrompt(0, { allowDynamicExtension: true })];
-        assert.strictEqual(
-          shouldInjectExtensionInstructions(
-            prompts[0],
-            0,
-            prompts,
-            false,
-            true
-          ),
+    test("should return true when global allowDynamicExtension is true and prompt-level is true", () => {
+      assert.strictEqual(
+        shouldInjectExtensionInstructions(
+          { prompt: "First", allowDynamicExtension: true },
           true
-        );
-      });
+        ),
+        true
+      );
+    });
 
-      test("new path: should auto-inject on last prompt when global=true and no explicit prompt flags", () => {
-        const prompts = [makePrompt(0), makePrompt(1), makePrompt(2)];
-        assert.strictEqual(
-          shouldInjectExtensionInstructions(prompts[2], 2, prompts, true, true),
+    test("should return false for prompts without explicit flag regardless of position in queue", () => {
+      assert.strictEqual(
+        shouldInjectExtensionInstructions(
+          { prompt: "Last prompt, no flag" },
           true
-        );
-      });
-
-      test("new path: should NOT auto-inject if any prompt has explicit true flag", () => {
-        // First prompt has explicit true, last prompt has no flag — anyExplicitFlag suppresses auto-inject on last
-        const prompts = [
-          makePrompt(0, { allowDynamicExtension: true }),
-          makePrompt(1),
-          makePrompt(2),
-        ];
-        assert.strictEqual(
-          shouldInjectExtensionInstructions(prompts[2], 2, prompts, true, true),
-          false
-        );
-      });
-
-      test("new path: explicit false on prompt does not suppress auto-inject (unlike legacy path)", () => {
-        // In new path, prompt-level false is ignored; last-prompt auto still fires when global=true and no anyExplicitFlag
-        const prompts = [
-          makePrompt(0),
-          makePrompt(1),
-          makePrompt(2, { allowDynamicExtension: false }),
-        ];
-        assert.strictEqual(
-          shouldInjectExtensionInstructions(prompts[2], 2, prompts, true, true),
-          true
-        );
-      });
+        ),
+        false
+      );
     });
   });
 });

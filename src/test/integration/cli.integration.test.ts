@@ -72,13 +72,11 @@ suite("CLI Integration Tests", () => {
     // Test that all our settings exist
     const promptsDir = config.get<string>("promptsDirectory");
     const scriptTimeout = config.get<number>("scriptTimeout");
-    const autoAttach = config.get<boolean>("autoAttachFiles");
     const integrationMode = config.get<string>("harness");
     const cliModel = config.get<string>("copilotCliModel");
 
     assert.strictEqual(typeof promptsDir, "string");
     assert.strictEqual(typeof scriptTimeout, "number");
-    assert.strictEqual(typeof autoAttach, "boolean");
     assert.strictEqual(typeof integrationMode, "string");
     assert.strictEqual(typeof cliModel, "string");
   });

@@ -168,10 +168,6 @@ export const ConfigurationUtils = {
 
     return {
       enabled: config.get<boolean>("enableDynamicQueue", false),
-      dynamicExtensionOnLastPrompt: config.get<boolean>(
-        "dynamicExtensionOnLastPrompt",
-        true
-      ),
       maxQueueSize: config.get<number>("maxQueueSize", 100),
       maxWorkflowExecutionTime: config.get<number>(
         "maxWorkflowExecutionTime",
@@ -217,13 +213,6 @@ export const ConfigurationUtils = {
    */
   getDefaultWorkflowFormat(): "yaml" | "json" {
     return getConfig().get<"yaml" | "json">("defaultWorkflowFormat", "yaml");
-  },
-
-  /**
-   * Check if files should be auto-attached
-   */
-  shouldAutoAttachFiles(): boolean {
-    return getConfig().get<boolean>("autoAttachFiles", true);
   },
 
   /**

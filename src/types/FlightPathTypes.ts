@@ -218,7 +218,6 @@ export interface QueueState {
  */
 export interface DynamicQueueConfig {
   enabled: boolean;
-  dynamicExtensionOnLastPrompt: boolean;
   maxQueueSize: number; // 1-1000 (default: 100)
   maxWorkflowExecutionTime: number; // In seconds (-1 or 3600-604800, default: 86400)
   unlimitedMode: boolean; // If true, ignore maxQueueSize AND maxWorkflowExecutionTime
