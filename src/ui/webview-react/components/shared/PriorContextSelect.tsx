@@ -13,6 +13,8 @@ interface PriorContextSelectProps {
   onChange: (value: PriorContext | undefined) => void;
   /** Show "Default (inherit from workflow)" as the first option. Use in prompt-level UI. */
   showDefault?: boolean;
+  /** Override label for the Default option (e.g. "Default (None)" or "Default (Previous prompt)"). */
+  defaultLabel?: string;
   /**
    * When provided, adds a "Select specific prompts" section with checkboxes.
    * Omit for workflow-level UI where specific prompt indices don't apply.
@@ -21,7 +23,7 @@ interface PriorContextSelectProps {
   dropdownMaxHeight?: string;
 }
 
-type KeywordMode =
+export type KeywordMode =
   | "default"
   | "none"
   | "previous"
@@ -29,7 +31,7 @@ type KeywordMode =
   | "finalPromptAll"
   | "finalPromptPrevious";
 
-const KEYWORD_LABELS: Record<KeywordMode, string> = {
+export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
   default: "Default (inherit from workflow)",
   none: "None",
   previous: "Previous prompt",
@@ -63,6 +65,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   value,
   onChange,
   showDefault = false,
+  defaultLabel,
   priorPrompts,
   dropdownMaxHeight = "60vh",
 }) => {
@@ -110,8 +113,10 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
       customIndices.length === 0
         ? "Custom (edit in YAML)"
         : `Custom: [${customIndices.join(", ")}]`;
+  } else if (mode === "default" && defaultLabel) {
+    buttonLabel = defaultLabel;
   } else {
-    buttonLabel = KEYWORD_LABELS[mode];
+    buttonLabel = PRIOR_CONTEXT_KEYWORD_LABELS[mode];
   }
 
   const keywords: KeywordMode[] = showDefault
@@ -151,6 +156,10 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           {/* Keyword options */}
           {keywords.map((k) => {
             const isSelected = mode === k;
+            const label =
+              k === "default" && defaultLabel
+                ? defaultLabel
+                : PRIOR_CONTEXT_KEYWORD_LABELS[k];
             return (
               <button
                 key={k}
@@ -167,7 +176,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
                     isSelected ? "visible" : "invisible"
                   }`}
                 />
-                <span>{KEYWORD_LABELS[k]}</span>
+                <span>{label}</span>
               </button>
             );
           })}

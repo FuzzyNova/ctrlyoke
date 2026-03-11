@@ -6,7 +6,7 @@ import {
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
-import { type HarnessId } from "../../types/messages";
+import { type HarnessId, type PriorContext } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
@@ -17,6 +17,7 @@ import {
   HARNESS_DISPLAY_NAMES,
   harnessCategory,
   PriorContextSelect,
+  PRIOR_CONTEXT_KEYWORD_LABELS,
 } from "../shared";
 
 /** Max height for dropdowns inside the PropertiesDrawer (px, not vh — the drawer has a fixed height). */
@@ -287,6 +288,16 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     workflowProperties.allowDynamicExtension ??
     globalSettings.allowDynamicExtension;
   const defaultAllowDynamicLabel = `Default (${resolvedAllowDynamic ? "Yes" : "No"})`;
+
+  const resolvedPriorContext =
+    workflowProperties.priorContext ?? (globalSettings.priorContext as PriorContext);
+  const defaultPriorContextLabel = (() => {
+    if (Array.isArray(resolvedPriorContext)) {
+      return `Default (Custom: [${resolvedPriorContext.join(", ")}])`;
+    }
+    const label = PRIOR_CONTEXT_KEYWORD_LABELS[resolvedPriorContext as keyof typeof PRIOR_CONTEXT_KEYWORD_LABELS];
+    return `Default (${label ?? resolvedPriorContext})`;
+  })();
 
   // End condition expanded state
   const [endConditionExpanded, setEndConditionExpanded] = useState(
@@ -616,6 +627,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 value={properties.priorContext}
                 onChange={(v) => setProperty("priorContext", v)}
                 showDefault
+                defaultLabel={defaultPriorContextLabel}
                 priorPrompts={priorPrompts}
                 dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />

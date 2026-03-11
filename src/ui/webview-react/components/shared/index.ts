@@ -22,5 +22,7 @@ export {
 } from "./HarnessDropdown";
 export {
   PriorContextSelect,
+  PRIOR_CONTEXT_KEYWORD_LABELS,
   type PriorPrompt,
+  type KeywordMode,
 } from "./PriorContextSelect";
