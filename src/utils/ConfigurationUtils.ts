@@ -528,6 +528,16 @@ export const ConfigurationUtils = {
     return getConfig().get<boolean>("chatUseNativeAttachments", false);
   },
 
+  /**
+   * Check if agent and skill instructions should be omitted when resuming a session.
+   * When true (default), agent/skill blocks are skipped for prompts that resume an existing
+   * session — preventing duplicate instructions since the harness already received them
+   * in the first message of that session.
+   */
+  shouldOmitAgentsAndSkillsOnResume(): boolean {
+    return getConfig().get<boolean>("omitAgentsAndSkillsOnResume", true);
+  },
+
   // ============================================================
   // SETTINGS UPDATE HELPERS
   // ============================================================

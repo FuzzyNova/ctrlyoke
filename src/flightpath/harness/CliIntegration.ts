@@ -1587,7 +1587,8 @@ export class CliIntegration extends HarnessIntegration {
         resolvedProperties?.agent,
         resolvedProperties?.skills,
         resolvedProperties?.priorContext,
-        workflowContext?.promptQueue?.getFinalPromptResponseTexts()
+        workflowContext?.promptQueue?.getFinalPromptResponseTexts(),
+        !!resolvedSessionId
       );
 
       this.lastFullPrompt = finalPromptText;

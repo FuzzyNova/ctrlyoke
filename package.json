@@ -577,6 +577,13 @@
           "description": "[All Modes] Default skills for new workflows",
           "markdownDescription": "Default skills applied to new workflows. Skills are discovered from `.flightpath/skills/` and `.claude/skills/` directories. Set via the **Set as Default** button in the Settings panel."
         },
+        "flightpath.omitAgentsAndSkillsOnResume": {
+          "order": 103.7,
+          "type": "boolean",
+          "default": true,
+          "description": "[All Modes] Omit agent and skill instructions when resuming an existing session",
+          "markdownDescription": "When enabled (default), agent and skill instructions are **not** injected into prompts that resume an existing session. This prevents duplicate instructions — harnesses already have the agent/skill context from the first message in the session.\n\nDisable this if you need agent and skill instructions re-sent on every prompt regardless of session state."
+        },
         "flightpath.chatInactivityTimeout": {
           "order": 104,
           "type": "number",

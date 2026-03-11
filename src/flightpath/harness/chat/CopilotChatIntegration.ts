@@ -469,7 +469,8 @@ export class CopilotChatIntegration extends HarnessIntegration {
       // Build full prompt (what we'll type into chat)
       const chatPrompt = await this.buildCopilotChatPrompt(
         prompt,
-        workflowContext
+        workflowContext,
+        !shouldStartNewSession
       );
 
       // Determine what text appears in session files so we can verify submission.
@@ -900,7 +901,8 @@ export class CopilotChatIntegration extends HarnessIntegration {
       resolvedProperties?: ResolvedProperties;
       promptQueue?: PromptQueue;
       finalPromptSessionId?: string;
-    }
+    },
+    isResumedSession?: boolean
   ): Promise<string> {
     const promptText = workflowContext
       ? await this.buildPromptWithInstructions(
@@ -911,7 +913,8 @@ export class CopilotChatIntegration extends HarnessIntegration {
           workflowContext.resolvedProperties?.agent,
           workflowContext.resolvedProperties?.skills,
           workflowContext.resolvedProperties?.priorContext,
-          workflowContext.promptQueue?.getFinalPromptResponseTexts()
+          workflowContext.promptQueue?.getFinalPromptResponseTexts(),
+          isResumedSession
         )
       : await this.buildPromptText(prompt);
 

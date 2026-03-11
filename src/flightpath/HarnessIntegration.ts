@@ -479,6 +479,9 @@ export abstract class HarnessIntegration {
    * @param resolvedSkills Resolved skill names for frontmatter injection
    * @param resolvedPriorContext Prior context injection setting
    * @param finalPromptResponseTexts Per-loop finalPrompt response texts (for "finalPromptAll"/"finalPromptPrevious")
+   * @param isResumedSession Whether this prompt is continuing an existing session.
+   *   When true and `flightpath.omitAgentsAndSkillsOnResume` is enabled, agent and skill
+   *   blocks are omitted to prevent duplicate instructions in the resumed session.
    * @returns Fully assembled prompt text
    */
   protected async buildPromptWithInstructions(
@@ -489,7 +492,8 @@ export abstract class HarnessIntegration {
     resolvedAgent?: string,
     resolvedSkills?: string[],
     resolvedPriorContext?: PriorContext,
-    finalPromptResponseTexts?: string[]
+    finalPromptResponseTexts?: string[],
+    isResumedSession?: boolean
   ): Promise<string> {
     const userPromptText = prompt.prompt.trim();
     const workspaceRoot = this.getWorkspaceRoot();
@@ -497,16 +501,29 @@ export abstract class HarnessIntegration {
     // 1. Attachment section (file/directory context references)
     const attachmentSection = await this.expandContextOnly(userPromptText);
 
+    // Determine whether to omit agent/skill blocks for this prompt.
+    // When the setting is enabled and this prompt resumes an existing session,
+    // the harness already has those instructions from the first message.
+    const omitAgentsAndSkills =
+      isResumedSession && ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume();
+
+    if (omitAgentsAndSkills) {
+      Log.debug(
+        "⏭️ Omitting agent and skill blocks (resuming existing session)"
+      );
+    }
+
     // 2. Skill block
     const skillContent =
-      resolvedSkills?.length
+      !omitAgentsAndSkills && resolvedSkills?.length
         ? await this.expandSkillBlock(resolvedSkills, workspaceRoot)
         : null;
 
     // 3. Agent block
-    const agentContent = resolvedAgent
-      ? await this.expandAgentBlock(resolvedAgent, workspaceRoot)
-      : null;
+    const agentContent =
+      !omitAgentsAndSkills && resolvedAgent
+        ? await this.expandAgentBlock(resolvedAgent, workspaceRoot)
+        : null;
 
     // 4. Prior context block
     let priorContextBlock = "";
