@@ -67,7 +67,14 @@
       "Bash(opencode:*)",
       "Bash(opencode mcp:*)",
       "Bash(codex mcp:*)",
-      "WebFetch(domain:stackoverflow.com)"
+      "WebFetch(domain:stackoverflow.com)",
+      "WebFetch(domain:www.electronjs.org)",
+      "WebFetch(domain:blog.vscode.dev)",
+      "WebFetch(domain:reactjs.org)",
+      "WebFetch(domain:legacy.reactjs.org)",
+      "WebFetch(domain:devblogs.microsoft.com)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:npmjs.com)"
     ],
     "deny": [],
     "ask": []

@@ -83,6 +83,20 @@ const FormField: React.FC<{
 );
 
 /**
+ * Layout row: 2-column grid in wide mode, transparent fragment in narrow mode
+ * so the parent's space-y-4 controls spacing uniformly.
+ */
+const Row: React.FC<{ narrow: boolean; children: React.ReactNode }> = ({
+  narrow,
+  children,
+}) =>
+  narrow ? (
+    <>{children}</>
+  ) : (
+    <div className="grid grid-cols-2 gap-4">{children}</div>
+  );
+
+/**
  * SettingsPanel Component
  *
  * Collapsible panel for configuring:
@@ -150,6 +164,9 @@ export const SettingsPanel: React.FC<{
 
   // Narrow detection for footer toggle buttons
   const [footerRef, isFooterNarrow] = useElementNarrow<HTMLDivElement>(300);
+
+  // Wide detection for 2-column body layout (matches PropertiesDrawer breakpoint)
+  const [bodyRef, isBodyNarrow] = useElementNarrow<HTMLDivElement>(440);
 
   // Get current effective values
   const effectiveHarness = getEffectiveHarness();
@@ -535,291 +552,296 @@ export const SettingsPanel: React.FC<{
 
       {/* Body - Scrollable (pointer-events disabled in CLI watch mode) */}
       <div
+        ref={bodyRef}
         className={`flex-1 overflow-y-auto${isCLIManaged ? " pointer-events-none opacity-60 select-none" : ""}`}
       >
         <div className="px-4 py-3 space-y-4">
-          {/* Harness */}
-          <FormField
-            label={`Harness${harnessCategory(effectiveHarness) === "cli" ? " (CLI)" : harnessCategory(effectiveHarness) === "chat" ? " (Chat)" : ""}`}
-            htmlFor="settings-harness"
-            description="AI harness for execution"
-            setAsDefaultButton={
-              <SetAsDefaultButton
-                property="harness"
-                show={isDifferentFromGlobal("harness")}
-                onSetDefault={() =>
-                  handleSetAsDefault("harness", workflowProperties.harness)
+          {/* Row 1: Harness + Model */}
+          <Row narrow={isBodyNarrow}>
+            <FormField
+              label={`Harness${harnessCategory(effectiveHarness) === "cli" ? " (CLI)" : harnessCategory(effectiveHarness) === "chat" ? " (Chat)" : ""}`}
+              htmlFor="settings-harness"
+              description="AI harness for execution"
+              setAsDefaultButton={
+                <SetAsDefaultButton
+                  property="harness"
+                  show={isDifferentFromGlobal("harness")}
+                  onSetDefault={() =>
+                    handleSetAsDefault("harness", workflowProperties.harness)
+                  }
+                />
+              }
+            >
+              <HarnessDropdown
+                id="settings-harness"
+                value={effectiveHarness}
+                onChange={handleHarnessChange}
+                harnessStatus={harnessStatus}
+                hiddenValues={
+                  hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? []
+                }
+                onHideOption={(v) =>
+                  hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
+                }
+                onUnhideOption={(v) =>
+                  unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
                 }
               />
-            }
-          >
-            <HarnessDropdown
-              id="settings-harness"
-              value={effectiveHarness}
-              onChange={handleHarnessChange}
-              harnessStatus={harnessStatus}
-              hiddenValues={
-                hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? []
-              }
-              onHideOption={(v) =>
-                hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
-              }
-              onUnhideOption={(v) =>
-                unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
-              }
-            />
-          </FormField>
+            </FormField>
 
-          {/* Model */}
-          <FormField
-            label="Model"
-            htmlFor="settings-model"
-            description="AI model for execution"
-            setAsDefaultButton={
-              <SetAsDefaultButton
-                property="model"
-                show={isDifferentFromGlobal("model")}
-                onSetDefault={() =>
-                  handleSetAsDefault("model", workflowProperties.model)
-                }
-              />
-            }
-          >
-            <CustomSelect
-              id="settings-model"
-              value={effectiveModel}
-              onChange={handleModelChange}
-              options={
-                currentHarnessModels.length === 0
-                  ? [{ value: "", label: "Loading models...", disabled: true }]
-                  : currentHarnessModels.map((m) => ({
-                      value: m.value,
-                      label: m.label,
-                    }))
+            <FormField
+              label="Model"
+              htmlFor="settings-model"
+              description="AI model for execution"
+              setAsDefaultButton={
+                <SetAsDefaultButton
+                  property="model"
+                  show={isDifferentFromGlobal("model")}
+                  onSetDefault={() =>
+                    handleSetAsDefault("model", workflowProperties.model)
+                  }
+                />
               }
-              namespace={modelNamespace}
-              hiddenValues={hiddenDropdownOptions[modelNamespace] ?? []}
-              onHideOption={(v) => hideDropdownOption(modelNamespace, v)}
-              onUnhideOption={(v) => unhideDropdownOption(modelNamespace, v)}
-              nonHideableValues={["default", ""]}
-            />
-          </FormField>
+            >
+              <CustomSelect
+                id="settings-model"
+                value={effectiveModel}
+                onChange={handleModelChange}
+                options={
+                  currentHarnessModels.length === 0
+                    ? [{ value: "", label: "Loading models...", disabled: true }]
+                    : currentHarnessModels.map((m) => ({
+                        value: m.value,
+                        label: m.label,
+                      }))
+                }
+                namespace={modelNamespace}
+                hiddenValues={hiddenDropdownOptions[modelNamespace] ?? []}
+                onHideOption={(v) => hideDropdownOption(modelNamespace, v)}
+                onUnhideOption={(v) => unhideDropdownOption(modelNamespace, v)}
+                nonHideableValues={["default", ""]}
+              />
+            </FormField>
+          </Row>
 
-          {/* Agent */}
-          <FormField
-            label="Agent"
-            htmlFor="settings-agent"
-            description="Custom agent file (.agent.md)"
-            setAsDefaultButton={
-              <SetAsDefaultButton
-                property="agent"
-                show={isDifferentFromGlobal("agent")}
-                onSetDefault={() =>
-                  handleSetAsDefault("agent", workflowProperties.agent)
+          {/* Row 2: Agent + Skills */}
+          <Row narrow={isBodyNarrow}>
+            <FormField
+              label="Agent"
+              htmlFor="settings-agent"
+              description="Custom agent file (.agent.md)"
+              setAsDefaultButton={
+                <SetAsDefaultButton
+                  property="agent"
+                  show={isDifferentFromGlobal("agent")}
+                  onSetDefault={() =>
+                    handleSetAsDefault("agent", workflowProperties.agent)
+                  }
+                />
+              }
+            >
+              <CustomSelect
+                id="settings-agent"
+                value={effectiveAgent || ""}
+                onChange={handleAgentChange}
+                options={[
+                  { value: "", label: "None (default behavior)" },
+                  ...availableAgents.map((agent) => ({
+                    value: agent.name || agent.path,
+                    label: `${agent.name || "Unknown Agent"}${agent.description ? ` - ${agent.description}` : ""}`,
+                  })),
+                ]}
+                namespace={DROPDOWN_NAMESPACES.AGENT}
+                hiddenValues={
+                  hiddenDropdownOptions[DROPDOWN_NAMESPACES.AGENT] ?? []
+                }
+                onHideOption={(v) =>
+                  hideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
+                }
+                onUnhideOption={(v) =>
+                  unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
                 }
               />
-            }
-          >
-            <CustomSelect
-              id="settings-agent"
-              value={effectiveAgent || ""}
-              onChange={handleAgentChange}
-              options={[
-                { value: "", label: "None (default behavior)" },
-                ...availableAgents.map((agent) => ({
-                  value: agent.name || agent.path,
-                  label: `${agent.name || "Unknown Agent"}${agent.description ? ` - ${agent.description}` : ""}`,
-                })),
-              ]}
-              namespace={DROPDOWN_NAMESPACES.AGENT}
-              hiddenValues={
-                hiddenDropdownOptions[DROPDOWN_NAMESPACES.AGENT] ?? []
-              }
-              onHideOption={(v) =>
-                hideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
-              }
-              onUnhideOption={(v) =>
-                unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
-              }
-            />
-          </FormField>
+            </FormField>
 
-          {/* Skills */}
-          <FormField
-            label="Skills"
-            htmlFor="settings-skills"
-            description="Attach skills (frontmatter only, progressive disclosure)"
-            setAsDefaultButton={
-              <SetAsDefaultButton
-                property="skills"
-                show={isDifferentFromGlobal("skills")}
-                onSetDefault={() =>
-                  handleSetAsDefault("skills", workflowProperties.skills)
+            <FormField
+              label="Skills"
+              htmlFor="settings-skills"
+              description="Attach skills (frontmatter only, progressive disclosure)"
+              setAsDefaultButton={
+                <SetAsDefaultButton
+                  property="skills"
+                  show={isDifferentFromGlobal("skills")}
+                  onSetDefault={() =>
+                    handleSetAsDefault("skills", workflowProperties.skills)
+                  }
+                />
+              }
+            >
+              <MultiCheckboxDropdown
+                id="settings-skills"
+                selectedValues={effectiveSkills}
+                onChange={handleSkillsChange}
+                options={availableSkills.map((s) => ({
+                  value: s.name,
+                  label: s.name,
+                  description: s.description || undefined,
+                }))}
+                placeholder="No skills selected"
+                namespace={DROPDOWN_NAMESPACES.SKILLS}
+                hiddenValues={
+                  hiddenDropdownOptions[DROPDOWN_NAMESPACES.SKILLS] ?? []
+                }
+                onHideOption={(v) =>
+                  hideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
+                }
+                onUnhideOption={(v) =>
+                  unhideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
                 }
               />
-            }
-          >
-            <MultiCheckboxDropdown
-              id="settings-skills"
-              selectedValues={effectiveSkills}
-              onChange={handleSkillsChange}
-              options={availableSkills.map((s) => ({
-                value: s.name,
-                label: s.name,
-                description: s.description || undefined,
-              }))}
-              placeholder="No skills selected"
-              namespace={DROPDOWN_NAMESPACES.SKILLS}
-              hiddenValues={
-                hiddenDropdownOptions[DROPDOWN_NAMESPACES.SKILLS] ?? []
-              }
-              onHideOption={(v) =>
-                hideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
-              }
-              onUnhideOption={(v) =>
-                unhideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
-              }
-            />
-            {effectiveSkills.length > 0 && (
-              <p className="text-[10px] text-description-fg mt-0.5">
-                Active: {effectiveSkills.join(", ")}
-              </p>
-            )}
-          </FormField>
+              {effectiveSkills.length > 0 && (
+                <p className="text-[10px] text-description-fg mt-0.5">
+                  Active: {effectiveSkills.join(", ")}
+                </p>
+              )}
+            </FormField>
+          </Row>
 
-          {/* Additional Args */}
-          <FormField
-            label="Additional Args"
-            htmlFor="settings-append-args"
-            description="Extra CLI flags appended to FlightPath's standard argument set. Only applies to CLI harnesses."
-            setAsDefaultButton={
-              <SetAsDefaultButton
-                property="additionalArgs"
-                show={isDifferentFromGlobal("additionalArgs")}
-                onSetDefault={() =>
-                  handleSetAsDefault(
-                    "additionalArgs",
-                    workflowProperties.additionalArgs,
-                    effectiveHarness
-                  )
-                }
-              />
-            }
-          >
-            <input
-              type="text"
-              id="settings-append-args"
-              value={workflowProperties.additionalArgs ?? ""}
-              onChange={(e) => handleAdditionalArgsChange(e.target.value)}
-              placeholder="e.g. --effort high --max-turns 10"
-              className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
-            />
-          </FormField>
-
-          {/* Resume Session & Session ID */}
-          <FormField
-            label="Resume Session"
-            htmlFor="settings-resume-session"
-            description="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number)."
-            setAsDefaultButton={
-              <SetAsDefaultButton
-                property="resumeSession"
-                show={isDifferentFromGlobal("resumeSession")}
-                onSetDefault={() =>
-                  handleSetAsDefault(
-                    "resumeSession",
-                    workflowProperties.resumeSession
-                  )
-                }
-              />
-            }
-          >
-            <CustomSelect
-              id="settings-resume-session"
-              value={effectiveResumeSession ? "yes" : "no"}
-              onChange={(v) => handleResumeSessionChange(v === "yes")}
-              options={[
-                { value: "no", label: "No - New session" },
-                { value: "yes", label: "Yes - Resume previous" },
-              ]}
-            />
-            {/* Session ID input — visible only when resume session is enabled */}
-            <div
-              className={`transition-all duration-300 ${
-                effectiveResumeSession
-                  ? "max-h-[40px] opacity-100 mt-1"
-                  : "max-h-0 opacity-0 overflow-hidden"
-              }`}
+          {/* Row 3: Additional Args + Resume Session (with paired Session ID) */}
+          <Row narrow={isBodyNarrow}>
+            <FormField
+              label="Additional Args"
+              htmlFor="settings-append-args"
+              description="Extra CLI flags appended to FlightPath's standard argument set. Only applies to CLI harnesses."
+              setAsDefaultButton={
+                <SetAsDefaultButton
+                  property="additionalArgs"
+                  show={isDifferentFromGlobal("additionalArgs")}
+                  onSetDefault={() =>
+                    handleSetAsDefault(
+                      "additionalArgs",
+                      workflowProperties.additionalArgs,
+                      effectiveHarness
+                    )
+                  }
+                />
+              }
             >
               <input
                 type="text"
-                id="settings-session-id"
-                value={sessionIdInput}
-                onChange={(e) => handleSessionIdChange(e.target.value)}
-                placeholder="Enter session ID or prompt number"
-                className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border h-7"
-                title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
+                id="settings-append-args"
+                value={workflowProperties.additionalArgs ?? ""}
+                onChange={(e) => handleAdditionalArgsChange(e.target.value)}
+                placeholder="e.g. --effort high --max-turns 10"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
               />
-            </div>
-          </FormField>
+            </FormField>
 
-          {/* Prior Context */}
-          <FormField
-            label="Prior Context"
-            htmlFor="settings-prior-context"
-            description="Inject prior prompt outputs into each prompt's text before sending to the AI"
-            setAsDefaultButton={
-              <SetAsDefaultButton
-                property="priorContext"
-                show={isDifferentFromGlobal("priorContext")}
-                onSetDefault={() =>
-                  handleSetAsDefault(
-                    "priorContext",
-                    workflowProperties.priorContext
-                  )
-                }
+            <FormField
+              label="Resume Session"
+              htmlFor="settings-resume-session"
+              description="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number)."
+              setAsDefaultButton={
+                <SetAsDefaultButton
+                  property="resumeSession"
+                  show={isDifferentFromGlobal("resumeSession")}
+                  onSetDefault={() =>
+                    handleSetAsDefault(
+                      "resumeSession",
+                      workflowProperties.resumeSession
+                    )
+                  }
+                />
+              }
+            >
+              <CustomSelect
+                id="settings-resume-session"
+                value={effectiveResumeSession ? "yes" : "no"}
+                onChange={(v) => handleResumeSessionChange(v === "yes")}
+                options={[
+                  { value: "no", label: "No - New session" },
+                  { value: "yes", label: "Yes - Resume previous" },
+                ]}
               />
-            }
-          >
-            <PriorContextSelect
-              id="settings-prior-context"
-              value={effectivePriorContext}
-              onChange={handlePriorContextChange}
-              priorPrompts={prompts.map((p, i) => ({
-                number: i + 1,
-                name: p.name,
-              }))}
-            />
-          </FormField>
+              {/* Session ID input — visible only when resume session is enabled */}
+              <div
+                className={`transition-all duration-300 ${
+                  effectiveResumeSession
+                    ? "max-h-[40px] opacity-100 mt-1"
+                    : "max-h-0 opacity-0 overflow-hidden"
+                }`}
+              >
+                <input
+                  type="text"
+                  id="settings-session-id"
+                  value={sessionIdInput}
+                  onChange={(e) => handleSessionIdChange(e.target.value)}
+                  placeholder="Enter session ID or prompt number"
+                  className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border h-7"
+                  title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
+                />
+              </div>
+            </FormField>
+          </Row>
 
-          {/* Allow Dynamic Extension */}
-          <FormField
-            label="Allow Dynamic Extension"
-            htmlFor="settings-dynamic-ext"
-            description="Allow harness to extend the workflow queue. This will add FlightPath's MCP configuration to the harness, which exposes functions for extending and querying the workflow queue."
-            setAsDefaultButton={
-              <SetAsDefaultButton
-                property="allowDynamicExtension"
-                show={isDifferentFromGlobal("allowDynamicExtension")}
-                onSetDefault={() =>
-                  handleSetAsDefault(
-                    "allowDynamicExtension",
-                    workflowProperties.allowDynamicExtension
-                  )
-                }
+          {/* Row 4: Prior Context + Allow Dynamic Extension */}
+          <Row narrow={isBodyNarrow}>
+            <FormField
+              label="Prior Context"
+              htmlFor="settings-prior-context"
+              description="Inject prior prompt outputs into each prompt's text before sending to the AI"
+              setAsDefaultButton={
+                <SetAsDefaultButton
+                  property="priorContext"
+                  show={isDifferentFromGlobal("priorContext")}
+                  onSetDefault={() =>
+                    handleSetAsDefault(
+                      "priorContext",
+                      workflowProperties.priorContext
+                    )
+                  }
+                />
+              }
+            >
+              <PriorContextSelect
+                id="settings-prior-context"
+                value={effectivePriorContext}
+                onChange={handlePriorContextChange}
+                priorPrompts={prompts.map((p, i) => ({
+                  number: i + 1,
+                  name: p.name,
+                }))}
               />
-            }
-          >
-            <CustomSelect
-              id="settings-dynamic-ext"
-              value={effectiveAllowDynamicExtension ? "yes" : "no"}
-              onChange={(v) => handleDynamicExtensionChange(v === "yes")}
-              options={[
-                { value: "no", label: "No - Disable" },
-                { value: "yes", label: "Yes - Allow AI to extend" },
-              ]}
-            />
-          </FormField>
+            </FormField>
+
+            <FormField
+              label="Allow Dynamic Extension"
+              htmlFor="settings-dynamic-ext"
+              description="Allow harness to extend the workflow queue. This will add FlightPath's MCP configuration to the harness, which exposes functions for extending and querying the workflow queue."
+              setAsDefaultButton={
+                <SetAsDefaultButton
+                  property="allowDynamicExtension"
+                  show={isDifferentFromGlobal("allowDynamicExtension")}
+                  onSetDefault={() =>
+                    handleSetAsDefault(
+                      "allowDynamicExtension",
+                      workflowProperties.allowDynamicExtension
+                    )
+                  }
+                />
+              }
+            >
+              <CustomSelect
+                id="settings-dynamic-ext"
+                value={effectiveAllowDynamicExtension ? "yes" : "no"}
+                onChange={(v) => handleDynamicExtensionChange(v === "yes")}
+                options={[
+                  { value: "no", label: "No - Disable" },
+                  { value: "yes", label: "Yes - Allow AI to extend" },
+                ]}
+              />
+            </FormField>
+          </Row>
 
           {/* End Condition Section */}
           {/* Enable checkbox */}
@@ -848,93 +870,95 @@ export const SettingsPanel: React.FC<{
                 : "max-h-0 opacity-0 overflow-hidden"
             }`}
           >
-            {/* Script */}
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="settings-end-script"
-                className="text-[11px] font-semibold text-description-fg"
-              >
-                Script:
-              </label>
-              <input
-                type="text"
-                id="settings-end-script"
-                value={(endCondition as any).script || ""}
-                onChange={(e) =>
-                  handleEndConditionFieldChange("script", e.target.value)
-                }
-                placeholder="npm test"
-                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-              />
-            </div>
+            {/* Row 1: Script + Returns */}
+            <Row narrow={isBodyNarrow}>
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="settings-end-script"
+                  className="text-[11px] font-semibold text-description-fg"
+                >
+                  Script:
+                </label>
+                <input
+                  type="text"
+                  id="settings-end-script"
+                  value={(endCondition as any).script || ""}
+                  onChange={(e) =>
+                    handleEndConditionFieldChange("script", e.target.value)
+                  }
+                  placeholder="npm test"
+                  className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                />
+              </div>
 
-            {/* Returns */}
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="settings-end-returns"
-                className="text-[11px] font-semibold text-description-fg"
-              >
-                Returns:
-              </label>
-              <input
-                type="text"
-                id="settings-end-returns"
-                value={(endCondition as any).returns || ""}
-                onChange={(e) =>
-                  handleEndConditionFieldChange("returns", e.target.value)
-                }
-                placeholder="true"
-                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-              />
-            </div>
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="settings-end-returns"
+                  className="text-[11px] font-semibold text-description-fg"
+                >
+                  Returns:
+                </label>
+                <input
+                  type="text"
+                  id="settings-end-returns"
+                  value={(endCondition as any).returns || ""}
+                  onChange={(e) =>
+                    handleEndConditionFieldChange("returns", e.target.value)
+                  }
+                  placeholder="true"
+                  className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                />
+              </div>
+            </Row>
 
-            {/* Timeout */}
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="settings-end-timeout"
-                className="text-[11px] font-semibold text-description-fg"
-              >
-                Timeout (ms):
-              </label>
-              <input
-                type="number"
-                id="settings-end-timeout"
-                value={(endCondition as any).timeout || 30000}
-                onChange={(e) =>
-                  handleEndConditionFieldChange(
-                    "timeout",
-                    parseInt(e.target.value) || 30000
-                  )
-                }
-                min={1000}
-                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-              />
-            </div>
+            {/* Row 2: Timeout + Max Retries */}
+            <Row narrow={isBodyNarrow}>
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="settings-end-timeout"
+                  className="text-[11px] font-semibold text-description-fg"
+                >
+                  Timeout (ms):
+                </label>
+                <input
+                  type="number"
+                  id="settings-end-timeout"
+                  value={(endCondition as any).timeout || 30000}
+                  onChange={(e) =>
+                    handleEndConditionFieldChange(
+                      "timeout",
+                      parseInt(e.target.value) || 30000
+                    )
+                  }
+                  min={1000}
+                  className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                />
+              </div>
 
-            {/* Max Retries */}
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="settings-end-retries"
-                className="text-[11px] font-semibold text-description-fg"
-              >
-                Max Retries:
-              </label>
-              <input
-                type="number"
-                id="settings-end-retries"
-                value={(endCondition as any).maxRetries ?? 0}
-                onChange={(e) =>
-                  handleEndConditionFieldChange(
-                    "maxRetries",
-                    parseInt(e.target.value) ?? 0
-                  )
-                }
-                min={-1}
-                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-              />
-            </div>
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="settings-end-retries"
+                  className="text-[11px] font-semibold text-description-fg"
+                >
+                  Max Retries:
+                </label>
+                <input
+                  type="number"
+                  id="settings-end-retries"
+                  value={(endCondition as any).maxRetries ?? 0}
+                  onChange={(e) =>
+                    handleEndConditionFieldChange(
+                      "maxRetries",
+                      parseInt(e.target.value) ?? 0
+                    )
+                  }
+                  min={-1}
+                  className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                />
+              </div>
+            </Row>
 
-            {/* Retry Prompt */}
+            {/* Retry Prompt (full width) */}
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="settings-end-retry-prompt"
@@ -956,7 +980,7 @@ export const SettingsPanel: React.FC<{
               />
             </div>
 
-            {/* Resume Session on Retry */}
+            {/* Resume Session on Retry (full width) */}
             <div className="flex items-center gap-2 mt-1">
               <input
                 type="checkbox"
