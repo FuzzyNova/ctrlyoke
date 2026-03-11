@@ -216,8 +216,8 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize FlightPath orchestrator with React webview provider
     workflowOrchestrator = new WorkflowOrchestrator(context, webviewProvider);
 
-    // Set manager reference in webview provider (for getting current state)
-    webviewProvider.setFlightPathManager(workflowOrchestrator);
+    // Set orchestrator reference in webview provider (for getting current state)
+    webviewProvider.setWorkflowOrchestrator(workflowOrchestrator);
 
     // Share OutputHistoryManager with webview provider (single instance)
     webviewProvider.setOutputHistoryManager(

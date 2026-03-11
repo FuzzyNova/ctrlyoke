@@ -127,40 +127,19 @@ Before publishing, ensure:
 - [ ] Maximum 30 keywords in `package.json`
 - [ ] No sensitive data or API keys in source
 
-### Create .vscodeignore
+### `.vscodeignore`
 
-Add a `.vscodeignore` file to exclude unnecessary files from the package:
+The `.vscodeignore` file already exists at the project root and is correctly configured. It whitelists only the files needed at runtime:
 
-```
-.vscode/**
-.vscode-test/**
-out/**
-!out/extension.js
-!out/templates/**
-!out/schemas/**
-node_modules/**
-src/**
-.gitignore
-.yarnrc
-esbuild.js
-vsc-extension-quickstart.md
-**/tsconfig.json
-**/eslint.config.mjs
-**/*.map
-**/*.ts
-**/.vscode-test.*
+- `out/extension.js` — extension entry point
+- `out/mcp-server.js` — MCP server (ships with extension)
+- `out/ui/**` — React webview bundle
+- `out/scripts/**` — CLI hook scripts
+- `out/templates/**`, `out/schemas/**` — workflow templates and schemas
 
-# Development files
-docs/**
-manual-test/**
-logs/**
-prompts/**
-.github/**
-DEVELOPMENT.md
-images/README.md
-```
+Everything else in `out/**` (including `out/cli.js`) is excluded. The CLI is distributed separately via npm.
 
-**Note:** The actual `.vscodeignore` file already exists in the project root.
+**Note:** Do not edit `.vscodeignore` without running `vsce ls` to verify the output.
 
 ---
 

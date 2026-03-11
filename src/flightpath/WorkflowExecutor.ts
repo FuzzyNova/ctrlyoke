@@ -110,7 +110,7 @@ type StepExecutionKey = `queue:${number}` | `final:${number}`;
  *      prompts, the outer loop repeats (queue → finalPrompt → queue → …).
  *
  * Pause/resume is implemented by holding the response promise until
- * `resumePendingResponse()` is called by `FlightPathManager`.
+ * `resumePendingResponse()` is called by `WorkflowOrchestrator`.
  */
 export class WorkflowExecutor {
   private pendingResponseResolver: ((text: string) => void) | null = null;
@@ -979,7 +979,7 @@ export class WorkflowExecutor {
     return this.isWaitingForResponse;
   }
 
-  /** Called by `FlightPathManager.resume()` when there is a held response. */
+  /** Called by `WorkflowOrchestrator.resume()` when there is a held response. */
   resumePendingResponse(): void {
     if (this.pendingResponseResolver && this.pendingResponseText !== null) {
       const resolver = this.pendingResponseResolver;

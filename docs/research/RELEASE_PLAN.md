@@ -513,16 +513,16 @@ jobs:
 | 3.2     | Marketplace metadata in package.json                            | 3     | 30 min | No       |         |
 | 3.3     | Add screenshots/GIF                                             | 3     | 1–2 hr | No       |         |
 | 3.4     | Verify GitHub repo is public                                    | 3     | 5 min  | No       |         |
-| 4.1     | Delete dead `CliTerminalFormatter.ts`                           | 4     | 5 min  | No       |         |
-| 4.2     | Relocate `chat-log-investigation.ts`                            | 4     | 10 min | No       |         |
-| 4.3     | Fix `console.*` bypassing log system                            | 4     | 1 hr   | No       |         |
-| 4.4     | Fix webview `console.log` in `useVsCodeApi.ts`                  | 4     | 15 min | No       |         |
-| 4.5     | Sync stale model lists                                          | 4     | 1–2 hr | No       |         |
-| 4.6     | Remove dead exports from `ModelConstants.ts`                    | 4     | 15 min | No       |         |
-| 4.7     | Collapse duplicate function pairs in `ModelRegistry.ts`         | 4     | 15 min | No       |         |
-| 4.8     | Update stale `FlightPathManager` comment references             | 4     | 30 min | No       |         |
-| 4.9     | Clean up unimplemented message types in `DashboardConstants.ts` | 4     | 30 min | No       |         |
-| 4.10    | Delete `archive/` directory                                     | 4     | 5 min  | No       |         |
+| 4.1     | Delete dead `CliTerminalFormatter.ts`                           | 4     | 5 min  | No       | ✅ DONE |
+| 4.2     | Relocate `chat-log-investigation.ts`                            | 4     | 10 min | No       | ✅ DONE |
+| 4.3     | Fix `console.*` bypassing log system                            | 4     | 1 hr   | No       | ✅ DONE |
+| 4.4     | Fix webview `console.log` in `useVsCodeApi.ts`                  | 4     | 15 min | No       | ✅ DONE |
+| 4.5     | Sync stale model lists                                          | 4     | 1–2 hr | No       | ✅ DONE |
+| 4.6     | Remove dead exports from `ModelConstants.ts`                    | 4     | 15 min | No       | ✅ DONE |
+| 4.7     | Collapse duplicate function pairs in `ModelRegistry.ts`         | 4     | 15 min | No       | ✅ DONE |
+| 4.8     | Update stale `FlightPathManager` references                     | 4     | 30 min | No       | ✅ DONE |
+| 4.9     | Clean up unimplemented message types in `DashboardConstants.ts` | 4     | 30 min | No       | ✅ DONE |
+| 4.10    | Delete `archive/` directory                                     | 4     | 5 min  | No       | ✅ DONE |
 | 5.1–5.4 | Publish extension + verify + optional featured listing          | 5     | 1 hr   | —        |         |
 | 6.1–6.3 | Post-release: GitHub Release, Open VSX, CI/CD                   | 6     | 2–3 hr | —        |         |
 | 7.1     | Decide single vs. separate CLI package structure                | 7     | 30 min | **YES**  |         |

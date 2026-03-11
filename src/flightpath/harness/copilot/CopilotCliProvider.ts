@@ -14,7 +14,7 @@ import { CopilotLogParser } from "./CopilotLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import {
-  getCliSupportedModelIds,
+  getCliSupportedModelIdsSync,
   initializeModelRegistry,
   isCliModelSupported,
   isRegistryInitialized,
@@ -239,7 +239,7 @@ export class CopilotCliProvider implements ICliProvider {
     }
 
     // Model not supported - warn user and fallback
-    const supportedModels = getCliSupportedModelIds();
+    const supportedModels = getCliSupportedModelIdsSync();
     const message = `Model "${requestedModel}" not supported by Copilot CLI. Using default: ${defaultModel}`;
     Log.warn(`⚠️ ${message}`);
 

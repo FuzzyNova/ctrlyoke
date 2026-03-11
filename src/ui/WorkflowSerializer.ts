@@ -388,7 +388,7 @@ export class WorkflowSerializer {
   ): Promise<void> {
     const manager = this.getManager();
     if (!manager) {
-      Log.error("FlightPathManager not initialized");
+      Log.error("WorkflowOrchestrator not initialized");
       return;
     }
 

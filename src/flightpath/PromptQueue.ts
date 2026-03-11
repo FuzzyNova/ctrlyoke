@@ -359,7 +359,7 @@ export class PromptQueue {
   /**
    * Start queue execution
    * Note: This only sets the queue state to running. The state change event
-   * triggers FlightPathManager.onQueueStateChanged() which starts actual execution.
+   * triggers WorkflowOrchestrator.onQueueStateChanged() which starts actual execution.
    */
   async start(): Promise<void> {
     if (this.state.status === EXECUTION_STATES.RUNNING) {
@@ -404,7 +404,7 @@ export class PromptQueue {
 
   /**
    * Resume queue execution
-   * Note: This only updates queue state. FlightPathManager checks the state
+   * Note: This only updates queue state. WorkflowOrchestrator checks the state
    * and continues execution from where it was paused or stopped.
    *
    * PAUSED: Current prompt completed, will continue to next prompt
@@ -606,7 +606,7 @@ export class PromptQueue {
 
   /**
    * Mark current prompt as sent
-   * Note: Does NOT automatically move to next prompt. FlightPathManager handles
+   * Note: Does NOT automatically move to next prompt. WorkflowOrchestrator handles
    * end condition evaluation and decides when to move to next prompt (including retries).
    */
   async markCurrentAsSent(): Promise<void> {
@@ -620,13 +620,13 @@ export class PromptQueue {
 
     this.emitStateChange();
 
-    // FlightPathManager now handles end condition evaluation and workflow progression
+    // WorkflowOrchestrator handles end condition evaluation and workflow progression
     // Do NOT set up timers or automatically move to next prompt here
   }
 
   /**
    * Mark current prompt as completed and move to next
-   * Note: This only updates state. FlightPathManager's loop handles actual execution progression.
+   * Note: This only updates state. WorkflowOrchestrator's loop handles actual execution progression.
    */
   async completeCurrentAndMoveNext(): Promise<void> {
     if (!this.hasNext()) {
@@ -807,7 +807,7 @@ export class PromptQueue {
   }
 
   /**
-   * Mark workflow as completed (for manual completion by FlightPathManager)
+   * Mark workflow as completed (called by WorkflowOrchestrator)
    */
   async markCompleted(): Promise<void> {
     this.state.status = EXECUTION_STATES.COMPLETED;
@@ -818,7 +818,7 @@ export class PromptQueue {
   }
 
   /**
-   * Mark workflow as errored (for manual error handling by FlightPathManager)
+   * Mark workflow as errored (called by WorkflowOrchestrator)
    */
   async markErrored(): Promise<void> {
     this.state.status = EXECUTION_STATES.ERROR;

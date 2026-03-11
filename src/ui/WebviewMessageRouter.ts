@@ -38,7 +38,7 @@ export class WebviewMessageRouter {
     private readonly postMessage: PostMessageFn,
     private readonly settingsSync: WebviewSettingsSync,
     private readonly serializer: WorkflowSerializer,
-    private readonly getManager: () => WorkflowOrchestrator | undefined,
+    private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
     private readonly callbacks: WebviewRouterCallbacks
   ) {
     this.handlers = this.buildDispatchTable();
@@ -83,9 +83,9 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.READY, async () => {
       Log.debug("Received READY from React — sending INIT");
       this.settingsSync.sendInitialState();
-      const manager = this.getManager();
-      if (manager) {
-        await manager.setDashboardReady();
+      const orchestrator = this.getOrchestrator();
+      if (orchestrator) {
+        await orchestrator.setDashboardReady();
       }
     });
 
@@ -308,8 +308,8 @@ export class WebviewMessageRouter {
 
     // ── Multi-workflow coordination ──────────────────────────────────────
     table.set(MESSAGE_TYPES.GET_WORKFLOWS_LIST, () => {
-      const manager = this.getManager();
-      const summaries = manager?.getWorkflowSummaries() ?? [];
+      const orchestrator = this.getOrchestrator();
+      const summaries = orchestrator?.getWorkflowSummaries() ?? [];
       Log.trace(
         `[GET_WORKFLOWS_LIST] returning ${summaries.length} summaries: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState})`).join(", ") || "(none)"}`
       );
@@ -322,7 +322,7 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.SWITCH_WORKFLOW, (message) => {
       const { workflowId } = message;
       if (workflowId) {
-        this.getManager()?.setActiveWorkflow(workflowId);
+        this.getOrchestrator()?.setActiveWorkflow(workflowId);
       }
     });
 
@@ -330,28 +330,28 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.PAUSE_WORKFLOW, async (message) => {
       const { workflowId } = message;
       if (workflowId) {
-        await this.getManager()?.pauseWorkflow(workflowId);
+        await this.getOrchestrator()?.pauseWorkflow(workflowId);
       }
     });
 
     table.set(MESSAGE_TYPES.RESUME_WORKFLOW, async (message) => {
       const { workflowId } = message;
       if (workflowId) {
-        await this.getManager()?.resumeWorkflow(workflowId);
+        await this.getOrchestrator()?.resumeWorkflow(workflowId);
       }
     });
 
     table.set(MESSAGE_TYPES.STOP_WORKFLOW, async (message) => {
       const { workflowId } = message;
       if (workflowId) {
-        await this.getManager()?.stopWorkflow(workflowId);
+        await this.getOrchestrator()?.stopWorkflow(workflowId);
       }
     });
 
     table.set(MESSAGE_TYPES.STOP_CLI_RUN, async (message) => {
       const { workflowId } = message;
       if (workflowId) {
-        await this.getManager()?.stopCliSession(workflowId);
+        await this.getOrchestrator()?.stopCliSession(workflowId);
       }
     });
 
@@ -359,7 +359,7 @@ export class WebviewMessageRouter {
       const { filePath } = message;
       if (filePath) {
         const currentWorkingFilePath =
-          this.getManager()?.getQueueState()?.workingFilePath;
+          this.getOrchestrator()?.getQueueState()?.workingFilePath;
         await this.serializer.handleRemoveWorkflowHistory(filePath);
         // If the deleted file was the currently viewed working file, clear the stale
         // path reference so ensureEphemeralWorkingFile() creates a fresh one on next
@@ -370,7 +370,7 @@ export class WebviewMessageRouter {
           path.normalize(filePath).toLowerCase() ===
             path.normalize(currentWorkingFilePath).toLowerCase()
         ) {
-          this.getManager()?.clearWorkingFilePath();
+          this.getOrchestrator()?.clearWorkingFilePath();
         }
       }
     });
@@ -390,16 +390,16 @@ export class WebviewMessageRouter {
   // ============================================================================
 
   private async handleExecutePrompt(message: any): Promise<void> {
-    const manager = this.getManager();
-    if (!manager) {
-      Log.error("FlightPathManager not initialized");
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("WorkflowOrchestrator not initialized");
       return;
     }
 
     const { text, properties, action, promptName, forceNewWorkflow } = message;
 
     try {
-      await manager.executeEphemeralPrompt(
+      await orchestrator.executeEphemeralPrompt(
         text,
         properties,
         action,
@@ -415,16 +415,16 @@ export class WebviewMessageRouter {
   }
 
   private async handleUpdatePrompt(message: any): Promise<void> {
-    const manager = this.getManager();
-    if (!manager) {
-      Log.error("FlightPathManager not initialized");
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("WorkflowOrchestrator not initialized");
       return;
     }
 
     const { index, text, properties, clearProperties, promptName } = message;
 
     try {
-      await manager.updatePromptInQueue(
+      await orchestrator.updatePromptInQueue(
         index,
         text,
         properties,
@@ -440,14 +440,14 @@ export class WebviewMessageRouter {
   }
 
   private async handleUpdateFinalPrompt(message: any): Promise<void> {
-    const manager = this.getManager();
-    if (!manager) {
-      Log.error("FlightPathManager not initialized");
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("WorkflowOrchestrator not initialized");
       return;
     }
 
     try {
-      await manager.updateFinalPromptInQueue(
+      await orchestrator.updateFinalPromptInQueue(
         message.finalPrompt ?? null,
         message.clearProperties
       );
@@ -460,16 +460,16 @@ export class WebviewMessageRouter {
   }
 
   private async handleDeletePrompt(message: any): Promise<void> {
-    const manager = this.getManager();
-    if (!manager) {
-      Log.error("FlightPathManager not initialized");
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("WorkflowOrchestrator not initialized");
       return;
     }
 
     const { index } = message;
 
     try {
-      await manager.deletePromptFromQueue(index);
+      await orchestrator.deletePromptFromQueue(index);
     } catch (error) {
       Log.error("Failed to delete prompt:", error);
       vscode.window.showErrorMessage(
@@ -479,14 +479,14 @@ export class WebviewMessageRouter {
   }
 
   private async handleResetWorkflowState(): Promise<void> {
-    const manager = this.getManager();
-    if (!manager) {
-      Log.error("FlightPathManager not initialized");
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("WorkflowOrchestrator not initialized");
       return;
     }
 
     try {
-      await manager.resetWorkflowState();
+      await orchestrator.resetWorkflowState();
     } catch (error) {
       Log.error("Failed to reset workflow state:", error);
       vscode.window.showErrorMessage(

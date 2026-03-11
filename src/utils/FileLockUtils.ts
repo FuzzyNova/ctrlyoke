@@ -1,4 +1,5 @@
 import * as fs from "fs/promises";
+import { Log } from "./Log";
 
 const LOCK_FILE_EXTENSION = ".lock";
 const LOCK_TIMEOUT_MS = 5000;
@@ -61,10 +62,7 @@ async function releaseLock(lockPath: string): Promise<void> {
   } catch (error) {
     // Ignore ENOENT (already deleted by another process) but log other errors
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.warn(
-        `[FileLockUtils] Failed to release lock ${lockPath}:`,
-        error
-      );
+      Log.warn(`[FileLockUtils] Failed to release lock ${lockPath}: ${error}`);
     }
   }
 }

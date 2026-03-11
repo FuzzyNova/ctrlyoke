@@ -24,15 +24,12 @@ export const MESSAGE_TYPES = {
   EXECUTION_COMPLETED: "executionCompleted",
   QUEUE_EXTENDED: "queueExtended",
   PROMPTS_EXTENDED: "promptsExtended", // Send updated prompt list after queue extension
-  PROMPTS_APPENDED: "promptsAppended", // Reserved: defined for future use (no handler exists yet)
   PROMPT_DELETED: "promptDeleted", // Notify webview that a prompt was deleted
   UPDATE_FINAL_PROMPT: "updateFinalPrompt", // Bidirectional: webview updates workflow-level finalPrompt; extension pushes latest finalPrompt
   FINAL_PROMPT_STATUS_CHANGED: "finalPromptStatusChanged", // Granular runtime status updates for finalPrompt phase
   FINAL_PROMPT_OUTPUT: "finalPromptOutput", // CLI output for finalPrompt keyed by loop index
   QUEUE_SIZE_LIMIT_REACHED: "queueSizeLimitReached",
   EXECUTION_TIME_LIMIT_REACHED: "executionTimeLimitReached",
-  DYNAMIC_QUEUE_ENABLED: "dynamicQueueEnabled",
-  DYNAMIC_QUEUE_DISABLED: "dynamicQueueDisabled",
 
   // Webview -> Extension (Logging)
   LOG_MESSAGE: "logMessage", // Forward webview log entries to extension Log class (payload: { level: LogLevel, message: string })
@@ -269,6 +266,7 @@ export const CLAUDE_CLI_MODELS = [
   { value: "sonnet", label: "Sonnet" },
   { value: "sonnet[1m]", label: "Sonnet 1M Context" },
   { value: "opus", label: "Opus" },
+  { value: "opus[1m]", label: "Opus 1M Context" },
   { value: "haiku", label: "Haiku" },
 ] as const;
 
@@ -276,10 +274,12 @@ export const CLAUDE_CLI_MODELS = [
 // CODEX CLI MODELS - Static options (from codex /model command)
 // ============================================================================
 export const CODEX_CLI_MODELS = [
+  { value: "gpt-5.3-codex", label: "GPT 5.3 Codex" },
+  { value: "gpt-5.4", label: "GPT 5.4" },
   { value: "gpt-5.2-codex", label: "GPT 5.2 Codex" },
   { value: "gpt-5.1-codex-max", label: "GPT 5.1 Codex Max" },
-  { value: "gpt-5.1-codex-mini", label: "GPT 5.1 Codex Mini" },
   { value: "gpt-5.2", label: "GPT 5.2" },
+  { value: "gpt-5.1-codex-mini", label: "GPT 5.1 Codex Mini" },
 ] as const;
 
 // ============================================================================

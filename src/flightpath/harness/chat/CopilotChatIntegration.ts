@@ -1027,7 +1027,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       await vscode.commands.executeCommand("workbench.action.chat.cancel");
       Log.info("⏹️ Cancelled");
 
-      // Fire responseComplete so FlightPathManager knows cancellation finished
+      // Fire responseComplete so WorkflowOrchestrator knows cancellation finished
       // This allows state transition from CANCELLING to IDLE
       this.responseCompleteEmitter.fire("Chat cancelled");
     } catch (error) {

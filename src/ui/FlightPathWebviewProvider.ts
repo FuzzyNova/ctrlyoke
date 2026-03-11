@@ -38,7 +38,7 @@ export type { HarnessStatus } from "./WebviewSettingsSync";
  */
 export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
-  private flightPathManager?: WorkflowOrchestrator;
+  private workflowOrchestrator?: WorkflowOrchestrator;
   private outputHistoryManager?: OutputHistoryManager;
   private configChangeDisposable?: vscode.Disposable;
   private modelsLoadedDisposable?: vscode.Disposable;
@@ -65,22 +65,22 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
 
     // Bind postMessage to use the view reference
     const postMessage = (message: any) => this.postMessage(message);
-    const getManager = () => this.flightPathManager;
+    const getOrchestrator = () => this.workflowOrchestrator;
     const getOutputHistoryManager = () => this.outputHistoryManager;
 
     // Create delegate classes
-    this.settingsSync = new WebviewSettingsSync(postMessage, getManager);
+    this.settingsSync = new WebviewSettingsSync(postMessage, getOrchestrator);
     this.serializer = new WorkflowSerializer(
       postMessage,
       templateManager,
-      getManager,
+      getOrchestrator,
       getOutputHistoryManager
     );
     this.router = new WebviewMessageRouter(
       postMessage,
       this.settingsSync,
       this.serializer,
-      getManager,
+      getOrchestrator,
       {
         handleClearWorkflow: () => this.handleClearWorkflow(),
         updateWorkflowName: (name: string) => this.updateWorkflowName(name),
@@ -539,14 +539,6 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public notifyDynamicQueueEnabled(enabled: boolean): void {
-    this.postMessage({
-      type: enabled
-        ? MESSAGE_TYPES.DYNAMIC_QUEUE_ENABLED
-        : MESSAGE_TYPES.DYNAMIC_QUEUE_DISABLED,
-    });
-  }
-
   public updateWorkflowName(workflowName: string): void {
     this.postMessage({
       type: MESSAGE_TYPES.WORKFLOW_NAME_UPDATED,
@@ -612,8 +604,8 @@ window.vscodeApi = acquireVsCodeApi();
   /**
    * Set WorkflowOrchestrator reference (called after construction to avoid circular dependency)
    */
-  public setFlightPathManager(manager: WorkflowOrchestrator): void {
-    this.flightPathManager = manager;
+  public setWorkflowOrchestrator(manager: WorkflowOrchestrator): void {
+    this.workflowOrchestrator = manager;
   }
 
   /**
@@ -704,13 +696,13 @@ window.vscodeApi = acquireVsCodeApi();
    * Clear the current workflow. Public because it's called by extension commands.
    */
   public async handleClearWorkflow(): Promise<void> {
-    if (!this.flightPathManager) {
-      Log.error("FlightPathManager not initialized");
+    if (!this.workflowOrchestrator) {
+      Log.error("WorkflowOrchestrator not initialized");
       return;
     }
 
     this.settingsSync.sendWorkflowUnloadedToSettings();
-    await this.flightPathManager.clearWorkflow();
+    await this.workflowOrchestrator.clearWorkflow();
     this.updateFileSelected("New Workflow", [], undefined);
     Log.info("Workflow cleared, ready for new prompts");
   }

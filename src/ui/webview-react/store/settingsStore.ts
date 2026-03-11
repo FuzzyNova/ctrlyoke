@@ -6,6 +6,10 @@ import {
   type HarnessStatusString,
   type PriorContext,
 } from "../types/messages";
+import {
+  CLAUDE_CLI_MODELS as CLAUDE_CLI_MODEL_LIST,
+  CODEX_CLI_MODELS as CODEX_CLI_MODEL_LIST,
+} from "@root/types/DashboardConstants";
 
 /**
  * Model option for dropdowns
@@ -158,25 +162,9 @@ interface SettingsActions {
   resetSettings: () => void;
 }
 
-/**
- * Claude CLI static models (no programmatic way to query)
- */
-const CLAUDE_CLI_MODELS: ModelOption[] = [
-  { value: "sonnet", label: "Sonnet" },
-  { value: "sonnet[1m]", label: "Sonnet 1M Context" },
-  { value: "opus", label: "Opus" },
-  { value: "haiku", label: "Haiku" },
-];
-
-/**
- * Codex CLI static models
- */
-const CODEX_CLI_MODELS: ModelOption[] = [
-  { value: "gpt-5.2-codex", label: "GPT 5.2 Codex" },
-  { value: "gpt-5.1-codex-max", label: "GPT 5.1 Codex Max" },
-  { value: "gpt-5.1-codex-mini", label: "GPT 5.1 Codex Mini" },
-  { value: "gpt-5.2", label: "GPT 5.2" },
-];
+// Model lists imported from DashboardConstants (single source of truth)
+const CLAUDE_CLI_MODELS: ModelOption[] = [...CLAUDE_CLI_MODEL_LIST];
+const CODEX_CLI_MODELS: ModelOption[] = [...CODEX_CLI_MODEL_LIST];
 
 const initialGlobalSettings: GlobalSettings = {
   harness: HARNESS_IDS.COPILOT_CLI as HarnessId,

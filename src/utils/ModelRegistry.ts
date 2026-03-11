@@ -332,18 +332,9 @@ export function getAvailableModelsSync(): CopilotModel[] {
 }
 
 /**
- * Get Copilot CLI-supported model IDs
- * Returns models that work with Copilot CLI
+ * Get Copilot CLI-supported model IDs synchronously (from cache, populated at startup)
  *
  * @returns Array of CLI-supported model IDs
- */
-export function getCliSupportedModelIds(): string[] {
-  return cachedCopilotCliModelIds;
-}
-
-/**
- * Get CLI-supported model IDs synchronously
- * Alias for getCliSupportedModelIds
  */
 export function getCliSupportedModelIdsSync(): string[] {
   return cachedCopilotCliModelIds;
@@ -383,14 +374,7 @@ export function isClaudeCliModel(modelId: string): boolean {
 }
 
 /**
- * Get OpenCode model IDs (discovered via `opencode models --verbose`, falls back to static list)
- */
-export function getOpenCodeModelIds(): string[] {
-  return cachedOpenCodeModelIds;
-}
-
-/**
- * Get OpenCode model IDs synchronously (from cache)
+ * Get OpenCode model IDs synchronously (from cache, populated at startup)
  */
 export function getOpenCodeModelIdsSync(): string[] {
   return cachedOpenCodeModelIds;

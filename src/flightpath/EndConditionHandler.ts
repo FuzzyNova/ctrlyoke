@@ -65,7 +65,7 @@ export interface EndConditionHandlerResult {
  * - Handle validation failures (output doesn't match expected)
  * - Provide user interaction for error recovery decisions
  *
- * This class extracts retry/validation logic from FlightPathManager to improve
+ * This class extracts retry/validation logic from WorkflowOrchestrator to improve
  * separation of concerns and testability.
  */
 export class EndConditionHandler {

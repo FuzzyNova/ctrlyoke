@@ -98,7 +98,7 @@ export class WebviewSettingsSync {
 
   constructor(
     private readonly postMessage: PostMessageFn,
-    private readonly getManager: () => WorkflowOrchestrator | undefined
+    private readonly getOrchestrator: () => WorkflowOrchestrator | undefined
   ) {}
 
   // ============================================================================
@@ -236,13 +236,13 @@ export class WebviewSettingsSync {
    * Read workflow properties from the working file and send to the settings panel.
    */
   async sendWorkflowPropertiesToSettings(): Promise<void> {
-    const manager = this.getManager();
-    if (!manager) {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
       return;
     }
 
     try {
-      const workingFilePath = manager.getQueueState()?.workingFilePath;
+      const workingFilePath = orchestrator.getQueueState()?.workingFilePath;
       if (!workingFilePath) {
         return;
       }
@@ -358,25 +358,25 @@ export class WebviewSettingsSync {
       return;
     }
 
-    const manager = this.getManager();
-    if (!manager) {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
       return;
     }
 
-    if (!manager.getQueueState()?.workingFilePath) {
-      await manager.ensureEphemeralWorkingFile({
+    if (!orchestrator.getQueueState()?.workingFilePath) {
+      await orchestrator.ensureEphemeralWorkingFile({
         initialProperties: properties,
       });
     }
 
-    if (!manager.getQueueState()?.workingFilePath) {
+    if (!orchestrator.getQueueState()?.workingFilePath) {
       Log.warn(
         `handleUpdateWorkflowProperties: no workspace, cannot persist keys [${Object.keys(properties).join(", ")}]`
       );
       return;
     }
 
-    await manager.updateWorkingFileProperties(properties, {
+    await orchestrator.updateWorkingFileProperties(properties, {
       allowDeletes: Object.values(properties).some(
         (propertyValue) => propertyValue === undefined
       ),
@@ -497,12 +497,12 @@ export class WebviewSettingsSync {
    * Get the current workflow state from WorkflowOrchestrator (or defaults).
    */
   getCurrentState(): any {
-    const manager = this.getManager();
-    if (manager) {
-      const queueState = manager.getQueueState();
-      const currentFile = manager.getCurrentPromptFile();
+    const orchestrator = this.getOrchestrator();
+    if (orchestrator) {
+      const queueState = orchestrator.getQueueState();
+      const currentFile = orchestrator.getCurrentPromptFile();
       const workflowName = queueState.workflowName;
-      const promptQueue = manager.getActivePromptQueue();
+      const promptQueue = orchestrator.getActivePromptQueue();
       const finalPrompt = promptQueue?.getWorkflowFile().finalPrompt ?? null;
       const finalPromptRuntime = promptQueue?.getFinalPromptRuntime();
       return {

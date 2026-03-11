@@ -15,10 +15,11 @@ declare global {
 
 let vscodeApi: VsCodeApi | undefined;
 
-// Initialize immediately from window (set by inline script)
+// Initialize immediately from window (set by inline script).
+// No logging here — WebviewLog imports this module (circular dep) and the
+// VS Code API is not yet available at module-load time anyway.
 if (typeof window !== "undefined" && window.vscodeApi && !vscodeApi) {
   vscodeApi = window.vscodeApi;
-  console.log("FlightPath: VS Code API initialized from window.vscodeApi");
 }
 
 export function useVsCodeApi(): VsCodeApi {
@@ -34,7 +35,6 @@ export function useVsCodeApi(): VsCodeApi {
           "VS Code API not available - window.vscodeApi is undefined"
         );
       }
-      console.log("FlightPath: VS Code API loaded in useEffect");
       setApi(vscodeApi);
     }
   }, []);

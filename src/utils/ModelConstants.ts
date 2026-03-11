@@ -107,16 +107,6 @@ export const CLAUDE_CLI_MODELS = [
 ] as const;
 
 /**
- * Alias for CLAUDE_CLI_MODELS (used by some imports)
- */
-export const CLAUDE_CLI_MODEL_ALIASES = CLAUDE_CLI_MODELS;
-
-/**
- * Default model for Claude Code CLI
- */
-export const CLAUDE_CLI_DEFAULT_MODEL = "sonnet" as const;
-
-/**
  * Claude CLI model display names
  */
 export const CLAUDE_CLI_MODEL_LABELS: Record<string, string> = {
@@ -143,11 +133,6 @@ export const CODEX_CLI_MODELS = [
   "gpt-5.2",
   "gpt-5.1-codex-mini",
 ] as const;
-
-/**
- * Default model for Codex CLI
- */
-export const CODEX_CLI_DEFAULT_MODEL = "gpt-5.3-codex" as const;
 
 /**
  * Codex CLI model display names
