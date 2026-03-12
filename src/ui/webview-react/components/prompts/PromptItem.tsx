@@ -62,6 +62,13 @@ interface PromptItemProps {
    * from the original absolute index. Defaults to `index + 1` when omitted.
    */
   displayNumber?: number;
+  /** When true, suppresses the bottom border (e.g. when a BoundaryBar follows) */
+  hideBorderBottom?: boolean;
+  /**
+   * When true, applies completed-section styling: slight dim + green left
+   * accent to visually distinguish locked/done prompts from pending ones.
+   */
+  dimmed?: boolean;
   /** Drag handle props from dnd-kit sortable */
   dragHandleProps?: {
     listeners: SyntheticListenerMap | undefined;
@@ -111,6 +118,8 @@ export const PromptItem: React.FC<PromptItemProps> = ({
   onSetStartPosition,
   startPositionDirection,
   displayNumber,
+  hideBorderBottom = false,
+  dimmed = false,
   dragHandleProps,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -120,8 +129,9 @@ export const PromptItem: React.FC<PromptItemProps> = ({
     "py-2 px-3",
     "cursor-pointer",
     "group",
-    "border-b border-panel-border",
+    hideBorderBottom ? "" : "border-b border-panel-border",
     "transition-colors",
+    dimmed ? "opacity-80" : "",
   ];
 
   // Add hover and selection states

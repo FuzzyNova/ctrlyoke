@@ -37,7 +37,6 @@ import {
   useSortable,
   arrayMove,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { BoundaryBar } from "../prompts/BoundaryBar";
 import { ResetConfirmModal } from "../shared/ResetConfirmModal";
 
@@ -67,7 +66,8 @@ function SortablePromptItemWrapper({
     isDragging,
   } = useSortable({ id, disabled });
   const style = {
-    transform: CSS.Transform.toString(transform),
+    // Restrict to vertical axis only — prevent horizontal drift during drag
+    transform: transform ? `translate3d(0, ${transform.y}px, 0)` : undefined,
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
@@ -631,7 +631,9 @@ export const PromptsPanel: React.FC<{
                   key={`prompt-${index}-${prompt.name || ""}`}
                   className="flex items-stretch"
                 >
-                  <div className="flex-shrink-0 w-7 flex items-start justify-end pt-2 pr-1 text-[11px] text-description-fg select-none">
+                  {/* 2px green accent — compensated by narrowing number col by 2px so numbers stay aligned with pending items */}
+                  <div className="w-[2px] flex-shrink-0 self-stretch bg-bash-status-success" />
+                  <div className="flex-shrink-0 w-[26px] flex items-start justify-end pt-2 pr-1 text-[11px] text-description-fg select-none">
                     {slotNumber}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -655,6 +657,11 @@ export const PromptsPanel: React.FC<{
                       canSetStartPosition={canChangeStartPosition}
                       startPositionDirection="rewind"
                       onSetStartPosition={() => handleSetPositionClick(index)}
+                      hideBorderBottom={
+                        sliceIdx === currentStep - 1 &&
+                        currentStep < prompts.length
+                      }
+                      dimmed
                     />
                   </div>
                 </div>

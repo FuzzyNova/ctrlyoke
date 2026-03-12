@@ -897,6 +897,13 @@ export class CopilotChatIntegration extends HarnessIntegration {
     },
     isResumedSession?: boolean
   ): Promise<string> {
+    // Native attachments mode: files are attached via VS Code native commands,
+    // agent is handled by openAgentSpecificChat. Send only the raw prompt text —
+    // no inline expansion of agent, skills, or file references.
+    if (ConfigurationUtils.shouldUseChatNativeAttachments()) {
+      return (await this.buildPromptText(prompt)).trim();
+    }
+
     const promptText = workflowContext
       ? await this.buildPromptWithInstructions(
           prompt,
