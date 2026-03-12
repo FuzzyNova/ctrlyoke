@@ -11,6 +11,7 @@ import { MESSAGE_TYPES, type PriorContext } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
+  getResumeSessionOptions,
 } from "../../types/dropdownNamespaces";
 import {
   PanelBar,
@@ -609,7 +610,13 @@ export const SettingsPanel: React.FC<{
                 onChange={handleModelChange}
                 options={
                   currentHarnessModels.length === 0
-                    ? [{ value: "", label: "Loading models...", disabled: true }]
+                    ? [
+                        {
+                          value: "",
+                          label: "Loading models...",
+                          disabled: true,
+                        },
+                      ]
                     : currentHarnessModels.map((m) => ({
                         value: m.value,
                         label: m.label,
@@ -758,10 +765,7 @@ export const SettingsPanel: React.FC<{
                 id="settings-resume-session"
                 value={effectiveResumeSession ? "yes" : "no"}
                 onChange={(v) => handleResumeSessionChange(v === "yes")}
-                options={[
-                  { value: "no", label: "No - New session" },
-                  { value: "yes", label: "Yes - Resume previous" },
-                ]}
+                options={[...getResumeSessionOptions()]}
               />
               {/* Session ID input — visible only when resume session is enabled */}
               <div

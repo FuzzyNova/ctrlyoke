@@ -10,6 +10,7 @@ import { type HarnessId, type PriorContext } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
+  getResumeSessionOptions,
 } from "../../types/dropdownNamespaces";
 import {
   CustomSelect,
@@ -290,12 +291,16 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const defaultAllowDynamicLabel = `Default (${resolvedAllowDynamic ? "Yes" : "No"})`;
 
   const resolvedPriorContext =
-    workflowProperties.priorContext ?? (globalSettings.priorContext as PriorContext);
+    workflowProperties.priorContext ??
+    (globalSettings.priorContext as PriorContext);
   const defaultPriorContextLabel = (() => {
     if (Array.isArray(resolvedPriorContext)) {
       return `Default (Custom: [${resolvedPriorContext.join(", ")}])`;
     }
-    const label = PRIOR_CONTEXT_KEYWORD_LABELS[resolvedPriorContext as keyof typeof PRIOR_CONTEXT_KEYWORD_LABELS];
+    const label =
+      PRIOR_CONTEXT_KEYWORD_LABELS[
+        resolvedPriorContext as keyof typeof PRIOR_CONTEXT_KEYWORD_LABELS
+      ];
     return `Default (${label ?? resolvedPriorContext})`;
   })();
 
@@ -585,9 +590,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   )
                 }
                 options={[
-                  { value: "default", label: defaultResumeSessionLabel },
-                  { value: "yes", label: "Yes - Resume previous" },
-                  { value: "no", label: "No - New session" },
+                  ...getResumeSessionOptions(defaultResumeSessionLabel),
                 ]}
                 dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />

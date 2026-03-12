@@ -28,3 +28,18 @@ export type DropdownNamespace =
 export function modelNamespaceForHarness(harness: string): string {
   return `model:${harness}`;
 }
+
+/**
+ * Generate Resume Session dropdown options.
+ * PropertiesDrawer includes a "Default" option with dynamic label.
+ * SettingsDrawer uses only Yes/No (computes effective value separately).
+ */
+export function getResumeSessionOptions(defaultLabel?: string) {
+  const base = [
+    { value: "yes", label: "Yes - Resume previous" },
+    { value: "no", label: "No - Create New" },
+  ] as const;
+  return defaultLabel
+    ? [{ value: "default", label: defaultLabel }, ...base]
+    : base;
+}
