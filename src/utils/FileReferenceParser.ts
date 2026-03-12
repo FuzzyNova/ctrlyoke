@@ -3,9 +3,12 @@
  *
  * FlightPath supports multiple reference syntaxes:
  * 1. @path → Full file (CLI-native, no line ranges)
- * 2. @path/to/directory/ → Directory structure (trailing slash)
- * 3. #selection:path:line-line → Line range snippet (FlightPath XML)
- * 4. #sym:symbolName → Symbol reference (resolves to file + line range)
+ * 2. @"path with spaces/file" → Full file with quoted path (for paths containing spaces)
+ * 3. @path/to/directory/ → Directory structure (trailing slash)
+ * 4. #selection:path:line-line → Line range snippet (FlightPath XML)
+ * 5. #selection:"path with spaces":line-line → Line range with quoted path
+ * 6. #sym:path:SymbolName:line → Symbol reference (resolves to file + line range)
+ * 7. #sym:"path with spaces":SymbolName:line → Symbol reference with quoted path
  *
  * This module provides unified parsing logic used by:
  * - NativeAttachmentHandler (Chat mode)
@@ -123,14 +126,13 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
 /**
  * Parse #sym: references from prompt text (symbol references)
  *
- * Format: #sym:path/to/file.ts:SymbolName:123
- * - File path (workspace-relative)
- * - Symbol name (may include () for methods)
- * - Line number (1-based) for disambiguation
+ * Supports formats:
+ * - #sym:path/to/file.ts:SymbolName:123 (plain path)
+ * - #sym:"path with spaces/file.ts":SymbolName:123 (quoted path for paths with spaces)
+ * - #sym:path/to/file.ts:methodName():123 (method with parentheses)
  *
- * This format ensures unique identification when:
- * - Same symbol name exists in multiple files
- * - Same symbol name appears multiple times in same file
+ * File path (workspace-relative), symbol name, and line number (1-based) together
+ * ensure unique identification when the same symbol appears in multiple files.
  *
  * @param prompt The prompt text containing #sym: references
  * @returns Array of symbol references with file path, symbol name, and line number
@@ -138,19 +140,37 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
 export function parseSymbolReferences(prompt: string): FileReference[] {
   const references: FileReference[] = [];
 
-  // Match #sym:path/to/file.ts:SymbolName:123 or #sym:path/to/file.ts:methodName():123
-  // Captures: (1) file path, (2) symbol name (with optional parens), (3) line number
-  const regex = /#sym:([^:]+):([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?):(\d+)/g;
+  // Match quoted paths: #sym:"path with spaces/file.ts":SymbolName:123
+  // Group 1: quoted path, Group 2: symbol name (with optional parens), Group 3: line number
+  const quotedRegex = /#sym:"([^"]+)":([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?):(\d+)/g;
   let match;
 
-  while ((match = regex.exec(prompt)) !== null) {
+  while ((match = quotedRegex.exec(prompt)) !== null) {
     const [, filePath, symbolName, lineStr] = match;
-    const lineNumber = parseInt(lineStr, 10);
+    references.push({
+      path: filePath,
+      symbolName,
+      startLine: parseInt(lineStr, 10),
+    });
+  }
+
+  // Match unquoted paths: #sym:path/to/file.ts:SymbolName:123
+  // Captures: (1) file path, (2) symbol name (with optional parens), (3) line number
+  const plainRegex = /#sym:([^:]+):([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?):(\d+)/g;
+
+  while ((match = plainRegex.exec(prompt)) !== null) {
+    const [, filePath, symbolName, lineStr] = match;
+
+    // Skip if this position was already captured by the quoted regex
+    // (plain regex would match the quoted form too, capturing '"path..."')
+    if (filePath.startsWith('"')) {
+      continue;
+    }
 
     references.push({
       path: filePath,
       symbolName,
-      startLine: lineNumber, // Store the line number for symbol resolution
+      startLine: parseInt(lineStr, 10),
     });
   }
 

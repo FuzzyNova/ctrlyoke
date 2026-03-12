@@ -357,16 +357,20 @@ export async function getFileCompletions(
 
     // Add file completion (but don't let files crowd out directory entries)
     if (fileItems.length < MAX_FILE_ITEMS) {
+      // Quote paths with spaces so the parser can handle them correctly
+      const insertPath = relativePath.includes(" ")
+        ? `"${relativePath}"`
+        : relativePath;
       const fileItem: PlainCompletionItem = {
         label: fileName,
         kind: vscode.CompletionItemKind.File,
-        insertText: relativePath,
+        insertText: insertPath,
         detail: dirName === "." ? "Root directory" : dirName,
         documentation:
           `**Full file attachment** (CLI-native)\n\n` +
-          `Insert: \`@${relativePath}\`\n\n` +
+          `Insert: \`@${insertPath}\`\n\n` +
           `The CLI will automatically attach this file's content.\n\n` +
-          `_For line ranges, use \`#selection:${relativePath}:10-20\`_`,
+          `_For line ranges, use \`#selection:${insertPath}:10-20\`_`,
         sortText: `0_${relativePath.split(path.sep).length}_${relativePath}`,
         filterText: `${relativePath} ${fileName}`,
       };
@@ -385,14 +389,18 @@ export async function getFileCompletions(
     const dirName = path.basename(dirPath);
     const parentDir = path.dirname(dirPath);
 
+    // Quote directory paths with spaces so the parser can handle them correctly
+    const insertDirPath = dirPath.includes(" ")
+      ? `"${dirPath}/"`
+      : dirPath + "/";
     const dirItem: PlainCompletionItem = {
       label: dirName + "/",
       kind: vscode.CompletionItemKind.Folder,
-      insertText: dirPath + "/",
+      insertText: insertDirPath,
       detail: parentDir === "." ? "Root directory" : parentDir,
       documentation:
         `**Directory structure attachment**\n\n` +
-        `Insert: \`@${dirPath}/\`\n\n` +
+        `Insert: \`@${insertDirPath}\`\n\n` +
         `FlightPath will attach a file tree of this directory.\n\n` +
         `_No file contents, just structure._`,
       sortText: `0_${dirPath.split(path.sep).length}_0_${dirPath}`,
@@ -444,7 +452,11 @@ export async function getSymbolCompletions(
       const line = symbol.location.range.start.line + 1;
 
       // Insert #sym:path/to/file.ts:SymbolName:123
-      const insertText = `sym:${relativePath}:${symbol.name}:${line}`;
+      // Quote paths with spaces so FileReferenceParser can handle them correctly
+      const quotedPath = relativePath.includes(" ")
+        ? `"${relativePath}"`
+        : relativePath;
+      const insertText = `sym:${quotedPath}:${symbol.name}:${line}`;
 
       // Show symbol kind and location
       const symbolKindName = vscode.SymbolKind[symbol.kind];
@@ -461,7 +473,7 @@ export async function getSymbolCompletions(
           `**Symbol Reference**\n\n` +
           `Type: ${symbolKindName}\n\n` +
           `Location: \`${relativePath}:${line}\`\n\n` +
-          `Insert: \`#sym:${relativePath}:${symbol.name}:${line}\`\n\n` +
+          `Insert: \`#sym:${quotedPath}:${symbol.name}:${line}\`\n\n` +
           `_FlightPath will resolve this symbol to its exact location and attach the code._`,
         sortText: symbol.name,
         filterText: `${symbol.name} ${relativePath}`,
@@ -516,7 +528,11 @@ export function getSelectionCompletions(): PlainCompletionItem[] {
     seenSelections.add(selectionKey);
 
     // Format: #selection:path:startLine-endLine
-    const completionText = `selection:${relativePath}:${startLine}-${endLine}`;
+    // Quote paths with spaces so FileReferenceParser can handle them correctly
+    const quotedPath = relativePath.includes(" ")
+      ? `"${relativePath}"`
+      : relativePath;
+    const completionText = `selection:${quotedPath}:${startLine}-${endLine}`;
 
     // Create label with file name and line range
     // Label must start with "selection" so both VS Code and CodeMirror can

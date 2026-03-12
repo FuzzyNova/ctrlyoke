@@ -238,9 +238,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // Custom completions source
   const customCompletions = useCallback(
     (context: any): Promise<CompletionResult | null> | null => {
-      // Match @ or # patterns for completions
+      // Match @ or # patterns for completions.
+      // Supports both plain paths (@src/file.ts) and quoted paths (@"path with spaces/file.ts").
+      // Quoted form: @" followed by anything except a closing quote.
+      // Plain form: @ followed by non-whitespace path characters.
       const before = context.matchBefore(
-        /@[a-zA-Z0-9_/.-]*|#[a-zA-Z0-9_/:.-]*/
+        /@"[^"]*|@[a-zA-Z0-9_/.-]*|#"[^"]*|#[a-zA-Z0-9_/:.-]*/
       );
 
       if (!before) return null;
@@ -632,7 +635,8 @@ function getCompletionRanges(
 ): Array<{ from: number; to: number }> {
   const ranges: Array<{ from: number; to: number }> = [];
 
-  const patterns = [/@[^\s@#]+/g, /#[^\s@#]+/g];
+  // Match both plain paths (@src/file.ts) and quoted paths (@"path with spaces/file.ts")
+  const patterns = [/@"[^"]*"|@[^\s@#]+/g, /#"[^"]*"|#[^\s@#]+/g];
 
   for (const pattern of patterns) {
     let match;
@@ -681,20 +685,33 @@ function createLinkDecorationExtension() {
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
 
-        // Regex patterns matching PromptLinkHarness
+        // Regex patterns matching PromptLinkProvider.
+        // Each reference type supports both plain paths and quoted paths
+        // (quoted form used when the path contains spaces).
         const patterns = {
-          // @file.ext (no trailing slash, has extension)
+          // @"path with spaces/file.ext" (quoted path, full file)
+          fullFileQuoted: /@"([^"]+\.[a-zA-Z0-9]+)"(?!\/)/g,
+
+          // @"path with spaces/dir/" (quoted path, directory)
+          directoryQuoted: /@"([^"]+\/)"(?![\w])/g,
+
+          // @file.ext (unquoted, no trailing slash, has extension)
           // Negative lookahead (?!\/) ensures we don't match if followed by /
-          // This prevents @.flightpath/ from being treated as a file
-          fullFile: /@([^\s@#]+\.[a-zA-Z0-9]+)(?!\/)/g,
+          fullFile: /@([^\s@#"]+\.[a-zA-Z0-9]+)(?!\/)/g,
 
-          // @dir/ (trailing slash)
-          directory: /@([^\s@#]+\/)/g,
+          // @dir/ (unquoted, trailing slash)
+          directory: /@([^\s@#"]+\/)/g,
 
-          // #selection:path:10-20 (line range)
+          // #selection:"path with spaces/file":10-20 (quoted path, line range)
+          lineRangeQuoted: /#selection:"([^"]+)":(\d+)-(\d+)/g,
+
+          // #selection:path:10-20 (unquoted, line range)
           lineRange: /#selection:([^\s:]+):(\d+)-(\d+)/g,
 
-          // #sym:path:symbol:42 (symbol reference)
+          // #sym:"path with spaces/file":symbol:42 (quoted path, symbol reference)
+          symbolQuoted: /#sym:"([^"]+)":([^:]+):(\d+)/g,
+
+          // #sym:path:symbol:42 (unquoted, symbol reference)
           symbol: /#sym:([^\s:]+):([^:]+):(\d+)/g,
         };
 
@@ -707,8 +724,23 @@ function createLinkDecorationExtension() {
           const lineRangeMatches: any[] = [];
           const symbolMatches: any[] = [];
 
-          // 1. Full file references (@file.ext)
           let match;
+
+          // 1a. Quoted full file references (@"path with spaces/file.ext")
+          const fullFileQuotedRegex = new RegExp(
+            patterns.fullFileQuoted.source,
+            "g"
+          );
+          while ((match = fullFileQuotedRegex.exec(text)) !== null) {
+            fileMatches.push({
+              from: from + match.index,
+              to: from + match.index + match[0].length,
+              type: "file",
+              path: match[1],
+            });
+          }
+
+          // 1b. Plain full file references (@file.ext)
           const fullFileRegex = new RegExp(patterns.fullFile.source, "g");
           while ((match = fullFileRegex.exec(text)) !== null) {
             fileMatches.push({
@@ -719,7 +751,21 @@ function createLinkDecorationExtension() {
             });
           }
 
-          // 2. Directory references (@dir/)
+          // 2a. Quoted directory references (@"path with spaces/dir/")
+          const directoryQuotedRegex = new RegExp(
+            patterns.directoryQuoted.source,
+            "g"
+          );
+          while ((match = directoryQuotedRegex.exec(text)) !== null) {
+            directoryMatches.push({
+              from: from + match.index,
+              to: from + match.index + match[0].length,
+              type: "directory",
+              path: match[1],
+            });
+          }
+
+          // 2b. Plain directory references (@dir/)
           const directoryRegex = new RegExp(patterns.directory.source, "g");
           while ((match = directoryRegex.exec(text)) !== null) {
             directoryMatches.push({
@@ -730,7 +776,23 @@ function createLinkDecorationExtension() {
             });
           }
 
-          // 3. Line range references (#selection:path:10-20)
+          // 3a. Quoted line range references (#selection:"path with spaces/file":10-20)
+          const lineRangeQuotedRegex = new RegExp(
+            patterns.lineRangeQuoted.source,
+            "g"
+          );
+          while ((match = lineRangeQuotedRegex.exec(text)) !== null) {
+            lineRangeMatches.push({
+              from: from + match.index,
+              to: from + match.index + match[0].length,
+              type: "lineRange",
+              path: match[1],
+              lineStart: match[2],
+              lineEnd: match[3],
+            });
+          }
+
+          // 3b. Plain line range references (#selection:path:10-20)
           const lineRangeRegex = new RegExp(patterns.lineRange.source, "g");
           while ((match = lineRangeRegex.exec(text)) !== null) {
             lineRangeMatches.push({
@@ -743,7 +805,23 @@ function createLinkDecorationExtension() {
             });
           }
 
-          // 4. Symbol references (#sym:path:symbol:42)
+          // 4a. Quoted symbol references (#sym:"path with spaces/file":symbol:42)
+          const symbolQuotedRegex = new RegExp(
+            patterns.symbolQuoted.source,
+            "g"
+          );
+          while ((match = symbolQuotedRegex.exec(text)) !== null) {
+            symbolMatches.push({
+              from: from + match.index,
+              to: from + match.index + match[0].length,
+              type: "symbol",
+              path: match[1],
+              symbolName: match[2],
+              line: match[3],
+            });
+          }
+
+          // 4b. Plain symbol references (#sym:path:symbol:42)
           const symbolRegex = new RegExp(patterns.symbol.source, "g");
           while ((match = symbolRegex.exec(text)) !== null) {
             symbolMatches.push({

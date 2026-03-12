@@ -180,6 +180,41 @@ suite("FileReferenceParser", () => {
       const refs = parseSymbolReferences("#sym:src/file.ts:myVar:99");
       assert.strictEqual(refs[0].startLine, 99);
     });
+
+    test("parses quoted path in #sym: reference", () => {
+      const refs = parseSymbolReferences(
+        '#sym:"path with spaces/example.py":ProductInSpace:11'
+      );
+      assert.strictEqual(refs.length, 1);
+      assert.strictEqual(refs[0].path, "path with spaces/example.py");
+      assert.strictEqual(refs[0].symbolName, "ProductInSpace");
+      assert.strictEqual(refs[0].startLine, 11);
+    });
+
+    test("parses quoted path in #sym: reference with method syntax", () => {
+      const refs = parseSymbolReferences(
+        '#sym:"my dir/class.ts":handleClick():50'
+      );
+      assert.strictEqual(refs.length, 1);
+      assert.strictEqual(refs[0].path, "my dir/class.ts");
+      assert.strictEqual(refs[0].symbolName, "handleClick()");
+      assert.strictEqual(refs[0].startLine, 50);
+    });
+
+    test("does not include surrounding quotes in path when quoted", () => {
+      const refs = parseSymbolReferences(
+        '#sym:"path with spaces/file.ts":myFunc:1'
+      );
+      assert.strictEqual(refs.length, 1);
+      assert.ok(
+        !refs[0].path.startsWith('"'),
+        "path should not start with a quote"
+      );
+      assert.ok(
+        !refs[0].path.endsWith('"'),
+        "path should not end with a quote"
+      );
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────

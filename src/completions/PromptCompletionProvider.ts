@@ -74,8 +74,11 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     }
 
     // Don't provide completions if there's a space after trigger
-    // (user has moved on to next context item)
-    if (afterTrigger.includes(" ")) {
+    // unless we're inside a quoted path: @"path with spaces/..."
+    // A quoted path starts with " immediately after the trigger character
+    const isInsideQuotedPath =
+      afterTrigger.startsWith('"') && !afterTrigger.slice(1).includes('"');
+    if (afterTrigger.includes(" ") && !isInsideQuotedPath) {
       return undefined;
     }
 
