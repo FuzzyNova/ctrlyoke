@@ -52,6 +52,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const [filename, setFilename] = useState("");
   const [filenameError, setFilenameError] = useState<string | null>(null);
   const [defaultConfirmation, setDefaultConfirmation] = useState(false);
+  const [format, setFormat] = useState<"yaml" | "json">("yaml");
 
   // Initialize form state when modal opens
   const prevIsOpenRef = useRef(false);
@@ -204,6 +205,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         variables,
         filename: filename.trim(),
         workflowsDir,
+        format,
         runAfter,
       });
     },
@@ -230,8 +232,9 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const actionTemplates = templates.filter((t) => t.isAction);
 
   // Path preview
+  const fileExt = format === "json" ? ".flightpath.json" : ".flightpath.yaml";
   const pathPreview = filename.trim()
-    ? `${workflowsDir}/${filename.trim()}.flightpath.json`
+    ? `${workflowsDir}/${filename.trim()}${fileExt}`
     : `${workflowsDir}/`;
 
   return (
@@ -405,6 +408,28 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           {filenameError && (
             <p className="mt-1 text-xs text-error-fg">{filenameError}</p>
           )}
+        </div>
+
+        {/* Format Selection */}
+        <div className="form-group">
+          <label className="block text-sm font-medium mb-1 text-foreground">
+            Format
+          </label>
+          <div className="flex gap-3">
+            {(["yaml", "json"] as const).map((f) => (
+              <label key={f} className="flex items-center gap-1.5 cursor-pointer text-sm text-foreground">
+                <input
+                  type="radio"
+                  name="workflow-format"
+                  value={f}
+                  checked={format === f}
+                  onChange={() => setFormat(f)}
+                  className="accent-button-primary-bg"
+                />
+                {f.toUpperCase()}
+              </label>
+            ))}
+          </div>
         </div>
 
         {/* Path Preview */}

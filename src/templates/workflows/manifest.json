@@ -6,7 +6,7 @@
       "id": "simple-feature",
       "label": "Simple Feature Workflow",
       "description": "Plan → Implement → Commit in same session",
-      "file": "simple-feature.flightpath.json",
+      "file": "simple-feature.flightpath.yaml",
       "tags": ["beginner", "same-session"],
       "icon": "$(lightbulb)"
     },
@@ -14,7 +14,7 @@
       "id": "fix-tests",
       "label": "Fix Tests",
       "description": "Fix failing tests with validation retry loop until they pass",
-      "file": "fix-tests.flightpath.json",
+      "file": "fix-tests.flightpath.yaml",
       "tags": ["intermediate", "validation", "testing"],
       "icon": "$(testing-run-icon)"
     },
@@ -22,7 +22,7 @@
       "id": "full-feature",
       "label": "Full Feature Workflow",
       "description": "Complete Plan→Implement→Review→Docs→Commit workflow",
-      "file": "full-feature.flightpath.json",
+      "file": "full-feature.flightpath.yaml",
       "tags": ["advanced", "complete"],
       "icon": "$(rocket)"
     },
@@ -30,7 +30,7 @@
       "id": "spec-driven-loop",
       "label": "Spec-Driven Loop",
       "description": "Architect → Implement → Orchestrate loop driven by a spec/design document",
-      "file": "spec-driven-loop.flightpath.json",
+      "file": "spec-driven-loop.flightpath.yaml",
       "tags": ["advanced", "loop", "spec"],
       "icon": "$(sync)"
     }

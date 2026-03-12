@@ -342,14 +342,15 @@ export class WorkflowSerializer {
   }
 
   async handleCreateWorkflow(message: any): Promise<void> {
-    const { templateId, variables, filename, workflowsDir, runAfter } = message;
+    const { templateId, variables, filename, workflowsDir, runAfter, format } = message;
 
     try {
       const filePath = await this.templateManager.createWorkflow(
         templateId,
         variables || {},
         filename,
-        workflowsDir
+        workflowsDir,
+        format === "json" ? "json" : "yaml"
       );
 
       this.postMessage({
@@ -410,6 +411,10 @@ export class WorkflowSerializer {
           filePath = filePath.slice(wsPath.length).replace(/^[\\/]/, "");
         }
       }
+
+      // Normalize backslashes to forward slashes so paths work across platforms
+      // and are valid in prompt file @path references
+      filePath = filePath.replace(/\\/g, "/");
 
       this.postMessage({
         type: MESSAGE_TYPES.TEMPLATE_FILE_SELECTED,

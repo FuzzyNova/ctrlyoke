@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
+import * as jsYaml from "js-yaml";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 
@@ -201,10 +202,10 @@ export class TemplateManager {
       return await fs.promises.readFile(templatePath, "utf-8");
     }
 
-    // Built-in template
+    // Built-in template (source is .yaml)
     const templatePath = path.join(
       this.getBuiltInTemplatesPath(),
-      `${templateId}.flightpath.json`
+      `${templateId}.flightpath.yaml`
     );
     return await fs.promises.readFile(templatePath, "utf-8");
   }
@@ -290,22 +291,34 @@ export class TemplateManager {
     templateId: string,
     variables: Record<string, string>,
     filename: string,
-    workflowsDir: string
+    workflowsDir: string,
+    format: "yaml" | "json" = "yaml"
   ): Promise<string> {
     const workspaceFolder = this.getWorkspaceFolder();
     if (!workspaceFolder) {
       throw new Error("No workspace folder available");
     }
 
-    // Get template content
+    // Get template content (built-ins are YAML; custom templates are JSON)
     const templateContent = await this.getTemplateContent(templateId);
 
-    // Replace variables
-    const workflowContent = this.replaceVariables(templateContent, variables);
+    // Replace variables in raw template string
+    const substituted = this.replaceVariables(templateContent, variables);
+
+    // Parse (yaml.load handles both YAML and JSON) then re-serialize to desired format
+    const parsed = jsYaml.load(substituted) as object;
+    let workflowContent: string;
+    const ext = format === "json" ? ".flightpath.json" : ".flightpath.yaml";
+
+    if (format === "json") {
+      workflowContent = JSON.stringify(parsed, null, 2);
+    } else {
+      workflowContent = jsYaml.dump(parsed, { lineWidth: -1, noRefs: true });
+    }
 
     // Build full path
     const fullDir = path.join(workspaceFolder.uri.fsPath, workflowsDir);
-    const fullPath = path.join(fullDir, `${filename}.flightpath.json`);
+    const fullPath = path.join(fullDir, `${filename}${ext}`);
 
     // Ensure directory exists
     if (!(await this.pathExists(fullDir))) {
@@ -314,7 +327,7 @@ export class TemplateManager {
 
     // Check if file already exists
     if (await this.pathExists(fullPath)) {
-      throw new Error(`File already exists: ${filename}.flightpath.json`);
+      throw new Error(`File already exists: ${filename}${ext}`);
     }
 
     // Write file
@@ -343,8 +356,10 @@ export class TemplateManager {
       await fs.promises.mkdir(customPath, { recursive: true });
     }
 
-    // Get template content
+    // Get template content (built-ins are YAML), convert to JSON for custom templates
     const templateContent = await this.getTemplateContent(startingPointId);
+    const parsed = jsYaml.load(templateContent) as object;
+    const jsonContent = JSON.stringify(parsed, null, 2);
 
     // Build path
     const fullPath = path.join(customPath, `${templateName}.flightpath.json`);
@@ -355,7 +370,7 @@ export class TemplateManager {
     }
 
     // Write file
-    await fs.promises.writeFile(fullPath, templateContent, "utf-8");
+    await fs.promises.writeFile(fullPath, jsonContent, "utf-8");
 
     return fullPath;
   }
