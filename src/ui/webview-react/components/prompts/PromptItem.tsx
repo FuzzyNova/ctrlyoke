@@ -56,6 +56,12 @@ interface PromptItemProps {
   onSetStartPosition?: () => void;
   /** Direction of position change (rewind = go backward, forward = skip ahead) */
   startPositionDirection?: "rewind" | "forward";
+  /**
+   * Visual 1-based position for tooltips (e.g. "Set step 3 as start position").
+   * Separate from `index` because after drag-reorder the visual slot differs
+   * from the original absolute index. Defaults to `index + 1` when omitted.
+   */
+  displayNumber?: number;
   /** Drag handle props from dnd-kit sortable */
   dragHandleProps?: {
     listeners: SyntheticListenerMap | undefined;
@@ -104,6 +110,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
   canSetStartPosition,
   onSetStartPosition,
   startPositionDirection,
+  displayNumber,
   dragHandleProps,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -162,7 +169,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
               e.stopPropagation();
               onSetStartPosition?.();
             }}
-            title={`Set step ${index + 1} as start position`}
+            title={`Set step ${displayNumber ?? index + 1} as start position`}
           >
             <i
               className={`codicon ${startPositionDirection === "rewind" ? "codicon-debug-reverse-continue" : "codicon-debug-step-over"} text-[12px]`}
@@ -176,7 +183,6 @@ export const PromptItem: React.FC<PromptItemProps> = ({
         <span
           className={`flex-1 min-w-0 text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
         >
-          <span className="font-medium">{index + 1}.</span>{" "}
           {name ? name : truncate(text, 60)}
         </span>
       </div>

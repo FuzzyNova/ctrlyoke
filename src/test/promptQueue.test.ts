@@ -942,7 +942,9 @@ suite("PromptQueue State Machine Tests", () => {
       queue.loadPrompts(createPromptFile(prompts));
       (queue as any).state.currentIndex = 2;
 
-      await queue.reorderPendingPrompts([4, 2, 3]);
+      // Pending slice is [p2, p3, p4] at slice positions [0, 1, 2].
+      // Move slice[2]=p4 to front: [2, 0, 1]
+      await queue.reorderPendingPrompts([2, 0, 1]);
 
       const state = queue.getState();
       assert.strictEqual(state.prompts[0].prompt, "p0");
@@ -963,7 +965,9 @@ suite("PromptQueue State Machine Tests", () => {
       queue.loadPrompts(createPromptFile(prompts));
       (queue as any).state.currentIndex = 2;
 
-      await queue.reorderPendingPrompts([4, 2, 3]);
+      // Pending slice is [p2, p3, p4] at slice positions [0, 1, 2].
+      // Move slice[2]=p4 to front: [2, 0, 1]
+      await queue.reorderPendingPrompts([2, 0, 1]);
 
       const state = queue.getState();
       assert.strictEqual(state.results[0].prompt, "p0");
@@ -971,6 +975,31 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.results[2].prompt, "p4");
       assert.strictEqual(state.results[3].prompt, "p2");
       assert.strictEqual(state.results[4].prompt, "p3");
+    });
+
+    test("should produce correct order after successive reorders", async () => {
+      const prompts: PromptItem[] = [
+        { prompt: "p0" },
+        { prompt: "p1" },
+        { prompt: "p2" },
+      ];
+      queue.loadPrompts(createPromptFile(prompts));
+      (queue as any).state.currentIndex = 0;
+
+      // First reorder: move p0 to last → [1, 2, 0]
+      await queue.reorderPendingPrompts([1, 2, 0]);
+      let state = queue.getState();
+      assert.strictEqual(state.prompts[0].prompt, "p1");
+      assert.strictEqual(state.prompts[1].prompt, "p2");
+      assert.strictEqual(state.prompts[2].prompt, "p0");
+
+      // Second reorder: move the new first (p1) to last → [1, 2, 0]
+      // Current pending slice: [p1, p2, p0]; move slice[0]=p1 to end
+      await queue.reorderPendingPrompts([1, 2, 0]);
+      state = queue.getState();
+      assert.strictEqual(state.prompts[0].prompt, "p2");
+      assert.strictEqual(state.prompts[1].prompt, "p0");
+      assert.strictEqual(state.prompts[2].prompt, "p1");
     });
   });
 });

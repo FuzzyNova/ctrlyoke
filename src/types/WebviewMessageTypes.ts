@@ -658,7 +658,9 @@ export interface SetStartPositionConfirmedMessage {
 
 /**
  * Reorder prompts message (webview -> extension)
- * newPendingOrder is an array of original indices in new order
+ * newPendingOrder is an array of 0-based positions within the current pending
+ * slice (not absolute indices into the full prompts array). Using slice-relative
+ * positions avoids stale-index bugs after successive reorders.
  */
 export interface ReorderPromptsMessage {
   type: typeof MESSAGE_TYPES.REORDER_PROMPTS;

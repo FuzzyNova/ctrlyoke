@@ -1522,14 +1522,19 @@ export class PromptQueue {
 
   /**
    * Reorder the pending (not-yet-executed) prompts.
-   * @param newPendingOrder Array of original indices in the desired new order.
+   * @param newPendingOrder Positions within the current pending slice (0-based)
+   *   in the desired new order. These are slice-relative indices, not absolute
+   *   indices into the full prompts array. Using absolute indices would break on
+   *   the second reorder because state.prompts has already been mutated.
    */
   async reorderPendingPrompts(newPendingOrder: number[]): Promise<void> {
     const currentIndex = this.state.currentIndex;
     const donePrompts = this.state.prompts.slice(0, currentIndex);
     const doneResults = this.state.results.slice(0, currentIndex);
-    const newPending = newPendingOrder.map((i) => this.state.prompts[i]);
-    const newPendingResults = newPendingOrder.map((i) => this.state.results[i]);
+    const pendingPrompts = this.state.prompts.slice(currentIndex);
+    const pendingResults = this.state.results.slice(currentIndex);
+    const newPending = newPendingOrder.map((i) => pendingPrompts[i]);
+    const newPendingResults = newPendingOrder.map((i) => pendingResults[i]);
     this.state.prompts = [...donePrompts, ...newPending];
     this.state.results = [...doneResults, ...newPendingResults];
     this.emitStateChange();

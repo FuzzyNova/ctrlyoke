@@ -48,11 +48,14 @@ type SortableWrapperProps = Omit<
 > & {
   id: string;
   disabled: boolean;
+  /** Visual 1-based slot number rendered outside the draggable area */
+  slotNumber: number;
 };
 
 function SortablePromptItemWrapper({
   id,
   disabled,
+  slotNumber,
   ...promptItemProps
 }: SortableWrapperProps) {
   const {
@@ -69,11 +72,19 @@ function SortablePromptItemWrapper({
     opacity: isDragging ? 0.5 : 1,
   };
   return (
-    <div ref={setNodeRef} style={style}>
-      <PromptItem
-        {...promptItemProps}
-        dragHandleProps={disabled ? undefined : { listeners, attributes }}
-      />
+    // Number column sits outside setNodeRef so it stays anchored to the DOM
+    // slot position while the content transforms during drag.
+    <div className="flex items-stretch">
+      <div className="flex-shrink-0 w-7 flex items-start justify-end pt-2 pr-1 text-[11px] text-description-fg select-none">
+        {slotNumber}
+      </div>
+      <div ref={setNodeRef} style={style} className="flex-1 min-w-0">
+        <PromptItem
+          {...promptItemProps}
+          displayNumber={slotNumber}
+          dragHandleProps={disabled ? undefined : { listeners, attributes }}
+        />
+      </div>
     </div>
   );
 }
@@ -515,9 +526,13 @@ export const PromptsPanel: React.FC<{
       const newSortableIds = arrayMove(sortableIds, oldIdx, newIdx);
       setSortableIds(newSortableIds);
 
-      // Derive the absolute-index order for the backend
+      // Send positions within the current pending slice (0-based), not original
+      // absolute indices. The stable IDs (e.g. "prompt-pending-4") encode the
+      // original absolute index, but state.prompts may have been reordered by a
+      // prior drag — so the backend must index into the pending slice it holds,
+      // not into the full prompts array by original position.
       const newPendingOrder = newSortableIds.map((id) =>
-        parseInt(id.replace("prompt-pending-", ""))
+        sortableIds.indexOf(id)
       );
       sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, { newPendingOrder });
 
@@ -601,6 +616,7 @@ export const PromptsPanel: React.FC<{
             {/* Done prompts (indices 0..currentStep-1) */}
             {prompts.slice(0, currentStep).map((prompt, sliceIdx) => {
               const index = sliceIdx;
+              const slotNumber = index + 1;
               const status = getPromptStatus(prompt, index);
               const retryState = retryStates[index];
               const details = getPromptDetails(prompt, index);
@@ -611,27 +627,37 @@ export const PromptsPanel: React.FC<{
               const harnessModel = getPromptHarnessModel(prompt);
               const overrides = getPromptOverrides(prompt);
               return (
-                <PromptItem
+                <div
                   key={`prompt-${index}-${prompt.name || ""}`}
-                  text={prompt.prompt}
-                  index={index}
-                  name={prompt.name}
-                  status={status}
-                  retryState={retryState}
-                  details={details}
-                  latestOutput={latestOutput}
-                  isCurrent={false}
-                  isSelected={isSelected}
-                  onClick={() => handlePromptClick(index)}
-                  harnessLabel={harnessModel.harnessLabel}
-                  harnessIsDefault={harnessModel.harnessIsDefault}
-                  modelLabel={harnessModel.modelLabel}
-                  modelIsDefault={harnessModel.modelIsDefault}
-                  overrides={overrides}
-                  canSetStartPosition={canChangeStartPosition}
-                  startPositionDirection="rewind"
-                  onSetStartPosition={() => handleSetPositionClick(index)}
-                />
+                  className="flex items-stretch"
+                >
+                  <div className="flex-shrink-0 w-7 flex items-start justify-end pt-2 pr-1 text-[11px] text-description-fg select-none">
+                    {slotNumber}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <PromptItem
+                      text={prompt.prompt}
+                      index={index}
+                      displayNumber={slotNumber}
+                      name={prompt.name}
+                      status={status}
+                      retryState={retryState}
+                      details={details}
+                      latestOutput={latestOutput}
+                      isCurrent={false}
+                      isSelected={isSelected}
+                      onClick={() => handlePromptClick(index)}
+                      harnessLabel={harnessModel.harnessLabel}
+                      harnessIsDefault={harnessModel.harnessIsDefault}
+                      modelLabel={harnessModel.modelLabel}
+                      modelIsDefault={harnessModel.modelIsDefault}
+                      overrides={overrides}
+                      canSetStartPosition={canChangeStartPosition}
+                      startPositionDirection="rewind"
+                      onSetStartPosition={() => handleSetPositionClick(index)}
+                    />
+                  </div>
+                </div>
               );
             })}
 
@@ -673,11 +699,13 @@ export const PromptsPanel: React.FC<{
                   // Target index for set-position is currentStep + visual offset,
                   // matching the post-reorder backend index for this slot.
                   const setPositionTarget = currentStep + visualIdx;
+                  const slotNumber = currentStep + visualIdx + 1;
                   return (
                     <SortablePromptItemWrapper
                       key={id}
                       id={id}
                       disabled={!canReorder}
+                      slotNumber={slotNumber}
                       text={prompt.prompt}
                       index={index}
                       name={prompt.name}
