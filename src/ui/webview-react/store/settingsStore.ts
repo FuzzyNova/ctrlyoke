@@ -61,6 +61,7 @@ export interface GlobalSettings {
   allowDynamicExtension: boolean;
   respectGitignore: boolean;
   confirmDeleteOperations: boolean;
+  confirmResetOperations: boolean;
   priorContext: string;
 }
 
@@ -178,6 +179,7 @@ const initialGlobalSettings: GlobalSettings = {
   allowDynamicExtension: false,
   respectGitignore: true,
   confirmDeleteOperations: true,
+  confirmResetOperations: true,
   priorContext: "none",
 };
 

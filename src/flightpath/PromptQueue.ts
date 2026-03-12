@@ -1473,6 +1473,70 @@ export class PromptQueue {
   }
 
   /**
+   * Move the execution start position to a given index.
+   * - Rewind (toIndex < currentIndex): clears _runtime and resets results to PENDING for all prompts >= toIndex.
+   * - Skip-ahead (toIndex > currentIndex): marks prompts currentIndex..toIndex-1 as SKIPPED.
+   */
+  async setStartPosition(toIndex: number): Promise<void> {
+    const currentIndex = this.state.currentIndex;
+    if (toIndex === currentIndex) return;
+
+    if (toIndex < currentIndex) {
+      this.state.prompts = this.state.prompts.map((prompt, index) => {
+        if (index < toIndex) return prompt;
+        const { _runtime, ...rest } = prompt;
+        void _runtime;
+        return rest;
+      });
+      this.state.results = this.state.results.map((result, index) =>
+        index < toIndex ? result : { ...result, status: STEP_STATUS.PENDING }
+      );
+    } else {
+      this.state.results = this.state.results.map((result, index) =>
+        index >= currentIndex && index < toIndex
+          ? { ...result, status: STEP_STATUS.SKIPPED }
+          : result
+      );
+      this.state.prompts = this.state.prompts.map((prompt, index) => {
+        if (index < currentIndex || index >= toIndex) return prompt;
+        return {
+          ...prompt,
+          _runtime: {
+            ...(prompt._runtime ?? { startedAt: Date.now() }),
+            completedAt: Date.now(),
+          },
+        };
+      });
+    }
+
+    this.state.currentIndex = toIndex;
+    this.state.status = EXECUTION_STATES.IDLE;
+    this.state.stopped = false;
+    this.state.completedIndices = new Set<string>(
+      Array.from({ length: toIndex }, (_, i) => String(i))
+    );
+
+    this.emitStateChange();
+    await this.updateWorkingFile();
+  }
+
+  /**
+   * Reorder the pending (not-yet-executed) prompts.
+   * @param newPendingOrder Array of original indices in the desired new order.
+   */
+  async reorderPendingPrompts(newPendingOrder: number[]): Promise<void> {
+    const currentIndex = this.state.currentIndex;
+    const donePrompts = this.state.prompts.slice(0, currentIndex);
+    const doneResults = this.state.results.slice(0, currentIndex);
+    const newPending = newPendingOrder.map((i) => this.state.prompts[i]);
+    const newPendingResults = newPendingOrder.map((i) => this.state.results[i]);
+    this.state.prompts = [...donePrompts, ...newPending];
+    this.state.results = [...doneResults, ...newPendingResults];
+    this.emitStateChange();
+    await this.updateWorkingFile();
+  }
+
+  /**
    * Load working file from path
    * @param filePath - Path to working file
    */

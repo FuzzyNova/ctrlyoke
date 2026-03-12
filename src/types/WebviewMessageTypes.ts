@@ -604,6 +604,7 @@ export interface GlobalSettingsUpdatedMessage {
     allowDynamicExtension: boolean;
     respectGitignore?: boolean;
     confirmDeleteOperations?: boolean;
+    confirmResetOperations?: boolean;
   };
 }
 
@@ -636,6 +637,32 @@ export interface OutputHistoryLoadedMessage {
   currentRunIndex: number;
   runTimestamps?: (number | undefined)[];
   runStates?: (string | undefined)[];
+}
+
+/**
+ * Set start position message (webview -> extension)
+ */
+export interface SetStartPositionMessage {
+  type: typeof MESSAGE_TYPES.SET_START_POSITION;
+  toIndex: number;
+}
+
+/**
+ * Set start position confirmed message (extension -> webview)
+ */
+export interface SetStartPositionConfirmedMessage {
+  type: typeof MESSAGE_TYPES.SET_START_POSITION_CONFIRMED;
+  prompts: PromptItem[];
+  currentIndex: number;
+}
+
+/**
+ * Reorder prompts message (webview -> extension)
+ * newPendingOrder is an array of original indices in new order
+ */
+export interface ReorderPromptsMessage {
+  type: typeof MESSAGE_TYPES.REORDER_PROMPTS;
+  newPendingOrder: number[];
 }
 
 /**
@@ -694,4 +721,5 @@ export type IncomingMessage =
   | GlobalSettingsUpdatedMessage
   | ResetWorkflowStateMessage
   | RunHistoryUpdatedMessage
-  | OutputHistoryLoadedMessage;
+  | OutputHistoryLoadedMessage
+  | SetStartPositionConfirmedMessage;

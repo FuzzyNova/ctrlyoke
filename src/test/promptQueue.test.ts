@@ -766,4 +766,211 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
     });
   });
+
+  suite("setStartPosition", () => {
+    test("should be a no-op when toIndex equals currentIndex", async () => {
+      const prompts: PromptItem[] = [
+        { prompt: "p0" },
+        { prompt: "p1" },
+        { prompt: "p2" },
+        { prompt: "p3" },
+        { prompt: "p4" },
+      ];
+      queue.loadPrompts(createPromptFile(prompts));
+      (queue as any).state.currentIndex = 2;
+      await queue.setStartPosition(2);
+      const state = queue.getState();
+      assert.strictEqual(state.currentIndex, 2);
+      assert.strictEqual(state.status, EXECUTION_STATES.IDLE);
+    });
+
+    test("should rewind: strip _runtime and reset results to PENDING for prompts at/after toIndex", async () => {
+      const prompts: PromptItem[] = [
+        { prompt: "p0" },
+        { prompt: "p1" },
+        { prompt: "p2" },
+        { prompt: "p3" },
+        { prompt: "p4" },
+      ];
+      queue.loadPrompts(createPromptFile(prompts));
+      (queue as any).state.currentIndex = 3;
+      (queue as any).state.prompts[0]._runtime = {
+        startedAt: 100,
+        completedAt: 200,
+      };
+      (queue as any).state.prompts[1]._runtime = {
+        startedAt: 300,
+        completedAt: 400,
+      };
+      (queue as any).state.prompts[2]._runtime = {
+        startedAt: 500,
+        completedAt: 600,
+      };
+      (queue as any).state.results[0].status = STEP_STATUS.COMPLETED;
+      (queue as any).state.results[1].status = STEP_STATUS.COMPLETED;
+      (queue as any).state.results[2].status = STEP_STATUS.COMPLETED;
+      (queue as any).state.completedIndices = new Set(["0", "1", "2"]);
+
+      await queue.setStartPosition(1);
+
+      const state = queue.getState();
+      assert.strictEqual(state.currentIndex, 1);
+      assert.strictEqual(state.status, EXECUTION_STATES.IDLE);
+      assert.strictEqual(state.stopped, false);
+      assert.ok(
+        state.prompts[0]._runtime?.completedAt !== undefined,
+        "prompts[0]._runtime should be preserved"
+      );
+      assert.strictEqual(
+        state.prompts[1]._runtime,
+        undefined,
+        "prompts[1]._runtime should be stripped"
+      );
+      assert.strictEqual(
+        state.prompts[2]._runtime,
+        undefined,
+        "prompts[2]._runtime should be stripped"
+      );
+      assert.strictEqual(
+        state.results[0].status,
+        STEP_STATUS.COMPLETED,
+        "results[0] should be unchanged"
+      );
+      assert.strictEqual(
+        state.results[1].status,
+        STEP_STATUS.PENDING,
+        "results[1] should be reset to PENDING"
+      );
+      assert.strictEqual(
+        state.results[2].status,
+        STEP_STATUS.PENDING,
+        "results[2] should be reset to PENDING"
+      );
+      assert.strictEqual(state.completedIndices.size, 1);
+      assert.ok(state.completedIndices.has("0"));
+    });
+
+    test("should skip-ahead: mark prompts currentIndex..toIndex-1 as SKIPPED in results", async () => {
+      const prompts: PromptItem[] = [
+        { prompt: "p0" },
+        { prompt: "p1" },
+        { prompt: "p2" },
+        { prompt: "p3" },
+        { prompt: "p4" },
+      ];
+      queue.loadPrompts(createPromptFile(prompts));
+      (queue as any).state.currentIndex = 1;
+      (queue as any).state.completedIndices = new Set(["0"]);
+      (queue as any).state.results[0].status = STEP_STATUS.COMPLETED;
+
+      await queue.setStartPosition(3);
+
+      const state = queue.getState();
+      assert.strictEqual(state.currentIndex, 3);
+      assert.strictEqual(state.status, EXECUTION_STATES.IDLE);
+      assert.strictEqual(state.stopped, false);
+      assert.strictEqual(state.results[1].status, STEP_STATUS.SKIPPED);
+      assert.strictEqual(state.results[2].status, STEP_STATUS.SKIPPED);
+      assert.strictEqual(
+        state.results[3].status,
+        STEP_STATUS.PENDING,
+        "results[3] should not be skipped"
+      );
+      assert.ok(
+        state.prompts[1]._runtime?.completedAt !== undefined,
+        "prompts[1]._runtime.completedAt should be set"
+      );
+      assert.ok(
+        state.prompts[2]._runtime?.completedAt !== undefined,
+        "prompts[2]._runtime.completedAt should be set"
+      );
+      assert.ok(state.completedIndices.has("0"));
+      assert.ok(state.completedIndices.has("1"));
+      assert.ok(state.completedIndices.has("2"));
+      assert.strictEqual(state.completedIndices.size, 3);
+    });
+
+    test("should rebuild completedIndices correctly for rewind", async () => {
+      const prompts: PromptItem[] = [
+        { prompt: "p0" },
+        { prompt: "p1" },
+        { prompt: "p2" },
+        { prompt: "p3" },
+        { prompt: "p4" },
+      ];
+      queue.loadPrompts(createPromptFile(prompts));
+      (queue as any).state.currentIndex = 3;
+      (queue as any).state.completedIndices = new Set(["0", "1", "2"]);
+
+      await queue.setStartPosition(1);
+
+      const state = queue.getState();
+      assert.strictEqual(state.completedIndices.size, 1);
+      assert.ok(state.completedIndices.has("0"));
+      assert.strictEqual(state.completedIndices.has("1"), false);
+      assert.strictEqual(state.completedIndices.has("2"), false);
+    });
+
+    test("should set status to IDLE and stopped to false after position change", async () => {
+      const prompts: PromptItem[] = [
+        { prompt: "p0" },
+        { prompt: "p1" },
+        { prompt: "p2" },
+      ];
+      queue.loadPrompts(createPromptFile(prompts));
+      (queue as any).state.currentIndex = 2;
+      (queue as any).state.status = EXECUTION_STATES.STOPPED;
+      (queue as any).state.stopped = true;
+
+      await queue.setStartPosition(0);
+
+      const state = queue.getState();
+      assert.strictEqual(state.status, EXECUTION_STATES.IDLE);
+      assert.strictEqual(state.stopped, false);
+    });
+  });
+
+  suite("reorderPendingPrompts", () => {
+    test("should keep done-prefix unchanged and reorder pending section", async () => {
+      const prompts: PromptItem[] = [
+        { prompt: "p0" },
+        { prompt: "p1" },
+        { prompt: "p2" },
+        { prompt: "p3" },
+        { prompt: "p4" },
+      ];
+      queue.loadPrompts(createPromptFile(prompts));
+      (queue as any).state.currentIndex = 2;
+
+      await queue.reorderPendingPrompts([4, 2, 3]);
+
+      const state = queue.getState();
+      assert.strictEqual(state.prompts[0].prompt, "p0");
+      assert.strictEqual(state.prompts[1].prompt, "p1");
+      assert.strictEqual(state.prompts[2].prompt, "p4");
+      assert.strictEqual(state.prompts[3].prompt, "p2");
+      assert.strictEqual(state.prompts[4].prompt, "p3");
+    });
+
+    test("should reorder results in sync with prompts", async () => {
+      const prompts: PromptItem[] = [
+        { prompt: "p0" },
+        { prompt: "p1" },
+        { prompt: "p2" },
+        { prompt: "p3" },
+        { prompt: "p4" },
+      ];
+      queue.loadPrompts(createPromptFile(prompts));
+      (queue as any).state.currentIndex = 2;
+
+      await queue.reorderPendingPrompts([4, 2, 3]);
+
+      const state = queue.getState();
+      assert.strictEqual(state.results[0].prompt, "p0");
+      assert.strictEqual(state.results[1].prompt, "p1");
+      assert.strictEqual(state.results[2].prompt, "p4");
+      assert.strictEqual(state.results[3].prompt, "p2");
+      assert.strictEqual(state.results[4].prompt, "p3");
+    });
+  });
 });

@@ -513,6 +513,17 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
+  public notifyStartPositionSet(
+    prompts: PromptItem[],
+    currentIndex: number
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.SET_START_POSITION_CONFIRMED,
+      prompts,
+      currentIndex,
+    });
+  }
+
   public notifyQueueSizeLimitReached(
     currentSize: number,
     maxSize: number

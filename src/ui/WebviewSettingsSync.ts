@@ -489,6 +489,7 @@ export class WebviewSettingsSync {
       respectGitignore,
       confirmDeleteOperations:
         ConfigurationUtils.shouldConfirmDeleteOperations(),
+      confirmResetOperations: ConfigurationUtils.shouldConfirmResetOperations(),
       priorContext: ConfigurationUtils.getPriorContext(),
     };
   }

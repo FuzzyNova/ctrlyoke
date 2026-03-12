@@ -1008,6 +1008,12 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "When enabled (default), FlightPath shows a confirmation dialog before deleting prompts or workflow history. Uncheck **\"Don't ask me again\"** in any delete dialog to disable. Re-enable here to restore confirmation prompts."
+        },
+        "flightpath.confirmResetOperations": {
+          "order": 851,
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show a confirmation dialog before changing the workflow start position (Clear All or Set Start Position). Uncheck to skip the confirmation."
         }
       }
     },
@@ -1110,6 +1116,9 @@
     "@codemirror/search": "^6.6.0",
     "@codemirror/state": "^6.5.4",
     "@codemirror/view": "^6.39.12",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "@types/js-yaml": "^4.0.9",
     "@vscode/codicons": "^0.0.44",

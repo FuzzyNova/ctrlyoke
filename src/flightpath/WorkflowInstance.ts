@@ -1548,6 +1548,30 @@ export class WorkflowInstance {
     Log.debug("WorkflowInstance.resetWorkflowState: Complete");
   }
 
+  async setStartPosition(toIndex: number): Promise<void> {
+    const state = this.promptQueue.getState();
+    if (
+      state.status === EXECUTION_STATES.RUNNING ||
+      state.status === EXECUTION_STATES.CANCELLING
+    ) {
+      Log.warn(
+        `WorkflowInstance.setStartPosition: Cannot set start position while in state ${state.status}`
+      );
+      return;
+    }
+    Log.info(`WorkflowInstance.setStartPosition: Moving to index ${toIndex}`);
+    await this.promptQueue.setStartPosition(toIndex);
+    if (this.dashboardSink) {
+      const updatedState = this.promptQueue.getState();
+      const promptsWithStatus = updatedState.prompts.map((prompt, index) => ({
+        ...prompt,
+        status: updatedState.results[index]?.status ?? STEP_STATUS.PENDING,
+      }));
+      this.dashboardSink.notifyStartPositionSet(promptsWithStatus, toIndex);
+    }
+    Log.info(`WorkflowInstance.setStartPosition: Complete`);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Ephemeral / dashboard prompts
   // ─────────────────────────────────────────────────────────────────────────

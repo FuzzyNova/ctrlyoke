@@ -27,7 +27,10 @@ import { CLI_EVENT_TYPES } from "../types/cliEvents";
 function mergeStreamingEvents(existing: any[], incoming: any[]): any[] {
   const result = [...existing];
   for (const event of incoming) {
-    if (event.type === CLI_EVENT_TYPES.TEXT || event.type === CLI_EVENT_TYPES.THINKING) {
+    if (
+      event.type === CLI_EVENT_TYPES.TEXT ||
+      event.type === CLI_EVENT_TYPES.THINKING
+    ) {
       const last = result[result.length - 1];
       if (
         last &&
@@ -37,7 +40,10 @@ function mergeStreamingEvents(existing: any[], incoming: any[]): any[] {
       ) {
         result[result.length - 1] = {
           ...last,
-          data: { ...last.data, text: (last.data?.text || "") + (event.data?.text || "") },
+          data: {
+            ...last.data,
+            text: (last.data?.text || "") + (event.data?.text || ""),
+          },
         };
         continue;
       }
@@ -154,6 +160,13 @@ interface WorkflowActions {
 
   // Partial runtime state clear (for append-continuation runs)
   clearRuntimeStateFromStep: (startStep: number) => void;
+
+  // Apply a start-position change — updates prompts, currentStep, totalSteps, and resets execution state to IDLE.
+  applyStartPositionChange: (
+    prompts: PromptItem[],
+    newCurrentStep: number
+  ) => void;
+
 
   // Promote history snapshot data into live cliOutputs/statusMessages for preserved steps.
   // Called before switching from history→live view on a continuation run so the user
@@ -465,7 +478,10 @@ export const useWorkflowStore = create<
           {
             prompt: "",
             response: "",
-            structured: { events: mergeStreamingEvents([], events), metadata: {} },
+            structured: {
+              events: mergeStreamingEvents([], events),
+              metadata: {},
+            },
             elapsed: 0,
             isStreaming: true,
             timestampMs: Date.now(),
@@ -685,6 +701,15 @@ export const useWorkflowStore = create<
         finalPromptPhase: null,
       };
     }),
+
+  applyStartPositionChange: (prompts, newCurrentStep) =>
+    set(() => ({
+      prompts,
+      currentStep: newCurrentStep,
+      totalSteps: prompts.length,
+      executionState: EXECUTION_STATES.IDLE,
+      finalPromptStatus: null,
+    })),
 
   promoteHistoryToLive: (stepCount) =>
     set((state) => {

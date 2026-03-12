@@ -673,4 +673,12 @@ export const ConfigurationUtils = {
   async setConfirmDeleteOperations(enabled: boolean): Promise<void> {
     await this.updateSetting("confirmDeleteOperations", enabled);
   },
+
+  shouldConfirmResetOperations(): boolean {
+    return getConfig().get<boolean>("confirmResetOperations", true);
+  },
+
+  async setConfirmResetOperations(enabled: boolean): Promise<void> {
+    await this.updateSetting("confirmResetOperations", enabled);
+  },
 };

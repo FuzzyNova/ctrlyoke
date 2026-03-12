@@ -272,6 +272,31 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // SET_START_POSITION_CONFIRMED - Extension confirms start position was moved
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SET_START_POSITION_CONFIRMED] = (message) => {
+    const workflowStore = useWorkflowStore.getState();
+    const prevCurrentStep = workflowStore.currentStep;
+    const newCurrentStep = message.currentIndex as number;
+
+    workflowStore.applyStartPositionChange(
+      message.prompts || [],
+      newCurrentStep
+    );
+
+    // For rewind: clear live CLI outputs for rewound steps
+    if (newCurrentStep < prevCurrentStep) {
+      workflowStore.clearRuntimeStateFromStep(newCurrentStep);
+    }
+
+    // Cancel any active edit — the selected prompt's state has changed
+    const editorStore = useEditorStore.getState();
+    if (editorStore.selectionTarget.kind !== "newPrompt") {
+      editorStore.cancelEdit();
+    }
+  };
+
+  // --------------------------------------------------------------------------
   // PROMPT_DELETED - Prompt was deleted from queue
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.PROMPT_DELETED] = (message) => {
@@ -559,7 +584,10 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.TEMPLATE_FILE_SELECTED] = (message) => {
     const uiStore = useUiStore.getState();
-    uiStore.setTemplateFileSelection({ variable: message.variable, path: message.path });
+    uiStore.setTemplateFileSelection({
+      variable: message.variable,
+      path: message.path,
+    });
   };
 
   // --------------------------------------------------------------------------

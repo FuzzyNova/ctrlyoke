@@ -21,7 +21,10 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
   // Map status to codicon class name and color
   const getIconConfig = (): { icon: string; colorClass: string } => {
     if (disabled) {
-      return { icon: "codicon-circle-slash", colorClass: "text-description-fg" };
+      return {
+        icon: "codicon-circle-slash",
+        colorClass: "text-description-fg",
+      };
     }
     switch (status) {
       case STEP_STATUS.PENDING:
@@ -52,6 +55,11 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
       case STEP_STATUS.CANCELLED:
         return {
           icon: "codicon-circle-slash",
+          colorClass: "text-description-fg",
+        };
+      case STEP_STATUS.SKIPPED:
+        return {
+          icon: "codicon-debug-step-over",
           colorClass: "text-description-fg",
         };
       default:

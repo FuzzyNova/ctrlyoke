@@ -162,6 +162,16 @@ export class WebviewMessageRouter {
       await this.handleResetWorkflowState();
     });
 
+    table.set(MESSAGE_TYPES.SET_START_POSITION, async (message) => {
+      await this.handleSetStartPosition(message.toIndex as number);
+    });
+
+    table.set(MESSAGE_TYPES.REORDER_PROMPTS, async (message) => {
+      await this.getOrchestrator()
+        ?.getActivePromptQueue()
+        ?.reorderPendingPrompts(message.newPendingOrder as number[]);
+    });
+
     // ── Dashboard — CodeMirror Editor ────────────────────────────────────
     table.set(MESSAGE_TYPES.REQUEST_COMPLETIONS, async (message) => {
       await this.handleCompletionRequest(
@@ -214,7 +224,10 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.BROWSE_TEMPLATE_FILE, (message) => {
-      this.serializer.handleBrowseTemplateFile(message.variable, message.fileFilter);
+      this.serializer.handleBrowseTemplateFile(
+        message.variable,
+        message.fileFilter
+      );
     });
 
     // ── Dashboard — Workflow Status ──────────────────────────────────────
@@ -386,6 +399,13 @@ export class WebviewMessageRouter {
       }
     });
 
+    table.set(MESSAGE_TYPES.UPDATE_CONFIRM_RESET, async (message) => {
+      const { value } = message;
+      if (typeof value === "boolean") {
+        await ConfigurationUtils.setConfirmResetOperations(value);
+      }
+    });
+
     return table;
   }
 
@@ -495,6 +515,23 @@ export class WebviewMessageRouter {
       Log.error("Failed to reset workflow state:", error);
       vscode.window.showErrorMessage(
         `Failed to reset workflow state: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async handleSetStartPosition(toIndex: number): Promise<void> {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("WorkflowOrchestrator not initialized");
+      return;
+    }
+
+    try {
+      await orchestrator.setStartPosition(toIndex);
+    } catch (error) {
+      Log.error("Failed to set start position:", error);
+      vscode.window.showErrorMessage(
+        `Failed to set start position: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }

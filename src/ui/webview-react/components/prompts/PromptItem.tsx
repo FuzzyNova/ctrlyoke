@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
+import type { DraggableAttributes } from "@dnd-kit/core";
+type SyntheticListenerMap = Record<string, Function>;
 import { StatusIcon } from "./StatusIcon";
 import { PromptItemDetails } from "./PromptItemDetails";
 import type { PromptOverride } from "./PromptItemDetails";
@@ -48,6 +50,17 @@ interface PromptItemProps {
   modelIsDefault?: boolean;
   /** Prompt-level property overrides to display as compact chips */
   overrides?: PromptOverride[];
+  /** Whether this prompt can be used to set the start position */
+  canSetStartPosition?: boolean;
+  /** Callback when set start position is clicked */
+  onSetStartPosition?: () => void;
+  /** Direction of position change (rewind = go backward, forward = skip ahead) */
+  startPositionDirection?: "rewind" | "forward";
+  /** Drag handle props from dnd-kit sortable */
+  dragHandleProps?: {
+    listeners: SyntheticListenerMap | undefined;
+    attributes: DraggableAttributes;
+  };
 }
 
 /**
@@ -88,11 +101,18 @@ export const PromptItem: React.FC<PromptItemProps> = ({
   modelLabel,
   modelIsDefault,
   overrides,
+  canSetStartPosition,
+  onSetStartPosition,
+  startPositionDirection,
+  dragHandleProps,
 }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
   // Build class names for the container
   const containerClasses = [
     "py-2 px-3",
     "cursor-pointer",
+    "group",
     "border-b border-panel-border",
     "transition-colors",
   ];
@@ -111,6 +131,8 @@ export const PromptItem: React.FC<PromptItemProps> = ({
       className={containerClasses.join(" ")}
       data-prompt-index={index}
       onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       title="Click to edit"
       role="button"
       tabIndex={0}
@@ -123,9 +145,34 @@ export const PromptItem: React.FC<PromptItemProps> = ({
     >
       {/* Header: Icon + Index + Text */}
       <div className="flex items-start gap-2">
-        <span className="flex-shrink-0 mt-0.5">
-          <StatusIcon status={status} />
-        </span>
+        {dragHandleProps && (
+          <span
+            className="flex-shrink-0 cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+            {...dragHandleProps.listeners}
+            {...dragHandleProps.attributes}
+            aria-label="Drag to reorder"
+          >
+            <i className="codicon codicon-grabber text-[12px]" />
+          </span>
+        )}
+        {canSetStartPosition && isHovered ? (
+          <button
+            className="flex-shrink-0 mt-0.5 w-4 flex items-center justify-center text-description-fg hover:text-foreground"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSetStartPosition?.();
+            }}
+            title={`Set step ${index + 1} as start position`}
+          >
+            <i
+              className={`codicon ${startPositionDirection === "rewind" ? "codicon-debug-reverse-continue" : "codicon-debug-step-over"} text-[12px]`}
+            />
+          </button>
+        ) : (
+          <span className="flex-shrink-0 mt-0.5">
+            <StatusIcon status={status} />
+          </span>
+        )}
         <span
           className={`flex-1 min-w-0 text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
         >

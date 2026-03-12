@@ -155,6 +155,14 @@ export const MESSAGE_TYPES = {
 
   // Settings — Webview → Extension
   UPDATE_CONFIRM_DELETE: "updateConfirmDelete", // Update confirmDeleteOperations setting: { value: boolean }
+
+  // Queue Position Control — Webview → Extension
+  SET_START_POSITION: "setStartPosition",
+  REORDER_PROMPTS: "reorderPrompts",
+  UPDATE_CONFIRM_RESET: "updateConfirmReset",
+
+  // Queue Position Control — Extension → Webview
+  SET_START_POSITION_CONFIRMED: "setStartPositionConfirmed",
 } as const;
 
 // ============================================================================
@@ -191,6 +199,7 @@ export const STEP_STATUS = {
   COMPLETED: "completed",
   FAILED: "failed",
   CANCELLED: "cancelled",
+  SKIPPED: "skipped",
 } as const;
 
 // ============================================================================

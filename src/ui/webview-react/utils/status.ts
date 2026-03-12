@@ -21,6 +21,7 @@ export const STATUS_ICONS: Record<StepStatus, string> = {
   [STEP_STATUS.COMPLETED]: "codicon-pass",
   [STEP_STATUS.FAILED]: "codicon-error",
   [STEP_STATUS.CANCELLED]: "codicon-circle-slash",
+  [STEP_STATUS.SKIPPED]: "codicon-debug-step-over",
 };
 
 /**
@@ -59,6 +60,7 @@ export const STATUS_COLORS: Record<StepStatus, string> = {
   [STEP_STATUS.COMPLETED]: "text-green-500",
   [STEP_STATUS.FAILED]: "text-red-500",
   [STEP_STATUS.CANCELLED]: "text-gray-500",
+  [STEP_STATUS.SKIPPED]: "text-gray-400",
 };
 
 /**
@@ -81,6 +83,7 @@ export const STATUS_LABELS: Record<StepStatus, string> = {
   [STEP_STATUS.COMPLETED]: "Completed",
   [STEP_STATUS.FAILED]: "Failed",
   [STEP_STATUS.CANCELLED]: "Cancelled",
+  [STEP_STATUS.SKIPPED]: "Skipped",
 };
 
 /**

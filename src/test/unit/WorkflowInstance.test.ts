@@ -121,6 +121,7 @@ suite("WorkflowInstance finalPrompt replay", () => {
         statusMessageCalls.push({ stepIndex, message, severity });
       },
       notifyWorkflowStateReset: () => {},
+      notifyStartPositionSet: () => {},
     };
 
     const instance = new WorkflowInstance(
@@ -243,6 +244,7 @@ suite("WorkflowInstance eager working file creation", () => {
       updateFinalPromptOutput: () => {},
       updateStatusMessage: () => {},
       notifyWorkflowStateReset: () => {},
+      notifyStartPositionSet: () => {},
     };
 
     const instance = new WorkflowInstance(
@@ -309,6 +311,7 @@ suite("WorkflowInstance append-and-continue", () => {
       updateFinalPromptOutput: () => {},
       updateStatusMessage: () => {},
       notifyWorkflowStateReset: () => {},
+      notifyStartPositionSet: () => {},
     };
 
     const instance = new WorkflowInstance(
@@ -372,6 +375,7 @@ suite("WorkflowInstance append-and-continue", () => {
       updateFinalPromptOutput: () => {},
       updateStatusMessage: () => {},
       notifyWorkflowStateReset: () => {},
+      notifyStartPositionSet: () => {},
     };
 
     const instance = new WorkflowInstance(

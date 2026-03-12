@@ -887,6 +887,10 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().resetWorkflowState();
   }
 
+  async setStartPosition(toIndex: number): Promise<void> {
+    return this.getActiveInstance().setStartPosition(toIndex);
+  }
+
   async executeEphemeralPrompt(
     text: string,
     properties: unknown,
