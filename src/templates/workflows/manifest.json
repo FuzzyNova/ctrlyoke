@@ -25,6 +25,14 @@
       "file": "full-feature.flightpath.json",
       "tags": ["advanced", "complete"],
       "icon": "$(rocket)"
+    },
+    {
+      "id": "spec-driven-loop",
+      "label": "Spec-Driven Loop",
+      "description": "Architect → Implement → Orchestrate loop driven by a spec/design document",
+      "file": "spec-driven-loop.flightpath.json",
+      "tags": ["advanced", "loop", "spec"],
+      "icon": "$(sync)"
     }
   ]
 }

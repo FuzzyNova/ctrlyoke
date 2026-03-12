@@ -9,6 +9,14 @@
       "file": "flightpath-orchestrator.agent.md",
       "tags": ["workflow", "planning", "automation"],
       "icon": "$(compass)"
+    },
+    {
+      "id": "spec-orchestrator",
+      "label": "Spec Orchestrator",
+      "description": "Orchestrating reviewer for spec-driven loops. Reviews completed work against the spec and queues follow-up prompts if gaps remain.",
+      "file": "spec-orchestrator.agent.md",
+      "tags": ["orchestration", "review", "loop"],
+      "icon": "$(sync)"
     }
   ]
 }

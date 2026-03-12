@@ -5,6 +5,28 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 
 /**
+ * A single template variable — name plus optional UI metadata.
+ *
+ * Type is inferred from the placeholder syntax in template content:
+ *   {file:varName}  → type = 'file'  (Browse button, workspace-relative file picker)
+ *   {text:varName}  → type = 'text'  (plain input, explicit)
+ *   {varName}       → type = 'text'  (plain input, default)
+ *
+ * Built-in templates may also carry fileFilter and autoFillFilename, which
+ * cannot be expressed in the placeholder syntax alone.
+ */
+export interface TemplateVariable {
+  /** Matches the {placeholder} in the template content */
+  name: string;
+  /** 'file' shows a Browse button; 'text' (default) is a plain input */
+  type?: "text" | "file";
+  /** Glob patterns for the file picker filter. Only used when type = 'file' */
+  fileFilter?: string[];
+  /** When true, the workflow filename auto-fills with the selected file's basename (no extension) */
+  autoFillFilename?: boolean;
+}
+
+/**
  * Template information structure for UI display
  */
 export interface TemplateInfo {
@@ -12,7 +34,7 @@ export interface TemplateInfo {
   name: string;
   description: string;
   path: string | null;
-  variables: string[];
+  variables: TemplateVariable[];
   isBuiltIn: boolean;
   isAction?: boolean;
 }
@@ -39,21 +61,36 @@ export class TemplateManager {
       id: "simple-feature",
       name: "Simple Feature",
       description: "Plan → Implement → Commit",
-      variables: ["featureDescription"],
+      variables: [{ name: "featureDescription" }],
       isBuiltIn: true,
     },
     {
       id: "fix-tests",
       name: "Fix Tests",
       description: "Run tests and fix failures with retry",
-      variables: ["testCommand"],
+      variables: [{ name: "testCommand" }],
       isBuiltIn: true,
     },
     {
       id: "full-feature",
       name: "Full Feature",
       description: "Plan → Implement → Review → Docs → Commit",
-      variables: ["featureDescription", "planDocument"],
+      variables: [{ name: "featureDescription" }, { name: "planDocument" }],
+      isBuiltIn: true,
+    },
+    {
+      id: "spec-driven-loop",
+      name: "Spec-Driven Loop",
+      description:
+        "Architect → Implement → Orchestrate loop. Give it a spec/design doc and it runs until every requirement is satisfied.",
+      variables: [
+        {
+          name: "specFile",
+          type: "file" as const, // mirrors {file:specFile} in template content
+          fileFilter: ["**/*.md", "**/*.txt", "**/*.yaml", "**/*.json"],
+          autoFillFilename: true,
+        },
+      ],
       isBuiltIn: true,
     },
   ];
@@ -194,31 +231,48 @@ export class TemplateManager {
   }
 
   /**
-   * Extract variables from template content
-   * Matches {variableName} patterns, filters out reserved variables
+   * Extract variables from template content.
+   *
+   * Supports typed placeholder syntax:
+   *   {file:varName}  → TemplateVariable with type = 'file'
+   *   {text:varName}  → TemplateVariable with type = 'text'
+   *   {varName}       → TemplateVariable with no explicit type (defaults to text in UI)
+   *
+   * Reserved names (scriptOutput, retryCount, maxRetries) are filtered out.
+   * Duplicate names are deduplicated; first occurrence wins.
    */
-  extractVariables(content: string): string[] {
-    const pattern = /\{([a-z][a-zA-Z0-9]*)\}/g;
+  extractVariables(content: string): TemplateVariable[] {
+    // Matches optional type prefix: {file:name}, {text:name}, or plain {name}
+    const pattern = /\{(?:(file|text):)?([a-z][a-zA-Z0-9]*)\}/g;
     const reserved = ["scriptOutput", "retryCount", "maxRetries"];
-    const variables = new Set<string>();
+    const seen = new Set<string>();
+    const variables: TemplateVariable[] = [];
 
     let match;
     while ((match = pattern.exec(content)) !== null) {
-      if (!reserved.includes(match[1])) {
-        variables.add(match[1]);
+      const [, typePrefix, name] = match;
+      if (!reserved.includes(name) && !seen.has(name)) {
+        seen.add(name);
+        const variable: TemplateVariable = { name };
+        if (typePrefix === "file" || typePrefix === "text") {
+          variable.type = typePrefix;
+        }
+        variables.push(variable);
       }
     }
 
-    return Array.from(variables);
+    return variables;
   }
 
   /**
-   * Replace variables in template content with provided values
+   * Replace variables in template content with provided values.
+   * Handles plain {varName}, {file:varName}, and {text:varName} placeholders.
    */
   replaceVariables(content: string, variables: Record<string, string>): string {
     let result = content;
     for (const [key, value] of Object.entries(variables)) {
-      const pattern = new RegExp(`\\{${key}\\}`, "g");
+      // Replace all forms: {varName}, {file:varName}, {text:varName}
+      const pattern = new RegExp(`\\{(?:file:|text:)?${key}\\}`, "g");
       result = result.replace(pattern, value);
     }
     return result;

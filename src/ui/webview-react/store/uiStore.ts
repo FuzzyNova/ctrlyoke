@@ -56,13 +56,24 @@ const vsCodeRawStorage: StateStorage = {
 };
 
 /**
+ * A single template variable — name plus optional UI metadata.
+ * Mirrors TemplateVariable in TemplateManager.ts.
+ */
+export interface TemplateVariable {
+  name: string;
+  type?: "text" | "file";
+  fileFilter?: string[];
+  autoFillFilename?: boolean;
+}
+
+/**
  * Template information for new workflow modal
  */
 export interface TemplateInfo {
   id: string;
   name: string;
   description: string;
-  variables?: string[];
+  variables?: TemplateVariable[];
   isBuiltIn: boolean;
   isAction: boolean;
 }
@@ -139,6 +150,8 @@ interface UiState {
   currentTemplate: TemplateInfo | null;
   workflowsDir: string;
   defaultTemplateId: string;
+  /** Last file selected via OS file picker for a template variable; cleared after TemplateModal consumes it */
+  templateFileSelection: { variable: string; path: string } | null;
 
   // Recent workflows dropdown
   recentWorkflows: RecentWorkflow[];
@@ -204,6 +217,7 @@ interface UiActions {
   closeNewWorkflowModal: () => void;
   setCurrentTemplate: (template: TemplateInfo | null) => void;
   setDefaultTemplateId: (id: string) => void;
+  setTemplateFileSelection: (selection: { variable: string; path: string } | null) => void;
 
   // Recent workflows
   setRecentWorkflows: (workflows: RecentWorkflow[]) => void;
@@ -266,6 +280,7 @@ const initialState: UiState = {
   currentTemplate: null,
   workflowsDir: ".flightpath/workflows",
   defaultTemplateId: "blank",
+  templateFileSelection: null,
   recentWorkflows: [],
   recentWorkflowsDropdownOpen: false,
   loadedWorkflows: [],
@@ -403,6 +418,8 @@ export const useUiStore = create<UiState & UiActions>()(
       setCurrentTemplate: (template) => set({ currentTemplate: template }),
 
       setDefaultTemplateId: (id) => set({ defaultTemplateId: id }),
+
+      setTemplateFileSelection: (selection) => set({ templateFileSelection: selection }),
 
       // ============================================================================
       // RECENT WORKFLOWS

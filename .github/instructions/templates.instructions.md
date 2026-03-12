@@ -35,6 +35,7 @@ Templates support `{variableName}` placeholder substitution:
 - `simple-feature`: `{featureDescription}`
 - `fix-tests`: `{testCommand}`
 - `full-feature`: `{featureDescription}`, `{planDocument}`
+- `spec-driven-loop`: `{specFile}`
 
 **Reserved variables** (automatically injected, do NOT use in templates):
 
@@ -47,12 +48,30 @@ Templates support `{variableName}` placeholder substitution:
 - Pattern: `/\{([a-z][a-zA-Z0-9]*)\}/g`
 - Filters out reserved variables
 - Used by TemplateManager.extractVariables()
+
+**Typed placeholder syntax** — variable type is encoded directly in the placeholder:
+
+| Syntax | Type | Modal UI |
+|--------|------|----------|
+| `{varName}` | text (default) | plain text input |
+| `{text:varName}` | text (explicit) | plain text input |
+| `{file:varName}` | file | text input + Browse button (workspace-relative file picker) |
+
+This syntax works in **both built-in and custom templates** — `extractVariables()` parses the prefix. `replaceVariables()` substitutes all three forms with the user-provided value.
+
+**Advanced built-in-only metadata** (cannot be expressed in placeholder syntax, declared in `TemplateManager.BUILT_IN_TEMPLATES`):
+
+- `fileFilter` — glob patterns for the file picker filter (e.g. `['**/*.md', '**/*.txt']`)
+- `autoFillFilename: true` — auto-fills the workflow name from the selected file's basename
   </templateVariables>
 
 <contextSyntax>
-**Parsed:** `#file:path`, `#file:path:lines`, `#file:"path with spaces"`
-**Passed through:** `@workspace`, `#codebase`, slash commands (harness-specific)
-Use `#file:` for portable templates.
+**Full file / directory attachment:** `@path/to/file.ts`, `@path/to/dir/`
+**Line range or symbol:** `#file:path`, `#file:path:startLine-endLine`, `#file:"path with spaces"`
+**Passed through (harness-handled):** `@workspace`, `#codebase`, slash commands
+
+Use `@path` for attaching whole files in templates — it is portable across all harnesses.
+`#file:` is for line ranges and symbol excerpts only.
 </contextSyntax>
 
 <workflowGuidelines>

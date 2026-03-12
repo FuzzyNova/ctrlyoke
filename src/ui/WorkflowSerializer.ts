@@ -378,6 +378,47 @@ export class WorkflowSerializer {
     vscode.commands.executeCommand("flightpath.createPromptFile");
   }
 
+  async handleBrowseTemplateFile(variable: string, fileFilter?: string[]): Promise<void> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const filters: Record<string, string[]> = {};
+
+    if (fileFilter && fileFilter.length > 0) {
+      // Extract extensions from glob patterns like **/*.md → md
+      const exts = fileFilter
+        .map((p) => p.replace(/^\*\*\/\*\./, ""))
+        .filter((e) => !e.includes("*"));
+      if (exts.length > 0) {
+        filters["Spec / Design Files"] = exts;
+      }
+    }
+    filters["All Files"] = ["*"];
+
+    const uris = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      canSelectFolders: false,
+      defaultUri: workspaceFolder?.uri,
+      filters,
+      title: `Select file for {${variable}}`,
+    });
+
+    if (uris && uris.length > 0) {
+      // Return a workspace-relative path when possible so workflows are portable
+      let filePath = uris[0].fsPath;
+      if (workspaceFolder) {
+        const wsPath = workspaceFolder.uri.fsPath;
+        if (filePath.startsWith(wsPath)) {
+          filePath = filePath.slice(wsPath.length).replace(/^[\\/]/, "");
+        }
+      }
+
+      this.postMessage({
+        type: MESSAGE_TYPES.TEMPLATE_FILE_SELECTED,
+        variable,
+        path: filePath,
+      });
+    }
+  }
+
   // ============================================================================
   // Workflow Name
   // ============================================================================

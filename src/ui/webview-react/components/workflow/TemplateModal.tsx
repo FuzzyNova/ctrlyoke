@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Modal, Button } from "../shared";
 import { useUiStore } from "@store/uiStore";
+import type { TemplateVariable } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
 
@@ -42,6 +43,8 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const currentTemplate = useUiStore((s) => s.currentTemplate);
   const setCurrentTemplate = useUiStore((s) => s.setCurrentTemplate);
   const setDefaultTemplateId = useUiStore((s) => s.setDefaultTemplateId);
+  const templateFileSelection = useUiStore((s) => s.templateFileSelection);
+  const setTemplateFileSelection = useUiStore((s) => s.setTemplateFileSelection);
 
   // Local form state
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
@@ -76,6 +79,30 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     }
   }, [isOpen]);
 
+  // Consume file selection from OS picker (sent back via TEMPLATE_FILE_SELECTED)
+  useEffect(() => {
+    if (!templateFileSelection) return;
+    const { variable, path } = templateFileSelection;
+
+    // Apply selected path to the variable field
+    setVariables((prev) => ({ ...prev, [variable]: path }));
+
+    // Auto-fill workflow filename if this variable has autoFillFilename: true
+    const meta = currentTemplate?.variables?.find((v) => v.name === variable);
+    if (meta?.autoFillFilename && !filename) {
+      // Extract basename without extension: "path/to/my-spec.md" → "my-spec"
+      const base = path.split(/[\\/]/).pop() ?? path;
+      const withoutExt = base.replace(/\.[^.]+$/, "");
+      if (withoutExt) {
+        setFilename(withoutExt);
+        setFilenameError(null);
+      }
+    }
+
+    // Clear so the effect doesn't re-fire
+    setTemplateFileSelection(null);
+  }, [templateFileSelection, currentTemplate, filename, setTemplateFileSelection]);
+
   // Handle template selection change
   const handleTemplateChange = useCallback(
     (templateId: string) => {
@@ -101,6 +128,18 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       setVariables((prev) => ({ ...prev, [variable]: value }));
     },
     []
+  );
+
+  // Open OS file picker for a file-type variable
+  const handleBrowseFile = useCallback(
+    (variable: string, meta?: TemplateVariable) => {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.BROWSE_TEMPLATE_FILE,
+        variable,
+        fileFilter: meta?.fileFilter,
+      });
+    },
+    [vscode]
   );
 
   // Validate filename
@@ -304,26 +343,41 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         {currentTemplate?.variables && currentTemplate.variables.length > 0 && (
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-foreground">Variables</h4>
-            {currentTemplate.variables.map((variable) => (
-              <div key={variable} className="form-group">
-                <label
-                  htmlFor={`var-${variable}`}
-                  className="block text-sm mb-1 text-foreground"
-                >
-                  {variable}
-                </label>
-                <input
-                  type="text"
-                  id={`var-${variable}`}
-                  value={variables[variable] || ""}
-                  onChange={(e) =>
-                    handleVariableChange(variable, e.target.value)
-                  }
-                  placeholder={`Enter ${variable}`}
-                  className="w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border border-input-border focus:outline-none focus:border-focus-border"
-                />
-              </div>
-            ))}
+            {currentTemplate.variables.map((variable) => {
+              const isFile = variable.type === "file";
+              return (
+                <div key={variable.name} className="form-group">
+                  <label
+                    htmlFor={`var-${variable.name}`}
+                    className="block text-sm mb-1 text-foreground"
+                  >
+                    {variable.name}
+                    {isFile && (
+                      <span className="ml-1 text-xs text-description-fg">(file path)</span>
+                    )}
+                  </label>
+                  <div className={isFile ? "flex gap-1.5" : undefined}>
+                    <input
+                      type="text"
+                      id={`var-${variable.name}`}
+                      value={variables[variable.name] || ""}
+                      onChange={(e) => handleVariableChange(variable.name, e.target.value)}
+                      placeholder={isFile ? "path/to/spec.md" : `Enter ${variable.name}`}
+                      className="flex-1 px-2 py-1.5 rounded bg-input-bg text-input-fg border border-input-border focus:outline-none focus:border-focus-border font-mono text-xs"
+                    />
+                    {isFile && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleBrowseFile(variable.name, variable)}
+                        title="Browse for file"
+                      >
+                        Browse…
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 

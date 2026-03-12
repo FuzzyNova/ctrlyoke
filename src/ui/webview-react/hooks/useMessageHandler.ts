@@ -555,6 +555,14 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // TEMPLATE_FILE_SELECTED - OS file picker result for a template variable
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.TEMPLATE_FILE_SELECTED] = (message) => {
+    const uiStore = useUiStore.getState();
+    uiStore.setTemplateFileSelection({ variable: message.variable, path: message.path });
+  };
+
+  // --------------------------------------------------------------------------
   // WORKFLOW_CREATED - New workflow file was created
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_CREATED] = (message) => {

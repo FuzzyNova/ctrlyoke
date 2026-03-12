@@ -213,6 +213,10 @@ export class WebviewMessageRouter {
       this.serializer.handleCreateNewTemplate();
     });
 
+    table.set(MESSAGE_TYPES.BROWSE_TEMPLATE_FILE, (message) => {
+      this.serializer.handleBrowseTemplateFile(message.variable, message.fileFilter);
+    });
+
     // ── Dashboard — Workflow Status ──────────────────────────────────────
     table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_NAME, (message) => {
       this.serializer.handleUpdateWorkflowName(

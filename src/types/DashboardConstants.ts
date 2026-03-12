@@ -102,6 +102,10 @@ export const MESSAGE_TYPES = {
   SET_DEFAULT_TEMPLATE: "setDefaultTemplate",
   CREATE_WORKFLOW: "createWorkflow",
   CREATE_NEW_TEMPLATE: "createNewTemplate",
+  BROWSE_TEMPLATE_FILE: "browseTemplateFile", // Request OS file picker for a template variable
+
+  // New Workflow Modal - Extension -> Webview
+  TEMPLATE_FILE_SELECTED: "templateFileSelected", // OS file picker result for a template variable
 
   // CodeMirror editor - Webview <-> Extension
   REQUEST_COMPLETIONS: "requestCompletions", // Request autocomplete suggestions

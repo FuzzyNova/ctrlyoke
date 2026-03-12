@@ -1,0 +1,51 @@
+# Spec-Driven Implementation Loop
+# Architect → Implement → Orchestrate (loops until spec is fully satisfied)
+#
+# Variable: {file:specFile} — path to your design/spec document
+# The orchestrating finalPrompt reviews the work against the spec and
+# queues additional prompts if anything is missing or incorrect.
+
+prompts:
+  - id: architect
+    prompt: |
+      Review the following specification document:
+      @{file:specFile}
+
+      Your tasks:
+      1. Fully understand all requirements and scope in the spec
+      2. Analyze the existing codebase architecture, patterns, and conventions (@workspace)
+      3. Identify any gaps, ambiguities, or conflicts between the spec and the current architecture
+      4. Produce a clear, refined implementation plan aligned with existing patterns
+
+      Label your final plan as "## Implementation Plan" at the end of your response.
+
+  - id: implement
+    prompt: |
+      Implement the specification:
+      @{file:specFile}
+
+      Requirements:
+      - Follow all existing codebase patterns and conventions
+      - Complete the full implementation — no TODOs, stubs, or placeholders
+      - Handle edge cases and error conditions throughout
+
+finalPrompt:
+  id: orchestrate
+  agent: spec-orchestrator
+  allowDynamicExtension: true
+  priorContext: all
+  prompt: |
+    Compare all work completed so far against the original specification:
+    @{file:specFile}
+
+    Evaluate:
+    1. Is every requirement in the spec fully implemented and correct?
+    2. Are there any bugs, type errors, broken tests, or incomplete features?
+    3. Does the implementation follow existing codebase architecture and patterns?
+
+    If the implementation is complete and meets all requirements, output exactly:
+    DONE: <brief one-line summary of what was completed>
+
+    If more work is needed, first use the flightpath_append_queue tool to add specific,
+    actionable follow-up prompts addressing only the remaining gaps. Then output:
+    CONTINUING: <brief summary of what still needs to be done>
