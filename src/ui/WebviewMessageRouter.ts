@@ -167,9 +167,9 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.REORDER_PROMPTS, async (message) => {
-      await this.getOrchestrator()
-        ?.getActivePromptQueue()
-        ?.reorderPendingPrompts(message.newPendingOrder as number[]);
+      await this.getOrchestrator()?.reorderPendingPrompts(
+        message.newPendingOrder as number[]
+      );
     });
 
     // ── Dashboard — CodeMirror Editor ────────────────────────────────────

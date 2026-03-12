@@ -887,6 +887,10 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().resetWorkflowState();
   }
 
+  async reorderPendingPrompts(newPendingOrder: number[]): Promise<void> {
+    return this.getActiveInstance().reorderPendingPrompts(newPendingOrder);
+  }
+
   async setStartPosition(toIndex: number): Promise<void> {
     return this.getActiveInstance().setStartPosition(toIndex);
   }

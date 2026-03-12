@@ -272,6 +272,14 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // REORDER_PROMPTS_CONFIRMED - Extension confirms pending prompts were reordered
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED] = (message) => {
+    const workflowStore = useWorkflowStore.getState();
+    workflowStore.setPrompts(message.prompts || []);
+  };
+
+  // --------------------------------------------------------------------------
   // SET_START_POSITION_CONFIRMED - Extension confirms start position was moved
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SET_START_POSITION_CONFIRMED] = (message) => {

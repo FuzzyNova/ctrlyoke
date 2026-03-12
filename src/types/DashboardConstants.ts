@@ -163,6 +163,7 @@ export const MESSAGE_TYPES = {
 
   // Queue Position Control — Extension → Webview
   SET_START_POSITION_CONFIRMED: "setStartPositionConfirmed",
+  REORDER_PROMPTS_CONFIRMED: "reorderPromptsConfirmed",
 } as const;
 
 // ============================================================================

@@ -524,6 +524,13 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
+  public notifyPromptsReordered(prompts: PromptItem[]): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED,
+      prompts,
+    });
+  }
+
   public notifyQueueSizeLimitReached(
     currentSize: number,
     maxSize: number

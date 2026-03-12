@@ -1548,6 +1548,14 @@ export class WorkflowInstance {
     Log.debug("WorkflowInstance.resetWorkflowState: Complete");
   }
 
+  async reorderPendingPrompts(newPendingOrder: number[]): Promise<void> {
+    await this.promptQueue.reorderPendingPrompts(newPendingOrder);
+    if (this.dashboardSink) {
+      const state = this.promptQueue.getState();
+      this.dashboardSink.notifyPromptsReordered(state.prompts);
+    }
+  }
+
   async setStartPosition(toIndex: number): Promise<void> {
     const state = this.promptQueue.getState();
     if (

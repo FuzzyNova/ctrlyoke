@@ -101,4 +101,6 @@ export interface IDashboardSink {
   notifyWorkflowStateReset(prompts: any[]): void;
 
   notifyStartPositionSet(prompts: PromptItem[], currentIndex: number): void;
+
+  notifyPromptsReordered(prompts: PromptItem[]): void;
 }
