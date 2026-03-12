@@ -103,7 +103,7 @@ We want to support multiple context reference syntaxes in prompt files:
 
 - `@path/to/file` - Full file references (CLI-native)
 - `@path/to/dir/` - Directory structure (trailing slash)
-- `#file:path:line-line` - Exact line ranges to attach
+- `#selection::-` - Exact line ranges to attach
 - `#sym:path:symbol:line` - Symbol references (resolves to definition)
 
 However:
@@ -247,7 +247,7 @@ This applies to ALL reference types (`@path`, `#file:path:lines`, `#sym:path:sym
 - ✅ Makes prompts self-documenting and easier to understand
 - ✅ Helps LLM correlate prompt text with attached code sections
 - ✅ Useful for debugging and understanding prompt intent
-- ✅ **Enables sequential/ordered references**: Users can write prompts like "Look at this first: #file:A:1-10 then read this: #file:B:20-30"
+- ✅ **Enables sequential/ordered references**: Users can write prompts like "Look at this first: #selection::- then read this: #selection::-"
 
 **Example 1 - Simple Reference**:
 
@@ -260,15 +260,15 @@ Excerpt from src/app.ts, lines 45 to 67:
 
 </attachment>
 
-Fix the bug in #file:src/app.ts:45-67 where the event handler leaks memory [TOOL_INSTRUCTION]
+Fix the bug in #selection::- where the event handler leaks memory [TOOL_INSTRUCTION]
 
 ```
 
 **Example 2 - Sequential References (CRITICAL USE CASE)**:
 ```
 
-Look at this line first: #file:CopilotChatIntegration.ts:695-696
-and then only after that, read this other line #file:CopilotChatIntegration.ts:697-697
+Look at this line first: #selection::-
+and then only after that, read this other line #selection::-
 
 ````
 
@@ -353,7 +353,7 @@ This makes the attachment process **instantaneous and invisible to the user**.
 
 - `parseAllFileReferences(prompt): FileReference[]` - Unified parser for all reference types
 - `parseAtReferences(prompt): FileReference[]` - Parses @path references
-- `parseFileReferences(prompt): FileReference[]` - Parses #file:path:line-line references
+- `parseFileReferences(prompt): FileReference[]` - Parses #selection::- references
 - `parseSymbolReferences(prompt): FileReference[]` - Parses #sym:path:symbol:line references
 
 **ContextExpander Helper Methods** (private):

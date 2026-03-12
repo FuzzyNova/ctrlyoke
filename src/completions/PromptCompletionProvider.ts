@@ -21,13 +21,13 @@ type TriggerChar = "@" | "#";
  * - Triggers on `@` character for full file references (CLI-native syntax)
  * - Triggers on `#` character for snippet references (line ranges, selections)
  * - Offers workspace files as completions
- * - Special handling for current selection (inserts #file:path:line-line)
+ * - Special handling for current selection (inserts #selection:path:line-line)
  * - Dynamic model completions inside "model" string values (JSON files)
  *
  * Syntax Reference (see docs/PROMPT_SYNTAX.md):
- * - @path/to/file.ts       → Full file (CLI handles natively)
- * - #file:path:10-20       → Line range snippet (FlightPath XML)
- * - #sym:symbolName        → Symbol reference (planned)
+ * - @path/to/file.ts          → Full file (CLI handles natively)
+ * - #selection:path:10-20     → Line range snippet (FlightPath XML)
+ * - #sym:symbolName           → Symbol reference (planned)
  */
 export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   // No local cache - using shared cache from CompletionHelpers

@@ -366,7 +366,7 @@ export async function getFileCompletions(
           `**Full file attachment** (CLI-native)\n\n` +
           `Insert: \`@${relativePath}\`\n\n` +
           `The CLI will automatically attach this file's content.\n\n` +
-          `_For line ranges, use \`#file:${relativePath}:10-20\`_`,
+          `_For line ranges, use \`#selection:${relativePath}:10-20\`_`,
         sortText: `0_${relativePath.split(path.sep).length}_${relativePath}`,
         filterText: `${relativePath} ${fileName}`,
       };
@@ -515,8 +515,8 @@ export function getSelectionCompletions(): PlainCompletionItem[] {
     }
     seenSelections.add(selectionKey);
 
-    // Format: #file:path:startLine-endLine
-    const completionText = `file:${relativePath}:${startLine}-${endLine}`;
+    // Format: #selection:path:startLine-endLine
+    const completionText = `selection:${relativePath}:${startLine}-${endLine}`;
 
     // Create label with file name and line range
     // Label must start with "selection" so both VS Code and CodeMirror can

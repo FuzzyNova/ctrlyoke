@@ -750,7 +750,7 @@ Claude CLI **automatically attaches file content** when you reference files usin
 **Proposed optimization:**
 
 - Convert `#file:path` → `@path` for full file references
-- Keep XML attachments only for line ranges (`#file:path:10-20`)
+- Keep XML attachments only for line ranges (`#selection::-`)
 - Let Claude's native attachment handle full files (more efficient)
 - **Note**: Custom instructions limited to `CLAUDE.md` files only
 
@@ -758,14 +758,14 @@ Claude CLI **automatically attaches file content** when you reference files usin
 
 Neither Copilot nor Claude CLI natively support line ranges. FlightPath implements this feature for both:
 
-- **Format**: `#file:path:startLine-endLine`
+- **Format**: `#selection::-`
 - **Implementation**: Extract lines and include in XML `<attachment>` block
 - **Behavior**: Works consistently across both CLI integrations
 
 **Example:**
 
 ```markdown
-Analyze the error handling in #file:src/extension.ts:45-67
+Analyze the error handling in #selection::-
 ```
 
 FlightPath converts this to:

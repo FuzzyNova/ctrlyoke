@@ -78,7 +78,7 @@ All phases completed successfully:
 
 - `@file.ext` - Full file references
 - `@dir/` - Directory references
-- `#file:path:10-20` - Line range references
+- `#selection::-` - Line range references
 - `#sym:path:symbol:42` - Symbol references
 - ViewPlugin with Decoration API for performant link rendering
 - Ctrl+Click navigation to open files with optional line selection
@@ -198,7 +198,7 @@ All phases completed successfully:
 
 - ✅ @file.ext links styled and clickable
 - ✅ @dir/ links open directory in explorer
-- ✅ #file:path:10-20 opens with line selection
+- ✅ #selection::- opens with line selection
 - ✅ #sym:path:symbol:42 navigates to symbol line
 - ✅ Ctrl+Click works on all patterns
 
@@ -1442,7 +1442,7 @@ export const MESSAGE_TYPES = {
 - [ ] `#file:path/to/file.ts` shows as underlined link
 - [ ] Ctrl+Click on link opens file in editor
 - [ ] `#file:path:10` opens file at line 10
-- [ ] `#file:path:10-20` opens file with lines 10-20 selected
+- [ ] `#selection::-` opens file with lines 10-20 selected
 
 **Theme Integration:**
 

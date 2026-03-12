@@ -535,20 +535,20 @@ applyTo: "src/flightpath/base/**"
 
 - Convert `#file:path` → `@path` reference (triggers custom instructions)
 - **Also** include XML attachment for file content (Copilot needs explicit content)
-- Keep XML attachments for line ranges (`#file:path:10-20`)
+- Keep XML attachments for line ranges (`#selection::-`)
 
 ### Line Range Support
 
 Neither Copilot nor Claude CLI natively support line ranges. FlightPath implements this feature for both:
 
-- **Format**: `#file:path:startLine-endLine`
+- **Format**: `#selection::-`
 - **Implementation**: Extract lines and include in XML `<attachment>` block
 - **Behavior**: Works consistently across both CLI integrations
 
 **Example:**
 
 ```markdown
-Analyze the error handling in #file:src/extension.ts:45-67
+Analyze the error handling in #selection::-
 ```
 
 FlightPath converts this to:
@@ -623,7 +623,7 @@ FlightPath would:
 
 1. Parse `#sym:symbolName` from prompt
 2. Resolve symbol location using VS Code API
-3. Convert to `#file:path:startLine-endLine` format
+3. Convert to `#selection::-` format
 4. Process as line range attachment (existing implementation)
 
 **Implementation priority**: Medium (symbol resolution adds complexity but high user value)

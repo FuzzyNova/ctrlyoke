@@ -2,7 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
   parseAtReferences,
-  parseFileReferences,
+  parseSelectionReferences,
   parseSymbolReferences,
   parseDirectoryReferences,
   parseAllFileReferences,
@@ -91,15 +91,15 @@ suite("FileReferenceParser", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  suite("parseFileReferences", () => {
-    test("returns empty array for prompt with no #file: references", () => {
-      const refs = parseFileReferences("just normal text");
+  suite("parseSelectionReferences", () => {
+    test("returns empty array for prompt with no #selection: references", () => {
+      const refs = parseSelectionReferences("just normal text");
       assert.deepStrictEqual(refs, []);
     });
 
-    test("parses #file: reference with line range", () => {
-      const refs = parseFileReferences(
-        "See #file:src/utils.ts:10-20 for details."
+    test("parses #selection: reference with line range", () => {
+      const refs = parseSelectionReferences(
+        "See #selection:src/utils.ts:10-20 for details."
       );
       assert.strictEqual(refs.length, 1);
       assert.strictEqual(refs[0].path, "src/utils.ts");
@@ -107,17 +107,20 @@ suite("FileReferenceParser", () => {
       assert.strictEqual(refs[0].endLine, 20);
     });
 
-    test("parses quoted path in #file: reference", () => {
-      const refs = parseFileReferences('#file:"path with spaces/file.ts":5-15');
+    test("parses quoted path in #selection: reference", () => {
+      const refs = parseSelectionReferences(
+        '#selection:"path with spaces/file.ts":5-15'
+      );
       assert.strictEqual(refs.length, 1);
       assert.strictEqual(refs[0].path, "path with spaces/file.ts");
       assert.strictEqual(refs[0].startLine, 5);
       assert.strictEqual(refs[0].endLine, 15);
     });
 
-    test("parses multiple #file: references", () => {
-      const prompt = "Look at #file:src/a.ts:1-10 and #file:src/b.ts:20-30";
-      const refs = parseFileReferences(prompt);
+    test("parses multiple #selection: references", () => {
+      const prompt =
+        "Look at #selection:src/a.ts:1-10 and #selection:src/b.ts:20-30";
+      const refs = parseSelectionReferences(prompt);
       assert.strictEqual(refs.length, 2);
       assert.strictEqual(refs[0].path, "src/a.ts");
       assert.strictEqual(refs[0].startLine, 1);
@@ -127,14 +130,14 @@ suite("FileReferenceParser", () => {
       assert.strictEqual(refs[1].endLine, 30);
     });
 
-    test("ignores #file: without line range", () => {
-      // Per the spec, #file:path (without line range) is DEPRECATED — should not match
-      const refs = parseFileReferences("#file:src/utils.ts");
+    test("ignores #selection: without line range", () => {
+      // #selection: requires a line range — bare reference should not match
+      const refs = parseSelectionReferences("#selection:src/utils.ts");
       assert.strictEqual(refs.length, 0);
     });
 
     test("line range values are parsed as numbers", () => {
-      const refs = parseFileReferences("#file:src/file.ts:100-200");
+      const refs = parseSelectionReferences("#selection:src/file.ts:100-200");
       assert.strictEqual(refs.length, 1);
       assert.strictEqual(typeof refs[0].startLine, "number");
       assert.strictEqual(typeof refs[0].endLine, "number");
@@ -211,10 +214,10 @@ suite("FileReferenceParser", () => {
       assert.deepStrictEqual(refs, []);
     });
 
-    test("combines @path, #file:, and #sym: references", () => {
+    test("combines @path, #selection:, and #sym: references", () => {
       const prompt = [
         "Look at @src/utils.ts",
-        "and #file:src/types.ts:1-50",
+        "and #selection:src/types.ts:1-50",
         "and #sym:src/index.ts:main:10",
       ].join(" ");
       const refs = parseAllFileReferences(prompt);
@@ -234,7 +237,8 @@ suite("FileReferenceParser", () => {
     });
 
     test("returns unique syntaxes from mixed prompt", () => {
-      const prompt = "@src/a.ts #file:src/b.ts:1-5 #sym:src/c.ts:myFunc:10";
+      const prompt =
+        "@src/a.ts #selection:src/b.ts:1-5 #sym:src/c.ts:myFunc:10";
       const refs = parseAllFileReferences(prompt);
       assert.strictEqual(refs.length, 3);
     });

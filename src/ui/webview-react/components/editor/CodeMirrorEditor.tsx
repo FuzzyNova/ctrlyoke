@@ -485,8 +485,7 @@ function createThemeExtension() {
       ".cm-searchMatch.cm-searchMatch-selected": {
         backgroundColor:
           "var(--vscode-editor-findMatchBackground, rgba(234, 92, 0, 0.7))",
-        outline:
-          "1px solid var(--vscode-editor-findMatchBorder, #f38518)",
+        outline: "1px solid var(--vscode-editor-findMatchBorder, #f38518)",
       },
       // Selection match highlight (highlightSelectionMatches)
       ".cm-selectionMatch": {
@@ -692,8 +691,8 @@ function createLinkDecorationExtension() {
           // @dir/ (trailing slash)
           directory: /@([^\s@#]+\/)/g,
 
-          // #file:path:10-20 (line range)
-          lineRange: /#file:([^\s:]+):(\d+)-(\d+)/g,
+          // #selection:path:10-20 (line range)
+          lineRange: /#selection:([^\s:]+):(\d+)-(\d+)/g,
 
           // #sym:path:symbol:42 (symbol reference)
           symbol: /#sym:([^\s:]+):([^:]+):(\d+)/g,
@@ -731,7 +730,7 @@ function createLinkDecorationExtension() {
             });
           }
 
-          // 3. Line range references (#file:path:10-20)
+          // 3. Line range references (#selection:path:10-20)
           const lineRangeRegex = new RegExp(patterns.lineRange.source, "g");
           while ((match = lineRangeRegex.exec(text)) !== null) {
             lineRangeMatches.push({
@@ -843,7 +842,7 @@ function createClickHandlerExtension(vscode: any) {
             path: path,
           });
         } else if (type === "lineRange") {
-          // #file:path:10-20 (line range)
+          // #selection:path:10-20 (line range)
           const lineStart = target.getAttribute("data-line-start");
           const lineEnd = target.getAttribute("data-line-end");
           vscode.postMessage({

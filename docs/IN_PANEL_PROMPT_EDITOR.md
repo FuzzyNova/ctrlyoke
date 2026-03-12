@@ -1911,7 +1911,7 @@ test("should validate filename correctly", () => {
 
 - [ ] Implement regex-based link detection
 - [ ] Detect @file references
-- [ ] Detect #file:path:line-line references
+- [ ] Detect #selection::- references
 - [ ] Detect #sym:path:symbol references
 - [ ] Style links with CSS (underline, color)
 - [ ] Implement Ctrl+Click / Cmd+Click handlers

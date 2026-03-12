@@ -14,7 +14,7 @@ import { Log } from "./Log";
  * - @path/to/file (full file)
  * - @path/to/dir/ (directory listing)
  * - #file:path (full file)
- * - #file:path:line-line (line range)
+ * - #selection:path:line-line (line range)
  * - #sym:path:symbol:line (symbol context)
  *
  * This class consolidates all attachment building logic that was previously

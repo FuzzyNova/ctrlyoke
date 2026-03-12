@@ -1252,7 +1252,7 @@ export class GeminiToolPermissionMapper implements IToolPermissionMapper {
   - Verify special chars preserved in response
 
 - [ ] **File References**:
-  - Run prompt with `@workspace`, `#file:path:10-20`
+  - Run prompt with `@workspace`, `#selection::-`
   - Verify file content attached correctly
   - Verify line selection extracted
 

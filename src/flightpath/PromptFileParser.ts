@@ -158,13 +158,13 @@ export class PromptFileParser {
    * This is a heuristic check - we verify file existence separately
    *
    * IMPORTANT: This should ONLY match pure file paths, not prompts that happen to
-   * contain file references like #file:path/to/file.ts or "help me with ./file.md"
+   * contain file references like #selection:path/to/file.ts or "help me with ./file.md"
    */
   private looksLikeFilePath(promptValue: string): boolean {
     const trimmed = promptValue.trim();
 
-    // Skip if it starts with #file: - that's a file attachment, not a prompt file reference
-    if (trimmed.startsWith("#file:")) {
+    // Skip if it starts with # - that's a FlightPath reference (#selection:, #sym:, etc.), not a prompt file path
+    if (trimmed.startsWith("#")) {
       return false;
     }
 

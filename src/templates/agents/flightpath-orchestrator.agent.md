@@ -108,7 +108,7 @@ Every workflow you create follows this pattern:
 Use these in your generated prompts:
 
 - `@path/to/file.ts` - Reference specific file
-- `#file:path/to/file.ts:10-50` - Reference specific lines
+- `#selection:path/to/file.ts:10-50` - Reference specific lines
 - `/explain`, `/fix`, `/tests` - Copilot slash commands (optional)
 
 ## Output Format

@@ -7,7 +7,7 @@ import * as path from "path";
  * Supported patterns:
  * - @path/to/file.ts       → Open file
  * - @path/to/dir/          → Reveal directory
- * - #file:path:10-20       → Open file with line selection
+ * - #selection:path:10-20  → Open file with line selection
  * - #sym:path:symbol:42    → Open file at symbol line
  *
  * Enables Ctrl+Click (Cmd+Click on Mac) navigation from prompts back to source code.
@@ -25,9 +25,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     // Matches: @src/ui/, @docs/
     directory: /@([^\s@#]+\/)/g,
 
-    // #file:path:10-20 (line range)
-    // Matches: #file:src/extension.ts:10-20
-    lineRange: /#file:([^\s:]+):(\d+)-(\d+)/g,
+    // #selection:path:10-20 (line range)
+    // Matches: #selection:src/extension.ts:10-20
+    lineRange: /#selection:([^\s:]+):(\d+)-(\d+)/g,
 
     // #sym:path:symbol:42 (symbol reference)
     // Matches: #sym:src/extension.ts:activate:14
@@ -60,7 +60,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     // 2. Detect directory references (@dir/)
     links.push(...this.findDirectoryLinks(document, text, workspaceRoot));
 
-    // 3. Detect line range references (#file:path:10-20)
+    // 3. Detect line range references (#selection:path:10-20)
     links.push(...this.findLineRangeLinks(document, text, workspaceRoot));
 
     // 4. Detect symbol references (#sym:path:symbol:42)
@@ -162,7 +162,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   }
 
   /**
-   * Find line range reference links (#file:path:10-20)
+   * Find line range reference links (#selection:path:10-20)
    */
   private findLineRangeLinks(
     document: vscode.TextDocument,

@@ -13,7 +13,7 @@ import { countTokens } from "../utils/tokenizer";
 import { sendMessage } from "./useMessageHandler";
 import {
   parseAtReferences,
-  parseFileReferences,
+  parseSelectionReferences,
   parseSymbolReferences,
 } from "@root/utils/FileReferenceParser";
 
@@ -77,8 +77,8 @@ function extractRawReferences(promptText: string): string[] {
     refs.push(`@${ref.path}`);
   }
 
-  for (const ref of parseFileReferences(promptText)) {
-    refs.push(`#file:${ref.path}:${ref.startLine}-${ref.endLine}`);
+  for (const ref of parseSelectionReferences(promptText)) {
+    refs.push(`#selection:${ref.path}:${ref.startLine}-${ref.endLine}`);
   }
 
   for (const ref of parseSymbolReferences(promptText)) {

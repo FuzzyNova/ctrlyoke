@@ -300,7 +300,7 @@ class PromptEditor {
     const text = this.editor.textContent;
     const linkPatterns = [
       /@([^\s]+)/g, // @file references
-      /#file:([^\s:]+:\d+-\d+)/g, // #file:path:line-line
+      /#file:([^\s:]+:\d+-\d+)/g, // #selection::-
     ];
 
     // Replace with clickable spans
@@ -423,7 +423,7 @@ Add new tab structure to dashboard:
       class="prompt-editor"
       contenteditable="true"
       spellcheck="true"
-      data-placeholder="Type your prompt here...&#10;&#10;Use @ to reference files and folders&#10;Use # for file selections and symbols&#10;&#10;Examples:&#10;  @src/extension.ts - Reference entire file&#10;  @src/flightpath/ - Reference directory&#10;  #file:src/extension.ts:10-20 - Reference specific lines&#10;  #sym:src/types.ts:PromptFile - Reference symbol"
+      data-placeholder="Type your prompt here...&#10;&#10;Use @ to reference files and folders&#10;Use # for file selections and symbols&#10;&#10;Examples:&#10;  @src/extension.ts - Reference entire file&#10;  @src/flightpath/ - Reference directory&#10;  #selection::- - Reference specific lines&#10;  #sym:src/types.ts:PromptFile - Reference symbol"
     ></div>
 
     <!-- Completion dropdown (positioned absolutely over editor) -->
@@ -1460,7 +1460,7 @@ private async handleLinkClick(linkType: string, linkValue: string): Promise<void
     await vscode.window.showTextDocument(uri);
   }
   else if (linkType === 'selection') {
-    // Parse #file:path:start-end
+    // Parse #selection::-
     const match = linkValue.match(/#file:([^:]+):(\d+)-(\d+)/);
     if (match) {
       const [, filePath, startStr, endStr] = match;

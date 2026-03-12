@@ -15,7 +15,7 @@ FlightPath supports rich context references in prompts using a syntax aligned wi
 - ✅ `@` trigger for full file completions (CLI-native syntax)
 - ✅ `#` trigger for selection + symbol completions
 - ✅ `@path` syntax parsed in all integrations (Copilot CLI, Claude CLI, Chat)
-- ✅ `#file:path:10-20` line range support (XML attachments)
+- ✅ `#selection::-` line range support (XML attachments)
 - ✅ Selection completions (inserts `file:path:line-line`)
 - ✅ Symbol completions (inserts `sym:symbolName`, shows immediately when typing #)
 - ✅ Smart filtering (excludes markdown/text/JSON files from symbol results)
@@ -30,7 +30,7 @@ FlightPath supports rich context references in prompts using a syntax aligned wi
 - ❌ Deprecation warnings for legacy `#file:path` without line ranges
 
 **Breaking Change Applied**: `#file:path` for full files is DEPRECATED. Use `@path` instead.
-Line ranges (`#file:path:10-20`) continue to use `#file:` syntax.
+Line ranges (`#selection::-`) continue to use `#file:` syntax.
 
 ---
 
@@ -74,7 +74,7 @@ Line ranges (`#file:path:10-20`) continue to use `#file:` syntax.
 - Chat mode: `@path` converted to native attachment via `github.copilot.chat.attachFile`
 - See [COPILOT_CLI_DESIGN.md](./COPILOT_CLI_DESIGN.md) and [CLAUDE_CLI_DESIGN.md](./CLAUDE_CLI_DESIGN.md) for details
 
-**Important**: CLIs don't support line range syntax. Use `#file:path:10-20` for line ranges.
+**Important**: CLIs don't support line range syntax. Use `#selection::-` for line ranges.
 
 ---
 
@@ -112,19 +112,19 @@ Line ranges (`#file:path:10-20`) continue to use `#file:` syntax.
 
 **Purpose**: Attach code excerpts and workspace snippets (FlightPath handles with XML)
 
-#### Line Range: `#file:path:startLine-endLine`
+#### Line Range: `#selection::-`
 
 **Format**:
 
 ```
-#file:path/to/file.ts:10-20   # Lines 10-20 only
+#selection::-   # Lines 10-20 only
 ```
 
 **Example**:
 
 ```json
 {
-  "prompt": "Explain the logic in #file:src/flightpath/PromptQueue.ts:45-67"
+  "prompt": "Explain the logic in #selection::-"
 }
 ```
 
@@ -147,7 +147,7 @@ Line ranges (`#file:path:10-20`) continue to use `#file:` syntax.
 
 ```json
 {
-  "prompt": "Optimize #file:src/extension.ts:45-67 for better performance"
+  "prompt": "Optimize #selection::- for better performance"
 }
 ```
 
@@ -158,7 +158,7 @@ Line ranges (`#file:path:10-20`) continue to use `#file:` syntax.
 - **FlightPath processes**: Extracts lines and wraps in XML attachment
 - **Important**: `#selection` is NEVER in actual prompts - it's just a UI label
 
-**Note**: There is no `#selection` prompt syntax. The completion provider automatically converts selections to `#file:path:line-line` format.
+**Note**: There is no `#selection` prompt syntax. The completion provider automatically converts selections to `#selection::-` format.
 
 #### Symbol References: `#sym:path:name:line` ✅ FULLY IMPLEMENTED
 
@@ -290,7 +290,7 @@ extension.ts                            → inserts: src/extension.ts
 package.json                            → inserts: package.json
 
 # For line ranges, manually type:
-#file:src/extension.ts:10-20           (no completion, user types manually)
+#selection::-           (no completion, user types manually)
 ```
 
 **Note**: Selection completions show `$(selection)` label but insert `file:path:line-line` text.
@@ -323,7 +323,7 @@ FlightPath previously used `#file:path` for full file attachment:
 
 ```json
 {
-  "prompt": "Explain #file:src/extension.ts:45-67"
+  "prompt": "Explain #selection::-"
 }
 ```
 
@@ -333,7 +333,7 @@ FlightPath previously used `#file:path` for full file attachment:
 
 - User types `#`, sees `$(selection) Current Selection` in completions
 - Completion inserts `file:src/extension.ts:45-67`
-- Final prompt: `Optimize #file:src/extension.ts:45-67`
+- Final prompt: `Optimize #selection::-`
 
 ✅ No change needed - `#selection` is just a completion label, not prompt syntax.
 
@@ -353,14 +353,14 @@ The migration from `#file:path` to `@path` for full files has been completed.
 **Migration Tooling**:
 
 - ✅ **Migration Script**: `node scripts/migrate-prompt-syntax.mjs`
-  - Converts `#file:path` → `@path` (preserves `#file:path:10-20`)
+  - Converts `#file:path` → `@path` (preserves `#selection::-`)
   - Scans `manual-test/`, `src/templates/`, `.flightpath/`
   - Run manually when migrating existing prompts
 
 **Legacy Support**:
 
 - `#file:path` (without line range) still works but is DEPRECATED
-- `#file:path:10-20` (with line range) is the correct syntax for line ranges
+- `#selection::-` (with line range) is the correct syntax for line ranges
 - Future versions may show deprecation warnings for `#file:path` without line ranges
 
 ---
@@ -389,7 +389,7 @@ The migration from `#file:path` to `@path` for full files has been completed.
 | --------------------- | ------------------------ | ---------------- | --------------------------------------- | -------------------------------------- |
 | `@path`               | Full file content        | CLI (native)     | `@src/extension.ts`                     | CLI attaches entire file               |
 | `@path/`              | Full directory structure | FlightPath (XML) | `@src/flightpath/`                      | Trailing slash = directory _(planned)_ |
-| `#file:path:10-20`    | Line range snippet       | FlightPath (XML) | `#file:src/extension.ts:10-20`          | Extracts specific lines                |
+| `#selection::-`    | Line range snippet       | FlightPath (XML) | `#selection::-`          | Extracts specific lines                |
 | `#sym:path:name:line` | Symbol snippet           | FlightPath (XML) | `#sym:src/file.ts:FlightPathManager:42` | Resolves to exact symbol location      |
 
 **Note**: There is no `#selection` syntax. The completion provider shows `$(selection)` as a label but inserts `file:path:line-line`.
@@ -415,7 +415,7 @@ The migration from `#file:path` to `@path` for full files has been completed.
 | `@path` file references          | ✅ Done | -        | Parsed in all integrations (CLI + Chat)                     |
 | - ✅ `#` trigger for selections  | ✅ Done | -        | Selections shown when typing `#`                            |
 | - ✅ `#` symbol completions      | ✅ Done | -        | Shows immediately with `#`, filters code files, 500 max     |
-| `#file:path:10-20` line ranges   | ✅ Done | -        | Manual typing, XML attachment in all integrations           |
+| `#selection::-` line ranges   | ✅ Done | -        | Manual typing, XML attachment in all integrations           |
 | Selection completions            | ✅ Done | -        | Inserts `file:path:line-line` from editor selections        |
 | Symbol completions               | ✅ Done | -        | Inserts `sym:path:name:line`, dynamic refresh as you type   |
 | Model completions                | ✅ Done | -        | Dynamic model list in "model" field                         |
@@ -442,7 +442,7 @@ _CLI attaches entire file content natively_
 
 ```json
 {
-  "prompt": "Explain the error handling in #file:src/flightpath/PromptQueue.ts:123-145"
+  "prompt": "Explain the error handling in #selection::-"
 }
 ```
 
@@ -462,7 +462,7 @@ _Both files attached in full by CLI_
 
 ```json
 {
-  "prompt": "Optimize #file:src/extension.ts:45-67 for better type safety"
+  "prompt": "Optimize #selection::- for better type safety"
 }
 ```
 
@@ -492,7 +492,7 @@ _Trailing slash indicates directory. FlightPath reads directory tree (no file co
 
 ```json
 {
-  "prompt": "Review @docs/ARCHITECTURE.md and verify that #file:src/flightpath/FlightPathManager.ts:45-120 follows the documented patterns"
+  "prompt": "Review @docs/ARCHITECTURE.md and verify that #selection::- follows the documented patterns"
 }
 ```
 

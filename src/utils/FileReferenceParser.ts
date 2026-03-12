@@ -4,7 +4,7 @@
  * FlightPath supports multiple reference syntaxes:
  * 1. @path → Full file (CLI-native, no line ranges)
  * 2. @path/to/directory/ → Directory structure (trailing slash)
- * 3. #file:path:line-line → Line range snippet (FlightPath XML)
+ * 3. #selection:path:line-line → Line range snippet (FlightPath XML)
  * 4. #sym:symbolName → Symbol reference (resolves to file + line range)
  *
  * This module provides unified parsing logic used by:
@@ -29,7 +29,7 @@ export interface FileReference {
  * - @"path with spaces/file.ts" (quoted path)
  *
  * Note: @path does NOT support line ranges - CLIs don't support them.
- * Line ranges should use #file:path:start-end syntax instead.
+ * Line ranges should use #selection:path:start-end syntax instead.
  *
  * Trailing punctuation is stripped from unquoted paths.
  *
@@ -89,23 +89,21 @@ export function parseAtReferences(prompt: string): FileReference[] {
 }
 
 /**
- * Parse #file:path:line-line references from prompt text (line ranges)
+ * Parse #selection:path:line-line references from prompt text (line ranges)
  *
  * Supports formats:
- * - #file:path:10-20 (line range)
- * - #file:"path with spaces":10-20 (quoted path with line range)
+ * - #selection:path:10-20 (line range)
+ * - #selection:"path with spaces":10-20 (quoted path with line range)
  *
- * Note: #file:path (without line range) is DEPRECATED - use @path instead.
- *
- * @param prompt The prompt text containing #file: references
+ * @param prompt The prompt text containing #selection: references
  * @returns Array of file references with line ranges
  */
-export function parseFileReferences(prompt: string): FileReference[] {
+export function parseSelectionReferences(prompt: string): FileReference[] {
   const references: FileReference[] = [];
 
-  // Match #file:path:startLine-endLine for line ranges ONLY
+  // Match #selection:path:startLine-endLine for line ranges ONLY
   // Group 1: quoted path, Group 2: unquoted path, Group 3: startLine, Group 4: endLine
-  const regex = /#file:(?:"([^"]+)"|([^\s:]+)):(\d+)-(\d+)/g;
+  const regex = /#selection:(?:"([^"]+)"|([^\s:]+)):(\d+)-(\d+)/g;
   let match;
 
   while ((match = regex.exec(prompt)) !== null) {
@@ -180,7 +178,7 @@ export function parseDirectoryReferences(prompt: string): FileReference[] {
  * Combines all syntaxes into a single array:
  * - @path → Full file references
  * - @path/ → Directory references
- * - #file:path:line-line → Line range references
+ * - #selection:path:line-line → Line range references
  * - #sym:name → Symbol references
  *
  * @param prompt The prompt text containing file references
@@ -188,7 +186,7 @@ export function parseDirectoryReferences(prompt: string): FileReference[] {
  */
 export function parseAllFileReferences(prompt: string): FileReference[] {
   const atRefs = parseAtReferences(prompt);
-  const fileRefs = parseFileReferences(prompt);
+  const fileRefs = parseSelectionReferences(prompt);
   const symRefs = parseSymbolReferences(prompt);
 
   // Combine and sort by position in original prompt

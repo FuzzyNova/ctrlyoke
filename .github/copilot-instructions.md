@@ -68,7 +68,7 @@ Adding a new harness requires creating a new directory only — zero changes to 
 - **PromptQueue** — State container with events; WorkflowExecutor owns the execution loop
 - **PropertyResolver** — Three-tier precedence: prompt-level → workflow-level → VS Code settings
 - **SessionResolver** — Per-prompt session ID tracking with cross-harness validation
-- **ContextExpander** — Expands `#file:` and `@path` references before sending to AI
+- **ContextExpander** — Expands `#selection:` and `@path` references before sending to AI
 - **MCP Server** (`src/mcp-server.ts`) — Standalone stdio server for queue management from CLI harnesses
 - **LM Tools** — `flightpath_queue_status` and `flightpath_append_queue` for VS Code Chat integration
 - **React Webview** — Dashboard with prompt editor (CodeMirror), output viewer, settings panel
@@ -257,7 +257,7 @@ prompts:
 - **`allowDynamicExtension`**: Allow AI to extend the workflow queue
 - **`endCondition`**: `{ script, returns, timeout?, maxRetries?, retryPrompt? }`
 
-> **Final-form storage**: Context references (`@workspace`, `#file:path`) are included directly in prompt text — no runtime injection.
+> **Final-form storage**: Context references (`@workspace`, `#selection:path:N-N`) are included directly in prompt text — no runtime injection.
 
 > **Schema source**: `/schemas/prompt-schema.json`. Never edit `out/schemas/` — auto-copied during build.
 
@@ -281,7 +281,7 @@ All settings accessed via `src/utils/ConfigurationUtils.ts`. Prefix: `flightpath
 | `cliDeniedTools`            | `[]`                | Tool deny patterns (takes precedence over allow)                         |
 | `promptsDirectory`          | `.flightpath`       | Base directory for workflows and scripts                                 |
 | `scriptTimeout`             | `30`                | End condition script timeout in seconds                                  |
-| `autoAttachFiles`           | `true`              | Auto-expand `#file:` references to inline content                        |
+| `autoAttachFiles`           | `true`              | Auto-expand `#selection:` references to inline content                   |
 | `enableDynamicQueue`        | `false`             | Allow AI to extend the workflow queue                                    |
 | `showCliOutput`             | `true`              | Show CLI output in the Output panel                                      |
 | `chatInactivityTimeout`     | `300`               | Seconds before chat timeout (Chat harness only)                          |
