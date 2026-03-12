@@ -79,7 +79,7 @@ export class SkillExpander {
     }
 
     const header =
-      "The following skills are available. Read each skill's full SKILL.md file when you decide to use it.";
+      "The following skills are available. When you decide to use a skill, read its SKILL.md file directly using your built-in file read tool and follow the instructions inside. Do NOT attempt to invoke these skills using any native skills tool — these are not registered harness skills and that will fail. Simply read the file at the path listed and follow the instructions.";
     const body = resolvedBlocks.join("\n\n");
 
     return `<skillInstructions>\n${header}\n\n${body}\n</skillInstructions>`;
