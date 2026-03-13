@@ -1,11 +1,77 @@
-import * as vscode from "vscode";
 import * as path from "path";
+import * as fs from "fs/promises";
 import { FileReference, parseAllFileReferences } from "./FileReferenceParser";
 import {
   resolveSymbol,
   buildDirectoryAttachmentXml,
 } from "./AttachmentBuilders";
 import { Log } from "./Log";
+
+/**
+ * Map common file extensions to VS Code language IDs.
+ * Avoids calling vscode.workspace.openTextDocument() just for language detection,
+ * which would load full text models into memory (expensive for large files).
+ */
+const EXTENSION_TO_LANGUAGE: Record<string, string> = {
+  ".ts": "typescript",
+  ".tsx": "typescriptreact",
+  ".js": "javascript",
+  ".jsx": "javascriptreact",
+  ".mjs": "javascript",
+  ".cjs": "javascript",
+  ".py": "python",
+  ".rb": "ruby",
+  ".go": "go",
+  ".rs": "rust",
+  ".java": "java",
+  ".cs": "csharp",
+  ".cpp": "cpp",
+  ".cc": "cpp",
+  ".cxx": "cpp",
+  ".c": "c",
+  ".h": "c",
+  ".hpp": "cpp",
+  ".sh": "shellscript",
+  ".bash": "shellscript",
+  ".zsh": "shellscript",
+  ".ps1": "powershell",
+  ".json": "json",
+  ".jsonc": "jsonc",
+  ".yaml": "yaml",
+  ".yml": "yaml",
+  ".toml": "toml",
+  ".xml": "xml",
+  ".html": "html",
+  ".htm": "html",
+  ".css": "css",
+  ".scss": "scss",
+  ".sass": "sass",
+  ".less": "less",
+  ".md": "markdown",
+  ".mdx": "mdx",
+  ".sql": "sql",
+  ".graphql": "graphql",
+  ".gql": "graphql",
+  ".tf": "terraform",
+  ".dockerfile": "dockerfile",
+  ".swift": "swift",
+  ".kt": "kotlin",
+  ".kts": "kotlin",
+  ".dart": "dart",
+  ".r": "r",
+  ".lua": "lua",
+  ".php": "php",
+  ".proto": "protobuf",
+};
+
+function getLanguageId(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  // Special case: Dockerfile (no extension)
+  if (path.basename(filePath).toLowerCase() === "dockerfile") {
+    return "dockerfile";
+  }
+  return EXTENSION_TO_LANGUAGE[ext] ?? "plaintext";
+}
 
 /**
  * ContextExpander - Unified context expansion utility
@@ -55,6 +121,10 @@ export class ContextExpander {
         return promptText; // No attachments needed
       }
 
+      Log.debug(
+        `[ContextExpander] Expanding ${fileReferences.length} reference(s): ${fileReferences.map((r) => this.getRefDescription(r)).join(", ")}`
+      );
+
       // Resolve symbol references to actual file locations
       const resolvedRefs = await this.resolveSymbolReferences(fileReferences);
 
@@ -63,6 +133,7 @@ export class ContextExpander {
       }
 
       // Build attachments in parallel for performance
+      const t0 = Date.now();
       const attachmentPromises = resolvedRefs.map((ref) =>
         this.buildAttachmentForReference(ref).catch((err) => {
           const refDesc = this.getRefDescription(ref);
@@ -72,6 +143,10 @@ export class ContextExpander {
       );
 
       const attachments = await Promise.all(attachmentPromises);
+      Log.debug(
+        `[ContextExpander] Built ${attachments.length} attachment(s) in ${Date.now() - t0}ms`
+      );
+
       // Filter out nulls (errors) and empty strings (duplicates)
       const validAttachments = attachments.filter(
         (a) => a !== null && a !== ""
@@ -80,6 +155,14 @@ export class ContextExpander {
       if (validAttachments.length === 0) {
         return promptText; // No valid attachments
       }
+
+      const totalBytes = validAttachments.reduce(
+        (sum, a) => sum + Buffer.byteLength(a, "utf8"),
+        0
+      );
+      Log.debug(
+        `[ContextExpander] Total attachment size: ${(totalBytes / 1024).toFixed(1)} KB across ${validAttachments.length} attachment(s)`
+      );
 
       // Prepend attachments to prompt
       const attachmentsSection = validAttachments.join("\n\n");
@@ -208,8 +291,11 @@ export class ContextExpander {
   }
 
   /**
-   * Build attachment XML for a file or file excerpt
-   * Moved from HarnessIntegration to consolidate all attachment logic
+   * Build attachment XML for a file or file excerpt.
+   *
+   * Uses fs.readFile directly instead of vscode.workspace.openTextDocument to
+   * avoid loading large files into VS Code's text model (which triggers tokenization,
+   * language server activation, etc. and can deadlock the extension host for large files).
    *
    * @param filePath Workspace-relative file path
    * @param startLine Optional start line (1-indexed)
@@ -222,19 +308,19 @@ export class ContextExpander {
     endLine?: number,
     symbolName?: string
   ): Promise<string> {
-    // Resolve to absolute path
     const absolutePath = this.resolveWorkspacePath(filePath);
-    const uri = vscode.Uri.file(absolutePath);
+    const language = getLanguageId(filePath);
 
-    // Read file content
-    const doc = await vscode.workspace.openTextDocument(uri);
-    const language = doc.languageId;
+    const t0 = Date.now();
+    const rawContent = await fs.readFile(absolutePath, "utf8");
+    const elapsed = Date.now() - t0;
+    const sizeKb = (Buffer.byteLength(rawContent, "utf8") / 1024).toFixed(1);
+    Log.debug(
+      `[ContextExpander] Read ${filePath} (${sizeKb} KB) in ${elapsed}ms`
+    );
 
     // If no line range, attach entire file
     if (!startLine || !endLine) {
-      const content = doc.getText();
-      // Note: For full files with symbolName, we should have startLine/endLine from resolveSymbol
-      // This case should rarely happen for symbols, but use file path for consistency
       const attachmentId = `file:${filePath}`;
       const description = symbolName
         ? `Symbol: ${symbolName} in ${filePath}`
@@ -243,22 +329,24 @@ export class ContextExpander {
       return `<attachment id="${attachmentId}">
 ${description}
 \`\`\`${language}
-${content}
+${rawContent}
 \`\`\`
 </attachment>`;
     }
 
-    // Extract line range (convert to 0-indexed)
-    const start = new vscode.Position(startLine - 1, 0);
-    const end = new vscode.Position(endLine - 1, Number.MAX_SAFE_INTEGER);
-    const range = new vscode.Range(start, end);
-    const content = doc.getText(range);
+    // Extract line range (0-indexed slice)
+    const lines = rawContent.split("\n");
+    const slicedLines = lines.slice(startLine - 1, endLine);
+    const content = slicedLines.join("\n");
+
+    Log.debug(
+      `[ContextExpander] Sliced ${filePath} lines ${startLine}-${endLine} (${slicedLines.length} lines of ${lines.length})`
+    );
 
     // Build attachment with symbol-aware ID and description
-    // Use path + line range for uniqueness (same symbol can appear in multiple files)
     const attachmentId = symbolName
       ? `symbol:${filePath}:${startLine}-${endLine}`
-      : `file:${filePath}:${startLine}-${endLine}`;
+      : `selection:${filePath}:${startLine}-${endLine}`;
     const description = symbolName
       ? `Symbol: ${symbolName} in ${filePath}, lines ${startLine} to ${endLine}`
       : `Excerpt from ${filePath}, lines ${startLine} to ${endLine}`;

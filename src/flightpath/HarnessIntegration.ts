@@ -14,7 +14,7 @@ import { Log } from "../utils/Log";
 import { ResolvedProperties } from "../utils/PropertyResolver";
 import { shouldInjectExtensionInstructions } from "../utils/PromptIdentity";
 import { TempFileManager } from "../utils/TempFileManager";
-import { PromptFileSplitter } from "../utils/PromptFileSplitter";
+import { PromptFileSplitter, SplitConfig } from "../utils/PromptFileSplitter";
 import type { PromptQueue } from "./PromptQueue";
 
 /**
@@ -620,6 +620,15 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
   }
 
   /**
+   * Return the SplitConfig to use when creating temp prompt files.
+   * Override in subclasses to apply harness-specific limits.
+   * Default returns undefined (PromptFileSplitter uses its built-in defaults).
+   */
+  protected getTempFileSplitConfig(): SplitConfig | undefined {
+    return undefined;
+  }
+
+  /**
    * Create temp prompt file(s) from expanded prompt text.
    * Handles large-prompt splitting (>20K tokens or >1800 lines) via PromptFileSplitter.
    * Logs creation stats for debugging.
@@ -643,7 +652,7 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
     }
 
     const tempMgr = new TempFileManager(workspaceRoot);
-    const splitter = new PromptFileSplitter();
+    const splitter = new PromptFileSplitter(this.getTempFileSplitConfig());
     const splitResult = splitter.split(promptText);
 
     let tempFilePaths: string[];

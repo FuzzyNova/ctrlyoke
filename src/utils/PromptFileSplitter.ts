@@ -30,6 +30,14 @@ export interface SplitConfig {
 
   /** Minimum chunk size to avoid tiny fragments (default: 3000) */
   minChunkSize?: number;
+
+  /**
+   * When true, prefer splitting on </attachment> boundaries so that each
+   * <attachment>…</attachment> block is kept atomic and never split mid-way.
+   * Falls back to paragraph splitting for oversized individual attachments.
+   * (default: true)
+   */
+  splitOnAttachmentBoundaries?: boolean;
 }
 
 /**
@@ -48,6 +56,7 @@ export class PromptFileSplitter {
     maxTokensPerFile: 15000,
     maxLinesPerFile: 1800, // 90% of Claude's 2K line limit
     minChunkSize: 3000,
+    splitOnAttachmentBoundaries: true,
   };
 
   constructor(config?: SplitConfig) {
@@ -71,7 +80,12 @@ export class PromptFileSplitter {
   }
 
   /**
-   * Split prompt into chunks if needed, preserving structure
+   * Split prompt into chunks if needed, preserving structure.
+   *
+   * When splitOnAttachmentBoundaries is enabled (default), first attempts to
+   * split on </attachment> tag boundaries so no attachment block is ever split
+   * mid-way. Falls back to paragraph splitting for text without attachments or
+   * for oversized individual attachment blocks.
    */
   split(promptText: string): SplitResult {
     const totalTokens = this.countTokens(promptText);
@@ -90,7 +104,20 @@ export class PromptFileSplitter {
       };
     }
 
-    // Split into chunks
+    // Try attachment-boundary splitting first (keeps attachment blocks atomic)
+    if (this.config.splitOnAttachmentBoundaries) {
+      const attachmentChunks = this.splitOnAttachmentBoundaries(promptText);
+      if (attachmentChunks && attachmentChunks.length > 1) {
+        Log.debug(
+          `[PromptFileSplitter] Split at ${attachmentChunks.length} attachment boundaries`
+        );
+        const tokenCounts = attachmentChunks.map((c) => this.countTokens(c));
+        const lineCounts = attachmentChunks.map((c) => this.countLines(c));
+        return { needsSplit: true, chunks: attachmentChunks, tokenCounts, lineCounts };
+      }
+    }
+
+    // Fall back to paragraph splitting
     const chunks = this.splitIntoChunks(promptText);
 
     // Calculate stats for each chunk
@@ -127,6 +154,122 @@ export class PromptFileSplitter {
   private countLines(text: string): number {
     if (!text) return 0;
     return text.split("\n").length;
+  }
+
+  /**
+   * Split text at <attachment>…</attachment> boundaries, treating each block
+   * as an atomic unit that is never split internally.
+   *
+   * @returns Array of chunks (length ≥ 2) when attachments are present and
+   *          splitting is needed, or null when no attachments are found.
+   */
+  private splitOnAttachmentBoundaries(text: string): string[] | null {
+    // Match complete attachment blocks (non-greedy to handle adjacent blocks)
+    const attachmentPattern = /<attachment\s[^>]*>[\s\S]*?<\/attachment>/g;
+    const blocks: { start: number; end: number; content: string }[] = [];
+    let match: RegExpExecArray | null;
+
+    while ((match = attachmentPattern.exec(text)) !== null) {
+      blocks.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        content: match[0],
+      });
+    }
+
+    if (blocks.length === 0) {
+      return null; // No attachment blocks — fall back to paragraph splitting
+    }
+
+    // Build ordered segments: preamble | attachment blocks | trailing text
+    const segments: string[] = [];
+    let pos = 0;
+
+    for (const block of blocks) {
+      // Text before this attachment (preamble or inter-attachment text)
+      if (block.start > pos) {
+        const before = text.slice(pos, block.start).trim();
+        if (before) {
+          segments.push(before);
+        }
+      }
+      // Each attachment block is atomic
+      segments.push(block.content);
+      // Advance past block, skipping trailing whitespace/newlines
+      pos = block.end;
+      while (
+        pos < text.length &&
+        (text[pos] === "\n" || text[pos] === "\r" || text[pos] === " ")
+      ) {
+        pos++;
+      }
+    }
+
+    // Trailing text after the last attachment (e.g. user prompt)
+    if (pos < text.length) {
+      const trailing = text.slice(pos).trim();
+      if (trailing) {
+        segments.push(trailing);
+      }
+    }
+
+    return this.binPackSegments(segments);
+  }
+
+  /**
+   * Pack an ordered list of atomic segments into chunks that respect the
+   * configured token and line limits. Oversized individual segments are
+   * sub-split via splitIntoChunks (paragraph fallback).
+   */
+  private binPackSegments(segments: string[]): string[] {
+    const chunks: string[] = [];
+    let currentChunk = "";
+    let currentTokens = 0;
+    let currentLines = 0;
+
+    for (const segment of segments) {
+      const segTokens = this.countTokens(segment);
+      const segLines = this.countLines(segment);
+
+      // Flush current chunk when adding this segment would exceed limits
+      if (
+        currentChunk &&
+        (currentTokens + segTokens > this.config.maxTokensPerFile ||
+          currentLines + segLines > this.config.maxLinesPerFile)
+      ) {
+        chunks.push(currentChunk.trim());
+        currentChunk = "";
+        currentTokens = 0;
+        currentLines = 0;
+      }
+
+      // Oversized single segment: sub-split with paragraph method
+      if (
+        segTokens > this.config.maxTokensPerFile ||
+        segLines > this.config.maxLinesPerFile
+      ) {
+        if (currentChunk.trim()) {
+          chunks.push(currentChunk.trim());
+          currentChunk = "";
+          currentTokens = 0;
+          currentLines = 0;
+        }
+        const subChunks = this.splitIntoChunks(segment);
+        chunks.push(...subChunks);
+      } else {
+        currentChunk = currentChunk
+          ? currentChunk + "\n\n" + segment
+          : segment;
+        currentTokens += segTokens;
+        currentLines += segLines;
+      }
+    }
+
+    if (currentChunk.trim()) {
+      chunks.push(currentChunk.trim());
+    }
+
+    return chunks.length > 0 ? chunks : [segments.join("\n\n")];
   }
 
   /**

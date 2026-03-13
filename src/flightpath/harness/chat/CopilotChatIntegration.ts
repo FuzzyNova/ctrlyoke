@@ -8,6 +8,7 @@ import { ChatSessionMonitor } from "./ChatSessionMonitor";
 import { ChatSessionParser } from "./ChatSessionParser";
 import { NativeAttachmentHandler } from "./NativeAttachmentHandler";
 import { Log } from "../../../utils/Log";
+import type { SplitConfig } from "../../../utils/PromptFileSplitter";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { AgentExpander } from "../../../utils/AgentExpander";
 import { CliOutputFormatter } from "../shared/CliOutputFormatter";
@@ -162,6 +163,21 @@ export class CopilotChatIntegration extends HarnessIntegration {
   /** Get the default model from settings */
   private getDefaultModel(): string {
     return ConfigurationUtils.getCopilotChatModel();
+  }
+
+  /**
+   * Use smaller file limits for Copilot Chat to prevent auto-summarization.
+   * Copilot summarizes attached files that exceed a certain size, which can
+   * strip the prompt text (always at the end) and lose critical context.
+   * Attachment-boundary splitting ensures attachment blocks are never cut mid-way.
+   */
+  protected override getTempFileSplitConfig(): SplitConfig {
+    return {
+      maxTokensPerFile: 8000,
+      maxLinesPerFile: 600,
+      minChunkSize: 1000,
+      splitOnAttachmentBoundaries: true,
+    };
   }
 
   /** Resolve workspace root for chat-mode file expansion/attachments. */
@@ -710,12 +726,29 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
       await new Promise((resolve) => setTimeout(resolve, 300)); // PROVEN: 300ms required
 
-      // Step 3: Type the prompt directly into chat input
+      // Step 3: Paste the prompt into chat input.
+      // IMPORTANT: Do NOT use `vscode.commands.executeCommand("type", ...)` for large prompts.
+      // The `type` command fires individual input events per character — with 230KB+ of context
+      // attachments this deadlocks the VS Code extension host completely.
+      // Clipboard paste is instant regardless of content size.
+      const promptSizeKb = (
+        Buffer.byteLength(chatPrompt, "utf8") / 1024
+      ).toFixed(1);
+      Log.debug(
+        `[Chat] Step 3: pasting prompt into chat input (${promptSizeKb} KB)`
+      );
+      const previousClipboard = await vscode.env.clipboard.readText();
       try {
-        await vscode.commands.executeCommand("type", { text: chatPrompt });
-      } catch (typeError) {
-        Log.error("❌ Could not type text:", typeError);
-        throw new Error(`Failed to type text: ${typeError}`);
+        await vscode.env.clipboard.writeText(chatPrompt);
+        await vscode.commands.executeCommand(
+          "editor.action.clipboardPasteAction"
+        );
+        Log.debug(`[Chat] Step 3: paste complete`);
+      } catch (pasteError) {
+        Log.error("❌ Could not paste text:", pasteError);
+        throw new Error(`Failed to paste text: ${pasteError}`);
+      } finally {
+        await vscode.env.clipboard.writeText(previousClipboard);
       }
 
       await new Promise((resolve) => setTimeout(resolve, 500)); // PROVEN: 500ms required
@@ -816,13 +849,31 @@ export class CopilotChatIntegration extends HarnessIntegration {
     resolvedAgent?: string,
     resolvedSkills?: string[]
   ): Promise<string> {
-    // Build fully expanded prompt text (base class handles agent, skills, context)
     const expandedText = await super.buildPromptText(
       prompt,
       resolvedAgent,
       resolvedSkills
     );
+    return this.wrapInTempFilePrompt(expandedText, prompt.prompt.trim());
+  }
 
+  /**
+   * Write already-expanded prompt text to temp file(s), attach them to chat,
+   * and return a short "Follow instructions in ..." string.
+   *
+   * Falls back to inline text for simple prompts (fast path) and when no
+   * workspace root is available.
+   *
+   * When rawPromptText is supplied and context was prepended to it, the context
+   * (agent, skills, attachments) is written to one or more files using the
+   * smaller chat split limits, and the prompt itself always gets its own dedicated
+   * file. This prevents Copilot's auto-summarizer from stripping the prompt text
+   * (which would otherwise end up at the end of a large context file).
+   */
+  private async wrapInTempFilePrompt(
+    expandedText: string,
+    rawPromptText?: string
+  ): Promise<string> {
     if (!this.getWorkspaceRoot()) {
       Log.warn("No workspace root, falling back to inline prompt");
       return expandedText;
@@ -835,14 +886,47 @@ export class CopilotChatIntegration extends HarnessIntegration {
       return expandedText;
     }
 
-    // Create temp file(s) via base class (handles splitting, logging)
-    const { tempFilePaths } = await this.createTempPromptFiles(expandedText);
+    // Detect whether context was prepended before the user prompt.
+    // buildPromptText / buildPromptWithInstructions always assembles sections with
+    // sections.join("\n\n"), placing rawPromptText as the final section.
+    const separator = "\n\n";
+    const hasContext =
+      rawPromptText !== undefined &&
+      expandedText !== rawPromptText &&
+      expandedText.endsWith(separator + rawPromptText);
+
+    let allTempFilePaths: string[];
+
+    if (hasContext && rawPromptText) {
+      const contextText = expandedText.slice(
+        0,
+        -(separator.length + rawPromptText.length)
+      );
+
+      // Context files: smaller limits via getTempFileSplitConfig override,
+      // with attachment-boundary awareness
+      const { tempFilePaths: contextPaths } =
+        await this.createTempPromptFiles(contextText);
+
+      // Prompt always gets its own dedicated file — never merged with context
+      const { tempFilePaths: promptPaths } =
+        await this.createTempPromptFiles(rawPromptText);
+
+      allTempFilePaths = [...contextPaths, ...promptPaths];
+      Log.debug(
+        `📁 Chat split: ${contextPaths.length} context file(s) + 1 prompt file`
+      );
+    } else {
+      // No context to separate: write as single blob (still uses smaller limits)
+      const { tempFilePaths } = await this.createTempPromptFiles(expandedText);
+      allTempFilePaths = tempFilePaths;
+    }
 
     // Track temp files for cleanup after execution
-    this.pendingTempFiles.push(...tempFilePaths);
+    this.pendingTempFiles.push(...allTempFilePaths);
 
     // Attach each temp file to chat using native file attachment
-    for (const filePath of tempFilePaths) {
+    for (const filePath of allTempFilePaths) {
       try {
         const uri = vscode.Uri.file(filePath);
         await vscode.commands.executeCommand(
@@ -861,7 +945,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
     }
 
     // Build short instruction referencing the files (bare filenames - no @ prefix)
-    const fileNames = tempFilePaths.map((fp) => path.basename(fp));
+    const fileNames = allTempFilePaths.map((fp) => path.basename(fp));
     if (fileNames.length === 1) {
       return `Follow instructions in ${fileNames[0]}`;
     }
@@ -884,7 +968,18 @@ export class CopilotChatIntegration extends HarnessIntegration {
     this.pendingTempFiles = [];
   }
 
-  /** Build final prompt with dynamic queue instructions if applicable */
+  /**
+   * Build final prompt text for the chat input.
+   *
+   * - **Native attachments** (`useNativeAttachments=true`): attach files via VS Code
+   *   native commands, return only the raw prompt text (short string typed into input).
+   * - **Temp file path** (`useNativeAttachments=false`, default): build the fully
+   *   expanded prompt (including workflow context, agent, skills, and context
+   *   attachments), write to temp file(s), attach them to chat, and return a short
+   *   "Follow instructions in …" string. This matches the CLI harness flow and avoids
+   *   sending large prompts through the `type` command (which deadlocks VS Code for
+   *   large context attachments).
+   */
   private async buildCopilotChatPrompt(
     prompt: PromptItem,
     workflowContext?: {
@@ -904,7 +999,10 @@ export class CopilotChatIntegration extends HarnessIntegration {
       return (await this.buildPromptText(prompt)).trim();
     }
 
-    const promptText = workflowContext
+    // Build the fully expanded text (with workflow context if available), then
+    // route through temp file wrapping. This prevents large attachment blocks
+    // from being sent via the `type` command.
+    const expandedText = workflowContext
       ? await this.buildPromptWithInstructions(
           prompt,
           workflowContext.promptIndex,
@@ -916,9 +1014,9 @@ export class CopilotChatIntegration extends HarnessIntegration {
           workflowContext.promptQueue?.getFinalPromptResponseTexts(),
           isResumedSession
         )
-      : await this.buildPromptText(prompt);
+      : await super.buildPromptText(prompt);
 
-    return promptText.trim();
+    return (await this.wrapInTempFilePrompt(expandedText, prompt.prompt.trim())).trim();
   }
 
   /** Get the last parsed structured output (tool calls, thinking blocks, metadata) */
