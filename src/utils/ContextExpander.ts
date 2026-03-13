@@ -7,71 +7,6 @@ import {
 } from "./AttachmentBuilders";
 import { Log } from "./Log";
 
-/**
- * Map common file extensions to VS Code language IDs.
- * Avoids calling vscode.workspace.openTextDocument() just for language detection,
- * which would load full text models into memory (expensive for large files).
- */
-const EXTENSION_TO_LANGUAGE: Record<string, string> = {
-  ".ts": "typescript",
-  ".tsx": "typescriptreact",
-  ".js": "javascript",
-  ".jsx": "javascriptreact",
-  ".mjs": "javascript",
-  ".cjs": "javascript",
-  ".py": "python",
-  ".rb": "ruby",
-  ".go": "go",
-  ".rs": "rust",
-  ".java": "java",
-  ".cs": "csharp",
-  ".cpp": "cpp",
-  ".cc": "cpp",
-  ".cxx": "cpp",
-  ".c": "c",
-  ".h": "c",
-  ".hpp": "cpp",
-  ".sh": "shellscript",
-  ".bash": "shellscript",
-  ".zsh": "shellscript",
-  ".ps1": "powershell",
-  ".json": "json",
-  ".jsonc": "jsonc",
-  ".yaml": "yaml",
-  ".yml": "yaml",
-  ".toml": "toml",
-  ".xml": "xml",
-  ".html": "html",
-  ".htm": "html",
-  ".css": "css",
-  ".scss": "scss",
-  ".sass": "sass",
-  ".less": "less",
-  ".md": "markdown",
-  ".mdx": "mdx",
-  ".sql": "sql",
-  ".graphql": "graphql",
-  ".gql": "graphql",
-  ".tf": "terraform",
-  ".dockerfile": "dockerfile",
-  ".swift": "swift",
-  ".kt": "kotlin",
-  ".kts": "kotlin",
-  ".dart": "dart",
-  ".r": "r",
-  ".lua": "lua",
-  ".php": "php",
-  ".proto": "protobuf",
-};
-
-function getLanguageId(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
-  // Special case: Dockerfile (no extension)
-  if (path.basename(filePath).toLowerCase() === "dockerfile") {
-    return "dockerfile";
-  }
-  return EXTENSION_TO_LANGUAGE[ext] ?? "plaintext";
-}
 
 /**
  * ContextExpander - Unified context expansion utility
@@ -309,7 +244,7 @@ export class ContextExpander {
     symbolName?: string
   ): Promise<string> {
     const absolutePath = this.resolveWorkspacePath(filePath);
-    const language = getLanguageId(filePath);
+    const language = path.extname(filePath).toLowerCase().slice(1) || "plaintext";
 
     const t0 = Date.now();
     const rawContent = await fs.readFile(absolutePath, "utf8");

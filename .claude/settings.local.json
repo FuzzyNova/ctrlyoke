@@ -74,7 +74,11 @@
       "WebFetch(domain:legacy.reactjs.org)",
       "WebFetch(domain:devblogs.microsoft.com)",
       "WebFetch(domain:medium.com)",
-      "WebFetch(domain:npmjs.com)"
+      "WebFetch(domain:npmjs.com)",
+      "WebFetch(domain:registry.npmjs.org)",
+      "WebFetch(domain:highlightjs.readthedocs.io)",
+      "WebFetch(domain:highlightjs.org)",
+      "WebFetch(domain:api.npmjs.org)"
     ],
     "deny": [],
     "ask": []
