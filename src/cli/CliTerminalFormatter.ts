@@ -147,6 +147,29 @@ function renderDiffBlock(data: FileEditData): void {
  */
 export class CliTerminalFormatter {
   /**
+   * Live streaming state — tracks which block type is currently streaming so we
+   * print the THINKING header once and write each chunk directly to stdout as it
+   * arrives (typewriter effect), rather than buffering and dumping all at once.
+   */
+  private static _streaming: {
+    type: typeof CLI_EVENT_TYPES.TEXT | typeof CLI_EVENT_TYPES.THINKING;
+    label?: string;
+    /** Whether the last character written ended with a newline (for TEXT blocks). */
+    endsWithNewline: boolean;
+  } | null = null;
+
+  /**
+   * Close the current streaming block by writing its trailing newline separator.
+   * Call this when the prompt completes or when a non-TEXT/THINKING event arrives.
+   */
+  static flushStreamingBuffer(): void {
+    if (!CliTerminalFormatter._streaming) return;
+    CliTerminalFormatter._streaming = null;
+    // End the block with a blank line separator
+    process.stdout.write("\n\n");
+  }
+
+  /**
    * Renders an array of CLI events to stdout with chalk formatting.
    */
   static renderEvents(events: CliEvent[]): void {
@@ -159,26 +182,37 @@ export class CliTerminalFormatter {
     switch (event.type) {
       case CLI_EVENT_TYPES.TEXT: {
         const data = event.data as TextData;
-        if (data.text) {
-          process.stdout.write(data.text);
-          if (!data.text.endsWith("\n")) process.stdout.write("\n");
-          process.stdout.write("\n");
+        if (!data.text) break;
+        const s = CliTerminalFormatter._streaming;
+        if (!s || s.type !== CLI_EVENT_TYPES.TEXT) {
+          // End any prior THINKING block, then start streaming TEXT
+          CliTerminalFormatter.flushStreamingBuffer();
+          CliTerminalFormatter._streaming = { type: CLI_EVENT_TYPES.TEXT, endsWithNewline: false };
         }
+        process.stdout.write(data.text);
+        CliTerminalFormatter._streaming!.endsWithNewline = data.text.endsWith("\n");
         break;
       }
 
       case CLI_EVENT_TYPES.THINKING: {
         const data = event.data as ThinkingBlock;
-        if (data.text) {
-          const label = data.label ?? "Thinking";
-          console.log(chalk.dim(`● ${label}`));
-          console.log(chalk.dim("  " + data.text.split("\n").join("\n  ")));
-          console.log();
+        if (!data.text) break;
+        const label = data.label ?? "Thinking";
+        const s = CliTerminalFormatter._streaming;
+        if (!s || s.type !== CLI_EVENT_TYPES.THINKING || (s.label ?? "Thinking") !== label) {
+          // End any prior block, print header once, then start streaming this THINKING block
+          CliTerminalFormatter.flushStreamingBuffer();
+          process.stdout.write(chalk.dim(`● ${label}\n  `));
+          CliTerminalFormatter._streaming = { type: CLI_EVENT_TYPES.THINKING, label, endsWithNewline: false };
         }
+        // Indent newlines within the chunk to keep thinking text aligned under the header
+        process.stdout.write(chalk.dim(data.text.replace(/\n/g, "\n  ")));
+        CliTerminalFormatter._streaming!.endsWithNewline = data.text.endsWith("\n");
         break;
       }
 
       case CLI_EVENT_TYPES.BASH_COMMAND: {
+        CliTerminalFormatter.flushStreamingBuffer();
         const data = event.data as BashCommandData;
         if (data.command) {
           console.log(chalk.yellow("$ " + data.command));
@@ -201,6 +235,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.FILE_EDIT: {
+        CliTerminalFormatter.flushStreamingBuffer();
         const data = event.data as FileEditData;
         if (!data.path) break;
         if (data.status === OPERATION_STATUS.INITIATED) {
@@ -218,6 +253,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.FILE_WRITE: {
+        CliTerminalFormatter.flushStreamingBuffer();
         const data = event.data as FileWriteData;
         if (!data.path) break;
         if (data.status === OPERATION_STATUS.INITIATED) {
@@ -237,6 +273,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.FILE_READ: {
+        CliTerminalFormatter.flushStreamingBuffer();
         const data = event.data as FileReadData;
         if (!data.path) break;
         if (data.status === OPERATION_STATUS.INITIATED) {
@@ -252,6 +289,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.FILE_DELETE: {
+        CliTerminalFormatter.flushStreamingBuffer();
         const data = event.data as FileDeleteData;
         if (!data.path) break;
         if (data.success === false) {
@@ -265,6 +303,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
+        CliTerminalFormatter.flushStreamingBuffer();
         const data = event.data as McpToolCallData;
         if (data.server && data.tool) {
           console.log(chalk.magenta("⚙ " + data.server + ":" + data.tool));
@@ -274,6 +313,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.WEB_SEARCH: {
+        CliTerminalFormatter.flushStreamingBuffer();
         const data = event.data as WebSearchData;
         if (data.query) {
           console.log(chalk.blue('⌕ "' + data.query + '"'));
@@ -283,6 +323,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.TOOL_CALL: {
+        CliTerminalFormatter.flushStreamingBuffer();
         const data = event.data as ToolCall;
         if (data.name) {
           const params = data.parameters
@@ -305,6 +346,7 @@ export class CliTerminalFormatter {
       }
 
       case CLI_EVENT_TYPES.TOOL_RESULT: {
+        CliTerminalFormatter.flushStreamingBuffer();
         const data = event.data as ToolResultData;
         if (data.result?.output) {
           const truncated =

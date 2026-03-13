@@ -95,6 +95,15 @@ export class CliWatchSession implements vscode.Disposable {
         await this.handleWorkingFileChange();
       })
     );
+    // Also handle onDidCreate: on Windows, fs.rename() over an existing file
+    // (used by the MCP server's atomic temp-file write) fires onDidCreate
+    // instead of onDidChange, so MCP queue appends would otherwise be missed
+    // until the next natural queue write.
+    this.disposables.push(
+      watcher.onDidCreate(async () => {
+        await this.handleWorkingFileChange();
+      })
+    );
     this.disposables.push(watcher);
   }
 

@@ -271,6 +271,7 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
       CliTerminalFormatter.renderStatusMessage(data.message, data.severity);
     });
     instance.onPromptComplete((data) => {
+      CliTerminalFormatter.flushStreamingBuffer();
       CliTerminalFormatter.renderStats(data);
     });
   }
