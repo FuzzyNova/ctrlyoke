@@ -1,4 +1,7 @@
 import { create } from "zustand";
+import { temporal } from "zundo";
+import { useStoreWithEqualityFn } from "zustand/traditional";
+import type { TemporalState } from "zundo";
 import {
   EXECUTION_STATES,
   STEP_STATUS,
@@ -167,7 +170,6 @@ interface WorkflowActions {
     newCurrentStep: number
   ) => void;
 
-
   // Promote history snapshot data into live cliOutputs/statusMessages for preserved steps.
   // Called before switching from history→live view on a continuation run so the user
   // still sees previous prompts' output in the live panel.
@@ -242,613 +244,718 @@ const initialState: WorkflowState = {
 
 export const useWorkflowStore = create<
   WorkflowState & WorkflowActions & WorkflowSelectors
->((set, get) => ({
-  ...initialState,
+>()(
+  temporal(
+    (set, get) => ({
+      ...initialState,
 
-  // ============================================================================
-  // SETTERS
-  // ============================================================================
+      // ============================================================================
+      // SETTERS
+      // ============================================================================
 
-  setFileName: (fileName) => set({ fileName }),
+      setFileName: (fileName) => {
+        useWorkflowStore.temporal.getState().pause();
+        set({ fileName });
+        useWorkflowStore.temporal.getState().resume();
+      },
 
-  setWorkflowName: (workflowName) => set({ workflowName }),
+      setWorkflowName: (workflowName) => set({ workflowName }),
 
-  setPrompts: (prompts) =>
-    set({
-      prompts,
-      totalSteps: prompts.length,
-    }),
+      setPrompts: (prompts) =>
+        set({
+          prompts,
+          totalSteps: prompts.length,
+        }),
 
-  updatePrompt: (index, updates) =>
-    set((state) => ({
-      prompts: state.prompts.map((p, i) =>
-        i === index ? { ...p, ...updates } : p
-      ),
-    })),
+      updatePrompt: (index, updates) =>
+        set((state) => ({
+          prompts: state.prompts.map((p, i) =>
+            i === index ? { ...p, ...updates } : p
+          ),
+        })),
 
-  setExecutionState: (executionState) => set({ executionState }),
+      setExecutionState: (executionState) => {
+        useWorkflowStore.temporal.getState().pause();
+        set({ executionState });
+        useWorkflowStore.temporal.getState().resume();
+      },
 
-  setCurrentStep: (currentStep) => set({ currentStep }),
+      setCurrentStep: (currentStep) => {
+        useWorkflowStore.temporal.getState().pause();
+        set({ currentStep });
+        useWorkflowStore.temporal.getState().resume();
+      },
 
-  setTotalSteps: (totalSteps) => set({ totalSteps }),
+      setTotalSteps: (totalSteps) => {
+        useWorkflowStore.temporal.getState().pause();
+        set({ totalSteps });
+        useWorkflowStore.temporal.getState().resume();
+      },
 
-  setFinalPrompt: (finalPrompt) =>
-    set((state) => ({
-      finalPrompt,
-      ...(finalPrompt
-        ? {}
-        : {
+      setFinalPrompt: (finalPrompt) =>
+        set((state) => ({
+          finalPrompt,
+          ...(finalPrompt
+            ? {}
+            : {
+                finalPromptStatus: null,
+                finalPromptLoopCount: 0,
+                finalPromptPhase: null,
+                finalPromptOutputs: {},
+                finalPromptStatusMessages: {},
+              }),
+          prompts: state.prompts,
+        })),
+
+      setFinalPromptStatus: (status, loopCount, phase) => {
+        useWorkflowStore.temporal.getState().pause();
+        set({
+          finalPromptStatus: status,
+          finalPromptLoopCount: loopCount,
+          finalPromptPhase: phase,
+        });
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      // ============================================================================
+      // CLI OUTPUT MANAGEMENT
+      // ============================================================================
+
+      addCliOutput: (stepIndex, output) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => {
+          const outputs = state.cliOutputs[stepIndex] || [];
+          const attemptIndex = output.attemptIndex ?? 0;
+          let newOutputs: CliOutput[];
+
+          // Guard: If no retry state exists for this step, reject phantom retries.
+          // Only end conditions can trigger retries, so attemptIndex > 0 without
+          // retry state means something is wrong (e.g. undisposed event listener).
+          const retryState = state.retryStates[stepIndex];
+          if (attemptIndex === 0 && !retryState) {
+            // Initial attempt with no retry state: find and replace existing entry
+            // for attemptIndex 0 (handles streaming→final replacement and any
+            // accidental double-writes).
+            const existingIdx = outputs.findIndex(
+              (o) => (o.attemptIndex ?? 0) === 0
+            );
+
+            if (existingIdx >= 0) {
+              const existing = outputs[existingIdx];
+
+              // Preserve streamed response if final output lacks structured data
+              if (
+                existing.isStreaming &&
+                existing.response &&
+                existing.response.length > 0 &&
+                !(
+                  output.structured &&
+                  (output.structured as any).events &&
+                  (output.structured as any).events.length > 0
+                )
+              ) {
+                newOutputs = [
+                  ...outputs.slice(0, existingIdx),
+                  { ...output, response: existing.response },
+                  ...outputs.slice(existingIdx + 1),
+                ];
+              } else {
+                newOutputs = [
+                  ...outputs.slice(0, existingIdx),
+                  output,
+                  ...outputs.slice(existingIdx + 1),
+                ];
+              }
+            } else {
+              // No existing entry for attempt 0 — first write
+              newOutputs = [...outputs, output];
+            }
+          } else if (attemptIndex > 0 && !retryState) {
+            // Bug: retry output without retry state — replace attempt 0 and warn.
+            // This should no longer happen after the captureOutputInit fix, but
+            // keep the guard for safety and add verbose logging.
+            WebviewLog.warn(
+              `[WorkflowStore] Received attemptIndex=${attemptIndex} for step ${stepIndex} but no retry state exists. ` +
+                `Existing outputs: ${outputs.length} (attempts: ${outputs.map((o) => o.attemptIndex ?? 0).join(",")}). ` +
+                `Replacing initial output (likely a bug — retryState should have been sent first).`
+            );
+            newOutputs = [output];
+          } else {
+            // Retry with valid retry state: place at the correct index
+            // Find existing entry for this attemptIndex and replace, or append
+            const existingIdx = outputs.findIndex(
+              (o) => (o.attemptIndex ?? 0) === attemptIndex
+            );
+
+            if (existingIdx >= 0) {
+              const existing = outputs[existingIdx];
+
+              // Preserve streamed response if applicable
+              if (
+                existing.isStreaming &&
+                existing.response &&
+                existing.response.length > 0 &&
+                !(
+                  output.structured &&
+                  (output.structured as any).events &&
+                  (output.structured as any).events.length > 0
+                )
+              ) {
+                newOutputs = [
+                  ...outputs.slice(0, existingIdx),
+                  { ...output, response: existing.response },
+                  ...outputs.slice(existingIdx + 1),
+                ];
+              } else {
+                newOutputs = [
+                  ...outputs.slice(0, existingIdx),
+                  output,
+                  ...outputs.slice(existingIdx + 1),
+                ];
+              }
+              WebviewLog.debug(
+                `[WorkflowStore] addCliOutput: replaced attempt ${attemptIndex} for step ${stepIndex} (${existingIdx}/${outputs.length})`
+              );
+            } else {
+              // New retry attempt — append
+              newOutputs = [...outputs, output];
+              WebviewLog.debug(
+                `[WorkflowStore] addCliOutput: appended attempt ${attemptIndex} for step ${stepIndex} (total: ${newOutputs.length}, retryState: ${retryState?.currentRetry}/${retryState?.maxRetries})`
+              );
+            }
+          }
+
+          return {
+            cliOutputs: {
+              ...state.cliOutputs,
+              [stepIndex]: newOutputs,
+            },
+            // Clear streaming chunk when final output arrives
+            streamingChunks: {
+              ...state.streamingChunks,
+              [stepIndex]: "",
+            },
+          };
+        });
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      addFinalPromptOutput: (loopIndex, output) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => {
+          const outputs = state.finalPromptOutputs[loopIndex] || [];
+          const attemptIndex = output.attemptIndex ?? 0;
+          const existingIdx = outputs.findIndex(
+            (o) => (o.attemptIndex ?? 0) === attemptIndex
+          );
+
+          const newOutputs =
+            existingIdx >= 0
+              ? [
+                  ...outputs.slice(0, existingIdx),
+                  output,
+                  ...outputs.slice(existingIdx + 1),
+                ]
+              : [...outputs, output];
+
+          return {
+            finalPromptOutputs: {
+              ...state.finalPromptOutputs,
+              [loopIndex]: newOutputs,
+            },
+          };
+        });
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      clearCliOutputs: (stepIndex) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => {
+          const { [stepIndex]: _, ...rest } = state.cliOutputs;
+          return { cliOutputs: rest };
+        });
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      appendStreamingChunk: (stepIndex, chunk) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => ({
+          streamingChunks: {
+            ...state.streamingChunks,
+            [stepIndex]: (state.streamingChunks[stepIndex] || "") + chunk,
+          },
+        }));
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      clearStreamingChunk: (stepIndex) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => ({
+          streamingChunks: {
+            ...state.streamingChunks,
+            [stepIndex]: "",
+          },
+        }));
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      appendStreamingEvents: (stepIndex, events) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => {
+          const outputs = state.cliOutputs[stepIndex] || [];
+          let newOutputs: CliOutput[];
+
+          // Find the streaming buffer for attemptIndex 0 (streaming is always initial attempt)
+          const streamingIdx = outputs.findIndex(
+            (o) => o.isStreaming && (o.attemptIndex ?? 0) === 0
+          );
+
+          if (streamingIdx < 0) {
+            // No streaming buffer yet — create one with explicit attemptIndex
+            newOutputs = [
+              ...outputs,
+              {
+                prompt: "",
+                response: "",
+                structured: {
+                  events: mergeStreamingEvents([], events),
+                  metadata: {},
+                },
+                elapsed: 0,
+                isStreaming: true,
+                timestampMs: Date.now(),
+                attemptIndex: 0,
+              },
+            ];
+          } else {
+            // Append events to existing streaming buffer, merging consecutive text/thinking deltas
+            const streamingBuffer = outputs[streamingIdx];
+            const existingStructured = streamingBuffer.structured as any;
+            const existingEvents = existingStructured?.events || [];
+
+            newOutputs = [
+              ...outputs.slice(0, streamingIdx),
+              {
+                ...streamingBuffer,
+                structured: {
+                  ...existingStructured,
+                  events: mergeStreamingEvents(existingEvents, events),
+                  metadata: existingStructured?.metadata || {},
+                },
+              },
+              ...outputs.slice(streamingIdx + 1),
+            ];
+          }
+
+          return {
+            cliOutputs: {
+              ...state.cliOutputs,
+              [stepIndex]: newOutputs,
+            },
+          };
+        });
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      // ============================================================================
+      // RETRY MANAGEMENT
+      // ============================================================================
+
+      setRetryState: (stepIndex, currentRetry, maxRetries) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => ({
+          retryStates: {
+            ...state.retryStates,
+            [stepIndex]: { currentRetry, maxRetries },
+          },
+        }));
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      clearRetryState: (stepIndex) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => {
+          const { [stepIndex]: _, ...rest } = state.retryStates;
+          return { retryStates: rest };
+        });
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      // ============================================================================
+      // STATUS MESSAGE MANAGEMENT
+      // ============================================================================
+
+      addStatusMessage: (stepIndex, message, severity = "info") => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => ({
+          statusMessages: {
+            ...state.statusMessages,
+            [stepIndex]: [
+              ...(state.statusMessages[stepIndex] || []),
+              { message, severity, timestamp: Date.now() },
+            ],
+          },
+        }));
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      addFinalPromptStatusMessage: (loopIndex, message, severity = "info") => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => ({
+          finalPromptStatusMessages: {
+            ...state.finalPromptStatusMessages,
+            [loopIndex]: [
+              ...(state.finalPromptStatusMessages[loopIndex] || []),
+              { message, severity, timestamp: Date.now() },
+            ],
+          },
+        }));
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      clearStatusMessages: (stepIndex) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => {
+          const { [stepIndex]: _, ...rest } = state.statusMessages;
+          return { statusMessages: rest };
+        });
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      // ============================================================================
+      // STEP STATUS MANAGEMENT
+      // ============================================================================
+
+      setStepStatus: (stepIndex, status) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => ({
+          prompts: state.prompts.map((p, i) =>
+            i === stepIndex ? { ...p, status } : p
+          ),
+        }));
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      // ============================================================================
+      // BULK OPERATIONS
+      // ============================================================================
+
+      loadWorkflow: ({
+        fileName,
+        workflowName,
+        prompts,
+        executionState = EXECUTION_STATES.IDLE,
+        currentStep = 0,
+        results = [],
+        finalPrompt = null,
+        finalPromptStatus = null,
+        finalPromptLoopCount = 0,
+        finalPromptPhase = null,
+      }) => {
+        const t = useWorkflowStore.temporal.getState();
+        t.pause();
+        // Apply status from results to prompts
+        const promptsWithStatus = prompts.map((prompt, index) => ({
+          ...prompt,
+          status: (results[index]?.status as StepStatus) || STEP_STATUS.PENDING,
+        }));
+
+        set({
+          fileName,
+          workflowName: workflowName ?? null,
+          prompts: promptsWithStatus,
+          executionState,
+          currentStep,
+          totalSteps: prompts.length,
+          finalPrompt,
+          finalPromptStatus,
+          finalPromptLoopCount,
+          finalPromptPhase,
+          // Clear runtime state on new workflow
+          cliOutputs: {},
+          finalPromptOutputs: {},
+          retryStates: {},
+          statusMessages: {},
+          finalPromptStatusMessages: {},
+          streamingChunks: {},
+        });
+        t.resume();
+        t.clear();
+      },
+
+      // ============================================================================
+      // HISTORY MANAGEMENT
+      // ============================================================================
+
+      loadHistoryRun: (history, availableRuns, runIndex) => {
+        useWorkflowStore.temporal.getState().pause();
+        set(() => {
+          // Update uiStore for history view state
+          useUiStore.getState().setHistoryView(runIndex, availableRuns);
+
+          // Populate self-contained history snapshot
+          return {
+            historyOutputs: {
+              stepCount: history.runStepCount,
+              steps: history.promptOutputs,
+              finalPromptOutputs: history.finalPromptOutputs,
+              runMetadata: {
+                runId: history.runId,
+                startedAt: history.startedAt,
+                completedAt: history.completedAt,
+                executionState: history.executionState,
+              },
+            },
+          };
+        });
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      clearHistoryOutputs: () => {
+        useWorkflowStore.temporal.getState().pause();
+        set(() => ({ historyOutputs: null }));
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      resetExecutionState: (prompts) => {
+        useWorkflowStore.temporal.getState().pause();
+        set(() => ({
+          prompts: prompts.map((p) => ({ ...p, status: STEP_STATUS.PENDING })),
+          totalSteps: prompts.length,
+          executionState: EXECUTION_STATES.IDLE,
+          currentStep: 0,
+          finalPromptStatus: null,
+          finalPromptLoopCount: 0,
+          finalPromptPhase: null,
+          // cliOutputs, retryStates, statusMessages, streamingChunks, historyOutputs,
+          // finalPromptOutputs, finalPromptStatusMessages are intentionally preserved
+          // so the run history and output panel are unaffected.
+        }));
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      clearRuntimeStateFromStep: (startStep) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => {
+          const newCliOutputs = { ...state.cliOutputs };
+          const newRetryStates = { ...state.retryStates };
+          const newStatusMessages = { ...state.statusMessages };
+          const newStreamingChunks = { ...state.streamingChunks };
+
+          Object.keys(newCliOutputs).forEach((key) => {
+            if (Number(key) >= startStep) {
+              delete newCliOutputs[Number(key)];
+            }
+          });
+          Object.keys(newRetryStates).forEach((key) => {
+            if (Number(key) >= startStep) {
+              delete newRetryStates[Number(key)];
+            }
+          });
+          Object.keys(newStatusMessages).forEach((key) => {
+            if (Number(key) >= startStep) {
+              delete newStatusMessages[Number(key)];
+            }
+          });
+          Object.keys(newStreamingChunks).forEach((key) => {
+            if (Number(key) >= startStep) {
+              delete newStreamingChunks[Number(key)];
+            }
+          });
+
+          return {
+            cliOutputs: newCliOutputs,
+            retryStates: newRetryStates,
+            statusMessages: newStatusMessages,
+            streamingChunks: newStreamingChunks,
+            finalPromptOutputs: {},
+            finalPromptStatusMessages: {},
             finalPromptStatus: null,
             finalPromptLoopCount: 0,
             finalPromptPhase: null,
-            finalPromptOutputs: {},
-            finalPromptStatusMessages: {},
-          }),
-      prompts: state.prompts,
-    })),
+          };
+        });
+        useWorkflowStore.temporal.getState().resume();
+      },
 
-  setFinalPromptStatus: (status, loopCount, phase) =>
-    set({
-      finalPromptStatus: status,
-      finalPromptLoopCount: loopCount,
-      finalPromptPhase: phase,
-    }),
+      applyStartPositionChange: (prompts, newCurrentStep) => {
+        useWorkflowStore.temporal.getState().pause();
+        set(() => ({
+          prompts,
+          currentStep: newCurrentStep,
+          totalSteps: prompts.length,
+          executionState: EXECUTION_STATES.IDLE,
+          finalPromptStatus: null,
+        }));
+        useWorkflowStore.temporal.getState().resume();
+      },
 
-  // ============================================================================
-  // CLI OUTPUT MANAGEMENT
-  // ============================================================================
-
-  addCliOutput: (stepIndex, output) =>
-    set((state) => {
-      const outputs = state.cliOutputs[stepIndex] || [];
-      const attemptIndex = output.attemptIndex ?? 0;
-      let newOutputs: CliOutput[];
-
-      // Guard: If no retry state exists for this step, reject phantom retries.
-      // Only end conditions can trigger retries, so attemptIndex > 0 without
-      // retry state means something is wrong (e.g. undisposed event listener).
-      const retryState = state.retryStates[stepIndex];
-      if (attemptIndex === 0 && !retryState) {
-        // Initial attempt with no retry state: find and replace existing entry
-        // for attemptIndex 0 (handles streaming→final replacement and any
-        // accidental double-writes).
-        const existingIdx = outputs.findIndex(
-          (o) => (o.attemptIndex ?? 0) === 0
-        );
-
-        if (existingIdx >= 0) {
-          const existing = outputs[existingIdx];
-
-          // Preserve streamed response if final output lacks structured data
-          if (
-            existing.isStreaming &&
-            existing.response &&
-            existing.response.length > 0 &&
-            !(
-              output.structured &&
-              (output.structured as any).events &&
-              (output.structured as any).events.length > 0
-            )
-          ) {
-            newOutputs = [
-              ...outputs.slice(0, existingIdx),
-              { ...output, response: existing.response },
-              ...outputs.slice(existingIdx + 1),
-            ];
-          } else {
-            newOutputs = [
-              ...outputs.slice(0, existingIdx),
-              output,
-              ...outputs.slice(existingIdx + 1),
-            ];
+      promoteHistoryToLive: (stepCount) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => {
+          if (!state.historyOutputs) {
+            WebviewLog.debug(
+              `[WorkflowStore] promoteHistoryToLive(${stepCount}): no historyOutputs, nothing to promote`
+            );
+            return {};
           }
-        } else {
-          // No existing entry for attempt 0 — first write
-          newOutputs = [...outputs, output];
-        }
-      } else if (attemptIndex > 0 && !retryState) {
-        // Bug: retry output without retry state — replace attempt 0 and warn.
-        // This should no longer happen after the captureOutputInit fix, but
-        // keep the guard for safety and add verbose logging.
-        WebviewLog.warn(
-          `[WorkflowStore] Received attemptIndex=${attemptIndex} for step ${stepIndex} but no retry state exists. ` +
-            `Existing outputs: ${outputs.length} (attempts: ${outputs.map((o) => o.attemptIndex ?? 0).join(",")}). ` +
-            `Replacing initial output (likely a bug — retryState should have been sent first).`
-        );
-        newOutputs = [output];
-      } else {
-        // Retry with valid retry state: place at the correct index
-        // Find existing entry for this attemptIndex and replace, or append
-        const existingIdx = outputs.findIndex(
-          (o) => (o.attemptIndex ?? 0) === attemptIndex
-        );
 
-        if (existingIdx >= 0) {
-          const existing = outputs[existingIdx];
+          const newCliOutputs = { ...state.cliOutputs };
+          const newStatusMessages = { ...state.statusMessages };
+          let promoted = 0;
 
-          // Preserve streamed response if applicable
-          if (
-            existing.isStreaming &&
-            existing.response &&
-            existing.response.length > 0 &&
-            !(
-              output.structured &&
-              (output.structured as any).events &&
-              (output.structured as any).events.length > 0
-            )
-          ) {
-            newOutputs = [
-              ...outputs.slice(0, existingIdx),
-              { ...output, response: existing.response },
-              ...outputs.slice(existingIdx + 1),
-            ];
-          } else {
-            newOutputs = [
-              ...outputs.slice(0, existingIdx),
-              output,
-              ...outputs.slice(existingIdx + 1),
-            ];
+          for (let i = 0; i < stepCount; i++) {
+            const stepData = state.historyOutputs.steps[i];
+            if (stepData) {
+              // Only populate if live data is missing for this step
+              if (!newCliOutputs[i] || newCliOutputs[i].length === 0) {
+                newCliOutputs[i] = stepData.cliOutputs;
+                promoted++;
+              }
+              if (!newStatusMessages[i] || newStatusMessages[i].length === 0) {
+                newStatusMessages[i] = stepData.statusMessages;
+              }
+            }
           }
+
           WebviewLog.debug(
-            `[WorkflowStore] addCliOutput: replaced attempt ${attemptIndex} for step ${stepIndex} (${existingIdx}/${outputs.length})`
+            `[WorkflowStore] promoteHistoryToLive(${stepCount}): promoted ${promoted} step(s) from history into live cliOutputs`
           );
-        } else {
-          // New retry attempt — append
-          newOutputs = [...outputs, output];
-          WebviewLog.debug(
-            `[WorkflowStore] addCliOutput: appended attempt ${attemptIndex} for step ${stepIndex} (total: ${newOutputs.length}, retryState: ${retryState?.currentRetry}/${retryState?.maxRetries})`
-          );
-        }
-      }
-
-      return {
-        cliOutputs: {
-          ...state.cliOutputs,
-          [stepIndex]: newOutputs,
-        },
-        // Clear streaming chunk when final output arrives
-        streamingChunks: {
-          ...state.streamingChunks,
-          [stepIndex]: "",
-        },
-      };
-    }),
-
-  addFinalPromptOutput: (loopIndex, output) =>
-    set((state) => {
-      const outputs = state.finalPromptOutputs[loopIndex] || [];
-      const attemptIndex = output.attemptIndex ?? 0;
-      const existingIdx = outputs.findIndex(
-        (o) => (o.attemptIndex ?? 0) === attemptIndex
-      );
-
-      const newOutputs =
-        existingIdx >= 0
-          ? [
-              ...outputs.slice(0, existingIdx),
-              output,
-              ...outputs.slice(existingIdx + 1),
-            ]
-          : [...outputs, output];
-
-      return {
-        finalPromptOutputs: {
-          ...state.finalPromptOutputs,
-          [loopIndex]: newOutputs,
-        },
-      };
-    }),
-
-  clearCliOutputs: (stepIndex) =>
-    set((state) => {
-      const { [stepIndex]: _, ...rest } = state.cliOutputs;
-      return { cliOutputs: rest };
-    }),
-
-  appendStreamingChunk: (stepIndex, chunk) =>
-    set((state) => ({
-      streamingChunks: {
-        ...state.streamingChunks,
-        [stepIndex]: (state.streamingChunks[stepIndex] || "") + chunk,
+          return {
+            cliOutputs: newCliOutputs,
+            statusMessages: newStatusMessages,
+          };
+        });
+        useWorkflowStore.temporal.getState().resume();
       },
-    })),
 
-  clearStreamingChunk: (stepIndex) =>
-    set((state) => ({
-      streamingChunks: {
-        ...state.streamingChunks,
-        [stepIndex]: "",
+      resetWorkflow: () => {
+        const t = useWorkflowStore.temporal.getState();
+        t.pause();
+        set(initialState);
+        t.resume();
+        t.clear();
       },
-    })),
 
-  appendStreamingEvents: (stepIndex, events) =>
-    set((state) => {
-      const outputs = state.cliOutputs[stepIndex] || [];
-      let newOutputs: CliOutput[];
-
-      // Find the streaming buffer for attemptIndex 0 (streaming is always initial attempt)
-      const streamingIdx = outputs.findIndex(
-        (o) => o.isStreaming && (o.attemptIndex ?? 0) === 0
-      );
-
-      if (streamingIdx < 0) {
-        // No streaming buffer yet — create one with explicit attemptIndex
-        newOutputs = [
-          ...outputs,
-          {
-            prompt: "",
-            response: "",
-            structured: {
-              events: mergeStreamingEvents([], events),
-              metadata: {},
-            },
-            elapsed: 0,
-            isStreaming: true,
-            timestampMs: Date.now(),
-            attemptIndex: 0,
-          },
-        ];
-      } else {
-        // Append events to existing streaming buffer, merging consecutive text/thinking deltas
-        const streamingBuffer = outputs[streamingIdx];
-        const existingStructured = streamingBuffer.structured as any;
-        const existingEvents = existingStructured?.events || [];
-
-        newOutputs = [
-          ...outputs.slice(0, streamingIdx),
-          {
-            ...streamingBuffer,
-            structured: {
-              ...existingStructured,
-              events: mergeStreamingEvents(existingEvents, events),
-              metadata: existingStructured?.metadata || {},
-            },
-          },
-          ...outputs.slice(streamingIdx + 1),
-        ];
-      }
-
-      return {
-        cliOutputs: {
-          ...state.cliOutputs,
-          [stepIndex]: newOutputs,
-        },
-      };
-    }),
-
-  // ============================================================================
-  // RETRY MANAGEMENT
-  // ============================================================================
-
-  setRetryState: (stepIndex, currentRetry, maxRetries) =>
-    set((state) => ({
-      retryStates: {
-        ...state.retryStates,
-        [stepIndex]: { currentRetry, maxRetries },
+      clearAllRuntimeState: () => {
+        useWorkflowStore.temporal.getState().pause();
+        set({
+          cliOutputs: {},
+          finalPromptOutputs: {},
+          retryStates: {},
+          statusMessages: {},
+          finalPromptStatusMessages: {},
+          streamingChunks: {},
+          finalPromptStatus: null,
+          finalPromptLoopCount: 0,
+          finalPromptPhase: null,
+        });
+        useWorkflowStore.temporal.getState().resume();
       },
-    })),
 
-  clearRetryState: (stepIndex) =>
-    set((state) => {
-      const { [stepIndex]: _, ...rest } = state.retryStates;
-      return { retryStates: rest };
-    }),
+      // ============================================================================
+      // COMPUTED SELECTORS
+      // ============================================================================
 
-  // ============================================================================
-  // STATUS MESSAGE MANAGEMENT
-  // ============================================================================
+      /**
+       * Check if there are pending prompts in the queue.
+       * Returns true if there are prompts that haven't been executed yet.
+       * Used to determine whether Run button should say "Run" or "Run Next".
+       */
+      hasPendingPrompts: () => {
+        const { prompts, executionState, currentStep, totalSteps } = get();
 
-  addStatusMessage: (stepIndex, message, severity = "info") =>
-    set((state) => ({
-      statusMessages: {
-        ...state.statusMessages,
-        [stepIndex]: [
-          ...(state.statusMessages[stepIndex] || []),
-          { message, severity, timestamp: Date.now() },
-        ],
-      },
-    })),
-
-  addFinalPromptStatusMessage: (loopIndex, message, severity = "info") =>
-    set((state) => ({
-      finalPromptStatusMessages: {
-        ...state.finalPromptStatusMessages,
-        [loopIndex]: [
-          ...(state.finalPromptStatusMessages[loopIndex] || []),
-          { message, severity, timestamp: Date.now() },
-        ],
-      },
-    })),
-
-  clearStatusMessages: (stepIndex) =>
-    set((state) => {
-      const { [stepIndex]: _, ...rest } = state.statusMessages;
-      return { statusMessages: rest };
-    }),
-
-  // ============================================================================
-  // STEP STATUS MANAGEMENT
-  // ============================================================================
-
-  setStepStatus: (stepIndex, status) =>
-    set((state) => ({
-      prompts: state.prompts.map((p, i) =>
-        i === stepIndex ? { ...p, status } : p
-      ),
-    })),
-
-  // ============================================================================
-  // BULK OPERATIONS
-  // ============================================================================
-
-  loadWorkflow: ({
-    fileName,
-    workflowName,
-    prompts,
-    executionState = EXECUTION_STATES.IDLE,
-    currentStep = 0,
-    results = [],
-    finalPrompt = null,
-    finalPromptStatus = null,
-    finalPromptLoopCount = 0,
-    finalPromptPhase = null,
-  }) => {
-    // Apply status from results to prompts
-    const promptsWithStatus = prompts.map((prompt, index) => ({
-      ...prompt,
-      status: (results[index]?.status as StepStatus) || STEP_STATUS.PENDING,
-    }));
-
-    set({
-      fileName,
-      workflowName: workflowName ?? null,
-      prompts: promptsWithStatus,
-      executionState,
-      currentStep,
-      totalSteps: prompts.length,
-      finalPrompt,
-      finalPromptStatus,
-      finalPromptLoopCount,
-      finalPromptPhase,
-      // Clear runtime state on new workflow
-      cliOutputs: {},
-      finalPromptOutputs: {},
-      retryStates: {},
-      statusMessages: {},
-      finalPromptStatusMessages: {},
-      streamingChunks: {},
-    });
-  },
-
-  // ============================================================================
-  // HISTORY MANAGEMENT
-  // ============================================================================
-
-  loadHistoryRun: (history, availableRuns, runIndex) =>
-    set(() => {
-      // Update uiStore for history view state
-      useUiStore.getState().setHistoryView(runIndex, availableRuns);
-
-      // Populate self-contained history snapshot
-      return {
-        historyOutputs: {
-          stepCount: history.runStepCount,
-          steps: history.promptOutputs,
-          finalPromptOutputs: history.finalPromptOutputs,
-          runMetadata: {
-            runId: history.runId,
-            startedAt: history.startedAt,
-            completedAt: history.completedAt,
-            executionState: history.executionState,
-          },
-        },
-      };
-    }),
-
-  clearHistoryOutputs: () => set(() => ({ historyOutputs: null })),
-
-  resetExecutionState: (prompts) =>
-    set(() => ({
-      prompts: prompts.map((p) => ({ ...p, status: STEP_STATUS.PENDING })),
-      totalSteps: prompts.length,
-      executionState: EXECUTION_STATES.IDLE,
-      currentStep: 0,
-      finalPromptStatus: null,
-      finalPromptLoopCount: 0,
-      finalPromptPhase: null,
-      // cliOutputs, retryStates, statusMessages, streamingChunks, historyOutputs,
-      // finalPromptOutputs, finalPromptStatusMessages are intentionally preserved
-      // so the run history and output panel are unaffected.
-    })),
-
-  clearRuntimeStateFromStep: (startStep) =>
-    set((state) => {
-      const newCliOutputs = { ...state.cliOutputs };
-      const newRetryStates = { ...state.retryStates };
-      const newStatusMessages = { ...state.statusMessages };
-      const newStreamingChunks = { ...state.streamingChunks };
-
-      Object.keys(newCliOutputs).forEach((key) => {
-        if (Number(key) >= startStep) {
-          delete newCliOutputs[Number(key)];
+        if (prompts.length === 0) {
+          return false;
         }
-      });
-      Object.keys(newRetryStates).forEach((key) => {
-        if (Number(key) >= startStep) {
-          delete newRetryStates[Number(key)];
-        }
-      });
-      Object.keys(newStatusMessages).forEach((key) => {
-        if (Number(key) >= startStep) {
-          delete newStatusMessages[Number(key)];
-        }
-      });
-      Object.keys(newStreamingChunks).forEach((key) => {
-        if (Number(key) >= startStep) {
-          delete newStreamingChunks[Number(key)];
-        }
-      });
 
-      return {
-        cliOutputs: newCliOutputs,
-        retryStates: newRetryStates,
-        statusMessages: newStatusMessages,
-        streamingChunks: newStreamingChunks,
-        finalPromptOutputs: {},
-        finalPromptStatusMessages: {},
-        finalPromptStatus: null,
-        finalPromptLoopCount: 0,
-        finalPromptPhase: null,
-      };
-    }),
-
-  applyStartPositionChange: (prompts, newCurrentStep) =>
-    set(() => ({
-      prompts,
-      currentStep: newCurrentStep,
-      totalSteps: prompts.length,
-      executionState: EXECUTION_STATES.IDLE,
-      finalPromptStatus: null,
-    })),
-
-  promoteHistoryToLive: (stepCount) =>
-    set((state) => {
-      if (!state.historyOutputs) {
-        WebviewLog.debug(
-          `[WorkflowStore] promoteHistoryToLive(${stepCount}): no historyOutputs, nothing to promote`
-        );
-        return {};
-      }
-
-      const newCliOutputs = { ...state.cliOutputs };
-      const newStatusMessages = { ...state.statusMessages };
-      let promoted = 0;
-
-      for (let i = 0; i < stepCount; i++) {
-        const stepData = state.historyOutputs.steps[i];
-        if (stepData) {
-          // Only populate if live data is missing for this step
-          if (!newCliOutputs[i] || newCliOutputs[i].length === 0) {
-            newCliOutputs[i] = stepData.cliOutputs;
-            promoted++;
+        // If we're idle, check if this is a fresh workflow or resumed workflow
+        if (executionState === EXECUTION_STATES.IDLE) {
+          // Fresh workflow (not started yet) - no pending prompts, just "Run"
+          if (currentStep === 0) {
+            return false;
           }
-          if (!newStatusMessages[i] || newStatusMessages[i].length === 0) {
-            newStatusMessages[i] = stepData.statusMessages;
-          }
+          // Resumed workflow (some prompts completed) - has pending prompts, show "Run Next"
+          return currentStep < totalSteps;
         }
-      }
 
-      WebviewLog.debug(
-        `[WorkflowStore] promoteHistoryToLive(${stepCount}): promoted ${promoted} step(s) from history into live cliOutputs`
-      );
-      return { cliOutputs: newCliOutputs, statusMessages: newStatusMessages };
-    }),
+        // If stopped, there are pending prompts (current was cancelled, may have more after)
+        if (executionState === EXECUTION_STATES.STOPPED) {
+          return currentStep < totalSteps;
+        }
 
-  resetWorkflow: () => set(initialState),
+        // If running/paused, check if there are prompts after current step
+        if (
+          executionState === EXECUTION_STATES.RUNNING ||
+          executionState === EXECUTION_STATES.PAUSED
+        ) {
+          return currentStep < totalSteps;
+        }
 
-  clearAllRuntimeState: () =>
-    set({
-      cliOutputs: {},
-      finalPromptOutputs: {},
-      retryStates: {},
-      statusMessages: {},
-      finalPromptStatusMessages: {},
-      streamingChunks: {},
-      finalPromptStatus: null,
-      finalPromptLoopCount: 0,
-      finalPromptPhase: null,
-    }),
-
-  // ============================================================================
-  // COMPUTED SELECTORS
-  // ============================================================================
-
-  /**
-   * Check if there are pending prompts in the queue.
-   * Returns true if there are prompts that haven't been executed yet.
-   * Used to determine whether Run button should say "Run" or "Run Next".
-   */
-  hasPendingPrompts: () => {
-    const { prompts, executionState, currentStep, totalSteps } = get();
-
-    if (prompts.length === 0) {
-      return false;
-    }
-
-    // If we're idle, check if this is a fresh workflow or resumed workflow
-    if (executionState === EXECUTION_STATES.IDLE) {
-      // Fresh workflow (not started yet) - no pending prompts, just "Run"
-      if (currentStep === 0) {
+        // If completed, no pending prompts
         return false;
-      }
-      // Resumed workflow (some prompts completed) - has pending prompts, show "Run Next"
-      return currentStep < totalSteps;
+      },
+
+      getCurrentPrompt: () => {
+        const { prompts, currentStep } = get();
+        if (currentStep >= 0 && currentStep < prompts.length) {
+          return prompts[currentStep];
+        }
+        return null;
+      },
+
+      getPromptByIndex: (index) => {
+        const { prompts } = get();
+        if (index >= 0 && index < prompts.length) {
+          return prompts[index];
+        }
+        return null;
+      },
+
+      isWorkflowRunning: () =>
+        get().executionState === EXECUTION_STATES.RUNNING,
+
+      isWorkflowPaused: () => get().executionState === EXECUTION_STATES.PAUSED,
+
+      isWorkflowStopped: () =>
+        get().executionState === EXECUTION_STATES.STOPPED,
+
+      isWorkflowIdle: () => get().executionState === EXECUTION_STATES.IDLE,
+
+      isWorkflowComplete: () =>
+        get().executionState === EXECUTION_STATES.COMPLETED,
+
+      getStepOutputs: (stepIndex) => get().cliOutputs[stepIndex] || [],
+
+      getLatestOutput: (stepIndex) => {
+        const outputs = get().cliOutputs[stepIndex];
+        if (outputs && outputs.length > 0) {
+          return outputs[outputs.length - 1];
+        }
+        return null;
+      },
+
+      isStepFailed: (stepIndex) => {
+        const { prompts } = get();
+        const prompt = prompts[stepIndex];
+        return prompt?.status === STEP_STATUS.FAILED;
+      },
+
+      getCompletedCount: () => {
+        const { prompts } = get();
+        return prompts.filter((p) => p.status === STEP_STATUS.COMPLETED).length;
+      },
+    }),
+    {
+      partialize: (state): UndoableWorkflowState => ({
+        prompts: state.prompts,
+        workflowName: state.workflowName,
+        finalPrompt: state.finalPrompt,
+      }),
+      limit: 100,
     }
-
-    // If stopped, there are pending prompts (current was cancelled, may have more after)
-    if (executionState === EXECUTION_STATES.STOPPED) {
-      return currentStep < totalSteps;
-    }
-
-    // If running/paused, check if there are prompts after current step
-    if (
-      executionState === EXECUTION_STATES.RUNNING ||
-      executionState === EXECUTION_STATES.PAUSED
-    ) {
-      return currentStep < totalSteps;
-    }
-
-    // If completed, no pending prompts
-    return false;
-  },
-
-  getCurrentPrompt: () => {
-    const { prompts, currentStep } = get();
-    if (currentStep >= 0 && currentStep < prompts.length) {
-      return prompts[currentStep];
-    }
-    return null;
-  },
-
-  getPromptByIndex: (index) => {
-    const { prompts } = get();
-    if (index >= 0 && index < prompts.length) {
-      return prompts[index];
-    }
-    return null;
-  },
-
-  isWorkflowRunning: () => get().executionState === EXECUTION_STATES.RUNNING,
-
-  isWorkflowPaused: () => get().executionState === EXECUTION_STATES.PAUSED,
-
-  isWorkflowStopped: () => get().executionState === EXECUTION_STATES.STOPPED,
-
-  isWorkflowIdle: () => get().executionState === EXECUTION_STATES.IDLE,
-
-  isWorkflowComplete: () => get().executionState === EXECUTION_STATES.COMPLETED,
-
-  getStepOutputs: (stepIndex) => get().cliOutputs[stepIndex] || [],
-
-  getLatestOutput: (stepIndex) => {
-    const outputs = get().cliOutputs[stepIndex];
-    if (outputs && outputs.length > 0) {
-      return outputs[outputs.length - 1];
-    }
-    return null;
-  },
-
-  isStepFailed: (stepIndex) => {
-    const { prompts } = get();
-    const prompt = prompts[stepIndex];
-    return prompt?.status === STEP_STATUS.FAILED;
-  },
-
-  getCompletedCount: () => {
-    const { prompts } = get();
-    return prompts.filter((p) => p.status === STEP_STATUS.COMPLETED).length;
-  },
-}));
+  )
+);
 
 // Re-export types for convenience (imported from consolidated sources)
 export type {
@@ -857,3 +964,13 @@ export type {
   RetryState,
   StatusMessage,
 } from "../types/messages";
+
+export interface UndoableWorkflowState {
+  prompts: PromptItem[];
+  workflowName: string | null;
+  finalPrompt: PromptItem | null;
+}
+
+export const useWorkflowTemporalStore = <T>(
+  selector: (state: TemporalState<UndoableWorkflowState>) => T
+): T => useStoreWithEqualityFn(useWorkflowStore.temporal, selector, Object.is);

@@ -7,6 +7,7 @@ import {
   GroupImperativeHandle,
 } from "react-resizable-panels";
 import { useMessageHandler } from "@hooks/useMessageHandler";
+import { useUndoRedoKeyHandler } from "@hooks/useUndoRedoKeyHandler";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { WebviewLog } from "@utils/logger";
 import { useIsMobile } from "@hooks/useMediaQuery";
@@ -152,6 +153,7 @@ function App() {
 
   // Message handlers with full implementations
   useMessageHandler();
+  useUndoRedoKeyHandler();
 
   // Signal ready to extension
   useEffect(() => {

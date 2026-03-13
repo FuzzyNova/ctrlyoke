@@ -10,3 +10,4 @@ export {
 } from "./useMessageHandler";
 export { useMediaQuery, useIsMobile } from "./useMediaQuery";
 export { useElementNarrow } from "./useElementNarrow";
+export { useUndoRedoKeyHandler } from "./useUndoRedoKeyHandler";
