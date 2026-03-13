@@ -200,7 +200,7 @@ FlightPath uses **adaptive prompt passing** based on prompt complexity:
 - Aborts completion detection (CliNotificationMonitor polling / file monitoring)
 - Clears currentProcess/currentExecution references
 - Updates status to idle
-- Called by FlightPathManager.stop() when user presses stop button
+- Called by WorkflowOrchestrator.stop() when user presses stop button
 
 **Process Lifecycle**:
 
@@ -265,10 +265,10 @@ Key settings (see package.json for full list):
   </configuration>
 
 <factoryPattern>
-**FlightPathManager** instantiates ALL integrations eagerly at startup, then routes execution to the active harness:
+**WorkflowOrchestrator** instantiates ALL integrations eagerly at startup, then routes execution to the active harness:
 
 ```typescript
-// FlightPathManager.ts — all integrations created upfront
+// WorkflowOrchestrator.ts — all integrations created upfront
 this.copilotCliIntegration = new CliIntegration(
   new CopilotCliProvider(),
   this.context
@@ -307,7 +307,7 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for complete guide
    - GeminiNotificationMonitor.ts (implements INotificationMonitor)
    - GeminiToolPermissionMapper.ts (implements IToolPermissionMapper)
    - GeminiLogParser.ts (extends BaseLogParser, implements ILogParser)
-3. Instantiate alongside other integrations in FlightPathManager
+3. Instantiate alongside other integrations in WorkflowOrchestrator
 4. Add HARNESS_IDS entry and settings to package.json (model, harness enum value)
 5. Test with manual-test workflows
 
@@ -488,6 +488,6 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for detailed step-by-step guide with code
 12. **Provider isolation**: Each provider directory is self-contained - no cross-provider dependencies
 13. **Interface contracts**: TypeScript interfaces (ICliProvider, IResponseParser, ILogParser, etc.) prevent implementation mistakes
 14. **Testable components**: Provider components testable in isolation without mocking
-15. **All integrations instantiated eagerly**: FlightPathManager creates all 4 integrations at startup (not lazy/on-demand)
+15. **All integrations instantiated eagerly**: WorkflowOrchestrator creates all 4 integrations at startup (not lazy/on-demand)
 16. **CliTerminalFormatter is NOT here**: It lives in `src/cli/CliTerminalFormatter.ts` — it is strictly a FlightPath CLI binary display helper, not a harness utility
 </importantNotes>

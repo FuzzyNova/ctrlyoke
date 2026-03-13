@@ -59,7 +59,7 @@ Shared utilities for file system operations, logging, validation, CLI process ma
 </terminology>
 
 <relatedComponents>
-- FlightPathManager: Uses PropertyResolver, SessionResolver, ConfigurationUtils for orchestration
+- WorkflowOrchestrator: Uses PropertyResolver, SessionResolver, ConfigurationUtils for orchestration
 - CopilotIntegration subclasses: Use CliProcessManager, ContextExpander, FileReferenceParser, AttachmentBuilders, TempFileManager, PromptFileSplitter
 - PromptFileParser: Uses ValidationUtils for schema validation
 - PromptQueue: Uses PromptIdentity for deduplication, SessionResolver for session tracking

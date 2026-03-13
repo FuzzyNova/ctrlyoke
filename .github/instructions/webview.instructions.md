@@ -174,12 +174,12 @@ CSP headers, `localResourceRoots` restricted to `out/ui/webview/`, custom icons 
 - Implements `vscode.WebviewViewProvider` for sidebar integration
 - HTML generation with secure CSP and local resource URIs
 - Message routing between WebView and extension commands
-- State updates via public methods called by FlightPathManager
+- State updates via public methods called by WorkflowOrchestrator
 - Initial state hydration on webview ready
 - Template management for workflow creation
 - Completion harness integration for CodeMirror autocomplete
 
-**Key public methods (called by FlightPathManager):**
+**Key public methods (called by WorkflowOrchestrator):**
 
 ```typescript
 updateFileSelected(fileName, prompts); // File selection with prompt list
@@ -516,9 +516,9 @@ class CodeMirrorPromptEditor {
 - Set as default checkbox for templates
   </dashboardCSS>
 
-<integrationWithFlightPathManager>
+<integrationWithWorkflowOrchestrator>
 **Dashboard lifecycle:**
-1. FlightPathManager registers dashboard harness in `extension.ts`
+1. WorkflowOrchestrator registers dashboard harness in `extension.ts`
 2. User opens FlightPath sidebar view (or it auto-opens)
 3. WebView sends `ready` message → Provider sends initial state with models and templates
 4. User selects file OR creates new workflow from template → Manager calls `updateFileSelected()`
@@ -539,7 +539,7 @@ class CodeMirrorPromptEditor {
 
 ```
 CopilotCommandLineIntegration streams chunk
-→ FlightPathManager receives chunk in onResponseChunk
+→ WorkflowOrchestrator receives chunk in onResponseChunk
 → Manager calls dashboardProvider.updateCliStreamingChunk(stepIndex, chunk)
 → DashboardProvider sends { type: 'cliStreamingChunk', stepIndex, chunk }
 → dashboard.js appends chunk to state.cliOutputs[stepIndex].response
@@ -552,7 +552,7 @@ CopilotCommandLineIntegration streams chunk
 
 ```
 CopilotCommandLineIntegration completes request
-→ FlightPathManager receives complete output in onResponseComplete
+→ WorkflowOrchestrator receives complete output in onResponseComplete
 → Manager calls dashboardProvider.updateCliOutput(stepIndex, output)
 → DashboardProvider sends { type: 'cliOutput', stepIndex, output }
 → dashboard.js stores output in state.cliOutputs[stepIndex]
@@ -568,7 +568,7 @@ User clicks prompt in list
 → User modifies text/properties
 → User clicks Update
 → dashboard.js sends { type: 'updatePrompt', index, prompt, properties }
-→ FlightPathManager updates queue and prompt file
+→ WorkflowOrchestrator updates queue and prompt file
 → Dashboard re-renders with updated prompt
 ```
 
@@ -588,11 +588,11 @@ User clicks New Workflow
 
 **State synchronization:**
 
-- Dashboard state is derived from FlightPathManager state
+- Dashboard state is derived from WorkflowOrchestrator state
 - No independent state mutations (single source of truth in Manager)
 - WebView never sends state updates, only command triggers
 - Editor state persisted to VS Code memento for session recovery
-  </integrationWithFlightPathManager>
+  </integrationWithWorkflowOrchestrator>
 
 <propertyFlow>
 
@@ -605,7 +605,7 @@ User clicks New Workflow
 5. **User modifies property** (select dropdown or input field)
 6. **editor-manager.js detects change** via event listener
 7. **message-router.js sends MESSAGE_TYPES.updatePrompt** back to extension with new property values
-8. **FlightPathManager updates** PromptQueue and writes to working file
+8. **WorkflowOrchestrator updates** PromptQueue and writes to working file
 
 **Checklist: Adding a New Property (e.g., "promptTemplate")**
 
@@ -717,7 +717,7 @@ Settings → Extension:
 
 **Integration:**
 
-Settings panel is registered in extension.ts alongside dashboard. Changes immediately update FlightPathManager configuration via ConfigurationUtils.
+Settings panel is registered in extension.ts alongside dashboard. Changes immediately update WorkflowOrchestrator configuration via ConfigurationUtils.
 
 </settingsWebview>
 
@@ -725,7 +725,7 @@ Settings panel is registered in extension.ts alongside dashboard. Changes immedi
 - `../FlightPathDashboardProvider.ts` - Dashboard webview provider (main UI)
 - `../FlightPathSettingsProvider.ts` - Settings webview provider (configuration UI)
 - `../StatusBarManager.ts` - Companion UI component for status bar display
-- `../../flightpath/FlightPathManager.ts` - Orchestrates dashboard updates
+- `../../flightpath/WorkflowOrchestrator.ts` - Orchestrates dashboard updates
 - `../../flightpath/TemplateManager.ts` - Manages workflow templates
 - `../../flightpath/cli/CopilotCommandLineIntegration.ts` - Source of CLI output
 - `../../completions/CompletionHelpers.ts` - File/hash completion providers

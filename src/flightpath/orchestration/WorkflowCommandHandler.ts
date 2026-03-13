@@ -337,52 +337,17 @@ export class WorkflowCommandHandler {
   }
 
   /**
-   * Create a new custom template from a built-in starting point
+   * Create a new custom template with a feature-demonstrating starter
    */
   async createNewTemplate(): Promise<void> {
     try {
-      // Show QuickPick for starting point selection
-      const startingPoints = [
-        {
-          label: "$(new-file) Blank",
-          description: "Empty 2-prompt workflow",
-          id: "blank",
-        },
-        {
-          label: "$(lightbulb) Simple Feature",
-          description: "Plan → Implement → Commit",
-          id: "simple-feature",
-        },
-        {
-          label: "$(testing-run-icon) Fix Tests",
-          description: "Run tests and fix failures with retry",
-          id: "fix-tests",
-        },
-        {
-          label: "$(rocket) Full Feature",
-          description: "Plan → Implement → Review → Docs → Commit",
-          id: "full-feature",
-        },
-      ];
-
-      const selected = await vscode.window.showQuickPick(startingPoints, {
-        placeHolder: "Select a starting point for your custom template",
-        title: "Create New Template",
-      });
-
-      if (!selected) {
-        return; // User cancelled
-      }
-
-      // Prompt for template name
       const templateName = await vscode.window.showInputBox({
         prompt: "Enter a name for your custom template",
-        placeHolder: "my-custom-workflow",
+        placeHolder: "my-custom-template",
         validateInput: (value) => {
           if (!value || !value.trim()) {
             return "Template name is required";
           }
-          // Check for invalid characters
           if (/[<>:"/\\|?*\x00-\x1f]/.test(value)) {
             return "Invalid characters in template name";
           }
@@ -391,21 +356,18 @@ export class WorkflowCommandHandler {
       });
 
       if (!templateName) {
-        return; // User cancelled
+        return;
       }
 
-      // Create the template using TemplateManager
       const templatePath = await this.templateManager.createCustomTemplate(
-        selected.id,
         templateName.trim()
       );
 
-      // Open the template file in editor
       const doc = await vscode.workspace.openTextDocument(templatePath);
       await vscode.window.showTextDocument(doc);
 
       vscode.window.showInformationMessage(
-        `✅ Created custom template: ${templateName}.flightpath.json`
+        `✅ Created custom template: ${templateName.trim()}.flightpath.json`
       );
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);

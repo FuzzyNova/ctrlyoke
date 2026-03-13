@@ -403,15 +403,14 @@ export class TemplateManager {
   }
 
   /**
-   * Create a new custom template from a built-in starting point
-   * @param startingPointId Built-in template ID to copy
+   * Create a new custom template with a feature-demonstrating starter.
+   * The starter includes _templateMeta, a file-type variable with autoFillFilename,
+   * and a plain text placeholder so users can see key features in context.
+   *
    * @param templateName Name for the new template
    * @returns Path to created template file
    */
-  async createCustomTemplate(
-    startingPointId: string,
-    templateName: string
-  ): Promise<string> {
+  async createCustomTemplate(templateName: string): Promise<string> {
     const customPath = this.getCustomTemplatesPath();
     if (!customPath) {
       throw new Error("No workspace folder available");
@@ -422,21 +421,43 @@ export class TemplateManager {
       await fs.promises.mkdir(customPath, { recursive: true });
     }
 
-    // Get template content (built-ins are YAML), convert to JSON for custom templates
-    const templateContent = await this.getTemplateContent(startingPointId);
-    const parsed = jsYaml.load(templateContent) as object;
-    const jsonContent = JSON.stringify(parsed, null, 2);
-
-    // Build path
     const fullPath = path.join(customPath, `${templateName}.flightpath.json`);
 
-    // Check if file already exists
     if (await this.pathExists(fullPath)) {
       throw new Error(`Template already exists: ${templateName}`);
     }
 
-    // Write file
-    await fs.promises.writeFile(fullPath, jsonContent, "utf-8");
+    const starter = {
+      _templateMeta: {
+        name: templateName,
+        description: "Describe what this template does",
+        variables: {
+          specFile: {
+            type: "file",
+            fileFilter: ["**/*.md", "**/*.txt"],
+            autoFillFilename: true,
+          },
+        },
+      },
+      prompts: [
+        {
+          name: "plan",
+          prompt:
+            "Review the following spec and create a detailed implementation plan:\n@{file:specFile}",
+        },
+        {
+          name: "implement",
+          prompt: "Implement the plan you just created.",
+          resumeSession: true,
+        },
+      ],
+    };
+
+    await fs.promises.writeFile(
+      fullPath,
+      JSON.stringify(starter, null, 2),
+      "utf-8"
+    );
 
     return fullPath;
   }

@@ -375,7 +375,7 @@ export class WorkflowSerializer {
   }
 
   handleCreateNewTemplate(): void {
-    vscode.commands.executeCommand("flightpath.createPromptFile");
+    vscode.commands.executeCommand("flightpath.createNewTemplate");
   }
 
   async handleBrowseTemplateFile(variable: string, fileFilter?: string[]): Promise<void> {

@@ -16,7 +16,7 @@ When editing or analyzing files, read the corresponding instruction file:
 
 | File Pattern                           | Instruction File                                             | When to Read                                                                                |
 | -------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| `src/flightpath/*.ts` (top-level only) | `.github/instructions/flightpath-core.instructions.md`       | HarnessIntegration, FlightPathManager, PromptQueue, PromptFileParser, EndConditionEvaluator |
+| `src/flightpath/*.ts` (top-level only) | `.github/instructions/flightpath-core.instructions.md`       | HarnessIntegration, WorkflowOrchestrator, PromptQueue, PromptFileParser, EndConditionEvaluator |
 | `src/flightpath/harness/chat/**`       | `.github/instructions/flightpath-chat.instructions.md`       | CopilotChatIntegration (UI automation)                                                      |
 | `src/flightpath/harness/**`            | `.github/instructions/harness-integrations.instructions.md`  | CliIntegration, Harness providers (Copilot, Claude, Codex)                                  |
 | `src/cli.ts`, `src/cli/**`             | `.github/instructions/flightpath-cli-binary.instructions.md` | FlightPath CLI binary, CliAdapter, CliTerminalFormatter                                     |
@@ -38,7 +38,7 @@ When editing or analyzing files, read the corresponding instruction file:
 
 **Examples:**
 
-- Working on `src/flightpath/FlightPathManager.ts`?
+- Working on `src/flightpath/WorkflowOrchestrator.ts`?
   - Read: `.github/instructions/flightpath-core.instructions.md`
 
 - Working on `src/ui/FlightPathDashboardProvider.ts`?

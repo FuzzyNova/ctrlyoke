@@ -15,12 +15,13 @@ Orchestration, parsing, queue, validation, and template management. Top-level `s
 **Shared utilities:** `ContextExpander` for `@file`/`#file` references, `PropertyResolver.ResolvedProperties` for harness/model/session resolution, `shouldInjectExtensionInstructions` from PromptIdentity
 </harnessIntegration>
 
-<flightPathManager>
+<workflowOrchestrator>
 **Factory pattern:** All 4 harness integrations initialized at startup, `getDefaultIntegration()` respects harness setting, `createIntegrationForMode()` handles per-prompt overrides
 **Harness selection:** Supports copilot-cli (default), copilot-chat, claude-cli, codex-cli
 **Workflow separation:** Loading delegated to PromptFileLoader, execution to WorkflowExecutor, specialized tasks to orchestration/ classes
 **Composition pattern:** Uses 5 orchestration dependencies (PromptFileLoader, PromptFileWatcher, TemplateImporter, WorkflowCommandHandler, WorkspaceSessionManager)
-</flightPathManager>
+**VS Code-only:** Manages parallel workflow registry via `WorkflowInstance` (not used in CLI binary)
+</workflowOrchestrator>
 
 <promptQueue>
 **State container** with events (NOT event-driven executor - WorkflowExecutor handles loop)
@@ -39,7 +40,7 @@ AJV validation, normalizes single/multi formats, loads schema from `out/schemas/
 
 <endConditionHandler>
 Orchestrates retry logic with WorkflowExecutor callback pattern
-**Extracted from FlightPathManager** for single responsibility principle
+**Extracted from WorkflowOrchestrator** for single responsibility principle
 **Two failure paths:** Execution errors (timeout, exit code) vs validation failures (wrong output)
 **Retry coordination:** Uses SendRetryPromptCallback to execute retry prompts
 </endConditionHandler>
@@ -94,7 +95,7 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 **WorkflowContext:** Bundle pattern for passing dependencies to WorkflowExecutor (avoids long parameter lists)
 **Callback pattern:** EndConditionHandler uses SendRetryPromptCallback to avoid circular dependencies
 **File locking:** withFileLock wrapper prevents concurrent working file corruption
-**Event emitters:** PromptQueue emits state changes, FlightPathManager subscribes and updates UI
+**Event emitters:** PromptQueue emits state changes, WorkflowOrchestrator subscribes and updates UI
 </keyPatterns>
 
 <terminology>

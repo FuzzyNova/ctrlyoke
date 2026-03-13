@@ -12,7 +12,7 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - Implements vscode.WebviewViewProvider for sidebar panel
 - Loads React app from out/ui/webview-react/
 - Handles message routing between extension and React UI
-- Harness availability driven by FlightPathManager via `notifyHarnessAvailability()` (not polled in constructor)
+- Harness availability driven by WorkflowOrchestrator via `notifyHarnessAvailability()` (not polled in constructor)
 - Discovers available agents (`AgentDiscovery`) and skills (`SkillDiscovery`) in background on construction
 - Injects webview resource URIs into Vite-built HTML (assets, typo.js, codicons, custom-icons.css, spell-check dictionaries, logo)
 - `localResourceRoots`: webview-react dir + images dir
@@ -99,7 +99,7 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 <criticalPatterns>
 **vscodeApi capture:** Must happen BEFORE React modules load (acquireVsCodeApi only callable once)
 **CSP policy:** script-src for vscodeApi, style-src for Tailwind inline styles, img-src for data URIs
-**Circular dependency:** FlightPathWebviewProvider created first, setFlightPathManager() called after
+**Circular dependency:** FlightPathWebviewProvider created first, setWorkflowOrchestrator() called after
 **Resource URIs:** All assets loaded via webview.asWebviewUri() for security
 **Message validation:** Validate harness IDs against VALID_HARNESSES constant
 **No emoji:** Use codicons or custom-icons only
@@ -107,7 +107,7 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 
 <relatedFiles>
 - src/ui/webview-react/ - React UI implementation (separate instructions file)
-- FlightPathManager.ts - Orchestration, calls webview update methods and notifyHarnessAvailability()
+- ../../flightpath/WorkflowOrchestrator.ts - Orchestration, calls webview update methods and notifyHarnessAvailability()
 - DashboardConstants.ts - MESSAGE_TYPES, EXECUTION_STATES, HARNESS_IDS
 - ModelRegistry.ts - Runtime model discovery
 - ModelConstants.ts - Model display names and mappings
