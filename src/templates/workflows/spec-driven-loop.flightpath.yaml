@@ -1,12 +1,19 @@
-# Spec-Driven Implementation Loop
-# Architect → Implement → Orchestrate (loops until spec is fully satisfied)
-#
-# Variable: {file:specFile} — path to your design/spec document
-# The orchestrating finalPrompt reviews the work against the spec and
-# queues additional prompts if anything is missing or incorrect.
+_templateMeta:
+  name: Spec-Driven Loop
+  description: "Architect → Implement → Orchestrate loop. Give it a spec/design doc and it runs until every requirement is satisfied."
+  variables:
+    specFile:
+      type: file
+      fileFilter:
+        - "**/*.md"
+        - "**/*.txt"
+        - "**/*.yaml"
+        - "**/*.json"
+      autoFillFilename: true
 
+# prompts
 prompts:
-  - id: architect
+  - name: architect
     prompt: |
       Review the following specification document:
       @{file:specFile}
@@ -15,11 +22,9 @@ prompts:
       1. Fully understand all requirements and scope in the spec
       2. Analyze the existing codebase architecture, patterns, and conventions (@workspace)
       3. Identify any gaps, ambiguities, or conflicts between the spec and the current architecture
-      4. Produce a clear, refined implementation plan aligned with existing patterns
+      4. Update the specification document with a clear, refined implementation plan aligned with existing patterns
 
-      Label your final plan as "## Implementation Plan" at the end of your response.
-
-  - id: implement
+  - name: implement
     prompt: |
       Implement the specification:
       @{file:specFile}
@@ -30,7 +35,7 @@ prompts:
       - Handle edge cases and error conditions throughout
 
 finalPrompt:
-  id: orchestrate
+  name: orchestrate
   agent: spec-orchestrator
   allowDynamicExtension: true
   priorContext: all

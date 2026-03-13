@@ -13,8 +13,17 @@ import { Log } from "../utils/Log";
  *   {text:varName}  → type = 'text'  (plain input, explicit)
  *   {varName}       → type = 'text'  (plain input, default)
  *
- * Built-in templates may also carry fileFilter and autoFillFilename, which
- * cannot be expressed in the placeholder syntax alone.
+ * Built-in templates hardcode fileFilter and autoFillFilename in BUILT_IN_TEMPLATES.
+ * User templates can declare the same metadata via a top-level `_templateMeta` key:
+ *
+ *   _templateMeta:
+ *     variables:
+ *       specFile:
+ *         type: file
+ *         fileFilter: ["**\/*.md"]
+ *         autoFillFilename: true
+ *
+ * If multiple variables declare autoFillFilename: true, only the first wins.
  */
 export interface TemplateVariable {
   /** Matches the {placeholder} in the template content */
@@ -37,7 +46,13 @@ export interface TemplateInfo {
   path: string | null;
   variables: TemplateVariable[];
   isBuiltIn: boolean;
-  isAction?: boolean;
+}
+
+/** Parsed shape of a `_templateMeta` block in a template file */
+interface ParsedTemplateMeta {
+  name?: string;
+  description?: string;
+  variables: Record<string, Partial<Omit<TemplateVariable, "name">>>;
 }
 
 /**
@@ -49,66 +64,96 @@ export interface TemplateInfo {
 export class TemplateManager {
   private context: vscode.ExtensionContext;
 
-  // Built-in template definitions (hardcoded, always available)
-  private readonly BUILT_IN_TEMPLATES: Omit<TemplateInfo, "path">[] = [
-    {
-      id: "blank",
-      name: "Blank",
-      description: "Empty 2-prompt workflow",
-      variables: [],
-      isBuiltIn: true,
-    },
-    {
-      id: "simple-feature",
-      name: "Simple Feature",
-      description: "Plan → Implement → Commit",
-      variables: [{ name: "featureDescription" }],
-      isBuiltIn: true,
-    },
-    {
-      id: "fix-tests",
-      name: "Fix Tests",
-      description: "Run tests and fix failures with retry",
-      variables: [{ name: "testCommand" }],
-      isBuiltIn: true,
-    },
-    {
-      id: "full-feature",
-      name: "Full Feature",
-      description: "Plan → Implement → Review → Docs → Commit",
-      variables: [{ name: "featureDescription" }, { name: "planDocument" }],
-      isBuiltIn: true,
-    },
-    {
-      id: "spec-driven-loop",
-      name: "Spec-Driven Loop",
-      description:
-        "Architect → Implement → Orchestrate loop. Give it a spec/design doc and it runs until every requirement is satisfied.",
-      variables: [
-        {
-          name: "specFile",
-          type: "file" as const, // mirrors {file:specFile} in template content
-          fileFilter: ["**/*.md", "**/*.txt", "**/*.yaml", "**/*.json"],
-          autoFillFilename: true,
-        },
-      ],
-      isBuiltIn: true,
-    },
-  ];
-
-  // Special action item for creating new templates
-  private readonly CREATE_TEMPLATE_ACTION: TemplateInfo = {
-    id: "__create_new__",
-    name: "➕ Create New Template...",
-    description: "Create a custom template from a starting point",
-    path: null,
-    variables: [],
-    isBuiltIn: false,
-    isAction: true,
-  };
+  // Ordered list of built-in template IDs. "blank" is special-cased (generated, no file).
+  // All others are self-describing via _templateMeta in their YAML files.
+  private readonly BUILT_IN_TEMPLATE_IDS = [
+    "blank",
+    "simple-feature",
+    "fix-tests",
+    "full-feature",
+    "spec-driven-loop",
+  ] as const;
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
+  }
+
+  /**
+   * Parse the `_templateMeta` block from raw template content.
+   * Returns name, description, and a variable enrichment map.
+   * Returns safe defaults if the block is absent or malformed.
+   */
+  private parseTemplateMeta(content: string): ParsedTemplateMeta {
+    try {
+      const parsed = jsYaml.load(content) as Record<string, unknown> | null;
+      if (!parsed || typeof parsed !== "object") return { variables: {} };
+      const meta = parsed["_templateMeta"] as Record<string, unknown> | undefined;
+      if (!meta || typeof meta !== "object") return { variables: {} };
+
+      const result: ParsedTemplateMeta = { variables: {} };
+
+      if (typeof meta["name"] === "string") result.name = meta["name"];
+      if (typeof meta["description"] === "string") result.description = meta["description"];
+
+      const variablesMeta = meta["variables"];
+      if (variablesMeta && typeof variablesMeta === "object" && !Array.isArray(variablesMeta)) {
+        for (const [varName, varMeta] of Object.entries(variablesMeta as Record<string, unknown>)) {
+          if (typeof varMeta !== "object" || varMeta === null) continue;
+          const vm = varMeta as Record<string, unknown>;
+          const entry: Partial<Omit<TemplateVariable, "name">> = {};
+          if (vm["type"] === "file" || vm["type"] === "text") entry.type = vm["type"];
+          if (
+            Array.isArray(vm["fileFilter"]) &&
+            vm["fileFilter"].every((f) => typeof f === "string")
+          ) {
+            entry.fileFilter = vm["fileFilter"] as string[];
+          }
+          if (vm["autoFillFilename"] === true) entry.autoFillFilename = true;
+          result.variables[varName] = entry;
+        }
+      }
+
+      return result;
+    } catch {
+      return { variables: {} };
+    }
+  }
+
+  /**
+   * Merge auto-extracted variables with metadata from `_templateMeta`.
+   * Meta enriches type, fileFilter, and autoFillFilename.
+   *
+   * Corner case: if multiple variables declare autoFillFilename: true,
+   * only the first (in extraction order) gets it — subsequent ones are warned and ignored.
+   */
+  private mergeVariablesWithMeta(
+    extracted: TemplateVariable[],
+    meta: Record<string, Partial<Omit<TemplateVariable, "name">>>,
+    templateName: string
+  ): TemplateVariable[] {
+    let autoFillAssigned = false;
+
+    return extracted.map((variable) => {
+      const varMeta = meta[variable.name];
+      if (!varMeta) return variable;
+
+      const merged: TemplateVariable = { ...variable };
+      if (varMeta.type) merged.type = varMeta.type;
+      if (varMeta.fileFilter) merged.fileFilter = varMeta.fileFilter;
+
+      if (varMeta.autoFillFilename) {
+        if (!autoFillAssigned) {
+          merged.autoFillFilename = true;
+          autoFillAssigned = true;
+        } else {
+          Log.warn(
+            `Template "${templateName}": variable "${variable.name}" declares autoFillFilename but a prior variable already claims it; ignoring.`
+          );
+        }
+      }
+
+      return merged;
+    });
   }
 
   /**
@@ -152,33 +197,52 @@ export class TemplateManager {
   }
 
   /**
-   * Get all available templates (built-in + custom + action)
+   * Get all available templates (built-in + custom + action).
+   *
+   * Built-in templates are self-describing: name, description, and variable enrichment
+   * come from the `_templateMeta` block in each YAML file, same as user templates.
    */
   async getAvailableTemplates(): Promise<TemplateInfo[]> {
     const templates: TemplateInfo[] = [];
 
-    // Add built-in templates with paths
-    for (const template of this.BUILT_IN_TEMPLATES) {
-      const templatePath =
-        template.id === "blank"
-          ? null
-          : path.join(
-              this.getBuiltInTemplatesPath(),
-              `${template.id}.flightpath.json`
-            );
+    // "blank" is generated — no file, no metadata to parse
+    templates.push({
+      id: "blank",
+      name: "Blank",
+      description: "Empty 2-prompt workflow",
+      path: null,
+      variables: [],
+      isBuiltIn: true,
+    });
 
-      templates.push({
-        ...template,
-        path: templatePath,
-      });
+    // All other built-ins are loaded from their YAML files
+    for (const id of this.BUILT_IN_TEMPLATE_IDS) {
+      if (id === "blank") continue;
+      const templatePath = path.join(
+        this.getBuiltInTemplatesPath(),
+        `${id}.flightpath.yaml`
+      );
+      try {
+        const content = await fs.promises.readFile(templatePath, "utf-8");
+        const meta = this.parseTemplateMeta(content);
+        const extracted = this.extractVariables(content);
+        const variables = this.mergeVariablesWithMeta(extracted, meta.variables, id);
+        templates.push({
+          id,
+          name: meta.name ?? id,
+          description: meta.description ?? "",
+          path: templatePath,
+          variables,
+          isBuiltIn: true,
+        });
+      } catch (error) {
+        Log.warn(`Failed to load built-in template: ${id}`, error);
+      }
     }
 
     // Discover custom templates from .flightpath/templates/
     const customTemplates = await this.discoverCustomTemplates();
     templates.push(...customTemplates);
-
-    // Add "Create New Template" action at the end
-    templates.push(this.CREATE_TEMPLATE_ACTION);
 
     return templates;
   }
@@ -305,8 +369,10 @@ export class TemplateManager {
     // Replace variables in raw template string
     const substituted = this.replaceVariables(templateContent, variables);
 
-    // Parse (yaml.load handles both YAML and JSON) then re-serialize to desired format
-    const parsed = jsYaml.load(substituted) as object;
+    // Parse (yaml.load handles both YAML and JSON) then re-serialize to desired format.
+    // Strip _templateMeta — it's template-authoring metadata, not a workflow execution field.
+    const parsed = jsYaml.load(substituted) as Record<string, unknown>;
+    delete parsed["_templateMeta"];
     let workflowContent: string;
     const ext = format === "json" ? ".flightpath.json" : ".flightpath.yaml";
 
@@ -395,12 +461,14 @@ export class TemplateManager {
 
           try {
             const content = await fs.promises.readFile(fullPath, "utf-8");
-            const variables = this.extractVariables(content);
+            const meta = this.parseTemplateMeta(content);
+            const extracted = this.extractVariables(content);
+            const variables = this.mergeVariablesWithMeta(extracted, meta.variables, name);
 
             templates.push({
               id: `custom:${name}`,
-              name: name,
-              description: `Custom template`,
+              name: meta.name ?? name,
+              description: meta.description ?? "Custom template",
               path: fullPath,
               variables,
               isBuiltIn: false,

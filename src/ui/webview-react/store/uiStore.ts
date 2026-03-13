@@ -75,7 +75,6 @@ export interface TemplateInfo {
   description: string;
   variables?: TemplateVariable[];
   isBuiltIn: boolean;
-  isAction: boolean;
 }
 
 /**

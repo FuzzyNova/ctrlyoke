@@ -1,19 +1,21 @@
-# Simple Feature Workflow
-# Three-step workflow: Plan → Implement → Commit
+_templateMeta:
+  name: Simple Feature
+  description: "Plan → Implement → Commit"
 
+# prompts
 prompts:
-  - id: plan
+  - name: plan
     prompt: |
       {featureDescription}
 
       Create an implementation plan for this feature. Identify all files that need changes and outline the approach.
 
-  - id: implement
+  - name: implement
     prompt: |
       Implement the plan you just created. Make all necessary code changes.
     resumeSession: true
 
-  - id: commit
+  - name: commit
     prompt: |
       Generate a conventional commit message for the changes. Format: feat(scope): description
     resumeSession: true

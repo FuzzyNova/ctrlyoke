@@ -107,12 +107,6 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   // Handle template selection change
   const handleTemplateChange = useCallback(
     (templateId: string) => {
-      if (templateId === "__create_new__") {
-        onClose();
-        vscode.postMessage({ type: MESSAGE_TYPES.CREATE_NEW_TEMPLATE });
-        return;
-      }
-
       setSelectedTemplateId(templateId);
       setVariables({});
 
@@ -120,8 +114,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       const template = templates.find((t) => t.id === templateId) ?? null;
       setCurrentTemplate(template);
     },
-    [vscode, onClose, templates, setCurrentTemplate]
+    [templates, setCurrentTemplate]
   );
+
+  // Open the Create New Template flow
+  const handleCreateNewTemplate = useCallback(() => {
+    onClose();
+    vscode.postMessage({ type: MESSAGE_TYPES.CREATE_NEW_TEMPLATE });
+  }, [vscode, onClose]);
 
   // Handle variable change
   const handleVariableChange = useCallback(
@@ -228,8 +228,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
 
   // Group templates for display
   const builtInTemplates = templates.filter((t) => t.isBuiltIn);
-  const customTemplates = templates.filter((t) => !t.isBuiltIn && !t.isAction);
-  const actionTemplates = templates.filter((t) => t.isAction);
+  const customTemplates = templates.filter((t) => !t.isBuiltIn);
 
   // Path preview
   const fileExt = format === "json" ? ".flightpath.json" : ".flightpath.yaml";
@@ -322,17 +321,17 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                 ))}
               </optgroup>
             )}
-
-            {actionTemplates.length > 0 && (
-              <optgroup label="Actions">
-                {actionTemplates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
           </select>
+          <a
+            onClick={handleCreateNewTemplate}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && handleCreateNewTemplate()}
+            className="mt-1.5 flex items-center gap-1 text-sm text-link-fg hover:underline cursor-pointer w-fit"
+          >
+            <i className="codicon codicon-add" />
+            New template...
+          </a>
         </div>
 
         {/* Template Description */}

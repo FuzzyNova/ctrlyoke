@@ -506,7 +506,6 @@ export interface OpenNewWorkflowModalMessage {
     description: string;
     variables?: Record<string, any>;
     isBuiltIn: boolean;
-    isAction: boolean;
   }>;
   workflowsDir: string;
   defaultTemplateId?: string;

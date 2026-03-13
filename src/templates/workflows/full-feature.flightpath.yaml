@@ -1,8 +1,10 @@
-# Full Feature Development Workflow
-# Comprehensive workflow: Plan → Implement → Review → Docs → Commit
+_templateMeta:
+  name: Full Feature
+  description: "Plan → Implement → Review → Docs → Commit"
 
+# prompts
 prompts:
-  - id: plan
+  - name: plan
     prompt: |
       {featureDescription}
 
@@ -14,11 +16,11 @@ prompts:
       retryPrompt: |
         The plan document was not created. Please create {planDocument} with the implementation plan.
 
-  - id: implement
+  - name: implement
     prompt: |
       Implement the feature according to the plan in @{planDocument}. Make all necessary code changes.
 
-  - id: review
+  - name: review
     prompt: |
       Review the implementation for:
       - Code quality
@@ -28,10 +30,10 @@ prompts:
 
       Fix any problems found.
 
-  - id: update-docs
+  - name: update-docs
     prompt: |
       Update relevant documentation to explain the new feature.
 
-  - id: commit-message
+  - name: commit-message
     prompt: |
       Generate a conventional commit message. Format: feat(scope): description

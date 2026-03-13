@@ -305,7 +305,6 @@ export class WorkflowSerializer {
           description: t.description,
           variables: t.variables,
           isBuiltIn: t.isBuiltIn,
-          isAction: t.isAction,
         })),
         workflowsDir,
         defaultTemplateId,

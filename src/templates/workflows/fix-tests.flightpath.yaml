@@ -1,8 +1,10 @@
-# Fix Tests Workflow
-# Automated test fixing with retry logic
+_templateMeta:
+  name: Fix Tests
+  description: Run tests and fix failures with retry
 
+# prompts
 prompts:
-  - id: fix-tests
+  - name: fix-tests
     prompt: |
       There are currently failing tests. Run {testCommand} to see which tests are failing, then fix them.
     endCondition:
