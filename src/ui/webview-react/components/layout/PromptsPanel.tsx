@@ -389,13 +389,18 @@ export const PromptsPanel: React.FC<{
   // Show eraser button when the workflow has run but is not actively executing.
   // Allows resetting completion state so all prompts become editable before re-running.
   // Hidden in CLI watch mode (read-only).
+  // Also check prompt statuses directly — after an undo, executionState may
+  // still be IDLE even though prompts were restored to a completed/error state.
+  const hasCompletedPrompts = prompts.some(
+    (p) => p.status && p.status !== STEP_STATUS.PENDING
+  );
   const canClearState =
     !isCLIManaged &&
     prompts.length > 0 &&
     !isRunning &&
     executionState !== EXECUTION_STATES.CANCELLING &&
-    executionState !== EXECUTION_STATES.IDLE &&
-    executionState !== null;
+    ((executionState !== EXECUTION_STATES.IDLE && executionState !== null) ||
+      hasCompletedPrompts);
 
   const handleClearState = useCallback(() => {
     if (!globalSettings.confirmResetOperations) {

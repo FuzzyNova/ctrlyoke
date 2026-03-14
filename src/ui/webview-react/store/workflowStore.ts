@@ -735,7 +735,9 @@ export const useWorkflowStore = create<
       },
 
       resetExecutionState: (prompts) => {
-        useWorkflowStore.temporal.getState().pause();
+        // Not wrapped in pause/resume — this is a user-initiated action.
+        // partialize ensures only prompts/workflowName/finalPrompt are snapshotted,
+        // so executionState/currentStep changes here are NOT recorded in undo history.
         set(() => ({
           prompts: prompts.map((p) => ({ ...p, status: STEP_STATUS.PENDING })),
           totalSteps: prompts.length,
@@ -748,7 +750,6 @@ export const useWorkflowStore = create<
           // finalPromptOutputs, finalPromptStatusMessages are intentionally preserved
           // so the run history and output panel are unaffected.
         }));
-        useWorkflowStore.temporal.getState().resume();
       },
 
       clearRuntimeStateFromStep: (startStep) => {
@@ -796,7 +797,9 @@ export const useWorkflowStore = create<
       },
 
       applyStartPositionChange: (prompts, newCurrentStep) => {
-        useWorkflowStore.temporal.getState().pause();
+        // Not wrapped in pause/resume — this is a user-initiated action.
+        // partialize ensures only prompts/workflowName/finalPrompt are snapshotted,
+        // so currentStep/executionState changes here are NOT recorded in undo history.
         set(() => ({
           prompts,
           currentStep: newCurrentStep,
@@ -804,7 +807,6 @@ export const useWorkflowStore = create<
           executionState: EXECUTION_STATES.IDLE,
           finalPromptStatus: null,
         }));
-        useWorkflowStore.temporal.getState().resume();
       },
 
       promoteHistoryToLive: (stepCount) => {
@@ -968,6 +970,7 @@ export const useWorkflowStore = create<
         prompts: state.prompts,
         workflowName: state.workflowName,
         finalPrompt: state.finalPrompt,
+        currentStep: state.currentStep,
       }),
       limit: 100,
     }
@@ -986,6 +989,7 @@ export interface UndoableWorkflowState {
   prompts: PromptItem[];
   workflowName: string | null;
   finalPrompt: PromptItem | null;
+  currentStep: number;
 }
 
 export const useWorkflowTemporalStore = <T>(
