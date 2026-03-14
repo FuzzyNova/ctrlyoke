@@ -59,7 +59,6 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
       return () =>
         document.removeEventListener("mousedown", handleClickOutside);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const toggleValue = (value: string) => {

@@ -435,9 +435,12 @@ export const CliOutput = memo<CliOutputProps>(
     const undoRecordsFromStore = useWorkflowStore((s) => s.undoRecords);
 
     const isFinalPrompt = stepLabel !== undefined;
-    const target: UndoExecutionTarget = isFinalPrompt
-      ? { kind: "finalPrompt", loopIndex: stepIndex }
-      : { kind: "queue", stepIndex };
+    const target: UndoExecutionTarget = useMemo(
+      () => isFinalPrompt
+        ? { kind: "finalPrompt", loopIndex: stepIndex }
+        : { kind: "queue", stepIndex },
+      [isFinalPrompt, stepIndex]
+    );
     const targetKey = isFinalPrompt ? `finalPrompt-${stepIndex}` : `queue-${stepIndex}`;
 
     const effectiveUndoRecord = undoRecord ?? undoRecordsFromStore[targetKey];
@@ -476,8 +479,6 @@ export const CliOutput = memo<CliOutputProps>(
         }
       },
       [
-        stepIndex,
-        isFinalPrompt,
         target,
         output,
         effectiveUndoRecord,

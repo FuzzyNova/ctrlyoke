@@ -190,7 +190,6 @@ export class CliNotificationMonitor {
    */
   private static async readAndCleanupNotificationFile(
     notifyFile: string
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any | null> {
     return await readJsonFileAndDelete(notifyFile);
   }

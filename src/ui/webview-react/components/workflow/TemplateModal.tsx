@@ -209,7 +209,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         runAfter,
       });
     },
-    [vscode, selectedTemplateId, variables, filename, workflowsDir, validateFilename]
+    [vscode, selectedTemplateId, variables, filename, workflowsDir, format, validateFilename]
   );
 
   // Keyboard handling

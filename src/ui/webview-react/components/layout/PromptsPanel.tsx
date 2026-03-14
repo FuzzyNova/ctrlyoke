@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
@@ -312,7 +312,7 @@ export const PromptsPanel: React.FC<{
         }
       }
     },
-    [prompts, selectPrompt, cliOutputs, isViewingHistory, historyOutputs]
+    [prompts, selectPrompt, cliOutputs, isViewingHistory, historyOutputs, isCLIManaged]
   );
 
   const handleFinalPromptSelect = useCallback(() => {
@@ -417,7 +417,7 @@ export const PromptsPanel: React.FC<{
     } else {
       setShowClearConfirm(true);
     }
-  }, [globalSettings.confirmResetOperations, sendMessage]);
+  }, [globalSettings.confirmResetOperations]);
 
   // Get the status for a prompt based on workflow state
   const getPromptStatus = (
@@ -480,7 +480,7 @@ export const PromptsPanel: React.FC<{
         setSetPositionIndex(index);
       }
     },
-    [globalSettings.confirmResetOperations, sendMessage]
+    [globalSettings.confirmResetOperations]
   );
 
   const handleSetPositionConfirm = useCallback(() => {
@@ -510,22 +510,12 @@ export const PromptsPanel: React.FC<{
   );
 
   // Sync local IDs when prompts/currentStep change due to external events
-  // (session load, set-position confirmed, etc.). We intentionally do NOT sync
-  // on every render — only when the pending slice itself changes.
-  const prevPromptsRef = useRef(prompts);
-  const prevCurrentStepRef = useRef(currentStep);
+  // (session load, set-position confirmed, etc.).
   useEffect(() => {
-    if (
-      prevPromptsRef.current !== prompts ||
-      prevCurrentStepRef.current !== currentStep
-    ) {
-      prevPromptsRef.current = prompts;
-      prevCurrentStepRef.current = currentStep;
-      setSortableIds(
-        prompts.slice(currentStep).map((_, i) => `prompt-pending-${currentStep + i}`)
-      );
-    }
-  });
+    setSortableIds(
+      prompts.slice(currentStep).map((_, i) => `prompt-pending-${currentStep + i}`)
+    );
+  }, [prompts, currentStep]);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -557,7 +547,7 @@ export const PromptsPanel: React.FC<{
         editorStore.cancelEdit();
       }
     },
-    [sortableIds, sendMessage]
+    [sortableIds]
   );
 
   if (promptsCollapsed) {

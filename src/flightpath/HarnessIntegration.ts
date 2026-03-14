@@ -133,7 +133,6 @@ export abstract class HarnessIntegration {
    * @param workingFilePath The working file path for this workflow run
    * @param workspaceRoot Workspace root directory
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async cleanupWorkflowArtifacts(
     _workingFilePath: string | undefined,
     _workspaceRoot: string
