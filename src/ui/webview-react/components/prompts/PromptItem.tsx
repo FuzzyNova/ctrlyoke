@@ -7,6 +7,13 @@ import type { PromptOverride } from "./PromptItemDetails";
 export type { PromptOverride };
 import type { StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
+import { useWorkflowStore } from "../../store/workflowStore";
+import { buildUndoCandidatesForOutputs, buildUndoDialogInputForPrompt, getPromptUndoSummary } from "../../utils/promptUndo";
+import type { UndoDialogInput } from "../../utils/promptUndo";
+import type { UndoExecutionTarget } from "@root/types/OutputHistoryTypes";
+import type { UndoFileInstruction } from "../../types/messages";
+import { UndoChangesDialog } from "../output/UndoChangesDialog";
+import { STEP_STATUS } from "../../types/messages";
 
 export interface EndConditionResult {
   passed: boolean;
@@ -74,6 +81,8 @@ interface PromptItemProps {
     listeners: SyntheticListenerMap | undefined;
     attributes: DraggableAttributes;
   };
+  /** When true, show prompt-level undo button for completed prompts */
+  allowUndoActions?: boolean;
 }
 
 /**
@@ -121,8 +130,68 @@ export const PromptItem: React.FC<PromptItemProps> = ({
   hideBorderBottom = false,
   dimmed = false,
   dragHandleProps,
+  allowUndoActions = false,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+
+  interface DialogState {
+    mode: "undo" | "redo";
+    input?: UndoDialogInput;
+    redoInstructions?: UndoFileInstruction[];
+    requestId: string;
+  }
+  const [dialogState, setDialogState] = useState<DialogState | null>(null);
+
+  const workspaceSnapshots = useWorkflowStore((s) => s.workspaceSnapshots);
+  const undoRecords = useWorkflowStore((s) => s.undoRecords);
+  const stepCliOutputs = useWorkflowStore((s) => s.cliOutputs[index] ?? []);
+
+  const executionTarget: UndoExecutionTarget = { kind: "queue", stepIndex: index };
+  const workspacePath = stepCliOutputs[stepCliOutputs.length - 1]?.workingDirectory ?? "";
+  const targetKey = `queue-${index}`;
+  const undoRecord = undoRecords[targetKey];
+  const isRedone = undoRecord?.isRedone === true;
+  const hasUndoRecord = undoRecord != null;
+  const showRedoButton = hasUndoRecord && !isRedone;
+
+  // Build undo/redo action for completed prompts when allowUndoActions is enabled
+  const undoAction = (() => {
+    if (!allowUndoActions || status !== STEP_STATUS.COMPLETED) return undefined;
+
+    if (showRedoButton && (undoRecord?.redoInstructions?.length ?? 0) > 0) {
+      const count = undoRecord!.redoInstructions.length;
+      return {
+        label: `Redo ${count} change${count !== 1 ? "s" : ""}`,
+        hasTier2: false,
+        isRedo: true,
+        onUndo: () => {
+          setDialogState({
+            mode: "redo",
+            redoInstructions: undoRecord!.redoInstructions,
+            requestId: crypto.randomUUID(),
+          });
+        },
+      };
+    }
+
+    const snapshot = workspaceSnapshots[index];
+    const candidates = buildUndoCandidatesForOutputs(stepCliOutputs, snapshot);
+    const { undoableCount, hasTier2 } = getPromptUndoSummary(candidates);
+    if (undoableCount === 0) return undefined;
+    return {
+      label: `Undo ${undoableCount} change${undoableCount !== 1 ? "s" : ""}`,
+      hasTier2,
+      isRedo: false,
+      onUndo: () => {
+        const input = buildUndoDialogInputForPrompt(executionTarget, stepCliOutputs, snapshot, workspacePath);
+        setDialogState({
+          mode: "undo",
+          input,
+          requestId: crypto.randomUUID(),
+        });
+      },
+    };
+  })();
 
   // Build class names for the container
   const containerClasses = [
@@ -208,7 +277,20 @@ export const PromptItem: React.FC<PromptItemProps> = ({
         details={details}
         isSelected={isSelected}
         overrides={overrides}
+        undoAction={undoAction}
       />
+
+      {dialogState && (
+        <UndoChangesDialog
+          mode={dialogState.mode}
+          target={executionTarget}
+          workspacePath={workspacePath}
+          input={dialogState.input}
+          redoInstructions={dialogState.redoInstructions}
+          requestId={dialogState.requestId}
+          onClose={() => setDialogState(null)}
+        />
+      )}
     </div>
   );
 };

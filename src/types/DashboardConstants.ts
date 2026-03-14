@@ -167,6 +167,17 @@ export const MESSAGE_TYPES = {
 
   // Undo/Redo — Webview → Extension: sync restored state after undo/redo
   UNDO_REDO_SYNC: "undoRedoSync",
+
+  // Prompt undo — Extension → Webview: live snapshot metadata after prompt completes
+  STEP_UNDO_DATA_UPDATED: "stepUndoDataUpdated",
+  // Prompt undo — Webview → Extension: request to restore files
+  UNDO_PROMPT_CHANGES: "undoPromptChanges",
+  // Prompt undo — Extension → Webview: result of restore operation
+  UNDO_PROMPT_RESULT: "undoPromptResult",
+  // Prompt undo — Extension → Webview: undo record updated (after undo/redo applied or on history load)
+  UNDO_RECORD_UPDATED: "undoRecordUpdated",
+  // Prompt undo — Webview → Extension: request to redo previously undone changes
+  REDO_PROMPT_CHANGES: "redoPromptChanges",
 } as const;
 
 // ============================================================================

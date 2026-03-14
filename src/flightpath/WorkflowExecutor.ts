@@ -33,6 +33,11 @@ import {
 } from "./harness/shared/CliOutputFormatter";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { StatusMessage, CliEvent } from "../types/WebviewMessageTypes";
+import {
+  WorkspaceSnapshotService,
+  RawWorkspaceState,
+} from "../utils/WorkspaceSnapshotService";
+import { WorkspaceSnapshot, OutputExecutionTarget } from "../types/OutputHistoryTypes";
 
 export interface WorkflowExecutionContext {
   workspaceFolderPath: string | undefined;
@@ -92,6 +97,10 @@ export interface WorkflowExecutionContext {
     message: string,
     severity: string
   ) => void;
+  /** WorkspaceSnapshotService instance — shared across the workflow run */
+  snapshotService?: WorkspaceSnapshotService;
+  /** Callback to emit live snapshot data to the webview after a prompt completes */
+  onSnapshotCaptured?: (target: ExecutionTarget, snapshot: WorkspaceSnapshot) => void;
 }
 
 type ExecutionTarget =
@@ -152,6 +161,17 @@ export class WorkflowExecutor {
       this.promptQueue.getProgress().total
     );
 
+    let snapshotStrategy: "git" | "filesystem" | undefined;
+    if (context.snapshotService && context.workspaceFolderPath) {
+      try {
+        snapshotStrategy = await context.snapshotService.selectStrategy(
+          context.workspaceFolderPath
+        );
+      } catch {
+        // ignore — snapshots unavailable
+      }
+    }
+
     const workflowFile = this.promptQueue.getWorkflowFile();
     const getFinalPrompt = () => this.promptQueue.getWorkflowFile().finalPrompt;
 
@@ -188,11 +208,47 @@ export class WorkflowExecutor {
           };
           const prompt = state.prompts[state.currentIndex];
 
+          let beforeState: RawWorkspaceState | undefined;
+          if (
+            context.snapshotService &&
+            context.workspaceFolderPath &&
+            snapshotStrategy
+          ) {
+            try {
+              beforeState =
+                await context.snapshotService.captureWorkspaceState(
+                  context.workspaceFolderPath,
+                  snapshotStrategy
+                );
+            } catch {
+              // ignore
+            }
+          }
+
           const shouldContinue = await this.executeSinglePrompt(
             target,
             prompt,
             context
           );
+
+          if (
+            beforeState &&
+            context.snapshotService &&
+            context.workspaceFolderPath &&
+            snapshotStrategy
+          ) {
+            try {
+              await this.captureAndEmitSnapshot(
+                target,
+                beforeState,
+                snapshotStrategy,
+                context
+              );
+            } catch (e) {
+              Log.warn("Failed to capture workspace snapshot:", e);
+            }
+          }
+
           if (!shouldContinue) {
             break;
           }
@@ -230,11 +286,47 @@ export class WorkflowExecutor {
         startedAt: Date.now(),
       });
 
+      let finalBeforeState: RawWorkspaceState | undefined;
+      if (
+        context.snapshotService &&
+        context.workspaceFolderPath &&
+        snapshotStrategy
+      ) {
+        try {
+          finalBeforeState = await context.snapshotService.captureWorkspaceState(
+            context.workspaceFolderPath,
+            snapshotStrategy
+          );
+        } catch {
+          // ignore
+        }
+      }
+
+      const finalTarget: ExecutionTarget = { kind: "finalPrompt", loopIndex };
       const shouldContinue = await this.executeSinglePrompt(
-        { kind: "finalPrompt", loopIndex },
+        finalTarget,
         currentFinalPrompt,
         context
       );
+
+      if (
+        finalBeforeState &&
+        context.snapshotService &&
+        context.workspaceFolderPath &&
+        snapshotStrategy
+      ) {
+        try {
+          await this.captureAndEmitSnapshot(
+            finalTarget,
+            finalBeforeState,
+            snapshotStrategy,
+            context
+          );
+        } catch (e) {
+          Log.warn("Failed to capture workspace snapshot:", e);
+        }
+      }
+
       if (!shouldContinue) {
         await this.persistInterruptedFinalPromptRuntime(context);
         break;
@@ -470,6 +562,51 @@ export class WorkflowExecutor {
     return target.kind === "queue"
       ? `queue:${target.stepIndex}`
       : `final:${target.loopIndex}`;
+  }
+
+  private async captureAndEmitSnapshot(
+    target: ExecutionTarget,
+    beforeState: RawWorkspaceState,
+    strategy: "git" | "filesystem",
+    context: WorkflowExecutionContext
+  ): Promise<void> {
+    if (!context.snapshotService || !context.workspaceFolderPath) {
+      return;
+    }
+
+    const afterState = await context.snapshotService.captureWorkspaceState(
+      context.workspaceFolderPath,
+      strategy
+    );
+
+    // TODO: wire up event path tracking to exclude Tier 1 (structured event) paths
+    const eventPaths = new Set<string>();
+
+    const changedFiles = context.snapshotService.computeSnapshotChanges(
+      beforeState,
+      afterState,
+      eventPaths
+    );
+
+    const snapshot: WorkspaceSnapshot = {
+      capturedAt: Date.now(),
+      strategy,
+      changedFiles,
+    };
+
+    context.onSnapshotCaptured?.(target, snapshot);
+
+    if (context.historyFilePath && context.outputHistoryManager) {
+      const outputTarget: OutputExecutionTarget =
+        target.kind === "queue"
+          ? { kind: "queue", stepIndex: target.stepIndex }
+          : { kind: "finalPrompt", loopIndex: target.loopIndex };
+      await context.outputHistoryManager.saveSnapshotForTarget(
+        context.historyFilePath,
+        outputTarget,
+        snapshot
+      );
+    }
   }
 
   /**

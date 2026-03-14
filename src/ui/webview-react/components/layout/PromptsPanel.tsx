@@ -101,7 +101,8 @@ function SortablePromptItemWrapper({
  */
 export const PromptsPanel: React.FC<{
   panelBarOrientation?: "horizontal" | "vertical";
-}> = ({ panelBarOrientation = "vertical" }) => {
+  allowUndoActions?: boolean;
+}> = ({ panelBarOrientation = "vertical", allowUndoActions = false }) => {
   const {
     prompts,
     currentStep,
@@ -386,6 +387,14 @@ export const PromptsPanel: React.FC<{
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
 
+  // Gate undo actions: only when allowed, workflow is idle, not in history view, not in CLI watch mode
+  const canShowUndoActions =
+    allowUndoActions &&
+    !isRunning &&
+    executionState !== EXECUTION_STATES.CANCELLING &&
+    !isViewingHistory &&
+    !isCLIManaged;
+
   // Show eraser button when the workflow has run but is not actively executing.
   // Allows resetting completion state so all prompts become editable before re-running.
   // Hidden in CLI watch mode (read-only).
@@ -667,6 +676,7 @@ export const PromptsPanel: React.FC<{
                         currentStep < prompts.length
                       }
                       dimmed
+                      allowUndoActions={canShowUndoActions}
                     />
                   </div>
                 </div>
@@ -742,6 +752,7 @@ export const PromptsPanel: React.FC<{
                           ? () => handleSetPositionClick(setPositionTarget)
                           : undefined
                       }
+                      allowUndoActions={canShowUndoActions}
                     />
                   );
                 })}

@@ -2,11 +2,33 @@
 
 ## Overview
 
-Add an "Undo changes for this prompt" button to each completed prompt's output block in the dashboard. Clicking it opens a review dialog showing exactly which files changed during that prompt so users can selectively undo them.
+Add two undo entry points to the dashboard:
 
-The implementation uses a **hybrid attribution model**: structured file events from `CliOutput` (already stored in history) are the primary, per-workflow source of truth; before/after workspace snapshots are supplementary, catching bash-driven changes and filling content gaps when events don't carry before-state data.
+1. Prompt-level undo in the prompt panel for completed queue prompts.
+2. File-level undo buttons on individual `FILE_EDIT` / `FILE_WRITE` / `FILE_DELETE` rows in `ToolCallOutput.tsx`.
 
----
+Both entry points open the same review dialog. The difference is scope:
+
+- Prompt-level opens the dialog for all changes attributed to one prompt execution, across all attempts/retries for that prompt.
+- File-level opens the dialog pre-filtered to a single file change from one rendered diff row.
+
+This keeps one undo pipeline, one dialog, and one backend restore service.
+
+The implementation uses a **hybrid attribution model**:
+
+- Structured file events from `CliOutput.structured.events` are the high-confidence source of truth.
+- Before/after workspace snapshots are the supplemental source for bash-driven changes and for delete restore content when the event itself does not carry before-state data.
+
+## Main Refinements to the Original Plan
+
+The original plan was close, but it missed a few important things:
+
+1. The primary button should not live in `CliOutput.tsx`. It should live in the prompt panel (`PromptItem` / `PromptItemDetails`) because that is where users think in terms of "undo this prompt".
+2. Individual diff rows should get their own compact undo buttons in `ToolCallOutput.tsx`, but they should reuse the same dialog and restore flow.
+3. Live mode needs access to snapshot metadata. Storing it only in history is not enough because the prompt panel and output panel need it immediately after a prompt completes.
+4. Prompt-level undo must aggregate changes across all attempts for that step, not just the latest `CliOutput`.
+5. History browsing must be view-only for this feature in v1. Undoing from an old historical run against the current workspace is too risky.
+6. The current plan is queue-step-centric. The backend/message contracts should be target-based so final-prompt loop support is not boxed out later, even if the prompt-panel button is queue-only in v1.
 
 ## The Attribution Problem (Parallel Workflows)
 
@@ -16,25 +38,105 @@ A naive before/after snapshot approach captures *everything* that changed in the
 
 `CliOutput.structured.events` already contains `FILE_EDIT`, `FILE_WRITE`, and `FILE_DELETE` events emitted by the AI session for *this specific* prompt. These are definitively attributed. The before/after snapshot catches the remainder (bash-driven mutations, etc.) but cannot confirm which workflow caused them. The dialog surfaces this distinction so users can decide.
 
----
+## UX
 
-## Core Design
+### Primary entry point: prompt panel
 
-### Attribution Sources
+Place the main `Undo changes` button on completed queue prompt rows in the prompt panel.
 
-**Tier 1 — Event-attributed (high confidence)**
+Recommended placement:
 
-Extracted from `CliOutput.structured.events` at the time the undo dialog opens. No extra storage needed — this data is already in the history file.
+- Add a compact action row in `PromptItemDetails.tsx`, shown only for completed prompts that have undoable changes.
+- Button text: `Undo changes`
+- Optional count badge: `(N)`
 
-| Event type | Data available for undo |
+Why this placement:
+
+- It matches the user's mental model: "undo this prompt".
+- It is visible without scrolling the output panel.
+- It avoids overloading the already-dense output header/stats row.
+
+Show the prompt-level button only when all of these are true:
+
+- prompt status is `completed` or `failed` with captured file changes
+- the workflow is not currently `running` or `cancelling`
+- the dashboard is not in run-history view
+- the workflow is not CLI-managed watch mode
+- there is at least one undoable file candidate
+
+### Secondary entry point: per-diff buttons
+
+Add compact icon-only undo buttons to `ToolCallOutput.tsx` for:
+
+- `FileEditOutput`
+- `FileWriteOutput`
+- `FileDeleteOutput`
+
+Placement:
+
+- Right-aligned on the same line as the file operation label/path.
+- Visible on hover, or always visible for selected/expanded rows.
+
+Tooltip text:
+
+- `Undo this file change`
+
+Behavior:
+
+- Opens the shared dialog in single-file mode.
+- The selected file is pre-checked.
+- Other files from the same prompt are hidden in single-file mode.
+
+### History mode
+
+Undo should be disabled in run-history view in v1.
+
+Reason:
+
+- History rendering is replaying an old run, but the workspace has moved on.
+- A destructive action from a historical run is much easier to misunderstand than a live-run undo.
+
+If useful, the dialog can later get a view-only `Review changes` mode for history, but that is not required for v1.
+
+### Final prompt scope
+
+Backend contracts should support final-prompt loops, because output history and output rendering already distinguish them.
+
+UI scope for v1:
+
+- Prompt-panel undo button: queue prompts only.
+- Per-diff undo button: queue prompts and final-prompt loop outputs both supported, because the button is attached to a concrete rendered output block.
+
+Reason to defer final-prompt footer undo:
+
+- The footer represents a recurring prompt with loop semantics, not one stable execution target.
+- The footer currently surfaces only the latest loop, which makes an aggregate "undo this final prompt" action ambiguous.
+
+## Attribution Model
+
+### Tier 1: event-attributed files
+
+Extracted from `CliOutput.structured.events` for the specific prompt execution target.
+
+These are high confidence because they came from the harness session for that prompt:
+
+| Event type | Undo source |
 |---|---|
-| `FILE_EDIT` | `FileEditData.originalFile` (full before-content, Claude CLI) or `oldContent` or `structuredPatch` (reversed) |
-| `FILE_WRITE` | Path only — undo = delete the created file |
-| `FILE_DELETE` | `FileDeleteData` — before-content must come from snapshot |
+| `FILE_EDIT` | `originalFile`, `oldContent`, or reversed `structuredPatch` |
+| `FILE_WRITE` | delete the created file |
+| `FILE_DELETE` | restore deleted content from snapshot fallback |
 
-**Tier 2 — Snapshot-attributed (lower confidence)**
+### Tier 2: snapshot-only files
 
-Files that appear in the before/after snapshot diff but have no corresponding structured event. These may be from bash tool use (`sed -i`, `npm install`, `git apply`, etc.) or from a parallel workflow. Stored in `StepOutput.workspaceSnapshot.changedFiles` — only files *not* covered by Tier 1 events are included here to avoid redundancy.
+Files present in the before/after workspace diff that do not have a matching structured file event.
+
+These can be:
+
+- bash-driven changes
+- tool side effects
+- changes from another concurrent workflow
+
+These should be shown separately in the dialog and unchecked by default.
 
 ### Undo Content Sources (priority order)
 
@@ -46,7 +148,9 @@ For a given file, undo content is resolved in this order:
 4. `workspaceSnapshot.changedFiles[].contentToRestore` — before-snapshot content (stored separately)
 5. `git restore <file>` — restores to HEAD, only when `wasAtHead: true`, `strategy === 'git'`, and file was unmodified before prompt
 
-Sources 1–3 live in the existing `CliOutput` structure; no new storage is needed for event-attributed files. Source 4 is the new storage, needed only for snapshot-only files.
+Sources 1–3 live in the existing `CliOutput` structure; no new storage is needed for event-attributed files. Source 4 is the new storage, needed only for snapshot-only files and `FILE_DELETE` restore.
+
+Do not introduce a backend `reverse-patch` action. If a patch must be reversed, resolve it to full `contentToRestore` in the webview utility (`promptUndo.ts`) before sending the message to the extension.
 
 ### Harness Coverage
 
@@ -57,48 +161,91 @@ Sources 1–3 live in the existing `CliOutput` structure; no new storage is need
 | `copilot-cli` | Minimal — `rawTextOutput` mode, no structured file events | High (primary source) |
 | `copilot-chat` | None | High (primary source) |
 
----
+## Undo Scope Model
+
+Introduce a target-based abstraction instead of passing only `stepIndex`.
+
+Use the same shape already present in `OutputHistoryTypes.ts`:
+
+```ts
+type UndoExecutionTarget =
+  | { kind: "queue"; stepIndex: number }
+  | { kind: "finalPrompt"; loopIndex: number };
+```
+
+Then add a UI-level scope:
+
+```ts
+type UndoDialogScope =
+  | { mode: "prompt"; target: UndoExecutionTarget }
+  | {
+      mode: "singleFile";
+      target: UndoExecutionTarget;
+      attemptIndex: number;
+      path: string;
+    };
+```
+
+This keeps the backend generic while the UI decides whether the dialog is prompt-wide or file-scoped.
+
+## Retry Semantics
+
+Prompt-level undo must aggregate across all attempts for a queue step.
+
+That means:
+
+- The before snapshot is captured once before the initial attempt.
+- The after snapshot is captured once after the prompt is fully finished, including retries/end-condition remediation.
+- Structured events are aggregated across all `CliOutput[]` attempts for that target.
+
+Result:
+
+- Prompt-level undo restores the workspace to the state before the prompt first started.
+- File-level undo still works at the individual event row level, but it is intentionally narrower and may conflict with later retries or later prompts. The dialog should warn that the file may have changed since this event was produced.
 
 ## Snapshot Strategy
 
-`WorkspaceSnapshotService` selects a snapshot strategy once at the start of each workflow run and uses it for all before/after captures in that run.
+`WorkspaceSnapshotService` still selects one strategy per workflow run:
 
-### Strategy Selection
-
-```
+```text
 isGitRepo(workspacePath)
-  → true:  use GitStrategy   (preferred)
-  → false: use FilesystemStrategy
+  -> true:  GitStrategy
+  -> false: FilesystemStrategy
 ```
 
 The strategy is determined by attempting `git rev-parse --is-inside-work-tree` at the workspace root. Failure (non-zero exit or git not installed) falls back to `FilesystemStrategy`.
 
-### Why GitStrategy Is Preferred
+### GitStrategy
 
-`git status --porcelain` only surfaces files that git tracks or that are untracked-but-not-gitignored. Any path matched by `.gitignore` — `dist/`, `out/`, `node_modules/`, `build/`, generated assets — is **completely invisible** to it. Build artifact noise is eliminated for free without any extra configuration.
+Preferred because:
 
-`git restore` is also only available under this strategy (it requires git history).
+- `git status --porcelain` naturally excludes `.gitignore`d build artifacts.
+- `git restore -- <path>` gives a clean restore path for files that were at HEAD before the prompt.
 
-### GitStrategy — How It Works
+Before snapshot:
 
-**Before-snapshot**: run `git status --porcelain` to get the set of already-dirty and untracked files. For each, read current content (≤ 512 KB, non-binary) and compute SHA-256. These are the files that were already dirty *before* the prompt ran.
+- run `git status --porcelain` to get already-dirty and untracked files
+- read content for those files when within limits
+- compute SHA-256 hash for change detection
 
-**After-snapshot**: run `git status --porcelain` again. Compare to before:
-- In after but not before → file was clean (at HEAD) before the prompt, modified during it → `wasAtHead: true`, no `contentToRestore` needed (undo via `git restore`)
-- In both with a different content hash → file was already dirty, further modified during the prompt → content from before-snapshot is the `contentToRestore`
-- In both with the same hash → not actually changed, exclude
+After snapshot:
 
-### FilesystemStrategy — How It Works
+- run `git status --porcelain` again
+- compare to before:
+  - in after but not before → file was at HEAD before, `wasAtHead: true`, undo via `git restore`
+  - in both with a different content hash → was already dirty, `contentToRestore` = before-snapshot content
+  - in both with same hash → unchanged, exclude
+- classify `created`, `modified`, `deleted`
 
-Used when git is unavailable or the workspace is not a git repo.
+### FilesystemStrategy
 
-**Change detection**: walk the workspace recursively, hash every non-excluded file. Compare before/after hashes to determine what changed.
+Used when git is unavailable or workspace is not a git repo.
 
-**Exclusion rules** (applied in order, first match wins):
+Walk the workspace, excluding (in priority order, first match wins):
 
-1. **`.flightpath/` directory** — always excluded (our own runtime files)
-2. **`.git/` directory** — always excluded
-3. **Hardcoded default exclusions** — covers the common build artifact directories across all major ecosystems:
+1. `.flightpath/` — always excluded (our own runtime files)
+2. `.git/` — always excluded
+3. Hardcoded artifact directories/files:
    ```
    node_modules/   dist/           out/            build/
    .next/          .nuxt/          .svelte-kit/    .turbo/
@@ -107,53 +254,47 @@ Used when git is unavailable or the workspace is not a git repo.
    target/         vendor/         .gradle/        .idea/
    *.pyc           *.class         *.o             *.obj
    ```
-4. **`.gitignore` patterns** — if a `.gitignore` file exists at the workspace root, parse it and apply matching patterns. This handles project-specific ignores even in non-git repos. Parsing rules:
-   - Skip empty lines and lines starting with `#`
-   - Skip negation patterns (`!`-prefixed) — too complex to invert reliably, ignore them
-   - Directory patterns (`dist/`, `build/`) → exclude any path whose first segment matches
+4. `.gitignore` patterns — if a `.gitignore` exists at workspace root, parse and apply:
+   - Skip empty lines and `#` comments
+   - Skip negation patterns (`!`-prefixed) — too complex to invert reliably
+   - Directory patterns (`dist/`) → exclude any path whose first segment matches
    - Bare names (`node_modules`) → exclude any path segment matching the name
-   - Simple glob patterns (`*.log`) → match against the filename only using basic `*` wildcard
+   - Simple glob patterns (`*.log`) → match against filename only using basic `*` wildcard
 
 `wasAtHead` is always `false` under `FilesystemStrategy` — there is no git history to restore from.
 
+### Capture limits
+
+- max content capture: 512 KB per file
+- binary detection: null byte in first 8 KB
+- large/binary files remain listed but are non-undoable automatically (`contentCaptureSkipped: true`)
+
 ### No External Package Required
 
-Both strategies use only Node.js built-ins (`fs`, `crypto`) and `child_process.execFile`. No git library (`simple-git`, etc.) and no gitignore parser package are needed. The gitignore parsing required is simple enough to implement inline.
-
----
+Both strategies use only Node.js built-ins (`fs`, `crypto`) and `child_process.execFile`. No git library (`simple-git`, etc.) and no gitignore parser package are needed.
 
 ## Data Model Changes
 
 ### `src/types/OutputHistoryTypes.ts`
 
-Add `workspaceSnapshot` to `StepOutput`. This only stores snapshot-only files (those not covered by structured events), keeping storage minimal.
+Extend `StepOutput`:
 
-```typescript
+```ts
 export interface StepOutput {
   cliOutputs: CliOutput[];
   statusMessages: StatusMessage[];
-  /**
-   * Supplementary workspace snapshot for prompt undo.
-   * Contains only files changed during the prompt that had NO corresponding
-   * FILE_EDIT/WRITE/DELETE structured event (e.g., bash-driven mutations).
-   * Undefined if snapshot capture failed entirely.
-   */
   workspaceSnapshot?: WorkspaceSnapshot;
 }
+```
 
-/**
- * Supplementary workspace snapshot for a single prompt execution.
- * Stores only the data that structured events cannot provide.
- */
+Use a snapshot shape that is sufficient for both restore and warnings:
+
+```ts
 export interface WorkspaceSnapshot {
   /** Timestamp when the after-snapshot was captured */
   capturedAt: number;
-  /**
-   * Which strategy was used to capture this snapshot.
-   * 'git': git available; git restore works for wasAtHead files.
-   * 'filesystem': no git; content-only undo, no git restore.
-   */
-  strategy: 'git' | 'filesystem';
+  /** 'git': git restore works for wasAtHead files. 'filesystem': content-only undo. */
+  strategy: "git" | "filesystem";
   /**
    * Files changed during this prompt that have NO structured event attribution.
    * May include changes from parallel workflows — shown with a warning in the dialog.
@@ -161,315 +302,523 @@ export interface WorkspaceSnapshot {
   changedFiles: SnapshotFileChange[];
 }
 
-export type PromptChangeType = 'created' | 'modified' | 'deleted';
+export type PromptChangeType = "created" | "modified" | "deleted";
 
 export interface SnapshotFileChange {
   /** Workspace-relative POSIX path (forward slashes, no leading slash) */
   path: string;
   changeType: PromptChangeType;
   /**
-   * Content to restore for undo of 'modified' or 'deleted' files.
-   * Undefined if the file was at HEAD before the prompt (use git restore when strategy === 'git')
-   * or if content capture was skipped due to size/binary limits.
+   * Content to restore for 'modified' or 'deleted' files.
+   * Undefined if wasAtHead (use git restore) or if content capture was skipped.
    */
   contentToRestore?: string;
   /** True if file was unmodified (at HEAD) before the prompt ran. Only set when strategy === 'git'. */
   wasAtHead?: boolean;
-  /** True if before-content was skipped due to size (>512KB) or binary detection. */
+  /** True if before-content was skipped due to size (>512 KB) or binary detection. */
   contentCaptureSkipped?: boolean;
+  /**
+   * SHA-256 of file content after the prompt completed.
+   * Enables reliable drift detection: if current hash differs at dialog-open time,
+   * show an amber warning "File has changed since this prompt completed".
+   */
+  afterHash?: string;
 }
 ```
 
-### Size Limits
+`afterHash` is worth storing even though it is small because it enables a reliable "workspace drift" warning in the dialog by comparing current file content to the post-prompt hash.
 
-- Files exceeding **512 KB** are excluded from `contentToRestore` capture. Entry still included in `changedFiles` with `contentCaptureSkipped: true`.
-- Binary files (null byte in first 8 KB) treated the same way.
-- Files with `contentCaptureSkipped: true` are shown in the dialog as non-undoable (greyed out checkbox).
+### Live webview state
 
----
+History storage is not enough. Live mode also needs this data.
+
+Add to `workflowStore.ts`:
+
+```ts
+workspaceSnapshots: Record<number, WorkspaceSnapshot>;
+finalPromptWorkspaceSnapshots: Record<number, WorkspaceSnapshot>;
+undoResults: Record<string, UndoResult>;
+```
+
+Why:
+
+- prompt panel button needs live snapshot data
+- per-diff dialog needs delete fallback data immediately
+- history view already gets snapshot data from `StepOutput`
 
 ## New Backend Service
 
 ### `src/utils/WorkspaceSnapshotService.ts`
 
-Handles workspace-state capture and file restoration across both strategies. Does **not** do event extraction — that happens in the webview at dialog-open time from existing `CliOutput` data.
+Responsibilities:
 
-```
-WorkspaceSnapshotService
-  selectStrategy(workspacePath): Promise<'git' | 'filesystem'>
-  captureWorkspaceState(workspacePath, strategy): Promise<RawWorkspaceState>
-  computeSnapshotOnlyChanges(before, after, eventPaths): SnapshotFileChange[]
-  undoFiles(files: UndoFileInstruction[], workspacePath): Promise<UndoResult>
+```ts
+selectStrategy(workspacePath): Promise<"git" | "filesystem">
+captureWorkspaceState(workspacePath, strategy): Promise<RawWorkspaceState>
+computeSnapshotChanges(before, after, eventPaths): SnapshotFileChange[]
+undoFiles(files: UndoFileInstruction[], workspacePath): Promise<UndoResult>
+hashCurrentFile(workspacePath, relativePath): Promise<string | undefined>
 ```
 
 **`RawWorkspaceState`** (internal, not stored):
-```typescript
+
+```ts
 interface RawWorkspaceState {
-  strategy: 'git' | 'filesystem';
+  strategy: "git" | "filesystem";
   files: Map<string, {
-    contentHash: string;      // SHA-256 for change detection
-    content?: string;         // before-state content, under size limit
-    isAtHead: boolean;        // true only under git strategy
+    contentHash: string;   // SHA-256 for change detection
+    content?: string;      // before-state content, under size limit
+    isAtHead: boolean;     // true only under git strategy
   }>;
   capturedAt: number;
 }
 ```
 
-**`selectStrategy(workspacePath)`**: runs `git rev-parse --is-inside-work-tree` via `execFile`. Returns `'git'` on success, `'filesystem'` on any failure. Called once per workflow run; callers pass the result to `captureWorkspaceState`.
+`UndoFileInstruction` should stay simple:
 
-**`captureWorkspaceState(workspacePath, strategy)`**:
-- `'git'`: runs `git status --porcelain`, reads content for each listed file
-- `'filesystem'`: walks the directory recursively applying exclusion rules (see above), reads content for each file
-
-**`computeSnapshotOnlyChanges(before, after, eventPaths)`**:
-- `eventPaths: Set<string>` — paths already covered by structured events (skip these)
-- For git: files in after but not before → `wasAtHead: true`; files in both with different hash → use before-content
-- For filesystem: files in after but not in before → `created`; files in both with different hash → `modified`; files in before but not after → `deleted`
-- Exclude any path in `eventPaths`
-
-**`undoFiles(files: UndoFileInstruction[], workspacePath)`**:
-```typescript
+```ts
 interface UndoFileInstruction {
   path: string;
-  action: 'delete' | 'restore-content' | 'git-restore';
-  contentToRestore?: string;  // for 'restore-content'
+  action: "delete" | "restore-content" | "git-restore";
+  contentToRestore?: string;
 }
 ```
-1. Validate all paths are inside workspace root (security — path traversal prevention)
-2. `delete`: `fs.unlink`
-3. `restore-content`: `fs.writeFile(content)`
-4. `git-restore`: `execFile('git', ['restore', '--', path])` — no shell interpolation; only called when `strategy === 'git'`
-5. Return `{ succeeded: string[], failed: Array<{path, error}> }`
 
----
+`undoFiles()` should also:
 
-## Integration: Snapshot Capture in Execution
+1. validate all paths stay inside the workspace (path traversal prevention)
+2. `mkdir -p` parent directories before `restore-content`
+3. treat deleting a missing file as a no-op success
+4. return partial success details, not fail the whole batch
 
-**Where**: `WorkflowExecutor.ts`, wrapping each prompt execution.
+**`computeSnapshotChanges(before, after, eventPaths)`**:
 
+- `eventPaths: Set<string>` — paths already covered by structured events (skip these — they are Tier 1)
+- For git: files in after but not before → `wasAtHead: true`; files in both with different hash → use before-content
+- For filesystem: files in after but not in before → `created`; hash mismatch → `modified`; in before but not after → `deleted`
+- Exclude any path in `eventPaths`
+
+## Integration in Execution Flow
+
+### `WorkflowExecutor.ts`
+
+Wrap the entire execution target, not each individual attempt:
+
+```text
+at workflow start (once):
+  strategy = selectStrategy(workspacePath)
+
+before first attempt:
+  beforeState = captureWorkspaceState(workspacePath, strategy)
+
+run prompt + retries until final result
+
+after prompt fully settles:
+  aggregate structured event paths across all attempts → eventPaths
+  afterState = captureWorkspaceState(workspacePath, strategy)
+  snapshot = computeSnapshotChanges(beforeState, afterState, eventPaths)
+  persist snapshot to history
+  send snapshot to live webview state
 ```
-At workflow start (once):
-  strategy = WorkspaceSnapshotService.selectStrategy(workspacePath)
 
-Before prompt N:
-  beforeState = WorkspaceSnapshotService.captureWorkspaceState(workspacePath, strategy)
+This applies to:
 
-[Prompt N runs → CliOutput built with structured events]
-
-After prompt N completes:
-  afterState = WorkspaceSnapshotService.captureWorkspaceState(workspacePath, strategy)
-  eventPaths = extractEventPaths(cliOutput.structured.events)
-  snapshotChanges = WorkspaceSnapshotService.computeSnapshotOnlyChanges(
-    beforeState, afterState, eventPaths
-  )
-  workspaceSnapshot = { capturedAt: Date.now(), strategy, changedFiles: snapshotChanges }
-```
-
-`extractEventPaths` collects `.path` from all `FILE_EDIT`, `FILE_WRITE`, `FILE_DELETE` events — these are excluded from snapshot diff because they are already covered by Tier 1 data.
-
-**`OutputHistoryManager.saveStepOutput`**: add optional `workspaceSnapshot?: WorkspaceSnapshot` parameter, persist into `StepOutput`.
+- queue prompts
+- final-prompt loops
 
 Failure modes:
+
 - Git not installed → `selectStrategy` returns `'filesystem'` — snapshot still captured, just no `git restore`
-- Not a git repo → same as above
-- Both strategies fail to capture (filesystem walk throws) → `workspaceSnapshot = undefined` — dialog shows event-attributed files only; undo still works for those
-- Either → Tier 1 (event-attributed) files always work regardless of snapshot availability
+- Both strategies fail to capture → `workspaceSnapshot = undefined` — dialog shows event-attributed files only; Tier 1 undo still works
 
----
+### `OutputHistoryManager.ts`
 
-## Review Dialog (New Component)
+Update `saveExecutionOutput()` to accept optional `workspaceSnapshot` and store it alongside the merged `cliOutputs`.
 
-### `src/ui/webview-react/components/output/UndoChangesDialog.tsx`
+Important:
 
-A modal (using the existing `Modal` shared component) that opens when the user clicks "↩ Undo changes" in the stats bar.
+- `cliOutputs` merge by `attemptIndex`
+- `workspaceSnapshot` is per target execution, not per attempt
+- only replace the snapshot when the prompt execution is fully done
 
-**Dialog layout:**
+## Live Message Protocol
 
-```
-Undo Changes for Prompt 3
-─────────────────────────────────────────────────────
-Changed by this prompt:
-  ☑  src/components/Button.tsx         edited
-  ☑  src/utils/helpers.ts              edited
-  ☑  src/newfile.ts                    created → will be deleted
-
-⚠ Also changed during this prompt (source unknown):
-  ☐  src/unrelated.ts                  modified
-     May be from a parallel workflow — review before undoing
-─────────────────────────────────────────────────────
-                    [ Cancel ]  [ Undo Selected (3 files) ]
-```
-
-**Tier 1 items** (event-attributed) — pre-checked, normal styling.
-
-**Tier 2 items** (snapshot-only) — unchecked by default, amber warning icon, tooltip: "This file changed during the prompt but was not directly modified by the AI. It may have been changed by a parallel workflow or a bash command. Review before undoing."
-
-**Non-undoable items** (contentCaptureSkipped) — shown greyed out with disabled checkbox, tooltip: "File exceeds size limit — cannot be undone automatically."
-
-**"Undo Selected" button**: disabled when zero files selected. Label updates dynamically: "Undo Selected (N files)".
-
-### Props
-
-```typescript
-interface UndoChangesDialogProps {
-  stepIndex: number;
-  attemptIndex: number;
-  /** Extracted from CliOutput.structured.events */
-  eventAttributedFiles: EventAttributedFile[];
-  /** From StepOutput.workspaceSnapshot.changedFiles */
-  snapshotOnlyFiles: SnapshotFileChange[];
-  onConfirm: (selectedFiles: UndoFileInstruction[]) => void;
-  onClose: () => void;
-}
-
-interface EventAttributedFile {
-  path: string;
-  changeType: PromptChangeType;
-  /** Resolved undo instruction built from event data */
-  undoInstruction: UndoFileInstruction;
-}
-```
-
-**Event-to-undo-instruction resolution** (done in the component or a utility):
-
-```typescript
-function resolveEventUndoInstruction(event: CliEvent): UndoFileInstruction | null {
-  switch (event.type) {
-    case CLI_EVENT_TYPES.FILE_EDIT: {
-      const d = event.data as FileEditData;
-      if (d.originalFile) return { path: d.path, action: 'restore-content', contentToRestore: d.originalFile };
-      if (d.oldContent)   return { path: d.path, action: 'restore-content', contentToRestore: d.oldContent };
-      if (d.structuredPatch) return { path: d.path, action: 'reverse-patch', patch: d.structuredPatch };
-      return null; // no content available — treat as non-undoable
-    }
-    case CLI_EVENT_TYPES.FILE_WRITE:
-      return { path: (event.data as FileWriteData).path, action: 'delete' };
-    case CLI_EVENT_TYPES.FILE_DELETE:
-      return null; // need contentToRestore from snapshot; look it up there
-    default:
-      return null;
-  }
-}
-```
-
-`FILE_DELETE` events don't carry before-content, so the undo instruction falls back to `snapshotOnlyFiles` for that path's `contentToRestore`. If not found there, the file is shown as non-undoable.
-
----
-
-## `CliOutput.tsx` Changes
-
-Replace the single "Undo changes" button concept with a trigger that opens the dialog.
-
-**Show the trigger when**:
-- `!output.isStreaming`
-- At least one of: event-attributed files exist OR `workspaceSnapshot?.changedFiles.length > 0`
-
-Note: the trigger is shown even when `workspaceSnapshot` is absent or `strategy === 'filesystem'` — Tier 1 (event-attributed) files are always undoable regardless of snapshot availability.
-
-**Trigger appearance**: Small inline link/button in stats bar — "↩ Undo changes (N files)" where N = total undoable file count.
-
-**State**: `dialogOpen: boolean` via `useState` in `CliOutput`.
-
----
-
-## Message Protocol
+The original plan only covered the confirm/restore round trip. It also needs a live snapshot message.
 
 ### `src/types/DashboardConstants.ts`
 
-```typescript
+Add:
+
+```ts
+STEP_UNDO_DATA_UPDATED: "stepUndoDataUpdated",
 UNDO_PROMPT_CHANGES: "undoPromptChanges",
-UNDO_PROMPT_RESULT:  "undoPromptResult",
+UNDO_PROMPT_RESULT: "undoPromptResult",
 ```
 
 ### `src/types/WebviewMessageTypes.ts`
 
-```typescript
-/** Webview → Extension: user confirmed undo selections */
+Add:
+
+```ts
+export interface StepUndoDataUpdatedMessage {
+  type: typeof MESSAGE_TYPES.STEP_UNDO_DATA_UPDATED;
+  target: UndoExecutionTarget;
+  workspaceSnapshot?: WorkspaceSnapshot;
+}
+
 export interface UndoPromptChangesMessage {
   type: typeof MESSAGE_TYPES.UNDO_PROMPT_CHANGES;
   data: {
-    stepIndex: number;
-    attemptIndex: number;
-    files: UndoFileInstruction[];  // only the files user chose to undo
+    requestId: string;
+    target: UndoExecutionTarget;
+    files: UndoFileInstruction[];
   };
 }
 
-/** Extension → Webview: undo operation result */
 export interface UndoPromptResultMessage {
   type: typeof MESSAGE_TYPES.UNDO_PROMPT_RESULT;
   data: {
-    stepIndex: number;
-    attemptIndex: number;
-    success: boolean;
+    requestId: string;
+    target: UndoExecutionTarget;
     restoredFiles: string[];
     failedFiles: Array<{ path: string; error: string }>;
   };
 }
 ```
 
-### `FlightPathWebviewProvider.ts`
+Use `requestId`, not `stepIndex + attemptIndex`, for result routing. That is more robust once there are two entry points and potentially repeated opens from the same prompt.
 
-Handle `UNDO_PROMPT_CHANGES`:
-1. Call `WorkspaceSnapshotService.undoFiles(message.data.files, workspaceFolderPath)`
-2. Send `UNDO_PROMPT_RESULT` back
-3. Show VS Code notification: "Restored N files" or "Undo failed for: ..."
+### Extension routing
 
----
+`FlightPathWebviewProvider.ts` / `WebviewMessageRouter.ts`:
 
-## State Routing for `UNDO_PROMPT_RESULT`
+- handle `STEP_UNDO_DATA_UPDATED` emission after prompt completion
+- handle `UNDO_PROMPT_CHANGES` request
+- call `WorkspaceSnapshotService.undoFiles(...)`
+- send `UNDO_PROMPT_RESULT`
+- show VS Code notification summarizing partial/full success
 
-Undo state (`idle | loading | success | error`) is ephemeral — lives in `CliOutput` local state via `useState`. The response message needs to reach the right `CliOutput` instance. Use `workflowStore.undoResults: Record<string, UndoResult>` keyed by `"${stepIndex}-${attemptIndex}"`:
+## Webview Utilities
 
-- `CliOutput` reads from this key and reacts to changes
-- `useMessageHandler.ts` writes the result into the store on `UNDO_PROMPT_RESULT`
-- `CliOutput` clears the key when it unmounts or when the dialog is re-opened
+Add a focused helper:
 
----
+- `src/ui/webview-react/utils/promptUndo.ts`
+
+Responsibilities:
+
+1. Extract file events from one `CliOutput`
+2. Aggregate file events across all `CliOutput[]` attempts for a prompt target
+3. Resolve event data into `UndoFileCandidate`s (including patch reversal to `contentToRestore`)
+4. Merge event candidates with snapshot-only candidates
+5. Produce prompt-panel summaries (`count`, `hasTier2`, `hasNonUndoable`)
+6. Resolve a single event-row click into dialog input
+
+This avoids duplicating file-attribution logic in:
+
+- `PromptsPanel.tsx`
+- `CliOutput.tsx`
+- `ToolCallOutput.tsx`
+- `UndoChangesDialog.tsx`
+
+**`resolveEventUndoInstruction()` example** (lives in `promptUndo.ts`):
+
+```ts
+function resolveEventUndoInstruction(
+  event: CliEvent,
+  snapshotFiles: SnapshotFileChange[]
+): UndoFileInstruction | null {
+  switch (event.type) {
+    case CLI_EVENT_TYPES.FILE_EDIT: {
+      const d = event.data as FileEditData;
+      if (d.originalFile)    return { path: d.path, action: "restore-content", contentToRestore: d.originalFile };
+      if (d.oldContent)      return { path: d.path, action: "restore-content", contentToRestore: d.oldContent };
+      if (d.structuredPatch) return { path: d.path, action: "restore-content", contentToRestore: reverseApplyPatch(d.structuredPatch, d.path) };
+      return null; // no content available — non-undoable
+    }
+    case CLI_EVENT_TYPES.FILE_WRITE:
+      return { path: (event.data as FileWriteData).path, action: "delete" };
+    case CLI_EVENT_TYPES.FILE_DELETE: {
+      // Before-content must come from snapshot fallback
+      const snap = snapshotFiles.find(f => f.path === (event.data as FileDeleteData).path);
+      if (!snap?.contentToRestore) return null; // non-undoable
+      if (snap.wasAtHead) return { path: snap.path, action: "git-restore" };
+      return { path: snap.path, action: "restore-content", contentToRestore: snap.contentToRestore };
+    }
+    default:
+      return null;
+  }
+}
+```
+
+## Dialog Plan
+
+### New component
+
+`src/ui/webview-react/components/output/UndoChangesDialog.tsx`
+
+Use the existing shared `Modal` component.
+
+### Dialog modes
+
+#### Prompt mode
+
+Title example:
+
+`Undo changes from Prompt 3`
+
+Subtitle:
+
+- `4 files can be restored`
+- optional warning if there are snapshot-only files
+
+#### Single-file mode
+
+Title example:
+
+`Undo change in src/utils/helpers.ts`
+
+Subtitle:
+
+- identifies the originating prompt/attempt when available
+
+### Layout
+
+Use a two-pane layout on wide widths, stacked layout on narrow widths.
+
+Left pane:
+
+- grouped checklist of files
+- `Changed directly by the AI`
+- `Also changed during this prompt`
+
+Right pane:
+
+- preview for the selected file
+- reuse existing diff rendering where possible
+
+Preview behavior by change type:
+
+- `modified`: show diff preview
+- `created`: show message `This file will be deleted`
+- `deleted`: show restored content preview if available, otherwise show non-undoable explanation
+
+**Example layout:**
+
+```
+Undo Changes for Prompt 3
+─────────────────────────────────────────────────────────────
+Changed directly by the AI:
+  ☑  src/components/Button.tsx      edited
+  ☑  src/utils/helpers.ts           edited
+  ☑  src/newfile.ts                 created  →  will be deleted
+
+⚠ Also changed during this prompt (source unknown):
+  ☐  src/unrelated.ts               modified
+     May be from a parallel workflow — review before undoing
+─────────────────────────────────────────────────────────────
+                          [ Cancel ]  [ Undo Selected (3) ]
+```
+
+### File row content
+
+Each row should show:
+
+- checkbox
+- path
+- change badge: `edited`, `created`, `deleted`
+- source badge: `AI` or `snapshot`
+- restore method badge when useful: `git restore`, `restore content`, `delete`
+- warning icon if file drift is detected
+
+Defaults:
+
+- Tier 1 items checked by default
+- Tier 2 items unchecked by default
+- non-undoable items disabled (`contentCaptureSkipped: true` or no restore content)
+
+### Props
+
+```ts
+interface UndoChangesDialogProps {
+  scope: UndoDialogScope;
+  /** Resolved from CliOutput.structured.events via promptUndo.ts */
+  eventAttributedFiles: UndoFileCandidate[];
+  /** From workspaceSnapshot.changedFiles (Tier 2 only — paths not in eventAttributedFiles) */
+  snapshotOnlyFiles: SnapshotFileChange[];
+  onConfirm: (requestId: string, files: UndoFileInstruction[]) => void;
+  onClose: () => void;
+}
+```
+
+### Drift warning
+
+If `afterHash` exists and current file hash differs at dialog-open time, show:
+
+- amber warning icon
+- helper text: `File has changed since this prompt completed`
+
+This is especially important for per-diff undo, where later retries or later prompts may already have touched the same file.
+
+### Footer
+
+- `Cancel`
+- `Undo selected (N)`
+
+Disable confirm when `N === 0`.
+
+On success:
+
+- close dialog
+- show toast / VS Code notification summary
+
+Do not mutate historical output UI to pretend the prompt was never run. The output remains historical evidence; undo is a workspace operation, not an output rewrite.
+
+## Prompt Panel Wiring
+
+### `PromptsPanel.tsx`
+
+This component already has the right context:
+
+- workflow execution state
+- history-mode state
+- CLI-managed state
+- access to live/history outputs per prompt
+
+Add a history-aware step data lookup that returns:
+
+- all `cliOutputs` for the target
+- `workspaceSnapshot` for the target
+- derived undo summary
+
+Pass an `undoAction` prop down to `PromptItem` / `PromptItemDetails`.
+
+### `PromptItem.tsx` and `PromptItemDetails.tsx`
+
+Add an optional action slot or dedicated prop for the prompt-level undo button.
+
+Do not force `PromptItemDetails` itself to understand undo attribution. It should only render a supplied action and count.
+
+## Output Wiring
+
+### `OutputSection.tsx`
+
+`CliOutput` currently does not know whether the UI is in history mode. It needs that gating information.
+
+Pass down:
+
+- `target`
+- `isViewingHistory`
+- `allowUndoActions`
+
+### `CliOutput.tsx`
+
+This component should stop owning the primary prompt-level undo button.
+
+Its role in v1:
+
+- pass execution target / attempt context to rendered events
+- host `UndoChangesDialog` state when an inline file-level undo button is clicked
+
+Show the inline undo trigger when:
+
+- `!output.isStreaming`
+- `allowUndoActions === true`
+- at least one of: event-attributed files exist OR `workspaceSnapshot?.changedFiles.length > 0`
+
+Trigger appearance: small inline link in stats bar — `↩ Undo changes (N)` where N = total undoable file count.
+
+### `ToolCallOutput.tsx`
+
+Add compact undo buttons to:
+
+- `FileEditOutput`
+- `FileWriteOutput`
+- `FileDeleteOutput`
+
+Those buttons should call back up with:
+
+```ts
+{
+  target,
+  attemptIndex,
+  path,
+  eventType
+}
+```
+
+Then `CliOutput` opens the shared dialog in single-file mode.
+
+## Result Routing
+
+Keep undo result state ephemeral.
+
+In `workflowStore.ts`:
+
+```ts
+undoResults: Record<string, UndoResult>;
+setUndoResult(requestId: string, result: UndoResult): void;
+clearUndoResult(requestId: string): void;
+```
+
+`useMessageHandler.ts` writes `UNDO_PROMPT_RESULT` into the store keyed by `requestId`.
+
+The dialog component watches the `requestId` it created and reacts when the result arrives.
 
 ## File Change Summary
 
 | File | Change |
 |---|---|
 | `src/types/OutputHistoryTypes.ts` | Add `workspaceSnapshot` to `StepOutput`; add `WorkspaceSnapshot`, `SnapshotFileChange` |
-| `src/types/DashboardConstants.ts` | Add `UNDO_PROMPT_CHANGES`, `UNDO_PROMPT_RESULT` to `MESSAGE_TYPES` |
-| `src/types/WebviewMessageTypes.ts` | Add `UndoPromptChangesMessage`, `UndoPromptResultMessage`, `UndoFileInstruction` |
-| `src/utils/WorkspaceSnapshotService.ts` | **New** — workspace snapshot capture (git + filesystem strategies) and file restoration |
-| `src/flightpath/WorkflowExecutor.ts` | Select strategy once at run start; wrap each prompt execution with before/after snapshot; pass `workspaceSnapshot` to history |
-| `src/flightpath/orchestration/OutputHistoryManager.ts` | Accept `workspaceSnapshot` in `saveStepOutput` |
-| `src/ui/FlightPathWebviewProvider.ts` | Handle `UNDO_PROMPT_CHANGES`, call `WorkspaceSnapshotService.undoFiles` |
-| `src/ui/webview-react/components/output/CliOutput.tsx` | Add undo trigger button; manage `dialogOpen` state |
-| `src/ui/webview-react/components/output/UndoChangesDialog.tsx` | **New** — review dialog with two-tier file list |
-| `src/ui/webview-react/hooks/useMessageHandler.ts` | Handle `UNDO_PROMPT_RESULT`, write to `workflowStore.undoResults` |
-| `src/ui/webview-react/store/workflowStore.ts` | Add `undoResults: Record<string, UndoResult>` for result routing |
-
----
+| `src/types/DashboardConstants.ts` | Add `STEP_UNDO_DATA_UPDATED`, `UNDO_PROMPT_CHANGES`, `UNDO_PROMPT_RESULT` |
+| `src/types/WebviewMessageTypes.ts` | Add target-based undo message types and `UndoFileInstruction` / `UndoResult` |
+| `src/utils/WorkspaceSnapshotService.ts` | New service for state capture, hashing, and restore |
+| `src/flightpath/WorkflowExecutor.ts` | Capture before/after snapshots around full target execution and emit/persist undo metadata |
+| `src/flightpath/orchestration/OutputHistoryManager.ts` | Persist `workspaceSnapshot` with merged step output |
+| `src/ui/FlightPathWebviewProvider.ts` | Emit live undo metadata, handle undo requests |
+| `src/ui/WebviewMessageRouter.ts` | Route `UNDO_PROMPT_CHANGES` |
+| `src/ui/webview-react/store/workflowStore.ts` | Add live workspace snapshots and undo result routing |
+| `src/ui/webview-react/hooks/useMessageHandler.ts` | Handle `STEP_UNDO_DATA_UPDATED` and `UNDO_PROMPT_RESULT` |
+| `src/ui/webview-react/utils/promptUndo.ts` | New shared file-attribution / dialog-input utility |
+| `src/ui/webview-react/components/prompts/PromptItemDetails.tsx` | Render prompt-level undo action |
+| `src/ui/webview-react/components/prompts/PromptItem.tsx` | Accept/present undo action props |
+| `src/ui/webview-react/components/layout/PromptsPanel.tsx` | Compute undo summary and wire prompt-level button |
+| `src/ui/webview-react/components/layout/OutputSection.tsx` | Pass target/history gating into `CliOutput` |
+| `src/ui/webview-react/components/output/CliOutput.tsx` | Own dialog open state for inline file undo |
+| `src/ui/webview-react/components/output/ToolCallOutput.tsx` | Add inline file-level undo buttons |
+| `src/ui/webview-react/components/output/UndoChangesDialog.tsx` | New shared review-and-confirm dialog |
 
 ## Edge Cases
 
 | Scenario | Handling |
 |---|---|
-| Workspace is not a git repo | `selectStrategy` returns `'filesystem'`; snapshot still works; `git restore` unavailable but `restore-content` works for all captured files |
-| Git not installed | Same as above — falls back to filesystem strategy |
-| Non-git repo with `.gitignore` | `.gitignore` patterns parsed and applied during filesystem walk — project-specific build dirs still excluded |
-| Build artifacts (`dist/`, `node_modules/`) | Git strategy: invisible to `git status --porcelain` (gitignored). Filesystem strategy: excluded by hardcoded defaults and/or `.gitignore` parsing |
-| Parallel workflows modifying overlapping files | Tier 2 (snapshot-only) files shown unchecked with warning; user decides |
-| `FILE_DELETE` event — no before-content in event | Look up path in `snapshotOnlyFiles` for `contentToRestore`; if absent, mark non-undoable |
-| File committed after prompt completed | `git restore` no longer appropriate; `contentToRestore` write still works |
-| File manually edited by user after prompt | Dialog tooltip warns: "File may have been modified since this prompt ran" (detect via current git status at dialog-open time) |
-| Multiple prompts changed the same file | Each prompt's dialog shows its own changes; undoing an earlier prompt may partially conflict with a later one — no automatic resolution |
-| Large file (>512 KB) | `contentCaptureSkipped: true` — greyed out, non-selectable in dialog |
-| Binary file | Same as large file |
-| Prompt had only bash-driven changes (no file events) | All files appear in Tier 2; dialog still opens and user can undo them |
-| Copilot CLI / Chat harnesses (no file events) | Dialog populated entirely from Tier 2 snapshot; all files shown with warning |
-| No snapshot AND no file events | Undo trigger not shown (nothing to undo) |
+| Workspace is not a git repo | fall back to filesystem strategy; `wasAtHead` always false; `git restore` unavailable but `restore-content` works |
+| Git not installed | same fallback |
+| Non-git repo with `.gitignore` | `.gitignore` patterns parsed and applied during filesystem walk |
+| Build artifacts (`dist/`, `node_modules/`) | git strategy: invisible to `git status --porcelain` (gitignored); filesystem strategy: excluded by hardcoded defaults |
+| Prompt had retries | one before snapshot, one after snapshot, aggregate all attempts |
+| Snapshot capture fails entirely | Tier 1 event-attributed undo still works |
+| `FILE_DELETE` has no restore content | look up path in snapshot; if absent, mark non-undoable |
+| `FILE_DELETE` was at HEAD | use `git restore` action |
+| Prompt had only bash-driven changes | dialog still works using Tier 2 entries |
+| Copilot CLI / Copilot Chat with no structured file events | prompt-level undo is snapshot-driven only; all files shown with Tier 2 warning |
+| No snapshot AND no file events | undo trigger not shown (nothing to undo) |
+| File exceeds size limit or is binary | show disabled row with explanation (`contentCaptureSkipped: true`) |
+| File already deleted before undo | delete action treated as no-op success |
+| Parent directory was deleted | `restore-content` recreates parents |
+| File changed after prompt completed | show drift warning using `afterHash` comparison |
+| Parallel workflows modifying overlapping files | Tier 2 files shown unchecked with warning; user decides |
+| Multiple prompts changed same file | no automatic conflict resolution; user is warned and reviews per file |
+| User is viewing history | destructive undo buttons hidden/disabled |
+| Workflow is currently running | destructive undo buttons hidden/disabled |
+| CLI-managed watch mode | destructive undo buttons hidden/disabled in v1 |
 
----
+## Not In Scope
 
-## Not In Scope (YAGNI)
-
-- Redo (re-apply undone changes)
-- Multi-step undo (undo prompts N through M in one action)
-- Undo for binary files
-- Reverse-patch application via `git apply --reverse` (use `contentToRestore` write instead — simpler, no patch apply failure modes)
-- Undo when history is disabled (no `workspaceSnapshot`, no button)
-- Full gitignore spec compliance in filesystem strategy (negation patterns, `**` globs, etc.) — hardcoded defaults + simple patterns are sufficient
+- redo
+- batch undo across multiple prompts
+- destructive undo while viewing history
+- final-prompt footer aggregate undo button
+- binary-file undo
+- full gitignore spec compliance in filesystem mode (negation patterns, `**` globs, etc.)
+- automatic merge/conflict resolution when later prompts changed the same file
+- reverse-patch application via `git apply --reverse` (resolve to `contentToRestore` in webview instead)

@@ -309,6 +309,9 @@ interface FileEditOutputProps {
     lines: string[];
   }>;
   error?: string;
+  onUndoFile?: (path: string, attemptIndex: number) => void;
+  attemptIndex?: number;
+  fileUndoMode?: "undo" | "redo";
   className?: string;
 }
 
@@ -327,6 +330,9 @@ export const FileEditOutput = memo<FileEditOutputProps>(
     newContent,
     structuredPatch,
     error,
+    onUndoFile,
+    attemptIndex = 0,
+    fileUndoMode = "undo",
     className = "",
   }) => {
     const dotStatus = fileOpDotStatus(status);
@@ -350,6 +356,16 @@ export const FileEditOutput = memo<FileEditOutputProps>(
           <FilePath path={path} />
           {error && status === OPERATION_STATUS.FAILED && (
             <span className="text-bash-status-error">— {error}</span>
+          )}
+          {onUndoFile && status !== OPERATION_STATUS.INITIATED && (
+            <button
+              type="button"
+              className="icon-btn py-0 px-1 ml-1 text-[10px]"
+              title={fileUndoMode === "redo" ? `Redo changes to ${path}` : `Undo changes to ${path}`}
+              onClick={() => onUndoFile(path, attemptIndex)}
+            >
+              {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
+            </button>
           )}
         </div>
         {hasDiffData && (
@@ -376,6 +392,9 @@ interface FileWriteOutputProps {
   status?: FileOperationStatus;
   content?: string;
   error?: string;
+  onUndoFile?: (path: string, attemptIndex: number) => void;
+  attemptIndex?: number;
+  fileUndoMode?: "undo" | "redo";
   className?: string;
 }
 
@@ -384,6 +403,9 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
   status,
   content,
   error,
+  onUndoFile,
+  attemptIndex = 0,
+  fileUndoMode = "undo",
   className = "",
 }) => {
   const dotStatus = fileOpDotStatus(status);
@@ -403,6 +425,16 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
         <FilePath path={path} />
         {error && status === OPERATION_STATUS.FAILED && (
           <span className="text-bash-status-error">— {error}</span>
+        )}
+        {onUndoFile && status !== OPERATION_STATUS.INITIATED && (
+          <button
+            type="button"
+            className="icon-btn py-0 px-1 ml-1 text-[10px]"
+            title={fileUndoMode === "redo" ? `Redo changes to ${path}` : `Undo changes to ${path}`}
+            onClick={() => onUndoFile(path, attemptIndex)}
+          >
+            {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
+          </button>
         )}
       </div>
     </div>
@@ -456,6 +488,9 @@ interface FileDeleteOutputProps {
   path: string;
   success?: boolean;
   error?: string;
+  onUndoFile?: (path: string, attemptIndex: number) => void;
+  attemptIndex?: number;
+  fileUndoMode?: "undo" | "redo";
   className?: string;
 }
 
@@ -463,6 +498,9 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
   path,
   success,
   error,
+  onUndoFile,
+  attemptIndex = 0,
+  fileUndoMode = "undo",
   className = "",
 }) => {
   const dotStatus = boolDotStatus(success);
@@ -475,6 +513,16 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
         <FilePath path={path} />
         {error && success === false && (
           <span className="text-bash-status-error">— {error}</span>
+        )}
+        {onUndoFile && success !== false && (
+          <button
+            type="button"
+            className="icon-btn py-0 px-1 ml-1 text-[10px]"
+            title={fileUndoMode === "redo" ? `Redo deletion of ${path}` : `Undo deletion of ${path}`}
+            onClick={() => onUndoFile(path, attemptIndex)}
+          >
+            {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
+          </button>
         )}
       </div>
     </div>

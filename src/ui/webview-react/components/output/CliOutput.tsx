@@ -13,6 +13,13 @@ import {
 } from "./ToolCallOutput";
 import { OUTPUT_BLOCK_BASE, TOOL_RESULT_LINE } from "./outputStyles";
 import { WebviewLog } from "../../utils/logger";
+import { useWorkflowStore } from "@store/workflowStore";
+import {
+  buildUndoDialogInputForSingleFile,
+  type UndoDialogInput,
+} from "../../utils/promptUndo";
+import type { UndoFileInstruction } from "../../types/messages";
+import { UndoChangesDialog } from "./UndoChangesDialog";
 import type {
   CliOutput as CliOutputType,
   CliEvent,
@@ -30,6 +37,7 @@ import type {
 } from "../../types/cliEvents";
 import { CLI_EVENT_TYPES } from "../../types/cliEvents";
 import { HARNESS_INFO } from "../../types/messages";
+import type { UndoExecutionTarget } from "@root/types/OutputHistoryTypes";
 
 // ============================================================================
 // Text Output Component
@@ -147,6 +155,9 @@ interface SingleEventProps {
   event: CliEvent;
   eventKey: string;
   rawTextOutput: boolean;
+  onUndoFile?: (path: string, attemptIndex: number) => void;
+  attemptIndex?: number;
+  fileUndoMode?: "undo" | "redo";
 }
 
 /**
@@ -155,7 +166,7 @@ interface SingleEventProps {
  * event) do not re-render on every streaming chunk.
  */
 const SingleEvent = memo<SingleEventProps>(
-  ({ event, eventKey, rawTextOutput }) => {
+  ({ event, eventKey, rawTextOutput, onUndoFile, attemptIndex = 0, fileUndoMode = "undo" }) => {
     switch (event.type) {
       case CLI_EVENT_TYPES.TEXT: {
         const data = event.data as TextData;
@@ -199,6 +210,9 @@ const SingleEvent = memo<SingleEventProps>(
             newContent={data.newContent}
             structuredPatch={data.structuredPatch}
             error={data.error}
+            onUndoFile={onUndoFile}
+            attemptIndex={attemptIndex}
+            fileUndoMode={fileUndoMode}
           />
         );
       }
@@ -213,6 +227,9 @@ const SingleEvent = memo<SingleEventProps>(
             status={data.status}
             content={data.content}
             error={data.error}
+            onUndoFile={onUndoFile}
+            attemptIndex={attemptIndex}
+            fileUndoMode={fileUndoMode}
           />
         );
       }
@@ -239,6 +256,9 @@ const SingleEvent = memo<SingleEventProps>(
             path={data.path}
             success={data.success}
             error={data.error}
+            onUndoFile={onUndoFile}
+            attemptIndex={attemptIndex}
+            fileUndoMode={fileUndoMode}
           />
         );
       }
@@ -296,6 +316,9 @@ interface StructuredOutputProps {
   events: CliEvent[];
   /** When true, text events are rendered as pre-formatted plain text (no markdown pipeline) */
   rawTextOutput?: boolean;
+  onUndoFile?: (path: string, attemptIndex: number) => void;
+  attemptIndex?: number;
+  fileUndoMode?: "undo" | "redo";
   className?: string;
 }
 
@@ -312,7 +335,7 @@ interface StructuredOutputProps {
  * the last event's text grows via mergeStreamingEvents in workflowStore).
  */
 const StructuredOutput = memo<StructuredOutputProps>(
-  ({ events, rawTextOutput = false, className = "" }) => {
+  ({ events, rawTextOutput = false, onUndoFile, attemptIndex = 0, fileUndoMode = "undo", className = "" }) => {
     if (!events || events.length === 0) return null;
 
     return (
@@ -327,6 +350,9 @@ const StructuredOutput = memo<StructuredOutputProps>(
               event={event}
               eventKey={eventKey}
               rawTextOutput={rawTextOutput}
+              onUndoFile={onUndoFile}
+              attemptIndex={attemptIndex}
+              fileUndoMode={fileUndoMode}
             />
           );
         })}
@@ -349,6 +375,8 @@ interface CliOutputProps {
   /** When false, suppresses the streaming indicator even if output.isStreaming is true.
    *  The partial streamed text is still shown so the user can see output captured before stop/error. */
   isExecutionActive?: boolean;
+  /** When true, shows per-file undo buttons on file edit/write/delete operations */
+  allowUndoActions?: boolean;
   className?: string;
 }
 
@@ -377,9 +405,76 @@ export const CliOutput = memo<CliOutputProps>(
     attemptIndex,
     streamingChunk = "",
     isExecutionActive = true,
+    allowUndoActions = false,
     className = "",
   }) => {
     const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
+
+    interface CliDialogState {
+      mode: "undo" | "redo";
+      input?: UndoDialogInput;
+      redoInstructions?: UndoFileInstruction[];
+      requestId: string;
+    }
+    const [dialogState, setDialogState] = useState<CliDialogState | null>(null);
+
+    const workspaceSnapshots = useWorkflowStore((s) => s.workspaceSnapshots);
+    const finalPromptWorkspaceSnapshots = useWorkflowStore(
+      (s) => s.finalPromptWorkspaceSnapshots
+    );
+    const undoRecords = useWorkflowStore((s) => s.undoRecords);
+
+    const isFinalPrompt = stepLabel !== undefined;
+    const target: UndoExecutionTarget = isFinalPrompt
+      ? { kind: "finalPrompt", loopIndex: stepIndex }
+      : { kind: "queue", stepIndex };
+    const targetKey = isFinalPrompt ? `finalPrompt-${stepIndex}` : `queue-${stepIndex}`;
+    const undoRecord = undoRecords[targetKey];
+
+    const fileUndoMode: "undo" | "redo" =
+      undoRecord != null && undoRecord.isRedone !== true ? "redo" : "undo";
+
+    const onUndoFile = useCallback(
+      (path: string, fileAttemptIndex: number) => {
+        const newRequestId = crypto.randomUUID();
+        const showRedo = undoRecord != null && undoRecord.isRedone !== true;
+
+        if (showRedo) {
+          const fileRedoInstruction = undoRecord.redoInstructions.find((i) => i.path === path);
+          if (fileRedoInstruction) {
+            setDialogState({
+              mode: "redo",
+              redoInstructions: [fileRedoInstruction],
+              requestId: newRequestId,
+            });
+          }
+        } else {
+          const snapshot = isFinalPrompt
+            ? finalPromptWorkspaceSnapshots[stepIndex]
+            : workspaceSnapshots[stepIndex];
+          const workspacePath = output.workingDirectory ?? "";
+          const input = buildUndoDialogInputForSingleFile(
+            target,
+            fileAttemptIndex,
+            path,
+            [output],
+            snapshot,
+            workspacePath
+          );
+          setDialogState({ mode: "undo", input, requestId: newRequestId });
+        }
+      },
+      [
+        stepIndex,
+        isFinalPrompt,
+        target,
+        workspaceSnapshots,
+        finalPromptWorkspaceSnapshots,
+        output,
+        undoRecord,
+      ]
+    );
+
     const attemptLabel =
       attemptIndex === 0 ? "Initial Attempt" : `Retry ${attemptIndex}`;
 
@@ -457,6 +552,9 @@ export const CliOutput = memo<CliOutputProps>(
             <StructuredOutput
               events={output.structured?.events as CliEvent[]}
               rawTextOutput={rawTextOutput}
+              onUndoFile={allowUndoActions ? onUndoFile : undefined}
+              attemptIndex={attemptIndex}
+              fileUndoMode={fileUndoMode}
             />
           </>
         );
@@ -468,6 +566,9 @@ export const CliOutput = memo<CliOutputProps>(
           <StructuredOutput
             events={output.structured?.events as CliEvent[]}
             rawTextOutput={rawTextOutput}
+            onUndoFile={allowUndoActions ? onUndoFile : undefined}
+            attemptIndex={attemptIndex}
+            fileUndoMode={fileUndoMode}
           />
         );
       }
@@ -512,6 +613,10 @@ export const CliOutput = memo<CliOutputProps>(
       output.response,
       streamingChunk,
       rawTextOutput,
+      allowUndoActions,
+      onUndoFile,
+      attemptIndex,
+      fileUndoMode,
     ]);
 
     // Token stats — memoized separately; only changes when the run completes
@@ -643,6 +748,19 @@ export const CliOutput = memo<CliOutputProps>(
 
         {/* Statistics */}
         {statsNode}
+
+        {/* Undo/Redo dialog — rendered inline so it can use this component's state */}
+        {dialogState && (
+          <UndoChangesDialog
+            mode={dialogState.mode}
+            target={target}
+            workspacePath={output.workingDirectory ?? ""}
+            input={dialogState.input}
+            redoInstructions={dialogState.redoInstructions}
+            requestId={dialogState.requestId}
+            onClose={() => setDialogState(null)}
+          />
+        )}
       </div>
     );
   }

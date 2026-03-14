@@ -1,5 +1,5 @@
 import { ExecutionState } from "./DashboardConstants";
-import { CliOutput, StatusMessage } from "./WebviewMessageTypes";
+import { CliOutput, StatusMessage, UndoFileInstruction } from "./WebviewMessageTypes";
 
 export type OutputExecutionTarget =
   | { kind: "queue"; stepIndex: number }
@@ -73,4 +73,76 @@ export interface StepOutput {
   cliOutputs: CliOutput[];
   /** Status messages for this step (e.g., "Prompt 1 started at 2:20 PM") */
   statusMessages: StatusMessage[];
+  /** Workspace snapshot captured around this step's execution (for undo) */
+  workspaceSnapshot?: WorkspaceSnapshot;
+  /** Undo record: set if user has applied undo for this step */
+  undoRecord?: UndoRecord;
+}
+
+// UndoExecutionTarget is identical in shape to OutputExecutionTarget but semantically
+// scoped to undo operations. Use a type alias to keep things DRY.
+export type UndoExecutionTarget = OutputExecutionTarget;
+
+/**
+ * Record of an undo operation applied to a step's changes.
+ * Persisted in StepOutput so history view can show redo buttons.
+ */
+export interface UndoRecord {
+  /** Timestamp when undo was applied (ms since epoch) */
+  appliedAt: number;
+  /** Paths of files successfully restored */
+  restoredFiles: string[];
+  /**
+   * Instructions to re-apply the AI's changes (redo).
+   * Captured by reading current file content just before it was overwritten.
+   */
+  redoInstructions: UndoFileInstruction[];
+  /** True while redo has been applied (undo available again) */
+  isRedone?: boolean;
+  /** Timestamp when redo was last applied */
+  redoneAt?: number;
+}
+
+export type UndoDialogScope =
+  | { mode: "prompt"; target: UndoExecutionTarget }
+  | {
+      mode: "singleFile";
+      target: UndoExecutionTarget;
+      attemptIndex: number;
+      path: string;
+    };
+
+export type PromptChangeType = "created" | "modified" | "deleted";
+
+export interface SnapshotFileChange {
+  /** Workspace-relative POSIX path (forward slashes, no leading slash) */
+  path: string;
+  changeType: PromptChangeType;
+  /**
+   * Content to restore for 'modified' or 'deleted' files.
+   * Undefined if wasAtHead (use git restore) or if content capture was skipped.
+   */
+  contentToRestore?: string;
+  /** True if file was unmodified (at HEAD) before the prompt ran. Only set when strategy === 'git'. */
+  wasAtHead?: boolean;
+  /** True if before-content was skipped due to size (>512 KB) or binary detection. */
+  contentCaptureSkipped?: boolean;
+  /**
+   * SHA-256 of file content after the prompt completed.
+   * Enables reliable drift detection: if current hash differs at dialog-open time,
+   * show an amber warning "File has changed since this prompt completed".
+   */
+  afterHash?: string;
+}
+
+export interface WorkspaceSnapshot {
+  /** Timestamp when the after-snapshot was captured */
+  capturedAt: number;
+  /** 'git': git restore works for wasAtHead files. 'filesystem': content-only undo. */
+  strategy: "git" | "filesystem";
+  /**
+   * Files changed during this prompt that have NO structured event attribution.
+   * May include changes from parallel workflows — shown with a warning in the dialog.
+   */
+  changedFiles: SnapshotFileChange[];
 }

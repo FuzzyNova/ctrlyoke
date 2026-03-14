@@ -10,6 +10,8 @@ import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import type { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
 import type { PostMessageFn } from "./WebviewSettingsSync";
 
+import type { WorkflowOutputHistory } from "../types/OutputHistoryTypes";
+
 /**
  * WorkflowSerializer
  *
@@ -28,7 +30,8 @@ export class WorkflowSerializer {
     private readonly getManager: () => WorkflowOrchestrator | undefined,
     private readonly getOutputHistoryManager: () =>
       | OutputHistoryManager
-      | undefined
+      | undefined,
+    private readonly onHistoryLoaded?: (history: WorkflowOutputHistory) => void
   ) {}
 
   // ============================================================================
@@ -739,6 +742,8 @@ export class WorkflowSerializer {
         runTimestamps,
         runStates,
       });
+
+      this.onHistoryLoaded?.(history);
     } catch (error) {
       Log.error("Failed to load run history:", error);
     }

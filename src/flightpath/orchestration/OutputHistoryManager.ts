@@ -9,6 +9,8 @@ import {
   StepOutput,
   OutputExecutionTarget,
   OutputTimelineEntry,
+  WorkspaceSnapshot,
+  UndoRecord,
 } from "../../types/OutputHistoryTypes";
 import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
 import {
@@ -258,6 +260,36 @@ export class OutputHistoryManager {
   }
 
   /**
+   * Save workspace snapshot for a specific execution target.
+   * Called after a prompt fully completes (including retries).
+   */
+  async saveSnapshotForTarget(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    snapshot: WorkspaceSnapshot
+  ): Promise<void> {
+    if (!historyFilePath) {
+      return;
+    }
+    try {
+      const history = await this.readHistory(historyFilePath);
+      if (target.kind === "queue") {
+        if (history.promptOutputs[target.stepIndex]) {
+          history.promptOutputs[target.stepIndex].workspaceSnapshot = snapshot;
+        }
+      } else {
+        if (history.finalPromptOutputs?.[target.loopIndex]) {
+          history.finalPromptOutputs[target.loopIndex].workspaceSnapshot =
+            snapshot;
+        }
+      }
+      await this.writeHistory(historyFilePath, history);
+    } catch (error) {
+      Log.warn("Failed to save workspace snapshot to history:", error);
+    }
+  }
+
+  /**
    * Finalize run (mark as completed/stopped/error and record total step count).
    * runStepCount is the total number of steps that were executed in this run —
    * used by history rendering to show all steps regardless of current workflow size.
@@ -403,6 +435,55 @@ export class OutputHistoryManager {
       } catch (error) {
         Log.warn(`Failed to delete old history file ${fileName}:`, error);
       }
+    }
+  }
+
+  /**
+   * Persist an UndoRecord for a step after undo has been applied.
+   */
+  async saveUndoRecord(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    undoRecord: UndoRecord
+  ): Promise<void> {
+    if (!historyFilePath) return;
+    try {
+      const history = await this.readHistory(historyFilePath);
+      const stepOutput =
+        target.kind === "queue"
+          ? history.promptOutputs[target.stepIndex]
+          : history.finalPromptOutputs?.[target.loopIndex];
+      if (stepOutput) {
+        stepOutput.undoRecord = undoRecord;
+      }
+      await this.writeHistory(historyFilePath, history);
+    } catch (error) {
+      Log.warn("Failed to save undo record to history:", error);
+    }
+  }
+
+  /**
+   * Update the undoRecord after redo is applied (set isRedone=true, redoneAt).
+   */
+  async markUndoRecordRedone(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    redoneAt: number
+  ): Promise<void> {
+    if (!historyFilePath) return;
+    try {
+      const history = await this.readHistory(historyFilePath);
+      const stepOutput =
+        target.kind === "queue"
+          ? history.promptOutputs[target.stepIndex]
+          : history.finalPromptOutputs?.[target.loopIndex];
+      if (stepOutput?.undoRecord) {
+        stepOutput.undoRecord.isRedone = true;
+        stepOutput.undoRecord.redoneAt = redoneAt;
+      }
+      await this.writeHistory(historyFilePath, history);
+    } catch (error) {
+      Log.warn("Failed to mark undo record as redone:", error);
     }
   }
 

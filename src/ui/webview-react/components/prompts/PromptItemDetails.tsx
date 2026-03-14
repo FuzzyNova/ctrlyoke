@@ -13,6 +13,13 @@ export interface PromptOverride {
   title?: string;
 }
 
+export interface UndoAction {
+  label: string;
+  hasTier2: boolean;
+  isRedo?: boolean;
+  onUndo: () => void;
+}
+
 interface PromptItemDetailsProps {
   status: StepStatus;
   harnessLabel?: string;
@@ -25,6 +32,8 @@ interface PromptItemDetailsProps {
   isSelected?: boolean;
   /** Prompt-level property overrides to display as compact chips */
   overrides?: PromptOverride[];
+  /** Undo action for completed prompts */
+  undoAction?: UndoAction;
 }
 
 /**
@@ -46,6 +55,7 @@ export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
   details,
   isSelected = false,
   overrides,
+  undoAction,
 }) => {
   const durationSeconds = details?.duration ?? latestOutput?.elapsed;
   const sessionId = latestOutput?.structured?.metadata?.sessionId;
@@ -205,6 +215,25 @@ export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
               {override.label}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Undo/Redo button — only for completed prompts with undoable changes */}
+      {undoAction && (
+        <div className="mt-0.5 pl-5">
+          <button
+            type="button"
+            className="icon-btn text-[10px] opacity-75 hover:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              undoAction.onUndo();
+            }}
+            title={undoAction.label}
+          >
+            {!undoAction.isRedo && undoAction.hasTier2 && <span className="mr-0.5">⚠</span>}
+            <i className={`codicon ${undoAction.isRedo ? "codicon-redo" : "codicon-discard"} text-[10px] mr-0.5`} />
+            {undoAction.label}
+          </button>
         </div>
       )}
     </>

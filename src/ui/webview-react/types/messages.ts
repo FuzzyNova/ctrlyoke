@@ -88,6 +88,14 @@ export {
   type WebSearchData,
   type ToolResult,
   type UnifiedDiffHunk,
+  type UndoResult,
+  type UndoFileAction,
+  type UndoFileInstruction,
+  type UndoCandidateTier,
+  type UndoFileCandidate,
+  type UndoRecord,
+  type UndoRecordUpdatedMessage,
+  type RedoPromptChangesMessage,
 } from "@root/types/WebviewMessageTypes";
 
 // Re-export WorkflowSummary, PriorContext, and helpers from FlightPathTypes

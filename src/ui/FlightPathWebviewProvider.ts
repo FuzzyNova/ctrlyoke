@@ -8,7 +8,22 @@ import {
   type StepStatus,
   type FinalPromptPhase,
 } from "../types/DashboardConstants";
-import type { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
+import type {
+  CliEvent,
+  CliOutput,
+  UndoExecutionTarget,
+  UndoResult,
+  StepUndoDataUpdatedMessage,
+  UndoPromptResultMessage,
+  UndoRecordUpdatedMessage,
+} from "../types/WebviewMessageTypes";
+import type {
+  WorkspaceSnapshot,
+  WorkflowOutputHistory,
+  StepOutput,
+  UndoRecord,
+  OutputExecutionTarget,
+} from "../types/OutputHistoryTypes";
 import type { PromptItem } from "../types/FlightPathTypes";
 import { TemplateManager } from "../flightpath/TemplateManager";
 import { Log } from "../utils/Log";
@@ -74,7 +89,8 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
       postMessage,
       templateManager,
       getOrchestrator,
-      getOutputHistoryManager
+      getOutputHistoryManager,
+      (history) => this.sendHistoryUndoData(history)
     );
     this.router = new WebviewMessageRouter(
       postMessage,
@@ -620,6 +636,80 @@ window.vscodeApi = acquireVsCodeApi();
     this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
   }
 
+  /** Send workspace snapshot data for a completed prompt step to the webview. */
+  public sendStepUndoDataUpdated(
+    target: UndoExecutionTarget,
+    workspaceSnapshot?: WorkspaceSnapshot
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.STEP_UNDO_DATA_UPDATED,
+      target,
+      workspaceSnapshot,
+    } as StepUndoDataUpdatedMessage);
+  }
+
+  /** Notify webview that an undo record was created or updated for a step. */
+  public sendUndoRecordUpdated(
+    target: OutputExecutionTarget,
+    undoRecord: UndoRecord
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
+      target,
+      undoRecord,
+    } as UndoRecordUpdatedMessage);
+  }
+
+  /**
+   * Send all undo-related data for a history to the webview.
+   * Iterates all StepOutputs and sends STEP_UNDO_DATA_UPDATED for snapshots
+   * and UNDO_RECORD_UPDATED for undoRecords.
+   */
+  public sendHistoryUndoData(history: WorkflowOutputHistory): void {
+    const sendForOutput = (
+      target: OutputExecutionTarget,
+      stepOutput: StepOutput
+    ) => {
+      if (stepOutput.workspaceSnapshot) {
+        this.sendStepUndoDataUpdated(target, stepOutput.workspaceSnapshot);
+      }
+      if (stepOutput.undoRecord) {
+        this.sendUndoRecordUpdated(target, stepOutput.undoRecord);
+      }
+    };
+
+    for (const [idx, stepOutput] of Object.entries(history.promptOutputs)) {
+      sendForOutput({ kind: "queue", stepIndex: Number(idx) }, stepOutput);
+    }
+    if (history.finalPromptOutputs) {
+      for (const [idx, stepOutput] of Object.entries(
+        history.finalPromptOutputs
+      )) {
+        sendForOutput(
+          { kind: "finalPrompt", loopIndex: Number(idx) },
+          stepOutput
+        );
+      }
+    }
+  }
+
+  /** Send the result of an undo operation back to the webview. */
+  public sendUndoPromptResult(
+    requestId: string,
+    target: UndoExecutionTarget,
+    result: UndoResult
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
+      data: {
+        requestId,
+        target,
+        restoredFiles: result.restoredFiles,
+        failedFiles: result.failedFiles,
+      },
+    } as UndoPromptResultMessage);
+  }
+
   // ============================================================================
   // Public API - External Wiring
   // ============================================================================
@@ -688,6 +778,8 @@ window.vscodeApi = acquireVsCodeApi();
         runTimestamps,
         runStates,
       });
+
+      this.sendHistoryUndoData(history);
     } catch (error) {
       Log.warn("Failed to load output history for workflow:", error);
     }

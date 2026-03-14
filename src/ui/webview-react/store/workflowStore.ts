@@ -15,7 +15,11 @@ import {
 import type {
   WorkflowOutputHistory,
   StepOutput,
+  WorkspaceSnapshot,
+  UndoExecutionTarget,
+  UndoRecord,
 } from "@root/types/OutputHistoryTypes";
+import type { UndoResult } from "../types/messages";
 import { useUiStore } from "./uiStore";
 import { WebviewLog } from "@utils/logger";
 import { CLI_EVENT_TYPES } from "../types/cliEvents";
@@ -94,6 +98,14 @@ interface WorkflowState {
       "runId" | "startedAt" | "completedAt" | "executionState"
     >;
   } | null;
+  /** Live workspace snapshots keyed by stepIndex (queue) */
+  workspaceSnapshots: Record<number, WorkspaceSnapshot>;
+  /** Live workspace snapshots keyed by loopIndex (finalPrompt) */
+  finalPromptWorkspaceSnapshots: Record<number, WorkspaceSnapshot>;
+  /** Undo result state keyed by requestId — ephemeral, cleared after use */
+  undoResults: Record<string, UndoResult>;
+  /** UndoRecord per execution target (keyed by target key, same format as workspaceSnapshots) */
+  undoRecords: Record<string, UndoRecord>;
 }
 
 /**
@@ -189,6 +201,10 @@ interface WorkflowActions {
   }) => void;
   resetWorkflow: () => void;
   clearAllRuntimeState: () => void;
+  setWorkspaceSnapshot: (target: UndoExecutionTarget, snapshot: WorkspaceSnapshot) => void;
+  setUndoRecord: (target: UndoExecutionTarget, record: UndoRecord) => void;
+  setUndoResult: (requestId: string, result: UndoResult) => void;
+  clearUndoResult: (requestId: string) => void;
 }
 
 /**
@@ -239,6 +255,10 @@ const initialState: WorkflowState = {
   finalPromptStatusMessages: {},
   streamingChunks: {},
   historyOutputs: null,
+  workspaceSnapshots: {},
+  finalPromptWorkspaceSnapshots: {},
+  undoResults: {},
+  undoRecords: {},
 };
 
 export const useWorkflowStore = create<
@@ -868,6 +888,50 @@ export const useWorkflowStore = create<
           finalPromptStatus: null,
           finalPromptLoopCount: 0,
           finalPromptPhase: null,
+          workspaceSnapshots: {},
+          finalPromptWorkspaceSnapshots: {},
+          undoResults: {},
+          undoRecords: {},
+        });
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      setWorkspaceSnapshot: (target, snapshot) => {
+        useWorkflowStore.temporal.getState().pause();
+        if (target.kind === "queue") {
+          set((state) => ({
+            workspaceSnapshots: { ...state.workspaceSnapshots, [target.stepIndex]: snapshot },
+          }));
+        } else {
+          set((state) => ({
+            finalPromptWorkspaceSnapshots: { ...state.finalPromptWorkspaceSnapshots, [target.loopIndex]: snapshot },
+          }));
+        }
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      setUndoRecord: (target, record) => {
+        const key = target.kind === "queue"
+          ? `queue-${target.stepIndex}`
+          : `finalPrompt-${target.loopIndex}`;
+        useWorkflowStore.temporal.getState().pause();
+        set((s) => ({ undoRecords: { ...s.undoRecords, [key]: record } }));
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      setUndoResult: (requestId, result) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => ({
+          undoResults: { ...state.undoResults, [requestId]: result },
+        }));
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      clearUndoResult: (requestId) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => {
+          const { [requestId]: _, ...rest } = state.undoResults;
+          return { undoResults: rest };
         });
         useWorkflowStore.temporal.getState().resume();
       },

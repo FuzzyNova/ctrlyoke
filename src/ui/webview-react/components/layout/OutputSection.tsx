@@ -273,6 +273,9 @@ export const OutputSection: React.FC = () => {
     executionState === EXECUTION_STATES.RUNNING ||
     executionState === EXECUTION_STATES.CANCELLING;
 
+  // Only show undo actions when not in history view and execution is not active
+  const allowUndoActions = !isViewingHistory && !isExecutionActive;
+
   if (outputCollapsed) {
     return (
       <PanelBar
@@ -460,6 +463,7 @@ export const OutputSection: React.FC = () => {
                     attemptIndex={item.attemptIndex || 0}
                     streamingChunk={streamingChunk}
                     isExecutionActive={isExecutionActive}
+                    allowUndoActions={allowUndoActions}
                   />
                 </React.Fragment>
               );

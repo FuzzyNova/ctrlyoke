@@ -24,6 +24,7 @@ import {
   type HarnessId,
   type WorkflowSummary,
   type PromptItem,
+  type UndoRecordUpdatedMessage,
 } from "../types/messages";
 import { WebviewLog } from "@utils/logger";
 
@@ -1015,6 +1016,40 @@ function createMessageHandlers(): MessageHandlerMap {
       useUiStore.getState().setActiveWorkflowId(message.workflowId);
     }
     // Full state sync comes via SESSION_RESTORED which is already handled
+  };
+
+  // --------------------------------------------------------------------------
+  // STEP_UNDO_DATA_UPDATED - Live snapshot metadata after prompt completes
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.STEP_UNDO_DATA_UPDATED] = (message) => {
+    const workspaceSnapshot = message.workspaceSnapshot;
+    const target = message.target;
+    if (!target) return;
+    if (workspaceSnapshot) {
+      useWorkflowStore.getState().setWorkspaceSnapshot(target, workspaceSnapshot);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // UNDO_PROMPT_RESULT - Result of the restore operation
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.UNDO_PROMPT_RESULT] = (message) => {
+    const data = message.data;
+    if (!data?.requestId) return;
+    useWorkflowStore.getState().setUndoResult(data.requestId, {
+      restoredFiles: data.restoredFiles ?? [],
+      failedFiles: data.failedFiles ?? [],
+      redoInstructions: data.redoInstructions ?? [],
+    });
+  };
+
+  // --------------------------------------------------------------------------
+  // UNDO_RECORD_UPDATED - UndoRecord for a target updated after undo/redo
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.UNDO_RECORD_UPDATED] = (message) => {
+    const m = message as UndoRecordUpdatedMessage;
+    if (!m.target || !m.undoRecord) return;
+    useWorkflowStore.getState().setUndoRecord(m.target, m.undoRecord);
   };
 
   return handlers;

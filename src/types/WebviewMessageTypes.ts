@@ -30,6 +30,13 @@ import type {
   UniversalCliOutput,
   ToolResult,
 } from "./CliOutputTypes";
+import type {
+  WorkspaceSnapshot,
+  UndoExecutionTarget,
+  OutputExecutionTarget,
+  PromptChangeType,
+  UndoRecord,
+} from "./OutputHistoryTypes";
 
 // ============================================================================
 // IMPORT TYPES FROM DASHBOARDCONSTANTS
@@ -666,6 +673,111 @@ export interface ReorderPromptsMessage {
   newPendingOrder: number[];
 }
 
+// ============================================================================
+// PROMPT UNDO TYPES
+// ============================================================================
+
+// Re-export for webview consumers
+export type {
+  WorkspaceSnapshot,
+  SnapshotFileChange,
+  PromptChangeType,
+  UndoExecutionTarget,
+  UndoDialogScope,
+  UndoRecord,
+} from "./OutputHistoryTypes";
+
+export type UndoFileAction = "delete" | "restore-content" | "git-restore";
+
+export interface UndoFileInstruction {
+  /** Workspace-relative POSIX path */
+  path: string;
+  action: UndoFileAction;
+  /** Required when action === "restore-content" */
+  contentToRestore?: string;
+}
+
+export interface UndoResult {
+  restoredFiles: string[];
+  failedFiles: Array<{ path: string; error: string }>;
+  /** Instructions to re-apply the AI's changes (redo). Populated after a successful undo. */
+  redoInstructions: UndoFileInstruction[];
+}
+
+/**
+ * Attribution tier for undo candidates shown in the dialog.
+ * tier1: event-attributed (high confidence — from CliOutput structured events)
+ * tier2: snapshot-only (lower confidence — may include parallel workflow changes)
+ */
+export type UndoCandidateTier = "tier1" | "tier2";
+
+export interface UndoFileCandidate {
+  path: string;
+  changeType: PromptChangeType;
+  tier: UndoCandidateTier;
+  /** Resolved undo instruction (null if non-undoable) */
+  instruction: UndoFileInstruction | null;
+  /** True if content capture was skipped — row shown as disabled */
+  contentCaptureSkipped?: boolean;
+  /** SHA-256 hash of content after prompt completed (for drift detection) */
+  afterHash?: string;
+  /** True when strategy=git and file was at HEAD before prompt */
+  wasAtHead?: boolean;
+}
+
+/**
+ * Extension → Webview: emitted after a prompt target completes with live snapshot
+ */
+export interface StepUndoDataUpdatedMessage {
+  type: typeof MESSAGE_TYPES.STEP_UNDO_DATA_UPDATED;
+  target: UndoExecutionTarget;
+  workspaceSnapshot?: WorkspaceSnapshot;
+}
+
+/**
+ * Webview → Extension: request to restore selected files
+ */
+export interface UndoPromptChangesMessage {
+  type: typeof MESSAGE_TYPES.UNDO_PROMPT_CHANGES;
+  data: {
+    requestId: string;
+    target: UndoExecutionTarget;
+    workspacePath: string;
+    files: UndoFileInstruction[];
+  };
+}
+
+/**
+ * Extension → Webview: result of the restore operation
+ */
+export interface UndoPromptResultMessage {
+  type: typeof MESSAGE_TYPES.UNDO_PROMPT_RESULT;
+  data: {
+    requestId: string;
+    target: UndoExecutionTarget;
+    restoredFiles: string[];
+    failedFiles: Array<{ path: string; error: string }>;
+  };
+}
+
+/** Extension → Webview: undo record updated (after undo/redo applied or on history load) */
+export interface UndoRecordUpdatedMessage {
+  type: typeof MESSAGE_TYPES.UNDO_RECORD_UPDATED;
+  target: OutputExecutionTarget;
+  undoRecord: UndoRecord;
+}
+
+/** Webview → Extension: request to redo previously undone changes */
+export interface RedoPromptChangesMessage {
+  type: typeof MESSAGE_TYPES.REDO_PROMPT_CHANGES;
+  data: {
+    requestId: string;
+    target: OutputExecutionTarget;
+    workspacePath: string;
+    files: UndoFileInstruction[];
+  };
+}
+
 /**
  * Union type for all incoming messages from extension to webview
  */
@@ -723,4 +835,7 @@ export type IncomingMessage =
   | ResetWorkflowStateMessage
   | RunHistoryUpdatedMessage
   | OutputHistoryLoadedMessage
-  | SetStartPositionConfirmedMessage;
+  | SetStartPositionConfirmedMessage
+  | StepUndoDataUpdatedMessage
+  | UndoPromptResultMessage
+  | UndoRecordUpdatedMessage;
