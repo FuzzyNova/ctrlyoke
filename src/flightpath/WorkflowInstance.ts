@@ -1455,6 +1455,34 @@ export class WorkflowInstance {
     }
   }
 
+  /**
+   * Sync prompts (and optionally finalPrompt) to match the state restored by a webview undo/redo.
+   * Updates the in-memory queue and persists to the working file without broadcasting to the webview.
+   */
+  async syncPromptsForUndoRedo(
+    prompts: PromptItem[],
+    finalPrompt: PromptItem | null
+  ): Promise<void> {
+    await this.promptQueue.syncPromptsForUndoRedo(prompts);
+
+    // Sync finalPrompt if it changed
+    if (finalPrompt !== null) {
+      this.promptQueue.updateWorkflowProperty("finalPrompt", finalPrompt);
+      await this.promptQueue.updateWorkingFileProperties({ finalPrompt });
+    } else {
+      this.promptQueue.updateWorkflowProperty("finalPrompt", undefined);
+      await this.promptQueue.updateWorkingFileProperties(
+        { finalPrompt: undefined },
+        { allowDeletes: true }
+      );
+    }
+
+    this.dashboardSink?.notifyUndoRedoSynced();
+    Log.debug(
+      `[WorkflowInstance] syncPromptsForUndoRedo: ${prompts.length} prompts, finalPrompt=${finalPrompt ? "set" : "null"}`
+    );
+  }
+
   async updatePromptInQueue(
     index: number,
     text: string,

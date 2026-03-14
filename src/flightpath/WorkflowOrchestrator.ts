@@ -891,6 +891,13 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().reorderPendingPrompts(newPendingOrder);
   }
 
+  async syncPromptsForUndoRedo(
+    prompts: PromptItem[],
+    finalPrompt: PromptItem | null
+  ): Promise<void> {
+    return this.getActiveInstance().syncPromptsForUndoRedo(prompts, finalPrompt);
+  }
+
   async setStartPosition(toIndex: number): Promise<void> {
     return this.getActiveInstance().setStartPosition(toIndex);
   }

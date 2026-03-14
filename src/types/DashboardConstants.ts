@@ -164,6 +164,9 @@ export const MESSAGE_TYPES = {
   // Queue Position Control — Extension → Webview
   SET_START_POSITION_CONFIRMED: "setStartPositionConfirmed",
   REORDER_PROMPTS_CONFIRMED: "reorderPromptsConfirmed",
+
+  // Undo/Redo — Webview → Extension: sync restored state after undo/redo
+  UNDO_REDO_SYNC: "undoRedoSync",
 } as const;
 
 // ============================================================================

@@ -1,6 +1,5 @@
-import { create } from "zustand";
+import { create, useStore } from "zustand";
 import { temporal } from "zundo";
-import { useStoreWithEqualityFn } from "zustand/traditional";
 import type { TemporalState } from "zundo";
 import {
   EXECUTION_STATES,
@@ -261,18 +260,36 @@ export const useWorkflowStore = create<
 
       setWorkflowName: (workflowName) => set({ workflowName }),
 
-      setPrompts: (prompts) =>
+      setPrompts: (prompts) => {
+        const before = useWorkflowStore.temporal.getState();
+        WebviewLog.debug(
+          `[WorkflowStore] setPrompts(${prompts.length} prompts) — pastStates before: ${before.pastStates.length}`
+        );
         set({
           prompts,
           totalSteps: prompts.length,
-        }),
+        });
+        const after = useWorkflowStore.temporal.getState();
+        WebviewLog.debug(
+          `[WorkflowStore] setPrompts done — pastStates after: ${after.pastStates.length}`
+        );
+      },
 
-      updatePrompt: (index, updates) =>
+      updatePrompt: (index, updates) => {
+        const before = useWorkflowStore.temporal.getState();
+        WebviewLog.debug(
+          `[WorkflowStore] updatePrompt(${index}) — pastStates before: ${before.pastStates.length}`
+        );
         set((state) => ({
           prompts: state.prompts.map((p, i) =>
             i === index ? { ...p, ...updates } : p
           ),
-        })),
+        }));
+        const after = useWorkflowStore.temporal.getState();
+        WebviewLog.debug(
+          `[WorkflowStore] updatePrompt done — pastStates after: ${after.pastStates.length}`
+        );
+      },
 
       setExecutionState: (executionState) => {
         useWorkflowStore.temporal.getState().pause();
@@ -973,4 +990,4 @@ export interface UndoableWorkflowState {
 
 export const useWorkflowTemporalStore = <T>(
   selector: (state: TemporalState<UndoableWorkflowState>) => T
-): T => useStoreWithEqualityFn(useWorkflowStore.temporal, selector, Object.is);
+): T => useStore(useWorkflowStore.temporal, selector);

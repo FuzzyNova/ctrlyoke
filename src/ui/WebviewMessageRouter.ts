@@ -172,6 +172,13 @@ export class WebviewMessageRouter {
       );
     });
 
+    table.set(MESSAGE_TYPES.UNDO_REDO_SYNC, async (message) => {
+      await this.getOrchestrator()?.syncPromptsForUndoRedo(
+        message.prompts,
+        message.finalPrompt ?? null
+      );
+    });
+
     // ── Dashboard — CodeMirror Editor ────────────────────────────────────
     table.set(MESSAGE_TYPES.REQUEST_COMPLETIONS, async (message) => {
       await this.handleCompletionRequest(

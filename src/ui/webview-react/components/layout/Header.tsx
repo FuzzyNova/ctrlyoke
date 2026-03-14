@@ -1,8 +1,8 @@
 import React, { useCallback } from "react";
-import { useWorkflowStore } from "@store/workflowStore";
+import { useWorkflowStore, useWorkflowTemporalStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
-import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
+import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
 import { SaveWorkflowDialog } from "../workflow/SaveWorkflowDialog";
@@ -74,6 +74,24 @@ export const Header: React.FC = () => {
   const { fileName, executionState } = useWorkflowStore();
   const { loadedWorkflows, activeWorkflowId, newWorkflowModalOpen, closeNewWorkflowModal } = useUiStore();
 
+  // Undo/redo state from temporal store
+  const canUndo = useWorkflowTemporalStore((s) => s.pastStates.length > 0);
+  const canRedo = useWorkflowTemporalStore((s) => s.futureStates.length > 0);
+  const temporalUndo = useWorkflowTemporalStore((s) => s.undo);
+  const temporalRedo = useWorkflowTemporalStore((s) => s.redo);
+
+  const handleUndo = useCallback(() => {
+    temporalUndo();
+    const { prompts, finalPrompt } = useWorkflowStore.getState();
+    vscode.postMessage({ type: MESSAGE_TYPES.UNDO_REDO_SYNC, prompts, finalPrompt });
+  }, [temporalUndo, vscode]);
+
+  const handleRedo = useCallback(() => {
+    temporalRedo();
+    const { prompts, finalPrompt } = useWorkflowStore.getState();
+    vscode.postMessage({ type: MESSAGE_TYPES.UNDO_REDO_SYNC, prompts, finalPrompt });
+  }, [temporalRedo, vscode]);
+
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === "cli";
@@ -137,9 +155,37 @@ export const Header: React.FC = () => {
   return (
     <>
       <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_1fr] gap-x-4 gap-y-1.5 items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
-        {/* Left Section: Workflow Controls + Save button */}
+        {/* Left Section: Workflow Controls + Undo/Redo buttons */}
         <div className="header-left flex items-center gap-2">
           <WorkflowControls />
+          {/* Undo button */}
+          <button
+            className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
+              canUndo && !isRunning && !isPaused
+                ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+            }`}
+            onClick={handleUndo}
+            disabled={!canUndo || isRunning || isPaused}
+            title="Undo"
+            aria-label="Undo"
+          >
+            <i className="codicon codicon-discard" />
+          </button>
+          {/* Redo button */}
+          <button
+            className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
+              canRedo && !isRunning && !isPaused
+                ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+            }`}
+            onClick={handleRedo}
+            disabled={!canRedo || isRunning || isPaused}
+            title="Redo"
+            aria-label="Redo"
+          >
+            <i className="codicon codicon-redo" />
+          </button>
         </div>
 
         {/* Save Workflow Dialog — rendered here for co-location with SaveWorkflowButton */}

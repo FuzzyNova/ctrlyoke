@@ -103,4 +103,7 @@ export interface IDashboardSink {
   notifyStartPositionSet(prompts: PromptItem[], currentIndex: number): void;
 
   notifyPromptsReordered(prompts: PromptItem[]): void;
+
+  /** Called after webview undo/redo to acknowledge the sync (no-op response needed; kept for extensibility). */
+  notifyUndoRedoSynced(): void;
 }

@@ -23,6 +23,7 @@ import {
   type StepStatus,
   type HarnessId,
   type WorkflowSummary,
+  type PromptItem,
 } from "../types/messages";
 import { WebviewLog } from "@utils/logger";
 
@@ -250,9 +251,37 @@ function createMessageHandlers(): MessageHandlerMap {
     WebviewLog.debug(
       `[PROMPTS_EXTENDED] ${currentPrompts.length} → ${newPrompts.length} prompts${message.workflowId ? ` (CLI workflowId=${message.workflowId.slice(0, 8)})` : ""}`
     );
+    // Only record an undo entry when the user actually changed something.
+    // Count changes cover add/remove. Content changes (same count, different
+    // text/name/model/harness) cover edits. Pure re-syncs (file-watcher firing
+    // after the extension writes the working file) have identical content and
+    // must not pollute the undo stack.
+    const promptCountChanged = newPrompts.length !== currentPrompts.length;
+    const promptContentChanged =
+      !promptCountChanged &&
+      newPrompts.some((p: PromptItem, i: number) => {
+        const cur = currentPrompts[i];
+        return (
+          p.prompt !== cur?.prompt ||
+          p.name !== cur?.name ||
+          p.model !== cur?.model ||
+          p.harness !== cur?.harness
+        );
+      });
+    const shouldRecord = promptCountChanged || promptContentChanged;
+    if (!shouldRecord) {
+      useWorkflowStore.temporal.getState().pause();
+    }
     workflowStore.setPrompts(newPrompts);
+    if (!shouldRecord) {
+      useWorkflowStore.temporal.getState().resume();
+    }
+    // finalPrompt changes here are system-driven syncs, not user actions —
+    // suppress their undo entries regardless of count change.
     if (message.finalPrompt !== undefined) {
+      useWorkflowStore.temporal.getState().pause();
       workflowStore.setFinalPrompt(message.finalPrompt ?? null);
+      useWorkflowStore.temporal.getState().resume();
     }
   };
 
@@ -312,8 +341,13 @@ function createMessageHandlers(): MessageHandlerMap {
 
     workflowStore.setFileName(message.fileName);
     workflowStore.setPrompts(message.prompts || []);
+    // Pause around setFinalPrompt — the delete action is already recorded by
+    // setPrompts above; a second entry from setFinalPrompt would require two
+    // undos to restore a single deleted prompt.
     if (message.finalPrompt !== undefined) {
+      useWorkflowStore.temporal.getState().pause();
       workflowStore.setFinalPrompt(message.finalPrompt ?? null);
+      useWorkflowStore.temporal.getState().resume();
     }
   };
 
@@ -353,13 +387,16 @@ function createMessageHandlers(): MessageHandlerMap {
       workflowStore.setCurrentStep(preserveStepCount);
 
       // Reset only the new (not-yet-run) prompts to pending; preserve completed status.
+      // Pause undo recording — execution start is not a user-undoable action.
       const updatedPrompts = workflowStore.prompts.map((prompt, i) => {
         if (i < preserveStepCount) {
           return prompt; // Keep completed status and output
         }
         return { ...prompt, status: STEP_STATUS.PENDING as StepStatus };
       });
+      useWorkflowStore.temporal.getState().pause();
       workflowStore.setPrompts(updatedPrompts);
+      useWorkflowStore.temporal.getState().resume();
 
       // Clear runtime state only for the new steps (steps >= preserveStepCount)
       workflowStore.clearRuntimeStateFromStep(preserveStepCount);
@@ -384,7 +421,10 @@ function createMessageHandlers(): MessageHandlerMap {
         ...prompt,
         status: STEP_STATUS.PENDING as StepStatus,
       }));
+      // Pause undo recording — execution start is not a user-undoable action.
+      useWorkflowStore.temporal.getState().pause();
       workflowStore.setPrompts(resetPrompts);
+      useWorkflowStore.temporal.getState().resume();
       workflowStore.clearAllRuntimeState();
     }
 
@@ -417,6 +457,10 @@ function createMessageHandlers(): MessageHandlerMap {
     const { stepIndex, status, details } = message;
 
     if (workflowStore.prompts[stepIndex]) {
+      // Pause around updatePrompt — step status changes are runtime events,
+      // not user actions. Without this, every running/completed/failed status
+      // transition during a workflow run would pollute the undo stack.
+      useWorkflowStore.temporal.getState().pause();
       workflowStore.updatePrompt(stepIndex, {
         status: status.state || status,
         _runtime: details
@@ -426,6 +470,7 @@ function createMessageHandlers(): MessageHandlerMap {
             }
           : undefined,
       });
+      useWorkflowStore.temporal.getState().resume();
     }
   };
 

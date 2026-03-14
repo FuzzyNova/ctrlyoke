@@ -1542,6 +1542,33 @@ export class PromptQueue {
   }
 
   /**
+   * Replace all prompts with the state restored by an undo/redo operation.
+   * Preserves completed results (0..currentIndex-1); resets pending slots to PENDING.
+   * Does NOT emit a state change event — the webview already has the correct state.
+   * The working file watcher ignores changes in non-running states, so no re-broadcast occurs.
+   */
+  public async syncPromptsForUndoRedo(newPrompts: PromptItem[]): Promise<void> {
+    const currentIndex = this.state.currentIndex;
+    this.state.prompts = newPrompts;
+
+    // Preserve completed results; reset pending slots to PENDING
+    const completedResults = this.state.results.slice(0, currentIndex);
+    const pendingResults = newPrompts.slice(currentIndex).map((p) => ({
+      prompt: p.prompt,
+      status: STEP_STATUS.PENDING,
+      timestamp: new Date(),
+    }));
+    this.state.results = [...completedResults, ...pendingResults];
+
+    // Persist to working file (skip merge — we know exactly what we want)
+    await this.updateWorkingFile(true);
+
+    Log.debug(
+      `[PromptQueue] syncPromptsForUndoRedo: ${newPrompts.length} prompts, currentIndex=${currentIndex}`
+    );
+  }
+
+  /**
    * Load working file from path
    * @param filePath - Path to working file
    */

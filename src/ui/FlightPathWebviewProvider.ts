@@ -531,6 +531,11 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
+  public notifyUndoRedoSynced(): void {
+    // No payload needed — webview already holds the correct state.
+    // This is a no-op acknowledgement kept for extensibility.
+  }
+
   public notifyQueueSizeLimitReached(
     currentSize: number,
     maxSize: number
