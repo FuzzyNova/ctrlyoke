@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 interface ModalProps {
   isOpen: boolean;
@@ -46,7 +47,7 @@ export const Modal: React.FC<ModalProps> = ({
     xl: "max-w-4xl",
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-black bg-opacity-50"
       onClick={onClose}
@@ -93,6 +94,7 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
