@@ -705,6 +705,20 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
   }
 
   /**
+   * Extract the leading slash command from user prompt text.
+   *
+   * Returns the slash command token (e.g., "/handoff") if the text starts with
+   * one, or null if no leading slash command is present.
+   *
+   * A slash command is "/" followed by one or more word characters (\w+).
+   * Examples: "/handoff", "/compact", "/context".
+   */
+  protected extractLeadingSlashCommand(text: string): string | null {
+    const match = text.match(/^(\/\w+)/);
+    return match ? match[1] : null;
+  }
+
+  /**
    * Check if a prompt is simple enough to pass directly without a temp file.
    *
    * Simple prompts must be:

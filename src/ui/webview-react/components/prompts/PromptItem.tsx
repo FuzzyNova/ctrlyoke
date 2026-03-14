@@ -10,7 +10,7 @@ import type { RetryState, CliOutput } from "../../store/workflowStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { buildUndoCandidatesForOutputs, buildUndoDialogInputForPrompt, getPromptUndoSummary } from "../../utils/promptUndo";
 import type { UndoDialogInput } from "../../utils/promptUndo";
-import type { UndoExecutionTarget } from "@root/types/OutputHistoryTypes";
+import type { UndoExecutionTarget, WorkspaceSnapshot, UndoRecord } from "@root/types/OutputHistoryTypes";
 import type { UndoFileInstruction } from "../../types/messages";
 import { UndoChangesDialog } from "../output/UndoChangesDialog";
 import { STEP_STATUS } from "../../types/messages";
@@ -83,6 +83,12 @@ interface PromptItemProps {
   };
   /** When true, show prompt-level undo button for completed prompts */
   allowUndoActions?: boolean;
+  /** Override: CLI outputs from history (used in history view instead of live store) */
+  allCliOutputs?: CliOutput[];
+  /** Override: workspace snapshot from history (used in history view instead of live store) */
+  workspaceSnapshot?: WorkspaceSnapshot;
+  /** Override: undo record from history (used in history view instead of live store) */
+  undoRecord?: UndoRecord;
 }
 
 // Stable empty array used as a fallback in useWorkflowStore selectors.
@@ -137,6 +143,9 @@ export const PromptItem: React.FC<PromptItemProps> = ({
   dimmed = false,
   dragHandleProps,
   allowUndoActions = false,
+  allCliOutputs: allCliOutputsProp,
+  workspaceSnapshot: workspaceSnapshotProp,
+  undoRecord: undoRecordProp,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -153,12 +162,17 @@ export const PromptItem: React.FC<PromptItemProps> = ({
   // Use a stable empty-array constant as fallback — `?? []` would create a new
   // array reference on every snapshot call, causing useSyncExternalStore to
   // always detect a "change" and call forceStoreRerender (React error #185).
-  const stepCliOutputs = useWorkflowStore((s) => s.cliOutputs[index] ?? EMPTY_CLI_OUTPUTS);
+  const stepCliOutputsFromStore = useWorkflowStore((s) => s.cliOutputs[index] ?? EMPTY_CLI_OUTPUTS);
+
+  // In history view, caller passes allCliOutputsProp / workspaceSnapshotProp / undoRecordProp
+  // from historyOutputs — use those in preference to the live store values.
+  const stepCliOutputs = allCliOutputsProp ?? stepCliOutputsFromStore;
 
   const executionTarget: UndoExecutionTarget = { kind: "queue", stepIndex: index };
   const workspacePath = stepCliOutputs[stepCliOutputs.length - 1]?.workingDirectory ?? "";
   const targetKey = `queue-${index}`;
-  const undoRecord = undoRecords[targetKey];
+  const undoRecord = undoRecordProp ?? undoRecords[targetKey];
+  const effectiveSnapshot = workspaceSnapshotProp ?? workspaceSnapshots[index];
   const isRedone = undoRecord?.isRedone === true;
   const hasUndoRecord = undoRecord != null;
   const showRedoButton = hasUndoRecord && !isRedone;
@@ -183,8 +197,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
       };
     }
 
-    const snapshot = workspaceSnapshots[index];
-    const candidates = buildUndoCandidatesForOutputs(stepCliOutputs, snapshot);
+    const candidates = buildUndoCandidatesForOutputs(stepCliOutputs, effectiveSnapshot);
     const { undoableCount, hasTier2 } = getPromptUndoSummary(candidates);
     if (undoableCount === 0) return undefined;
     return {
@@ -192,7 +205,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
       hasTier2,
       isRedo: false,
       onUndo: () => {
-        const input = buildUndoDialogInputForPrompt(executionTarget, stepCliOutputs, snapshot, workspacePath);
+        const input = buildUndoDialogInputForPrompt(executionTarget, stepCliOutputs, effectiveSnapshot, workspacePath);
         setDialogState({
           mode: "undo",
           input,

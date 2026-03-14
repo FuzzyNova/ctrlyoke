@@ -121,6 +121,13 @@ export class CliIntegration extends HarnessIntegration {
   /** Actual prompt text sent to CLI (may be file reference if using temp files) */
   protected actualPromptSent?: string;
 
+  /**
+   * Leading slash command extracted from the original user prompt (e.g., "/handoff").
+   * Set in sendPrompt() and consumed by execute methods to prepend the slash command
+   * to temp file reference instructions, making the harness treat it as a top-level command.
+   */
+  private currentSlashCommandPrefix: string | undefined;
+
   // NOTE: currentProcess field removed — the child process lives in processManager,
   // not on this class. See processManager.isActive() for process state.
 
@@ -491,7 +498,12 @@ export class CliIntegration extends HarnessIntegration {
         const { tempFilePaths: paths, promptWithInstruction } =
           await this.createPromptFileWithReference(promptText, workflowContext);
         tempFilePaths = paths;
-        promptToSend = promptWithInstruction;
+        // If the original prompt started with a slash command, prepend it so the
+        // harness executes it as a top-level command rather than a buried file instruction.
+        // e.g. "/handoff Follow instructions in @.flightpath/temp/prompt-1.md"
+        promptToSend = this.currentSlashCommandPrefix
+          ? `${this.currentSlashCommandPrefix} ${promptWithInstruction.trimStart()}`
+          : promptWithInstruction;
         Log.debug(
           `📁 CLI interactive using ${tempFilePaths.length} temp file(s) for prompt passing`
         );
@@ -857,7 +869,12 @@ export class CliIntegration extends HarnessIntegration {
         workflowContext
       );
       tempFilePaths = result.tempFilePaths;
-      actualPromptText = result.promptWithInstruction;
+      // If the original prompt started with a slash command, prepend it so the
+      // harness executes it as a top-level command rather than a buried file instruction.
+      // e.g. "/handoff Follow instructions in @.flightpath/temp/prompt-1.md"
+      actualPromptText = this.currentSlashCommandPrefix
+        ? `${this.currentSlashCommandPrefix} ${result.promptWithInstruction.trimStart()}`
+        : result.promptWithInstruction;
       Log.debug(
         `📁 Interactive mode using ${tempFilePaths.length} temp file(s) for safe prompt passing`
       );
@@ -1011,7 +1028,12 @@ export class CliIntegration extends HarnessIntegration {
         const { tempFilePaths: paths, promptWithInstruction } =
           await this.createPromptFileWithReference(promptText, workflowContext);
         tempFilePaths = paths;
-        promptArgument = promptWithInstruction;
+        // If the original prompt started with a slash command, prepend it so the
+        // harness executes it as a top-level command rather than a buried file instruction.
+        // e.g. "/handoff Follow instructions in @.flightpath/temp/prompt-1.md"
+        promptArgument = this.currentSlashCommandPrefix
+          ? `${this.currentSlashCommandPrefix} ${promptWithInstruction.trimStart()}`
+          : promptWithInstruction;
         Log.info(`🚀 Starting headless mode with ${paths.length} file(s)`);
         Log.info(`📝 Total prompt length: ${promptText.length} characters`);
       }
@@ -1578,18 +1600,40 @@ export class CliIntegration extends HarnessIntegration {
         }
       }
 
+      // Detect leading slash command (e.g. /handoff, /context) in the original prompt text.
+      // Pure slash commands (/word only) bypass instruction assembly and are sent directly —
+      // injecting skill/agent blocks into a meta-command makes no sense and would bury the
+      // slash command inside a temp file where the harness won't execute it.
+      // Slash commands with a body (/handoff to the next agent) are assembled normally but
+      // have the slash word prepended to the temp file reference instruction so the harness
+      // still picks it up as a top-level command.
+      const originalPromptText = prompt.prompt.trim();
+      const slashCommand = this.extractLeadingSlashCommand(originalPromptText);
+      const isPureSlashCommand =
+        slashCommand !== null && /^\/\w+\s*$/.test(originalPromptText);
+      this.currentSlashCommandPrefix = slashCommand ?? undefined;
+
       // Build prompt with optional dynamic queue instructions, agent, skills, and prior context
-      const finalPromptText = await this.buildPromptWithInstructions(
-        prompt,
-        workflowContext?.promptIndex ?? 0,
-        workflowContext?.allPrompts ?? [prompt],
-        resolvedProperties?.allowDynamicExtension,
-        resolvedProperties?.agent,
-        resolvedProperties?.skills,
-        resolvedProperties?.priorContext,
-        workflowContext?.promptQueue?.getFinalPromptResponseTexts(),
-        !!resolvedSessionId
-      );
+      let finalPromptText: string;
+      if (isPureSlashCommand) {
+        // Pure slash command: send the original text directly, no instruction injection.
+        finalPromptText = originalPromptText;
+        Log.debug(
+          `⚡ Slash command detected ("${slashCommand}") — skipping instruction assembly`
+        );
+      } else {
+        finalPromptText = await this.buildPromptWithInstructions(
+          prompt,
+          workflowContext?.promptIndex ?? 0,
+          workflowContext?.allPrompts ?? [prompt],
+          resolvedProperties?.allowDynamicExtension,
+          resolvedProperties?.agent,
+          resolvedProperties?.skills,
+          resolvedProperties?.priorContext,
+          workflowContext?.promptQueue?.getFinalPromptResponseTexts(),
+          !!resolvedSessionId
+        );
+      }
 
       this.lastFullPrompt = finalPromptText;
 

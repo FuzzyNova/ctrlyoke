@@ -1063,6 +1063,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const m = message as UndoRecordUpdatedMessage;
     if (!m.target || !m.undoRecord) return;
     useWorkflowStore.getState().setUndoRecord(m.target, m.undoRecord);
+    useWorkflowStore.getState().updateHistoryStepUndoRecord(m.target, m.undoRecord);
   };
 
   return handlers;

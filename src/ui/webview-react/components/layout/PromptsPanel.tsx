@@ -387,12 +387,12 @@ export const PromptsPanel: React.FC<{
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
 
-  // Gate undo actions: only when allowed, workflow is idle, not in history view, not in CLI watch mode
+  // Gate undo actions: only when allowed, workflow is not actively running, not in CLI watch mode.
+  // History view is intentionally NOT excluded — undo/redo should work from the history panel.
   const canShowUndoActions =
     allowUndoActions &&
     !isRunning &&
     executionState !== EXECUTION_STATES.CANCELLING &&
-    !isViewingHistory &&
     !isCLIManaged;
 
   // Show eraser button when the workflow has run but is not actively executing.
@@ -617,61 +617,78 @@ export const PromptsPanel: React.FC<{
           </div>
         ) : (
           <div className="py-1">
-            {/* Done prompts (indices 0..currentStep-1) */}
-            {prompts.slice(0, currentStep).map((prompt, sliceIdx) => {
-              const index = sliceIdx;
-              const slotNumber = index + 1;
-              const status = getPromptStatus(prompt, index);
-              const retryState = retryStates[index];
-              const details = getPromptDetails(prompt, index);
-              const latestOutput = getLatestOutput(index);
-              const isSelected =
-                selectionTarget.kind === "queue" &&
-                selectionTarget.index === index;
-              const harnessModel = getPromptHarnessModel(prompt);
-              const overrides = getPromptOverrides(prompt);
-              return (
-                <div
-                  key={`prompt-${index}-${prompt.name || ""}`}
-                  className="flex items-stretch"
-                >
-                  {/* 2px green accent — compensated by narrowing number col by 2px so numbers stay aligned with pending items */}
-                  <div className="w-[2px] flex-shrink-0 self-stretch bg-bash-status-success" />
-                  <div className="flex-shrink-0 w-[26px] flex items-start justify-end pt-2 pr-1 text-[11px] text-description-fg select-none">
-                    {slotNumber}
+            {/* Done prompts (indices 0..doneStepCount-1).
+                In history view, use historyOutputs.stepCount so completed history
+                steps are shown even when currentStep is 0 (reset live run). */}
+            {(() => {
+              const doneStepCount =
+                isViewingHistory && historyOutputs
+                  ? Math.min(prompts.length, historyOutputs.stepCount)
+                  : currentStep;
+              return prompts.slice(0, doneStepCount).map((prompt, sliceIdx) => {
+                const index = sliceIdx;
+                const slotNumber = index + 1;
+                const status = getPromptStatus(prompt, index);
+                const retryState = retryStates[index];
+                const details = getPromptDetails(prompt, index);
+                const latestOutput = getLatestOutput(index);
+                const isSelected =
+                  selectionTarget.kind === "queue" &&
+                  selectionTarget.index === index;
+                const harnessModel = getPromptHarnessModel(prompt);
+                const overrides = getPromptOverrides(prompt);
+                // In history view, pass history step data so PromptItem uses it
+                // instead of the (empty/wrong) live store values.
+                const historyStep =
+                  isViewingHistory && historyOutputs
+                    ? historyOutputs.steps[index]
+                    : undefined;
+                return (
+                  <div
+                    key={`prompt-${index}-${prompt.name || ""}`}
+                    className="flex items-stretch"
+                  >
+                    {/* 2px green accent — compensated by narrowing number col by 2px so numbers stay aligned with pending items */}
+                    <div className="w-[2px] flex-shrink-0 self-stretch bg-bash-status-success" />
+                    <div className="flex-shrink-0 w-[26px] flex items-start justify-end pt-2 pr-1 text-[11px] text-description-fg select-none">
+                      {slotNumber}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <PromptItem
+                        text={prompt.prompt}
+                        index={index}
+                        displayNumber={slotNumber}
+                        name={prompt.name}
+                        status={status}
+                        retryState={retryState}
+                        details={details}
+                        latestOutput={latestOutput}
+                        isCurrent={false}
+                        isSelected={isSelected}
+                        onClick={() => handlePromptClick(index)}
+                        harnessLabel={harnessModel.harnessLabel}
+                        harnessIsDefault={harnessModel.harnessIsDefault}
+                        modelLabel={harnessModel.modelLabel}
+                        modelIsDefault={harnessModel.modelIsDefault}
+                        overrides={overrides}
+                        canSetStartPosition={canChangeStartPosition}
+                        startPositionDirection="rewind"
+                        onSetStartPosition={() => handleSetPositionClick(index)}
+                        hideBorderBottom={
+                          sliceIdx === doneStepCount - 1 &&
+                          doneStepCount < prompts.length
+                        }
+                        dimmed
+                        allowUndoActions={canShowUndoActions}
+                        allCliOutputs={historyStep?.cliOutputs}
+                        workspaceSnapshot={historyStep?.workspaceSnapshot}
+                        undoRecord={historyStep?.undoRecord}
+                      />
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <PromptItem
-                      text={prompt.prompt}
-                      index={index}
-                      displayNumber={slotNumber}
-                      name={prompt.name}
-                      status={status}
-                      retryState={retryState}
-                      details={details}
-                      latestOutput={latestOutput}
-                      isCurrent={false}
-                      isSelected={isSelected}
-                      onClick={() => handlePromptClick(index)}
-                      harnessLabel={harnessModel.harnessLabel}
-                      harnessIsDefault={harnessModel.harnessIsDefault}
-                      modelLabel={harnessModel.modelLabel}
-                      modelIsDefault={harnessModel.modelIsDefault}
-                      overrides={overrides}
-                      canSetStartPosition={canChangeStartPosition}
-                      startPositionDirection="rewind"
-                      onSetStartPosition={() => handleSetPositionClick(index)}
-                      hideBorderBottom={
-                        sliceIdx === currentStep - 1 &&
-                        currentStep < prompts.length
-                      }
-                      dimmed
-                      allowUndoActions={canShowUndoActions}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              });
+            })()}
 
             {/* Boundary bar between done and pending */}
             {currentStep > 0 && currentStep < prompts.length && (

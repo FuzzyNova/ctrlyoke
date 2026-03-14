@@ -204,6 +204,7 @@ interface WorkflowActions {
   clearAllRuntimeState: () => void;
   setWorkspaceSnapshot: (target: UndoExecutionTarget, snapshot: WorkspaceSnapshot) => void;
   setUndoRecord: (target: UndoExecutionTarget, record: UndoRecord) => void;
+  updateHistoryStepUndoRecord: (target: UndoExecutionTarget, undoRecord: UndoRecord) => void;
   setUndoResult: (requestId: string, result: UndoResult) => void;
   clearUndoResult: (requestId: string) => void;
 }
@@ -901,6 +902,40 @@ export const useWorkflowStore = create<
           : `finalPrompt-${target.loopIndex}`;
         useWorkflowStore.temporal.getState().pause();
         set((s) => ({ undoRecords: { ...s.undoRecords, [key]: record } }));
+        useWorkflowStore.temporal.getState().resume();
+      },
+
+      updateHistoryStepUndoRecord: (target, undoRecord) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => {
+          if (!state.historyOutputs) return {};
+          if (target.kind === "queue") {
+            const step = state.historyOutputs.steps[target.stepIndex];
+            if (!step) return {};
+            return {
+              historyOutputs: {
+                ...state.historyOutputs,
+                steps: {
+                  ...state.historyOutputs.steps,
+                  [target.stepIndex]: { ...step, undoRecord },
+                },
+              },
+            };
+          } else {
+            if (!state.historyOutputs.finalPromptOutputs) return {};
+            const step = state.historyOutputs.finalPromptOutputs[target.loopIndex];
+            if (!step) return {};
+            return {
+              historyOutputs: {
+                ...state.historyOutputs,
+                finalPromptOutputs: {
+                  ...state.historyOutputs.finalPromptOutputs,
+                  [target.loopIndex]: { ...step, undoRecord },
+                },
+              },
+            };
+          }
+        });
         useWorkflowStore.temporal.getState().resume();
       },
 
