@@ -123,6 +123,8 @@ interface DiffViewProps {
    * Can be overridden per-instance by the user clicking the expand button.
    */
   globallyCollapsed: boolean;
+  /** Optional content rendered inline with the expand/collapse toggle */
+  actionSlot?: React.ReactNode;
   className?: string;
 }
 
@@ -148,6 +150,7 @@ const DiffView: React.FC<DiffViewProps> = ({
   structuredPatch,
   language,
   globallyCollapsed,
+  actionSlot,
   className = "",
 }) => {
   // Track whether the user has manually toggled this instance.
@@ -229,24 +232,27 @@ const DiffView: React.FC<DiffViewProps> = ({
   return (
     <div className={`my-2 ml-6 font-mono text-[11px] ${className}`}>
       {/* Summary / toggle header */}
-      <button
-        type="button"
-        onClick={handleToggle}
-        className="flex items-center gap-1.5 text-[10px] text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit] mb-1"
-        title={isExpanded ? "Collapse diff" : "Expand diff"}
-      >
-        <i
-          className={`codicon codicon-chevron-right text-[10px] transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
-        />
-        <span>
-          {isExpanded ? "Hide" : "Show"} diff
-          {!isExpanded && estimatedLineCount > 0 && (
-            <span className="ml-1 opacity-60">
-              (~{estimatedLineCount} lines)
-            </span>
-          )}
-        </span>
-      </button>
+      <div className="flex items-center gap-2 mb-1">
+        <button
+          type="button"
+          onClick={handleToggle}
+          className="flex items-center gap-1.5 text-[10px] text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
+          title={isExpanded ? "Collapse diff" : "Expand diff"}
+        >
+          <i
+            className={`codicon codicon-chevron-right text-[10px] transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
+          />
+          <span>
+            {isExpanded ? "Hide" : "Show"} diff
+            {!isExpanded && estimatedLineCount > 0 && (
+              <span className="ml-1 opacity-60">
+                (~{estimatedLineCount} lines)
+              </span>
+            )}
+          </span>
+        </button>
+        {actionSlot}
+      </div>
 
       {/* Diff lines — only mounted when expanded */}
       {isExpanded && diffLines.length > 0 && (
@@ -348,6 +354,17 @@ export const FileEditOutput = memo<FileEditOutputProps>(
       (structuredPatch && structuredPatch.length > 0) ||
       (oldContent && newContent);
 
+    const undoButton = onUndoFile && status !== OPERATION_STATUS.INITIATED ? (
+      <button
+        type="button"
+        className="text-[10px] font-bold uppercase text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
+        title={fileUndoMode === "redo" ? `Redo changes to ${path}` : `Undo changes to ${path}`}
+        onClick={() => onUndoFile(path, attemptIndex)}
+      >
+        {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
+      </button>
+    ) : null;
+
     return (
       <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
         <div className={TOOL_CALL_LINE}>
@@ -357,25 +374,18 @@ export const FileEditOutput = memo<FileEditOutputProps>(
           {error && status === OPERATION_STATUS.FAILED && (
             <span className="text-bash-status-error">— {error}</span>
           )}
-          {onUndoFile && status !== OPERATION_STATUS.INITIATED && (
-            <button
-              type="button"
-              className="icon-btn py-0 px-1 ml-1 text-[10px]"
-              title={fileUndoMode === "redo" ? `Redo changes to ${path}` : `Undo changes to ${path}`}
-              onClick={() => onUndoFile(path, attemptIndex)}
-            >
-              {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
-            </button>
-          )}
         </div>
-        {hasDiffData && (
+        {hasDiffData ? (
           <DiffView
             oldContent={oldContent}
             newContent={newContent}
             structuredPatch={structuredPatch}
             language={getLanguageFromPath(path)}
             globallyCollapsed={diffsCollapsed}
+            actionSlot={undoButton}
           />
+        ) : undoButton && (
+          <div className="ml-6 mt-1">{undoButton}</div>
         )}
       </div>
     );
