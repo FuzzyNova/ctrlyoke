@@ -703,8 +703,8 @@ export class CliIntegration extends HarnessIntegration {
         logPath = discovery.logPath;
         sessionId = discovery.sessionId;
         Log.info(`✅ Found log file for resumed session: ${logPath}`);
-      } else if (this.provider.notificationMonitor.waitForSessionStart) {
-        // Harness supports SessionStart hook (Claude only currently)
+      } else if (this.provider.notificationMonitor.supportsSessionStart) {
+        // Harness supports SessionStart hook (Claude, Copilot)
         Log.info("🔍 Waiting for SessionStart hook and log file creation...");
 
         const workspaceRoot = this.getWorkspaceRoot();
@@ -720,7 +720,7 @@ export class CliIntegration extends HarnessIntegration {
 
         // Wait for SessionStart notification
         const startResultNotify =
-          await this.provider.notificationMonitor.waitForSessionStart(
+          await this.provider.notificationMonitor.waitForSessionStart!(
             {
               directory: notifyDir,
               timeoutMs: SESSION_START_TIMEOUT_MS,

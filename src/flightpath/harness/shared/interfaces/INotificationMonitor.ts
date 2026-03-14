@@ -64,6 +64,16 @@ export interface INotificationMonitor {
   readonly supportsSessionIdInFilename: boolean;
 
   /**
+   * Whether this harness fires a SessionStart hook at the beginning of a session.
+   *
+   * - `true`: waitForSessionStart() will be called to detect session start and extract session ID
+   * - `false`: CliIntegration falls through to log file discovery as the session-start proxy
+   *
+   * Claude and Copilot fire SessionStart hooks; Codex does not.
+   */
+  readonly supportsSessionStart: boolean;
+
+  /**
    * Monitor for completion notification
    * @param config Monitoring configuration
    * @param sessionId Optional session/thread ID (undefined = wildcard mode)
@@ -163,6 +173,12 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
    * Override to false for harnesses that use timestamp-based filenames.
    */
   readonly supportsSessionIdInFilename: boolean = true;
+
+  /**
+   * Standard harnesses (Claude, Copilot) fire a SessionStart hook.
+   * Override to false for harnesses that use log file discovery instead (Codex).
+   */
+  readonly supportsSessionStart: boolean = true;
 
   // ── Abstract (CLI-specific) ──────────────────────────────────────────────
 
