@@ -611,7 +611,7 @@ function App() {
             })()}
             <div className="relative z-10 flex flex-col flex-1">
               <div className="flex-none">
-                <PromptsPanel panelBarOrientation="horizontal" />
+                <PromptsPanel panelBarOrientation="horizontal" allowUndoActions />
               </div>
               <div className="flex-none">
                 <OutputSection />
@@ -654,7 +654,7 @@ function App() {
                 }
               }}
             >
-              <PromptsPanel panelBarOrientation="horizontal" />
+              <PromptsPanel panelBarOrientation="horizontal" allowUndoActions />
             </Panel>
 
             <Separator className={SEPARATOR_HORIZONTAL} />
@@ -782,7 +782,7 @@ function App() {
             }
           }}
         >
-          <PromptsPanel />
+          <PromptsPanel allowUndoActions />
         </Panel>
 
         <Separator className={SEPARATOR_VERTICAL} />

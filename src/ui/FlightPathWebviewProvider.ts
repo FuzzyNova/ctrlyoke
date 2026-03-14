@@ -89,8 +89,7 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
       postMessage,
       templateManager,
       getOrchestrator,
-      getOutputHistoryManager,
-      (history) => this.sendHistoryUndoData(history)
+      getOutputHistoryManager
     );
     this.router = new WebviewMessageRouter(
       postMessage,
@@ -781,7 +780,6 @@ window.vscodeApi = acquireVsCodeApi();
         runStates,
       });
 
-      this.sendHistoryUndoData(history);
     } catch (error) {
       Log.warn("Failed to load output history for workflow:", error);
     }

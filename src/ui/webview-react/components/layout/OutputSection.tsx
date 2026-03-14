@@ -9,6 +9,7 @@ import type {
   CliOutput as CliOutputType,
   OutputStatusMessage,
 } from "../../types/cliEvents";
+import type { WorkspaceSnapshot, UndoRecord } from "@root/types/OutputHistoryTypes";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
@@ -273,8 +274,8 @@ export const OutputSection: React.FC = () => {
     executionState === EXECUTION_STATES.RUNNING ||
     executionState === EXECUTION_STATES.CANCELLING;
 
-  // Only show undo actions when not in history view and execution is not active
-  const allowUndoActions = !isViewingHistory && !isExecutionActive;
+  // Only show undo actions when execution is not active
+  const allowUndoActions = !isExecutionActive;
 
   if (outputCollapsed) {
     return (
@@ -440,6 +441,16 @@ export const OutputSection: React.FC = () => {
                 item.target.kind === "queue"
                   ? streamingChunks[item.target.index] || ""
                   : "";
+              const stepSnapshot: WorkspaceSnapshot | undefined = isViewingHistory && historyOutputs
+                ? (item.target.kind === "queue"
+                    ? historyOutputs.steps[item.target.index]?.workspaceSnapshot
+                    : historyOutputs.finalPromptOutputs?.[item.target.index]?.workspaceSnapshot)
+                : undefined;
+              const stepUndoRecord: UndoRecord | undefined = isViewingHistory && historyOutputs
+                ? (item.target.kind === "queue"
+                    ? historyOutputs.steps[item.target.index]?.undoRecord
+                    : historyOutputs.finalPromptOutputs?.[item.target.index]?.undoRecord)
+                : undefined;
               return (
                 <React.Fragment key={`cli-${index}`}>
                   {isFirstForStep && (
@@ -464,6 +475,8 @@ export const OutputSection: React.FC = () => {
                     streamingChunk={streamingChunk}
                     isExecutionActive={isExecutionActive}
                     allowUndoActions={allowUndoActions}
+                    workspaceSnapshot={stepSnapshot}
+                    undoRecord={stepUndoRecord}
                   />
                 </React.Fragment>
               );

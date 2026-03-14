@@ -37,7 +37,11 @@ import type {
 } from "../../types/cliEvents";
 import { CLI_EVENT_TYPES } from "../../types/cliEvents";
 import { HARNESS_INFO } from "../../types/messages";
-import type { UndoExecutionTarget } from "@root/types/OutputHistoryTypes";
+import type {
+  UndoExecutionTarget,
+  WorkspaceSnapshot,
+  UndoRecord,
+} from "@root/types/OutputHistoryTypes";
 
 // ============================================================================
 // Text Output Component
@@ -378,6 +382,10 @@ interface CliOutputProps {
   /** When true, shows per-file undo buttons on file edit/write/delete operations */
   allowUndoActions?: boolean;
   className?: string;
+  /** Workspace snapshot override — used in history mode so we don't read from the live store */
+  workspaceSnapshot?: WorkspaceSnapshot;
+  /** UndoRecord override — used in history mode so we don't read from the live store */
+  undoRecord?: UndoRecord;
 }
 
 /**
@@ -407,6 +415,8 @@ export const CliOutput = memo<CliOutputProps>(
     isExecutionActive = true,
     allowUndoActions = false,
     className = "",
+    workspaceSnapshot,
+    undoRecord,
   }) => {
     const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
 
@@ -418,29 +428,33 @@ export const CliOutput = memo<CliOutputProps>(
     }
     const [dialogState, setDialogState] = useState<CliDialogState | null>(null);
 
-    const workspaceSnapshots = useWorkflowStore((s) => s.workspaceSnapshots);
-    const finalPromptWorkspaceSnapshots = useWorkflowStore(
+    const workspaceSnapshotsFromStore = useWorkflowStore((s) => s.workspaceSnapshots);
+    const finalPromptWorkspaceSnapshotsFromStore = useWorkflowStore(
       (s) => s.finalPromptWorkspaceSnapshots
     );
-    const undoRecords = useWorkflowStore((s) => s.undoRecords);
+    const undoRecordsFromStore = useWorkflowStore((s) => s.undoRecords);
 
     const isFinalPrompt = stepLabel !== undefined;
     const target: UndoExecutionTarget = isFinalPrompt
       ? { kind: "finalPrompt", loopIndex: stepIndex }
       : { kind: "queue", stepIndex };
     const targetKey = isFinalPrompt ? `finalPrompt-${stepIndex}` : `queue-${stepIndex}`;
-    const undoRecord = undoRecords[targetKey];
+
+    const effectiveUndoRecord = undoRecord ?? undoRecordsFromStore[targetKey];
+    const effectiveSnapshot = workspaceSnapshot ?? (isFinalPrompt
+      ? finalPromptWorkspaceSnapshotsFromStore[stepIndex]
+      : workspaceSnapshotsFromStore[stepIndex]);
 
     const fileUndoMode: "undo" | "redo" =
-      undoRecord != null && undoRecord.isRedone !== true ? "redo" : "undo";
+      effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true ? "redo" : "undo";
 
     const onUndoFile = useCallback(
       (path: string, fileAttemptIndex: number) => {
         const newRequestId = crypto.randomUUID();
-        const showRedo = undoRecord != null && undoRecord.isRedone !== true;
+        const showRedo = effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true;
 
         if (showRedo) {
-          const fileRedoInstruction = undoRecord.redoInstructions.find((i) => i.path === path);
+          const fileRedoInstruction = effectiveUndoRecord.redoInstructions.find((i) => i.path === path);
           if (fileRedoInstruction) {
             setDialogState({
               mode: "redo",
@@ -449,16 +463,13 @@ export const CliOutput = memo<CliOutputProps>(
             });
           }
         } else {
-          const snapshot = isFinalPrompt
-            ? finalPromptWorkspaceSnapshots[stepIndex]
-            : workspaceSnapshots[stepIndex];
           const workspacePath = output.workingDirectory ?? "";
           const input = buildUndoDialogInputForSingleFile(
             target,
             fileAttemptIndex,
             path,
             [output],
-            snapshot,
+            effectiveSnapshot,
             workspacePath
           );
           setDialogState({ mode: "undo", input, requestId: newRequestId });
@@ -468,10 +479,9 @@ export const CliOutput = memo<CliOutputProps>(
         stepIndex,
         isFinalPrompt,
         target,
-        workspaceSnapshots,
-        finalPromptWorkspaceSnapshots,
         output,
-        undoRecord,
+        effectiveUndoRecord,
+        effectiveSnapshot,
       ]
     );
 
