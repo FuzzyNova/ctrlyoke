@@ -80,7 +80,7 @@ export interface IDashboardSink {
 
   updateCliStreamingEvents(stepIndex: number, events: CliEvent[]): void;
 
-  updatePromptsExtended(prompts: any[], finalPrompt?: PromptItem | null): void;
+  updatePromptsExtended(prompts: any[], finalPrompt?: PromptItem | null, executionState?: string): void;
 
   updatePromptDeleted(
     fileName: string,

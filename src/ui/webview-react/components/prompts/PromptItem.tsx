@@ -85,6 +85,12 @@ interface PromptItemProps {
   allowUndoActions?: boolean;
 }
 
+// Stable empty array used as a fallback in useWorkflowStore selectors.
+// Never use `?? []` inline in a selector — a new array literal is a new
+// reference on every call, which fools useSyncExternalStore into thinking
+// the snapshot changed and triggers unnecessary (or crashing) re-renders.
+const EMPTY_CLI_OUTPUTS: CliOutput[] = [];
+
 /**
  * Truncate text to a maximum length with ellipsis
  */
@@ -144,7 +150,10 @@ export const PromptItem: React.FC<PromptItemProps> = ({
 
   const workspaceSnapshots = useWorkflowStore((s) => s.workspaceSnapshots);
   const undoRecords = useWorkflowStore((s) => s.undoRecords);
-  const stepCliOutputs = useWorkflowStore((s) => s.cliOutputs[index] ?? []);
+  // Use a stable empty-array constant as fallback — `?? []` would create a new
+  // array reference on every snapshot call, causing useSyncExternalStore to
+  // always detect a "change" and call forceStoreRerender (React error #185).
+  const stepCliOutputs = useWorkflowStore((s) => s.cliOutputs[index] ?? EMPTY_CLI_OUTPUTS);
 
   const executionTarget: UndoExecutionTarget = { kind: "queue", stepIndex: index };
   const workspacePath = stepCliOutputs[stepCliOutputs.length - 1]?.workingDirectory ?? "";

@@ -1,4 +1,5 @@
-import { create, useStore } from "zustand";
+import { create } from "zustand";
+import { useState, useEffect, useRef } from "react";
 import { temporal } from "zundo";
 import type { TemporalState } from "zundo";
 import {
@@ -281,34 +282,18 @@ export const useWorkflowStore = create<
       setWorkflowName: (workflowName) => set({ workflowName }),
 
       setPrompts: (prompts) => {
-        const before = useWorkflowStore.temporal.getState();
-        WebviewLog.debug(
-          `[WorkflowStore] setPrompts(${prompts.length} prompts) — pastStates before: ${before.pastStates.length}`
-        );
         set({
           prompts,
           totalSteps: prompts.length,
         });
-        const after = useWorkflowStore.temporal.getState();
-        WebviewLog.debug(
-          `[WorkflowStore] setPrompts done — pastStates after: ${after.pastStates.length}`
-        );
       },
 
       updatePrompt: (index, updates) => {
-        const before = useWorkflowStore.temporal.getState();
-        WebviewLog.debug(
-          `[WorkflowStore] updatePrompt(${index}) — pastStates before: ${before.pastStates.length}`
-        );
         set((state) => ({
           prompts: state.prompts.map((p, i) =>
             i === index ? { ...p, ...updates } : p
           ),
         }));
-        const after = useWorkflowStore.temporal.getState();
-        WebviewLog.debug(
-          `[WorkflowStore] updatePrompt done — pastStates after: ${after.pastStates.length}`
-        );
       },
 
       setExecutionState: (executionState) => {
@@ -1056,6 +1041,36 @@ export interface UndoableWorkflowState {
   currentStep: number;
 }
 
-export const useWorkflowTemporalStore = <T>(
+/**
+ * Safe hook to subscribe to the zundo temporal store.
+ *
+ * Uses useState + useEffect instead of useSyncExternalStore (used by Zustand's
+ * useStore). In React 18 concurrent mode, useSyncExternalStore's tearing
+ * detection calls forceStoreRerender on work-in-progress fibers when the
+ * temporal store changes mid-render (e.g. from loadWorkflow → t.clear()),
+ * causing getRootForUpdatedFiber to throw React error #185.
+ *
+ * The setState-from-useEffect pattern is safe because React processes these
+ * updates normally outside the concurrent render cycle.
+ */
+export function useWorkflowTemporalStore<T>(
   selector: (state: TemporalState<UndoableWorkflowState>) => T
-): T => useStore(useWorkflowStore.temporal, selector);
+): T {
+  const selectorRef = useRef(selector);
+  selectorRef.current = selector;
+
+  const [value, setValue] = useState<T>(() =>
+    selector(useWorkflowStore.temporal.getState())
+  );
+
+  useEffect(() => {
+    // Sync any change that happened between render and this effect
+    setValue(selectorRef.current(useWorkflowStore.temporal.getState()));
+
+    return useWorkflowStore.temporal.subscribe((state) => {
+      setValue(selectorRef.current(state));
+    });
+  }, []);
+
+  return value;
+}

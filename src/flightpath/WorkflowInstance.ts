@@ -2160,8 +2160,20 @@ export class WorkflowInstance {
     this.onStatusBarUpdate();
 
     if (this.isActive && this.dashboardSink) {
-      // Active workflow: forward state changes directly to the dashboard
-      this.dashboardSink.updateExecutionState(state.status);
+      // Active workflow: forward state changes directly to the dashboard.
+      // When prompts also increase in the same state change, piggyback the
+      // execution state onto the PROMPTS_EXTENDED message so both updates land
+      // in a single webview render.  Sending them as two separate postMessage
+      // calls causes React 19 error #185: a component that mounts during the
+      // first render (executionStateChanged) can unmount in the second render
+      // (promptsExtended) before its passive-mount effect fires, leaving a
+      // detached fiber that useSyncExternalStore fails to re-render.
+      const hasNewPrompts = state.prompts.length > this.lastKnownPromptCount;
+
+      if (!hasNewPrompts) {
+        // Execution state changed with no new prompts — send standalone message.
+        this.dashboardSink.updateExecutionState(state.status);
+      }
 
       // When cancelling, the currently-executing step must be marked CANCELLED.
       // The queue updates its internal result record but WorkflowExecutor never
@@ -2176,13 +2188,15 @@ export class WorkflowInstance {
         }
       }
 
-      if (state.prompts.length > this.lastKnownPromptCount) {
+      if (hasNewPrompts) {
         Log.debug(
           `Detected prompt count increase: ${this.lastKnownPromptCount} → ${state.prompts.length}. Notifying dashboard.`
         );
+        // Include executionState so both updates reach the webview in one message.
         this.dashboardSink.updatePromptsExtended(
           state.prompts,
-          this.promptQueue.getWorkflowFile().finalPrompt ?? null
+          this.promptQueue.getWorkflowFile().finalPrompt ?? null,
+          state.status
         );
         this.dashboardSink.updateProgress(
           state.currentIndex,

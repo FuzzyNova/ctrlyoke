@@ -74,23 +74,22 @@ export const Header: React.FC = () => {
   const { fileName, executionState } = useWorkflowStore();
   const { loadedWorkflows, activeWorkflowId, newWorkflowModalOpen, closeNewWorkflowModal } = useUiStore();
 
-  // Undo/redo state from temporal store
+  // Undo/redo availability — useWorkflowTemporalStore uses useState+useEffect
+  // (not useSyncExternalStore) to avoid React 18 concurrent mode error #185.
   const canUndo = useWorkflowTemporalStore((s) => s.pastStates.length > 0);
   const canRedo = useWorkflowTemporalStore((s) => s.futureStates.length > 0);
-  const temporalUndo = useWorkflowTemporalStore((s) => s.undo);
-  const temporalRedo = useWorkflowTemporalStore((s) => s.redo);
 
   const handleUndo = useCallback(() => {
-    temporalUndo();
+    useWorkflowStore.temporal.getState().undo();
     const { prompts, finalPrompt } = useWorkflowStore.getState();
     vscode.postMessage({ type: MESSAGE_TYPES.UNDO_REDO_SYNC, prompts, finalPrompt });
-  }, [temporalUndo, vscode]);
+  }, [vscode]);
 
   const handleRedo = useCallback(() => {
-    temporalRedo();
+    useWorkflowStore.temporal.getState().redo();
     const { prompts, finalPrompt } = useWorkflowStore.getState();
     vscode.postMessage({ type: MESSAGE_TYPES.UNDO_REDO_SYNC, prompts, finalPrompt });
-  }, [temporalRedo, vscode]);
+  }, [vscode]);
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =

@@ -269,7 +269,20 @@ function createMessageHandlers(): MessageHandlerMap {
           p.harness !== cur?.harness
         );
       });
-    const shouldRecord = promptCountChanged || promptContentChanged;
+    // Also suppress undo recording for the initial auto-load (0 → N prompts).
+    // Loading from an empty state is a system-driven restore, not a user edit.
+    const isInitialAutoLoad = currentPrompts.length === 0;
+    const shouldRecord = !isInitialAutoLoad && (promptCountChanged || promptContentChanged);
+    WebviewLog.debug(
+      `[PROMPTS_EXTENDED] shouldRecord=${shouldRecord} (countChanged=${promptCountChanged} contentChanged=${promptContentChanged} isInitialAutoLoad=${isInitialAutoLoad}) pastStatesBefore=${useWorkflowStore.temporal.getState().pastStates.length}`
+    );
+    // If executionState is piggybacked (sent alongside prompts to avoid a
+    // separate render), apply it first — same synchronous call, same render.
+    if (message.executionState !== undefined) {
+      useWorkflowStore.temporal.getState().pause();
+      workflowStore.setExecutionState(message.executionState as ExecutionState);
+      useWorkflowStore.temporal.getState().resume();
+    }
     if (!shouldRecord) {
       useWorkflowStore.temporal.getState().pause();
     }

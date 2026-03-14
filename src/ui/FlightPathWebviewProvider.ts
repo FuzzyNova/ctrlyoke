@@ -455,12 +455,14 @@ window.vscodeApi = acquireVsCodeApi();
 
   public updatePromptsExtended(
     prompts: any[],
-    finalPrompt?: PromptItem | null
+    finalPrompt?: PromptItem | null,
+    executionState?: string
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.PROMPTS_EXTENDED,
       prompts,
       finalPrompt: finalPrompt ?? null,
+      ...(executionState !== undefined ? { executionState } : {}),
     });
   }
 
