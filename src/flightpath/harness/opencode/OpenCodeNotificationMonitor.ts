@@ -4,6 +4,7 @@ import {
   HookConfig,
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
+import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 
 /**
  * OpenCode CLI Notification Monitor
@@ -50,8 +51,8 @@ export class OpenCodeNotificationMonitor
   getNotificationDirectory(workspaceRoot: string): string {
     return path.join(
       workspaceRoot,
-      ".flightpath",
-      "temp",
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.TEMP_DIR,
       "opencode-notifications"
     );
   }

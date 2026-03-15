@@ -179,13 +179,6 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get the prompts directory path
-   */
-  getPromptsDirectory(): string {
-    return getConfig().get<string>("promptsDirectory", ".flightpath");
-  },
-
-  /**
    * Get the script timeout in milliseconds
    * User configures in seconds, this returns milliseconds
    */
@@ -457,16 +450,6 @@ export const ConfigurationUtils = {
       return promptResumeSession;
     }
     return ConfigurationUtils.shouldResumeExistingSession();
-  },
-
-  /**
-   * Get workflows directory path
-   */
-  getWorkflowsDirectory(): string {
-    return getConfig().get<string>(
-      "workflowsDirectory",
-      ".flightpath/workflows"
-    );
   },
 
   /**

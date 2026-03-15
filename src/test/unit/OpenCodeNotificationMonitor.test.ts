@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import * as path from "path";
 import { OpenCodeNotificationMonitor } from "../../flightpath/harness/opencode/OpenCodeNotificationMonitor";
+import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
 suite("OpenCodeNotificationMonitor", () => {
   let monitor: OpenCodeNotificationMonitor;
@@ -25,7 +26,7 @@ suite("OpenCodeNotificationMonitor", () => {
 
     assert.strictEqual(
       notifyDir,
-      path.join(workspaceRoot, ".flightpath", "temp", "opencode-notifications")
+      path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.TEMP_DIR, "opencode-notifications")
     );
   });
 

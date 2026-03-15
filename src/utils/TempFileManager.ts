@@ -3,6 +3,7 @@ import * as path from "path";
 import * as fs from "fs";
 import { randomUUID } from "crypto";
 import { Log } from "./Log";
+import { PATH_CONSTANTS } from "./ConfigurationUtils";
 
 /**
  * TempFileManager - Manages temporary prompt files in .flightpath/temp/
@@ -19,8 +20,8 @@ import { Log } from "./Log";
  * - Graceful failures: Never throw on cleanup
  */
 export class TempFileManager {
-  private readonly TEMP_DIR_NAME = ".flightpath";
-  private readonly TEMP_SUBDIR_NAME = "temp";
+  private readonly TEMP_DIR_NAME = PATH_CONSTANTS.FLIGHTPATH_DIR;
+  private readonly TEMP_SUBDIR_NAME = PATH_CONSTANTS.TEMP_DIR;
   private readonly PROMPT_EXTENSION = ".prompt.md";
   private readonly MCP_CONFIG_PREFIX = "mcp-config";
   private readonly MAX_FILE_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours

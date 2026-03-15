@@ -70,12 +70,10 @@ suite("CLI Integration Tests", () => {
     const config = vscode.workspace.getConfiguration("flightpath");
 
     // Test that all our settings exist
-    const promptsDir = config.get<string>("promptsDirectory");
     const scriptTimeout = config.get<number>("scriptTimeout");
     const integrationMode = config.get<string>("harness");
     const cliModel = config.get<string>("copilotCliModel");
 
-    assert.strictEqual(typeof promptsDir, "string");
     assert.strictEqual(typeof scriptTimeout, "number");
     assert.strictEqual(typeof integrationMode, "string");
     assert.strictEqual(typeof cliModel, "string");

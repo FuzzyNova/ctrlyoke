@@ -3,6 +3,7 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import type {
   WorkspaceSnapshot,
   SnapshotFileChange,
@@ -24,7 +25,7 @@ const EXCLUDED_DIRS = new Set([
   "node_modules", "dist", "out", "build", ".next", ".nuxt", ".svelte-kit",
   ".turbo", "coverage", ".nyc_output", ".cache", ".parcel-cache",
   "__pycache__", ".pytest_cache", ".venv", "venv", "target", "vendor",
-  ".gradle", ".idea", ".flightpath", ".git",
+  ".gradle", ".idea", PATH_CONSTANTS.FLIGHTPATH_DIR, ".git",
 ]);
 
 const EXCLUDED_EXTENSIONS = new Set([".pyc", ".class", ".o", ".obj"]);

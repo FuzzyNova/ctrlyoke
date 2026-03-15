@@ -401,6 +401,8 @@ export class WebviewSettingsSync {
       await ConfigurationUtils.setDefaultAgent(value || "");
     } else if (property === "skills") {
       await ConfigurationUtils.setDefaultSkills(value || []);
+    } else if (property === "resumeSession") {
+      await ConfigurationUtils.updateSetting("resumeExistingSession", value);
     } else {
       await ConfigurationUtils.updateSetting(property, value);
     }

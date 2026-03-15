@@ -3,7 +3,7 @@ import * as fs from "fs";
 import { spawn, ChildProcess } from "child_process";
 import { Log } from "../utils/Log";
 import { EndCondition } from "../types/FlightPathTypes";
-import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { CliProcessManager } from "../utils/CliProcessManager";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 
@@ -187,10 +187,9 @@ export class EndConditionEvaluator {
       }
 
       // Try in .flightpath directory
-      const flightpathDir = ConfigurationUtils.getPromptsDirectory();
       const flightpathPath = path.resolve(
         workspaceRoot,
-        flightpathDir,
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
         scriptPath
       );
       try {
@@ -401,8 +400,8 @@ export class EndConditionEvaluator {
     }
 
     const baseDir = workingDirectory || workspaceRoot!;
-    const flightpathDir = path.join(baseDir, ".flightpath");
-    const scriptsDir = path.join(flightpathDir, "scripts");
+    const flightpathDir = path.join(baseDir, PATH_CONSTANTS.FLIGHTPATH_DIR);
+    const scriptsDir = path.join(flightpathDir, PATH_CONSTANTS.SCRIPTS_DIR);
 
     // Ensure .flightpath/scripts directory exists
     try {

@@ -3,7 +3,7 @@ import * as path from "path";
 import Ajv from "ajv";
 import * as yaml from "js-yaml";
 import { PromptFile, PromptItem } from "../types/FlightPathTypes";
-import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 
@@ -298,10 +298,9 @@ export class PromptFileParser {
       }
 
       // Try in .flightpath directory
-      const flightpathDir = ConfigurationUtils.getPromptsDirectory();
       const relativeToFlightpath = path.resolve(
         workspaceRoot,
-        flightpathDir,
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
         filePath
       );
       if (await this.fileExists(relativeToFlightpath)) {
@@ -450,8 +449,7 @@ export class PromptFileParser {
    * Discover prompt files in workspace
    */
   async discoverPromptFiles(workspaceFolderPath: string): Promise<string[]> {
-    const promptsDir = ConfigurationUtils.getPromptsDirectory();
-    const promptsDirPath = path.join(workspaceFolderPath, promptsDir);
+    const promptsDirPath = path.join(workspaceFolderPath, PATH_CONSTANTS.FLIGHTPATH_DIR);
 
     try {
       const files = await this.findPromptFilesRecursive(promptsDirPath);

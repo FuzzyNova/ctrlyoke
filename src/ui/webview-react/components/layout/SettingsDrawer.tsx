@@ -626,7 +626,7 @@ export const SettingsPanel: React.FC<{
                 hiddenValues={hiddenDropdownOptions[modelNamespace] ?? []}
                 onHideOption={(v) => hideDropdownOption(modelNamespace, v)}
                 onUnhideOption={(v) => unhideDropdownOption(modelNamespace, v)}
-                nonHideableValues={["default", "", "none"]}
+                nonHideableValues={["default", ""]}
               />
             </FormField>
           </Row>
@@ -668,6 +668,7 @@ export const SettingsPanel: React.FC<{
                 onUnhideOption={(v) =>
                   unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
                 }
+                nonHideableValues={[]}
               />
             </FormField>
 

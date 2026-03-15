@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { IS_DEV_MODE } from "./BuildConfig";
-import { ConfigurationUtils } from "./ConfigurationUtils";
+import { ConfigurationUtils, PATH_CONSTANTS } from "./ConfigurationUtils";
 
 /**
  * Log levels in order from most verbose (TRACE) to least verbose (ERROR), plus OFF.
@@ -103,7 +103,7 @@ export class Log {
     this.cliMode = true;
     this.logLevel = verbose ? LogLevel.DEBUG : LogLevel.INFO;
 
-    const logDir = path.join(workspaceDir, ".flightpath", "logs");
+    const logDir = path.join(workspaceDir, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.LOGS_DIR);
     try {
       fs.mkdirSync(logDir, { recursive: true });
       this.cliLogFilePath = path.join(logDir, `flightpath-cli-${Date.now()}.log`);
@@ -123,7 +123,7 @@ export class Log {
     if (!this.workspaceRoot) {
       return;
     }
-    const logDir = path.join(this.workspaceRoot, ".flightpath", "logs");
+    const logDir = path.join(this.workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.LOGS_DIR);
     try {
       fs.mkdirSync(logDir, { recursive: true });
       this.logFilePath = path.join(logDir, `flightpath-${Date.now()}.log`);
@@ -144,12 +144,12 @@ export class Log {
     }
     const flagPath = path.join(
       this.workspaceRoot,
-      ".flightpath",
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
       DIAGNOSTIC_FLAG_FILE
     );
     try {
       if (enabled) {
-        const flightpathDir = path.join(this.workspaceRoot, ".flightpath");
+        const flightpathDir = path.join(this.workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR);
         fs.mkdirSync(flightpathDir, { recursive: true });
         fs.writeFileSync(flagPath, "");
       } else {

@@ -10,7 +10,7 @@ import { ClaudeNotificationMonitor } from "./ClaudeNotificationMonitor";
 import { ClaudeToolPermissionMapper } from "./ClaudeToolPermissionMapper";
 import { ClaudeLogParser } from "./ClaudeLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
-import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import { ConfigurationUtils, PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 import { getClaudeModelName, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
@@ -267,7 +267,7 @@ export class ClaudeCliProvider implements ICliProvider {
       throw new Error("Unexpected hook config type for Claude CLI");
     }
 
-    const tempDir = path.join(workspaceRoot, ".flightpath", "temp");
+    const tempDir = path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.TEMP_DIR);
     await fs.mkdir(tempDir, { recursive: true });
     const settingsPath = path.join(tempDir, "claude-hook-settings.json");
     await fs.writeFile(settingsPath, hookConfig.config, "utf-8");

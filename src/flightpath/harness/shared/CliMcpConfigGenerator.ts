@@ -1,5 +1,6 @@
 import * as path from "path";
 import { Log } from "../../../utils/Log";
+import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 
 /**
  * MCP configuration format
@@ -69,8 +70,8 @@ export class CliMcpConfigGenerator {
       : "default";
     return path.join(
       workspaceRoot,
-      ".flightpath",
-      "temp",
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.TEMP_DIR,
       `${filenamePrefix}-${configSuffix}.json`
     );
   }

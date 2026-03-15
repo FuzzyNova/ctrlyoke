@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Log } from "../../../utils/Log";
+import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 import { readJsonFileAndDelete } from "../../../utils/FileSystemUtils";
 import {
   NotificationConfig,
@@ -219,8 +220,8 @@ export class CliNotificationMonitor {
   ): string {
     return path.join(
       workspaceRoot,
-      ".flightpath",
-      "temp",
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.TEMP_DIR,
       `${cliName}-notifications`
     );
   }

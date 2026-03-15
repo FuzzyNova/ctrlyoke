@@ -434,12 +434,6 @@
           "description": "Choose which harness/framework to use for AI execution",
           "markdownDescription": "Choose which harness (agent framework/CLI tool) to use for AI execution.\n\n- **Copilot CLI** (default): Best reliability with GitHub Copilot\n- **Claude CLI**: Uses Anthropic's Claude Code CLI\n- **Codex CLI**: Uses OpenAI's Codex code-specialized CLI\n- **Copilot Chat**: UI automation (less reliable than CLI modes)"
         },
-        "flightpath.promptsDirectory": {
-          "order": 10,
-          "type": "string",
-          "default": ".flightpath",
-          "description": "Directory containing prompt files relative to workspace root"
-        },
         "flightpath.scriptTimeout": {
           "order": 11,
           "type": "number",
@@ -448,13 +442,6 @@
           "maximum": 300,
           "description": "Timeout for end condition scripts in seconds",
           "markdownDescription": "Maximum time in seconds to wait for end condition scripts to complete. Default is 30 seconds. Range: 5 seconds to 5 minutes."
-        },
-        "flightpath.workflowsDirectory": {
-          "order": 12,
-          "type": "string",
-          "default": ".flightpath/workflows",
-          "description": "Directory for generated workflow files (relative to workspace root)",
-          "markdownDescription": "Directory where workflows created from templates are saved. Relative to workspace root. Default: `.flightpath/workflows`"
         },
         "flightpath.defaultWorkflowFormat": {
           "order": 13,

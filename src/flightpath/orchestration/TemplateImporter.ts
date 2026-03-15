@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { ConfigurationUtils, PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 
 /**
@@ -187,14 +187,11 @@ export class TemplateImporter {
         return; // User cancelled
       }
 
-      // Get prompts directory from settings
-      const promptsDir = ConfigurationUtils.getPromptsDirectory();
-
       // Create .flightpath/templates directory
       const targetDir = path.join(
         this.currentWorkspaceFolder.uri.fsPath,
-        promptsDir,
-        "templates"
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.TEMPLATES_DIR
       );
 
       try {

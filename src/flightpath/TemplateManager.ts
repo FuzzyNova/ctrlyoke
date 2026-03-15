@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import * as jsYaml from "js-yaml";
-import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 
 /**
@@ -193,7 +193,7 @@ export class TemplateManager {
   private getCustomTemplatesPath(): string | null {
     const workspaceFolder = this.getWorkspaceFolder();
     if (!workspaceFolder) return null;
-    return path.join(workspaceFolder.uri.fsPath, ".flightpath", "templates");
+    return path.join(workspaceFolder.uri.fsPath, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.TEMPLATES_DIR);
   }
 
   /**

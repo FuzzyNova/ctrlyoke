@@ -87,10 +87,9 @@ export class WorkflowCommandHandler {
       }
 
       // Create prompts directory if it doesn't exist
-      const promptsDir = ConfigurationUtils.getPromptsDirectory();
       const promptsDirPath = path.join(
         this.currentWorkspaceFolder.uri.fsPath,
-        promptsDir
+        PATH_CONSTANTS.FLIGHTPATH_DIR
       );
 
       // Ensure directory exists

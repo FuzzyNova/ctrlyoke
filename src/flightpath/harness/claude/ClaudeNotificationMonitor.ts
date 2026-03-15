@@ -4,6 +4,7 @@ import {
   HookConfig,
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
+import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 
 /**
  * Claude CLI Notification Monitor
@@ -83,8 +84,8 @@ export class ClaudeNotificationMonitor
   getNotificationDirectory(workspaceRoot: string): string {
     return path.join(
       workspaceRoot,
-      ".flightpath",
-      "temp",
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.TEMP_DIR,
       "claude-notifications"
     );
   }
