@@ -35,7 +35,7 @@ import type {
   ToolCall,
   ToolResultData,
 } from "../../types/cliEvents";
-import { CLI_EVENT_TYPES } from "../../types/cliEvents";
+import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../../types/cliEvents";
 import { HARNESS_INFO } from "../../types/messages";
 import type {
   UndoExecutionTarget,
@@ -170,7 +170,14 @@ interface SingleEventProps {
  * event) do not re-render on every streaming chunk.
  */
 const SingleEvent = memo<SingleEventProps>(
-  ({ event, eventKey, rawTextOutput, onUndoFile, attemptIndex = 0, fileUndoMode = "undo" }) => {
+  ({
+    event,
+    eventKey,
+    rawTextOutput,
+    onUndoFile,
+    attemptIndex = 0,
+    fileUndoMode = "undo",
+  }) => {
     switch (event.type) {
       case CLI_EVENT_TYPES.TEXT: {
         const data = event.data as TextData;
@@ -337,17 +344,66 @@ interface StructuredOutputProps {
  * The component itself is also memoized; it will only re-render when the
  * events array reference changes (which happens only when new events arrive or
  * the last event's text grows via mergeStreamingEvents in workflowStore).
+ *
+ * FILE_EDIT deduplication: harnesses like claude-cli emit both an INITIATED
+ * event (the attempted diff) and a COMPLETED event (the applied diff + undo
+ * button) for the same file edit. When a COMPLETED event exists for a given
+ * path, the preceding INITIATED event is suppressed — the COMPLETED version
+ * has better diff data (structuredPatch with line numbers) and carries the
+ * undo button. When an edit FAILS, the INITIATED event is kept so the
+ * attempted diff remains visible alongside the error.
  */
 const StructuredOutput = memo<StructuredOutputProps>(
-  ({ events, rawTextOutput = false, onUndoFile, attemptIndex = 0, fileUndoMode = "undo", className = "" }) => {
+  ({
+    events,
+    rawTextOutput = false,
+    onUndoFile,
+    attemptIndex = 0,
+    fileUndoMode = "undo",
+    className = "",
+  }) => {
+    // Deduplicate FILE_EDIT INITIATED events that have a matching COMPLETED
+    // event later in the list for the same path. We use a forward-scan so
+    // that multiple sequential edits to the same file are handled correctly:
+    // each INITIATED is only suppressed by the *next* edit of the same file,
+    // not by a later unrelated completion.
+    const visibleEvents = useMemo(() => {
+      const indicesToSkip = new Set<number>();
+      for (let i = 0; i < events.length; i++) {
+        const event = events[i];
+        if (event.type !== CLI_EVENT_TYPES.FILE_EDIT) continue;
+        const data = event.data as FileEditData;
+        if (data.status !== OPERATION_STATUS.INITIATED) continue;
+        // Find the next FILE_EDIT event for the same path.
+        for (let j = i + 1; j < events.length; j++) {
+          const next = events[j];
+          if (next.type !== CLI_EVENT_TYPES.FILE_EDIT) continue;
+          const nextData = next.data as FileEditData;
+          if (nextData.path !== data.path) continue;
+          // Skip the INITIATED only when a COMPLETED follows — the COMPLETED
+          // event has a structuredPatch and the undo button. When the edit
+          // FAILED we keep the INITIATED so the attempted diff is visible.
+          if (nextData.status === OPERATION_STATUS.COMPLETED) {
+            indicesToSkip.add(i);
+          }
+          break;
+        }
+      }
+      if (indicesToSkip.size === 0)
+        return events.map((event, i) => ({ event, originalIndex: i }));
+      return events
+        .map((event, i) => ({ event, originalIndex: i }))
+        .filter(({ originalIndex }) => !indicesToSkip.has(originalIndex));
+    }, [events]);
+
     if (!events || events.length === 0) return null;
 
     return (
       <div className={`mt-[var(--spacing-sm)] ${className}`}>
-        {events.map((event, index) => {
-          // Stable key from position — events are append-only during streaming,
-          // so index is stable for all existing elements.
-          const eventKey = `event-${index}`;
+        {visibleEvents.map(({ event, originalIndex }) => {
+          // Use original index for stable keys — events are append-only during
+          // streaming, so the original position never changes for existing items.
+          const eventKey = `event-${originalIndex}`;
           return (
             <SingleEvent
               key={eventKey}
@@ -428,7 +484,9 @@ export const CliOutput = memo<CliOutputProps>(
     }
     const [dialogState, setDialogState] = useState<CliDialogState | null>(null);
 
-    const workspaceSnapshotsFromStore = useWorkflowStore((s) => s.workspaceSnapshots);
+    const workspaceSnapshotsFromStore = useWorkflowStore(
+      (s) => s.workspaceSnapshots
+    );
     const finalPromptWorkspaceSnapshotsFromStore = useWorkflowStore(
       (s) => s.finalPromptWorkspaceSnapshots
     );
@@ -436,28 +494,38 @@ export const CliOutput = memo<CliOutputProps>(
 
     const isFinalPrompt = stepLabel !== undefined;
     const target: UndoExecutionTarget = useMemo(
-      () => isFinalPrompt
-        ? { kind: "finalPrompt", loopIndex: stepIndex }
-        : { kind: "queue", stepIndex },
+      () =>
+        isFinalPrompt
+          ? { kind: "finalPrompt", loopIndex: stepIndex }
+          : { kind: "queue", stepIndex },
       [isFinalPrompt, stepIndex]
     );
-    const targetKey = isFinalPrompt ? `finalPrompt-${stepIndex}` : `queue-${stepIndex}`;
+    const targetKey = isFinalPrompt
+      ? `finalPrompt-${stepIndex}`
+      : `queue-${stepIndex}`;
 
     const effectiveUndoRecord = undoRecord ?? undoRecordsFromStore[targetKey];
-    const effectiveSnapshot = workspaceSnapshot ?? (isFinalPrompt
-      ? finalPromptWorkspaceSnapshotsFromStore[stepIndex]
-      : workspaceSnapshotsFromStore[stepIndex]);
+    const effectiveSnapshot =
+      workspaceSnapshot ??
+      (isFinalPrompt
+        ? finalPromptWorkspaceSnapshotsFromStore[stepIndex]
+        : workspaceSnapshotsFromStore[stepIndex]);
 
     const fileUndoMode: "undo" | "redo" =
-      effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true ? "redo" : "undo";
+      effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
+        ? "redo"
+        : "undo";
 
     const onUndoFile = useCallback(
       (path: string, fileAttemptIndex: number) => {
         const newRequestId = crypto.randomUUID();
-        const showRedo = effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true;
+        const showRedo =
+          effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true;
 
         if (showRedo) {
-          const fileRedoInstruction = effectiveUndoRecord.redoInstructions.find((i) => i.path === path);
+          const fileRedoInstruction = effectiveUndoRecord.redoInstructions.find(
+            (i) => i.path === path
+          );
           if (fileRedoInstruction) {
             setDialogState({
               mode: "redo",
@@ -478,12 +546,7 @@ export const CliOutput = memo<CliOutputProps>(
           setDialogState({ mode: "undo", input, requestId: newRequestId });
         }
       },
-      [
-        target,
-        output,
-        effectiveUndoRecord,
-        effectiveSnapshot,
-      ]
+      [target, output, effectiveUndoRecord, effectiveSnapshot]
     );
 
     const attemptLabel =
