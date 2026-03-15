@@ -7,6 +7,8 @@ import type { UndoDialogInput } from "../../utils/promptUndo";
 import type { SnapshotFileChange, PromptChangeType, OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import { useWorkflowStore } from "@store/workflowStore";
 import { sendMessage } from "../../hooks/useMessageHandler";
+import { DiffView } from "./ToolCallOutput";
+import { getLanguageFromPath } from "@utils/hljsUtils";
 
 // ============================================================================
 // Types
@@ -28,6 +30,15 @@ interface FileRow {
   tier: "tier1" | "tier2";
   instruction: UndoFileInstruction | null;
   contentCaptureSkipped?: boolean;
+  oldContent?: string;
+  newContent?: string;
+  structuredPatch?: Array<{
+    oldStart: number;
+    oldLines: number;
+    newStart: number;
+    newLines: number;
+    lines: string[];
+  }>;
 }
 
 // ============================================================================
@@ -97,43 +108,58 @@ interface FileRowItemProps {
 const FileRowItem: React.FC<FileRowItemProps> = ({ row, checked, onChange }) => {
   const undoable = row.instruction !== null;
   const isDisabled = !undoable;
+  const hasDiff = (row.structuredPatch && row.structuredPatch.length > 0) || (row.oldContent && row.newContent);
 
   const nonUndoableReason = row.contentCaptureSkipped ? "Content not captured" : "Cannot undo";
 
   return (
-    <div
-      className={`flex items-start gap-2 py-1.5 px-2 rounded text-sm ${
-        isDisabled ? "opacity-50" : "hover:bg-list-hover-bg"
-      }`}
-    >
-      {/* Checkbox (undoable) or spacer (non-undoable) */}
-      {undoable ? (
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onChange(row.path, e.target.checked)}
-          className="mt-0.5 w-3.5 h-3.5 accent-btn-bg cursor-pointer shrink-0"
+    <div className={`rounded ${isDisabled ? "opacity-50" : ""}`}>
+      <div
+        className={`flex items-start gap-2 py-1.5 px-2 text-sm ${
+          isDisabled ? "" : "hover:bg-list-hover-bg rounded"
+        }`}
+      >
+        {/* Checkbox (undoable) or spacer (non-undoable) */}
+        {undoable ? (
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={(e) => onChange(row.path, e.target.checked)}
+            className="mt-0.5 w-3.5 h-3.5 accent-btn-bg cursor-pointer shrink-0"
+          />
+        ) : (
+          <span className="mt-0.5 w-3.5 h-3.5 shrink-0" />
+        )}
+
+        {/* File path */}
+        <span className={`flex-1 font-mono text-xs break-all ${isDisabled ? "text-description-fg" : "text-foreground"}`}>
+          {row.path}
+        </span>
+
+        {/* Change type badge */}
+        <span className={`shrink-0 text-xs font-medium ${CHANGE_TYPE_COLORS[row.changeType]}`}>
+          {CHANGE_TYPE_LABEL[row.changeType]}
+        </span>
+
+        {/* Tier 2 note or non-undoable reason */}
+        {row.tier === "tier2" && undoable && (
+          <span className="shrink-0 text-xs text-description-fg italic">(may include other changes)</span>
+        )}
+        {isDisabled && (
+          <span className="shrink-0 text-xs text-description-fg italic">{nonUndoableReason}</span>
+        )}
+      </div>
+
+      {/* Collapsible diff (starts collapsed) */}
+      {hasDiff && (
+        <DiffView
+          oldContent={row.oldContent}
+          newContent={row.newContent}
+          structuredPatch={row.structuredPatch}
+          language={getLanguageFromPath(row.path)}
+          globallyCollapsed={true}
+          className="ml-5"
         />
-      ) : (
-        <span className="mt-0.5 w-3.5 h-3.5 shrink-0" />
-      )}
-
-      {/* File path */}
-      <span className={`flex-1 font-mono text-xs break-all ${isDisabled ? "text-description-fg" : "text-foreground"}`}>
-        {row.path}
-      </span>
-
-      {/* Change type badge */}
-      <span className={`shrink-0 text-xs font-medium ${CHANGE_TYPE_COLORS[row.changeType]}`}>
-        {CHANGE_TYPE_LABEL[row.changeType]}
-      </span>
-
-      {/* Tier 2 note or non-undoable reason */}
-      {row.tier === "tier2" && undoable && (
-        <span className="shrink-0 text-xs text-description-fg italic">(may include other changes)</span>
-      )}
-      {isDisabled && (
-        <span className="shrink-0 text-xs text-description-fg italic">{nonUndoableReason}</span>
       )}
     </div>
   );
@@ -180,6 +206,9 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
         tier: "tier1",
         instruction: c.instruction,
         contentCaptureSkipped: c.contentCaptureSkipped,
+        oldContent: c.oldContent,
+        newContent: c.newContent,
+        structuredPatch: c.structuredPatch,
       })),
     [input?.eventAttributedFiles]
   );

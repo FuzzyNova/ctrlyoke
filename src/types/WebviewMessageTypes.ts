@@ -723,6 +723,18 @@ export interface UndoFileCandidate {
   afterHash?: string;
   /** True when strategy=git and file was at HEAD before prompt */
   wasAtHead?: boolean;
+  /** Old file content (before the AI edit) — for diff display in undo dialog */
+  oldContent?: string;
+  /** New file content (after the AI edit) — for diff display in undo dialog */
+  newContent?: string;
+  /** Structured diff hunks (Claude CLI) — for diff display in undo dialog */
+  structuredPatch?: Array<{
+    oldStart: number;
+    oldLines: number;
+    newStart: number;
+    newLines: number;
+    lines: string[];
+  }>;
 }
 
 /**

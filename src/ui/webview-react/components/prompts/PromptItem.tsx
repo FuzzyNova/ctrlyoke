@@ -251,11 +251,11 @@ export const PromptItem: React.FC<PromptItemProps> = ({
         }
       }}
     >
-      {/* Header: Icon + Index + Text */}
+      {/* Layout: drag handle | icon column | content column */}
       <div className="flex items-start gap-2">
         {dragHandleProps && (
           <span
-            className="flex-shrink-0 cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+            className="flex-shrink-0 cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-0.5"
             {...dragHandleProps.listeners}
             {...dragHandleProps.attributes}
             aria-label="Drag to reorder"
@@ -263,11 +263,14 @@ export const PromptItem: React.FC<PromptItemProps> = ({
             <i className="codicon codicon-grabber text-[12px]" />
           </span>
         )}
-        <span className="flex-shrink-0 mt-0.5 flex flex-col items-center">
-          <StatusIcon status={status} />
+        {/* Icon column: status icon at top, set-start-position button at bottom */}
+        <span className="flex-shrink-0 flex flex-col items-center self-stretch">
+          <span className="mt-0.5">
+            <StatusIcon status={status} />
+          </span>
           {canSetStartPosition && isHovered && (
             <button
-              className="w-4 flex items-center justify-center text-description-fg hover:text-foreground mt-0.5"
+              className="mt-auto w-4 flex items-center justify-center text-description-fg hover:text-foreground mb-0.5"
               onClick={(e) => {
                 e.stopPropagation();
                 onSetStartPosition?.();
@@ -280,26 +283,28 @@ export const PromptItem: React.FC<PromptItemProps> = ({
             </button>
           )}
         </span>
-        <span
-          className={`flex-1 min-w-0 text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
-        >
-          {name ? name : truncate(text, 60)}
-        </span>
+        {/* Content column: title + details */}
+        <div className="flex-1 min-w-0">
+          <span
+            className={`text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
+          >
+            {name ? name : truncate(text, 60)}
+          </span>
+          <PromptItemDetails
+            status={status}
+            harnessLabel={harnessLabel}
+            harnessIsDefault={harnessIsDefault}
+            modelLabel={modelLabel}
+            modelIsDefault={modelIsDefault}
+            retryState={retryState}
+            latestOutput={latestOutput}
+            details={details}
+            isSelected={isSelected}
+            overrides={overrides}
+            undoAction={undoAction}
+          />
+        </div>
       </div>
-
-      <PromptItemDetails
-        status={status}
-        harnessLabel={harnessLabel}
-        harnessIsDefault={harnessIsDefault}
-        modelLabel={modelLabel}
-        modelIsDefault={modelIsDefault}
-        retryState={retryState}
-        latestOutput={latestOutput}
-        details={details}
-        isSelected={isSelected}
-        overrides={overrides}
-        undoAction={undoAction}
-      />
 
       {dialogState && (
         <UndoChangesDialog

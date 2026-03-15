@@ -119,6 +119,18 @@ export function buildUndoCandidatesForOutputs(
       if (!path) continue;
       const instruction = resolveEventUndoInstruction(event, snapshotFiles);
       const snapEntry = snapshotFiles.find((f) => f.path === path);
+
+      // Carry diff data for FILE_EDIT events so the dialog can render a preview
+      let oldContent: string | undefined;
+      let newContent: string | undefined;
+      let structuredPatch: UndoFileCandidate["structuredPatch"];
+      if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
+        const editData = d as FileEditData;
+        oldContent = editData.originalFile ?? editData.oldContent;
+        newContent = editData.newContent;
+        structuredPatch = editData.structuredPatch;
+      }
+
       tier1Map.set(path, {
         path,
         changeType,
@@ -127,6 +139,9 @@ export function buildUndoCandidatesForOutputs(
         afterHash: snapEntry?.afterHash,
         contentCaptureSkipped: snapEntry?.contentCaptureSkipped,
         wasAtHead: snapEntry?.wasAtHead,
+        oldContent,
+        newContent,
+        structuredPatch,
       });
     }
   }

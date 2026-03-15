@@ -144,7 +144,7 @@ interface DiffViewProps {
  * global toggle — the global toggle only resets instances that haven't been
  * interacted with (i.e. the user-override takes priority).
  */
-const DiffView: React.FC<DiffViewProps> = ({
+export const DiffView: React.FC<DiffViewProps> = ({
   oldContent,
   newContent,
   structuredPatch,
