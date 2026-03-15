@@ -218,6 +218,63 @@ export function buildUndoDialogInputForPrompt(
   };
 }
 
+/**
+ * Build the dialog input for undoing a **specific** event (identified by its index in the
+ * events array of a single CliOutput).  Unlike buildUndoDialogInputForSingleFile, this does
+ * NOT use last-write-wins across all events for the path — it targets the exact event the
+ * user clicked so that individual diffs can be undone independently.
+ */
+export function buildUndoDialogInputForSpecificEvent(
+  target: UndoExecutionTarget,
+  eventIndex: number,
+  path: string,
+  events: CliEvent[],
+  snapshot: WorkspaceSnapshot | undefined,
+  workspacePath: string
+): UndoDialogInput {
+  const scope: UndoDialogScope = { mode: "singleFile", target, attemptIndex: eventIndex, path };
+  const snapshotFiles: SnapshotFileChange[] = snapshot?.changedFiles ?? [];
+
+  const event = events[eventIndex];
+  if (!event) {
+    return { scope, eventAttributedFiles: [], snapshotOnlyFiles: [], workspacePath };
+  }
+
+  const changeType = eventTypeToChangeType(event.type);
+  if (!changeType) {
+    return { scope, eventAttributedFiles: [], snapshotOnlyFiles: [], workspacePath };
+  }
+
+  const instruction = resolveEventUndoInstruction(event, snapshotFiles);
+
+  let oldContent: string | undefined;
+  let newContent: string | undefined;
+  let structuredPatch: UndoFileCandidate["structuredPatch"];
+  if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
+    const editData = event.data as FileEditData;
+    oldContent = editData.originalFile ?? editData.oldContent;
+    newContent = editData.newContent;
+    structuredPatch = editData.structuredPatch;
+  }
+
+  const candidate: UndoFileCandidate = {
+    path,
+    changeType,
+    tier: "tier1",
+    instruction,
+    oldContent,
+    newContent,
+    structuredPatch,
+  };
+
+  return {
+    scope,
+    eventAttributedFiles: [candidate],
+    snapshotOnlyFiles: [],
+    workspacePath,
+  };
+}
+
 /** Build the dialog input for a single-file undo from a diff row. */
 export function buildUndoDialogInputForSingleFile(
   target: UndoExecutionTarget,

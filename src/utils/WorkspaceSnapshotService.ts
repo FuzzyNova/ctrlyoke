@@ -346,9 +346,18 @@ export class WorkspaceSnapshotService {
     for (const instruction of files) {
       const absPath = path.resolve(workspacePath, instruction.path);
 
-      // Security: prevent path traversal
-      if (!absPath.startsWith(path.resolve(workspacePath) + path.sep) &&
-          absPath !== path.resolve(workspacePath)) {
+      // Security: prevent path traversal.
+      // Windows file systems are case-insensitive and drive letters may differ in case
+      // between the workspace path and the instruction path (e.g. "c:\..." vs "C:\..."),
+      // so compare case-insensitively on Windows. macOS/Linux are case-sensitive, so
+      // keep an exact comparison there to avoid incorrectly aliasing distinct paths.
+      const resolvedWorkspace = path.resolve(workspacePath);
+      const isWindows = process.platform === "win32";
+      const normalize = (p: string) => (isWindows ? p.toLowerCase() : p);
+      if (
+        !normalize(absPath).startsWith(normalize(resolvedWorkspace + path.sep)) &&
+        normalize(absPath) !== normalize(resolvedWorkspace)
+      ) {
         failedFiles.push({
           path: instruction.path,
           error: "Path traversal detected — skipping",

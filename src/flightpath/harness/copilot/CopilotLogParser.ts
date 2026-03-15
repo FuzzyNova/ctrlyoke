@@ -4,6 +4,7 @@ import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import { CliEventMapper } from "../shared/CliEventMapper";
+import { CliResponseParser } from "../shared/CliResponseParser";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { COPILOT_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
@@ -565,7 +566,7 @@ export class CopilotLogParser extends BaseLogParser {
           ) {
             // Parse unified diff to get structured patch with line numbers
             const structuredPatch = event.data.result?.detailedContent
-              ? this.parseUnifiedDiff(event.data.result.detailedContent)
+              ? CliResponseParser.parseUnifiedDiff(event.data.result.detailedContent)
               : undefined;
 
             // Debug: Log parsing results
@@ -1149,102 +1150,6 @@ export class CopilotLogParser extends BaseLogParser {
           } as ToolCall,
         };
     }
-  }
-
-  /**
-   * Parse unified diff format into structured patch hunks
-   *
-   * Extracts line numbers and diff lines from Git-style unified diff format.
-   *
-   * @param diffText - Unified diff string (from tool.execution_complete detailedContent)
-   * @returns Array of diff hunks with line numbers, or undefined if parsing fails
-   *
-   * @example
-   * ```typescript
-   * const diff = `
-   * diff --git a/file.md b/file.md
-   * @@ -1,4 +1,4 @@
-   *  First line
-   * -Second line
-   * +Second line - edited
-   *  Third line
-   * `;
-   * const hunks = parser.parseUnifiedDiff(diff);
-   * // [{ oldStart: 1, oldLines: 4, newStart: 1, newLines: 4, lines: [...] }]
-   * ```
-   *
-   * @remarks
-   * **Unified Diff Format:**
-   * - `@@ -oldStart,oldCount +newStart,newCount @@` - Hunk header with line numbers
-   * - Lines prefixed with " " (space) - Context (unchanged)
-   * - Lines prefixed with "-" - Removed from old file
-   * - Lines prefixed with "+" - Added to new file
-   *
-   * **Output Format:** Matches Claude CLI's structuredPatch format for compatibility
-   */
-  private parseUnifiedDiff(diffText: string): UnifiedDiffHunk[] | undefined {
-    if (!diffText) {
-      return undefined;
-    }
-
-    const hunks: UnifiedDiffHunk[] = [];
-    const lines = diffText.split("\n");
-    let currentHunk: UnifiedDiffHunk | null = null;
-
-    for (const line of lines) {
-      // Match hunk header: @@ -1,4 +1,4 @@
-      const hunkMatch = line.match(
-        /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/
-      );
-      if (hunkMatch) {
-        // Save previous hunk if exists
-        if (currentHunk) {
-          hunks.push(currentHunk);
-        }
-
-        // Parse line numbers from header
-        const oldStart = parseInt(hunkMatch[1], 10);
-        const oldLines = hunkMatch[2] ? parseInt(hunkMatch[2], 10) : 1;
-        const newStart = parseInt(hunkMatch[3], 10);
-        const newLines = hunkMatch[4] ? parseInt(hunkMatch[4], 10) : 1;
-
-        currentHunk = {
-          oldStart,
-          oldLines,
-          newStart,
-          newLines,
-          lines: [],
-        };
-        continue;
-      }
-
-      // Collect diff lines (must be inside a hunk)
-      if (currentHunk) {
-        // Only include lines with diff prefixes: " " (context), "-" (removed), "+" (added)
-        if (
-          line.startsWith(" ") ||
-          line.startsWith("-") ||
-          line.startsWith("+")
-        ) {
-          currentHunk.lines.push(line);
-        }
-        // Stop collecting if we hit a non-diff line (e.g., "diff --git")
-        else if (line.startsWith("diff ") || line.startsWith("index ")) {
-          // Save current hunk and reset
-          if (currentHunk.lines.length > 0) {
-            hunks.push(currentHunk);
-          }
-          currentHunk = null;
-        }
-      }
-    }
-
-    // Save last hunk
-    if (currentHunk && currentHunk.lines.length > 0) {
-      hunks.push(currentHunk);
-    }
-
-    return hunks.length > 0 ? hunks : undefined;
   }
 
   /**

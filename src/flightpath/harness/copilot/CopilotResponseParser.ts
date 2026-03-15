@@ -6,6 +6,7 @@ import {
   UniversalCliOutput,
   CliEvent,
   TokenUsage,
+  FileEditData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -75,6 +76,13 @@ export class CopilotResponseParser
     let model: string | undefined;
     let totalOutputTokens = 0;
 
+    // Track pending tool calls by toolCallId for completion correlation.
+    // Populated from assistant.message.data.toolRequests; consumed on tool.execution_complete.
+    const pendingToolCalls = new Map<
+      string,
+      { name: string; path?: string; oldStr?: string; newStr?: string }
+    >();
+
     for (const json of objects) {
       // Only process non-ephemeral events in batch parse.
       // Ephemeral events (message_delta, reasoning_delta, assistant.reasoning) are
@@ -110,10 +118,23 @@ export class CopilotResponseParser
             });
           }
 
-          // Map tool requests to semantic events
+          // Map tool requests to semantic events and store for completion correlation
           if (Array.isArray(data.toolRequests)) {
             for (const toolReq of data.toolRequests) {
               this.mapToolRequestToEvent(toolReq, events);
+              if (toolReq.toolCallId) {
+                pendingToolCalls.set(toolReq.toolCallId, {
+                  name: toolReq.name,
+                  path:
+                    toolReq.arguments?.path || toolReq.arguments?.file_path,
+                  oldStr:
+                    toolReq.arguments?.old_str ||
+                    toolReq.arguments?.old_string,
+                  newStr:
+                    toolReq.arguments?.new_str ||
+                    toolReq.arguments?.new_string,
+                });
+              }
             }
           }
 
@@ -128,6 +149,39 @@ export class CopilotResponseParser
           // Track the model used (available on each tool completion)
           if (!model && json.data?.model) {
             model = json.data.model;
+          }
+
+          // Emit COMPLETED event for file edits so the UI shows the diff and undo button.
+          // The detailedContent field contains a git unified diff when the tool was "edit".
+          const toolCallId: string | undefined = json.data?.toolCallId;
+          if (toolCallId) {
+            const pending = pendingToolCalls.get(toolCallId);
+            if (
+              pending &&
+              CliEventMapper.classifyTool(pending.name).type ===
+                CLI_EVENT_TYPES.FILE_EDIT
+            ) {
+              const result = json.data?.result;
+              const structuredPatch = result?.detailedContent
+                ? CliResponseParser.parseUnifiedDiff(result.detailedContent)
+                : undefined;
+              const success = json.data?.success === true;
+              events.push({
+                type: CLI_EVENT_TYPES.FILE_EDIT,
+                timestamp: Date.now(),
+                data: {
+                  path: pending.path || "unknown",
+                  oldContent: pending.oldStr,
+                  newContent: pending.newStr,
+                  structuredPatch,
+                  status: success
+                    ? OPERATION_STATUS.COMPLETED
+                    : OPERATION_STATUS.FAILED,
+                  success,
+                } as FileEditData,
+              });
+              pendingToolCalls.delete(toolCallId);
+            }
           }
           break;
         }
@@ -410,6 +464,64 @@ export class CopilotResponseParser
               },
               events
             );
+            // Store for completion correlation
+            if (json.data.toolCallId) {
+              const pendingCalls =
+                (streamState.get("pendingToolCalls") as Map<
+                  string,
+                  { name: string; path?: string; oldStr?: string; newStr?: string }
+                >) ?? new Map();
+              pendingCalls.set(json.data.toolCallId, {
+                name: json.data.toolName,
+                path:
+                  json.data.arguments?.path || json.data.arguments?.file_path,
+                oldStr:
+                  json.data.arguments?.old_str ||
+                  json.data.arguments?.old_string,
+                newStr:
+                  json.data.arguments?.new_str ||
+                  json.data.arguments?.new_string,
+              });
+              streamState.set("pendingToolCalls", pendingCalls);
+            }
+          }
+          break;
+        }
+
+        case "tool.execution_complete": {
+          // Emit COMPLETED event for file edits so the UI shows the diff and undo button.
+          const toolCallId: string | undefined = json.data?.toolCallId;
+          if (toolCallId) {
+            const pendingCalls = streamState.get("pendingToolCalls") as
+              | Map<string, { name: string; path?: string; oldStr?: string; newStr?: string }>
+              | undefined;
+            const pending = pendingCalls?.get(toolCallId);
+            if (
+              pending &&
+              CliEventMapper.classifyTool(pending.name).type ===
+                CLI_EVENT_TYPES.FILE_EDIT
+            ) {
+              const result = json.data?.result;
+              const structuredPatch = result?.detailedContent
+                ? CliResponseParser.parseUnifiedDiff(result.detailedContent)
+                : undefined;
+              const success = json.data?.success === true;
+              events.push({
+                type: CLI_EVENT_TYPES.FILE_EDIT,
+                timestamp: Date.now(),
+                data: {
+                  path: pending.path || "unknown",
+                  oldContent: pending.oldStr,
+                  newContent: pending.newStr,
+                  structuredPatch,
+                  status: success
+                    ? OPERATION_STATUS.COMPLETED
+                    : OPERATION_STATUS.FAILED,
+                  success,
+                } as FileEditData,
+              });
+              pendingCalls!.delete(toolCallId);
+            }
           }
           break;
         }

@@ -15,7 +15,7 @@ import { OUTPUT_BLOCK_BASE, TOOL_RESULT_LINE } from "./outputStyles";
 import { WebviewLog } from "../../utils/logger";
 import { useWorkflowStore } from "@store/workflowStore";
 import {
-  buildUndoDialogInputForSingleFile,
+  buildUndoDialogInputForSpecificEvent,
   type UndoDialogInput,
 } from "../../utils/promptUndo";
 import type { UndoFileInstruction } from "../../types/messages";
@@ -327,8 +327,7 @@ interface StructuredOutputProps {
   events: CliEvent[];
   /** When true, text events are rendered as pre-formatted plain text (no markdown pipeline) */
   rawTextOutput?: boolean;
-  onUndoFile?: (path: string, attemptIndex: number) => void;
-  attemptIndex?: number;
+  onUndoFile?: (path: string, eventIndex: number) => void;
   fileUndoMode?: "undo" | "redo";
   className?: string;
 }
@@ -358,7 +357,6 @@ const StructuredOutput = memo<StructuredOutputProps>(
     events,
     rawTextOutput = false,
     onUndoFile,
-    attemptIndex = 0,
     fileUndoMode = "undo",
     className = "",
   }) => {
@@ -411,7 +409,7 @@ const StructuredOutput = memo<StructuredOutputProps>(
               eventKey={eventKey}
               rawTextOutput={rawTextOutput}
               onUndoFile={onUndoFile}
-              attemptIndex={attemptIndex}
+              attemptIndex={originalIndex}
               fileUndoMode={fileUndoMode}
             />
           );
@@ -517,7 +515,7 @@ export const CliOutput = memo<CliOutputProps>(
         : "undo";
 
     const onUndoFile = useCallback(
-      (path: string, fileAttemptIndex: number) => {
+      (path: string, eventIndex: number) => {
         const newRequestId = crypto.randomUUID();
         const showRedo =
           effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true;
@@ -535,11 +533,14 @@ export const CliOutput = memo<CliOutputProps>(
           }
         } else {
           const workspacePath = output.workingDirectory ?? "";
-          const input = buildUndoDialogInputForSingleFile(
+          // Use the specific event index so each individual diff undo targets only
+          // the clicked edit — not last-write-wins across all edits to the same file.
+          const events = output.structured?.events ?? [];
+          const input = buildUndoDialogInputForSpecificEvent(
             target,
-            fileAttemptIndex,
+            eventIndex,
             path,
-            [output],
+            events,
             effectiveSnapshot,
             workspacePath
           );
@@ -627,7 +628,6 @@ export const CliOutput = memo<CliOutputProps>(
               events={output.structured?.events as CliEvent[]}
               rawTextOutput={rawTextOutput}
               onUndoFile={allowUndoActions ? onUndoFile : undefined}
-              attemptIndex={attemptIndex}
               fileUndoMode={fileUndoMode}
             />
           </>
@@ -641,7 +641,6 @@ export const CliOutput = memo<CliOutputProps>(
             events={output.structured?.events as CliEvent[]}
             rawTextOutput={rawTextOutput}
             onUndoFile={allowUndoActions ? onUndoFile : undefined}
-            attemptIndex={attemptIndex}
             fileUndoMode={fileUndoMode}
           />
         );

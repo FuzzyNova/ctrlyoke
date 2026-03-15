@@ -1,4 +1,4 @@
-import { CliResult } from "../../../types/CliOutputTypes";
+import { CliResult, UnifiedDiffHunk } from "../../../types/CliOutputTypes";
 import { Log } from "../../../utils/Log";
 
 /**
@@ -204,6 +204,63 @@ export class CliResponseParser {
     }
 
     return stats;
+  }
+
+  /**
+   * Parse unified diff format into structured patch hunks
+   *
+   * Extracts hunk headers and diff lines from Git-style unified diff output.
+   * Shared across all harnesses that receive `detailedContent` diffs (e.g. Copilot CLI).
+   *
+   * @param diffText - Unified diff string (e.g. from tool.execution_complete detailedContent)
+   * @returns Array of diff hunks, or undefined if no hunks found
+   */
+  static parseUnifiedDiff(diffText: string): UnifiedDiffHunk[] | undefined {
+    if (!diffText) {
+      return undefined;
+    }
+
+    const hunks: UnifiedDiffHunk[] = [];
+    const lines = diffText.split("\n");
+    let currentHunk: UnifiedDiffHunk | null = null;
+
+    for (const line of lines) {
+      const hunkMatch = line.match(
+        /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/
+      );
+      if (hunkMatch) {
+        if (currentHunk) {
+          hunks.push(currentHunk);
+        }
+        currentHunk = {
+          oldStart: parseInt(hunkMatch[1], 10),
+          oldLines: hunkMatch[2] ? parseInt(hunkMatch[2], 10) : 1,
+          newStart: parseInt(hunkMatch[3], 10),
+          newLines: hunkMatch[4] ? parseInt(hunkMatch[4], 10) : 1,
+          lines: [],
+        };
+        continue;
+      }
+
+      if (currentHunk) {
+        if (
+          line.startsWith(" ") ||
+          line.startsWith("-") ||
+          line.startsWith("+")
+        ) {
+          currentHunk.lines.push(line);
+        } else if (line.startsWith("diff ") || line.startsWith("index ")) {
+          hunks.push(currentHunk);
+          currentHunk = null;
+        }
+      }
+    }
+
+    if (currentHunk) {
+      hunks.push(currentHunk);
+    }
+
+    return hunks.length > 0 ? hunks : undefined;
   }
 
   // Harness-specific parsing methods moved to:
