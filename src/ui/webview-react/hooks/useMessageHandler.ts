@@ -307,6 +307,12 @@ function createMessageHandlers(): MessageHandlerMap {
     const workflowStore = useWorkflowStore.getState();
     workflowStore.resetExecutionState(message.prompts || []);
 
+    // Exit history view — the panel must show the live (reset) state, not the
+    // historical run. Without this, isViewingHistory=true keeps doneStepCount
+    // at historyOutputs.stepCount while currentStep resets to 0, causing every
+    // prompt to appear twice (once in the done list, once in pending).
+    useUiStore.getState().clearHistoryView();
+
     // Cancel any active edit — the selected prompt's status has changed
     const editorStore = useEditorStore.getState();
     if (editorStore.selectionTarget.kind !== "newPrompt") {

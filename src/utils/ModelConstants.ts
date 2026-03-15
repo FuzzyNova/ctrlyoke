@@ -146,6 +146,14 @@ export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {
   "gpt-5.1-codex-mini": "GPT 5.1 Codex Mini",
 };
 
+/**
+ * Sentinel value to suppress the --model flag entirely.
+ * When a user selects "none", FlightPath skips the --model argument so the
+ * harness uses its own default or the user can pass a custom model via additionalArgs.
+ * Useful for harnesses that require a custom model string (e.g., hosted Bedrock).
+ */
+export const MODEL_NONE = "none";
+
 // Derived exports for convenience
 
 /**

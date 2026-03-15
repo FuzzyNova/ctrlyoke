@@ -11,7 +11,7 @@ import { ClaudeToolPermissionMapper } from "./ClaudeToolPermissionMapper";
 import { ClaudeLogParser } from "./ClaudeLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
-import { getClaudeModelName } from "../../../utils/ModelConstants";
+import { getClaudeModelName, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -125,7 +125,9 @@ export class ClaudeCliProvider implements ICliProvider {
 
     // Model selection with validation - use resolved property if available
     const model = this.validateAndGetModel(resolvedModel);
-    args.push("--model", model);
+    if (model) {
+      args.push("--model", model);
+    }
 
     // Agent handling is now done via prompt prepending in HarnessIntegration.buildPromptText()
     // AgentExpander reads the agent file and injects <agentInstructions> into the prompt.
@@ -205,13 +207,17 @@ export class ClaudeCliProvider implements ICliProvider {
   /**
    * Validate model is supported by Claude CLI, fallback to default if not
    */
-  private validateAndGetModel(requestedModel?: string): string {
+  private validateAndGetModel(requestedModel?: string): string | undefined {
     const defaultModel = ConfigurationUtils.getClaudeCliModel();
 
     if (!requestedModel) {
       // Return full model name for default
       const fullName = getClaudeModelName(defaultModel);
       return fullName || defaultModel;
+    }
+
+    if (requestedModel === MODEL_NONE) {
+      return undefined;
     }
 
     // Try to look up the model in our comprehensive map

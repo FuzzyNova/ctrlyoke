@@ -716,7 +716,11 @@ export const useWorkflowStore = create<
           // Update uiStore for history view state
           useUiStore.getState().setHistoryView(runIndex, availableRuns);
 
-          // Populate self-contained history snapshot
+          // Populate self-contained history snapshot.
+          // Clear live-store undo records and snapshots so stale state from
+          // a previous run or a different history selection doesn't bleed into
+          // this run's view. History data in historyOutputs is the sole source
+          // of truth for undo state while in history mode.
           return {
             historyOutputs: {
               stepCount: history.runStepCount,
@@ -729,6 +733,9 @@ export const useWorkflowStore = create<
                 executionState: history.executionState,
               },
             },
+            undoRecords: {},
+            workspaceSnapshots: {},
+            finalPromptWorkspaceSnapshots: {},
           };
         });
         useWorkflowStore.temporal.getState().resume();

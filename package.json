@@ -747,6 +747,7 @@
           "order": 300,
           "type": "string",
           "enum": [
+            "none",
             "claude-sonnet-4.6",
             "claude-sonnet-4.5",
             "claude-haiku-4.5",
@@ -798,6 +799,7 @@
           "order": 400,
           "type": "string",
           "enum": [
+            "none",
             "sonnet",
             "sonnet[1m]",
             "opus",
@@ -805,9 +807,11 @@
             "haiku"
           ],
           "enumDescriptions": [
+            "None - Skip --model flag (use additionalArgs for custom model string, e.g. Bedrock)",
             "Claude Sonnet - Best balance of speed and capability (recommended)",
             "Claude Sonnet 1M Context - Extended context window (new)",
             "Claude Opus - Most capable, best for complex tasks",
+            "Claude Opus 1M Context - Extended context window",
             "Claude Haiku - Fastest, best for simple tasks"
           ],
           "default": "sonnet",
@@ -825,6 +829,7 @@
           "order": 410,
           "type": "string",
           "enum": [
+            "none",
             "gpt-5.3-codex",
             "gpt-5.4",
             "gpt-5.2-codex",
@@ -833,11 +838,13 @@
             "gpt-5.1-codex-mini"
           ],
           "enumDescriptions": [
+            "None - Skip --model flag (use additionalArgs for custom model string)",
+            "GPT-5.3 Codex - Latest codex model",
+            "GPT-5.4 - Latest frontier model",
+            "GPT-5.2 Codex",
             "GPT-5.1 Codex Max - Most capable for deep reasoning",
-            "GPT-5.1 Codex - Recommended, optimized for code (default)",
-            "GPT-5.1 Codex Mini - Faster and cheaper, less capable",
-            "GPT-5.2 - Latest frontier model",
-            "GPT-5.1 - Broad world knowledge"
+            "GPT-5.2 - Broad world knowledge",
+            "GPT-5.1 Codex Mini - Faster and cheaper, less capable"
           ],
           "default": "gpt-5.1-codex",
           "description": "[Codex CLI] Default AI model",
@@ -847,7 +854,7 @@
           "order": 420,
           "type": "string",
           "default": "anthropic/claude-sonnet-4-6",
-          "description": "[OpenCode CLI] Model for OpenCode CLI in provider/model format (e.g. anthropic/claude-sonnet-4-6). Run 'opencode models' to see available models for your configured providers."
+          "description": "[OpenCode CLI] Model for OpenCode CLI in provider/model format (e.g. anthropic/claude-sonnet-4-6). Run 'opencode models' to see available models for your configured providers. Set to 'none' to skip the -m flag and pass a custom model via additionalArgs."
         },
         "flightpath.openCodeCliAdditionalArgs": {
           "order": 421,

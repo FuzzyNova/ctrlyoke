@@ -423,7 +423,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 hiddenValues={hiddenDropdownOptions[modelNamespace] ?? []}
                 onHideOption={(v) => hideDropdownOption(modelNamespace, v)}
                 onUnhideOption={(v) => unhideDropdownOption(modelNamespace, v)}
-                nonHideableValues={["default", ""]}
+                nonHideableValues={["default", "", "none"]}
                 dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
             </div>

@@ -65,8 +65,9 @@
         },
         "model": {
           "type": "string",
-          "description": "AI model to use for this prompt. Available models are queried dynamically from your Copilot subscription. Use IntelliSense (Ctrl+Space) to see available models. CLI mode supports limited models (claude-sonnet-4.5, claude-sonnet-4, claude-haiku-4.5, gpt-5) - others will fallback to default with warning. Optional - defaults to flightpath.copilotCliModel setting.",
+          "description": "AI model to use for this prompt. Available models are queried dynamically from your Copilot subscription. Use IntelliSense (Ctrl+Space) to see available models. CLI mode supports limited models (claude-sonnet-4.5, claude-sonnet-4, claude-haiku-4.5, gpt-5) - others will fallback to default with warning. Use 'none' to skip the --model flag entirely (e.g. for custom Bedrock model strings passed via additionalArgs). Optional - defaults to flightpath.copilotCliModel setting.",
           "examples": [
+            "none",
             "auto",
             "claude-haiku-4.5",
             "claude-opus-4.5",

@@ -618,12 +618,15 @@ export const PromptsPanel: React.FC<{
         ) : (
           <div className="py-1">
             {/* Done prompts (indices 0..doneStepCount-1).
-                In history view, use historyOutputs.stepCount so completed history
-                steps are shown even when currentStep is 0 (reset live run). */}
+                doneStepCount is capped at currentStep to guarantee no overlap with
+                the pending section (which starts at currentStep). Without the cap,
+                loading an idle workflow (currentStep=0) that has prior run history
+                causes historyOutputs.stepCount to exceed currentStep, rendering every
+                prompt in both lists simultaneously. */}
             {(() => {
               const doneStepCount =
                 isViewingHistory && historyOutputs
-                  ? Math.min(prompts.length, historyOutputs.stepCount)
+                  ? Math.min(currentStep, prompts.length, historyOutputs.stepCount)
                   : currentStep;
               return prompts.slice(0, doneStepCount).map((prompt, sliceIdx) => {
                 const index = sliceIdx;

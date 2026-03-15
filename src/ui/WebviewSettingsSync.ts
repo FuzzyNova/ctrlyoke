@@ -549,25 +549,41 @@ export class WebviewSettingsSync {
         label: getModelDisplayName(m.id),
       }));
 
-    const copilotCliOptions = cliModelIds
-      .filter((id) => !hiddenModels.has(id))
-      .map((id) => ({
+    const noneOption = { value: "none", label: "None (skip --model flag)" };
+
+    const copilotCliOptions = [
+      noneOption,
+      ...cliModelIds
+        .filter((id) => !hiddenModels.has(id))
+        .map((id) => ({
+          value: id,
+          label: getModelDisplayName(id),
+        })),
+    ];
+
+    const claudeCliOptions = [
+      noneOption,
+      ...Object.entries(CLAUDE_CLI_MODEL_LABELS).map(([value, label]) => ({
+        value,
+        label,
+      })),
+    ];
+
+    const codexCliOptions = [
+      noneOption,
+      ...Object.entries(CODEX_CLI_MODEL_LABELS).map(([value, label]) => ({
+        value,
+        label,
+      })),
+    ];
+
+    const openCodeCliOptions = [
+      noneOption,
+      ...getOpenCodeModelIdsSync().map((id) => ({
         value: id,
-        label: getModelDisplayName(id),
-      }));
-
-    const claudeCliOptions = Object.entries(CLAUDE_CLI_MODEL_LABELS).map(
-      ([value, label]) => ({ value, label })
-    );
-
-    const codexCliOptions = Object.entries(CODEX_CLI_MODEL_LABELS).map(
-      ([value, label]) => ({ value, label })
-    );
-
-    const openCodeCliOptions = getOpenCodeModelIdsSync().map((id) => ({
-      value: id,
-      label: id,
-    }));
+        label: id,
+      })),
+    ];
 
     return {
       [HARNESS_IDS.COPILOT_CLI]: copilotCliOptions,

@@ -12,6 +12,7 @@ import { OpenCodeToolPermissionMapper } from "./OpenCodeToolPermissionMapper";
 import { OpenCodeLogParser } from "./OpenCodeLogParser";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getOpenCodeContextWindowSize } from "../../../utils/ModelRegistry";
+import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -143,8 +144,10 @@ export class OpenCodeCliProvider implements ICliProvider {
 
     // Model selection — use resolved property if available
     const model = this.getModel(resolvedModel);
-    this.resolvedCurrentModel = model;
-    args.push("-m", model);
+    if (model) {
+      this.resolvedCurrentModel = model;
+      args.push("-m", model);
+    }
 
     // Session management — resume with explicit session ID only
     // NOTE: We do NOT use -c (continue last session) because:
@@ -370,7 +373,11 @@ export class OpenCodeCliProvider implements ICliProvider {
    * Get the model to use, validating format and applying fallback.
    * OpenCode models use provider/model format (e.g., anthropic/claude-sonnet-4-6).
    */
-  private getModel(resolvedModel?: string): string {
+  private getModel(resolvedModel?: string): string | undefined {
+    if (resolvedModel === MODEL_NONE) {
+      return undefined;
+    }
+
     // If we have a resolved model in the correct format, use it
     if (resolvedModel?.includes("/")) {
       return resolvedModel;

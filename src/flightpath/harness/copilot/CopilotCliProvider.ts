@@ -19,6 +19,7 @@ import {
   isCliModelSupported,
   isRegistryInitialized,
 } from "../../../utils/ModelRegistry";
+import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
@@ -224,6 +225,10 @@ export class CopilotCliProvider implements ICliProvider {
 
     if (!requestedModel) {
       return defaultModel;
+    }
+
+    if (requestedModel === MODEL_NONE) {
+      return "";
     }
 
     // Lazily initialize the registry if not yet done (CLI mode).

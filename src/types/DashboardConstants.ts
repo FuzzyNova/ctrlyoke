@@ -291,6 +291,7 @@ export const DEFAULT_MODELS = {
 // CLAUDE CLI MODELS - Static options (no programmatic way to query)
 // ============================================================================
 export const CLAUDE_CLI_MODELS = [
+  { value: "none", label: "None (skip --model flag)" },
   { value: "sonnet", label: "Sonnet" },
   { value: "sonnet[1m]", label: "Sonnet 1M Context" },
   { value: "opus", label: "Opus" },
@@ -302,6 +303,7 @@ export const CLAUDE_CLI_MODELS = [
 // CODEX CLI MODELS - Static options (from codex /model command)
 // ============================================================================
 export const CODEX_CLI_MODELS = [
+  { value: "none", label: "None (skip --model flag)" },
   { value: "gpt-5.3-codex", label: "GPT 5.3 Codex" },
   { value: "gpt-5.4", label: "GPT 5.4" },
   { value: "gpt-5.2-codex", label: "GPT 5.2 Codex" },

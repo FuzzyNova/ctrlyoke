@@ -11,7 +11,7 @@ import { CodexToolPermissionMapper } from "./CodexToolPermissionMapper";
 import { CodexLogParser } from "./CodexLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
-import { CODEX_CLI_MODELS } from "../../../utils/ModelConstants";
+import { CODEX_CLI_MODELS, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -133,7 +133,9 @@ export class CodexCliProvider implements ICliProvider {
 
     // Model selection with validation - use resolved property if available
     const model = this.validateAndGetModel(resolvedModel);
-    args.push("--model", model);
+    if (model) {
+      args.push("--model", model);
+    }
 
     // Add workspace directories
     if (workspaceRoot) {
@@ -230,11 +232,15 @@ export class CodexCliProvider implements ICliProvider {
   /**
    * Validate model is supported by Codex CLI, fallback to default if not
    */
-  private validateAndGetModel(requestedModel?: string): string {
+  private validateAndGetModel(requestedModel?: string): string | undefined {
     const defaultModel = ConfigurationUtils.getCodexCliModel();
 
     if (!requestedModel) {
       return defaultModel;
+    }
+
+    if (requestedModel === MODEL_NONE) {
+      return undefined;
     }
 
     // Check if model is in the supported list
