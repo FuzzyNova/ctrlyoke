@@ -209,8 +209,20 @@ async function walkDirectory(
 function buildReversePatchString(hunks: UnifiedDiffHunk[]): string {
   let patch = "--- b\n+++ a\n";
   for (const hunk of hunks) {
-    patch += `@@ -${hunk.newStart},${hunk.newLines} +${hunk.oldStart},${hunk.oldLines} @@\n`;
-    for (const line of hunk.lines) {
+    // Strip trailing empty context lines (" " — a bare space representing the file's
+    // trailing newline). Diff.applyPatch fails on CRLF files when such a line is present
+    // because the trailing empty string it implies is not part of jsdiff's line model.
+    let lines = hunk.lines;
+    let oldLines = hunk.oldLines;
+    let newLines = hunk.newLines;
+    while (lines.length > 0 && lines[lines.length - 1] === " ") {
+      lines = lines.slice(0, -1);
+      oldLines--;
+      newLines--;
+    }
+
+    patch += `@@ -${hunk.newStart},${newLines} +${hunk.oldStart},${oldLines} @@\n`;
+    for (const line of lines) {
       if (line.startsWith("+")) {
         patch += "-" + line.slice(1) + "\n";
       } else if (line.startsWith("-")) {
@@ -260,6 +272,7 @@ export class WorkspaceSnapshotService {
         const lines = stdout.split("\n").filter((l) => l.length >= 3);
         for (const line of lines) {
           // Format: XY<space><path> where XY are two status chars
+          const xy = line.slice(0, 2);
           let filePath = line.slice(3);
           // Git quotes paths containing special chars
           if (filePath.startsWith('"') && filePath.endsWith('"')) {
@@ -270,6 +283,10 @@ export class WorkspaceSnapshotService {
             continue;
           }
 
+          // isAtHead: true when the file exists in git HEAD (tracked, modified/deleted).
+          // False for new/untracked (??) or newly staged (A) files.
+          const isAtHead = xy !== "??" && xy[0] !== "A";
+
           const absPath = path.join(workspacePath, filePath);
           const fileData = await readFileForSnapshot(absPath);
           if (!fileData) {
@@ -278,7 +295,7 @@ export class WorkspaceSnapshotService {
           files.set(filePath, {
             contentHash: fileData.hash,
             content: fileData.content,
-            isAtHead: false,
+            isAtHead,
           });
         }
       } else {
@@ -306,15 +323,22 @@ export class WorkspaceSnapshotService {
     for (const [filePath, afterState] of after.files) {
       const beforeState = before.files.get(filePath);
       if (!beforeState) {
-        // Created during prompt
+        // File not in before snapshot. Under git strategy, the before snapshot only
+        // captures dirty files (git status --porcelain), so absence means the file was
+        // clean/at HEAD before the prompt ran. Use isAtHead on the after state to
+        // distinguish: tracked file modified from HEAD (isAtHead=true) vs truly new
+        // file (isAtHead=false, shown as ?? or A in git status).
+        const wasCleanAtHead = strategy === "git" && afterState.isAtHead;
         const change: SnapshotFileChange = {
           path: filePath,
-          changeType: "created" as PromptChangeType,
+          changeType: wasCleanAtHead
+            ? ("modified" as PromptChangeType)
+            : ("created" as PromptChangeType),
           afterHash: afterState.contentHash,
+          wasAtHead: wasCleanAtHead ? true : undefined,
         };
-        if (strategy === "git") {
-          change.wasAtHead = true;
-        }
+        // No structured patch for modified-from-HEAD (before content not captured;
+        // undo uses git-restore which doesn't need a patch).
         changes.push(change);
       } else if (afterState.contentHash !== beforeState.contentHash) {
         // Modified during prompt
