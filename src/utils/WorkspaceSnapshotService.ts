@@ -443,7 +443,10 @@ export class WorkspaceSnapshotService {
           await fs.promises.writeFile(absPath, content, "utf8");
           restoredFiles.push(instruction.path);
           if (currentContent !== undefined) {
-            redoInstructions.push({ path: instruction.path, action: "restore-content", contentToRestore: currentContent });
+            // Compute forward patch (pre-AI → AI-modified) for diff display in redo dialog
+            const fwdPatch = Diff.structuredPatch("", "", instruction.contentToRestore ?? "", currentContent);
+            const structuredPatch = fwdPatch.hunks.length > 0 ? (fwdPatch.hunks as UnifiedDiffHunk[]) : undefined;
+            redoInstructions.push({ path: instruction.path, action: "restore-content", contentToRestore: currentContent, structuredPatch });
           } else {
             // File didn't exist before the AI created it — redo should delete it
             redoInstructions.push({ path: instruction.path, action: "delete" });
@@ -478,8 +481,9 @@ export class WorkspaceSnapshotService {
           }
           await fs.promises.writeFile(absPath, patched, "utf8");
           restoredFiles.push(instruction.path);
-          // Redo: restore the pre-undo state (what was in the file before we reversed the patch)
-          redoInstructions.push({ path: instruction.path, action: "restore-content", contentToRestore: currentContent });
+          // Redo: restore the pre-undo state (what was in the file before we reversed the patch).
+          // The forward structuredPatch (before→after AI change) is the original instruction patch.
+          redoInstructions.push({ path: instruction.path, action: "restore-content", contentToRestore: currentContent, structuredPatch: instruction.structuredPatch });
         }
       } catch (err) {
         failedFiles.push({

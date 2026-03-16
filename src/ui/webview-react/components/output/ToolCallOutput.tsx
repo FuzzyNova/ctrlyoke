@@ -318,6 +318,8 @@ interface FileEditOutputProps {
   onUndoFile?: (path: string, attemptIndex: number) => void;
   attemptIndex?: number;
   fileUndoMode?: "undo" | "redo";
+  /** When true, suppresses the diff display (used when a COMPLETED event for the same file follows) */
+  hideDiff?: boolean;
   className?: string;
 }
 
@@ -339,6 +341,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
     onUndoFile,
     attemptIndex = 0,
     fileUndoMode = "undo",
+    hideDiff = false,
     className = "",
   }) => {
     const dotStatus = fileOpDotStatus(status);
@@ -351,6 +354,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
     };
 
     const hasDiffData =
+      !hideDiff &&
       status !== OPERATION_STATUS.FAILED &&
       ((structuredPatch && structuredPatch.length > 0) ||
         (oldContent && newContent));

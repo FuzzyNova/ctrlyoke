@@ -72,7 +72,7 @@ function resolveEventUndoInstruction(
  * absolute CLI event paths (`C:\dev\FlightPath\manual-test\temp.txt`) and
  * workspace-relative snapshot paths (`manual-test/temp.txt`).
  */
-function sameFilePath(a: string, b: string): boolean {
+export function sameFilePath(a: string, b: string): boolean {
   const na = a.replace(/\\/g, "/").toLowerCase();
   const nb = b.replace(/\\/g, "/").toLowerCase();
   if (na === nb) return true;

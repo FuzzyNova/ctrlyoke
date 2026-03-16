@@ -19,6 +19,7 @@ import {
   buildUndoCandidatesForOutputs,
   buildUndoDialogInputForPrompt,
   getPromptUndoSummary,
+  sameFilePath,
   type UndoDialogInput,
 } from "../../utils/promptUndo";
 import type { UndoFileInstruction } from "../../types/messages";
@@ -165,6 +166,7 @@ interface SingleEventProps {
   onUndoFile?: (path: string, attemptIndex: number) => void;
   attemptIndex?: number;
   fileUndoMode?: "undo" | "redo";
+  hideDiff?: boolean;
 }
 
 /**
@@ -180,6 +182,7 @@ const SingleEvent = memo<SingleEventProps>(
     onUndoFile,
     attemptIndex = 0,
     fileUndoMode = "undo",
+    hideDiff = false,
   }) => {
     switch (event.type) {
       case CLI_EVENT_TYPES.TEXT: {
@@ -227,6 +230,7 @@ const SingleEvent = memo<SingleEventProps>(
             onUndoFile={onUndoFile}
             attemptIndex={attemptIndex}
             fileUndoMode={fileUndoMode}
+            hideDiff={hideDiff}
           />
         );
       }
@@ -350,10 +354,10 @@ interface StructuredOutputProps {
  * FILE_EDIT deduplication: harnesses like claude-cli emit both an INITIATED
  * event (the attempted diff) and a COMPLETED event (the applied diff + undo
  * button) for the same file edit. When a COMPLETED event exists for a given
- * path, the preceding INITIATED event is suppressed — the COMPLETED version
- * has better diff data (structuredPatch with line numbers) and carries the
- * undo button. When an edit FAILS, the INITIATED event is kept so the
- * attempted diff remains visible alongside the error.
+ * path, the INITIATED event's diff is hidden — the COMPLETED version has
+ * better diff data (structuredPatch with line numbers) and carries the undo
+ * button. The INITIATED tool line ("Editing …") remains visible. When an edit
+ * FAILS, the INITIATED diff is kept so the attempted change is visible.
  */
 const StructuredOutput = memo<StructuredOutputProps>(
   ({
@@ -363,13 +367,14 @@ const StructuredOutput = memo<StructuredOutputProps>(
     fileUndoMode = "undo",
     className = "",
   }) => {
-    // Deduplicate FILE_EDIT INITIATED events that have a matching COMPLETED
-    // event later in the list for the same path. We use a forward-scan so
-    // that multiple sequential edits to the same file are handled correctly:
-    // each INITIATED is only suppressed by the *next* edit of the same file,
-    // not by a later unrelated completion.
+    // For FILE_EDIT INITIATED events that have a matching COMPLETED event later
+    // in the list for the same path, hide the diff (but keep the tool line
+    // visible so the "Editing …" indicator still appears). We use a forward-scan
+    // so that multiple sequential edits to the same file are handled correctly:
+    // each INITIATED is only affected by the *next* edit of the same file.
+    // When an edit FAILS the diff remains visible alongside the error.
     const visibleEvents = useMemo(() => {
-      const indicesToSkip = new Set<number>();
+      const indicesToHideDiff = new Set<number>();
       for (let i = 0; i < events.length; i++) {
         const event = events[i];
         if (event.type !== CLI_EVENT_TYPES.FILE_EDIT) continue;
@@ -381,27 +386,28 @@ const StructuredOutput = memo<StructuredOutputProps>(
           if (next.type !== CLI_EVENT_TYPES.FILE_EDIT) continue;
           const nextData = next.data as FileEditData;
           if (nextData.path !== data.path) continue;
-          // Skip the INITIATED only when a COMPLETED follows — the COMPLETED
-          // event has a structuredPatch and the undo button. When the edit
-          // FAILED we keep the INITIATED so the attempted diff is visible.
+          // Hide the diff on the INITIATED event only when a COMPLETED follows —
+          // the COMPLETED version has a structuredPatch and carries the undo
+          // button. When the edit FAILED we keep the diff so the attempted
+          // change remains visible alongside the error.
           if (nextData.status === OPERATION_STATUS.COMPLETED) {
-            indicesToSkip.add(i);
+            indicesToHideDiff.add(i);
           }
           break;
         }
       }
-      if (indicesToSkip.size === 0)
-        return events.map((event, i) => ({ event, originalIndex: i }));
-      return events
-        .map((event, i) => ({ event, originalIndex: i }))
-        .filter(({ originalIndex }) => !indicesToSkip.has(originalIndex));
+      return events.map((event, i) => ({
+        event,
+        originalIndex: i,
+        hideDiff: indicesToHideDiff.has(i),
+      }));
     }, [events]);
 
     if (!events || events.length === 0) return null;
 
     return (
       <div className={`mt-[var(--spacing-sm)] ${className}`}>
-        {visibleEvents.map(({ event, originalIndex }) => {
+        {visibleEvents.map(({ event, originalIndex, hideDiff }) => {
           // Use original index for stable keys — events are append-only during
           // streaming, so the original position never changes for existing items.
           const eventKey = `event-${originalIndex}`;
@@ -414,6 +420,7 @@ const StructuredOutput = memo<StructuredOutputProps>(
               onUndoFile={onUndoFile}
               attemptIndex={originalIndex}
               fileUndoMode={fileUndoMode}
+              hideDiff={hideDiff}
             />
           );
         })}
@@ -531,7 +538,7 @@ export const CliOutput = memo<CliOutputProps>(
 
         if (showRedo) {
           const fileRedoInstruction = effectiveUndoRecord.redoInstructions.find(
-            (i) => i.path === path
+            (i) => sameFilePath(i.path, path)
           );
           if (fileRedoInstruction) {
             setDialogState({
