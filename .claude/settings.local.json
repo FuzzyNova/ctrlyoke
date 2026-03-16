@@ -79,7 +79,9 @@
       "WebFetch(domain:highlightjs.readthedocs.io)",
       "WebFetch(domain:highlightjs.org)",
       "WebFetch(domain:api.npmjs.org)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(gh issue:*)",
+      "Bash(npm show:*)"
     ],
     "deny": [],
     "ask": []

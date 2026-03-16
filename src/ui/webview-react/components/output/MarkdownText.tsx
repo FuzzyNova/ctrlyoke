@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Streamdown, defaultRemarkPlugins } from "streamdown";
 import { findAndReplace } from "mdast-util-find-and-replace";
-import type { Root, Link } from "mdast";
+import type { Root } from "mdast";
 import { openFile } from "@hooks/useMessageHandler";
 import { highlightCode, injectHljsStyles } from "@utils/hljsUtils";
 
@@ -9,8 +9,6 @@ import { highlightCode, injectHljsStyles } from "@utils/hljsUtils";
 injectHljsStyles();
 
 // ── File-link detection ────────────────────────────────────────────────────
-
-const VSCODE_FILE_SCHEME = "vscode-file-ref://";
 
 /**
  * Recognized file extensions for auto-linking workspace paths.
@@ -23,30 +21,45 @@ const FILE_EXTENSIONS =
  * Matches workspace-relative or absolute file paths that end with a
  * recognized extension. Three alternatives:
  *   1. Windows absolute   – C:\path\to\file.ts  or  C:/path/to/file.ts
+ *                           Also handles escaped double-backslashes (C:\\path)
+ *                           output by some harnesses on Windows.
  *   2. Explicitly relative – ./path/file.ts  or  ../path/file.ts
  *   3. Bare relative       – src/path/file.ts  (lowercase start, ≥1 slash)
  *
  * Single-segment names like "file.ts" (no separator) are intentionally
  * excluded to avoid false positives in plain prose.
+ *
+ * Separators allow 1–2 consecutive slashes/backslashes so that harnesses
+ * that escape their output (e.g. writing C:\\dev\\) are also matched.
  */
+const SEP = "[/\\\\]{1,2}"; // matches /  \  //  \\  (1–2 of either)
 const FILE_PATH_SOURCE =
   "(?:" +
-  "[A-Za-z]:[/\\\\]" + // 1. Windows absolute  C:\  or  C:/
+  "[A-Za-z]:" + SEP + // 1. Windows absolute  C:\  or  C:/  or  C:\\
   "|" +
-  "\\.{1,2}[/\\\\]" + // 2. Relative prefix   ./   or  ../
+  "\\.{1,2}" + SEP + // 2. Relative prefix   ./   or  ../
   "|" +
-  "[a-z][\\w-]*[/\\\\]" + // 3. Bare relative      src/  lib/  …
+  "[a-z][\\w-]*" + SEP + // 3. Bare relative      src/  lib/  …
   ")" +
-  "(?:[\\w.\\-]+[/\\\\])*" + // Zero or more inner directory segments
+  "(?:[\\w.\\-]+" + SEP + ")*" + // Zero or more inner directory segments
   "[\\w.\\-]+" + // Final filename base
   "\\.(?:" +
   FILE_EXTENSIONS +
   ")\\b"; // Extension (required)
 
+/** Escapes HTML special characters for use in raw HTML node text content. */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 /**
  * Remark plugin that walks MDAST text nodes (outside code/links) and
- * converts recognised file path patterns into link nodes with the
- * custom `vscode-file-ref://` URL scheme.
+ * converts recognised file path patterns into raw HTML `<file-ref>` nodes.
+ *
+ * Using a custom element instead of a `link` node bypasses rehype-sanitize
+ * (which strips unrecognised URL schemes from `<a href>`) and rehype-harden
+ * (which only processes `<a>` and `<img>` tags). The `allowedTags` prop on
+ * `<Streamdown>` tells rehype-sanitize to keep `<file-ref path="…">`.
  */
 function remarkFileLinks() {
   return (tree: Root): undefined => {
@@ -56,11 +69,15 @@ function remarkFileLinks() {
         [
           // Fresh regex instance per transform call so lastIndex is always reset
           new RegExp(FILE_PATH_SOURCE, "gi"),
-          (match: string): Link => ({
-            type: "link",
-            url: VSCODE_FILE_SCHEME + match,
-            children: [{ type: "text", value: match }],
-          }),
+          (match: string) => {
+            const normalized = match.replace(/\\{2,}/g, "\\");
+            const encoded = encodeURIComponent(normalized);
+            const display = escapeHtml(normalized);
+            return {
+              type: "html",
+              value: `<file-ref path="${encoded}">${display}</file-ref>`,
+            };
+          },
         ],
       ],
       // Skip text nodes that are already inside a link to avoid double-wrapping
@@ -69,9 +86,68 @@ function remarkFileLinks() {
   };
 }
 
+/**
+ * Returns true when the given href is a local file reference that VS Code's
+ * webview would otherwise block:
+ *   - `file://` / `file:///` URLs
+ *   - Raw Windows absolute paths  (C:\…  or  C:/…)
+ *   - Explicitly relative paths   (./…  or  ../…)
+ */
+function isLocalFileHref(href: string): boolean {
+  return (
+    href.startsWith("file://") ||
+    /^[A-Za-z]:[/\\]/.test(href) ||
+    /^\.\.?[/\\]/.test(href)
+  );
+}
+
+/**
+ * Extracts a usable file-system path from a potentially blocked href so it
+ * can be forwarded to `openFile`.
+ *
+ * Handles:
+ *   - `file:///C:/path/file.ts`  →  `C:/path/file.ts`
+ *   - `file:///C:\path\file.ts`  →  `C:\path\file.ts`
+ *   - Raw paths passed through unchanged.
+ */
+function extractFilePath(href: string): string {
+  if (href.startsWith("file:///")) {
+    return decodeURIComponent(href.slice("file:///".length));
+  }
+  if (href.startsWith("file://")) {
+    return decodeURIComponent(href.slice("file://".length));
+  }
+  return href;
+}
+
+/** Button that opens a local file in VS Code on click. */
+function FileRefButton({
+  filePath,
+  children,
+}: {
+  filePath: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className="group text-link-fg inline-flex items-center gap-0.5 cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit]"
+      onClick={() => openFile(filePath)}
+      title={`Open ${filePath}`}
+    >
+      <i className="codicon codicon-file text-[10px] opacity-70" />
+      <span className="group-hover:underline">{children}</span>
+    </button>
+  );
+}
+
 // Module-level stable array so Streamdown's memo doesn't see a new reference.
 // Spread streamdown's defaults (remarkGfm) first, then add our file-link plugin.
 const REMARK_PLUGINS = [...Object.values(defaultRemarkPlugins), remarkFileLinks];
+
+// Extends rehype-sanitize's allowlist so it keeps <file-ref path="…"> nodes
+// produced by remarkFileLinks. Only "path" is needed as an allowed attribute.
+const FILE_REF_ALLOWED_TAGS = { "file-ref": ["path"] };
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -105,6 +181,20 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
   // Memoize components to avoid re-creating on every streaming chunk
   const components = useMemo(
     () => ({
+      // ── File-ref custom element ────────────────────────────────────────
+      // Rendered by remarkFileLinks for auto-detected file paths in AI text.
+      // rehype-sanitize keeps this element because of FILE_REF_ALLOWED_TAGS.
+      // rehype-harden ignores it (only processes <a> and <img>).
+      "file-ref": (props: Record<string, unknown>) => {
+        const encoded = props.path as string | undefined;
+        const filePath = encoded ? decodeURIComponent(encoded) : "";
+        return (
+          <FileRefButton filePath={filePath}>
+            {props.children as React.ReactNode}
+          </FileRefButton>
+        );
+      },
+
       // ── Links ─────────────────────────────────────────────────────────
       a: ({
         href,
@@ -112,19 +202,14 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
       }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
         children?: React.ReactNode;
       }) => {
-        // File-ref links open the file in VS Code instead of a browser tab
-        if (href?.startsWith(VSCODE_FILE_SCHEME)) {
-          const filePath = href.slice(VSCODE_FILE_SCHEME.length);
+        // Explicit markdown links whose href is a local path (e.g. the AI
+        // wrote [file.ts](C:\\dev\\path\\file.ts) or a file:// URL).
+        // VS Code's webview would block these; intercept and open in VS Code.
+        if (href && isLocalFileHref(href)) {
           return (
-            <button
-              type="button"
-              className="text-link-fg hover:underline inline-flex items-center gap-0.5 cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit]"
-              onClick={() => openFile(filePath)}
-              title={`Open ${filePath}`}
-            >
-              <i className="codicon codicon-file text-[10px] opacity-70" />
+            <FileRefButton filePath={extractFilePath(href)}>
               {linkChildren}
-            </button>
+            </FileRefButton>
           );
         }
         // Regular URLs open in the external browser (webviews intercept clicks)
@@ -285,6 +370,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
       className={`markdown-text ${className ?? ""}`}
       components={components}
       remarkPlugins={REMARK_PLUGINS}
+      allowedTags={FILE_REF_ALLOWED_TAGS}
       // No plugins prop: omitting avoids Shiki WASM CSP issues in VS Code webview
     >
       {children}

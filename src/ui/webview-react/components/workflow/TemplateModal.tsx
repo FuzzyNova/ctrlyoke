@@ -327,10 +327,10 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
             role="button"
             tabIndex={0}
             onKeyDown={(e) => e.key === "Enter" && handleCreateNewTemplate()}
-            className="mt-1.5 flex items-center gap-1 text-sm text-link-fg hover:underline cursor-pointer w-fit"
+            className="mt-1.5 group flex items-center gap-1 text-sm text-link-fg cursor-pointer w-fit"
           >
             <i className="codicon codicon-add" />
-            New template...
+            <span className="group-hover:underline">New template...</span>
           </a>
         </div>
 
