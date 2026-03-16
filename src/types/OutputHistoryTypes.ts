@@ -1,5 +1,6 @@
 import { ExecutionState } from "./DashboardConstants";
 import { CliOutput, StatusMessage, UndoFileInstruction } from "./WebviewMessageTypes";
+import type { UnifiedDiffHunk } from "./CliOutputTypes";
 
 export type OutputExecutionTarget =
   | { kind: "queue"; stepIndex: number }
@@ -119,7 +120,7 @@ export interface SnapshotFileChange {
   path: string;
   changeType: PromptChangeType;
   /**
-   * Content to restore for 'modified' or 'deleted' files.
+   * Content to restore for 'deleted' files.
    * Undefined if wasAtHead (use git restore) or if content capture was skipped.
    */
   contentToRestore?: string;
@@ -133,6 +134,12 @@ export interface SnapshotFileChange {
    * show an amber warning "File has changed since this prompt completed".
    */
   afterHash?: string;
+  /**
+   * Structured patch (before→after) for modified files.
+   * Used for display diff and prompt-level undo via reverse-patch.
+   * More storage-efficient than full contentToRestore for modified files.
+   */
+  structuredPatch?: UnifiedDiffHunk[];
 }
 
 export interface WorkspaceSnapshot {

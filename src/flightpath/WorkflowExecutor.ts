@@ -579,13 +579,9 @@ export class WorkflowExecutor {
       strategy
     );
 
-    // TODO: wire up event path tracking to exclude Tier 1 (structured event) paths
-    const eventPaths = new Set<string>();
-
     const changedFiles = context.snapshotService.computeSnapshotChanges(
       beforeState,
-      afterState,
-      eventPaths
+      afterState
     );
 
     const snapshot: WorkspaceSnapshot = {

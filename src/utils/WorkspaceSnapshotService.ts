@@ -297,17 +297,13 @@ export class WorkspaceSnapshotService {
 
   computeSnapshotChanges(
     before: RawWorkspaceState,
-    after: RawWorkspaceState,
-    eventPaths: Set<string>
+    after: RawWorkspaceState
   ): SnapshotFileChange[] {
     const changes: SnapshotFileChange[] = [];
     const strategy = after.strategy;
 
     // Files in after: created or modified
     for (const [filePath, afterState] of after.files) {
-      if (eventPaths.has(filePath)) {
-        continue;
-      }
       const beforeState = before.files.get(filePath);
       if (!beforeState) {
         // Created during prompt
@@ -330,8 +326,11 @@ export class WorkspaceSnapshotService {
         if (strategy === "git") {
           change.wasAtHead = false;
         }
-        if (beforeState.content !== undefined) {
-          change.contentToRestore = beforeState.content;
+        if (beforeState.content !== undefined && afterState.content !== undefined) {
+          const patchResult = Diff.structuredPatch("", "", beforeState.content, afterState.content);
+          if (patchResult.hunks.length > 0) {
+            change.structuredPatch = patchResult.hunks as UnifiedDiffHunk[];
+          }
         } else {
           change.contentCaptureSkipped = true;
         }
@@ -342,9 +341,6 @@ export class WorkspaceSnapshotService {
 
     // Files in before but not in after: deleted during prompt
     for (const [filePath, beforeState] of before.files) {
-      if (eventPaths.has(filePath)) {
-        continue;
-      }
       if (!after.files.has(filePath)) {
         const change: SnapshotFileChange = {
           path: filePath,
@@ -459,35 +455,6 @@ export class WorkspaceSnapshotService {
           await fs.promises.writeFile(absPath, patched, "utf8");
           restoredFiles.push(instruction.path);
           // Redo: restore the pre-undo state (what was in the file before we reversed the patch)
-          redoInstructions.push({ path: instruction.path, action: "restore-content", contentToRestore: currentContent });
-        } else if (instruction.action === "reverse-patch-chain") {
-          // Apply all patches in reverse order (last edit first) to restore the file to
-          // its pre-prompt state without requiring the full original file to be stored.
-          if (!instruction.structuredPatches || instruction.structuredPatches.length === 0) {
-            failedFiles.push({ path: instruction.path, error: "No patch data for reverse-patch-chain" });
-            continue;
-          }
-          if (currentContent === undefined) {
-            failedFiles.push({ path: instruction.path, error: "File not found" });
-            continue;
-          }
-          let result: string = currentContent;
-          let failError: string | undefined;
-          for (let i = instruction.structuredPatches.length - 1; i >= 0; i--) {
-            const patchStr = buildReversePatchString(instruction.structuredPatches[i]);
-            const applied = Diff.applyPatch(result, patchStr);
-            if (applied === false) {
-              failError = `Patch ${i + 1} of ${instruction.structuredPatches.length} did not apply cleanly`;
-              break;
-            }
-            result = applied;
-          }
-          if (failError !== undefined) {
-            failedFiles.push({ path: instruction.path, error: failError });
-            continue;
-          }
-          await fs.promises.writeFile(absPath, result, "utf8");
-          restoredFiles.push(instruction.path);
           redoInstructions.push({ path: instruction.path, action: "restore-content", contentToRestore: currentContent });
         }
       } catch (err) {

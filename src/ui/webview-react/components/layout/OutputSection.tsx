@@ -267,6 +267,27 @@ export const OutputSection: React.FC = () => {
     return map;
   }, [allMessages]);
 
+  // Map step key → all CLI outputs for that step (for prompt-level undo button on last attempt)
+  const stepOutputsMap = useMemo(() => {
+    const map = new Map<string, CliOutputType[]>();
+    for (const step of stepsToRender) {
+      const key = `${step.target.kind}:${step.target.index}`;
+      map.set(key, step.cliOutputs as CliOutputType[]);
+    }
+    return map;
+  }, [stepsToRender]);
+
+  // Track last CLI message index per step (prompt-level undo button shown only on last attempt)
+  const lastCliIndexPerStep = useMemo(() => {
+    const map = new Map<string, number>();
+    allMessages.forEach((msg, idx) => {
+      if (msg.type === "cli") {
+        map.set(`${msg.target.kind}:${msg.target.index}`, idx);
+      }
+    });
+    return map;
+  }, [allMessages]);
+
   // Check if there's any output
   const hasOutput = allMessages.length > 0;
 
@@ -451,6 +472,8 @@ export const OutputSection: React.FC = () => {
                     ? historyOutputs.steps[item.target.index]?.undoRecord
                     : historyOutputs.finalPromptOutputs?.[item.target.index]?.undoRecord)
                 : undefined;
+              const stepKey = `${item.target.kind}:${item.target.index}`;
+              const isLastCliForStep = lastCliIndexPerStep.get(stepKey) === index;
               return (
                 <React.Fragment key={`cli-${index}`}>
                   {isFirstForStep && (
@@ -477,6 +500,7 @@ export const OutputSection: React.FC = () => {
                     allowUndoActions={allowUndoActions}
                     workspaceSnapshot={stepSnapshot}
                     undoRecord={stepUndoRecord}
+                    allStepOutputs={isLastCliForStep && allowUndoActions ? stepOutputsMap.get(stepKey) : undefined}
                   />
                 </React.Fragment>
               );

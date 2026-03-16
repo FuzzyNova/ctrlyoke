@@ -45,12 +45,16 @@ interface FileRow {
 // Helpers
 // ============================================================================
 
-/** Resolve an undo instruction from a snapshot-only (Tier 2) file change. */
+/** Resolve an undo instruction from a snapshot file change. */
 function resolveSnapshotInstruction(snap: SnapshotFileChange): UndoFileInstruction | null {
   switch (snap.changeType) {
     case "created":
       return { path: snap.path, action: "delete" };
     case "modified":
+      if (snap.wasAtHead) return { path: snap.path, action: "git-restore" };
+      if (snap.structuredPatch && snap.structuredPatch.length > 0)
+        return { path: snap.path, action: "reverse-patch", structuredPatch: snap.structuredPatch };
+      return null;
     case "deleted":
       if (snap.wasAtHead) return { path: snap.path, action: "git-restore" };
       if (snap.contentToRestore != null)
@@ -194,6 +198,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
         tier: "tier2",
         instruction: resolveSnapshotInstruction(snap),
         contentCaptureSkipped: snap.contentCaptureSkipped,
+        structuredPatch: snap.structuredPatch,
       })),
     [input?.snapshotOnlyFiles]
   );

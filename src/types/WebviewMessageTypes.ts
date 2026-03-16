@@ -692,8 +692,7 @@ export type UndoFileAction =
   | "delete"
   | "restore-content"
   | "git-restore"
-  | "reverse-patch"
-  | "reverse-patch-chain";
+  | "reverse-patch";
 
 export interface UndoFileInstruction {
   /** Workspace-relative POSIX path */
@@ -703,17 +702,11 @@ export interface UndoFileInstruction {
   contentToRestore?: string;
   /**
    * Required when action === "reverse-patch".
-   * The original forward-direction diff hunks from a single edit event; applied in reverse
-   * to the current file so only this specific edit is undone, leaving all other edits intact.
+   * The forward-direction diff hunks applied in reverse to restore the file.
+   * For prompt-level undo this is the full before→after snapshot patch.
+   * For single-event undo this is the per-edit patch from the CLI event.
    */
   structuredPatch?: UnifiedDiffHunk[];
-  /**
-   * Required when action === "reverse-patch-chain".
-   * All forward-direction diff hunks from every FILE_EDIT event for this file during the
-   * prompt, in chronological order. The extension applies them in reverse order (last first)
-   * to restore the file to its pre-prompt state without storing the full file content.
-   */
-  structuredPatches?: UnifiedDiffHunk[][];
 }
 
 export interface UndoResult {
