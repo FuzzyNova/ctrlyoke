@@ -261,8 +261,16 @@ export class WebviewMessageRouter {
       this.serializer.handleLoadWorkflow(message);
     });
 
-    table.set(MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY, () => {
-      this.serializer.handleClearWorkflowHistory();
+    table.set(MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY, async () => {
+      const currentWorkingFilePath =
+        this.getOrchestrator()?.getQueueState()?.workingFilePath;
+      const deleted = await this.serializer.handleClearWorkflowHistory();
+      // Clear the stale working file path if it was deleted by the history clear.
+      // Same logic as REMOVE_WORKFLOW_HISTORY — we do NOT call clearWorkflow() to
+      // preserve the user's prompts and source file reference.
+      if (deleted && currentWorkingFilePath) {
+        this.getOrchestrator()?.clearWorkingFilePath();
+      }
     });
 
     // ── Settings — Harness & Model Selection ─────────────────────────────
