@@ -5,29 +5,17 @@ import { BaseLogParser } from "../shared/BaseLogParser";
 import { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
+import { CodexToolBuilder } from "./CodexToolBuilder";
 import {
   UniversalCliOutput,
-  ToolCall,
   ThinkingBlock,
   CliEvent,
   TextData,
   ToolResultData,
-  BashCommandData,
-  FileReadData,
-  FileWriteData,
-  FileEditData,
-  FileDeleteData,
-  McpToolCallData,
-  WebSearchData,
   TokenUsage,
-  UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
-import {
-  CLI_EVENT_TYPES,
-  OPERATION_STATUS,
-} from "../../../types/DashboardConstants";
+import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { CODEX_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
-import { CliEventMapper } from "../shared/CliEventMapper";
 
 // ============================================================================
 // Codex Log Event Payload Types
@@ -428,163 +416,21 @@ export class CodexLogParser extends BaseLogParser {
             // Tool calls - map to semantic event types based on tool name
             if (item.type === "tool_use") {
               const toolName = item.name?.toLowerCase() || "";
-              const params = item.input || {};
-              const callId = item.id;
-              const classification = CliEventMapper.classifyTool(toolName);
-
-              switch (classification.type) {
-                case CLI_EVENT_TYPES.BASH_COMMAND:
-                  if (callId) {
-                    this.toolCallMap.set(callId, {
-                      type: CLI_EVENT_TYPES.BASH_COMMAND,
-                      toolName: "bash",
-                    });
-                  }
-                  outputEvents.push({
-                    type: CLI_EVENT_TYPES.BASH_COMMAND,
-                    timestamp,
-                    data: {
-                      command: (params as any).command || "",
-                      workingDir: (params as any).workingDir,
-                      status: OPERATION_STATUS.INITIATED,
-                    } as BashCommandData,
-                  });
-                  break;
-
-                case CLI_EVENT_TYPES.FILE_READ:
-                  if (callId) {
-                    this.toolCallMap.set(callId, {
-                      type: CLI_EVENT_TYPES.FILE_READ,
-                      toolName: "read_file",
-                    });
-                  }
-                  outputEvents.push({
-                    type: CLI_EVENT_TYPES.FILE_READ,
-                    timestamp,
-                    data: {
-                      path: (params as any).path || (params as any).file || "",
-                      status: OPERATION_STATUS.INITIATED,
-                    } as FileReadData,
-                  });
-                  break;
-
-                case CLI_EVENT_TYPES.FILE_WRITE:
-                  if (callId) {
-                    this.toolCallMap.set(callId, {
-                      type: CLI_EVENT_TYPES.FILE_WRITE,
-                      toolName: "write_file",
-                    });
-                  }
-                  outputEvents.push({
-                    type: CLI_EVENT_TYPES.FILE_WRITE,
-                    timestamp,
-                    data: {
-                      path: (params as any).path || (params as any).file || "",
-                      content: (params as any).content || "",
-                      status: OPERATION_STATUS.INITIATED,
-                    } as FileWriteData,
-                  });
-                  break;
-
-                case CLI_EVENT_TYPES.FILE_EDIT:
-                  if (callId) {
-                    this.toolCallMap.set(callId, {
-                      type: CLI_EVENT_TYPES.FILE_EDIT,
-                      toolName:
-                        toolName === "apply_patch"
-                          ? "apply_patch"
-                          : "edit_file",
-                    });
-                  }
-                  // apply_patch has special structured diff parsing
-                  if (toolName === "apply_patch") {
-                    const patchInput = (params as any).input || "";
-                    let filePath = "unknown";
-                    const fileMatch = patchInput.match(
-                      /\*\*\* (?:Add|Update) File: (.+)/
-                    );
-                    if (fileMatch) {
-                      filePath = fileMatch[1].trim();
-                    }
-                    const structuredPatch = this.parseApplyPatch(patchInput);
-                    Log.debug(
-                      `[CodexLogParser] apply_patch (tool_use) - file=${filePath}, structuredPatch=${structuredPatch ? `${structuredPatch.length} hunks` : "none"}`
-                    );
-                    outputEvents.push({
-                      type: CLI_EVENT_TYPES.FILE_EDIT,
-                      timestamp,
-                      data: {
-                        path: filePath,
-                        structuredPatch,
-                        status: OPERATION_STATUS.INITIATED,
-                      } as FileEditData,
-                    });
-                  } else {
-                    outputEvents.push({
-                      type: CLI_EVENT_TYPES.FILE_EDIT,
-                      timestamp,
-                      data: {
-                        path:
-                          (params as any).path || (params as any).file || "",
-                        oldContent: (params as any).oldContent,
-                        newContent:
-                          (params as any).newContent || (params as any).content,
-                        status: OPERATION_STATUS.INITIATED,
-                      } as FileEditData,
-                    });
-                  }
-                  break;
-
-                case CLI_EVENT_TYPES.FILE_DELETE:
-                  if (callId) {
-                    this.toolCallMap.set(callId, {
-                      type: CLI_EVENT_TYPES.FILE_DELETE,
-                      toolName: "delete_file",
-                    });
-                  }
-                  outputEvents.push({
-                    type: CLI_EVENT_TYPES.FILE_DELETE,
-                    timestamp,
-                    data: {
-                      path: (params as any).path || (params as any).file || "",
-                      status: OPERATION_STATUS.INITIATED,
-                    } as FileDeleteData,
-                  });
-                  break;
-
-                case CLI_EVENT_TYPES.MCP_TOOL_CALL:
-                  outputEvents.push({
-                    type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-                    timestamp,
-                    data: {
-                      server: (classification as { server: string }).server,
-                      tool: (classification as { tool: string }).tool,
-                      parameters: params,
-                    } as McpToolCallData,
-                  });
-                  break;
-
-                case CLI_EVENT_TYPES.WEB_SEARCH:
-                  outputEvents.push({
-                    type: CLI_EVENT_TYPES.WEB_SEARCH,
-                    timestamp,
-                    data: {
-                      query: (params as any).query || "",
-                    } as WebSearchData,
-                  });
-                  break;
-
-                default:
-                  outputEvents.push({
-                    type: CLI_EVENT_TYPES.TOOL_CALL,
-                    timestamp,
-                    data: {
-                      name: item.name,
-                      parameters: params,
-                      id: item.id,
-                    } as ToolCall,
-                  });
+              const params = (item.input || {}) as Record<string, unknown>;
+              const callId = item.id as string | undefined;
+              const event = CodexToolBuilder.buildLogToolInitiatedEvent(
+                toolName,
+                params,
+                callId,
+                timestamp
+              );
+              if (
+                callId &&
+                CodexToolBuilder.needsCompletionTracking(event.type)
+              ) {
+                this.toolCallMap.set(callId, { type: event.type, toolName });
               }
+              outputEvents.push(event);
             }
 
             // Thinking blocks
@@ -639,41 +485,22 @@ export class CodexLogParser extends BaseLogParser {
         }
 
         const functionName = event.payload.name?.toLowerCase() || "";
-        const classification = CliEventMapper.classifyTool(functionName);
-
-        if (classification.type === CLI_EVENT_TYPES.BASH_COMMAND) {
-          const callId = event.payload.call_id ?? event.payload.id;
-
-          // Track call for correlation with output
-          if (callId) {
-            this.toolCallMap.set(callId, {
-              type: CLI_EVENT_TYPES.BASH_COMMAND,
-              toolName: functionName,
-            });
-          }
-
-          outputEvents.push({
-            type: CLI_EVENT_TYPES.BASH_COMMAND,
-            timestamp,
-            data: {
-              command: (params as any).command || (params as any).cmd || "",
-              workingDir: (params as any).workingDir || (params as any).cwd,
-              status: OPERATION_STATUS.INITIATED,
-            } as BashCommandData,
+        const callId = (event.payload.call_id ?? event.payload.id) as
+          | string
+          | undefined;
+        const event2 = CodexToolBuilder.buildLogToolInitiatedEvent(
+          functionName,
+          params,
+          callId,
+          timestamp
+        );
+        if (callId && CodexToolBuilder.needsCompletionTracking(event2.type)) {
+          this.toolCallMap.set(callId, {
+            type: event2.type,
+            toolName: functionName,
           });
         }
-        // Fallback to generic TOOL_CALL for other function calls
-        else {
-          outputEvents.push({
-            type: CLI_EVENT_TYPES.TOOL_CALL,
-            timestamp,
-            data: {
-              name: event.payload.name,
-              parameters: params,
-              id: event.payload.call_id ?? event.payload.id,
-            } as ToolCall,
-          });
-        }
+        outputEvents.push(event2);
       }
 
       // response_item:function_call_output - Function result (COMPLETED event)
@@ -681,53 +508,19 @@ export class CodexLogParser extends BaseLogParser {
         event.type === "response_item" &&
         event.payload?.type === "function_call_output"
       ) {
-        const callId = event.payload.call_id;
+        const callId = event.payload.call_id as string | undefined;
         const toolInfo = callId ? this.toolCallMap.get(callId) : undefined;
-
-        // Check if this is a bash command result
-        if (toolInfo?.type === CLI_EVENT_TYPES.BASH_COMMAND) {
-          // Parse exit code from output (format: "Exit code: 0\n...")
-          const output = event.payload.output || "";
-          const exitCodeMatch = output.match(/Exit code: (\d+)/);
-          const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : 0;
-          const success = exitCode === 0;
-
-          // Extract stdout/stderr from output
-          // Format: "Exit code: X\nWall time: Y\nTotal output lines: Z\nOutput:\n<content>"
-          const outputMatch = output.match(/Output:\n([\s\S]*)$/);
-          const stdout = outputMatch ? outputMatch[1] : output;
-
-          outputEvents.push({
-            type: CLI_EVENT_TYPES.BASH_COMMAND,
-            timestamp,
-            data: {
-              command: "", // Command not in output, was in INITIATED event
-              exitCode,
-              output: stdout,
-              error: success ? undefined : stdout,
-              status: success
-                ? OPERATION_STATUS.COMPLETED
-                : OPERATION_STATUS.FAILED,
-            } as BashCommandData,
-          });
-
-          // Clean up tracking
-          if (callId) {
-            this.toolCallMap.delete(callId);
-          }
-        } else {
-          // Generic tool result for non-bash commands
-          outputEvents.push({
-            type: CLI_EVENT_TYPES.TOOL_RESULT,
-            timestamp,
-            data: {
-              toolCallId: callId,
-              result: {
-                success: true, // Default success for non-bash tools
-                output: event.payload.output,
-              },
-            } as ToolResultData,
-          });
+        const isBash = toolInfo?.type === CLI_EVENT_TYPES.BASH_COMMAND;
+        outputEvents.push(
+          CodexToolBuilder.buildFunctionCallOutputCompletedEvent(
+            isBash,
+            event.payload.output || "",
+            callId,
+            timestamp
+          )
+        );
+        if (callId) {
+          this.toolCallMap.delete(callId);
         }
       }
 
@@ -739,170 +532,30 @@ export class CodexLogParser extends BaseLogParser {
         const toolName = event.payload.name?.toLowerCase() || "";
         const input = event.payload.input;
         let params: Record<string, unknown> =
-          typeof input === "string" ? { input } : input || {};
+          typeof input === "string"
+            ? { input }
+            : (input as Record<string, unknown>) || {};
 
         // Parse JSON input if it's a string
         if (typeof input === "string") {
           try {
-            params = JSON.parse(input);
+            params = JSON.parse(input) as Record<string, unknown>;
           } catch {
             params = { input };
           }
         }
 
-        const classification = CliEventMapper.classifyTool(toolName);
-        const callId = event.payload.call_id;
-
-        switch (classification.type) {
-          case CLI_EVENT_TYPES.BASH_COMMAND:
-            if (callId) {
-              this.toolCallMap.set(callId, {
-                type: CLI_EVENT_TYPES.BASH_COMMAND,
-                toolName,
-              });
-            }
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.BASH_COMMAND,
-              timestamp,
-              data: {
-                command: (params as any).command || (params as any).cmd || "",
-                workingDir: (params as any).workingDir || (params as any).cwd,
-                status: OPERATION_STATUS.INITIATED,
-              } as BashCommandData,
-            });
-            break;
-
-          case CLI_EVENT_TYPES.FILE_READ:
-            if (callId) {
-              this.toolCallMap.set(callId, {
-                type: CLI_EVENT_TYPES.FILE_READ,
-                toolName,
-              });
-            }
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.FILE_READ,
-              timestamp,
-              data: {
-                path: (params as any).path || (params as any).file || "",
-                status: OPERATION_STATUS.INITIATED,
-              } as FileReadData,
-            });
-            break;
-
-          case CLI_EVENT_TYPES.FILE_WRITE:
-            if (callId) {
-              this.toolCallMap.set(callId, {
-                type: CLI_EVENT_TYPES.FILE_WRITE,
-                toolName,
-              });
-            }
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.FILE_WRITE,
-              timestamp,
-              data: {
-                path: (params as any).path || (params as any).file || "",
-                content: (params as any).content || "",
-                status: OPERATION_STATUS.INITIATED,
-              } as FileWriteData,
-            });
-            break;
-
-          case CLI_EVENT_TYPES.FILE_EDIT:
-            if (callId) {
-              this.toolCallMap.set(callId, {
-                type: CLI_EVENT_TYPES.FILE_EDIT,
-                toolName,
-              });
-            }
-            // apply_patch has special structured diff parsing
-            if (toolName === "apply_patch") {
-              const patchInput =
-                typeof input === "string" ? input : (params as any).input || "";
-              let filePath = "unknown";
-              const fileMatch = patchInput.match(
-                /\*\*\* (?:Add|Update) File: (.+)/
-              );
-              if (fileMatch) {
-                filePath = fileMatch[1].trim();
-              }
-              const structuredPatch = this.parseApplyPatch(patchInput);
-              Log.debug(
-                `[CodexLogParser] apply_patch - file=${filePath}, structuredPatch=${structuredPatch ? `${structuredPatch.length} hunks` : "none"}`
-              );
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.FILE_EDIT,
-                timestamp,
-                data: {
-                  path: filePath,
-                  structuredPatch,
-                  status: OPERATION_STATUS.INITIATED,
-                } as FileEditData,
-              });
-            } else {
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.FILE_EDIT,
-                timestamp,
-                data: {
-                  path: (params as any).path || (params as any).file || "",
-                  oldContent: (params as any).oldContent,
-                  newContent:
-                    (params as any).newContent || (params as any).content,
-                  status: OPERATION_STATUS.INITIATED,
-                } as FileEditData,
-              });
-            }
-            break;
-
-          case CLI_EVENT_TYPES.FILE_DELETE:
-            if (callId) {
-              this.toolCallMap.set(callId, {
-                type: CLI_EVENT_TYPES.FILE_DELETE,
-                toolName,
-              });
-            }
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.FILE_DELETE,
-              timestamp,
-              data: {
-                path: (params as any).path || (params as any).file || "",
-                status: OPERATION_STATUS.INITIATED,
-              } as FileDeleteData,
-            });
-            break;
-
-          case CLI_EVENT_TYPES.MCP_TOOL_CALL:
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-              timestamp,
-              data: {
-                server: (classification as { server: string }).server,
-                tool: (classification as { tool: string }).tool,
-                parameters: params,
-              } as McpToolCallData,
-            });
-            break;
-
-          case CLI_EVENT_TYPES.WEB_SEARCH:
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.WEB_SEARCH,
-              timestamp,
-              data: {
-                query: (params as any).query || "",
-              } as WebSearchData,
-            });
-            break;
-
-          default:
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.TOOL_CALL,
-              timestamp,
-              data: {
-                name: event.payload.name,
-                parameters: params,
-                id: event.payload.call_id,
-              } as ToolCall,
-            });
+        const callId = event.payload.call_id as string | undefined;
+        const event3 = CodexToolBuilder.buildLogToolInitiatedEvent(
+          toolName,
+          params,
+          callId,
+          timestamp
+        );
+        if (callId && CodexToolBuilder.needsCompletionTracking(event3.type)) {
+          this.toolCallMap.set(callId, { type: event3.type, toolName });
         }
+        outputEvents.push(event3);
       }
 
       // response_item:custom_tool_call_output - Custom tool result (COMPLETED event)
@@ -910,121 +563,46 @@ export class CodexLogParser extends BaseLogParser {
         event.type === "response_item" &&
         event.payload?.type === "custom_tool_call_output"
       ) {
-        const callId = event.payload.call_id;
+        const callId = event.payload.call_id as string | undefined;
         const toolInfo = callId ? this.toolCallMap.get(callId) : undefined;
 
         // Parse JSON output to extract metadata
-        let parsedOutput: any = {};
-        let outputText = event.payload.output;
+        let parsedOutput: Record<string, any> = {};
+        let outputText: string = event.payload.output as string;
         try {
-          parsedOutput = JSON.parse(event.payload.output);
-          outputText = parsedOutput.output || event.payload.output;
+          parsedOutput = JSON.parse(event.payload.output as string) as Record<
+            string,
+            any
+          >;
+          outputText =
+            (parsedOutput.output as string) || (event.payload.output as string);
         } catch {
           // Use raw output if not JSON
         }
 
-        const exitCode = parsedOutput.metadata?.exit_code;
+        const exitCode = parsedOutput.metadata?.exit_code as number | undefined;
         const success = exitCode === 0 || exitCode === undefined;
 
-        // Emit type-specific COMPLETED event based on original tool call
         if (toolInfo) {
-          const status = success
-            ? OPERATION_STATUS.COMPLETED
-            : OPERATION_STATUS.FAILED;
-
-          switch (toolInfo.type) {
-            case CLI_EVENT_TYPES.BASH_COMMAND:
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.BASH_COMMAND,
-                timestamp,
-                data: {
-                  command: "", // Command not in output, was in INITIATED event
-                  exitCode: exitCode ?? 0,
-                  output: outputText,
-                  error: success ? undefined : outputText,
-                  status,
-                } as BashCommandData,
-              });
-              break;
-
-            case CLI_EVENT_TYPES.FILE_READ:
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.FILE_READ,
-                timestamp,
-                data: {
-                  path: "", // Path not in output, was in INITIATED event
-                  content: outputText,
-                  status,
-                  success,
-                } as FileReadData,
-              });
-              break;
-
-            case CLI_EVENT_TYPES.FILE_WRITE:
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.FILE_WRITE,
-                timestamp,
-                data: {
-                  path: "", // Path not in output, was in INITIATED event
-                  content: "", // Content not in output, was in INITIATED event
-                  status,
-                  success,
-                } as FileWriteData,
-              });
-              break;
-
-            case CLI_EVENT_TYPES.FILE_EDIT:
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.FILE_EDIT,
-                timestamp,
-                data: {
-                  path: "", // Path not in output, was in INITIATED event
-                  status,
-                  success,
-                } as FileEditData,
-              });
-              break;
-
-            case CLI_EVENT_TYPES.FILE_DELETE:
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.FILE_DELETE,
-                timestamp,
-                data: {
-                  path: "", // Path not in output, was in INITIATED event
-                  status,
-                  success,
-                } as FileDeleteData,
-              });
-              break;
-
-            default:
-              // Fallback to generic TOOL_RESULT for unknown types
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.TOOL_RESULT,
-                timestamp,
-                data: {
-                  toolCallId: callId,
-                  result: {
-                    success,
-                    output: outputText,
-                  },
-                } as ToolResultData,
-              });
-          }
-
-          // Clean up tracking
-          this.toolCallMap.delete(callId);
+          outputEvents.push(
+            CodexToolBuilder.buildCustomToolCallCompletedEvent(
+              toolInfo,
+              exitCode,
+              success,
+              outputText,
+              callId,
+              timestamp
+            )
+          );
+          this.toolCallMap.delete(callId!);
         } else {
-          // No tracking info, emit generic TOOL_RESULT
+          // No tracking info — emit generic TOOL_RESULT
           outputEvents.push({
             type: CLI_EVENT_TYPES.TOOL_RESULT,
             timestamp,
             data: {
               toolCallId: callId,
-              result: {
-                success,
-                output: outputText,
-              },
+              result: { success, output: outputText },
             } as ToolResultData,
           });
         }
@@ -1456,143 +1034,6 @@ export class CodexLogParser extends BaseLogParser {
    */
   formatStatistics(metadata: BaseCliEvent): string {
     return this.buildCommonStatisticsParts(metadata, 12).join(" | ");
-  }
-
-  /**
-   * Parse Codex apply_patch format and convert to UnifiedDiffHunk
-   *
-   * Codex uses a custom patch format:
-   * ```
-   * *** Begin Patch
-   * *** Update File: path/to/file.ext
-   * @@
-   * -removed line
-   * +added line
-   *  context line
-   * *** End Patch
-   * ```
-   *
-   * @param patchInput - The patch input string from apply_patch tool
-   * @returns Array of UnifiedDiffHunk objects, or undefined if parse fails
-   *
-   * @remarks
-   * **Patch Format:**
-   * - `*** Begin Patch` - Start marker
-   * - `*** Add File:` or `*** Update File:` - Operation type and file path
-   * - `@@` - Hunk separator
-   * - Lines prefixed with `-` are removed
-   * - Lines prefixed with `+` are added
-   * - Lines with space prefix (or no prefix) are context
-   * - `*** End Patch` - End marker
-   *
-   * **Line Number Inference:**
-   * Since Codex patches don't include explicit line numbers, we infer them:
-   * - Start at line 1 for new files
-   * - Track line numbers as we parse the diff
-   * - Removed lines increment old line counter
-   * - Added lines increment new line counter
-   * - Context lines increment both counters
-   */
-  private parseApplyPatch(patchInput: string): UnifiedDiffHunk[] | undefined {
-    try {
-      const lines = patchInput.split("\n");
-      const hunks: UnifiedDiffHunk[] = [];
-      let currentHunk: UnifiedDiffHunk | null = null;
-      let oldLineNum = 1;
-      let newLineNum = 1;
-      let inPatch = false;
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-
-        // Start of patch
-        if (line.startsWith("*** Begin Patch")) {
-          inPatch = true;
-          continue;
-        }
-
-        // End of patch
-        if (line.startsWith("*** End Patch")) {
-          // Finalize current hunk if exists
-          if (currentHunk && currentHunk.lines.length > 0) {
-            hunks.push(currentHunk);
-          }
-          break;
-        }
-
-        if (!inPatch) {
-          continue;
-        }
-
-        // File operation markers (skip, but could extract file path if needed)
-        if (
-          line.startsWith("*** Add File:") ||
-          line.startsWith("*** Update File:")
-        ) {
-          // Reset line counters for new file
-          oldLineNum = 1;
-          newLineNum = 1;
-          continue;
-        }
-
-        // Hunk separator
-        if (line === "@@" || line.startsWith("@@")) {
-          // Finalize previous hunk
-          if (currentHunk && currentHunk.lines.length > 0) {
-            hunks.push(currentHunk);
-          }
-
-          // Start new hunk
-          currentHunk = {
-            oldStart: oldLineNum,
-            oldLines: 0,
-            newStart: newLineNum,
-            newLines: 0,
-            lines: [],
-          };
-          continue;
-        }
-
-        // Parse diff lines
-        if (currentHunk) {
-          if (line.startsWith("+")) {
-            // Added line
-            currentHunk.lines.push(line); // Keep the + prefix
-            currentHunk.newLines++;
-            newLineNum++;
-          } else if (line.startsWith("-")) {
-            // Removed line
-            currentHunk.lines.push(line); // Keep the - prefix
-            currentHunk.oldLines++;
-            oldLineNum++;
-          } else if (line.startsWith(" ") || line.length === 0) {
-            // Context line (space prefix or empty)
-            currentHunk.lines.push(" " + line.substring(1)); // Ensure space prefix
-            currentHunk.oldLines++;
-            currentHunk.newLines++;
-            oldLineNum++;
-            newLineNum++;
-          } else {
-            // Treat unprefixed lines as context
-            currentHunk.lines.push(" " + line);
-            currentHunk.oldLines++;
-            currentHunk.newLines++;
-            oldLineNum++;
-            newLineNum++;
-          }
-        }
-      }
-
-      // Finalize last hunk if exists
-      if (currentHunk && currentHunk.lines.length > 0) {
-        hunks.push(currentHunk);
-      }
-
-      return hunks.length > 0 ? hunks : undefined;
-    } catch (error) {
-      Log.debug(`[CodexLogParser] Failed to parse apply_patch input: ${error}`);
-      return undefined;
-    }
   }
 
   /**
