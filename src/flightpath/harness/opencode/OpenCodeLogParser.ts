@@ -12,6 +12,7 @@ import {
   TokenUsage,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import { mapOpenCodeToolPartToCliEvent, accumulateOpenCodeStepTokens } from "./OpenCodeEventMapper";
 import { Log } from "../../../utils/Log";
 
 const execAsync = promisify(exec);
@@ -237,7 +238,7 @@ export class OpenCodeLogParser extends BaseLogParser {
         case "tool_use": {
           const part = e.part as Record<string, any> | undefined;
           if (part) {
-            const toolEvent = this.mapToolPartToCliEvent(
+            const toolEvent = mapOpenCodeToolPartToCliEvent(
               e.timestamp as number | undefined,
               part
             );
@@ -250,23 +251,8 @@ export class OpenCodeLogParser extends BaseLogParser {
         case "step_finish": {
           const tokens = e.part?.tokens as Record<string, any> | undefined;
           if (tokens) {
-            tokenUsage.inputTokens =
-              (tokenUsage.inputTokens ?? 0) + ((tokens.input as number) ?? 0);
-            tokenUsage.outputTokens =
-              (tokenUsage.outputTokens ?? 0) + ((tokens.output as number) ?? 0);
-            tokenUsage.totalTokens =
-              (tokenUsage.totalTokens ?? 0) +
-              ((tokens.input as number) ?? 0) +
-              ((tokens.output as number) ?? 0);
-            if (tokens.cache?.read) {
-              tokenUsage.cachedInputTokens =
-                (tokenUsage.cachedInputTokens ?? 0) +
-                (tokens.cache.read as number);
-            }
-            // tokens.total = full context occupancy for this step; track the last value.
-            if (typeof tokens.total === "number") {
-              lastStepTotal = tokens.total as number;
-            }
+            const stepTotal = accumulateOpenCodeStepTokens(tokens, tokenUsage);
+            if (stepTotal !== undefined) lastStepTotal = stepTotal;
           }
           break;
         }
@@ -461,89 +447,4 @@ export class OpenCodeLogParser extends BaseLogParser {
     }
   }
 
-  /**
-   * Map a tool_use part to a CliEvent for display.
-   * Handles the opencode tool names (read, write, edit, bash) and their
-   * camelCase input field names (filePath vs file_path).
-   */
-  private mapToolPartToCliEvent(
-    timestamp: number | undefined,
-    part: Record<string, any>
-  ): CliEvent | undefined {
-    const toolName = part.tool as string | undefined;
-    if (!toolName) {
-      return undefined;
-    }
-
-    const input = part.state?.input ?? {};
-    const output = part.state?.output ?? "";
-    const isCompleted = part.state?.status === "completed";
-
-    switch (toolName) {
-      case "bash":
-        return {
-          type: CLI_EVENT_TYPES.BASH_COMMAND,
-          timestamp,
-          data: {
-            command: input.command ?? "",
-            output:
-              typeof output === "string" ? output : JSON.stringify(output),
-            exitCode: part.state?.metadata?.exit,
-          },
-        };
-
-      case "write":
-        return {
-          type: CLI_EVENT_TYPES.FILE_WRITE,
-          timestamp,
-          data: {
-            path: input.filePath ?? input.path ?? input.file_path ?? "",
-            content: input.content ?? "",
-          },
-        };
-
-      case "edit": {
-        const filediff = part.state?.metadata?.filediff;
-        return {
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp,
-          data: {
-            path: input.filePath ?? input.path ?? input.file_path ?? "",
-            oldContent: filediff?.before ?? input.oldString ?? "",
-            newContent: filediff?.after ?? input.newString ?? "",
-            originalFile: filediff?.before,
-            success: isCompleted,
-          },
-        };
-      }
-
-      case "read":
-        return {
-          type: CLI_EVENT_TYPES.FILE_READ,
-          timestamp,
-          data: {
-            path: input.filePath ?? input.path ?? input.file_path ?? "",
-          },
-        };
-
-      default:
-        return {
-          type: CLI_EVENT_TYPES.TOOL_CALL,
-          timestamp,
-          data: {
-            name: toolName,
-            parameters: input as Record<string, unknown>,
-            result: isCompleted
-              ? {
-                  success: true,
-                  output:
-                    typeof output === "string"
-                      ? output
-                      : JSON.stringify(output),
-                }
-              : undefined,
-          },
-        };
-    }
-  }
 }

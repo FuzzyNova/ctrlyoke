@@ -33,11 +33,11 @@ export function resolveEventUndoInstruction(
     case CLI_EVENT_TYPES.FILE_EDIT: {
       const d = event.data as FileEditData;
       if (!d.path) return null;
+      // Only restore when we have the full pre-edit file content.
+      // d.oldContent is the old_string substring passed to the edit tool, not the full
+      // file — restoring the file to just that substring would delete everything else.
       if (d.originalFile != null)
         return { path: d.path, action: "restore-content", contentToRestore: d.originalFile };
-      if (d.oldContent != null)
-        return { path: d.path, action: "restore-content", contentToRestore: d.oldContent };
-      // structuredPatch only: cannot reverse without current file content in webview
       return null;
     }
     case CLI_EVENT_TYPES.FILE_WRITE: {
@@ -94,11 +94,45 @@ export function getFileEventPaths(cliOutputs: CliOutput[]): Set<string> {
   return paths;
 }
 
+/** Per-file accumulator used while building Tier 1 undo candidates. */
+interface FileAccum {
+  changeType: PromptChangeType;
+  /** structuredPatch arrays from every FILE_EDIT event, in chronological order */
+  patches: NonNullable<UndoFileCandidate["structuredPatch"]>[];
+  /** True if any FILE_EDIT for this file lacked a structuredPatch */
+  anyMissingPatch: boolean;
+  /** True if any non-FILE_EDIT event (FILE_WRITE / FILE_DELETE) touched this file */
+  hasNonEditEvent: boolean;
+  /** Fallback instruction from the first event — used for old history files (originalFile)
+   *  and for non-edit events (delete / git-restore). */
+  fallbackInstruction: UndoFileInstruction | null;
+  /** Display: first-write-wins (shows what the file looked like before AI touched it) */
+  oldContent: string | undefined;
+  /** Display: last-write-wins (shows the most recent change for context) */
+  newContent: string | undefined;
+  /** Display: last-write-wins (most recent structured diff, for inline preview) */
+  structuredPatch: UndoFileCandidate["structuredPatch"];
+  afterHash: string | undefined;
+  contentCaptureSkipped: boolean | undefined;
+  wasAtHead: boolean | undefined;
+}
+
 /**
  * Build the full list of undo candidates for a set of CliOutputs and an optional snapshot.
  *
  * Tier 1: derived from structured CLI events (high confidence).
  * Tier 2: snapshot-only entries whose paths are NOT covered by any event (lower confidence).
+ *
+ * Prompt-level undo strategy for FILE_EDIT files (applied in priority order):
+ *  1. reverse-patch-chain — when ALL FILE_EDIT events have a structuredPatch AND no
+ *     non-edit event touched the file. Applies each patch in reverse (last→first) to
+ *     reconstruct the pre-prompt state without storing full file content.
+ *  2. restore-content    — fallback for old history files that stored originalFile on the
+ *     first edit event. Used when any edit lacks a structuredPatch.
+ *  3. null               — no undo available (harness never provided patch data or originalFile).
+ *
+ * FILE_WRITE / FILE_DELETE events are always handled via their own fallback logic
+ * (delete / git-restore / restore-content from snapshot), never reverse-patch-chain.
  */
 export function buildUndoCandidatesForOutputs(
   cliOutputs: CliOutput[],
@@ -106,8 +140,8 @@ export function buildUndoCandidatesForOutputs(
 ): UndoFileCandidate[] {
   const snapshotFiles: SnapshotFileChange[] = snapshot?.changedFiles ?? [];
 
-  // Collect Tier 1 candidates, last-write-wins per path across all attempts.
-  const tier1Map = new Map<string, UndoFileCandidate>();
+  const accumMap = new Map<string, FileAccum>();
+
   for (const output of cliOutputs) {
     const events = output.structured?.events;
     if (!events) continue;
@@ -115,39 +149,87 @@ export function buildUndoCandidatesForOutputs(
       const changeType = eventTypeToChangeType(event.type);
       if (!changeType) continue;
       const d = event.data as FileEditData | FileWriteData | FileDeleteData;
-      const path = d.path;
-      if (!path) continue;
-      const instruction = resolveEventUndoInstruction(event, snapshotFiles);
-      const snapEntry = snapshotFiles.find((f) => f.path === path);
+      const filePath = d.path;
+      if (!filePath) continue;
 
-      // Carry diff data for FILE_EDIT events so the dialog can render a preview
-      let oldContent: string | undefined;
-      let newContent: string | undefined;
-      let structuredPatch: UndoFileCandidate["structuredPatch"];
+      const snapEntry = snapshotFiles.find((f) => f.path === filePath);
+      const existing = accumMap.get(filePath);
+
+      let patches = existing?.patches ?? [];
+      let anyMissingPatch = existing?.anyMissingPatch ?? false;
+      let hasNonEditEvent = existing?.hasNonEditEvent ?? false;
+      let fallbackInstruction = existing?.fallbackInstruction ?? null;
+      let oldContent = existing?.oldContent;
+      let newContent = existing?.newContent;
+      let structuredPatch = existing?.structuredPatch;
+
       if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
         const editData = d as FileEditData;
-        oldContent = editData.originalFile ?? editData.oldContent;
+        if (editData.structuredPatch && editData.structuredPatch.length > 0) {
+          patches = [...patches, editData.structuredPatch];
+        } else {
+          anyMissingPatch = true;
+        }
+        // Fallback instruction: first FILE_EDIT's originalFile (backward compat with old history)
+        if (fallbackInstruction === null) {
+          fallbackInstruction = resolveEventUndoInstruction(event, snapshotFiles);
+        }
+        // Display: first-write-wins for oldContent, last-write-wins for newContent/patch
+        if (oldContent === undefined) {
+          oldContent = editData.originalFile ?? editData.oldContent;
+        }
         newContent = editData.newContent;
         structuredPatch = editData.structuredPatch;
+      } else {
+        // FILE_WRITE or FILE_DELETE
+        hasNonEditEvent = true;
+        if (fallbackInstruction === null) {
+          fallbackInstruction = resolveEventUndoInstruction(event, snapshotFiles);
+        }
       }
 
-      tier1Map.set(path, {
-        path,
+      accumMap.set(filePath, {
         changeType,
-        tier: "tier1",
-        instruction,
-        afterHash: snapEntry?.afterHash,
-        contentCaptureSkipped: snapEntry?.contentCaptureSkipped,
-        wasAtHead: snapEntry?.wasAtHead,
+        patches,
+        anyMissingPatch,
+        hasNonEditEvent,
+        fallbackInstruction,
         oldContent,
         newContent,
         structuredPatch,
+        afterHash: snapEntry?.afterHash ?? existing?.afterHash,
+        contentCaptureSkipped: snapEntry?.contentCaptureSkipped ?? existing?.contentCaptureSkipped,
+        wasAtHead: snapEntry?.wasAtHead ?? existing?.wasAtHead,
       });
     }
   }
 
-  const tier1Candidates = Array.from(tier1Map.values());
-  const tier1Paths = new Set(tier1Map.keys());
+  const tier1Candidates: UndoFileCandidate[] = Array.from(accumMap.entries()).map(
+    ([filePath, accum]) => {
+      let instruction: UndoFileInstruction | null;
+      if (!accum.hasNonEditEvent && !accum.anyMissingPatch && accum.patches.length > 0) {
+        // All events are FILE_EDITs and every one has a structuredPatch: use chain undo
+        instruction = { path: filePath, action: "reverse-patch-chain", structuredPatches: accum.patches };
+      } else {
+        // Fall back to restore-content (old history) / delete / git-restore / null
+        instruction = accum.fallbackInstruction;
+      }
+      return {
+        path: filePath,
+        changeType: accum.changeType,
+        tier: "tier1",
+        instruction,
+        oldContent: accum.oldContent,
+        newContent: accum.newContent,
+        structuredPatch: accum.structuredPatch,
+        afterHash: accum.afterHash,
+        contentCaptureSkipped: accum.contentCaptureSkipped,
+        wasAtHead: accum.wasAtHead,
+      };
+    }
+  );
+
+  const tier1Paths = new Set(accumMap.keys());
 
   // Collect Tier 2 candidates: snapshot entries not covered by any event.
   const tier2Candidates: UndoFileCandidate[] = snapshotFiles
@@ -223,6 +305,9 @@ export function buildUndoDialogInputForPrompt(
  * events array of a single CliOutput).  Unlike buildUndoDialogInputForSingleFile, this does
  * NOT use last-write-wins across all events for the path — it targets the exact event the
  * user clicked so that individual diffs can be undone independently.
+ *
+ * For FILE_EDIT events, uses reverse-patch rather than restore-content so that only the
+ * clicked diff is reverted, leaving all other edits to the file intact.
  */
 export function buildUndoDialogInputForSpecificEvent(
   target: UndoExecutionTarget,
@@ -245,16 +330,28 @@ export function buildUndoDialogInputForSpecificEvent(
     return { scope, eventAttributedFiles: [], snapshotOnlyFiles: [], workspacePath };
   }
 
-  const instruction = resolveEventUndoInstruction(event, snapshotFiles);
-
+  // For FILE_EDIT: prefer reverse-patch so only this edit is undone (other edits stay intact).
+  // Fall back to restore-content (via resolveEventUndoInstruction) only when no patch is available.
+  let instruction: UndoFileInstruction | null;
   let oldContent: string | undefined;
   let newContent: string | undefined;
   let structuredPatch: UndoFileCandidate["structuredPatch"];
+
   if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
     const editData = event.data as FileEditData;
     oldContent = editData.originalFile ?? editData.oldContent;
     newContent = editData.newContent;
     structuredPatch = editData.structuredPatch;
+
+    if (structuredPatch && structuredPatch.length > 0) {
+      // Reverse-patch: the extension reads the current file and applies this patch in reverse.
+      instruction = { path, action: "reverse-patch", structuredPatch };
+    } else {
+      // No structured patch — fall back to restore-content with originalFile if available.
+      instruction = resolveEventUndoInstruction(event, snapshotFiles);
+    }
+  } else {
+    instruction = resolveEventUndoInstruction(event, snapshotFiles);
   }
 
   const candidate: UndoFileCandidate = {

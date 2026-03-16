@@ -29,6 +29,7 @@ import type {
   CliEvent as CliOutputEvent,
   UniversalCliOutput,
   ToolResult,
+  UnifiedDiffHunk,
 } from "./CliOutputTypes";
 import type {
   WorkspaceSnapshot,
@@ -687,7 +688,12 @@ export type {
   UndoRecord,
 } from "./OutputHistoryTypes";
 
-export type UndoFileAction = "delete" | "restore-content" | "git-restore";
+export type UndoFileAction =
+  | "delete"
+  | "restore-content"
+  | "git-restore"
+  | "reverse-patch"
+  | "reverse-patch-chain";
 
 export interface UndoFileInstruction {
   /** Workspace-relative POSIX path */
@@ -695,6 +701,19 @@ export interface UndoFileInstruction {
   action: UndoFileAction;
   /** Required when action === "restore-content" */
   contentToRestore?: string;
+  /**
+   * Required when action === "reverse-patch".
+   * The original forward-direction diff hunks from a single edit event; applied in reverse
+   * to the current file so only this specific edit is undone, leaving all other edits intact.
+   */
+  structuredPatch?: UnifiedDiffHunk[];
+  /**
+   * Required when action === "reverse-patch-chain".
+   * All forward-direction diff hunks from every FILE_EDIT event for this file during the
+   * prompt, in chronological order. The extension applies them in reverse order (last first)
+   * to restore the file to its pre-prompt state without storing the full file content.
+   */
+  structuredPatches?: UnifiedDiffHunk[][];
 }
 
 export interface UndoResult {

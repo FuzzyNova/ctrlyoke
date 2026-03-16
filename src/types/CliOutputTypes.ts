@@ -227,7 +227,12 @@ export interface FileEditData {
   status?: FileOperationStatus;
   /** Structured diff hunks with accurate line numbers (Claude CLI) */
   structuredPatch?: UnifiedDiffHunk[];
-  /** Full file content before edit (Claude CLI) */
+  /**
+   * Full file content before edit.
+   * @deprecated No longer populated by parsers — kept only for backward compatibility
+   * when loading old history files that were saved before the reverse-patch-chain refactor.
+   * Prompt-level undo now uses `reverse-patch-chain` (structuredPatches) instead.
+   */
   originalFile?: string;
   /** Whether user manually modified the edit (Claude CLI) */
   userModified?: boolean;

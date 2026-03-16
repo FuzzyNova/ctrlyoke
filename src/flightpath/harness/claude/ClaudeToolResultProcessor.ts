@@ -131,7 +131,6 @@ export function processToolUseResultMetadata(
         oldContent: oldString,
         newContent: newString,
         structuredPatch: toolUseResult.structuredPatch,
-        originalFile: toolUseResult.originalFile,
         userModified: toolUseResult.userModified,
         replaceAll: toolUseResult.replaceAll,
         status: OPERATION_STATUS.COMPLETED,

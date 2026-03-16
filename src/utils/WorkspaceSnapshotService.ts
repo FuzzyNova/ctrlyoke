@@ -3,6 +3,7 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import * as Diff from "diff";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import type {
   WorkspaceSnapshot,
@@ -13,6 +14,7 @@ import type {
   UndoFileInstruction,
   UndoResult,
 } from "../types/WebviewMessageTypes";
+import type { UnifiedDiffHunk } from "../types/CliOutputTypes";
 import { Log } from "./Log";
 
 const execFileAsync = promisify(execFile);
@@ -191,6 +193,34 @@ async function walkDirectory(
       });
     }
   }
+}
+
+/**
+ * Convert a forward-direction UnifiedDiffHunk[] to a reversed unified diff string
+ * that can be passed to Diff.applyPatch() to undo a specific edit without affecting
+ * any other edits to the file.
+ *
+ * Each hunk is reversed by:
+ *  - Swapping old/new line counts in the @@ header
+ *  - Turning '+' lines into '-' (they're in the current file; we remove them)
+ *  - Turning '-' lines into '+' (they were in the old file; we restore them)
+ *  - Leaving context lines unchanged
+ */
+function buildReversePatchString(hunks: UnifiedDiffHunk[]): string {
+  let patch = "--- b\n+++ a\n";
+  for (const hunk of hunks) {
+    patch += `@@ -${hunk.newStart},${hunk.newLines} +${hunk.oldStart},${hunk.oldLines} @@\n`;
+    for (const line of hunk.lines) {
+      if (line.startsWith("+")) {
+        patch += "-" + line.slice(1) + "\n";
+      } else if (line.startsWith("-")) {
+        patch += "+" + line.slice(1) + "\n";
+      } else {
+        patch += line + "\n";
+      }
+    }
+  }
+  return patch;
 }
 
 export class WorkspaceSnapshotService {
@@ -408,6 +438,57 @@ export class WorkspaceSnapshotService {
           } else {
             redoInstructions.push({ path: instruction.path, action: "delete" });
           }
+        } else if (instruction.action === "reverse-patch") {
+          if (!instruction.structuredPatch || instruction.structuredPatch.length === 0) {
+            failedFiles.push({ path: instruction.path, error: "No patch data for reverse-patch" });
+            continue;
+          }
+          if (currentContent === undefined) {
+            failedFiles.push({ path: instruction.path, error: "File not found" });
+            continue;
+          }
+          const reversePatchStr = buildReversePatchString(instruction.structuredPatch);
+          const patched = Diff.applyPatch(currentContent, reversePatchStr);
+          if (patched === false) {
+            failedFiles.push({
+              path: instruction.path,
+              error: "Patch did not apply cleanly — the file may have changed since this edit was made",
+            });
+            continue;
+          }
+          await fs.promises.writeFile(absPath, patched, "utf8");
+          restoredFiles.push(instruction.path);
+          // Redo: restore the pre-undo state (what was in the file before we reversed the patch)
+          redoInstructions.push({ path: instruction.path, action: "restore-content", contentToRestore: currentContent });
+        } else if (instruction.action === "reverse-patch-chain") {
+          // Apply all patches in reverse order (last edit first) to restore the file to
+          // its pre-prompt state without requiring the full original file to be stored.
+          if (!instruction.structuredPatches || instruction.structuredPatches.length === 0) {
+            failedFiles.push({ path: instruction.path, error: "No patch data for reverse-patch-chain" });
+            continue;
+          }
+          if (currentContent === undefined) {
+            failedFiles.push({ path: instruction.path, error: "File not found" });
+            continue;
+          }
+          let result: string = currentContent;
+          let failError: string | undefined;
+          for (let i = instruction.structuredPatches.length - 1; i >= 0; i--) {
+            const patchStr = buildReversePatchString(instruction.structuredPatches[i]);
+            const applied = Diff.applyPatch(result, patchStr);
+            if (applied === false) {
+              failError = `Patch ${i + 1} of ${instruction.structuredPatches.length} did not apply cleanly`;
+              break;
+            }
+            result = applied;
+          }
+          if (failError !== undefined) {
+            failedFiles.push({ path: instruction.path, error: failError });
+            continue;
+          }
+          await fs.promises.writeFile(absPath, result, "utf8");
+          restoredFiles.push(instruction.path);
+          redoInstructions.push({ path: instruction.path, action: "restore-content", contentToRestore: currentContent });
         }
       } catch (err) {
         failedFiles.push({

@@ -178,6 +178,7 @@ export class CopilotResponseParser
                     ? OPERATION_STATUS.COMPLETED
                     : OPERATION_STATUS.FAILED,
                   success,
+                  error: json.data?.error?.message,
                 } as FileEditData,
               });
               pendingToolCalls.delete(toolCallId);
@@ -518,6 +519,7 @@ export class CopilotResponseParser
                     ? OPERATION_STATUS.COMPLETED
                     : OPERATION_STATUS.FAILED,
                   success,
+                  error: json.data?.error?.message,
                 } as FileEditData,
               });
               pendingCalls!.delete(toolCallId);

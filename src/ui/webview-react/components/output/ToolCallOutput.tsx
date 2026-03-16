@@ -351,10 +351,13 @@ export const FileEditOutput = memo<FileEditOutputProps>(
     };
 
     const hasDiffData =
-      (structuredPatch && structuredPatch.length > 0) ||
-      (oldContent && newContent);
+      status !== OPERATION_STATUS.FAILED &&
+      ((structuredPatch && structuredPatch.length > 0) ||
+        (oldContent && newContent));
 
-    const undoButton = onUndoFile && status !== OPERATION_STATUS.INITIATED ? (
+    const undoButton = onUndoFile &&
+      status !== OPERATION_STATUS.INITIATED &&
+      status !== OPERATION_STATUS.FAILED ? (
       <button
         type="button"
         className="text-[10px] font-bold uppercase text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
