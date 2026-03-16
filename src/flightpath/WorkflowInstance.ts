@@ -40,6 +40,8 @@ import { PromptFileLoader } from "./orchestration/PromptFileLoader";
 import { PromptFileWatcher } from "./orchestration/PromptFileWatcher";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { IntegrationFactory } from "./IntegrationFactory";
+import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
+import type { UndoExecutionTarget } from "../types/OutputHistoryTypes";
 
 /**
  * WorkflowInstance
@@ -2056,6 +2058,13 @@ export class WorkflowInstance {
             message,
             severity,
           });
+        },
+        snapshotService: new WorkspaceSnapshotService(),
+        onSnapshotCaptured: (target, snapshot) => {
+          self.activeDashboard?.sendStepUndoDataUpdated(
+            target as UndoExecutionTarget,
+            snapshot
+          );
         },
       };
 
