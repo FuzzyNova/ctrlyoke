@@ -582,7 +582,7 @@ export class WorkflowSerializer {
     try {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!workspaceRoot) {
-        return;
+        return false;
       }
 
       const queueDir = path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.QUEUE_DIR);

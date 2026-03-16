@@ -11,27 +11,16 @@ import {
 } from "../../../utils/RetryUtils";
 import {
   UniversalCliOutput,
-  ToolCall,
   ThinkingBlock,
   CliEvent,
   TextData,
-  BashCommandData,
-  FileReadData,
-  FileWriteData,
-  FileEditData,
-  FileDeleteData,
-  McpToolCallData,
-  WebSearchData,
 } from "../../../types/CliOutputTypes";
-import {
-  CLI_EVENT_TYPES,
-  OPERATION_STATUS,
-} from "../../../types/DashboardConstants";
-import { CliEventMapper } from "../shared/CliEventMapper";
+import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import {
   processToolResultContentBlocks,
   processToolUseResultMetadata,
 } from "./ClaudeToolResultProcessor";
+import { ClaudeToolInitiatedBuilder } from "./ClaudeToolInitiatedBuilder";
 
 /**
  * Claude CLI Log Parser
@@ -217,95 +206,14 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
           // TOOL_USE - Map Claude tools to semantic event types
           if (contentBlock.type === "tool_use") {
-            const toolName = contentBlock.name;
-            const input = contentBlock.input || {};
-            const classification = CliEventMapper.classifyTool(toolName);
-
-            switch (classification.type) {
-              case CLI_EVENT_TYPES.BASH_COMMAND:
-                outputEvents.push({
-                  type: CLI_EVENT_TYPES.BASH_COMMAND,
-                  timestamp,
-                  data: {
-                    command: input.command || "unknown",
-                    workingDir: input.working_dir || input.cwd,
-                    status: OPERATION_STATUS.INITIATED,
-                  } as BashCommandData,
-                });
-                break;
-              case CLI_EVENT_TYPES.FILE_WRITE:
-                outputEvents.push({
-                  type: CLI_EVENT_TYPES.FILE_WRITE,
-                  timestamp,
-                  data: {
-                    path: input.path || "unknown",
-                    content: input.content || "",
-                    status: OPERATION_STATUS.INITIATED,
-                  } as FileWriteData,
-                });
-                break;
-              case CLI_EVENT_TYPES.FILE_EDIT:
-                outputEvents.push({
-                  type: CLI_EVENT_TYPES.FILE_EDIT,
-                  timestamp,
-                  data: {
-                    path: input.path || "unknown",
-                    oldContent: input.old_content || input.old_str,
-                    newContent: input.new_content || input.new_str,
-                    status: OPERATION_STATUS.INITIATED,
-                  } as FileEditData,
-                });
-                break;
-              case CLI_EVENT_TYPES.FILE_READ:
-                outputEvents.push({
-                  type: CLI_EVENT_TYPES.FILE_READ,
-                  timestamp,
-                  data: {
-                    path: input.path || "unknown",
-                    status: OPERATION_STATUS.INITIATED,
-                  } as FileReadData,
-                });
-                break;
-              case CLI_EVENT_TYPES.FILE_DELETE:
-                outputEvents.push({
-                  type: CLI_EVENT_TYPES.FILE_DELETE,
-                  timestamp,
-                  data: {
-                    path: input.path || "unknown",
-                  } as FileDeleteData,
-                });
-                break;
-              case CLI_EVENT_TYPES.WEB_SEARCH:
-                outputEvents.push({
-                  type: CLI_EVENT_TYPES.WEB_SEARCH,
-                  timestamp,
-                  data: {
-                    query: input.query || "",
-                  } as WebSearchData,
-                });
-                break;
-              case CLI_EVENT_TYPES.MCP_TOOL_CALL:
-                outputEvents.push({
-                  type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-                  timestamp,
-                  data: {
-                    server: (classification as { server: string }).server,
-                    tool: (classification as { tool: string }).tool,
-                    parameters: input,
-                  } as McpToolCallData,
-                });
-                break;
-              default:
-                outputEvents.push({
-                  type: CLI_EVENT_TYPES.TOOL_CALL,
-                  timestamp,
-                  data: {
-                    name: toolName,
-                    parameters: input,
-                    id: contentBlock.id,
-                  } as ToolCall,
-                });
-            }
+            outputEvents.push(
+              ClaudeToolInitiatedBuilder.buildEvent(
+                contentBlock.name,
+                contentBlock.input || {},
+                contentBlock.id,
+                timestamp
+              )
+            );
           }
         }
 

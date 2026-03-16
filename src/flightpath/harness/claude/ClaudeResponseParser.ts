@@ -7,18 +7,15 @@ import {
   CliEvent,
   TokenUsage,
 } from "../../../types/CliOutputTypes";
-import {
-  CLI_EVENT_TYPES,
-  OPERATION_STATUS,
-} from "../../../types/DashboardConstants";
+import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { getClaudeContextWindowSize } from "../../../utils/ModelConstants";
 import { CliResponseParser } from "../shared/CliResponseParser";
-import { CliEventMapper } from "../shared/CliEventMapper";
 import {
   processToolResultContentBlocks,
   processToolUseResultMetadata,
 } from "./ClaudeToolResultProcessor";
+import { ClaudeToolInitiatedBuilder } from "./ClaudeToolInitiatedBuilder";
 
 /**
  * Extended usage statistics from Claude CLI.
@@ -303,143 +300,15 @@ export class ClaudeResponseParser
 
       // Handle tool_use blocks - map to semantic event types
       if (contentBlock.type === "tool_use") {
-        this.mapToolToSemanticEvent(contentBlock, events);
-      }
-    }
-  }
-
-  /**
-   * Map Claude tool_use block to semantic event type
-   *
-   * Maps Claude-specific tool names to semantic event types:
-   * - "bash" or "shell" → BASH_COMMAND
-   * - "write" → FILE_WRITE
-   * - "edit" or "apply_patch" → FILE_EDIT
-   * - "read" → FILE_READ
-   * - Unknown tools → TOOL_CALL (fallback)
-   *
-   * @param toolUse Tool use content block
-   * @param events Array to append events to
-   */
-  private mapToolToSemanticEvent(toolUse: any, events: CliEvent[]): void {
-    const toolName = toolUse.name;
-    const input = toolUse.input || {};
-    const classification = CliEventMapper.classifyTool(toolName);
-    const timestamp = Date.now();
-
-    switch (classification.type) {
-      case CLI_EVENT_TYPES.BASH_COMMAND:
-        events.push({
-          type: CLI_EVENT_TYPES.BASH_COMMAND,
-          timestamp,
-          data: {
-            command: input.command || input.cmd || "unknown",
-            workingDir: input.cwd || input.workingDir,
-            status: OPERATION_STATUS.INITIATED,
-          },
-        });
-        return;
-
-      case CLI_EVENT_TYPES.FILE_WRITE:
-        events.push({
-          type: CLI_EVENT_TYPES.FILE_WRITE,
-          timestamp,
-          data: {
-            path: input.path || input.file_path || "unknown",
-            content: input.content || input.file_text || "",
-            status: OPERATION_STATUS.INITIATED,
-            success: input.success,
-            error: input.error,
-          },
-        });
-        return;
-
-      case CLI_EVENT_TYPES.FILE_EDIT: {
-        const oldContent =
-          input.oldString || input.old_string || input.oldContent;
-        const newContent =
-          input.newString || input.new_string || input.newContent;
-
-        Log.debug(
-          `[ClaudeParser] Edit operation - old_string=${oldContent ? "present" : "missing"}, new_string=${newContent ? "present" : "missing"}, input keys=${Object.keys(input).join(", ")}`
+        events.push(
+          ClaudeToolInitiatedBuilder.buildEvent(
+            contentBlock.name,
+            contentBlock.input || {},
+            contentBlock.id,
+            Date.now()
+          )
         );
-
-        events.push({
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp,
-          data: {
-            path: input.path || input.file_path || "unknown",
-            oldContent,
-            newContent,
-            status: OPERATION_STATUS.INITIATED,
-            success: input.success,
-            error: input.error,
-          },
-        });
-        return;
       }
-
-      case CLI_EVENT_TYPES.FILE_READ:
-        events.push({
-          type: CLI_EVENT_TYPES.FILE_READ,
-          timestamp,
-          data: {
-            path: input.path || input.file_path || "unknown",
-            content: input.content,
-            status: OPERATION_STATUS.INITIATED,
-            success: input.success,
-            error: input.error,
-          },
-        });
-        return;
-
-      case CLI_EVENT_TYPES.FILE_DELETE:
-        events.push({
-          type: CLI_EVENT_TYPES.FILE_DELETE,
-          timestamp,
-          data: {
-            path: input.path || input.file_path || "unknown",
-            success: input.success,
-            error: input.error,
-          },
-        });
-        return;
-
-      case CLI_EVENT_TYPES.WEB_SEARCH:
-        events.push({
-          type: CLI_EVENT_TYPES.WEB_SEARCH,
-          timestamp,
-          data: {
-            query: input.query || "",
-            results: input.results,
-            success: input.success,
-            error: input.error,
-          },
-        });
-        return;
-
-      case CLI_EVENT_TYPES.MCP_TOOL_CALL:
-        events.push({
-          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-          timestamp,
-          data: {
-            server: (classification as { server: string }).server,
-            tool: (classification as { tool: string }).tool,
-            parameters: input,
-          },
-        });
-        return;
-
-      default:
-        events.push({
-          type: CLI_EVENT_TYPES.TOOL_CALL,
-          timestamp,
-          data: {
-            name: toolName,
-            parameters: input,
-            id: toolUse.id,
-          },
-        });
     }
   }
 
@@ -572,13 +441,13 @@ export class ClaudeResponseParser
               try {
                 const input = JSON.parse(block.accumulatedJson);
                 // Map to semantic event type
-                this.mapToolToSemanticEvent(
-                  {
-                    name: block.name,
+                events.push(
+                  ClaudeToolInitiatedBuilder.buildEvent(
+                    block.name,
                     input,
-                    id: block.id,
-                  },
-                  events
+                    block.id,
+                    Date.now()
+                  )
                 );
               } catch (e) {
                 Log.debug(
