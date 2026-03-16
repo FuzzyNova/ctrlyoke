@@ -34,7 +34,7 @@ export interface AgentInfo {
  * RESPONSIBILITY: Discover custom agent files from multiple locations
  *
  * Agent discovery locations:
- * 1. User prompts directory: %APPDATA%\Code\User\prompts\ (Windows) or ~/.config/Code/User/prompts/ (Linux/Mac)
+ * 1. User prompts directory: %APPDATA%\Code\User\prompts\ (Windows), ~/Library/Application Support/Code/User/prompts/ (macOS), or $XDG_CONFIG_HOME/Code/User/prompts/ (Linux)
  * 2. Workspace .github/agents/ (Copilot-style agents)
  * 3. Workspace .claude/agents/ (Claude-style agents)
  * 4. Workspace .flightpath/agents/ (FlightPath-exclusive agents — not scraped by any harness)
@@ -105,7 +105,7 @@ export class AgentDiscovery {
 
   /**
    * Discover agents from user prompts directory
-   * Location: %APPDATA%\Code\User\prompts\ (Windows) or ~/.config/Code/User/prompts/ (Linux/Mac)
+   * Location: %APPDATA%\Code\User\prompts\ (Windows), ~/Library/Application Support/Code/User/prompts/ (macOS), or $XDG_CONFIG_HOME/Code/User/prompts/ (Linux)
    */
   private static async discoverUserAgents(): Promise<AgentInfo[]> {
     const userPromptsDir = this.getUserPromptsDirectory();
@@ -197,7 +197,8 @@ export class AgentDiscovery {
   /**
    * Get the user prompts directory path based on OS
    * Windows: %APPDATA%\Code\User\prompts\
-   * Linux/Mac: ~/.config/Code/User/prompts/
+   * macOS: ~/Library/Application Support/Code/User/prompts/
+   * Linux: $XDG_CONFIG_HOME/Code/User/prompts/ (default: ~/.config/Code/User/prompts/)
    */
   private static getUserPromptsDirectory(): string | null {
     try {
@@ -212,10 +213,14 @@ export class AgentDiscovery {
           return null;
         }
         baseDir = path.join(appData, "Code", "User", "prompts");
-      } else {
-        // Linux/Mac: ~/.config/Code/User/prompts/
+      } else if (platform === "darwin") {
+        // macOS: ~/Library/Application Support/Code/User/prompts/
         const homeDir = os.homedir();
-        baseDir = path.join(homeDir, ".config", "Code", "User", "prompts");
+        baseDir = path.join(homeDir, "Library", "Application Support", "Code", "User", "prompts");
+      } else {
+        // Linux: ~/.config/Code/User/prompts/ (respects XDG_CONFIG_HOME if set)
+        const configDir = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+        baseDir = path.join(configDir, "Code", "User", "prompts");
       }
 
       return baseDir;

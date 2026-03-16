@@ -213,7 +213,7 @@ export class EndConditionEvaluator {
 
     switch (ext) {
       case ".py":
-        return { executable: "python", args: [scriptPath] };
+        return { executable: this.resolvePythonExecutable(), args: [scriptPath] };
       case ".js":
         return { executable: "node", args: [scriptPath] };
       case ".ts":
@@ -308,6 +308,22 @@ export class EndConditionEvaluator {
         error: error instanceof Error ? error.message : String(error),
         timeout: isTimeout,
       };
+    }
+  }
+
+  /**
+   * Resolve Python executable — prefer `python3` (Linux/macOS standard), fall back to `python`.
+   */
+  private resolvePythonExecutable(): string {
+    if (process.platform === "win32") {
+      return "python";
+    }
+    try {
+      const { execSync } = require("child_process");
+      execSync("python3 --version", { stdio: "ignore", timeout: 5000 });
+      return "python3";
+    } catch {
+      return "python";
     }
   }
 
