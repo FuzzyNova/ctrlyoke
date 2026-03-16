@@ -7,6 +7,7 @@ import {
   CliEvent,
   TokenUsage,
   FileEditData,
+  FileWriteData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -80,7 +81,13 @@ export class CopilotResponseParser
     // Populated from assistant.message.data.toolRequests; consumed on tool.execution_complete.
     const pendingToolCalls = new Map<
       string,
-      { name: string; path?: string; oldStr?: string; newStr?: string }
+      {
+        name: string;
+        path?: string;
+        oldStr?: string;
+        newStr?: string;
+        content?: string;
+      }
     >();
 
     for (const json of objects) {
@@ -125,14 +132,13 @@ export class CopilotResponseParser
               if (toolReq.toolCallId) {
                 pendingToolCalls.set(toolReq.toolCallId, {
                   name: toolReq.name,
-                  path:
-                    toolReq.arguments?.path || toolReq.arguments?.file_path,
+                  path: toolReq.arguments?.path || toolReq.arguments?.file_path,
                   oldStr:
-                    toolReq.arguments?.old_str ||
-                    toolReq.arguments?.old_string,
+                    toolReq.arguments?.old_str || toolReq.arguments?.old_string,
                   newStr:
-                    toolReq.arguments?.new_str ||
-                    toolReq.arguments?.new_string,
+                    toolReq.arguments?.new_str || toolReq.arguments?.new_string,
+                  content:
+                    toolReq.arguments?.content || toolReq.arguments?.file_text,
                 });
               }
             }
@@ -151,36 +157,11 @@ export class CopilotResponseParser
             model = json.data.model;
           }
 
-          // Emit COMPLETED event for file edits so the UI shows the diff and undo button.
-          // The detailedContent field contains a git unified diff when the tool was "edit".
           const toolCallId: string | undefined = json.data?.toolCallId;
           if (toolCallId) {
             const pending = pendingToolCalls.get(toolCallId);
-            if (
-              pending &&
-              CliEventMapper.classifyTool(pending.name).type ===
-                CLI_EVENT_TYPES.FILE_EDIT
-            ) {
-              const result = json.data?.result;
-              const structuredPatch = result?.detailedContent
-                ? CliResponseParser.parseUnifiedDiff(result.detailedContent)
-                : undefined;
-              const success = json.data?.success === true;
-              events.push({
-                type: CLI_EVENT_TYPES.FILE_EDIT,
-                timestamp: Date.now(),
-                data: {
-                  path: pending.path || "unknown",
-                  oldContent: pending.oldStr,
-                  newContent: pending.newStr,
-                  structuredPatch,
-                  status: success
-                    ? OPERATION_STATUS.COMPLETED
-                    : OPERATION_STATUS.FAILED,
-                  success,
-                  error: json.data?.error?.message,
-                } as FileEditData,
-              });
+            if (pending) {
+              events.push(...this.buildToolCompletionEvents(json.data, pending));
               pendingToolCalls.delete(toolCallId);
             }
           }
@@ -285,6 +266,76 @@ export class CopilotResponseParser
   }
 
   /**
+   * Build COMPLETED/FAILED events for a file tool call outcome.
+   *
+   * Called from both the batch (`parseJsonLines`) and streaming (`processStreamingChunk`)
+   * `tool.execution_complete` handlers so the logic lives in one place.
+   *
+   * @param completionData `json.data` from the `tool.execution_complete` event
+   * @param pending Stored tool call arguments (name, path, oldStr, newStr, content)
+   * @returns Zero or more CliEvents to append to the event stream
+   */
+  private buildToolCompletionEvents(
+    completionData: any,
+    pending: {
+      name: string;
+      path?: string;
+      oldStr?: string;
+      newStr?: string;
+      content?: string;
+    }
+  ): CliEvent[] {
+    const classifiedType = CliEventMapper.classifyTool(pending.name).type;
+    const success = completionData?.success === true;
+    const errorMsg: string | undefined = completionData?.error?.message;
+
+    if (classifiedType === CLI_EVENT_TYPES.FILE_EDIT) {
+      const structuredPatch = completionData?.result?.detailedContent
+        ? CliResponseParser.parseUnifiedDiff(
+            completionData.result.detailedContent
+          )
+        : undefined;
+      return [
+        {
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp: Date.now(),
+          data: {
+            path: pending.path || "unknown",
+            oldContent: pending.oldStr,
+            newContent: pending.newStr,
+            structuredPatch,
+            status: success
+              ? OPERATION_STATUS.COMPLETED
+              : OPERATION_STATUS.FAILED,
+            success,
+            error: errorMsg,
+          } as FileEditData,
+        },
+      ];
+    }
+
+    if (classifiedType === CLI_EVENT_TYPES.FILE_WRITE) {
+      return [
+        {
+          type: CLI_EVENT_TYPES.FILE_WRITE,
+          timestamp: Date.now(),
+          data: {
+            path: pending.path || "unknown",
+            content: pending.content || "",
+            status: success
+              ? OPERATION_STATUS.COMPLETED
+              : OPERATION_STATUS.FAILED,
+            success,
+            error: errorMsg,
+          } as FileWriteData,
+        },
+      ];
+    }
+
+    return [];
+  }
+
+  /**
    * Map a Copilot tool request to a semantic CliEvent.
    *
    * Uses CliEventMapper.classifyTool() for consistent tool → event mapping across harnesses.
@@ -294,7 +345,12 @@ export class CopilotResponseParser
    * @param events Array to append the resulting event to
    */
   private mapToolRequestToEvent(
-    toolReq: { toolCallId?: string; name: string; arguments?: any; type?: string },
+    toolReq: {
+      toolCallId?: string;
+      name: string;
+      arguments?: any;
+      type?: string;
+    },
     events: CliEvent[]
   ): void {
     const toolName = toolReq.name;
@@ -470,7 +526,13 @@ export class CopilotResponseParser
               const pendingCalls =
                 (streamState.get("pendingToolCalls") as Map<
                   string,
-                  { name: string; path?: string; oldStr?: string; newStr?: string }
+                  {
+                    name: string;
+                    path?: string;
+                    oldStr?: string;
+                    newStr?: string;
+                    content?: string;
+                  }
                 >) ?? new Map();
               pendingCalls.set(json.data.toolCallId, {
                 name: json.data.toolName,
@@ -482,6 +544,9 @@ export class CopilotResponseParser
                 newStr:
                   json.data.arguments?.new_str ||
                   json.data.arguments?.new_string,
+                content:
+                  json.data.arguments?.content ||
+                  json.data.arguments?.file_text,
               });
               streamState.set("pendingToolCalls", pendingCalls);
             }
@@ -490,38 +555,23 @@ export class CopilotResponseParser
         }
 
         case "tool.execution_complete": {
-          // Emit COMPLETED event for file edits so the UI shows the diff and undo button.
           const toolCallId: string | undefined = json.data?.toolCallId;
           if (toolCallId) {
             const pendingCalls = streamState.get("pendingToolCalls") as
-              | Map<string, { name: string; path?: string; oldStr?: string; newStr?: string }>
+              | Map<
+                  string,
+                  {
+                    name: string;
+                    path?: string;
+                    oldStr?: string;
+                    newStr?: string;
+                    content?: string;
+                  }
+                >
               | undefined;
             const pending = pendingCalls?.get(toolCallId);
-            if (
-              pending &&
-              CliEventMapper.classifyTool(pending.name).type ===
-                CLI_EVENT_TYPES.FILE_EDIT
-            ) {
-              const result = json.data?.result;
-              const structuredPatch = result?.detailedContent
-                ? CliResponseParser.parseUnifiedDiff(result.detailedContent)
-                : undefined;
-              const success = json.data?.success === true;
-              events.push({
-                type: CLI_EVENT_TYPES.FILE_EDIT,
-                timestamp: Date.now(),
-                data: {
-                  path: pending.path || "unknown",
-                  oldContent: pending.oldStr,
-                  newContent: pending.newStr,
-                  structuredPatch,
-                  status: success
-                    ? OPERATION_STATUS.COMPLETED
-                    : OPERATION_STATUS.FAILED,
-                  success,
-                  error: json.data?.error?.message,
-                } as FileEditData,
-              });
+            if (pending) {
+              events.push(...this.buildToolCompletionEvents(json.data, pending));
               pendingCalls!.delete(toolCallId);
             }
           }

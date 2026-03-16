@@ -4,8 +4,17 @@
  * Extracts file change candidates from CliOutput structured events (Tier 1) and
  * workspace snapshots (Tier 2), then builds UndoDialogInput for the undo dialog.
  */
-import type { CliOutput, UndoFileInstruction, UndoFileCandidate } from "../types/messages";
-import type { CliEvent, FileEditData, FileWriteData, FileDeleteData } from "../types/cliEvents";
+import type {
+  CliOutput,
+  UndoFileInstruction,
+  UndoFileCandidate,
+} from "../types/messages";
+import type {
+  CliEvent,
+  FileEditData,
+  FileWriteData,
+  FileDeleteData,
+} from "../types/cliEvents";
 import { CLI_EVENT_TYPES } from "../types/cliEvents";
 import type {
   WorkspaceSnapshot,
@@ -46,12 +55,29 @@ function resolveEventUndoInstruction(
       if (!snap) return null;
       if (snap.wasAtHead) return { path: d.path, action: "git-restore" };
       if (snap.contentToRestore != null)
-        return { path: d.path, action: "restore-content", contentToRestore: snap.contentToRestore };
+        return {
+          path: d.path,
+          action: "restore-content",
+          contentToRestore: snap.contentToRestore,
+        };
       return null;
     }
     default:
       return null;
   }
+}
+
+/**
+ * Compare two file paths for equality, tolerating the mismatch between
+ * absolute CLI event paths (`C:\dev\FlightPath\manual-test\temp.txt`) and
+ * workspace-relative snapshot paths (`manual-test/temp.txt`).
+ */
+function sameFilePath(a: string, b: string): boolean {
+  const na = a.replace(/\\/g, "/").toLowerCase();
+  const nb = b.replace(/\\/g, "/").toLowerCase();
+  if (na === nb) return true;
+  // One is absolute, the other is a relative suffix of the absolute path.
+  return na.endsWith("/" + nb) || nb.endsWith("/" + na);
 }
 
 /** Map a CLI event type to a PromptChangeType for display purposes. */
@@ -127,6 +153,13 @@ export function buildUndoCandidatesForOutputs(
       const filePath = d.path;
       if (!filePath) continue;
 
+      // If the tool execution explicitly failed, discard any accumulated state for this
+      // path — the operation had no filesystem effect and should not appear as undoable.
+      if ((d as { success?: boolean }).success === false) {
+        accumMap.delete(filePath);
+        continue;
+      }
+
       const existing = accumMap.get(filePath);
 
       let oldContent = existing?.oldContent;
@@ -141,42 +174,53 @@ export function buildUndoCandidatesForOutputs(
         newContent = editData.newContent;
       }
 
+      // Preserve "created" once set — a FILE_WRITE followed by FILE_EDITs still
+      // means the file was created during this prompt.
+      const resolvedChangeType =
+        existing?.changeType === "created" ? "created" : changeType;
+
       accumMap.set(filePath, {
-        changeType,
+        changeType: resolvedChangeType,
         oldContent,
         newContent,
       });
     }
   }
 
-  const tier1Candidates: UndoFileCandidate[] = Array.from(accumMap.entries()).map(
-    ([filePath, accum]) => {
-      const snapEntry = snapshotFiles.find((f) => f.path === filePath);
+  const tier1Candidates: UndoFileCandidate[] = Array.from(
+    accumMap.entries()
+  ).map(([filePath, accum]) => {
+    // Use path-insensitive matching: CLI events emit absolute paths while the
+    // workspace snapshot stores workspace-relative paths.
+    const snapEntry = snapshotFiles.find((f) => sameFilePath(f.path, filePath));
 
-      // Snapshot-based instruction (works for all harnesses and CLI tool changes).
-      // No snapshot entry → non-undoable (instruction = null).
-      const instruction = snapEntry ? resolveSnapshotUndoInstruction(snapEntry) : null;
+    // Snapshot-based instruction (works for all harnesses and CLI tool changes).
+    // No snapshot entry → non-undoable (instruction = null).
+    const instruction = snapEntry
+      ? resolveSnapshotUndoInstruction(snapEntry)
+      : null;
 
-      return {
-        path: filePath,
-        changeType: accum.changeType,
-        tier: "tier1",
-        instruction,
-        oldContent: accum.oldContent,
-        newContent: accum.newContent,
-        structuredPatch: snapEntry?.structuredPatch,
-        afterHash: snapEntry?.afterHash,
-        contentCaptureSkipped: snapEntry?.contentCaptureSkipped,
-        wasAtHead: snapEntry?.wasAtHead,
-      };
-    }
-  );
+    return {
+      path: filePath,
+      changeType: accum.changeType,
+      tier: "tier1",
+      instruction,
+      oldContent: accum.oldContent,
+      newContent: accum.newContent,
+      structuredPatch: snapEntry?.structuredPatch,
+      afterHash: snapEntry?.afterHash,
+      contentCaptureSkipped: snapEntry?.contentCaptureSkipped,
+      wasAtHead: snapEntry?.wasAtHead,
+    };
+  });
 
-  const tier1Paths = new Set(accumMap.keys());
+  const tier1EventPaths = Array.from(accumMap.keys());
 
   // Collect Tier 2 candidates: snapshot entries not covered by any event.
+  // Use path-insensitive matching so absolute event paths and relative snapshot
+  // paths are correctly treated as the same file.
   const tier2Candidates: UndoFileCandidate[] = snapshotFiles
-    .filter((snap) => !tier1Paths.has(snap.path))
+    .filter((snap) => !tier1EventPaths.some((p) => sameFilePath(snap.path, p)))
     .map((snap) => ({
       path: snap.path,
       changeType: snap.changeType,
@@ -192,18 +236,28 @@ export function buildUndoCandidatesForOutputs(
 }
 
 /** Resolve an undo instruction for a snapshot file change. */
-function resolveSnapshotUndoInstruction(snap: SnapshotFileChange): UndoFileInstruction | null {
+function resolveSnapshotUndoInstruction(
+  snap: SnapshotFileChange
+): UndoFileInstruction | null {
   switch (snap.changeType) {
     case "modified": {
       if (snap.wasAtHead) return { path: snap.path, action: "git-restore" };
       if (snap.structuredPatch && snap.structuredPatch.length > 0)
-        return { path: snap.path, action: "reverse-patch", structuredPatch: snap.structuredPatch };
+        return {
+          path: snap.path,
+          action: "reverse-patch",
+          structuredPatch: snap.structuredPatch,
+        };
       return null;
     }
     case "deleted": {
       if (snap.wasAtHead) return { path: snap.path, action: "git-restore" };
       if (snap.contentToRestore != null)
-        return { path: snap.path, action: "restore-content", contentToRestore: snap.contentToRestore };
+        return {
+          path: snap.path,
+          action: "restore-content",
+          contentToRestore: snap.contentToRestore,
+        };
       return null;
     }
     case "created":
@@ -235,11 +289,15 @@ export function buildUndoDialogInputForPrompt(
 ): UndoDialogInput {
   const scope: UndoDialogScope = { mode: "prompt", target };
   const candidates = buildUndoCandidatesForOutputs(cliOutputs, snapshot);
-  const tier2Paths = new Set(candidates.filter((c) => c.tier === "tier2").map((c) => c.path));
+  const tier2Paths = new Set(
+    candidates.filter((c) => c.tier === "tier2").map((c) => c.path)
+  );
   return {
     scope,
     eventAttributedFiles: candidates.filter((c) => c.tier === "tier1"),
-    snapshotOnlyFiles: (snapshot?.changedFiles ?? []).filter((s) => tier2Paths.has(s.path)),
+    snapshotOnlyFiles: (snapshot?.changedFiles ?? []).filter((s) =>
+      tier2Paths.has(s.path)
+    ),
     workspacePath,
   };
 }
@@ -261,17 +319,32 @@ export function buildUndoDialogInputForSpecificEvent(
   snapshot: WorkspaceSnapshot | undefined,
   workspacePath: string
 ): UndoDialogInput {
-  const scope: UndoDialogScope = { mode: "singleFile", target, attemptIndex: eventIndex, path };
+  const scope: UndoDialogScope = {
+    mode: "singleFile",
+    target,
+    attemptIndex: eventIndex,
+    path,
+  };
   const snapshotFiles: SnapshotFileChange[] = snapshot?.changedFiles ?? [];
 
   const event = events[eventIndex];
   if (!event) {
-    return { scope, eventAttributedFiles: [], snapshotOnlyFiles: [], workspacePath };
+    return {
+      scope,
+      eventAttributedFiles: [],
+      snapshotOnlyFiles: [],
+      workspacePath,
+    };
   }
 
   const changeType = eventTypeToChangeType(event.type);
   if (!changeType) {
-    return { scope, eventAttributedFiles: [], snapshotOnlyFiles: [], workspacePath };
+    return {
+      scope,
+      eventAttributedFiles: [],
+      snapshotOnlyFiles: [],
+      workspacePath,
+    };
   }
 
   // For FILE_EDIT: prefer reverse-patch so only this edit is undone (other edits stay intact).
@@ -325,14 +398,23 @@ export function buildUndoDialogInputForSingleFile(
   snapshot: WorkspaceSnapshot | undefined,
   workspacePath: string
 ): UndoDialogInput {
-  const scope: UndoDialogScope = { mode: "singleFile", target, attemptIndex, path };
+  const scope: UndoDialogScope = {
+    mode: "singleFile",
+    target,
+    attemptIndex,
+    path,
+  };
   const allCandidates = buildUndoCandidatesForOutputs(cliOutputs, snapshot);
   const fileCandidates = allCandidates.filter((c) => c.path === path);
-  const tier2Paths = new Set(fileCandidates.filter((c) => c.tier === "tier2").map((c) => c.path));
+  const tier2Paths = new Set(
+    fileCandidates.filter((c) => c.tier === "tier2").map((c) => c.path)
+  );
   return {
     scope,
     eventAttributedFiles: fileCandidates.filter((c) => c.tier === "tier1"),
-    snapshotOnlyFiles: (snapshot?.changedFiles ?? []).filter((s) => tier2Paths.has(s.path)),
+    snapshotOnlyFiles: (snapshot?.changedFiles ?? []).filter((s) =>
+      tier2Paths.has(s.path)
+    ),
     workspacePath,
   };
 }
