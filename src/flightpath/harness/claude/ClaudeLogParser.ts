@@ -16,11 +16,7 @@ import {
   TextData,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
-import {
-  processToolResultContentBlocks,
-  processToolUseResultMetadata,
-} from "./ClaudeToolResultProcessor";
-import { ClaudeToolInitiatedBuilder } from "./ClaudeToolInitiatedBuilder";
+import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
 
 /**
  * Claude CLI Log Parser
@@ -207,7 +203,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           // TOOL_USE - Map Claude tools to semantic event types
           if (contentBlock.type === "tool_use") {
             outputEvents.push(
-              ClaudeToolInitiatedBuilder.buildEvent(
+              ClaudeToolBuilder.buildInitiatedEvent(
                 contentBlock.name,
                 contentBlock.input || {},
                 contentBlock.id,
@@ -237,7 +233,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
       // Process user events for TOOL_RESULT blocks and structured metadata
       if (event.type === "user" && Array.isArray(event.message?.content)) {
-        processToolResultContentBlocks(
+        ClaudeToolBuilder.processToolResultBlocks(
           event.message.content,
           timestamp,
           outputEvents
@@ -246,7 +242,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         // Process structured tool_use_result metadata for rich diff data
         // This contains accurate line numbers and full file context for Edit operations
         if (event.toolUseResult) {
-          processToolUseResultMetadata(
+          ClaudeToolBuilder.processToolUseResultMetadata(
             event.toolUseResult,
             timestamp,
             outputEvents

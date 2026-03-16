@@ -11,11 +11,7 @@ import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { getClaudeContextWindowSize } from "../../../utils/ModelConstants";
 import { CliResponseParser } from "../shared/CliResponseParser";
-import {
-  processToolResultContentBlocks,
-  processToolUseResultMetadata,
-} from "./ClaudeToolResultProcessor";
-import { ClaudeToolInitiatedBuilder } from "./ClaudeToolInitiatedBuilder";
+import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
 
 /**
  * Extended usage statistics from Claude CLI.
@@ -301,7 +297,7 @@ export class ClaudeResponseParser
       // Handle tool_use blocks - map to semantic event types
       if (contentBlock.type === "tool_use") {
         events.push(
-          ClaudeToolInitiatedBuilder.buildEvent(
+          ClaudeToolBuilder.buildInitiatedEvent(
             contentBlock.name,
             contentBlock.input || {},
             contentBlock.id,
@@ -328,11 +324,11 @@ export class ClaudeResponseParser
     toolUseResult: any | undefined,
     events: CliEvent[]
   ): void {
-    processToolResultContentBlocks(content, Date.now(), events);
+    ClaudeToolBuilder.processToolResultBlocks(content, Date.now(), events);
 
     // Process structured tool_use_result metadata to create semantic events
     if (toolUseResult) {
-      processToolUseResultMetadata(toolUseResult, Date.now(), events);
+      ClaudeToolBuilder.processToolUseResultMetadata(toolUseResult, Date.now(), events);
     }
   }
 
@@ -442,7 +438,7 @@ export class ClaudeResponseParser
                 const input = JSON.parse(block.accumulatedJson);
                 // Map to semantic event type
                 events.push(
-                  ClaudeToolInitiatedBuilder.buildEvent(
+                  ClaudeToolBuilder.buildInitiatedEvent(
                     block.name,
                     input,
                     block.id,
