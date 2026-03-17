@@ -230,24 +230,31 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     expect(candidates[0].instruction).toBeNull();
   });
 
-  it("failed FILE_EDIT (success=false) → excluded from tier1 (falls through to tier2 via snapshot)", () => {
-    const output = makeCliOutput([
-      makeFileEditEvent("src/a.ts", { success: false }),
-    ]);
-    const snapshot = makeSnapshot([makeModifiedSnap("src/a.ts")]);
-    const candidates = buildUndoCandidatesForOutputs([output], snapshot);
-    // The failed edit removes the path from the tier1 accumulator; the snapshot
-    // entry has no matching tier1 path and therefore becomes a tier2 candidate.
-    expect(candidates).toHaveLength(1);
-    expect(candidates[0].tier).toBe("tier2");
-  });
-
-  it("failed FILE_EDIT with no snapshot → zero candidates", () => {
+  it("failed FILE_EDIT (success=false) → skipped, does not appear as tier1 or tier2", () => {
+    // Only event is a failed edit — the file wasn't actually changed, so the
+    // snapshot won't show it as modified either. Nothing to undo.
     const output = makeCliOutput([
       makeFileEditEvent("src/a.ts", { success: false }),
     ]);
     const candidates = buildUndoCandidatesForOutputs([output], undefined);
     expect(candidates).toHaveLength(0);
+  });
+
+  it("prior successful FILE_WRITE then failed FILE_EDIT → write stays in tier1", () => {
+    // The write succeeded (file was created). The subsequent edit failed.
+    // The created file should still be undoable via tier1 — the failed edit
+    // must not wipe the accumulated state for that path.
+    const output = makeCliOutput([
+      makeFileWriteEvent("src/a.ts"),
+      makeFileEditEvent("src/a.ts", { success: false }),
+    ]);
+    const snapshot = makeSnapshot([makeCreatedSnap("src/a.ts")]);
+    const candidates = buildUndoCandidatesForOutputs([output], snapshot);
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].tier).toBe("tier1");
+    expect(candidates[0].changeType).toBe("created");
+    expect(candidates[0].instruction?.action).toBe("delete");
   });
 
   it("multiple edits to same file: first oldContent kept, last newContent wins", () => {

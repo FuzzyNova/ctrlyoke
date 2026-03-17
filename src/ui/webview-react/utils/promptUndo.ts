@@ -155,10 +155,9 @@ export function buildUndoCandidatesForOutputs(
       const filePath = d.path;
       if (!filePath) continue;
 
-      // If the tool execution explicitly failed, discard any accumulated state for this
-      // path — the operation had no filesystem effect and should not appear as undoable.
+      // If this specific event failed, skip it — don't let a failed event contribute
+      // to the undo candidates. Prior successful events for the same path are preserved.
       if ((d as { success?: boolean }).success === false) {
-        accumMap.delete(filePath);
         continue;
       }
 
