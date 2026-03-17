@@ -632,14 +632,15 @@ function createSpellCheckExtension(
         // Get ranges to exclude from spell checking (@ and # references)
         const excludedRanges = getCompletionRanges(text);
 
-        // Match words with contractions and hyphens
-        const wordRegex = /\b[a-zA-Z]+(?:['-][a-zA-Z]+)*\b/g;
+        // Match words and contractions. Hyphens and underscores act as
+        // separators — the regex stops at them, so "step-by-step" is matched
+        // as three separate tokens. CamelCase words are further split by
+        // splitCamelCaseWord().
+        const wordRegex = /[a-zA-Z]+(?:'[a-zA-Z]+)*/g;
         let match;
 
         while ((match = wordRegex.exec(text)) !== null) {
           const word = match[0];
-          const wordFrom = from + match.index;
-          const wordTo = wordFrom + word.length;
 
           // Skip if word is within a completion range
           if (
@@ -657,34 +658,48 @@ function createSpellCheckExtension(
             continue;
           }
 
-          if (!typoCheckerRef.current.check(word)) {
-            const checker = typoCheckerRef.current;
-            const diagnostic = {
-              from: wordFrom,
-              to: wordTo,
-              severity: "error" as const,
-              message: `Spelling: "${word}"`,
-              get actions() {
-                if (!(this as any)._cachedActions) {
-                  const suggestions = checker.suggest((this as any)._word);
-                  (this as any)._cachedActions = suggestions
-                    .slice(0, 5)
-                    .map((suggestion: string) => ({
-                      name: `Change to "${suggestion}"`,
-                      apply: (view: EditorView, from: number, to: number) => {
-                        view.dispatch({
-                          changes: { from, to, insert: suggestion },
-                        });
-                      },
-                    }));
-                }
-                return (this as any)._cachedActions;
-              },
-              _word: word,
-              _cachedActions: null,
-            };
+          // Split camelCase / PascalCase words into component parts and check
+          // each individually with its correct document position.
+          const parts = splitCamelCaseWord(word);
+          for (const part of parts) {
+            if (part.text.length <= 1) continue;
+            // Skip all-caps parts (e.g. "XML" within "XMLParser")
+            if (part.text === part.text.toUpperCase()) continue;
 
-            diagnostics.push(diagnostic);
+            if (!typoCheckerRef.current.check(part.text)) {
+              const checker = typoCheckerRef.current;
+              const partFrom = from + match.index + part.offset;
+              const partTo = partFrom + part.text.length;
+              const diagnostic = {
+                from: partFrom,
+                to: partTo,
+                severity: "error" as const,
+                message: `Spelling: "${part.text}"`,
+                get actions() {
+                  if (!(this as any)._cachedActions) {
+                    const suggestions = checker.suggest((this as any)._word);
+                    (this as any)._cachedActions = suggestions
+                      .slice(0, 5)
+                      .map((suggestion: string) => ({
+                        name: `Change to "${suggestion}"`,
+                        apply: (
+                          view: EditorView,
+                          from: number,
+                          to: number
+                        ) => {
+                          view.dispatch({
+                            changes: { from, to, insert: suggestion },
+                          });
+                        },
+                      }));
+                  }
+                  return (this as any)._cachedActions;
+                },
+                _word: part.text,
+                _cachedActions: null,
+              };
+              diagnostics.push(diagnostic);
+            }
           }
         }
       }
@@ -733,6 +748,38 @@ function isInExcludedRange(
     }
   }
   return false;
+}
+
+// Split a camelCase or PascalCase word into component parts with their offsets.
+// Returns the original word as a single entry when no camelCase splitting applies
+// (i.e. the word has no uppercase letter after position 0).
+//
+// Examples:
+//   "camelCase"   → [{ text: "camel", offset: 0 }, { text: "Case", offset: 5 }]
+//   "XMLParser"   → [{ text: "XML",   offset: 0 }, { text: "Parser", offset: 3 }]
+//   "hello"       → [{ text: "hello", offset: 0 }]
+//   "don't"       → [{ text: "don't", offset: 0 }]
+function splitCamelCaseWord(
+  word: string
+): Array<{ text: string; offset: number }> {
+  // Only split if there's an uppercase letter after position 0
+  if (!/[A-Z]/.test(word.slice(1))) {
+    return [{ text: word, offset: 0 }];
+  }
+
+  const parts: Array<{ text: string; offset: number }> = [];
+  // Three alternations (tried in order):
+  //   1. Uppercase run before an UpperLower transition ("XML" in "XMLParser")
+  //   2. Uppercase letter followed by zero-or-more lowercase ("Parser", "Case")
+  //   3. Pure lowercase run ("camel", "my")
+  const camelRegex = /[A-Z]+(?=[A-Z][a-z])|[A-Z][a-z]*|[a-z]+/g;
+  let m;
+  while ((m = camelRegex.exec(word)) !== null) {
+    if (m[0].length > 1) {
+      parts.push({ text: m[0], offset: m.index });
+    }
+  }
+  return parts.length > 0 ? parts : [{ text: word, offset: 0 }];
 }
 
 // Decorate links (@file, @dir/, #file:, #sym:)
