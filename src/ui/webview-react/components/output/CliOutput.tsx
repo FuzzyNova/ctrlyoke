@@ -848,6 +848,16 @@ export const CliOutput = memo<CliOutputProps>(
           )}
           [{stepLabel ?? `Prompt ${stepIndex + 1}`}] {attemptLabel}
           {streamingIndicator}
+          {promptUndoAction && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); handlePromptUndo(); }}
+              className="ml-auto flex-shrink-0 font-normal text-link-fg hover:text-link-active-fg transition-colors"
+            >
+              <i className={`codicon ${promptUndoAction.isRedo ? "codicon-redo" : "codicon-discard"} mr-1`} />
+              {promptUndoAction.label}
+            </button>
+          )}
         </div>
 
         {/* Prompt text */}

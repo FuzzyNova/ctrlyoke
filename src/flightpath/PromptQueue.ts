@@ -505,6 +505,46 @@ export class PromptQueue {
   }
 
   /**
+   * Mark the current cancelled prompt as complete and advance past it.
+   *
+   * Use case: AI did something useful even if not what was asked — the user
+   * wants to accept the result, move on to the next prompt, and preserve the
+   * partial output in history rather than re-running the cancelled step.
+   *
+   * Transitions: STOPPED/IDLE (cancelled current) → IDLE (or COMPLETED if last)
+   */
+  async markCurrentAsComplete(): Promise<void> {
+    const index = this.state.currentIndex;
+    if (index >= this.state.prompts.length) return;
+
+    const result = this.state.results[index];
+    if (result.status !== STEP_STATUS.CANCELLED) return;
+
+    result.status = STEP_STATUS.COMPLETED;
+    result.timestamp = new Date();
+
+    const now = Date.now();
+    if (!this.state.prompts[index]._runtime) {
+      this.state.prompts[index]._runtime = { startedAt: now, completedAt: now };
+    } else {
+      this.state.prompts[index]._runtime!.completedAt = now;
+    }
+
+    this.state.completedIndices.add(String(index));
+    this.state.currentIndex++;
+    this.state.stopped = false;
+
+    this.state.status =
+      this.state.currentIndex >= this.state.prompts.length
+        ? EXECUTION_STATES.COMPLETED
+        : EXECUTION_STATES.IDLE;
+
+    this.emitStateChange();
+    await this.updateWorkingFile();
+    Log.info(`Marked step ${index} as complete (was cancelled)`);
+  }
+
+  /**
    * Restart queue from the beginning
    * Resets index, results, and tracking state while keeping prompts loaded
    * Updates working file to clear completedPrompts array

@@ -101,8 +101,7 @@ function SortablePromptItemWrapper({
  */
 export const PromptsPanel: React.FC<{
   panelBarOrientation?: "horizontal" | "vertical";
-  allowUndoActions?: boolean;
-}> = ({ panelBarOrientation = "vertical", allowUndoActions = false }) => {
+}> = ({ panelBarOrientation = "vertical" }) => {
   const {
     prompts,
     currentStep,
@@ -384,16 +383,9 @@ export const PromptsPanel: React.FC<{
 
   // Determine if workflow is running
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
+  const isStopped = executionState === EXECUTION_STATES.STOPPED;
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
-
-  // Gate undo actions: only when allowed, workflow is not actively running, not in CLI watch mode.
-  // History view is intentionally NOT excluded — undo/redo should work from the history panel.
-  const canShowUndoActions =
-    allowUndoActions &&
-    !isRunning &&
-    executionState !== EXECUTION_STATES.CANCELLING &&
-    !isCLIManaged;
 
   // Show eraser button when the workflow has run but is not actively executing.
   // Allows resetting completion state so all prompts become editable before re-running.
@@ -640,12 +632,6 @@ export const PromptsPanel: React.FC<{
                   selectionTarget.index === index;
                 const harnessModel = getPromptHarnessModel(prompt);
                 const overrides = getPromptOverrides(prompt);
-                // In history view, pass history step data so PromptItem uses it
-                // instead of the (empty/wrong) live store values.
-                const historyStep =
-                  isViewingHistory && historyOutputs
-                    ? historyOutputs.steps[index]
-                    : undefined;
                 return (
                   <div
                     key={`prompt-${index}-${prompt.name || ""}`}
@@ -682,10 +668,6 @@ export const PromptsPanel: React.FC<{
                           doneStepCount < prompts.length
                         }
                         dimmed
-                        allowUndoActions={canShowUndoActions}
-                        allCliOutputs={historyStep?.cliOutputs}
-                        workspaceSnapshot={historyStep?.workspaceSnapshot}
-                        undoRecord={historyStep?.undoRecord}
                       />
                     </div>
                   </div>
@@ -732,6 +714,11 @@ export const PromptsPanel: React.FC<{
                   // matching the post-reorder backend index for this slot.
                   const setPositionTarget = currentStep + visualIdx;
                   const slotNumber = currentStep + visualIdx + 1;
+                  const canMarkAsComplete =
+                    !isCLIManaged &&
+                    isCurrentStep &&
+                    isStopped &&
+                    status === STEP_STATUS.CANCELLED;
                   return (
                     <SortablePromptItemWrapper
                       key={id}
@@ -762,7 +749,16 @@ export const PromptsPanel: React.FC<{
                           ? () => handleSetPositionClick(setPositionTarget)
                           : undefined
                       }
-                      allowUndoActions={canShowUndoActions}
+                      canMarkAsComplete={canMarkAsComplete}
+                      onMarkAsComplete={
+                        canMarkAsComplete
+                          ? () =>
+                              sendMessage(
+                                MESSAGE_TYPES.MARK_CURRENT_AS_COMPLETE,
+                                {}
+                              )
+                          : undefined
+                      }
                     />
                   );
                 })}

@@ -162,6 +162,7 @@ export const MESSAGE_TYPES = {
   SET_START_POSITION: "setStartPosition",
   REORDER_PROMPTS: "reorderPrompts",
   UPDATE_CONFIRM_RESET: "updateConfirmReset",
+  MARK_CURRENT_AS_COMPLETE: "markCurrentAsComplete",
 
   // Queue Position Control — Extension → Webview
   SET_START_POSITION_CONFIRMED: "setStartPositionConfirmed",

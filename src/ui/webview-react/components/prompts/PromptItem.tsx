@@ -7,13 +7,6 @@ import type { PromptOverride } from "./PromptItemDetails";
 export type { PromptOverride };
 import type { StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
-import { useWorkflowStore } from "../../store/workflowStore";
-import { buildUndoCandidatesForOutputs, buildUndoDialogInputForPrompt, getPromptUndoSummary } from "../../utils/promptUndo";
-import type { UndoDialogInput } from "../../utils/promptUndo";
-import type { UndoExecutionTarget, WorkspaceSnapshot, UndoRecord } from "@root/types/OutputHistoryTypes";
-import type { UndoFileInstruction } from "../../types/messages";
-import { UndoChangesDialog } from "../output/UndoChangesDialog";
-import { STEP_STATUS } from "../../types/messages";
 
 export interface EndConditionResult {
   passed: boolean;
@@ -69,6 +62,10 @@ interface PromptItemProps {
    * from the original absolute index. Defaults to `index + 1` when omitted.
    */
   displayNumber?: number;
+  /** When true, show a "mark as complete" button to accept a cancelled step without re-running it */
+  canMarkAsComplete?: boolean;
+  /** Callback when mark-as-complete is clicked */
+  onMarkAsComplete?: () => void;
   /** When true, suppresses the bottom border (e.g. when a BoundaryBar follows) */
   hideBorderBottom?: boolean;
   /**
@@ -81,21 +78,7 @@ interface PromptItemProps {
     listeners: SyntheticListenerMap | undefined;
     attributes: DraggableAttributes;
   };
-  /** When true, show prompt-level undo button for completed prompts */
-  allowUndoActions?: boolean;
-  /** Override: CLI outputs from history (used in history view instead of live store) */
-  allCliOutputs?: CliOutput[];
-  /** Override: workspace snapshot from history (used in history view instead of live store) */
-  workspaceSnapshot?: WorkspaceSnapshot;
-  /** Override: undo record from history (used in history view instead of live store) */
-  undoRecord?: UndoRecord;
 }
-
-// Stable empty array used as a fallback in useWorkflowStore selectors.
-// Never use `?? []` inline in a selector — a new array literal is a new
-// reference on every call, which fools useSyncExternalStore into thinking
-// the snapshot changed and triggers unnecessary (or crashing) re-renders.
-const EMPTY_CLI_OUTPUTS: CliOutput[] = [];
 
 /**
  * Truncate text to a maximum length with ellipsis
@@ -138,82 +121,14 @@ export const PromptItem: React.FC<PromptItemProps> = ({
   canSetStartPosition,
   onSetStartPosition,
   startPositionDirection,
+  canMarkAsComplete,
+  onMarkAsComplete,
   displayNumber,
   hideBorderBottom = false,
   dimmed = false,
   dragHandleProps,
-  allowUndoActions = false,
-  allCliOutputs: allCliOutputsProp,
-  workspaceSnapshot: workspaceSnapshotProp,
-  undoRecord: undoRecordProp,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
-
-  interface DialogState {
-    mode: "undo" | "redo";
-    input?: UndoDialogInput;
-    redoInstructions?: UndoFileInstruction[];
-    requestId: string;
-  }
-  const [dialogState, setDialogState] = useState<DialogState | null>(null);
-
-  const workspaceSnapshots = useWorkflowStore((s) => s.workspaceSnapshots);
-  const undoRecords = useWorkflowStore((s) => s.undoRecords);
-  // Use a stable empty-array constant as fallback — `?? []` would create a new
-  // array reference on every snapshot call, causing useSyncExternalStore to
-  // always detect a "change" and call forceStoreRerender (React error #185).
-  const stepCliOutputsFromStore = useWorkflowStore((s) => s.cliOutputs[index] ?? EMPTY_CLI_OUTPUTS);
-
-  // In history view, caller passes allCliOutputsProp / workspaceSnapshotProp / undoRecordProp
-  // from historyOutputs — use those in preference to the live store values.
-  const stepCliOutputs = allCliOutputsProp ?? stepCliOutputsFromStore;
-
-  const executionTarget: UndoExecutionTarget = { kind: "queue", stepIndex: index };
-  const workspacePath = stepCliOutputs[stepCliOutputs.length - 1]?.workingDirectory ?? "";
-  const targetKey = `queue-${index}`;
-  const undoRecord = undoRecordProp ?? undoRecords[targetKey];
-  const effectiveSnapshot = workspaceSnapshotProp ?? workspaceSnapshots[index];
-  const isRedone = undoRecord?.isRedone === true;
-  const hasUndoRecord = undoRecord != null;
-  const showRedoButton = hasUndoRecord && !isRedone;
-
-  // Build undo/redo action for completed prompts when allowUndoActions is enabled
-  const undoAction = (() => {
-    if (!allowUndoActions || status !== STEP_STATUS.COMPLETED) return undefined;
-
-    if (showRedoButton && (undoRecord?.redoInstructions?.length ?? 0) > 0) {
-      const count = undoRecord!.redoInstructions.length;
-      return {
-        label: `Redo ${count} change${count !== 1 ? "s" : ""}`,
-        hasTier2: false,
-        isRedo: true,
-        onUndo: () => {
-          setDialogState({
-            mode: "redo",
-            redoInstructions: undoRecord!.redoInstructions,
-            requestId: crypto.randomUUID(),
-          });
-        },
-      };
-    }
-
-    const candidates = buildUndoCandidatesForOutputs(stepCliOutputs, effectiveSnapshot);
-    const { undoableCount, hasTier2 } = getPromptUndoSummary(candidates);
-    if (undoableCount === 0) return undefined;
-    return {
-      label: `Undo ${undoableCount} change${undoableCount !== 1 ? "s" : ""}`,
-      hasTier2,
-      isRedo: false,
-      onUndo: () => {
-        const input = buildUndoDialogInputForPrompt(executionTarget, stepCliOutputs, effectiveSnapshot, workspacePath);
-        setDialogState({
-          mode: "undo",
-          input,
-          requestId: crypto.randomUUID(),
-        });
-      },
-    };
-  })();
 
   // Build class names for the container
   const containerClasses = [
@@ -268,6 +183,18 @@ export const PromptItem: React.FC<PromptItemProps> = ({
           <span className="mt-0.5">
             <StatusIcon status={status} />
           </span>
+          {canMarkAsComplete && isHovered && (
+            <button
+              className="mt-auto w-4 flex items-center justify-center text-bash-status-success hover:text-foreground mb-0.5"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMarkAsComplete?.();
+              }}
+              title="Mark as complete — accept this step's output and advance to the next prompt"
+            >
+              <i className="codicon codicon-pass-filled text-[12px]" />
+            </button>
+          )}
           {canSetStartPosition && isHovered && (
             <button
               className="mt-auto w-4 flex items-center justify-center text-description-fg hover:text-foreground mb-0.5"
@@ -301,22 +228,9 @@ export const PromptItem: React.FC<PromptItemProps> = ({
             details={details}
             isSelected={isSelected}
             overrides={overrides}
-            undoAction={undoAction}
           />
         </div>
       </div>
-
-      {dialogState && (
-        <UndoChangesDialog
-          mode={dialogState.mode}
-          target={executionTarget}
-          workspacePath={workspacePath}
-          input={dialogState.input}
-          redoInstructions={dialogState.redoInstructions}
-          requestId={dialogState.requestId}
-          onClose={() => setDialogState(null)}
-        />
-      )}
     </div>
   );
 };

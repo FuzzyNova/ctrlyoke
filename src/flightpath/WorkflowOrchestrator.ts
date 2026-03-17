@@ -902,6 +902,10 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().setStartPosition(toIndex);
   }
 
+  async markCurrentAsComplete(): Promise<void> {
+    return this.getActiveInstance().markCurrentAsComplete();
+  }
+
   async executeEphemeralPrompt(
     text: string,
     properties: unknown,

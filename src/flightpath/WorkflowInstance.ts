@@ -878,10 +878,22 @@ export class WorkflowInstance {
       prevCompletedCount > 0 &&
       filePromptCount > prevCompletedCount;
 
+    // Detect stop → setStartPosition → Run scenario: the queue is IDLE but
+    // already has a partial run in progress (currentIndex > 0). This happens
+    // when the user stopped a workflow, skipped the cancelled step via
+    // setStartPosition, and then pressed Run instead of Resume. We want to
+    // reuse the existing history file rather than starting a fresh run.
+    const isIdleContinuation =
+      !continueFromCurrent &&
+      !isAppendContinuation &&
+      prevQueueState.status === EXECUTION_STATES.IDLE &&
+      prevQueueState.currentIndex > 0;
+
     Log.debug(
       `[executeLoadedPromptFile] continueFromCurrent=${continueFromCurrent}, ` +
         `prevQueueStatus=${prevQueueState.status}, prevCompletedCount=${prevCompletedCount}, ` +
-        `filePromptCount=${filePromptCount}, isAppendContinuation=${isAppendContinuation}`
+        `filePromptCount=${filePromptCount}, isAppendContinuation=${isAppendContinuation}, ` +
+        `isIdleContinuation=${isIdleContinuation}`
     );
 
     try {
@@ -995,7 +1007,7 @@ export class WorkflowInstance {
 
       const workingFilePath = currentQueueState.workingFilePath ?? "";
       let historyFilePath = "";
-      if (!continueFromCurrent && !isAppendContinuation && workingFilePath) {
+      if (!continueFromCurrent && !isAppendContinuation && !isIdleContinuation && workingFilePath) {
         const workflowId =
           this.outputHistoryManager.extractWorkflowId(workingFilePath);
         const historyInit =
@@ -1065,10 +1077,18 @@ export class WorkflowInstance {
         Log.debug(
           `🟢 [APPEND-DEBUG] Manual resume: Reusing existing history file: ${historyFilePath}`
         );
+      } else if (isIdleContinuation && workingFilePath) {
+        const workflowId =
+          this.outputHistoryManager.extractWorkflowId(workingFilePath);
+        historyFilePath =
+          await this.outputHistoryManager.getLatestHistoryFilePath(workflowId);
+        Log.debug(
+          `🟢 [APPEND-DEBUG] Idle continuation (stop+skip): Reusing existing history file: ${historyFilePath}`
+        );
       }
 
       if (this.dashboardSink && totalPrompts > 0) {
-        if (continueFromCurrent) {
+        if (continueFromCurrent || isIdleContinuation) {
           const currentIndex = currentQueueState.currentIndex;
           Log.debug(
             `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${currentIndex}, totalSteps=${totalPrompts}`
@@ -1126,6 +1146,13 @@ export class WorkflowInstance {
    */
   async pause(): Promise<void> {
     await this.promptQueue.pause();
+  }
+
+  /**
+   * Mark the currently cancelled prompt as complete and advance past it.
+   */
+  async markCurrentAsComplete(): Promise<void> {
+    await this.promptQueue.markCurrentAsComplete();
   }
 
   /**
