@@ -778,14 +778,14 @@ export const CliOutput = memo<CliOutputProps>(
       }
 
       return (
-        <div className="text-[10px] text-[var(--fg-secondary)] mt-[var(--spacing-xs)]">
+        <>
           {parts.map((part, index) => (
             <React.Fragment key={`stats-${index}`}>
               {index > 0 && <span aria-hidden="true"> | </span>}
               {part}
             </React.Fragment>
           ))}
-        </div>
+        </>
       );
     }, [
       output.tokens,
@@ -872,20 +872,20 @@ export const CliOutput = memo<CliOutputProps>(
         {/* Response (structured or plain) */}
         {responseNode}
 
-        {/* Statistics */}
-        {statsNode}
-
-        {/* Prompt-level undo/redo button */}
-        {promptUndoAction && (
-          <div className="mt-1">
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); handlePromptUndo(); }}
-              className="text-[10px] text-link-fg hover:text-link-active-fg transition-colors"
-            >
-              <i className={`codicon ${promptUndoAction.isRedo ? "codicon-redo" : "codicon-discard"} mr-1`} />
-              {promptUndoAction.label}
-            </button>
+        {/* Statistics + Prompt-level undo/redo on the same row */}
+        {(statsNode || promptUndoAction) && (
+          <div className="flex items-center gap-2 mt-[var(--spacing-xs)] text-[10px] text-[var(--fg-secondary)]">
+            <div className="flex-1 min-w-0">{statsNode}</div>
+            {promptUndoAction && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handlePromptUndo(); }}
+                className="flex-shrink-0 text-link-fg hover:text-link-active-fg transition-colors"
+              >
+                <i className={`codicon ${promptUndoAction.isRedo ? "codicon-redo" : "codicon-discard"} mr-1`} />
+                {promptUndoAction.label}
+              </button>
+            )}
           </div>
         )}
 

@@ -10,7 +10,10 @@ import { Log } from "../utils/Log";
 import {
   getFileCompletions,
   getHashCompletions,
+  getPromptFileCompletions,
 } from "../completions/CompletionHelpers";
+import * as fs from "fs";
+import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { ContextExpander } from "../utils/ContextExpander";
 import { encode } from "gpt-tokenizer";
 import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
@@ -199,6 +202,10 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.OPEN_FILE, (message) => {
       this.handleOpenFile(message.path, message.lineStart, message.lineEnd);
+    });
+
+    table.set(MESSAGE_TYPES.VALIDATE_FILE_REF, async (message) => {
+      await this.handleFileRefValidation(message.filePath);
     });
 
     table.set(
@@ -610,22 +617,68 @@ export class WebviewMessageRouter {
   }
 
   /**
-   * Get completion items based on trigger (@file or #file)
+   * Get completion items based on trigger (@file, #file, or path)
    */
   private async getCompletionItems(
     trigger: string,
     prefix: string
   ): Promise<any[]> {
-    const filterText = prefix.substring(1); // Remove @ or #
-
     if (trigger === "@") {
-      return await getFileCompletions(filterText);
+      return await getFileCompletions(prefix.substring(1)); // Remove @
     } else if (trigger === "#") {
-      return await getHashCompletions(filterText);
+      return await getHashCompletions(prefix.substring(1)); // Remove #
+    } else if (trigger === "path") {
+      return await getPromptFileCompletions(prefix);
     }
 
     Log.warn(`[Dashboard] Unknown trigger: "${trigger}"`);
     return [];
+  }
+
+  /**
+   * Validate whether a file-ref path typed in the prompt editor resolves to
+   * an actual file.  Resolution order mirrors PromptFileParser:
+   *   1. Absolute path
+   *   2. Relative to workspace root
+   *   3. Relative to .flightpath directory inside workspace root
+   */
+  private async handleFileRefValidation(filePath: string): Promise<void> {
+    const workspaceRoot =
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
+    let exists = false;
+
+    try {
+      if (path.isAbsolute(filePath)) {
+        await fs.promises.stat(filePath);
+        exists = true;
+      } else if (workspaceRoot) {
+        const candidates = [
+          path.resolve(workspaceRoot, filePath),
+          path.resolve(
+            workspaceRoot,
+            PATH_CONSTANTS.FLIGHTPATH_DIR,
+            filePath.replace(/^\.\.?\//, "")
+          ),
+        ];
+        for (const candidate of candidates) {
+          try {
+            await fs.promises.stat(candidate);
+            exists = true;
+            break;
+          } catch {
+            // try next candidate
+          }
+        }
+      }
+    } catch {
+      exists = false;
+    }
+
+    this.postMessage({
+      type: MESSAGE_TYPES.FILE_REF_VALIDATION,
+      exists,
+      filePath,
+    });
   }
 
   private async handleOpenFile(

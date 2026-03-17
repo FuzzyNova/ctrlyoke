@@ -93,7 +93,7 @@ export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
       {/* Harness / model metadata */}
       {(harnessLabel || modelLabel) && (
         <div
-          className={`mt-0.5 pl-5 flex items-center gap-1 text-[10px] opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+          className={`mt-0.5 flex items-center gap-1 text-[10px] opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
         >
           {harnessLabel && (
             <span>
@@ -125,51 +125,69 @@ export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
         </div>
       )}
 
-      {/* Compact stats: context %, session ID, duration — for completed prompts */}
+      {/* Compact stats + undo/redo on the same row — for completed prompts */}
       {status === "completed" &&
         (contextPct !== undefined ||
           sessionId ||
-          durationSeconds !== undefined) && (
+          durationSeconds !== undefined ||
+          undoAction) && (
           <div
-            className={`mt-0.5 pl-5 flex items-center gap-1 text-[10px] opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+            className={`mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
           >
-            {[
-              contextPct !== undefined ? (
-                <span key="ctx">{contextPct}%</span>
-              ) : null,
-              sessionId ? (
-                <span
-                  key="session"
-                  className="inline-flex items-center gap-0.5"
-                >
-                  <span>{sessionId.substring(0, 6)}</span>
-                  <button
-                    type="button"
-                    className="icon-btn py-0 px-0.5"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void handleCopySessionId();
-                    }}
-                    title="Copy session ID"
-                    aria-label="Copy session ID"
+            <div className={`flex items-center gap-1 opacity-75`}>
+              {[
+                contextPct !== undefined ? (
+                  <span key="ctx">{contextPct}%</span>
+                ) : null,
+                sessionId ? (
+                  <span
+                    key="session"
+                    className="inline-flex items-center gap-0.5"
                   >
-                    <i
-                      className={`codicon text-[9px] ${copied ? "codicon-check" : "codicon-copy"}`}
-                    />
-                  </button>
-                </span>
-              ) : null,
-              durationSeconds !== undefined ? (
-                <span key="dur">{durationSeconds.toFixed(1)}s</span>
-              ) : null,
-            ]
-              .filter(Boolean)
-              .map((part, i) => (
-                <React.Fragment key={i}>
-                  {i > 0 && <span className="opacity-40">·</span>}
-                  {part}
-                </React.Fragment>
-              ))}
+                    <span>{sessionId.substring(0, 6)}</span>
+                    <button
+                      type="button"
+                      className="icon-btn py-0 px-0.5"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleCopySessionId();
+                      }}
+                      title="Copy session ID"
+                      aria-label="Copy session ID"
+                    >
+                      <i
+                        className={`codicon text-[9px] ${copied ? "codicon-check" : "codicon-copy"}`}
+                      />
+                    </button>
+                  </span>
+                ) : null,
+                durationSeconds !== undefined ? (
+                  <span key="dur">{durationSeconds.toFixed(1)}s</span>
+                ) : null,
+              ]
+                .filter(Boolean)
+                .map((part, i) => (
+                  <React.Fragment key={i}>
+                    {i > 0 && <span className="opacity-40">·</span>}
+                    {part}
+                  </React.Fragment>
+                ))}
+            </div>
+            {undoAction && (
+              <button
+                type="button"
+                className="icon-btn text-[10px] flex-shrink-0 opacity-75 hover:opacity-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  undoAction.onUndo();
+                }}
+                title={undoAction.label}
+              >
+                {!undoAction.isRedo && undoAction.hasTier2 && <span className="mr-0.5">⚠</span>}
+                <i className={`codicon ${undoAction.isRedo ? "codicon-redo" : "codicon-discard"} text-[10px] mr-0.5`} />
+                {undoAction.label}
+              </button>
+            )}
           </div>
         )}
 
@@ -218,24 +236,6 @@ export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
         </div>
       )}
 
-      {/* Undo/Redo button — only for completed prompts with undoable changes */}
-      {undoAction && (
-        <div className="mt-0.5 pl-5">
-          <button
-            type="button"
-            className="icon-btn text-[10px] opacity-75 hover:opacity-100"
-            onClick={(e) => {
-              e.stopPropagation();
-              undoAction.onUndo();
-            }}
-            title={undoAction.label}
-          >
-            {!undoAction.isRedo && undoAction.hasTier2 && <span className="mr-0.5">⚠</span>}
-            <i className={`codicon ${undoAction.isRedo ? "codicon-redo" : "codicon-discard"} text-[10px] mr-0.5`} />
-            {undoAction.label}
-          </button>
-        </div>
-      )}
     </>
   );
 };
