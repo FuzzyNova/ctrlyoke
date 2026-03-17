@@ -1,5 +1,4 @@
 import * as fs from "fs";
-import * as path from "path";
 import {
   UniversalCliOutput,
   CliEvent,
@@ -597,7 +596,8 @@ export class ChatSessionParser {
    * @returns Session ID (filename without extension)
    */
   extractSessionId(sessionFilePath: string): string {
-    const base = path.basename(sessionFilePath);
+    // Split on both POSIX (/) and Windows (\) separators for cross-platform support
+    const base = sessionFilePath.split(/[/\\]/).pop() ?? sessionFilePath;
     return base.replace(/\.jsonl?$/, "");
   }
 

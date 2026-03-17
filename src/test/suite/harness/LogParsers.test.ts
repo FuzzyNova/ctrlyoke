@@ -1080,7 +1080,7 @@ suite("CodexLogParser", () => {
           type: "response_item",
           payload: {
             type: "function_call",
-            name: "write_file",
+            name: "custom_tool",
             arguments: '{"path":"test.ts","content":"export const x = 1;"}',
             call_id: "call-456",
           },
@@ -1090,7 +1090,7 @@ suite("CodexLogParser", () => {
       const response = parser.extractResponse(events);
 
       assert.strictEqual(extractToolCalls(response).length, 1);
-      assert.strictEqual(extractToolCalls(response)[0].name, "write_file");
+      assert.strictEqual(extractToolCalls(response)[0].name, "custom_tool");
       assert.deepStrictEqual(extractToolCalls(response)[0].parameters, {
         path: "test.ts",
         content: "export const x = 1;",
