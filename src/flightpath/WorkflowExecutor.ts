@@ -579,9 +579,10 @@ export class WorkflowExecutor {
       strategy
     );
 
-    const changedFiles = context.snapshotService.computeSnapshotChanges(
+    const changedFiles = await context.snapshotService.computeSnapshotChanges(
       beforeState,
-      afterState
+      afterState,
+      context.workspaceFolderPath
     );
 
     const snapshot: WorkspaceSnapshot = {

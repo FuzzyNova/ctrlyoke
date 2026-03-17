@@ -691,7 +691,6 @@ export type {
 export type UndoFileAction =
   | "delete"
   | "restore-content"
-  | "git-restore"
   | "reverse-patch";
 
 export interface UndoFileInstruction {
@@ -733,7 +732,7 @@ export interface UndoFileCandidate {
   contentCaptureSkipped?: boolean;
   /** SHA-256 hash of content after prompt completed (for drift detection) */
   afterHash?: string;
-  /** True when strategy=git and file was at HEAD before prompt */
+  /** @deprecated Legacy field — no longer used for undo logic. May be present in old history files. */
   wasAtHead?: boolean;
   /** Old file content (before the AI edit) — for diff display in undo dialog */
   oldContent?: string;

@@ -6,12 +6,10 @@ import { PromptFile, PromptItem } from "../types/FlightPathTypes";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
-
-/**
- * Extensions that indicate a prompt value might be a file path
- * We try to resolve these as files first, falling back to literal text if not found
- */
-const PROMPT_FILE_EXTENSIONS = [".prompt.md", ".md", ".txt"] as const;
+import {
+  PROMPT_FILE_EXTENSIONS,
+  looksLikeFilePath,
+} from "../utils/promptPathUtils";
 
 export class PromptFileParser {
   private ajv = new Ajv({ allowUnionTypes: true });
@@ -154,50 +152,6 @@ export class PromptFileParser {
   }
 
   /**
-   * Check if a prompt value looks like it could be a file path
-   * This is a heuristic check - we verify file existence separately
-   *
-   * IMPORTANT: This should ONLY match pure file paths, not prompts that happen to
-   * contain file references like #selection:path/to/file.ts or "help me with ./file.md"
-   */
-  private looksLikeFilePath(promptValue: string): boolean {
-    const trimmed = promptValue.trim();
-
-    // Skip if it starts with # - that's a FlightPath reference (#selection:, #sym:, etc.), not a prompt file path
-    if (trimmed.startsWith("#")) {
-      return false;
-    }
-
-    // A prompt file reference must be ONLY a path - no other text before or after
-    // Check if it starts with a valid path indicator
-    const startsWithRelative =
-      trimmed.startsWith("./") || trimmed.startsWith("../");
-    const startsWithDriveLetter = /^[a-zA-Z]:[/\\]/.test(trimmed);
-    const startsWithUnixAbsolute = trimmed.startsWith("/");
-
-    const isPathLike =
-      startsWithRelative || startsWithDriveLetter || startsWithUnixAbsolute;
-
-    // If it doesn't start like a path, it's not a file reference
-    if (!isPathLike) {
-      return false;
-    }
-
-    // Check for known file extensions at the END of the string
-    const hasKnownExtension = PROMPT_FILE_EXTENSIONS.some((ext) =>
-      trimmed.toLowerCase().endsWith(ext)
-    );
-    if (hasKnownExtension) {
-      return true;
-    }
-
-    // For other extensions, also require ending with an extension pattern
-    const endsWithExtension = /\.\w+$/.test(trimmed);
-
-    return endsWithExtension;
-  }
-
-  /**
    * Resolve a prompt value that might be a file path
    * Returns the file content if path resolves to a file, otherwise returns original value
    *
@@ -210,7 +164,7 @@ export class PromptFileParser {
     promptFilePath: string
   ): Promise<string> {
     // Quick check - if it doesn't look like a file path, return as-is
-    if (!this.looksLikeFilePath(promptValue)) {
+    if (!looksLikeFilePath(promptValue)) {
       return promptValue;
     }
 

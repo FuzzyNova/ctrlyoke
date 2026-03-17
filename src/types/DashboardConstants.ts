@@ -111,6 +111,8 @@ export const MESSAGE_TYPES = {
   REQUEST_COMPLETIONS: "requestCompletions", // Request autocomplete suggestions
   COMPLETIONS_RESPONSE: "completionsResponse", // Return autocomplete suggestions
   OPEN_FILE: "openFile", // Open file from #file: link
+  VALIDATE_FILE_REF: "validateFileRef", // Webview -> Extension: Check if a file-ref path resolves
+  FILE_REF_VALIDATION: "fileRefValidation", // Extension -> Webview: { exists: boolean, filePath: string }
 
   // Token counting - Webview -> Extension: Request token counts for attachment references
   REQUEST_ATTACHMENT_TOKEN_COUNTS: "requestAttachmentTokenCounts",

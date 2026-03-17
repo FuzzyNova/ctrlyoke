@@ -21,6 +21,7 @@ import {
   PANEL_EXPANDED_SIZE_SINGLE,
   PANEL_MIN_SIZE_SMALL,
   PANEL_MIN_SIZE_CENTER,
+  PANEL_MIN_SIZE_SIDEBAR,
   PANEL_MAX_SIZE_SIDEBAR,
   PANEL_KEYS,
   SEPARATOR_HORIZONTAL,
@@ -764,7 +765,7 @@ function App() {
           defaultSize={desktopMountDefaults.current.prompts}
           collapsible
           collapsedSize={PANEL_COLLAPSED_SIZE_SIDEBAR}
-          minSize={PANEL_MIN_SIZE_SMALL}
+          minSize={PANEL_MIN_SIZE_SIDEBAR}
           maxSize={PANEL_MAX_SIZE_SIDEBAR}
           id="prompts-panel"
           onResize={() => {
@@ -890,7 +891,7 @@ function App() {
           defaultSize={desktopMountDefaults.current.settings}
           collapsible
           collapsedSize={PANEL_COLLAPSED_SIZE_SIDEBAR}
-          minSize={PANEL_MIN_SIZE_CENTER}
+          minSize={PANEL_MIN_SIZE_SIDEBAR}
           maxSize={PANEL_MAX_SIZE_SIDEBAR}
           id="settings-panel"
           onResize={() => {

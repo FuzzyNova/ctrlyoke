@@ -21,6 +21,7 @@ import { RangeSetBuilder } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
 import { WebviewLog } from "../../utils/logger";
+import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 
 // Typo.js spell checker (will be loaded from window.Typo)
 declare global {
@@ -207,10 +208,22 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
       // IMPORTANT: Skip trigger character (@/#) in 'from' position so CodeMirror
       // matches against "src" instead of "@src" (labels don't include trigger)
-      pendingCompletionResolveRef.current({
-        from: from + 1, // Skip the @ or # trigger character
+      // "path" completions replace from the start of the typed path (no trigger char to skip)
+      const isPathCompletion = pendingCompletionTriggerRef.current === "path";
+      const fromOffset = isPathCompletion ? 0 : 1;
+
+      const result: CompletionResult = {
+        from: from + fromOffset,
         options: completions,
-      });
+      };
+      // Disable CodeMirror's built-in fuzzy filter for path completions.
+      // The query text (the full path) won't match filename labels, so we
+      // handle all filtering on the extension side.
+      if (isPathCompletion) {
+        result.filter = false;
+      }
+
+      pendingCompletionResolveRef.current(result);
 
       pendingCompletionResolveRef.current = null;
       pendingCompletionTriggerRef.current = null;
@@ -276,6 +289,52 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     [vscode]
   );
 
+  // Path-only completions — fires when the entire editor content is a lone file path.
+  // Suggests .prompt.md / .md / .txt files from the workspace as replacements.
+  const pathCompletions = useCallback(
+    (context: any): Promise<CompletionResult | null> | null => {
+      // Match paths starting with ./ ../ / or a Windows drive letter
+      const before = context.matchBefore(
+        /(?:\.\.?\/|\/|[a-zA-Z]:[/\\])[^\s\n]*/
+      );
+      if (!before) return null;
+
+      // Only activate when this match starts at the very beginning of the
+      // actual content (no mixed text before the path)
+      const doc = context.state.doc.toString();
+      const leadingWs = doc.length - doc.trimStart().length;
+      if (before.from !== leadingWs) return null;
+
+      // Bail out if there is any non-whitespace content after the path
+      if (doc.slice(before.to).trim().length > 0) return null;
+
+      if (before.from === before.to && !context.explicit) return null;
+
+      WebviewLog.debug(
+        `[CodeMirror] pathCompletions triggered: "${before.text}" from=${before.from}`
+      );
+
+      const seq = ++completionSeqRef.current;
+
+      return new Promise<CompletionResult | null>((resolve) => {
+        if (pendingCompletionResolveRef.current) {
+          pendingCompletionResolveRef.current(null);
+        }
+        pendingCompletionResolveRef.current = resolve;
+        pendingCompletionTriggerRef.current = "path";
+
+        vscode.postMessage({
+          type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
+          trigger: "path",
+          prefix: before.text,
+          position: before.from,
+          seq,
+        });
+      });
+    },
+    [vscode]
+  );
+
   // Initialize CodeMirror editor
   useEffect(() => {
     if (!editorRef.current) return;
@@ -315,7 +374,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         highlightSelectionMatches(),
         createSpellCheckExtension(typoCheckerRef),
         autocompletion({
-          override: [customCompletions],
+          override: [customCompletions, pathCompletions],
           activateOnTyping: true,
           closeOnBlur: true,
           optionClass: (completion) =>
@@ -346,6 +405,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           ],
         }),
         createLinkDecorationExtension(),
+        createFileRefDecorationExtension(),
         createClickHandlerExtension(vscode),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
@@ -367,7 +427,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeholderText, customCompletions]);
+  }, [placeholderText, customCompletions, pathCompletions]);
   // `value` is intentionally omitted — the setup effect initializes the editor
   // once; value changes are handled by the separate effect below.
   // `vscode` is a stable singleton — never changes.
@@ -506,6 +566,12 @@ function createThemeExtension() {
       ".cm-link:hover": {
         color: "var(--vscode-textLink-activeForeground)",
       },
+      // File-reference styling — applied when the entire editor content is a lone path
+      ".cm-prompt-file-ref": {
+        color: "var(--vscode-textLink-foreground)",
+        textDecoration: "underline",
+        fontFamily: "var(--vscode-editor-font-family)",
+      },
     },
     { dark: document.body.classList.contains("vscode-dark") }
   );
@@ -553,6 +619,9 @@ function createSpellCheckExtension(
   return linter(
     (view) => {
       if (!typoCheckerRef.current) return [];
+
+      // Skip spellcheck entirely when the document is a lone file-path reference
+      if (looksLikeFilePath(view.state.doc.toString().trim())) return [];
 
       const diagnostics: any[] = [];
 
@@ -895,6 +964,52 @@ function createLinkDecorationExtension() {
   );
 
   return linkPlugin;
+}
+
+// Decorate the entire editor content when it is a lone file-path reference
+function createFileRefDecorationExtension() {
+  return ViewPlugin.fromClass(
+    class {
+      decorations;
+
+      constructor(view: EditorView) {
+        this.decorations = this.buildDecorations(view);
+      }
+
+      update(update: any) {
+        if (update.docChanged) {
+          this.decorations = this.buildDecorations(update.view);
+        }
+      }
+
+      buildDecorations(view: EditorView) {
+        const doc = view.state.doc.toString();
+        const trimmed = doc.trim();
+        if (!trimmed || !looksLikeFilePath(trimmed)) {
+          return Decoration.none;
+        }
+
+        // Mark only the trimmed content (skip leading/trailing whitespace).
+        // Reuse cm-link + data-* attributes so the existing click handler and
+        // styles work exactly the same as for @file / #file references.
+        const start = doc.indexOf(trimmed);
+        const end = start + trimmed.length;
+        const builder = new RangeSetBuilder<Decoration>();
+        builder.add(
+          start,
+          end,
+          Decoration.mark({
+            class: "cm-link cm-prompt-file-ref",
+            attributes: { "data-type": "file", "data-path": trimmed },
+          })
+        );
+        return builder.finish();
+      }
+    },
+    {
+      decorations: (v) => v.decorations,
+    }
+  );
 }
 
 // Handle Ctrl+Click on links

@@ -568,7 +568,7 @@ export class WorkflowSerializer {
     }
   }
 
-  async handleClearWorkflowHistory(): Promise<void> {
+  async handleClearWorkflowHistory(): Promise<boolean> {
     const confirm = await vscode.window.showWarningMessage(
       "Delete all workflow history files from .flightpath/.queue?",
       { modal: true },
@@ -576,13 +576,13 @@ export class WorkflowSerializer {
     );
 
     if (confirm !== "Delete All") {
-      return;
+      return false;
     }
 
     try {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!workspaceRoot) {
-        return;
+        return false;
       }
 
       const queueDir = path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.QUEUE_DIR);
@@ -612,6 +612,7 @@ export class WorkflowSerializer {
           type: MESSAGE_TYPES.RECENT_WORKFLOWS,
           workflows: [],
         });
+        return true;
       } catch (error) {
         Log.error("Failed to delete workflow files:", error);
         vscode.window.showErrorMessage(
@@ -621,6 +622,7 @@ export class WorkflowSerializer {
     } catch (error) {
       Log.error("Failed to clear workflow history:", error);
     }
+    return false;
   }
 
   /**

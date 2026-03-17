@@ -61,7 +61,9 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
   overrides,
 }) => {
   const hasFinalPrompt = !!finalPrompt;
-  const effectiveStatus: StepStatus = hasFinalPrompt ? (status ?? "pending") : "pending";
+  const effectiveStatus: StepStatus = hasFinalPrompt
+    ? (status ?? "pending")
+    : "pending";
 
   return (
     <div className="border-t border-panel-border bg-sidebar-bg flex-shrink-0">
@@ -87,13 +89,13 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
           }}
         >
           {/* Prompt name / text — pl-5 matches PromptItemDetails indent */}
-          <div className="pl-5 text-[11px] leading-relaxed">
+          <div className="text-[11px] leading-relaxed">
             {finalPrompt.name ? finalPrompt.name : truncate(finalPrompt.prompt)}
           </div>
 
           {/* Phase badge */}
           {phase && (
-            <div className="mt-0.5 pl-5 text-[10px] opacity-75">
+            <div className="mt-0.5text-[10px] opacity-75">
               {phase === "finalPrompt" ? "Final Prompt" : "Queue"}
             </div>
           )}

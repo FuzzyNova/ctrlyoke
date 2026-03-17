@@ -13,6 +13,7 @@ import {
   EXECUTION_STATES,
   STEP_STATUS,
 } from "../../types/messages";
+import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 
 /**
  * ACTION_TYPES for prompt execution
@@ -69,13 +70,17 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
   const vscode = getVsCodeApi();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const validateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
 
   // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  // null = not applicable / pending, true = file found, false = file not found
+  const [fileRefExists, setFileRefExists] = useState<boolean | null>(null);
 
   const isEditMode = selectionTarget.kind !== "newPrompt";
+  const isFileRef = looksLikeFilePath(promptText.trim());
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const selectedPromptStatus =
     selectionTarget.kind === "queue"
@@ -173,6 +178,48 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [propertiesDrawerOpen, closePropertiesDrawer]);
+
+  // Validate file-ref path when the editor contains a lone file path.
+  // Debounced to avoid spamming on every keystroke.
+  useEffect(() => {
+    if (!isFileRef) {
+      setFileRefExists(null);
+      if (validateTimeoutRef.current) {
+        clearTimeout(validateTimeoutRef.current);
+      }
+      return;
+    }
+
+    setFileRefExists(null); // pending while we wait
+
+    if (validateTimeoutRef.current) {
+      clearTimeout(validateTimeoutRef.current);
+    }
+
+    validateTimeoutRef.current = setTimeout(() => {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.VALIDATE_FILE_REF,
+        filePath: promptText.trim(),
+      });
+    }, 400);
+
+    return () => {
+      if (validateTimeoutRef.current) {
+        clearTimeout(validateTimeoutRef.current);
+      }
+    };
+  }, [isFileRef, promptText, vscode]);
+
+  // Listen for FILE_REF_VALIDATION responses from extension
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === MESSAGE_TYPES.FILE_REF_VALIDATION) {
+        setFileRefExists(event.data.exists as boolean);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
 
   // Get property values for sending to extension
   // includeNullsForDefaults: if true, send null for default values to clear overrides
@@ -509,6 +556,40 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           onClose={closePropertiesDrawer}
         />
       </div>
+
+      {/* File-reference badge — shown when editor contains only a file path */}
+      {isFileRef && (
+        <div
+          className="flex items-center gap-1 px-2 py-1 text-xs"
+          style={{
+            color:
+              fileRefExists === false
+                ? "var(--vscode-editorWarning-foreground)"
+                : "var(--vscode-textLink-foreground)",
+            backgroundColor: "var(--vscode-editor-background)",
+            borderTop:
+              "1px solid var(--vscode-widget-border, var(--vscode-panel-border))",
+          }}
+        >
+          {fileRefExists === false ? (
+            <>
+              <i
+                className="codicon codicon-warning"
+                style={{ fontSize: "11px" }}
+              />
+              <span>File not found — will be sent as literal text at execution</span>
+            </>
+          ) : (
+            <>
+              <i
+                className="codicon codicon-file"
+                style={{ fontSize: "11px" }}
+              />
+              <span>File reference — prompt will be read from this path at execution</span>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Editor Footer with actions (outside wrapper, not covered by drawer) */}
       <EditorFooter

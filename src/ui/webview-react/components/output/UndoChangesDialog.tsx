@@ -51,12 +51,10 @@ function resolveSnapshotInstruction(snap: SnapshotFileChange): UndoFileInstructi
     case "created":
       return { path: snap.path, action: "delete" };
     case "modified":
-      if (snap.wasAtHead) return { path: snap.path, action: "git-restore" };
       if (snap.structuredPatch && snap.structuredPatch.length > 0)
         return { path: snap.path, action: "reverse-patch", structuredPatch: snap.structuredPatch };
       return null;
     case "deleted":
-      if (snap.wasAtHead) return { path: snap.path, action: "git-restore" };
       if (snap.contentToRestore != null)
         return { path: snap.path, action: "restore-content", contentToRestore: snap.contentToRestore };
       return null;
@@ -87,7 +85,6 @@ function redoActionBadgeLabel(action: UndoFileInstruction["action"]): string {
   switch (action) {
     case "restore-content": return "modified/created";
     case "delete": return "deleted";
-    case "git-restore": return "modified";
     default: return action;
   }
 }
@@ -389,25 +386,35 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
           <p className="text-sm text-description-fg">No redo instructions available.</p>
         ) : (
           <div className="flex flex-col gap-0.5">
-            {redoRows.map((row) => (
-              <div
-                key={row.path}
-                className="flex items-start gap-2 py-1.5 px-2 rounded text-sm hover:bg-list-hover-bg"
-              >
-                <input
-                  type="checkbox"
-                  checked={checkedPaths.has(row.path)}
-                  onChange={(e) => handleToggle(row.path, e.target.checked)}
-                  className="mt-0.5 w-3.5 h-3.5 accent-btn-bg cursor-pointer shrink-0"
-                />
-                <span className="flex-1 font-mono text-xs break-all text-foreground">
-                  {row.path}
-                </span>
-                <span className={`shrink-0 text-xs font-medium ${redoActionBadgeColor(row.instruction.action)}`}>
-                  {redoActionBadgeLabel(row.instruction.action)}
-                </span>
-              </div>
-            ))}
+            {redoRows.map((row) => {
+              const hasDiff = (row.instruction.structuredPatch?.length ?? 0) > 0;
+              return (
+                <div key={row.path} className="rounded">
+                  <div className="flex items-start gap-2 py-1.5 px-2 rounded text-sm hover:bg-list-hover-bg">
+                    <input
+                      type="checkbox"
+                      checked={checkedPaths.has(row.path)}
+                      onChange={(e) => handleToggle(row.path, e.target.checked)}
+                      className="mt-0.5 w-3.5 h-3.5 accent-btn-bg cursor-pointer shrink-0"
+                    />
+                    <span className="flex-1 font-mono text-xs break-all text-foreground">
+                      {row.path}
+                    </span>
+                    <span className={`shrink-0 text-xs font-medium ${redoActionBadgeColor(row.instruction.action)}`}>
+                      {redoActionBadgeLabel(row.instruction.action)}
+                    </span>
+                  </div>
+                  {hasDiff && (
+                    <DiffView
+                      structuredPatch={row.instruction.structuredPatch}
+                      language={getLanguageFromPath(row.path)}
+                      globallyCollapsed={true}
+                      className="ml-5"
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         )
       ) : allUndoRows.length === 0 ? (

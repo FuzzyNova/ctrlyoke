@@ -6,16 +6,11 @@ import {
   UniversalCliOutput,
   CliEvent,
   TokenUsage,
-  FileEditData,
-  FileWriteData,
 } from "../../../types/CliOutputTypes";
-import {
-  CLI_EVENT_TYPES,
-  OPERATION_STATUS,
-} from "../../../types/DashboardConstants";
+import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { COPILOT_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
 import { CliResponseParser } from "../shared/CliResponseParser";
-import { CliEventMapper } from "../shared/CliEventMapper";
+import { CopilotToolBuilder } from "./CopilotToolBuilder";
 
 /**
  * Copilot CLI Response Parser
@@ -81,13 +76,7 @@ export class CopilotResponseParser
     // Populated from assistant.message.data.toolRequests; consumed on tool.execution_complete.
     const pendingToolCalls = new Map<
       string,
-      {
-        name: string;
-        path?: string;
-        oldStr?: string;
-        newStr?: string;
-        content?: string;
-      }
+      { name: string; args: Record<string, unknown> }
     >();
 
     for (const json of objects) {
@@ -128,17 +117,18 @@ export class CopilotResponseParser
           // Map tool requests to semantic events and store for completion correlation
           if (Array.isArray(data.toolRequests)) {
             for (const toolReq of data.toolRequests) {
-              this.mapToolRequestToEvent(toolReq, events);
+              events.push(
+                CopilotToolBuilder.buildInitiatedEvent(
+                  toolReq.name,
+                  toolReq.arguments || {},
+                  toolReq.toolCallId,
+                  Date.now()
+                )
+              );
               if (toolReq.toolCallId) {
                 pendingToolCalls.set(toolReq.toolCallId, {
                   name: toolReq.name,
-                  path: toolReq.arguments?.path || toolReq.arguments?.file_path,
-                  oldStr:
-                    toolReq.arguments?.old_str || toolReq.arguments?.old_string,
-                  newStr:
-                    toolReq.arguments?.new_str || toolReq.arguments?.new_string,
-                  content:
-                    toolReq.arguments?.content || toolReq.arguments?.file_text,
+                  args: toolReq.arguments || {},
                 });
               }
             }
@@ -277,179 +267,13 @@ export class CopilotResponseParser
    */
   private buildToolCompletionEvents(
     completionData: any,
-    pending: {
-      name: string;
-      path?: string;
-      oldStr?: string;
-      newStr?: string;
-      content?: string;
-    }
+    pending: { name: string; args: Record<string, unknown> }
   ): CliEvent[] {
-    const classifiedType = CliEventMapper.classifyTool(pending.name).type;
-    const success = completionData?.success === true;
-    const errorMsg: string | undefined = completionData?.error?.message;
-
-    if (classifiedType === CLI_EVENT_TYPES.FILE_EDIT) {
-      const structuredPatch = completionData?.result?.detailedContent
-        ? CliResponseParser.parseUnifiedDiff(
-            completionData.result.detailedContent
-          )
-        : undefined;
-      return [
-        {
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp: Date.now(),
-          data: {
-            path: pending.path || "unknown",
-            oldContent: pending.oldStr,
-            newContent: pending.newStr,
-            structuredPatch,
-            status: success
-              ? OPERATION_STATUS.COMPLETED
-              : OPERATION_STATUS.FAILED,
-            success,
-            error: errorMsg,
-          } as FileEditData,
-        },
-      ];
-    }
-
-    if (classifiedType === CLI_EVENT_TYPES.FILE_WRITE) {
-      return [
-        {
-          type: CLI_EVENT_TYPES.FILE_WRITE,
-          timestamp: Date.now(),
-          data: {
-            path: pending.path || "unknown",
-            content: pending.content || "",
-            status: success
-              ? OPERATION_STATUS.COMPLETED
-              : OPERATION_STATUS.FAILED,
-            success,
-            error: errorMsg,
-          } as FileWriteData,
-        },
-      ];
-    }
-
-    return [];
-  }
-
-  /**
-   * Map a Copilot tool request to a semantic CliEvent.
-   *
-   * Uses CliEventMapper.classifyTool() for consistent tool → event mapping across harnesses.
-   * Copilot tool names in JSON mode: "powershell", "read_file", "write_file", "report_intent", etc.
-   *
-   * @param toolReq Tool request from assistant.message.data.toolRequests
-   * @param events Array to append the resulting event to
-   */
-  private mapToolRequestToEvent(
-    toolReq: {
-      toolCallId?: string;
-      name: string;
-      arguments?: any;
-      type?: string;
-    },
-    events: CliEvent[]
-  ): void {
-    const toolName = toolReq.name;
-    const input = toolReq.arguments || {};
-    const classification = CliEventMapper.classifyTool(toolName);
-    const timestamp = Date.now();
-
-    switch (classification.type) {
-      case CLI_EVENT_TYPES.BASH_COMMAND:
-        events.push({
-          type: CLI_EVENT_TYPES.BASH_COMMAND,
-          timestamp,
-          data: {
-            command: input.command || input.cmd || "unknown",
-            workingDir: input.cwd || input.workingDir,
-            status: OPERATION_STATUS.INITIATED,
-          },
-        });
-        return;
-
-      case CLI_EVENT_TYPES.FILE_WRITE:
-        events.push({
-          type: CLI_EVENT_TYPES.FILE_WRITE,
-          timestamp,
-          data: {
-            path: input.path || input.file_path || "unknown",
-            content: input.content || input.file_text || "",
-            status: OPERATION_STATUS.INITIATED,
-          },
-        });
-        return;
-
-      case CLI_EVENT_TYPES.FILE_EDIT:
-        events.push({
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp,
-          data: {
-            path: input.path || input.file_path || "unknown",
-            oldContent: input.old_str || input.old_string || input.oldString,
-            newContent: input.new_str || input.new_string || input.newString,
-            status: OPERATION_STATUS.INITIATED,
-          },
-        });
-        return;
-
-      case CLI_EVENT_TYPES.FILE_READ:
-        events.push({
-          type: CLI_EVENT_TYPES.FILE_READ,
-          timestamp,
-          data: {
-            path: input.path || input.file_path || "unknown",
-            status: OPERATION_STATUS.INITIATED,
-          },
-        });
-        return;
-
-      case CLI_EVENT_TYPES.FILE_DELETE:
-        events.push({
-          type: CLI_EVENT_TYPES.FILE_DELETE,
-          timestamp,
-          data: {
-            path: input.path || input.file_path || "unknown",
-          },
-        });
-        return;
-
-      case CLI_EVENT_TYPES.WEB_SEARCH:
-        events.push({
-          type: CLI_EVENT_TYPES.WEB_SEARCH,
-          timestamp,
-          data: {
-            query: input.query || "",
-          },
-        });
-        return;
-
-      case CLI_EVENT_TYPES.MCP_TOOL_CALL:
-        events.push({
-          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-          timestamp,
-          data: {
-            server: (classification as { server: string }).server,
-            tool: (classification as { tool: string }).tool,
-            parameters: input,
-          },
-        });
-        return;
-
-      default:
-        events.push({
-          type: CLI_EVENT_TYPES.TOOL_CALL,
-          timestamp,
-          data: {
-            name: toolName,
-            parameters: input,
-            id: toolReq.toolCallId,
-          },
-        });
-    }
+    return CopilotToolBuilder.buildCompletedEvents(
+      pending.name,
+      pending.args,
+      completionData
+    );
   }
 
   /**
@@ -513,40 +337,24 @@ export class CopilotResponseParser
         case "tool.execution_start": {
           // Emit tool start event for real-time tool visualization
           if (json.data?.toolName && json.data?.arguments) {
-            this.mapToolRequestToEvent(
-              {
-                toolCallId: json.data.toolCallId,
-                name: json.data.toolName,
-                arguments: json.data.arguments,
-              },
-              events
+            events.push(
+              CopilotToolBuilder.buildInitiatedEvent(
+                json.data.toolName,
+                json.data.arguments || {},
+                json.data.toolCallId,
+                Date.now()
+              )
             );
             // Store for completion correlation
             if (json.data.toolCallId) {
               const pendingCalls =
                 (streamState.get("pendingToolCalls") as Map<
                   string,
-                  {
-                    name: string;
-                    path?: string;
-                    oldStr?: string;
-                    newStr?: string;
-                    content?: string;
-                  }
+                  { name: string; args: Record<string, unknown> }
                 >) ?? new Map();
               pendingCalls.set(json.data.toolCallId, {
                 name: json.data.toolName,
-                path:
-                  json.data.arguments?.path || json.data.arguments?.file_path,
-                oldStr:
-                  json.data.arguments?.old_str ||
-                  json.data.arguments?.old_string,
-                newStr:
-                  json.data.arguments?.new_str ||
-                  json.data.arguments?.new_string,
-                content:
-                  json.data.arguments?.content ||
-                  json.data.arguments?.file_text,
+                args: json.data.arguments || {},
               });
               streamState.set("pendingToolCalls", pendingCalls);
             }
@@ -558,16 +366,7 @@ export class CopilotResponseParser
           const toolCallId: string | undefined = json.data?.toolCallId;
           if (toolCallId) {
             const pendingCalls = streamState.get("pendingToolCalls") as
-              | Map<
-                  string,
-                  {
-                    name: string;
-                    path?: string;
-                    oldStr?: string;
-                    newStr?: string;
-                    content?: string;
-                  }
-                >
+              | Map<string, { name: string; args: Record<string, unknown> }>
               | undefined;
             const pending = pendingCalls?.get(toolCallId);
             if (pending) {

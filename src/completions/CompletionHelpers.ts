@@ -625,3 +625,62 @@ export function toVSCodeCompletionItem(
 
   return vscodeItem;
 }
+
+/**
+ * Extensions recognized as prompt file references when the entire prompt
+ * value is a lone file path (no surrounding text).
+ */
+const PROMPT_REF_EXTENSIONS = [".prompt.md", ".md", ".txt"];
+
+/**
+ * Get completions for the file-path trigger in the prompt editor.
+ * Only returns .prompt.md / .md / .txt files, with full ./relative paths as
+ * insertText so the completion replaces the entire typed path.
+ */
+export async function getPromptFileCompletions(
+  filterText: string
+): Promise<PlainCompletionItem[]> {
+  const files = await getWorkspaceFiles();
+
+  // Strip any leading ./ ../ or / from the filter so we compare against bare relative paths
+  const normalizedFilter = filterText
+    .replace(/^\.\.?\//, "")
+    .replace(/^\//, "")
+    .toLowerCase()
+    .replace(/\\/g, "/");
+
+  const items: PlainCompletionItem[] = [];
+
+  for (const fileUri of files) {
+    const relativePath = vscode.workspace
+      .asRelativePath(fileUri, false)
+      .replace(/\\/g, "/");
+    const lower = relativePath.toLowerCase();
+
+    if (!PROMPT_REF_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
+      continue;
+    }
+
+    if (normalizedFilter && !lower.includes(normalizedFilter)) {
+      continue;
+    }
+
+    const fileName = path.basename(relativePath);
+    const dirName = path.dirname(relativePath);
+    const insertPath = `./${relativePath}`;
+
+    items.push({
+      label: fileName,
+      kind: vscode.CompletionItemKind.File,
+      insertText: insertPath,
+      detail: dirName === "." ? "Root" : dirName,
+      documentation: `**Prompt file reference**\n\nPath: \`${insertPath}\``,
+      sortText: `${relativePath.split("/").length}_${relativePath}`,
+      filterText: `${relativePath} ${fileName}`,
+    });
+
+    if (items.length >= 200) break;
+  }
+
+  return items;
+}

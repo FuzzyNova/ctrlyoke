@@ -10,6 +10,7 @@ import {
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { CliResponseParser } from "../shared/CliResponseParser";
+import { CodexToolBuilder } from "./CodexToolBuilder";
 
 // ============================================================
 // CODEX CLI JSON EVENT TYPE DEFINITIONS
@@ -239,14 +240,12 @@ export class CodexResponseParser
   ): void {
     // Command execution started → BASH_COMMAND with INITIATED status
     if (item.type === "command_execution" && item.command) {
-      events.push({
-        type: CLI_EVENT_TYPES.BASH_COMMAND,
-        timestamp: Date.now(),
-        data: {
-          command: item.command,
-          status: OPERATION_STATUS.INITIATED,
-        },
-      });
+      events.push(
+        CodexToolBuilder.buildCommandExecutionInitiatedEvent(
+          item.command,
+          Date.now()
+        )
+      );
     }
 
     // File change started → FILE_EDIT with INITIATED status (one event per file)
@@ -507,14 +506,12 @@ export class CodexResponseParser
 
         // Command started - BASH_COMMAND with INITIATED status
         if (json.item.type === "command_execution" && json.item.command) {
-          events.push({
-            type: CLI_EVENT_TYPES.BASH_COMMAND,
-            timestamp: Date.now(),
-            data: {
-              command: json.item.command,
-              status: OPERATION_STATUS.INITIATED,
-            },
-          });
+          events.push(
+            CodexToolBuilder.buildCommandExecutionInitiatedEvent(
+              json.item.command,
+              Date.now()
+            )
+          );
         }
       }
 

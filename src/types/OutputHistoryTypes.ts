@@ -121,10 +121,10 @@ export interface SnapshotFileChange {
   changeType: PromptChangeType;
   /**
    * Content to restore for 'deleted' files.
-   * Undefined if wasAtHead (use git restore) or if content capture was skipped.
+   * Undefined if content capture was skipped.
    */
   contentToRestore?: string;
-  /** True if file was unmodified (at HEAD) before the prompt ran. Only set when strategy === 'git'. */
+  /** @deprecated Legacy field — no longer used for undo logic. May be present in old history files. */
   wasAtHead?: boolean;
   /** True if before-content was skipped due to size (>512 KB) or binary detection. */
   contentCaptureSkipped?: boolean;
@@ -145,7 +145,7 @@ export interface SnapshotFileChange {
 export interface WorkspaceSnapshot {
   /** Timestamp when the after-snapshot was captured */
   capturedAt: number;
-  /** 'git': git restore works for wasAtHead files. 'filesystem': content-only undo. */
+  /** Strategy used to capture the snapshot ('git' or 'filesystem'). */
   strategy: "git" | "filesystem";
   /**
    * Files changed during this prompt that have NO structured event attribution.

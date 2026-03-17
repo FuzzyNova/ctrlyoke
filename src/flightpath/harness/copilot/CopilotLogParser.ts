@@ -3,31 +3,20 @@ import * as path from "path";
 import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import { BaseCliEvent } from "../shared/interfaces/ILogParser";
-import { CliEventMapper } from "../shared/CliEventMapper";
 import { CliResponseParser } from "../shared/CliResponseParser";
+import { CopilotToolBuilder } from "./CopilotToolBuilder";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { COPILOT_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
 import {
   UniversalCliOutput,
-  ToolCall,
   ThinkingBlock,
   CliEvent,
   TextData,
   ToolResultData,
-  BashCommandData,
-  FileReadData,
-  FileWriteData,
-  FileEditData,
-  FileDeleteData,
-  McpToolCallData,
-  WebSearchData,
   UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
-import {
-  CLI_EVENT_TYPES,
-  OPERATION_STATUS,
-} from "../../../types/DashboardConstants";
+import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 
 // ============================================================================
 // Copilot Log Event Type Definitions
@@ -462,144 +451,29 @@ export class CopilotLogParser extends BaseLogParser {
         });
 
         // Emit semantic events for all tools immediately (for real-time feedback)
-        const toolEvent = this.mapToolToSemanticEvent(
-          event.data.toolName,
-          event.data.arguments || {},
-          event.data.toolCallId,
-          timestamp
+        outputEvents.push(
+          CopilotToolBuilder.buildInitiatedEvent(
+            event.data.toolName,
+            event.data.arguments || {},
+            event.data.toolCallId,
+            timestamp
+          )
         );
-        outputEvents.push(toolEvent);
       }
 
-      // Emit COMPLETED events for bash commands and file operations from tool.execution_complete
+      // Emit COMPLETED events for all tool types from tool.execution_complete
       if (event.type === "tool.execution_complete" && event.data) {
         const pendingTool = pendingTools.get(event.data.toolCallId);
-        const success = event.data.success;
-        const rawContent = event.data.result?.content;
-        const result =
-          typeof rawContent === "string"
-            ? rawContent
-            : rawContent
-              ? JSON.stringify(rawContent)
-              : "";
 
         if (pendingTool) {
-          const lowerName = pendingTool.toolName.toLowerCase();
-
-          // BASH COMMAND - Emit COMPLETED event with output/error
-          if (
-            lowerName === "powershell" ||
-            lowerName === "bash" ||
-            lowerName === "shell"
-          ) {
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.BASH_COMMAND,
-              timestamp,
-              data: {
-                command:
-                  (pendingTool.args.command as string) ||
-                  (pendingTool.args.script as string) ||
-                  "",
-                workingDir: pendingTool.args.cwd as string | undefined,
-                exitCode: success ? 0 : 1,
-                output: success ? result : undefined,
-                error: success ? undefined : result,
-                status: success
-                  ? OPERATION_STATUS.COMPLETED
-                  : OPERATION_STATUS.FAILED,
-              } as BashCommandData,
-            });
-            pendingTools.delete(event.data.toolCallId);
-          }
-          // FILE_READ - Emit COMPLETED event with content
-          else if (
-            lowerName === "view" ||
-            lowerName === "read" ||
-            lowerName === "read_file"
-          ) {
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.FILE_READ,
-              timestamp,
-              data: {
-                path:
-                  (pendingTool.args.path as string) ||
-                  (pendingTool.args.file_path as string) ||
-                  "",
-                content: success ? result : undefined,
-                status: success
-                  ? OPERATION_STATUS.COMPLETED
-                  : OPERATION_STATUS.FAILED,
-                success,
-              } as FileReadData,
-            });
-            pendingTools.delete(event.data.toolCallId);
-          }
-          // FILE_WRITE - Emit COMPLETED event
-          else if (
-            lowerName === "write" ||
-            lowerName === "create_file" ||
-            lowerName === "write_file"
-          ) {
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.FILE_WRITE,
-              timestamp,
-              data: {
-                path:
-                  (pendingTool.args.path as string) ||
-                  (pendingTool.args.file_path as string) ||
-                  "",
-                content: (pendingTool.args.content as string) || "",
-                status: success
-                  ? OPERATION_STATUS.COMPLETED
-                  : OPERATION_STATUS.FAILED,
-                success,
-              } as FileWriteData,
-            });
-            pendingTools.delete(event.data.toolCallId);
-          }
-          // FILE_EDIT - Emit COMPLETED event with diff data
-          else if (
-            lowerName === "edit" ||
-            lowerName === "modify_file" ||
-            lowerName === "replace_string_in_file" ||
-            lowerName === "multiedit"
-          ) {
-            // Parse unified diff to get structured patch with line numbers
-            const structuredPatch = event.data.result?.detailedContent
-              ? CliResponseParser.parseUnifiedDiff(event.data.result.detailedContent)
-              : undefined;
-
-            // Debug: Log parsing results
-            Log.debug(
-              `[CopilotLogParser] Parsed structuredPatch:`,
-              structuredPatch
-                ? `${structuredPatch.length} hunks`
-                : "undefined (parsing failed)"
-            );
-
-            // Emit FILE_EDIT COMPLETED event with full data (oldContent/newContent + structuredPatch)
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.FILE_EDIT,
-              timestamp,
-              data: {
-                path:
-                  (pendingTool.args.path as string) ||
-                  (pendingTool.args.file_path as string) ||
-                  "",
-                // Include old/new content as fallback if structuredPatch fails to parse
-                oldContent: (pendingTool.args.old_str ||
-                  pendingTool.args.old_string) as string | undefined,
-                newContent: (pendingTool.args.new_str ||
-                  pendingTool.args.new_string) as string | undefined,
-                structuredPatch,
-                status: success
-                  ? OPERATION_STATUS.COMPLETED
-                  : OPERATION_STATUS.FAILED,
-                success,
-              } as FileEditData,
-            });
-            pendingTools.delete(event.data.toolCallId);
-          }
+          outputEvents.push(
+            ...CopilotToolBuilder.buildCompletedEvents(
+              pendingTool.toolName,
+              pendingTool.args,
+              event.data
+            )
+          );
+          pendingTools.delete(event.data.toolCallId);
         }
 
         // Always emit TOOL_RESULT
@@ -1032,123 +906,6 @@ export class CopilotLogParser extends BaseLogParser {
       return last;
     } catch {
       return undefined;
-    }
-  }
-
-  /**
-   * Map Copilot tool name to semantic event type
-   *
-   * Converts Copilot-specific tool names to harness-agnostic semantic events.
-   *
-   * **Tool Name Mapping:**
-   * - Shell commands: `powershell`, `bash`, `shell` → BASH_COMMAND
-   * - File operations:
-   *   - `view`, `read` → FILE_READ
-   *   - `write`, `create_file` → FILE_WRITE
-   *   - `edit`, `modify_file`, `replace_string_in_file` → FILE_EDIT
-   *   - `delete`, `delete_file` → FILE_DELETE
-   * - MCP tools: Any tool with server prefix (e.g., `github(...)`) → MCP_TOOL_CALL
-   * - Web search: `web_search`, `search` → WEB_SEARCH
-   * - Unknown tools: Fallback to generic TOOL_CALL
-   *
-   * @param toolName - Copilot tool name
-   * @param args - Tool arguments from Copilot
-   * @param toolCallId - Unique tool call ID
-   * @param timestamp - Event timestamp
-   * @returns CliEvent with semantic type and properly structured data
-   */
-  private mapToolToSemanticEvent(
-    toolName: string,
-    args: Record<string, unknown>,
-    toolCallId: string,
-    timestamp: number
-  ): CliEvent {
-    const classification = CliEventMapper.classifyTool(toolName);
-
-    switch (classification.type) {
-      case CLI_EVENT_TYPES.BASH_COMMAND:
-        return {
-          type: CLI_EVENT_TYPES.BASH_COMMAND,
-          timestamp,
-          data: {
-            command: (args.command as string) || (args.script as string) || "",
-            workingDir: args.cwd as string | undefined,
-            status: OPERATION_STATUS.INITIATED,
-          } as BashCommandData,
-        };
-
-      case CLI_EVENT_TYPES.FILE_READ:
-        return {
-          type: CLI_EVENT_TYPES.FILE_READ,
-          timestamp,
-          data: {
-            path: (args.path as string) || (args.file_path as string) || "",
-            status: OPERATION_STATUS.INITIATED,
-          } as FileReadData,
-        };
-
-      case CLI_EVENT_TYPES.FILE_WRITE:
-        return {
-          type: CLI_EVENT_TYPES.FILE_WRITE,
-          timestamp,
-          data: {
-            path: (args.path as string) || (args.file_path as string) || "",
-            content: (args.content as string) || "",
-            status: OPERATION_STATUS.INITIATED,
-          } as FileWriteData,
-        };
-
-      case CLI_EVENT_TYPES.FILE_EDIT:
-        return {
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp,
-          data: {
-            path: (args.path as string) || (args.file_path as string) || "",
-            status: OPERATION_STATUS.INITIATED,
-            // Don't include oldContent/newContent here - they'll be added via structuredPatch
-            // from tool.execution_complete (prevents client-side diff generation with wrong line numbers)
-          } as FileEditData,
-        };
-
-      case CLI_EVENT_TYPES.FILE_DELETE:
-        return {
-          type: CLI_EVENT_TYPES.FILE_DELETE,
-          timestamp,
-          data: {
-            path: (args.path as string) || (args.file_path as string) || "",
-          } as FileDeleteData,
-        };
-
-      case CLI_EVENT_TYPES.MCP_TOOL_CALL:
-        return {
-          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-          timestamp,
-          data: {
-            server: (classification as { server: string }).server,
-            tool: (classification as { tool: string }).tool,
-            parameters: args,
-          } as McpToolCallData,
-        };
-
-      case CLI_EVENT_TYPES.WEB_SEARCH:
-        return {
-          type: CLI_EVENT_TYPES.WEB_SEARCH,
-          timestamp,
-          data: {
-            query: (args.query as string) || "",
-          } as WebSearchData,
-        };
-
-      default:
-        return {
-          type: CLI_EVENT_TYPES.TOOL_CALL,
-          timestamp,
-          data: {
-            name: toolName,
-            parameters: args,
-            id: toolCallId,
-          } as ToolCall,
-        };
     }
   }
 

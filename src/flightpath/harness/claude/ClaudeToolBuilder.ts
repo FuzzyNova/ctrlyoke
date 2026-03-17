@@ -1,0 +1,345 @@
+import type {
+  CliEvent,
+  ToolResultData,
+  BashCommandData,
+  FileReadData,
+  FileWriteData,
+  FileEditData,
+  FileDeleteData,
+  McpToolCallData,
+  WebSearchData,
+  ToolCall,
+} from "../../../types/CliOutputTypes";
+import {
+  CLI_EVENT_TYPES,
+  OPERATION_STATUS,
+} from "../../../types/DashboardConstants";
+import { CliEventMapper } from "../shared/CliEventMapper";
+import { Log } from "../../../utils/Log";
+
+/**
+ * Builds CliEvents from Claude CLI tool call payloads.
+ *
+ * Three static methods cover Claude's tool lifecycle:
+ * - `buildInitiatedEvent` — tool_use in assistant content → INITIATED event
+ * - `processToolResultBlocks` — tool_result in user content → TOOL_RESULT events
+ * - `processToolUseResultMetadata` — CLI structured metadata → COMPLETED semantic events
+ *
+ * Both ClaudeLogParser and ClaudeResponseParser use these methods so the
+ * event-shaping logic is never duplicated.
+ *
+ * Note: Claude's lifecycle differs from Copilot's — there is no start/complete
+ * pair correlated by toolCallId. Instead, tool_use and tool_result are separate
+ * message-level constructs, and structured completion metadata arrives as a
+ * separate CLI-injected field (toolUseResult).
+ */
+export class ClaudeToolBuilder {
+  // ── INITIATED ──────────────────────────────────────────────────────────────
+
+  /**
+   * Build an INITIATED CliEvent for a Claude tool_use block.
+   *
+   * @param toolName - Tool name from tool_use block
+   * @param input - Tool input parameters from tool_use block
+   * @param toolId - Tool call ID (used in generic TOOL_CALL fallback)
+   * @param timestamp - Event timestamp in milliseconds
+   * @returns A single CliEvent to push onto the event stream
+   */
+  static buildInitiatedEvent(
+    toolName: string,
+    input: Record<string, unknown>,
+    toolId: string | undefined,
+    timestamp: number
+  ): CliEvent {
+    const classification = CliEventMapper.classifyTool(toolName);
+    const path = (input.path ?? input.file_path) as string | undefined;
+
+    switch (classification.type) {
+      case CLI_EVENT_TYPES.BASH_COMMAND:
+        return {
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          timestamp,
+          data: {
+            command:
+              ((input.command ?? input.cmd) as string | undefined) || "unknown",
+            workingDir: (input.working_dir ?? input.cwd ?? input.workingDir) as
+              | string
+              | undefined,
+            status: OPERATION_STATUS.INITIATED,
+          } as BashCommandData,
+        };
+
+      case CLI_EVENT_TYPES.FILE_READ:
+        return {
+          type: CLI_EVENT_TYPES.FILE_READ,
+          timestamp,
+          data: {
+            path: path || "unknown",
+            status: OPERATION_STATUS.INITIATED,
+          } as FileReadData,
+        };
+
+      case CLI_EVENT_TYPES.FILE_WRITE:
+        return {
+          type: CLI_EVENT_TYPES.FILE_WRITE,
+          timestamp,
+          data: {
+            path: path || "unknown",
+            content:
+              ((input.content ?? input.file_text) as string | undefined) || "",
+            status: OPERATION_STATUS.INITIATED,
+          } as FileWriteData,
+        };
+
+      case CLI_EVENT_TYPES.FILE_EDIT: {
+        const oldContent = (
+          input.oldString ??
+          input.old_string ??
+          input.oldContent ??
+          input.old_content ??
+          input.old_str
+        ) as string | undefined;
+        const newContent = (
+          input.newString ??
+          input.new_string ??
+          input.newContent ??
+          input.new_content ??
+          input.new_str
+        ) as string | undefined;
+        return {
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp,
+          data: {
+            path: path || "unknown",
+            oldContent,
+            newContent,
+            status: OPERATION_STATUS.INITIATED,
+          } as FileEditData,
+        };
+      }
+
+      case CLI_EVENT_TYPES.FILE_DELETE:
+        return {
+          type: CLI_EVENT_TYPES.FILE_DELETE,
+          timestamp,
+          data: {
+            path: path || "unknown",
+          } as FileDeleteData,
+        };
+
+      case CLI_EVENT_TYPES.WEB_SEARCH:
+        return {
+          type: CLI_EVENT_TYPES.WEB_SEARCH,
+          timestamp,
+          data: {
+            query: (input.query as string) || "",
+          } as WebSearchData,
+        };
+
+      case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
+        const mcp = classification as {
+          type: typeof CLI_EVENT_TYPES.MCP_TOOL_CALL;
+          server: string;
+          tool: string;
+        };
+        return {
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          timestamp,
+          data: {
+            server: mcp.server,
+            tool: mcp.tool,
+            parameters: input,
+          } as McpToolCallData,
+        };
+      }
+
+      default:
+        return {
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp,
+          data: {
+            name: toolName,
+            parameters: input,
+            id: toolId,
+          } as ToolCall,
+        };
+    }
+  }
+
+  // ── TOOL RESULTS ───────────────────────────────────────────────────────────
+
+  /**
+   * Extract display text from a Claude tool_result content block.
+   *
+   * Claude tool_result content can be:
+   * - A string (most common)
+   * - An array of content blocks (e.g., `[{type: "text", text: "..."}]`)
+   * - null/undefined (empty result)
+   * - Other object (serialized as JSON)
+   */
+  static extractToolResultText(content: unknown): string {
+    if (typeof content === "string") {
+      return content;
+    }
+    if (Array.isArray(content)) {
+      return content
+        .filter(
+          (b: Record<string, unknown>) =>
+            b.type === "text" && typeof b.text === "string"
+        )
+        .map((b: Record<string, unknown>) => b.text)
+        .join("\n");
+    }
+    if (content != null) {
+      return JSON.stringify(content);
+    }
+    return "";
+  }
+
+  /**
+   * Process tool_result content blocks into TOOL_RESULT events.
+   *
+   * Processes content array from user-type messages, creating a TOOL_RESULT event
+   * for each `tool_result` block. Handles the `is_error` flag from Claude API.
+   *
+   * @param contentBlocks - Array of content blocks from a user message
+   * @param timestamp - Timestamp to use for created events
+   * @param events - Array to append events to
+   */
+  static processToolResultBlocks(
+    contentBlocks: Record<string, any>[],
+    timestamp: number,
+    events: CliEvent[]
+  ): void {
+    for (const block of contentBlocks) {
+      if (block.type === "tool_result") {
+        const outputText = ClaudeToolBuilder.extractToolResultText(
+          block.content
+        );
+        events.push({
+          type: CLI_EVENT_TYPES.TOOL_RESULT,
+          timestamp,
+          data: {
+            toolCallId: block.tool_use_id,
+            result: {
+              success: !block.is_error,
+              output: outputText,
+              error: block.is_error ? outputText : undefined,
+            },
+          } as ToolResultData,
+        });
+      }
+    }
+  }
+
+  // ── COMPLETED (structured CLI metadata) ────────────────────────────────────
+
+  /**
+   * Process structured toolUseResult metadata into COMPLETED semantic events.
+   *
+   * Converts Claude CLI's tool execution metadata into typed CliEvents:
+   * - File edit (Edit tool) → FILE_EDIT event with structured diff data
+   * - File write (Write tool) → FILE_WRITE event
+   * - File read (Read tool) → FILE_READ event
+   * - Bash command → BASH_COMMAND event with exit code
+   *
+   * Handles both camelCase (headless mode) and snake_case (interactive terminal)
+   * field names for Edit tool parameters.
+   *
+   * @param toolUseResult - Structured tool execution metadata from Claude CLI
+   * @param timestamp - Timestamp to use for created events
+   * @param events - Array to append events to
+   */
+  static processToolUseResultMetadata(
+    toolUseResult: Record<string, any>,
+    timestamp: number,
+    events: CliEvent[]
+  ): void {
+    // File edit result (Edit tool) - check both camelCase and snake_case
+    // Headless mode uses camelCase (oldString/newString)
+    // Interactive terminal uses snake_case (old_string/new_string)
+    const oldString = toolUseResult.oldString || toolUseResult.old_string;
+    const newString = toolUseResult.newString || toolUseResult.new_string;
+
+    if (oldString && newString) {
+      Log.debug(
+        `[ClaudeToolResult] Edit operation - oldString=${oldString ? "present" : "missing"}, ` +
+          `newString=${newString ? "present" : "missing"}, ` +
+          `structuredPatch=${toolUseResult.structuredPatch ? `${toolUseResult.structuredPatch.length} hunks` : "missing"}`
+      );
+
+      events.push({
+        type: CLI_EVENT_TYPES.FILE_EDIT,
+        timestamp,
+        data: {
+          path: toolUseResult.filePath || "unknown",
+          oldContent: oldString,
+          newContent: newString,
+          structuredPatch: toolUseResult.structuredPatch,
+          userModified: toolUseResult.userModified,
+          replaceAll: toolUseResult.replaceAll,
+          status: OPERATION_STATUS.COMPLETED,
+          success: true,
+        } as FileEditData,
+      });
+      return;
+    }
+
+    // File write result (Write tool)
+    // Must have a file path to avoid matching Grep results (which also have a `content` field)
+    // Check both "create" (log format) and "write" (stream format) type values
+    if (
+      (toolUseResult.type === "create" ||
+        toolUseResult.type === "write" ||
+        toolUseResult.content) &&
+      (toolUseResult.filePath || toolUseResult.path)
+    ) {
+      events.push({
+        type: CLI_EVENT_TYPES.FILE_WRITE,
+        timestamp,
+        data: {
+          path: toolUseResult.filePath || toolUseResult.path || "unknown",
+          content: toolUseResult.content || "",
+          status: OPERATION_STATUS.COMPLETED,
+          success: true,
+        } as FileWriteData,
+      });
+      return;
+    }
+
+    // File read result (Read tool)
+    if (toolUseResult.type === "text" && toolUseResult.file) {
+      events.push({
+        type: CLI_EVENT_TYPES.FILE_READ,
+        timestamp,
+        data: {
+          path: toolUseResult.file.filePath || "unknown",
+          content: toolUseResult.file.content || "",
+          status: OPERATION_STATUS.COMPLETED,
+          success: true,
+        } as FileReadData,
+      });
+      return;
+    }
+
+    // Bash command result
+    if (toolUseResult.command || toolUseResult.type === "bash") {
+      const exitCode = toolUseResult.exitCode ?? (toolUseResult.error ? 1 : 0);
+      events.push({
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        timestamp,
+        data: {
+          command: toolUseResult.command || "unknown",
+          workingDir: toolUseResult.workingDir || toolUseResult.cwd,
+          exitCode,
+          // Prefer stdout over output — stdout has full content while output may contain <persisted-output> placeholder
+          output: toolUseResult.stdout || toolUseResult.output,
+          error: toolUseResult.stderr || toolUseResult.error,
+          status:
+            exitCode === 0 ? OPERATION_STATUS.COMPLETED : OPERATION_STATUS.FAILED,
+        } as BashCommandData,
+      });
+      return;
+    }
+  }
+}
