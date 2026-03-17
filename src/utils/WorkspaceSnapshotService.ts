@@ -312,10 +312,11 @@ export class WorkspaceSnapshotService {
     return { strategy, files, capturedAt };
   }
 
-  computeSnapshotChanges(
+  async computeSnapshotChanges(
     before: RawWorkspaceState,
-    after: RawWorkspaceState
-  ): SnapshotFileChange[] {
+    after: RawWorkspaceState,
+    workspacePath: string
+  ): Promise<SnapshotFileChange[]> {
     const changes: SnapshotFileChange[] = [];
     const strategy = after.strategy;
 
@@ -329,27 +330,45 @@ export class WorkspaceSnapshotService {
         // distinguish: tracked file modified from HEAD (isAtHead=true) vs truly new
         // file (isAtHead=false, shown as ?? or A in git status).
         const wasCleanAtHead = strategy === "git" && afterState.isAtHead;
-        const change: SnapshotFileChange = {
-          path: filePath,
-          changeType: wasCleanAtHead
-            ? ("modified" as PromptChangeType)
-            : ("created" as PromptChangeType),
-          afterHash: afterState.contentHash,
-          wasAtHead: wasCleanAtHead ? true : undefined,
-        };
-        // No structured patch for modified-from-HEAD (before content not captured;
-        // undo uses git-restore which doesn't need a patch).
-        changes.push(change);
+        if (wasCleanAtHead) {
+          // Fetch the HEAD content so we can compute a structured patch for reverse-patch undo.
+          const change: SnapshotFileChange = {
+            path: filePath,
+            changeType: "modified" as PromptChangeType,
+            afterHash: afterState.contentHash,
+          };
+          try {
+            const { stdout: headContent } = await execFileAsync(
+              "git", ["show", `HEAD:${filePath}`],
+              { cwd: workspacePath }
+            );
+            if (afterState.content !== undefined) {
+              const patchResult = Diff.structuredPatch("", "", headContent, afterState.content);
+              if (patchResult.hunks.length > 0) {
+                change.structuredPatch = patchResult.hunks as UnifiedDiffHunk[];
+              }
+            } else {
+              change.contentCaptureSkipped = true;
+            }
+          } catch {
+            change.contentCaptureSkipped = true;
+          }
+          changes.push(change);
+        } else {
+          // Truly new file (untracked or newly staged)
+          changes.push({
+            path: filePath,
+            changeType: "created" as PromptChangeType,
+            afterHash: afterState.contentHash,
+          });
+        }
       } else if (afterState.contentHash !== beforeState.contentHash) {
-        // Modified during prompt
+        // Modified during prompt — before-content was captured (file was dirty before prompt)
         const change: SnapshotFileChange = {
           path: filePath,
           changeType: "modified" as PromptChangeType,
           afterHash: afterState.contentHash,
         };
-        if (strategy === "git") {
-          change.wasAtHead = false;
-        }
         if (beforeState.content !== undefined && afterState.content !== undefined) {
           const patchResult = Diff.structuredPatch("", "", beforeState.content, afterState.content);
           if (patchResult.hunks.length > 0) {
@@ -370,9 +389,6 @@ export class WorkspaceSnapshotService {
           path: filePath,
           changeType: "deleted" as PromptChangeType,
         };
-        if (strategy === "git") {
-          change.wasAtHead = false;
-        }
         if (beforeState.content !== undefined) {
           change.contentToRestore = beforeState.content;
         } else {
@@ -449,16 +465,6 @@ export class WorkspaceSnapshotService {
             redoInstructions.push({ path: instruction.path, action: "restore-content", contentToRestore: currentContent, structuredPatch });
           } else {
             // File didn't exist before the AI created it — redo should delete it
-            redoInstructions.push({ path: instruction.path, action: "delete" });
-          }
-        } else if (instruction.action === "git-restore") {
-          await execFileAsync("git", ["restore", "--", instruction.path], {
-            cwd: workspacePath,
-          });
-          restoredFiles.push(instruction.path);
-          if (currentContent !== undefined) {
-            redoInstructions.push({ path: instruction.path, action: "restore-content", contentToRestore: currentContent });
-          } else {
             redoInstructions.push({ path: instruction.path, action: "delete" });
           }
         } else if (instruction.action === "reverse-patch") {

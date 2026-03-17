@@ -51,12 +51,10 @@ function resolveSnapshotInstruction(snap: SnapshotFileChange): UndoFileInstructi
     case "created":
       return { path: snap.path, action: "delete" };
     case "modified":
-      if (snap.wasAtHead) return { path: snap.path, action: "git-restore" };
       if (snap.structuredPatch && snap.structuredPatch.length > 0)
         return { path: snap.path, action: "reverse-patch", structuredPatch: snap.structuredPatch };
       return null;
     case "deleted":
-      if (snap.wasAtHead) return { path: snap.path, action: "git-restore" };
       if (snap.contentToRestore != null)
         return { path: snap.path, action: "restore-content", contentToRestore: snap.contentToRestore };
       return null;
@@ -87,7 +85,6 @@ function redoActionBadgeLabel(action: UndoFileInstruction["action"]): string {
   switch (action) {
     case "restore-content": return "modified/created";
     case "delete": return "deleted";
-    case "git-restore": return "modified";
     default: return action;
   }
 }
