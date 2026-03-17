@@ -5,6 +5,9 @@ logs
 .vscode-test/
 *.vsix
 
+# Test coverage artifacts
+src/ui/webview-react/coverage
+
 # Build artifacts
 package.json.backup
 
