@@ -179,7 +179,11 @@ export function generateDiffLines(
   oldContent: string,
   newContent: string
 ): DiffLine[] {
-  const diffResult = Diff.diffLines(oldContent, newContent);
+  // Normalize Windows line endings so CRLF files don't appear as all-changed
+  const diffResult = Diff.diffLines(
+    oldContent.replace(/\r\n/g, "\n"),
+    newContent.replace(/\r\n/g, "\n")
+  );
   const lines: DiffLine[] = [];
 
   let oldLineNum = 1;

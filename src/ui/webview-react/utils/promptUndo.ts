@@ -223,7 +223,6 @@ export function buildUndoCandidatesForOutputs(
       structuredPatch: displayPatch,
       afterHash: snapEntry?.afterHash,
       contentCaptureSkipped: snapEntry?.contentCaptureSkipped,
-      wasAtHead: snapEntry?.wasAtHead,
     };
   });
 
@@ -241,7 +240,6 @@ export function buildUndoCandidatesForOutputs(
       instruction: resolveSnapshotUndoInstruction(snap),
       contentCaptureSkipped: snap.contentCaptureSkipped,
       afterHash: snap.afterHash,
-      wasAtHead: snap.wasAtHead,
       structuredPatch: snap.structuredPatch,
     }));
 
@@ -259,6 +257,7 @@ function resolveSnapshotUndoInstruction(
           path: snap.path,
           action: "reverse-patch",
           structuredPatch: snap.structuredPatch,
+          lineEnding: snap.lineEnding,
         };
       return null;
     }

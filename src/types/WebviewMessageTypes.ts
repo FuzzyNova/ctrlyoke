@@ -706,6 +706,12 @@ export interface UndoFileInstruction {
    * For single-event undo this is the per-edit patch from the CLI event.
    */
   structuredPatch?: UnifiedDiffHunk[];
+  /**
+   * Original line ending style of the file before the edit.
+   * When 'crlf', the reverse-patch result is converted from LF back to CRLF
+   * to restore the file's original line endings.
+   */
+  lineEnding?: 'crlf';
 }
 
 export interface UndoResult {
@@ -732,8 +738,6 @@ export interface UndoFileCandidate {
   contentCaptureSkipped?: boolean;
   /** SHA-256 hash of content after prompt completed (for drift detection) */
   afterHash?: string;
-  /** @deprecated Legacy field — no longer used for undo logic. May be present in old history files. */
-  wasAtHead?: boolean;
   /** Old file content (before the AI edit) — for diff display in undo dialog */
   oldContent?: string;
   /** New file content (after the AI edit) — for diff display in undo dialog */
