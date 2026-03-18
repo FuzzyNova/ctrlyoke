@@ -20,7 +20,6 @@ import {
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import {
   ACTION_TYPES,
-  FINAL_PROMPT_PHASES,
   QUEUE_POSITION,
   STEP_STATUS,
   type ActionType,
@@ -30,6 +29,7 @@ import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider"
 import { IDashboardSink } from "../types/IDashboardSink";
 import type { CliEvent } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
+import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { isCli } from "../utils/RuntimeMode";
 import { PlatformAdapter } from "../platform/PlatformAdapter";
@@ -42,6 +42,13 @@ import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import type { UndoExecutionTarget } from "../types/OutputHistoryTypes";
+import {
+  OutputCaptureBuffer,
+  type OutputCaptureCallbacks,
+  type PromptStartData,
+  type PromptCompleteData,
+} from "./OutputCaptureBuffer";
+export type { PromptStartData, PromptCompleteData } from "./OutputCaptureBuffer";
 
 /**
  * WorkflowInstance
@@ -67,36 +74,6 @@ import type { UndoExecutionTarget } from "../types/OutputHistoryTypes";
  * Phase 1: WorkflowOrchestrator holds exactly one instance.
  * Phase 2: Multiple instances run in parallel (one per open workflow).
  */
-
-/**
- * Data carried by onPromptStart when a prompt step begins (or retries).
- * Fires twice per attempt: once immediately (cliCommand undefined), then again
- * when the harness CLI command is known (cliCommand populated).
- */
-export interface PromptStartData {
-  stepIndex: number;
-  totalSteps: number;
-  promptText: string;
-  attemptIndex: number;
-  /** The harness CLI command string, populated only on the second fire. */
-  cliCommand?: string;
-}
-
-/** Data carried by onPromptComplete after each prompt fully finishes (post session-ID extraction). */
-export interface PromptCompleteData {
-  stepIndex: number;
-  tokens?: {
-    prompt: number;
-    completion: number;
-    cached?: number;
-    cacheCreated?: number;
-    contextWindowUsed?: number;
-    contextWindowSize?: number;
-  };
-  sessionId?: string;
-  harness?: string;
-  elapsed?: number; // seconds
-}
 
 export class WorkflowInstance {
   /** Unique identifier — stable for this instance's lifetime */
@@ -144,74 +121,8 @@ export class WorkflowInstance {
   }> = [];
   private static readonly MAX_BUFFER_SIZE = 500;
 
-  /**
-   * Per-step streaming output buffer — captures chunks even when this instance is inactive.
-   * Replayed in sendFullStateToDashboard so the user sees in-progress output when switching back.
-   */
-  private readonly stepOutputBuffer = new Map<
-    number,
-    {
-      prompt: string;
-      cliCommand: string | undefined;
-      workingDirectory: string | undefined;
-      timestampMs: number;
-      attemptIndex: number;
-      accumulatedText: string;
-      accumulatedEvents: CliEvent[];
-      rawTextOutput?: boolean;
-    }
-  >();
-
-  /**
-   * Stores the final completed output(s) for each step, indexed by stepIndex.
-   * Captured via captureCompletedOutput even when the instance is inactive.
-   * Replayed in sendFullStateToDashboard so completed prompts' outputs are
-   * visible when switching back to a running workflow.
-   *
-   * Each entry holds an array of outputs (one per attempt) plus optional retry
-   * state so the webview store accepts attemptIndex > 0 outputs on replay.
-   */
-  private readonly completedStepOutputs = new Map<
-    number,
-    {
-      outputs: any[];
-      retryState?: { currentRetry: number; maxRetries: number };
-    }
-  >();
-
-  /**
-   * Per-loop streaming output buffer for workflow-level finalPrompt.
-   * Uses loopIndex keys (not queue step indices) to avoid collisions.
-   */
-  private readonly finalPromptOutputBuffer = new Map<
-    number,
-    {
-      prompt: string;
-      cliCommand: string | undefined;
-      workingDirectory: string | undefined;
-      timestampMs: number;
-      attemptIndex: number;
-      accumulatedText: string;
-      accumulatedEvents: CliEvent[];
-      rawTextOutput?: boolean;
-    }
-  >();
-
-  /**
-   * Completed outputs keyed by finalPrompt loopIndex.
-   */
-  private readonly finalPromptCompletedOutputs = new Map<
-    number,
-    { outputs: any[] }
-  >();
-
-  /**
-   * Buffered status messages keyed by finalPrompt loopIndex.
-   */
-  private readonly finalPromptStatusMessages = new Map<
-    number,
-    Array<{ message: string; severity: string; timestamp: number }>
-  >();
+  /** Manages all output capture Maps and replay logic for background workflows. */
+  private readonly outputCaptureBuffer: OutputCaptureBuffer;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Orchestration helpers
@@ -341,6 +252,20 @@ export class WorkflowInstance {
       () => this.activeDashboard
     );
 
+    const bufferCallbacks: OutputCaptureCallbacks = {
+      onPromptStart: (data) => this._promptStartEmitter.fire(data),
+      onPromptComplete: (data) => this._promptCompleteEmitter.fire(data),
+      onStatusMessage: (stepIndex, message, severity) =>
+        this._workflowStatusMessageEmitter.fire({ stepIndex, message, severity }),
+      getPromptItem: (stepIndex) =>
+        this.promptQueue.getState().prompts[stepIndex],
+      getTotalSteps: () => this.promptQueue.getProgress().total,
+    };
+    this.outputCaptureBuffer = new OutputCaptureBuffer(
+      `[inst:${this.id.slice(0, 8)}]`,
+      bufferCallbacks
+    );
+
     // Subscribe to queue state changes
     this.promptQueue.onDidChangeState(this.onQueueStateChanged.bind(this));
   }
@@ -409,7 +334,7 @@ export class WorkflowInstance {
       ? path.basename(this.currentPromptFile.filePath)
       : state.workflowName || "Untitled";
     Log.trace(
-      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${state.status}, currentIndex=${state.currentIndex}, prompts=${state.prompts.length}, bufferSteps=${this.stepOutputBuffer.size}, finalBufferLoops=${this.finalPromptOutputBuffer.size}`
+      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${state.status}, currentIndex=${state.currentIndex}, prompts=${state.prompts.length}, bufferSteps=${this.outputCaptureBuffer.stepBufferSize}, finalBufferLoops=${this.outputCaptureBuffer.finalPromptBufferSize}`
     );
     this.dashboardSink.updateSessionRestored(
       fileName,
@@ -421,171 +346,12 @@ export class WorkflowInstance {
       this.promptQueue.getWorkflowFile().finalPrompt ?? null,
       this.promptQueue.getFinalPromptRuntime()
     );
-
-    // Replay completed step outputs so the user sees prior-prompt results
-    // when switching back to a workflow that is already partway through.
-    if (this.completedStepOutputs.size > 0) {
-      for (const [stepIndex, entry] of this.completedStepOutputs) {
-        Log.trace(
-          `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: replaying completed step ${stepIndex} (${entry.outputs.length} attempt(s))`
-        );
-        // If this step had retries, send retry state BEFORE the outputs so
-        // the webview store's addCliOutput guard accepts attemptIndex > 0.
-        if (entry.retryState) {
-          this.dashboardSink.updateRetryAttempt(
-            stepIndex,
-            entry.retryState.currentRetry,
-            entry.retryState.maxRetries
-          );
-        }
-        for (const output of entry.outputs) {
-          this.dashboardSink.updateCliOutput(stepIndex, output);
-        }
-      }
-    }
-
-    // Replay finalPrompt completed outputs (per loop), including retries.
-    if (this.finalPromptCompletedOutputs.size > 0) {
-      for (const [loopIndex, entry] of this.finalPromptCompletedOutputs) {
-        Log.trace(
-          `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: replaying finalPrompt loop ${loopIndex} (${entry.outputs.length} attempt(s))`
-        );
-        for (const output of entry.outputs) {
-          this.dashboardSink.updateFinalPromptOutput(loopIndex, output);
-        }
-      }
-    }
-
-    // Replay finalPrompt status messages (encoded for compatibility as legacy
-    // negative step indices: loop N => -(N+1)).
-    if (this.finalPromptStatusMessages.size > 0) {
-      const dashboard = this.dashboardSink as {
-        updateStatusMessage?: (
-          stepIndex: number,
-          message: string,
-          severity?: string
-        ) => void;
-      };
-      if (dashboard.updateStatusMessage) {
-        for (const [loopIndex, messages] of this.finalPromptStatusMessages) {
-          const legacyLoopStepIndex = -(loopIndex + 1);
-          for (const msg of messages) {
-            dashboard.updateStatusMessage(
-              legacyLoopStepIndex,
-              msg.message,
-              msg.severity
-            );
-          }
-        }
-      }
-    }
-
-    // Replay buffered streaming output for the currently-running step so the user
-    // sees in-progress output when switching back to this workflow mid-execution.
-    if (
-      state.status === EXECUTION_STATES.RUNNING &&
-      this.stepOutputBuffer.size > 0
-    ) {
-      const runningStep = state.currentIndex;
-      const buffer = this.stepOutputBuffer.get(runningStep);
-      if (buffer) {
-        Log.trace(
-          `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: replaying step ${runningStep} buffer (${buffer.accumulatedText.length} chars, attemptIndex=${buffer.attemptIndex})`
-        );
-
-        // Belt-and-suspenders: if the streaming buffer is for a retry attempt
-        // and the completedStepOutputs replay didn't already send retryState
-        // (e.g. step hasn't completed its first attempt yet), send it now so
-        // the webview store accepts attemptIndex > 0.
-        if (buffer.attemptIndex > 0) {
-          const completedEntry = this.completedStepOutputs.get(runningStep);
-          const retryState = completedEntry?.retryState;
-          if (retryState) {
-            // retryState was already sent via the completedStepOutputs loop
-            // above, but log for traceability
-            Log.trace(
-              `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: retryState already sent for step ${runningStep} (attempt ${retryState.currentRetry}/${retryState.maxRetries})`
-            );
-          } else {
-            // Edge case: retry streaming started but completedStepOutputs
-            // doesn't have retryState yet (should be set by captureOutputInit,
-            // but defend against timing gaps).
-            const promptItem = this.promptQueue.getState().prompts[runningStep];
-            const maxRetries =
-              promptItem?.endCondition?.maxRetries ?? buffer.attemptIndex;
-            Log.trace(
-              `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: sending fallback retryState for step ${runningStep} (attempt ${buffer.attemptIndex}/${maxRetries})`
-            );
-            this.dashboardSink.updateRetryAttempt(
-              runningStep,
-              buffer.attemptIndex,
-              maxRetries
-            );
-          }
-        }
-
-        // Re-initialize the step as streaming (so the output panel shows it correctly)
-        this.dashboardSink.updateCliOutput(runningStep, {
-          prompt: buffer.prompt,
-          response: "",
-          elapsed: 0,
-          tokens: undefined,
-          isStreaming: true,
-          cliCommand: buffer.cliCommand,
-          workingDirectory: buffer.workingDirectory,
-          timestampMs: buffer.timestampMs,
-          attemptIndex: buffer.attemptIndex,
-          rawTextOutput: buffer.rawTextOutput,
-        });
-        // Replay the accumulated text as a single chunk
-        if (buffer.accumulatedText) {
-          this.dashboardSink.updateCliStreamingChunk(
-            runningStep,
-            buffer.accumulatedText
-          );
-        }
-        // Replay accumulated structured events so tool calls/file edits are
-        // visible when switching back to a workflow mid-execution.
-        if (buffer.accumulatedEvents.length > 0) {
-          this.dashboardSink.updateCliStreamingEvents(
-            runningStep,
-            buffer.accumulatedEvents
-          );
-        }
-      }
-    }
-
-    // Replay in-flight finalPrompt streaming output when switching back mid-loop.
-    const finalRuntime = this.promptQueue.getFinalPromptRuntime();
-    if (
-      state.status === EXECUTION_STATES.RUNNING &&
-      finalRuntime?.phase === FINAL_PROMPT_PHASES.FINAL_PROMPT
-    ) {
-      const loopIndex = finalRuntime.loopCount;
-      const buffer = this.finalPromptOutputBuffer.get(loopIndex);
-      if (buffer) {
-        Log.trace(
-          `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: replaying finalPrompt loop ${loopIndex} buffer (${buffer.accumulatedText.length} chars, events=${buffer.accumulatedEvents.length}, attemptIndex=${buffer.attemptIndex})`
-        );
-
-        this.dashboardSink.updateFinalPromptOutput(loopIndex, {
-          prompt: buffer.prompt,
-          response: buffer.accumulatedText,
-          structured:
-            buffer.accumulatedEvents.length > 0
-              ? { events: [...buffer.accumulatedEvents], metadata: {} }
-              : undefined,
-          elapsed: 0,
-          tokens: undefined,
-          isStreaming: true,
-          cliCommand: buffer.cliCommand,
-          workingDirectory: buffer.workingDirectory,
-          timestampMs: buffer.timestampMs,
-          attemptIndex: buffer.attemptIndex,
-          rawTextOutput: buffer.rawTextOutput,
-        });
-      }
-    }
+    this.outputCaptureBuffer.replayTo(
+      this.dashboardSink,
+      { status: state.status, currentIndex: state.currentIndex },
+      this.promptQueue.getFinalPromptRuntime(),
+      `[inst:${this.id.slice(0, 8)}]`
+    );
   }
 
   /**
@@ -1048,20 +814,17 @@ export class WorkflowInstance {
                 const maxAttemptIndex = Math.max(
                   ...stepData.cliOutputs.map((o) => o.attemptIndex ?? 0)
                 );
-                this.completedStepOutputs.set(i, {
-                  outputs: stepData.cliOutputs,
-                  retryState:
-                    maxAttemptIndex > 0
-                      ? {
-                          currentRetry: maxAttemptIndex,
-                          maxRetries: maxAttemptIndex,
-                        }
-                      : undefined,
-                });
+                this.outputCaptureBuffer.cacheHistoricalStepOutput(
+                  i,
+                  stepData.cliOutputs,
+                  maxAttemptIndex > 0
+                    ? { currentRetry: maxAttemptIndex, maxRetries: maxAttemptIndex }
+                    : undefined
+                );
               }
             }
             Log.debug(
-              `[inst:${this.id.slice(0, 8)}] Cached ${this.completedStepOutputs.size} historical step(s) in completedStepOutputs for replay on workflow switch`
+              `[inst:${this.id.slice(0, 8)}] Cached ${this.outputCaptureBuffer.stepBufferSize} historical step(s) for replay on workflow switch`
             );
           } catch (error) {
             Log.warn(
@@ -1113,11 +876,7 @@ export class WorkflowInstance {
           Log.debug(
             `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${totalPrompts}`
           );
-          this.stepOutputBuffer.clear();
-          this.completedStepOutputs.clear();
-          this.finalPromptOutputBuffer.clear();
-          this.finalPromptCompletedOutputs.clear();
-          this.finalPromptStatusMessages.clear();
+          this.clearOutputBuffers();
           this.dashboardSink.updateExecutionStarted(fileName, totalPrompts);
         }
       }
@@ -1355,7 +1114,7 @@ export class WorkflowInstance {
     } catch (error) {
       Log.error("Failed to queue prompts:", error);
       this.platform.error(
-        `Failed to queue prompts: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to queue prompts: ${getErrorMessage(error)}`
       );
     }
   }
@@ -1770,6 +1529,99 @@ export class WorkflowInstance {
     return true;
   }
 
+  /** Clear all output capture buffers — called at the start of a fresh (non-continuation) run. */
+  private clearOutputBuffers(): void {
+    this.outputCaptureBuffer.clear();
+  }
+
+  /**
+   * Build the WorkflowExecutionContext passed to WorkflowExecutor.execute().
+   * Captures all per-run closure state (integration reference, buffer callbacks,
+   * lazy dashboard getter) so startWorkflowExecution stays focused on
+   * lock/lifecycle/cleanup concerns.
+   */
+  private buildWorkflowExecutionContext(
+    activeIntegration: HarnessIntegration,
+    historyFilePath: string,
+    workingFilePath: string | undefined
+  ): WorkflowExecutionContext {
+    const self = this;
+    return {
+      workspaceFolderPath: this.workspaceFolderPath,
+      currentPromptFilePath: this.currentPromptFile?.filePath,
+      // Use a getter so dashboardProvider is evaluated lazily each time
+      // WorkflowExecutor accesses it. When this instance is deactivated
+      // (user switches to another workflow), activeDashboard returns
+      // undefined and background output stops flowing to the UI.
+      get dashboardProvider() {
+        return self.activeDashboard;
+      },
+      // In CLI mode always show the CLI command so it flows through
+      // captureOutputInit and into onPromptStart events.
+      shouldShowCliCommand: isCli() || this.shouldShowCliCommand(),
+      showCliOutput: ConfigurationUtils.shouldShowCliOutput(),
+      dynamicQueueConfig: this.getDynamicQueueConfig(),
+      historyFilePath,
+      workingFilePath: workingFilePath || undefined,
+      instanceTag: `[inst:${this.id.slice(0, 8)}]`,
+      outputHistoryManager: this.outputHistoryManager,
+      getIntegrationForPrompt: (prompt: PromptItem, harnessOverride?: Harness) => {
+        const currentIntegration = this.activeIntegration ?? activeIntegration;
+        const resolvedHarness = harnessOverride || prompt.harness;
+        if (
+          resolvedHarness &&
+          resolvedHarness !== currentIntegration.getIntegrationMode()
+        ) {
+          currentIntegration.closeTerminal(); // close orphaned terminal before switching harnesses
+          Log.debug(
+            `🔀 Prompt ${prompt.name || "unnamed"} switching to harness: ${resolvedHarness}`
+          );
+          const overrideIntegration = this.createIntegrationForMode(resolvedHarness);
+          this.activeIntegration = overrideIntegration;
+          return overrideIntegration;
+        }
+        return currentIntegration;
+      },
+      captureOutputInit: (stepIndex, prompt, cliCommand, workingDirectory, timestampMs, attemptIndex, rawTextOutput) => {
+        this.outputCaptureBuffer.captureOutputInit(stepIndex, prompt, cliCommand, workingDirectory, timestampMs, attemptIndex, rawTextOutput);
+      },
+      captureChunk: (stepIndex, chunk) => {
+        this.outputCaptureBuffer.captureChunk(stepIndex, chunk);
+      },
+      captureEvents: (stepIndex, events) => {
+        this.outputCaptureBuffer.captureEvents(stepIndex, events);
+      },
+      captureCompletedOutput: (stepIndex, output) => {
+        this.outputCaptureBuffer.captureCompletedOutput(stepIndex, output);
+      },
+      captureFinalPromptOutputInit: (loopIndex, prompt, cliCommand, workingDirectory, timestampMs, attemptIndex, rawTextOutput) => {
+        this.outputCaptureBuffer.captureFinalPromptOutputInit(loopIndex, prompt, cliCommand, workingDirectory, timestampMs, attemptIndex, rawTextOutput);
+      },
+      captureFinalPromptChunk: (loopIndex, chunk) => {
+        this.outputCaptureBuffer.captureFinalPromptChunk(loopIndex, chunk);
+      },
+      captureFinalPromptEvents: (loopIndex, events) => {
+        this.outputCaptureBuffer.captureFinalPromptEvents(loopIndex, events);
+      },
+      captureFinalPromptCompletedOutput: (loopIndex, output) => {
+        this.outputCaptureBuffer.captureFinalPromptCompletedOutput(loopIndex, output);
+      },
+      onFinalPromptStatusMessage: (loopIndex, message, severity) => {
+        this.outputCaptureBuffer.onFinalPromptStatusMessage(loopIndex, message, severity);
+      },
+      onStatusMessage: (stepIndex, message, severity) => {
+        this._workflowStatusMessageEmitter.fire({ stepIndex, message, severity });
+      },
+      snapshotService: new WorkspaceSnapshotService(),
+      onSnapshotCaptured: (target, snapshot) => {
+        self.activeDashboard?.sendStepUndoDataUpdated(
+          target as UndoExecutionTarget,
+          snapshot
+        );
+      },
+    };
+  }
+
   private shouldShowCliCommand(): boolean {
     return ConfigurationUtils.shouldShowCliCommand();
   }
@@ -1869,231 +1721,11 @@ export class WorkflowInstance {
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: isActive=${this.isActive}, historyFilePath="${historyFilePath}"`
       );
-      // Use a getter so dashboardProvider is evaluated lazily each time
-      // WorkflowExecutor accesses it. When this instance is deactivated
-      // (user switches to another workflow), activeDashboard returns
-      // undefined and background output stops flowing to the UI.
-      const self = this;
-      const workflowContext: WorkflowExecutionContext = {
-        workspaceFolderPath: this.workspaceFolderPath,
-        currentPromptFilePath: this.currentPromptFile?.filePath,
-        get dashboardProvider() {
-          return self.activeDashboard;
-        },
-        // In CLI mode always show the CLI command so it flows through
-        // captureOutputInit and into onPromptStart events.
-        shouldShowCliCommand: isCli() || this.shouldShowCliCommand(),
-        showCliOutput: ConfigurationUtils.shouldShowCliOutput(),
-        dynamicQueueConfig: this.getDynamicQueueConfig(),
+      const workflowContext = this.buildWorkflowExecutionContext(
+        activeIntegration,
         historyFilePath,
-        workingFilePath: workingFilePath || undefined,
-        instanceTag: `[inst:${this.id.slice(0, 8)}]`,
-        outputHistoryManager: this.outputHistoryManager,
-        getIntegrationForPrompt: (
-          prompt: PromptItem,
-          harnessOverride?: Harness
-        ) => {
-          const currentIntegration =
-            this.activeIntegration ?? activeIntegration;
-          const resolvedHarness = harnessOverride || prompt.harness;
-          if (
-            resolvedHarness &&
-            resolvedHarness !== currentIntegration.getIntegrationMode()
-          ) {
-            currentIntegration.closeTerminal(); // close orphaned terminal before switching harnesses
-            Log.debug(
-              `🔀 Prompt ${prompt.name || "unnamed"} switching to harness: ${resolvedHarness}`
-            );
-            const overrideIntegration =
-              this.createIntegrationForMode(resolvedHarness);
-            this.activeIntegration = overrideIntegration;
-            return overrideIntegration;
-          }
-          return currentIntegration;
-        },
-        captureOutputInit: (
-          stepIndex,
-          prompt,
-          cliCommand,
-          workingDirectory,
-          timestampMs,
-          attemptIndex,
-          rawTextOutput
-        ) => {
-          // Always buffer the init state so we can replay it when switching back.
-          // Preserve accumulatedText and accumulatedEvents across the two
-          // captureOutputInit calls that occur within a single attempt (the
-          // second call updates cliCommand once the process starts).
-          const existing = self.stepOutputBuffer.get(stepIndex);
-          self.stepOutputBuffer.set(stepIndex, {
-            prompt,
-            cliCommand,
-            workingDirectory,
-            timestampMs,
-            attemptIndex,
-            accumulatedText: existing?.accumulatedText ?? "",
-            accumulatedEvents: existing?.accumulatedEvents ?? [],
-            rawTextOutput,
-          });
-
-          // When a retry starts streaming, eagerly set retryState in
-          // completedStepOutputs so sendFullStateToDashboard can send
-          // RETRY_ATTEMPT_CHANGED *before* replaying outputs.  Without
-          // this, switching to a workflow mid-retry would cause the
-          // webview store to reject attemptIndex > 0 (no retryState yet)
-          // and replace attempt 0 instead of appending.
-          if (attemptIndex > 0) {
-            const existing = self.completedStepOutputs.get(stepIndex);
-            if (existing) {
-              const promptItem = self.promptQueue.getState().prompts[stepIndex];
-              const maxRetries =
-                promptItem?.endCondition?.maxRetries ?? attemptIndex;
-              existing.retryState = {
-                currentRetry: attemptIndex,
-                maxRetries,
-              };
-              Log.debug(
-                `[inst:${self.id.slice(0, 8)}] captureOutputInit: set retryState for step ${stepIndex} (attempt ${attemptIndex}/${maxRetries})`
-              );
-            }
-          }
-
-          // Forward to CLI subscribers (standalone CLI terminal rendering).
-          // Fires twice per attempt: first with cliCommand=undefined (step start),
-          // then again when the harness CLI command becomes available.
-          const totalSteps = self.promptQueue.getProgress().total;
-          self._promptStartEmitter.fire({
-            stepIndex,
-            totalSteps,
-            promptText: prompt,
-            attemptIndex,
-            cliCommand,
-          });
-        },
-        captureChunk: (stepIndex, chunk) => {
-          const existing = self.stepOutputBuffer.get(stepIndex);
-          if (existing) {
-            existing.accumulatedText += chunk;
-          }
-        },
-        captureEvents: (stepIndex, events) => {
-          const existing = self.stepOutputBuffer.get(stepIndex);
-          if (existing) {
-            existing.accumulatedEvents.push(...events);
-          }
-        },
-        captureCompletedOutput: (stepIndex, output) => {
-          // Store the final output for replay when switching back to this workflow.
-          // Multiple outputs per step accumulate when retries occur.
-          const existing = self.completedStepOutputs.get(stepIndex);
-          const attemptIndex = output.attemptIndex ?? 0;
-          if (existing) {
-            existing.outputs.push(output);
-            // Update retry state to reflect the latest completed attempt
-            if (attemptIndex > 0) {
-              const prompt = self.promptQueue.getState().prompts[stepIndex];
-              const maxRetries =
-                prompt?.endCondition?.maxRetries ?? attemptIndex;
-              existing.retryState = {
-                currentRetry: attemptIndex,
-                maxRetries,
-              };
-            }
-          } else {
-            self.completedStepOutputs.set(stepIndex, { outputs: [output] });
-          }
-          Log.debug(
-            `[inst:${self.id.slice(0, 8)}] captureCompletedOutput: step ${stepIndex} attempt ${attemptIndex}, total outputs=${self.completedStepOutputs.get(stepIndex)!.outputs.length}, retryState=${JSON.stringify(self.completedStepOutputs.get(stepIndex)!.retryState ?? null)}`
-          );
-          // The step is no longer streaming; remove from streaming buffer
-          self.stepOutputBuffer.delete(stepIndex);
-          // Fire prompt-complete event so standalone CLI can render per-step stats.
-          // This fires AFTER sendPrompt() returns (post session-ID extraction), so
-          // metadata.sessionId is already populated for all harnesses.
-          self._promptCompleteEmitter.fire({
-            stepIndex,
-            tokens: output.tokens,
-            sessionId: output.structured?.metadata?.sessionId,
-            harness: output.structured?.metadata?.harness,
-            elapsed: output.elapsed,
-          });
-        },
-        captureFinalPromptOutputInit: (
-          loopIndex,
-          prompt,
-          cliCommand,
-          workingDirectory,
-          timestampMs,
-          attemptIndex,
-          rawTextOutput
-        ) => {
-          const existing = self.finalPromptOutputBuffer.get(loopIndex);
-          self.finalPromptOutputBuffer.set(loopIndex, {
-            prompt,
-            cliCommand,
-            workingDirectory,
-            timestampMs,
-            attemptIndex,
-            accumulatedText: existing?.accumulatedText ?? "",
-            accumulatedEvents: existing?.accumulatedEvents ?? [],
-            rawTextOutput,
-          });
-        },
-        captureFinalPromptChunk: (loopIndex, chunk) => {
-          const existing = self.finalPromptOutputBuffer.get(loopIndex);
-          if (existing) {
-            existing.accumulatedText += chunk;
-          }
-        },
-        captureFinalPromptEvents: (loopIndex, events) => {
-          const existing = self.finalPromptOutputBuffer.get(loopIndex);
-          if (existing) {
-            existing.accumulatedEvents.push(...events);
-          }
-        },
-        captureFinalPromptCompletedOutput: (loopIndex, output) => {
-          const existing = self.finalPromptCompletedOutputs.get(loopIndex);
-          if (existing) {
-            existing.outputs.push(output);
-          } else {
-            self.finalPromptCompletedOutputs.set(loopIndex, {
-              outputs: [output],
-            });
-          }
-
-          self.finalPromptOutputBuffer.delete(loopIndex);
-        },
-        onFinalPromptStatusMessage: (loopIndex, message, severity) => {
-          const messages = self.finalPromptStatusMessages.get(loopIndex) ?? [];
-          messages.push({
-            message,
-            severity,
-            timestamp: Date.now(),
-          });
-          self.finalPromptStatusMessages.set(loopIndex, messages);
-
-          // Keep standalone CLI event stream behavior unchanged.
-          self._workflowStatusMessageEmitter.fire({
-            stepIndex: -(loopIndex + 1),
-            message,
-            severity,
-          });
-        },
-        onStatusMessage: (stepIndex, message, severity) => {
-          self._workflowStatusMessageEmitter.fire({
-            stepIndex,
-            message,
-            severity,
-          });
-        },
-        snapshotService: new WorkspaceSnapshotService(),
-        onSnapshotCaptured: (target, snapshot) => {
-          self.activeDashboard?.sendStepUndoDataUpdated(
-            target as UndoExecutionTarget,
-            snapshot
-          );
-        },
-      };
+        workingFilePath
+      );
 
       await this.workflowExecutor.execute(activeIntegration, workflowContext);
 
@@ -2314,11 +1946,7 @@ export class WorkflowInstance {
         );
       } else {
         // Fresh start: clear all previous output buffers
-        this.stepOutputBuffer.clear();
-        this.completedStepOutputs.clear();
-        this.finalPromptOutputBuffer.clear();
-        this.finalPromptCompletedOutputs.clear();
-        this.finalPromptStatusMessages.clear();
+        this.clearOutputBuffers();
         this.dashboardSink.updateExecutionStarted(
           fileName,
           state.prompts.length

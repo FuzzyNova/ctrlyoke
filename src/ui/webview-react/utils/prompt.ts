@@ -2,20 +2,13 @@
  * Prompt utility functions and types
  */
 
-import { STEP_STATUS, type StepStatus } from "../types/messages";
+import {
+  STEP_STATUS,
+  PROMPT_PROPERTIES,
+  type StepStatus,
+} from "../types/messages";
 
-/** Property keys for prompt objects - matches PROMPT_PROPERTIES from DashboardConstants */
-export const PROMPT_PROPERTIES = {
-  PROMPT: "prompt",
-  HARNESS: "harness",
-  MODEL: "model",
-  AGENT: "agent",
-  SKILLS: "skills",
-  RESUME_SESSION: "resumeSession",
-  SESSION_ID: "sessionId",
-  ALLOW_DYNAMIC_EXTENSION: "allowDynamicExtension",
-  END_CONDITION: "endCondition",
-} as const;
+export { PROMPT_PROPERTIES };
 
 /**
  * End condition configuration

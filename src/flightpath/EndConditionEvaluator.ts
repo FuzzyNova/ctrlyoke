@@ -2,6 +2,7 @@ import * as path from "path";
 import * as fs from "fs";
 import { spawn, ChildProcess } from "child_process";
 import { Log } from "../utils/Log";
+import { getErrorMessage } from "../utils/ErrorUtils";
 import { EndCondition } from "../types/FlightPathTypes";
 import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { CliProcessManager } from "../utils/CliProcessManager";
@@ -35,7 +36,7 @@ export class EndConditionEvaluator {
    * Handles both space-separated and quoted arguments.
    * @returns { scriptPath: string, args: string[] }
    */
-  private parseScriptCommand(script: string): {
+  static parseScriptCommand(script: string): {
     scriptPath: string;
     args: string[];
   } {
@@ -62,7 +63,7 @@ export class EndConditionEvaluator {
 
       // Parse script command to separate path from arguments
       const { scriptPath: rawScriptPath, args: additionalArgs } =
-        this.parseScriptCommand(condition.script);
+        EndConditionEvaluator.parseScriptCommand(condition.script);
 
       // Resolve script path
       const resolvedScriptPath = await this.resolveScriptPath(
@@ -125,7 +126,7 @@ export class EndConditionEvaluator {
         stdout: "",
         stderr: "",
         result: "",
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
         duration: Date.now() - startTime,
       };
     }
@@ -305,7 +306,7 @@ export class EndConditionEvaluator {
         result: "",
         stdout: "",
         stderr: "",
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
         timeout: isTimeout,
       };
     }

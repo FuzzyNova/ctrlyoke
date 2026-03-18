@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import * as fs from "fs/promises";
 import {
   MESSAGE_TYPES,
   HARNESS_IDS,
@@ -21,6 +20,7 @@ import {
   CODEX_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import { Harness } from "../types/FlightPathTypes";
+import { readJsonFile } from "../utils/FileSystemUtils";
 import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import { AgentDiscovery } from "../utils/AgentDiscovery";
 import type { AgentInfo } from "../utils/AgentDiscovery";
@@ -247,8 +247,7 @@ export class WebviewSettingsSync {
         return;
       }
 
-      const workingFileContent = await fs.readFile(workingFilePath, "utf-8");
-      const workingFile = JSON.parse(workingFileContent);
+      const workingFile = await readJsonFile(workingFilePath);
 
       const workflowProperties = {
         harness: workingFile.harness,

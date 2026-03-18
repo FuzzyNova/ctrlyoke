@@ -1,5 +1,6 @@
 import * as path from "path";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
+import { SCRIPT_EXTENSIONS } from "../utils/ValidationUtils";
 import { PromptItem } from "../types/FlightPathTypes";
 import {
   STEP_STATUS,
@@ -158,7 +159,7 @@ export class EndConditionHandler {
     } else if (action === DIALOG_ACTIONS.OPEN_SCRIPT) {
       // Try to open the script file (only if the script looks like a file path)
       if (prompt.endCondition?.script) {
-        const script = prompt.endCondition.script.split(/\s+/)[0]; // Extract first token (path)
+        const { scriptPath: script } = EndConditionEvaluator.parseScriptCommand(prompt.endCondition.script);
         if (this.looksLikeFilePath(script)) {
           try {
             if (this.openFile) {
@@ -420,18 +421,9 @@ export class EndConditionHandler {
    * Returns true if it contains path separators or has a known script extension.
    */
   private looksLikeFilePath(script: string): boolean {
-    const knownExtensions = [
-      ".js",
-      ".ts",
-      ".py",
-      ".sh",
-      ".bat",
-      ".ps1",
-      ".cmd",
-    ];
     const ext = path.extname(script).toLowerCase();
     return (
-      knownExtensions.includes(ext) ||
+      (SCRIPT_EXTENSIONS as readonly string[]).includes(ext) ||
       script.includes("/") ||
       script.includes("\\") ||
       script.startsWith(".")

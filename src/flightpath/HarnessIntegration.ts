@@ -54,6 +54,11 @@ export enum HarnessStatus {
  * Harness integration strategies must implement.
  */
 export abstract class HarnessIntegration {
+  /** Maximum character length for prompts passed directly on the command line. */
+  private static readonly MAX_SIMPLE_PROMPT_LENGTH = 300;
+  /** Characters safe to pass directly on the command line without temp-file escaping. */
+  private static readonly SAFE_CHARS_PATTERN = /^[a-zA-Z0-9\s.,!?:;\-_()@#/]*$/;
+
   protected context: SubscriptionContainer | undefined;
   protected isAvailable: boolean = false;
   protected workflowStep: number = 0;
@@ -299,6 +304,24 @@ export abstract class HarnessIntegration {
   }
 
   /**
+   * Expand a block of content, logging success or warning on failure.
+   * Returns the content string, or null if nothing resolved.
+   */
+  private async expandBlockContent(
+    expander: () => Promise<string | null>,
+    successMsg: string,
+    warnMsg: string
+  ): Promise<string | null> {
+    const content = await expander();
+    if (content) {
+      Log.debug(successMsg);
+    } else {
+      Log.warn(warnMsg);
+    }
+    return content;
+  }
+
+  /**
    * Expand skill names to a <skillInstructions> block.
    * Returns null if no skills are provided or none resolve.
    */
@@ -306,20 +329,11 @@ export abstract class HarnessIntegration {
     resolvedSkills: string[],
     workspaceRoot: string | undefined
   ): Promise<string | null> {
-    const content = await SkillExpander.expandSkills(
-      resolvedSkills,
-      workspaceRoot
+    return this.expandBlockContent(
+      () => SkillExpander.expandSkills(resolvedSkills, workspaceRoot),
+      `🎯 Skills [${resolvedSkills.join(", ")}] instructions added to prompt`,
+      `⚠️ No skills resolved from [${resolvedSkills.join(", ")}], continuing without skills`
     );
-    if (content) {
-      Log.debug(
-        `🎯 Skills [${resolvedSkills.join(", ")}] instructions added to prompt`
-      );
-    } else {
-      Log.warn(
-        `⚠️ No skills resolved from [${resolvedSkills.join(", ")}], continuing without skills`
-      );
-    }
-    return content;
   }
 
   /**
@@ -330,18 +344,11 @@ export abstract class HarnessIntegration {
     resolvedAgent: string,
     workspaceRoot: string | undefined
   ): Promise<string | null> {
-    const content = await AgentExpander.expandAgent(
-      resolvedAgent,
-      workspaceRoot
+    return this.expandBlockContent(
+      () => AgentExpander.expandAgent(resolvedAgent, workspaceRoot),
+      `🤖 Agent "${resolvedAgent}" instructions added to prompt`,
+      `⚠️ Agent "${resolvedAgent}" not found, continuing without agent`
     );
-    if (content) {
-      Log.debug(`🤖 Agent "${resolvedAgent}" instructions added to prompt`);
-    } else {
-      Log.warn(
-        `⚠️ Agent "${resolvedAgent}" not found, continuing without agent`
-      );
-    }
-    return content;
   }
 
   /**
@@ -737,9 +744,7 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
    * @returns true if prompt can be passed directly
    */
   protected isSimplePrompt(finalPromptText: string): boolean {
-    const MAX_SIMPLE_PROMPT_LENGTH = 300;
-
-    if (finalPromptText.length > MAX_SIMPLE_PROMPT_LENGTH) {
+    if (finalPromptText.length > HarnessIntegration.MAX_SIMPLE_PROMPT_LENGTH) {
       return false;
     }
 
@@ -749,8 +754,7 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
 
     // Only allow: letters, numbers, spaces, and basic safe punctuation.
     // If anything else exists, use file-based passing.
-    const SAFE_CHARS_PATTERN = /^[a-zA-Z0-9\s.,!?:;\-_()@#/]*$/;
-    if (!SAFE_CHARS_PATTERN.test(finalPromptText)) {
+    if (!HarnessIntegration.SAFE_CHARS_PATTERN.test(finalPromptText)) {
       Log.debug(
         "📁 Prompt contains special characters, using file-based passing for safety"
       );

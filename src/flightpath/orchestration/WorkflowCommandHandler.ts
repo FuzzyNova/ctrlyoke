@@ -9,6 +9,7 @@ import {
 } from "../../utils/ConfigurationUtils";
 import { HARNESS_STATUS_STRINGS } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 
 /**
  * WorkflowCommandHandler
@@ -369,7 +370,7 @@ export class WorkflowCommandHandler {
         `✅ Created custom template: ${templateName.trim()}.flightpath.json`
       );
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      const errorMsg = getErrorMessage(error);
       vscode.window.showErrorMessage(`Failed to create template: ${errorMsg}`);
     }
   }

@@ -6,6 +6,7 @@ import { Harness } from "../types/FlightPathTypes";
 import { EXECUTION_STATES } from "../types/DashboardConstants";
 import type { ExecutionState } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
+import { getErrorMessage } from "../utils/ErrorUtils";
 import {
   ConfigurationUtils,
   PATH_CONSTANTS,
@@ -110,7 +111,7 @@ export class WorkingFileManager {
       return parsed;
     } catch (error) {
       throw new Error(
-        `Failed to read working file: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to read working file: ${getErrorMessage(error)}`
       );
     }
   }
@@ -141,7 +142,7 @@ export class WorkingFileManager {
         } catch {}
 
         throw new Error(
-          `Failed to write working file: ${error instanceof Error ? error.message : String(error)}`
+          `Failed to write working file: ${getErrorMessage(error)}`
         );
       }
     };
@@ -298,7 +299,7 @@ export class WorkingFileManager {
       });
     } catch (error) {
       Log.error(
-        `FlightPath: Failed to update working file: ${error instanceof Error ? error.message : String(error)}`
+        `FlightPath: Failed to update working file: ${getErrorMessage(error)}`
       );
       // Don't throw - this is a background operation
     }

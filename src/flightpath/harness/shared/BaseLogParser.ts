@@ -3,6 +3,7 @@ import * as path from "path";
 import { BaseCliEvent, ILogParser } from "./interfaces/ILogParser";
 import { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import { Log } from "../../../utils/Log";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 
 /**
  * Abstract base class for CLI harness log parsers
@@ -306,7 +307,7 @@ export abstract class BaseLogParser implements ILogParser {
     } catch (error) {
       // File read errors are thrown (caller should handle)
       throw new Error(
-        `Failed to read log file: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to read log file: ${getErrorMessage(error)}`
       );
     }
   }

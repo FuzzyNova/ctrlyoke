@@ -79,6 +79,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     // 4. Detect symbol references (#sym:path:symbol:42 and #sym:"path with spaces/file":symbol:42)
     links.push(...this.findSymbolLinks(document, text, workspaceRoot));
 
+    // 5. Detect git change references (~diff, ~staged, ~stash:N, ~<hash>)
+    links.push(...this.findGitChangeLinks(document, text));
+
     return links;
   }
 
@@ -238,6 +241,49 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     const plainPattern = new RegExp(this.patterns.lineRange.source, "g");
     while ((match = plainPattern.exec(text)) !== null) {
       addLineRangeLink(match);
+    }
+
+    return links;
+  }
+
+  /**
+   * Find git change reference links (~diff, ~staged, ~stash:N, ~<hash>)
+   * Opens a new untitled editor with the live diff output.
+   */
+  private findGitChangeLinks(
+    document: vscode.TextDocument,
+    text: string
+  ): vscode.DocumentLink[] {
+    const links: vscode.DocumentLink[] = [];
+
+    const gitPatterns = [
+      // ~diff and ~staged (fixed keywords)
+      { pattern: /~(diff|staged)/g, getRef: (m: RegExpExecArray) => m[1] },
+      // ~stash:N
+      { pattern: /~(stash:\d+)/g, getRef: (m: RegExpExecArray) => m[1] },
+      // ~<7-40 hex chars> (commit hash)
+      { pattern: /~([0-9a-f]{7,40})/gi, getRef: (m: RegExpExecArray) => m[1] },
+    ];
+
+    for (const { pattern, getRef } of gitPatterns) {
+      const regex = new RegExp(pattern.source, pattern.flags);
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(text)) !== null) {
+        const ref = getRef(match);
+        const startPos = document.positionAt(match.index);
+        const endPos = document.positionAt(match.index + match[0].length);
+        const range = new vscode.Range(startPos, endPos);
+
+        const commandUri = vscode.Uri.parse(
+          `command:flightpath.openGitChange?${encodeURIComponent(
+            JSON.stringify({ ref: ref.toLowerCase() })
+          )}`
+        );
+
+        const link = new vscode.DocumentLink(range, commandUri);
+        link.tooltip = `Open git ${ref} diff`;
+        links.push(link);
+      }
     }
 
     return links;

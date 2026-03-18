@@ -15,6 +15,7 @@ import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
 import { Log } from "../../utils/Log";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 import { ICliProvider } from "./shared/interfaces/ICliProvider";
 import { CliOutputFormatter } from "./shared/CliOutputFormatter";
 import { CliLogMonitor } from "./CliLogMonitor";
@@ -589,7 +590,7 @@ export class CliIntegration extends HarnessIntegration {
     } catch (error) {
       Log.error("❌ CLI interactive execution error", error);
       this.lastFailureReason =
-        error instanceof Error ? error.message : String(error);
+        getErrorMessage(error);
       return { success: false };
     } finally {
       await this.cleanupTempFiles(tempFilePaths);
@@ -822,7 +823,7 @@ export class CliIntegration extends HarnessIntegration {
     } catch (error) {
       Log.error(`❌ Interactive execution error`, error);
       this.lastFailureReason =
-        error instanceof Error ? error.message : String(error);
+        getErrorMessage(error);
       throw error;
     } finally {
       // Always clean up temp files, regardless of success or failure

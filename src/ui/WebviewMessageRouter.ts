@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import { getErrorMessage } from "../utils/ErrorUtils";
 import {
   MESSAGE_TYPES,
   LOG_LEVELS,
@@ -10,6 +11,7 @@ import { Log } from "../utils/Log";
 import {
   getFileCompletions,
   getHashCompletions,
+  getGitChangeCompletions,
   getPromptFileCompletions,
 } from "../completions/CompletionHelpers";
 import * as fs from "fs";
@@ -75,7 +77,7 @@ export class WebviewMessageRouter {
         Log.warn(`Unknown message type: ${message.type}`);
       }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      const errorMsg = getErrorMessage(error);
       Log.error(`Error handling webview message (${message.type}):`, errorMsg);
     }
   }
@@ -212,6 +214,18 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.OPEN_FILE, (message) => {
       this.handleOpenFile(message.path, message.lineStart, message.lineEnd);
+    });
+
+    table.set(MESSAGE_TYPES.OPEN_GIT_CHANGE, async (message) => {
+      const workspaceRoot =
+        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        return;
+      }
+      await vscode.commands.executeCommand("flightpath.openGitChange", {
+        workspaceRoot,
+        ref: message.ref,
+      });
     });
 
     table.set(MESSAGE_TYPES.VALIDATE_FILE_REF, async (message) => {
@@ -482,7 +496,7 @@ export class WebviewMessageRouter {
     } catch (error) {
       Log.error("Failed to execute ephemeral prompt:", error);
       vscode.window.showErrorMessage(
-        `Failed to execute prompt: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to execute prompt: ${getErrorMessage(error)}`
       );
     }
   }
@@ -507,7 +521,7 @@ export class WebviewMessageRouter {
     } catch (error) {
       Log.error("Failed to update prompt:", error);
       vscode.window.showErrorMessage(
-        `Failed to update prompt: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to update prompt: ${getErrorMessage(error)}`
       );
     }
   }
@@ -527,7 +541,7 @@ export class WebviewMessageRouter {
     } catch (error) {
       Log.error("Failed to update finalPrompt:", error);
       vscode.window.showErrorMessage(
-        `Failed to update finalPrompt: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to update finalPrompt: ${getErrorMessage(error)}`
       );
     }
   }
@@ -546,7 +560,7 @@ export class WebviewMessageRouter {
     } catch (error) {
       Log.error("Failed to delete prompt:", error);
       vscode.window.showErrorMessage(
-        `Failed to delete prompt: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to delete prompt: ${getErrorMessage(error)}`
       );
     }
   }
@@ -563,7 +577,7 @@ export class WebviewMessageRouter {
     } catch (error) {
       Log.error("Failed to reset workflow state:", error);
       vscode.window.showErrorMessage(
-        `Failed to reset workflow state: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to reset workflow state: ${getErrorMessage(error)}`
       );
     }
   }
@@ -580,7 +594,7 @@ export class WebviewMessageRouter {
     } catch (error) {
       Log.error("Failed to set start position:", error);
       vscode.window.showErrorMessage(
-        `Failed to set start position: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to set start position: ${getErrorMessage(error)}`
       );
     }
   }
@@ -637,6 +651,10 @@ export class WebviewMessageRouter {
       return await getFileCompletions(prefix.substring(1)); // Remove @
     } else if (trigger === "#") {
       return await getHashCompletions(prefix.substring(1)); // Remove #
+    } else if (trigger === "~") {
+      const workspaceRoot =
+        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+      return await getGitChangeCompletions(workspaceRoot, prefix.substring(1)); // Remove ~
     } else if (trigger === "path") {
       return await getPromptFileCompletions(prefix);
     }
@@ -855,7 +873,7 @@ export class WebviewMessageRouter {
         );
       }
     } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
+      const errMsg = getErrorMessage(error);
       this.postMessage({
         type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
         data: {
@@ -929,7 +947,7 @@ export class WebviewMessageRouter {
         );
       }
     } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
+      const errMsg = getErrorMessage(error);
       this.postMessage({
         type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
         data: {

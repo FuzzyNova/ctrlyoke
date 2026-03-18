@@ -5,6 +5,7 @@ import { Log } from "../utils/Log";
 import {
   getFileCompletions,
   getHashCompletions,
+  getGitChangeCompletions,
   toVSCodeCompletionItem,
   clearFilesCache,
 } from "./CompletionHelpers";
@@ -12,7 +13,7 @@ import {
 /**
  * Trigger character types for context-aware completions
  */
-type TriggerChar = "@" | "#";
+type TriggerChar = "@" | "#" | "~";
 
 /**
  * Provides context-aware completions for FlightPath prompt files
@@ -58,26 +59,35 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     const textBeforeCursor = line.substring(0, position.character);
     const lastAtIndex = textBeforeCursor.lastIndexOf("@");
     const lastHashIndex = textBeforeCursor.lastIndexOf("#");
+    const lastTildeIndex = textBeforeCursor.lastIndexOf("~");
 
-    // Determine which trigger is more recent (closer to cursor)
+    // Determine which trigger is most recent (closest to cursor)
     let triggerChar: TriggerChar | undefined;
     let afterTrigger: string;
 
-    if (lastAtIndex > lastHashIndex) {
-      triggerChar = "@";
-      afterTrigger = textBeforeCursor.substring(lastAtIndex + 1);
-    } else if (lastHashIndex !== -1) {
-      triggerChar = "#";
-      afterTrigger = textBeforeCursor.substring(lastHashIndex + 1);
-    } else {
+    const maxIndex = Math.max(lastAtIndex, lastHashIndex, lastTildeIndex);
+
+    if (maxIndex === -1) {
       return undefined; // No trigger found
     }
 
+    if (maxIndex === lastAtIndex) {
+      triggerChar = "@";
+      afterTrigger = textBeforeCursor.substring(lastAtIndex + 1);
+    } else if (maxIndex === lastHashIndex) {
+      triggerChar = "#";
+      afterTrigger = textBeforeCursor.substring(lastHashIndex + 1);
+    } else {
+      triggerChar = "~";
+      afterTrigger = textBeforeCursor.substring(lastTildeIndex + 1);
+    }
+
     // Don't provide completions if there's a space after trigger
-    // unless we're inside a quoted path: @"path with spaces/..."
-    // A quoted path starts with " immediately after the trigger character
+    // (except for @ inside a quoted path: @"path with spaces/...")
     const isInsideQuotedPath =
-      afterTrigger.startsWith('"') && !afterTrigger.slice(1).includes('"');
+      triggerChar === "@" &&
+      afterTrigger.startsWith('"') &&
+      !afterTrigger.slice(1).includes('"');
     if (afterTrigger.includes(" ") && !isInsideQuotedPath) {
       return undefined;
     }
@@ -85,8 +95,10 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     // Route to appropriate handler based on trigger
     if (triggerChar === "@") {
       return this.getAtCompletions(afterTrigger);
-    } else {
+    } else if (triggerChar === "#") {
       return this.getHashCompletions(afterTrigger);
+    } else {
+      return this.getTildeCompletions(afterTrigger);
     }
   }
 
@@ -139,6 +151,24 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     // completion dropdown (only affects UI, not the data we return). This is a VS Code
     // issue with how it handles completion list updates. isIncomplete: false is worse:
     // it still has dupes AND doesn't update the list as the user types.
+    return new vscode.CompletionList(items, true);
+  }
+
+  /**
+   * Get completions for ~ trigger (git change context)
+   */
+  private async getTildeCompletions(
+    filterText: string
+  ): Promise<vscode.CompletionList> {
+    const workspaceRoot =
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+    const plainItems = await getGitChangeCompletions(workspaceRoot, filterText);
+
+    const range = this.calculateCompletionRange("~");
+    const items = plainItems.map((item) =>
+      toVSCodeCompletionItem(item, "~", range)
+    );
+
     return new vscode.CompletionList(items, true);
   }
 

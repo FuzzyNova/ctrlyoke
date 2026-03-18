@@ -2,51 +2,113 @@
 
 ## Overview
 
-Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessible web app backed by a standalone HTTP/WebSocket server. The server replaces VS Code as the host environment, reusing all existing React components, Zustand stores, and core FlightPath business logic without forking or duplicating them.
+Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessible web app backed by a standalone HTTP/WebSocket server. The server delivers **full feature parity with the VS Code extension** — including parallel workflow execution, the workflow switcher dropdown, run history, and all message types. The only exclusions are capabilities that are inherently VS Code-specific (file pickers, Copilot Chat harness).
+
+The server is added as a new `server` subcommand to the existing `flightpath` CLI binary.
+
+## Mode Comparison
+
+| Feature | `flightpath run` (CLI) | `flightpath server` (standalone) | VS Code Extension |
+|---------|----------------------|----------------------------------|-------------------|
+| Parallel workflows | No — single run | **Yes** | **Yes** |
+| Full dashboard webview | No — terminal output | **Yes** | **Yes** |
+| Workflow switcher dropdown | No | **Yes** | **Yes** |
+| Run history | No | **Yes** | **Yes** |
+| File picker dialogs | No | No (path input only) | Yes |
+| `copilot-chat` harness | No | No (VS Code UI automation) | Yes |
 
 ## Goals
 
-- Serve the existing React webview at `http://localhost:<port>` in any browser
-- Replace VS Code-specific APIs (`acquireVsCodeApi`, `vscode.postMessage`, `vscode.getState/setState`) with browser-compatible equivalents
-- Provide full `--vscode-*` CSS variable defaults so the UI renders correctly without a VS Code theme
-- Reuse existing `PlatformAdapter` / `CliAdapter` for workflow execution (no new business logic)
-- Require **zero changes** to existing React components, hooks, or stores
+- Serve the existing React webview at `http://localhost:<port>` in any browser with zero React code changes
+- Full feature parity with the VS Code dashboard (parallel workflows, switcher, history, all message types)
+- Replace VS Code-specific APIs with browser-compatible equivalents via a minimal shim
+- Reuse `WorkflowOrchestrator` directly — no parallel orchestration logic
 - Support light and dark themes out of the box
 
 ## Non-Goals
 
-- Real-time multi-user collaboration
+- Real-time multi-user collaboration (each server instance = one workspace)
 - Remote workflow execution beyond what the CLI already supports
-- A full VS Code extension replacement (this is a developer/power-user tool)
+- A full VS Code extension replacement
+- Supporting the `copilot-chat` harness (directly automates VS Code's UI)
 
 ---
 
 ## Architecture
 
 ```
-Browser
+Browser (1..N tabs)
   ↕ HTTP (React app assets)
-  ↕ WebSocket (bidirectional messages, same protocol as VS Code postMessage)
+  ↕ WebSocket (bidirectional, same MESSAGE_TYPES protocol as VS Code)
 Standalone FlightPath Server (Node.js)
-  ↕ PlatformAdapter (StandaloneServerAdapter)
-  ↕ FlightPathManager / WorkflowExecutor / CliIntegration (unchanged)
+  ├── FlightPathServer        — HTTP + WS, connection registry, broadcast
+  ├── StandaloneServerAdapter — PlatformAdapter impl (modeled on CliAdapter)
+  ├── WorkflowOrchestrator    — REUSED unchanged (after IDashboardProvider refactor)
+  └── CliIntegration + CLI harnesses (copilot-cli, claude-cli, codex-cli — unchanged)
 ```
+
+### Multi-tab Model
+
+One server instance = one `WorkflowOrchestrator` managing all parallel workflows. Multiple browser tabs connect as separate WebSocket clients but observe the **same orchestrator state**. When any orchestrator event fires (workflow added, step advance, state change), the server broadcasts to **all connected tabs**.
+
+This mirrors VS Code behavior: opening the FlightPath sidebar in multiple panels shows the same state.
 
 ### Key Insight: The Shim Pattern
 
-The React app already talks to VS Code through a single narrow interface:
+The React app communicates with VS Code through a single narrow interface:
 
 ```typescript
-// All communication goes through this singleton
-window.vscodeApi = acquireVsCodeApi(); // set once before React loads
+// Set once before React loads
+window.vscodeApi = acquireVsCodeApi();
+// Returns: { postMessage(msg), getState(), setState(state) }
 ```
 
-`acquireVsCodeApi()` returns exactly three methods:
-- `postMessage(msg)` — webview → extension
-- `getState()` — read persisted UI state
-- `setState(state)` — write persisted UI state
+By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire contract is satisfied without touching a single React file. The existing `useMessageHandler` hook already listens on `window.addEventListener('message', ...)` — the shim reuses this via `dispatchEvent(new MessageEvent(...))`.
 
-By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, we satisfy the entire contract without touching a single React file.
+### Existing Patterns Reused
+
+| Pattern | Where It Exists | How Server Uses It |
+|---------|----------------|--------------------|
+| `PlatformAdapter` interface | `src/platform/PlatformAdapter.ts` | `StandaloneServerAdapter` is the third implementation |
+| `vscode-shim` alias | `esbuild.js` CLI bundle | Server bundle uses the same `alias: { vscode: 'src/platform/vscode-shim.ts' }` |
+| `WorkflowOrchestrator` | `src/flightpath/WorkflowOrchestrator.ts` | Reused after `IDashboardProvider` refactor (see Phase 2) |
+| Commander.js subcommands | `src/cli.ts` | `server` added as `program.command('server')` |
+| `setRuntimeMode` | `src/cli.ts` line 21 | Server calls `setRuntimeMode(RUNNER_IDS.SERVER)` |
+
+---
+
+## VS Code Dependencies Inventory
+
+### Structural VS Code Dependencies (not used by server)
+
+| File | Why Irrelevant |
+|------|---------------|
+| `src/extension.ts` | Extension activation — not used by server |
+| `src/ui/StatusBarManager.ts` | VS Code status bar — no equivalent needed |
+| `src/completions/PromptCompletionProvider.ts` | VS Code IntelliSense in text editor |
+| `src/completions/PromptLinkProvider.ts` | VS Code document links — CodeMirror has its own |
+| `src/flightpath/harness/chat/` | Automates VS Code's Copilot Chat UI |
+
+### VS Code Dependencies Requiring Server Equivalents
+
+| File | VS Code API Used | Server Approach |
+|------|-----------------|----------------|
+| `src/ui/FlightPathWebviewProvider.ts` | `vscode.WebviewView`, `webview.postMessage()`, `notifyX()` methods | Replaced by `FlightPathServer` + WebSocket broadcast |
+| `src/flightpath/WorkflowOrchestrator.ts` | `vscode.ExtensionContext`, `FlightPathWebviewProvider` | Refactored to depend on `IDashboardProvider` interface (Phase 2) |
+| `src/ui/WebviewMessageRouter.ts` | `vscode.commands.executeCommand()` (9 handlers) | `WebSocketMessageRouter` calls `WorkflowOrchestrator` methods directly |
+| `src/ui/WebviewSettingsSync.ts` | `vscode.workspace.getConfiguration()` | Reads from `StandaloneServerAdapter.getConfig()` |
+| `src/utils/ConfigurationUtils.ts` | `vscode.workspace.getConfiguration()` | Already bypassed when called through `CliAdapter.getConfig()` |
+| `src/flightpath/orchestration/PromptFileWatcher.ts` | `vscode.workspace.createFileSystemWatcher()` | `chokidar` (already in dependencies) |
+| `src/completions/CompletionHelpers.ts` | `vscode.workspace.findFiles()`, Git extension | Node.js `fs` + `fast-glob` + `ignore` |
+
+### Already Platform-Agnostic (zero changes)
+
+- `src/flightpath/WorkflowInstance.ts`
+- `src/flightpath/PromptQueue.ts` / `WorkflowExecutor.ts`
+- `src/flightpath/PromptFileParser.ts` / `EndConditionEvaluator.ts`
+- `src/flightpath/harness/CliIntegration.ts` + all CLI harnesses
+- `src/ui/webview-react/**` — entire React app and all stores
+- `src/types/**` — MESSAGE_TYPES, EXECUTION_STATES, WorkflowSummary, etc.
 
 ---
 
@@ -54,10 +116,9 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, we satisfy t
 
 ### Phase 1 — WebSocket Shim (browser side)
 
-**New file:** `src/server/standalone-shim.js` (plain JS, not TypeScript — injected directly into HTML)
+**New file:** `src/server/standalone-shim.js` (plain JS — injected directly into HTML before React loads)
 
 ```javascript
-// Runs before React. Provides window.vscodeApi backed by a WebSocket.
 (function () {
   let _state = JSON.parse(sessionStorage.getItem('fpState') || '{}');
   const ws = new WebSocket(`ws://${location.host}/ws`);
@@ -69,9 +130,12 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, we satisfy t
   });
 
   ws.addEventListener('message', e => {
-    // Deliver incoming server → webview messages into the React message handler
+    // useMessageHandler already listens on window.addEventListener('message', ...)
     window.dispatchEvent(new MessageEvent('message', { data: JSON.parse(e.data) }));
   });
+
+  // Reconnect on server restart (development convenience)
+  ws.addEventListener('close', () => setTimeout(() => location.reload(), 1500));
 
   window.vscodeApi = {
     postMessage(msg) {
@@ -87,22 +151,52 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, we satisfy t
 })();
 ```
 
-**Why `sessionStorage`?** The VS Code API only supports one `setState` object per webview session. `sessionStorage` matches that semantics exactly — cleared when the tab closes, persisted through refresh.
-
-**Delivery into React:** The existing `useMessageHandler` hook listens on `window.addEventListener('message', ...)`. The shim reuses this via `dispatchEvent(new MessageEvent(...))`.
+**Why `sessionStorage`?** Matches VS Code's `setState` semantics — cleared on tab close, persisted through refresh.
 
 ---
 
-### Phase 2 — CSS Theme Defaults
+### Phase 2 — Extract `IDashboardProvider` Interface (Refactor)
 
-The webview uses 50+ `--vscode-*` CSS variables. When served in a browser these are all `undefined`, causing invisible/broken UI.
+**This is the critical architectural enabler.** `WorkflowOrchestrator` currently takes `FlightPathWebviewProvider` (a VS Code class) as a constructor parameter and calls `notifyX()` methods on it to push state to the webview.
 
-**New file:** `src/server/themes/vscode-default-light.css`
-**New file:** `src/server/themes/vscode-default-dark.css`
+To reuse `WorkflowOrchestrator` in the server without modification, extract its dependency on `FlightPathWebviewProvider` into a minimal interface:
 
-These files define every `--vscode-*` variable referenced in `tailwind.config.js` with values matching the VS Code Default Light+ and Default Dark+ themes. This is a one-time audit and copy — no build tooling required.
+**New file:** `src/ui/IDashboardProvider.ts`
 
-**Complete variable list** (derived from `tailwind.config.js` audit):
+```typescript
+import type { WorkflowSummary } from '../types/FlightPathTypes';
+
+/**
+ * Platform-agnostic interface for pushing workflow state updates to the dashboard.
+ * Implemented by FlightPathWebviewProvider (VS Code) and FlightPathServer (standalone).
+ */
+export interface IDashboardProvider {
+  notifyWorkflowAdded(summary: WorkflowSummary): void;
+  notifyWorkflowDismissed(workflowId: string): void;
+  notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void;
+  notifyActiveWorkflowChanged(workflowId: string): void;
+  postMessage(message: unknown): void;
+}
+```
+
+**Update `WorkflowOrchestrator`:**
+- Change constructor parameter from `FlightPathWebviewProvider` to `IDashboardProvider`
+- No other changes — all `dashboardProvider.notifyX()` calls remain identical
+
+**Update `FlightPathWebviewProvider`:**
+- Add `implements IDashboardProvider` (it already has all these methods — zero implementation changes)
+
+**Update `WorkflowOrchestrator` constructor** to remove `vscode.ExtensionContext` if it is only used for VS Code-specific concerns (file watching, CLI watch session storage). If `ExtensionContext` is also used for extension path resolution, pass that via `PlatformAdapter.getExtensionPath()` instead.
+
+> This is a clean pre-release refactor. The interface is tiny (5 methods) and the only mechanical changes are the `implements` keyword and the constructor parameter type. Zero business logic changes.
+
+---
+
+### Phase 3 — CSS Theme Defaults
+
+**New files:** `src/server/themes/vscode-default-dark.css`, `src/server/themes/vscode-default-light.css`
+
+All `--vscode-*` variables referenced in `tailwind.config.js` must be defined. Complete variable list:
 
 | Group | Variables |
 |-------|-----------|
@@ -117,97 +211,22 @@ These files define every `--vscode-*` variable referenced in `tailwind.config.js
 | Progress | `--vscode-progressBar-background` |
 | Focus border | `--vscode-focusBorder` |
 | Diff | `--vscode-diffEditor-insertedLineBackground`, `--vscode-diffEditor-removedLineBackground`, `--vscode-diffEditor-insertedTextBackground`, `--vscode-diffEditor-removedTextBackground` |
-| Terminal ANSI | `--vscode-terminal-ansiGreen`, `--vscode-terminal-ansiRed`, `--vscode-terminal-ansiYellow`, `--vscode-terminal-ansiBlue`, `--vscode-terminal-ansiMagenta`, `--vscode-terminal-ansiCyan`, `--vscode-terminal-ansiWhite`, `--vscode-terminal-ansiBlack`, `--vscode-terminal-ansiBrightGreen`, `--vscode-terminal-ansiBrightRed`, `--vscode-terminal-ansiBrightYellow`, `--vscode-terminal-ansiBrightBlue`, `--vscode-terminal-ansiBrightMagenta`, `--vscode-terminal-ansiBrightCyan`, `--vscode-terminal-ansiBrightWhite`, `--vscode-terminal-ansiBrightBlack` |
+| Terminal ANSI | `--vscode-terminal-ansiGreen/Red/Yellow/Blue/Magenta/Cyan/White/Black` + Bright variants (16 total) |
 | Foreground tokens | `--vscode-foreground`, `--vscode-descriptionForeground`, `--vscode-disabledForeground`, `--vscode-errorForeground`, `--vscode-icon-foreground` |
 | Fonts | `--vscode-font-family`, `--vscode-font-size`, `--vscode-font-weight`, `--vscode-editor-font-family`, `--vscode-editor-font-size` |
 | Codicons | `--vscode-codicon-font-path` |
 
-**Loading strategy in the server HTML template:**
-
-```html
-<link rel="stylesheet" href="/theme/dark.css" id="theme-stylesheet">
-<!-- toggled by ?theme=light / dark query param or user preference header -->
+**Codicon path:** Vite copies codicons to `out/ui/webview-react/codicons/codicon.ttf`. Set:
+```css
+--vscode-codicon-font-path: url('/codicons/codicon.ttf');
 ```
 
-The server sets the theme stylesheet based on:
-1. `?theme=light|dark` query parameter (explicit)
-2. `prefers-color-scheme` media query hint from `Sec-CH-Prefers-Color-Scheme` header (if available)
-3. Defaults to dark
+Values sourced from VS Code's `src/vs/platform/theme/common/colorRegistry.ts` for Default Light+ and Default Dark+.
 
----
-
-### Phase 3 — HTTP / WebSocket Server
-
-**New file:** `src/server/FlightPathServer.ts`
-
-```typescript
-import express from 'express';
-import { WebSocketServer } from 'ws';
-import { createServer } from 'http';
-import path from 'path';
-
-export class FlightPathServer {
-  private app = express();
-  private httpServer = createServer(this.app);
-  private wss = new WebSocketServer({ server: this.httpServer });
-  private adapter: StandaloneServerAdapter;
-  private manager: FlightPathManager;
-
-  constructor(private config: StandaloneServerConfig) {
-    this.adapter = new StandaloneServerAdapter(config);
-    this.manager = new FlightPathManager(this.adapter);
-    this.setupRoutes();
-    this.setupWebSocket();
-  }
-
-  private setupRoutes() {
-    // Serve compiled React app (built by Vite with `npm run build:webview`)
-    this.app.use('/assets', express.static(path.join(this.config.webviewDistDir, 'assets')));
-    this.app.use('/static', express.static(path.join(this.config.webviewDistDir, 'static')));
-    this.app.use('/theme', express.static(path.join(__dirname, 'themes')));
-
-    // Main HTML — inject shim + theme, rewrite CSP for WebSocket
-    this.app.get('/', (req, res) => {
-      const theme = req.query.theme ?? this.detectTheme(req);
-      res.send(this.buildHtml(theme));
-    });
-  }
-
-  private buildHtml(theme: string): string {
-    // Read the Vite-generated index.html, inject the shim, and fix up paths
-    const indexHtml = fs.readFileSync(
-      path.join(this.config.webviewDistDir, 'index.html'), 'utf8'
-    );
-    return indexHtml
-      // Replace acquireVsCodeApi placeholder with WebSocket shim
-      .replace('</head>',
-        `<link rel="stylesheet" href="/theme/${theme}.css">
-         <script src="/standalone-shim.js"></script>
-         </head>`
-      )
-      // No CSP nonce needed in standalone mode — use a permissive policy
-      // (or configure a proper nonce-free CSP for production use)
-  }
-
-  private setupWebSocket() {
-    this.wss.on('connection', (ws) => {
-      // Register this connection with the adapter so it can push updates
-      this.adapter.setConnection(ws);
-
-      // Send initial state (equivalent to extension sending INIT message on webview ready)
-      this.adapter.sendInitialState();
-
-      ws.on('message', (raw) => {
-        const msg = JSON.parse(raw.toString());
-        // Route webview → server messages into FlightPathManager (same as WebviewMessageRouter)
-        this.handleWebviewMessage(msg);
-      });
-
-      ws.on('close', () => this.adapter.clearConnection());
-    });
-  }
-}
-```
+**Theme selection priority:**
+1. `?theme=light|dark` query parameter
+2. `Sec-CH-Prefers-Color-Scheme` request header
+3. Default: dark
 
 ---
 
@@ -215,204 +234,441 @@ export class FlightPathServer {
 
 **New file:** `src/server/StandaloneServerAdapter.ts`
 
-Implements `PlatformAdapter` (reuses the existing interface) and adds server-specific plumbing.
+The third `PlatformAdapter` implementation, modeled directly on `CliAdapter`. Maps server config (CLI flags + optional config file) to the same `getConfig()` key names that `ConfigurationUtils` uses internally.
 
 ```typescript
-import type { WebSocket } from 'ws';
-import type { PlatformAdapter } from '../platform/PlatformAdapter';
+export interface StandaloneServerConfig {
+  port: number;
+  cwd: string;
+  theme: 'light' | 'dark';
+  open: boolean;
+  harness: string;
+  model?: string;
+  allowedTools: string[];
+  deniedTools: string[];
+  allowAllTools: boolean;
+  scriptTimeout: number;
+  timeout: number;
+}
 
 export class StandaloneServerAdapter implements PlatformAdapter {
-  private ws: WebSocket | null = null;
-
   constructor(private config: StandaloneServerConfig) {}
 
-  // PlatformAdapter implementation
   getConfig<T>(key: string, defaultValue: T): T {
-    return (this.config.settings as any)[key] ?? defaultValue;
+    // Same switch/case as CliAdapter.getConfig() — maps config properties
+    // to ConfigurationUtils key names.
+    // Key difference: cliExecutionMode always returns "headless"
+    // (server spawns child processes, not VS Code terminals)
   }
 
-  getWorkspaceRoot(): string {
-    return this.config.cwd ?? process.cwd();
+  getWorkspaceRoot(): string { return this.config.cwd ?? process.cwd(); }
+  getExtensionPath(): string { /* same logic as CliAdapter */ }
+  isVsCode?(): boolean { return false; }
+  log/warn/error/showProgress: console.*
+  showChoice: async () => undefined  // headless — no interactive prompts
+}
+```
+
+**`cliExecutionMode: "headless"`** — `CliIntegration` reads this to decide whether to create a VS Code terminal or spawn a child process with `stdio: 'pipe'`. The server always uses the pipe path so output can be captured and forwarded to the webview over WebSocket.
+
+---
+
+### Phase 5 — HTTP / WebSocket Server
+
+**New file:** `src/server/FlightPathServer.ts`
+
+`FlightPathServer` implements `IDashboardProvider` — it is the server-side equivalent of `FlightPathWebviewProvider`.
+
+```typescript
+import express from 'express';
+import { WebSocketServer, WebSocket } from 'ws';
+import { createServer } from 'http';
+import { WorkflowOrchestrator } from '../flightpath/WorkflowOrchestrator';
+import { StandaloneServerAdapter } from './StandaloneServerAdapter';
+import type { IDashboardProvider } from '../ui/IDashboardProvider';
+import type { WorkflowSummary } from '../types/FlightPathTypes';
+import { MESSAGE_TYPES } from '../types/DashboardConstants';
+import { setRuntimeMode } from '../utils/RuntimeMode';
+import { RUNNER_IDS } from '../types/DashboardConstants';
+
+export class FlightPathServer implements IDashboardProvider {
+  private app = express();
+  private httpServer = createServer(this.app);
+  private wss = new WebSocketServer({ server: this.httpServer });
+  private connections = new Set<WebSocket>();  // all active tabs
+  private adapter: StandaloneServerAdapter;
+  private orchestrator: WorkflowOrchestrator;
+
+  constructor(private config: StandaloneServerConfig) {
+    setRuntimeMode(RUNNER_IDS.SERVER);
+    this.adapter = new StandaloneServerAdapter(config);
+    // WorkflowOrchestrator takes IDashboardProvider — this server IS the provider
+    this.orchestrator = new WorkflowOrchestrator(this.adapter, this);
+    this.setupRoutes();
+    this.setupWebSocket();
   }
 
-  log(message: string): void { console.log(message); }
-  warn(message: string): void { console.warn(message); }
-  error(message: string): void { console.error(message); }
-  showProgress(message: string): void { console.log(`[progress] ${message}`); }
+  // ── IDashboardProvider implementation ─────────────────────────────────────
+  // These mirror the notify* methods in FlightPathWebviewProvider
 
-  async showChoice(message: string, ...options: string[]): Promise<string | undefined> {
-    // Headless: return undefined (no interactive prompt in server mode)
-    return undefined;
+  notifyWorkflowAdded(summary: WorkflowSummary) {
+    this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary });
+  }
+  notifyWorkflowDismissed(workflowId: string) {
+    this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId });
+  }
+  notifyWorkflowSummaryUpdated(summary: WorkflowSummary) {
+    this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
+  }
+  notifyActiveWorkflowChanged(workflowId: string) {
+    this.broadcast({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
+  }
+  postMessage(message: unknown) {
+    this.broadcast(message);
   }
 
-  getExtensionPath(): string {
-    return path.dirname(require.main!.filename);
-  }
-
-  isVsCode(): boolean { return false; }
-
-  // Server-specific: push messages to the connected browser
-  setConnection(ws: WebSocket) { this.ws = ws; }
-  clearConnection() { this.ws = null; }
-
-  sendToWebview(message: unknown) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
+  // ── Broadcast to all connected tabs ───────────────────────────────────────
+  private broadcast(message: unknown) {
+    const json = JSON.stringify(message);
+    for (const ws of this.connections) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(json);
     }
   }
 
-  sendInitialState() {
-    // Sends the same INIT message that FlightPathWebviewProvider sends on ready
-    // Reuses the existing WebviewSettingsSync.buildInitPayload() if exposed,
-    // otherwise duplicates minimally
+  // ── HTTP routes ───────────────────────────────────────────────────────────
+  private setupRoutes() {
+    const webviewDist = path.resolve(this.getWebviewDistDir());
+
+    this.app.use(express.static(webviewDist));
+    this.app.use('/theme', express.static(path.join(__dirname, 'themes')));
+    this.app.get('/standalone-shim.js', (_req, res) =>
+      res.sendFile(path.join(__dirname, 'standalone-shim.js'))
+    );
+    this.app.get('*', (req, res) => {
+      const theme = (req.query.theme as string) ?? this.detectTheme(req);
+      res.send(this.buildHtml(theme, webviewDist));
+    });
+  }
+
+  private buildHtml(theme: string, webviewDist: string): string {
+    const index = fs.readFileSync(path.join(webviewDist, 'index.html'), 'utf8');
+    return index.replace('</head>',
+      `<link rel="stylesheet" href="/theme/${theme}.css">
+       <script src="/standalone-shim.js"></script>
+       </head>`
+    );
+  }
+
+  // ── WebSocket connection handling ─────────────────────────────────────────
+  private setupWebSocket() {
+    this.wss.on('connection', (ws, req) => {
+      if (!this.isAllowedOrigin(req)) { ws.close(4003, 'Forbidden'); return; }
+
+      this.connections.add(ws);
+
+      // New tab: send full current state (all running workflows + active workflow data)
+      this.sendInitialState(ws);
+
+      ws.on('message', (raw) => {
+        const msg = JSON.parse(raw.toString());
+        this.router.route(msg);
+      });
+
+      ws.on('close', () => this.connections.delete(ws));
+    });
+  }
+
+  private sendInitialState(ws: WebSocket) {
+    const send = (msg: unknown) => ws.send(JSON.stringify(msg));
+    // Mirror FlightPathWebviewProvider's READY → INIT handshake
+    // Send settings, workflow summaries, active workflow state
+    this.settingsSync.sendToClient(send);
+    send({ type: MESSAGE_TYPES.WORKFLOWS_LIST, workflows: this.orchestrator.getWorkflowSummaries() });
+    const active = this.orchestrator.getActiveWorkflow();
+    if (active) active.sendFullStateToDashboard(); // broadcasts via IDashboardProvider
+  }
+
+  listen() {
+    this.httpServer.listen(this.config.port, '127.0.0.1', () => {
+      console.log(`FlightPath server at http://localhost:${this.config.port}`);
+      if (this.config.open) open(`http://localhost:${this.config.port}`);
+    });
   }
 }
 ```
 
+**Webview dist path:** Vite outputs to `out/ui/webview-react/` (confirmed in `vite.config.ts` line 44).
+
 ---
 
-### Phase 5 — WebSocket Message Router
+### Phase 6 — WebSocket Message Router
 
 **New file:** `src/server/WebSocketMessageRouter.ts`
 
-Mirrors `src/ui/WebviewMessageRouter.ts` but for WebSocket connections. Handles the same set of webview → extension message types (RUN_WORKFLOW, PAUSE_WORKFLOW, etc.) and delegates to `FlightPathManager`.
+Handles all webview → server messages. The existing `WebviewMessageRouter.ts` cannot be reused directly because 9 handlers call `vscode.commands.executeCommand()`. The server router replaces those with direct `WorkflowOrchestrator` method calls.
 
-This is the only significant new file beyond thin adapters. It can extend or delegate to the existing `WebviewMessageRouter` once that class is refactored to be platform-agnostic (optional — see Phase 7).
+**The handler mapping:**
+
+| Message Type | VS Code Handler | Server Handler |
+|-------------|----------------|----------------|
+| `RUN` | `executeCommand("flightpath.run")` | `orchestrator.run(filePath)` |
+| `PAUSE` | `executeCommand("flightpath.pause")` | `orchestrator.pause()` |
+| `RESUME` | `executeCommand("flightpath.resume")` | `orchestrator.resume()` |
+| `STOP` | `executeCommand("flightpath.stop")` | `orchestrator.stop()` |
+| `PAUSE_WORKFLOW` | `orchestrator.pauseWorkflow(id)` | Same — direct call |
+| `RESUME_WORKFLOW` | `orchestrator.resumeWorkflow(id)` | Same — direct call |
+| `STOP_WORKFLOW` | `orchestrator.stopWorkflow(id)` | Same — direct call |
+| `SWITCH_WORKFLOW` | `orchestrator.setActiveWorkflow(id)` | Same — direct call |
+| `GET_WORKFLOWS_LIST` | `orchestrator.getWorkflowSummaries()` | Same — direct call |
+| `LOAD_WORKFLOW` | `executeCommand + file load` | `orchestrator.loadWorkflow(filePath)` |
+| `GET_RECENT_WORKFLOWS` | History service | Same — direct call |
+| `SELECT_FILE` | `executeCommand("flightpath.selectPromptFile")` | Respond with no-op or path input prompt |
+| `EDIT_FILE` | Opens VS Code editor | no-op |
+| `SHOW_OUTPUT` | Reveals Output panel | no-op |
+| `OPEN_GIT_CHANGE` | VS Code diff editor | no-op or OS file open |
+| `revealInExplorer` | VS Code explorer | `open` / `xdg-open` (OS) |
+| All other messages | Platform-agnostic | Same implementation |
+
+All the non-`executeCommand` handlers in `WebviewMessageRouter` (`EXECUTE_PROMPT`, `UPDATE_PROMPT`, `REORDER_PROMPTS`, `UNDO_PROMPT_CHANGES`, etc.) are called on the orchestrator/instance directly and can be ported verbatim.
+
+> **Future refactor (Phase 8):** Extract an abstract `BaseMessageRouter` from `WebviewMessageRouter` containing all platform-agnostic handlers. `WebviewMessageRouter` and `WebSocketMessageRouter` extend it, each providing only their transport/command differences. This eliminates duplication but is not required for the initial implementation.
 
 ---
 
-### Phase 6 — CLI Integration
+### Phase 7 — CompletionService (File + Symbol Completions)
 
-Add a `server` command to the existing CLI binary:
+**New file:** `src/server/CompletionService.ts`
 
+The webview CodeMirror sends completion requests via WebSocket. The server responds using Node.js APIs instead of VS Code APIs.
+
+#### File and Directory Completions
+
+Replace `vscode.workspace.findFiles()` + Git extension `checkIgnore()`:
+
+```typescript
+import fg from 'fast-glob';
+import ignore from 'ignore';
+
+export class CompletionService {
+  private ig = ignore();
+
+  constructor(private cwd: string) {
+    // Load all .gitignore files (including nested), correct base-path per file
+    const gitignoreFiles = fg.sync('**/.gitignore', { cwd, dot: true });
+    for (const f of gitignoreFiles) {
+      const content = fs.readFileSync(path.join(cwd, f), 'utf8');
+      const dir = path.dirname(f);
+      this.ig.add(dir === '.' ? content : content.split('\n')
+        .map(l => l ? `${dir}/${l}` : l).join('\n'));
+    }
+  }
+
+  async getFiles(filterText: string): Promise<PlainCompletionItem[]> {
+    const allFiles = await fg('**/*', {
+      cwd: this.cwd, dot: false, ignore: ['.git/**'], onlyFiles: false, markDirectories: true,
+    });
+    return allFiles
+      .filter(f => !this.ig.ignores(f))
+      .filter(f => !filterText || f.toLowerCase().includes(filterText.toLowerCase()))
+      .map(f => buildCompletionItem(f));
+  }
+}
 ```
-flightpath server [options]
-  --port <port>       Port to listen on (default: 3000)
-  --cwd <dir>         Workspace root directory
-  --theme <light|dark> Default theme (default: dark)
-  --open              Open browser automatically
+
+#### Symbol Completions
+
+**Option A (default) — Smart regex heuristic** scanning source files by extension:
+
+```typescript
+const SYMBOL_PATTERNS: Record<string, RegExp> = {
+  ts:   /^(?:export\s+)?(?:(?:abstract|default)\s+)?(?:class|function\*?|const|let|var|interface|type|enum|namespace|module)\s+(\w+)/gm,
+  py:   /^(?:class|def|async\s+def)\s+(\w+)/gm,
+  go:   /^(?:func(?:\s+\([^)]+\))?\s+|type\s+|var\s+|const\s+)(\w+)/gm,
+  rs:   /^(?:pub\s+)?(?:fn|struct|enum|trait|impl|type|const|static|mod)\s+(\w+)/gm,
+  // ... java, kt, cs, rb, swift, php, c, cpp
+};
 ```
 
-**New file:** `src/cli/ServerCommand.ts`
+Results cached per file by `mtime`. No new dependencies.
 
-Instantiates `FlightPathServer` with config resolved from CLI args + env vars. Uses existing `CliAdapter` pattern.
+**Option B (opt-in) — User-supplied LSP server:**
+
+```yaml
+# .flightpath/server.config.yaml
+symbolLanguageServer:
+  command: "typescript-language-server"
+  args: ["--stdio"]
+```
+
+**New file:** `src/server/LspSymbolClient.ts` — spawns the process, speaks LSP JSON-RPC over stdio, maps `SymbolInformation[]` → `PlainCompletionItem[]`. Falls back to Option A if unavailable. Uses `vscode-jsonrpc` npm package.
+
+#### Selection Completions
+
+Not supported in standalone mode — returns empty array. The `#selection:` syntax still works; the autocomplete shortcut that pre-fills current editor selection range is the only loss.
 
 ---
 
-### Phase 7 — Optional: Decouple WebviewMessageRouter (Refactor)
+### Phase 8 — File Watching
 
-Currently `WebviewMessageRouter` is tightly coupled to `vscode.WebviewView`. If we extract a `IWebviewMessageRouter` interface and inject a `sendToWebview` callback, both the VS Code provider and the standalone server can share the same routing logic.
+**New file:** `src/server/ServerFileWatcher.ts`
 
-This is a clean-architecture improvement but not required for the initial implementation — the standalone server can have its own router that duplicates the dispatch logic.
+Replace `vscode.workspace.createFileSystemWatcher()`. `chokidar` is **already in `package.json` dependencies** (`chokidar@^5.0.0`):
 
-**Defer this to after Phase 1–6 are working.**
+```typescript
+import chokidar from 'chokidar';
+
+export class ServerFileWatcher {
+  watch(pattern: string, cwd: string, callbacks: { onChange: (p: string) => void }) {
+    return chokidar.watch(pattern, { cwd, ignoreInitial: true })
+      .on('change', callbacks.onChange)
+      .on('add', callbacks.onChange)
+      .on('unlink', callbacks.onChange);
+  }
+}
+```
+
+If `WorkflowOrchestrator` constructs `PromptFileWatcher` internally (VS Code variant), the construction path needs to go through `PlatformAdapter`. Add an optional `createFileWatcher(pattern)` method to `PlatformAdapter` — `VsCodeAdapter` returns a VS Code watcher, `StandaloneServerAdapter` returns a `ServerFileWatcher`. This is the cleanest seam.
+
+---
+
+### Phase 9 — CLI Integration (`flightpath server`)
+
+Add `server` as a Commander.js subcommand in `src/cli.ts`, following the same pattern as `run`:
+
+```typescript
+// src/cli.ts
+program
+  .command('server')
+  .description('Start the FlightPath browser dashboard')
+  .option('-p, --port <port>', 'Port to listen on', '3000')
+  .option('-d, --cwd <path>', 'Workspace root directory')
+  .option('--theme <light|dark>', 'Default theme', 'dark')
+  .option('--open', 'Open browser automatically')
+  .option('-H, --harness <harness>', 'Default harness', 'copilot-cli')
+  .option('-m, --model <model>', 'Default model')
+  .option('--allow-tool <pattern>', 'Allow tool (repeatable)', collectRepeatable, [])
+  .option('--deny-tool <pattern>', 'Deny tool (repeatable)', collectRepeatable, [])
+  .option('--allow-all-tools', 'Dangerously allow all tools')
+  .action(async (options) => {
+    const { FlightPathServer } = await import('./server/FlightPathServer');
+    const server = new FlightPathServer(resolveServerConfig(options));
+    server.listen();
+  });
+```
+
+**New file:** `src/cli/ServerCommand.ts` — `resolveServerConfig()` logic (mirrors `resolveRunConfig()` in `src/cli.ts`).
+
+`RUNNER_IDS.SERVER` must be added to `src/types/DashboardConstants.ts`.
 
 ---
 
 ## File Structure
 
 ```
+src/ui/
+└── IDashboardProvider.ts          ← NEW: extracted interface (Phase 2)
+
 src/server/
-├── FlightPathServer.ts         ← HTTP + WebSocket server
-├── StandaloneServerAdapter.ts  ← PlatformAdapter impl for server mode
-├── WebSocketMessageRouter.ts   ← Handles webview → server messages
-├── standalone-shim.js          ← Browser-side VS Code API shim (static file)
+├── FlightPathServer.ts            ← HTTP + WS server; implements IDashboardProvider
+├── StandaloneServerAdapter.ts     ← PlatformAdapter impl (modeled on CliAdapter)
+├── WebSocketMessageRouter.ts      ← Routes webview messages to WorkflowOrchestrator
+├── CompletionService.ts           ← File/dir/symbol completions (no VS Code)
+├── LspSymbolClient.ts             ← (optional) LSP stdio client
+├── ServerFileWatcher.ts           ← chokidar-based file watcher
+├── standalone-shim.js             ← Browser-side VS Code API shim
 └── themes/
-    ├── vscode-default-dark.css  ← Full --vscode-* variable definitions (dark)
-    └── vscode-default-light.css ← Full --vscode-* variable definitions (light)
+    ├── vscode-default-dark.css    ← Full --vscode-* definitions (dark)
+    └── vscode-default-light.css   ← Full --vscode-* definitions (light)
 
-src/cli/ServerCommand.ts        ← `flightpath server` CLI command
+src/cli/ServerCommand.ts           ← resolveServerConfig() for `flightpath server`
+src/cli.ts                         ← Add program.command('server') block
+
+src/flightpath/WorkflowOrchestrator.ts  ← Update: IDashboardProvider instead of FlightPathWebviewProvider
+src/ui/FlightPathWebviewProvider.ts     ← Update: add `implements IDashboardProvider`
+src/platform/PlatformAdapter.ts         ← Update: add optional createFileWatcher()
 ```
-
----
-
-## CSS Theme File Strategy
-
-Each theme file follows this structure:
-
-```css
-/* vscode-default-dark.css — Default Dark+ equivalent */
-:root {
-  --vscode-editor-background: #1e1e1e;
-  --vscode-editor-foreground: #d4d4d4;
-  --vscode-button-background: #0e639c;
-  --vscode-button-foreground: #ffffff;
-  --vscode-button-hoverBackground: #1177bb;
-  /* ... all 50+ variables ... */
-
-  /* Codicon font path (served statically) */
-  --vscode-codicon-font-path: url('/static/codicon.ttf');
-}
-```
-
-VS Code's Default Light+ and Default Dark+ color values are well-documented in the VS Code source (`src/vs/platform/theme/common/colorRegistry.ts`). Values will be sourced directly from there to guarantee accuracy.
-
-**Theme switching:** A small `<select>` or toggle button can be added to the server-rendered HTML (outside the React app) to switch themes by reloading with `?theme=light|dark`. Alternatively, we can dispatch a CSS class change to `document.body` and have themes scoped to `.theme-light` / `.theme-dark` selectors.
-
----
-
-## Codicon Font
-
-VS Code codiconss are bundled as a webfont. The React app already copies `codicon.ttf` to `dist/static/` via the Vite config. The standalone server needs to serve this file and update `--vscode-codicon-font-path` to point to `/static/codicon.ttf` (already correct from the Vite build output).
-
----
-
-## Dependencies
-
-Minimal new dependencies:
-
-| Package | Purpose | Already present? |
-|---------|---------|-----------------|
-| `express` | HTTP server | No — add |
-| `ws` | WebSocket server | No — add |
-| `@types/ws` | TypeScript types | No — add |
-| `@types/express` | TypeScript types | No — add |
-
-All are small, well-maintained packages with no significant supply-chain risk. `express` and `ws` are the de-facto standard for this pattern in Node.js.
 
 ---
 
 ## Build Changes
 
-### Vite Config (no changes needed)
+### esbuild — no new bundle target
 
-The existing `vite.config.ts` already outputs:
-- Predictable asset names (no hashes)
-- Static file copies (codicons, dictionaries)
-- Source maps
-
-The server simply serves the existing `out/webview/` (or wherever the Vite build outputs) directory.
-
-### package.json — new script
-
-```json
-"server": "node out/server/FlightPathServer.js"
-```
-
-### esbuild — server bundle
-
-The server entry point needs to be bundled separately from the extension. Add a build target to `esbuild.config.js`:
+The `server` command is added to `src/cli.ts` (same entry point, same bundle). `express` and `ws` go in `external` — installed in `node_modules`, not bundled:
 
 ```javascript
-{
-  entryPoints: ['src/server/FlightPathServer.ts'],
-  bundle: true,
-  platform: 'node',
-  outfile: 'out/server/FlightPathServer.js',
-  external: ['express', 'ws'], // keep node_modules external for server
+// esbuild.js — update cliCtx
+external: ['node-pty', 'express', 'ws'],
+```
+
+The existing `vscode-shim` alias handles all `vscode` imports in the server code automatically.
+
+### package.json — new runtime dependencies
+
+```json
+"dependencies": {
+  "express": "^4.x",
+  "ws": "^8.x",
+  "fast-glob": "^3.x",
+  "ignore": "^5.x"
 }
+```
+
+Optional:
+```json
+"vscode-jsonrpc": "^8.x"   // only if LspSymbolClient is implemented
+```
+
+### package.json — convenience script
+
+```json
+"server": "node out/cli.js server"
 ```
 
 ---
 
 ## Message Protocol Compatibility
 
-The existing message protocol is fully compatible with WebSocket transport. No changes needed to:
-- `src/types/DashboardConstants.ts` (MESSAGE_TYPES)
-- `src/types/WebviewMessageTypes.ts` (payload types)
-- Any React component, hook, or store
+The protocol (`MESSAGE_TYPES`, `WebviewMessageTypes`) is unchanged. All existing message types work over WebSocket with the same payload shapes. The only transport change is `vscode.postMessage` → `ws.send` (shim handles this).
 
-The only change is **transport**: `vscode.postMessage` → `ws.send` (handled entirely by the shim).
+Full message coverage including multi-workflow types:
+- `WORKFLOW_ADDED`, `WORKFLOW_DISMISSED`, `WORKFLOW_SUMMARY_UPDATED`, `ACTIVE_WORKFLOW_CHANGED`
+- `GET_WORKFLOWS_LIST`, `WORKFLOWS_LIST`, `SWITCH_WORKFLOW`
+- `PAUSE_WORKFLOW`, `RESUME_WORKFLOW`, `STOP_WORKFLOW`
+- All other existing message types
+
+---
+
+## Multi-Tab Connection Handling
+
+- **One server = one `WorkflowOrchestrator`** managing all parallel workflows
+- **Multiple browser tabs** = multiple WebSocket connections, all subscribing to the same orchestrator
+- All orchestrator events broadcast to `connections: Set<WebSocket>` (all open tabs see the same state)
+- New tab connects → receives full initial state: settings, `WORKFLOWS_LIST`, active workflow data
+- Tab closes → removed from connection set; orchestrator continues running
+
+---
+
+## Security Considerations
+
+- **Localhost-only by default**: Bind to `127.0.0.1`; `--host 0.0.0.0` for remote access (explicit opt-in)
+- **No authentication in v1**: Developer tool
+- **WebSocket origin check**: Validate `Origin` header matches `localhost:<port>` on connect
+- **CSP**: Set `connect-src ws://localhost:<port>`; serve shim as a static file to avoid `'unsafe-inline'`
+- **No eval**: Shim uses `JSON.parse`
+
+---
+
+## Harness Compatibility
+
+| Harness | Works in Server? | Notes |
+|---------|-----------------|-------|
+| `copilot-cli` | ✅ Yes | Spawns process, no VS Code dep |
+| `claude-cli` | ✅ Yes | Spawns process, no VS Code dep |
+| `codex-cli` | ✅ Yes | Spawns process, no VS Code dep |
+| `copilot-chat` | ❌ No | Automates VS Code's Chat UI directly |
+
+Server validates harness at startup and rejects `copilot-chat` with a clear error.
 
 ---
 
@@ -423,271 +679,40 @@ The only change is **transport**: `vscode.postMessage` → `ws.send` (handled en
 | `vscode.setState()` | `sessionStorage.setItem('fpState', ...)` |
 | `vscode.getState()` | `sessionStorage.getItem('fpState')` |
 
-The shim in Phase 1 already handles this. No changes to `uiStore.ts` or `editorStore.ts`.
-
----
-
-## Security Considerations
-
-- **Localhost only by default**: Bind to `127.0.0.1` unless `--host` is explicitly passed
-- **No authentication in v1**: This is a developer tool, not a multi-user server
-- **CORS**: Restrict to same-origin (default Express behavior)
-- **WebSocket origin check**: Validate `Origin` header matches `localhost:<port>`
-- **No eval / dynamic code**: The shim uses `JSON.parse`, not `eval`
-- **CSP for standalone mode**: Relax `script-src` to allow inline scripts (needed for the shim), but set `connect-src ws://localhost:<port>` explicitly
-
----
-
-## Completions and Document Links in Standalone Mode
-
-### Background
-
-`CompletionHelpers.ts` powers three completion types triggered in the CodeMirror prompt editor:
-
-| Trigger | Source | VS Code API used |
-|---------|--------|-----------------|
-| `@path` | File/directory completions | `vscode.workspace.findFiles`, `vscode.workspace.asRelativePath`, Git extension for gitignore |
-| `#symbol` | Workspace symbol completions | `vscode.executeWorkspaceSymbolProvider` (LSP) |
-| `#selection:` | Current editor selections | `vscode.window.visibleTextEditors` |
-
-`PromptLinkProvider.ts` provides Ctrl+Click navigation for those same references — but only for `.prompt.md` / `.flightpath.yaml` files opened in the VS Code text editor. The CodeMirror editor in the webview has its own separate link detection that is already pure client-side JS.
-
-### What the Webview CodeMirror Already Does
-
-The CodeMirror editor calls completions via the existing WebSocket/postMessage bridge — it sends a completion request message, the server responds with a list. Link detection in CodeMirror is regex-based and has no VS Code dependency. **Both work transparently in standalone mode once the server has a completions endpoint.**
-
-### File and Directory Completions
-
-**Replacement:** Node.js `fs` + `fast-glob` + `ignore` npm packages.
-
-```
-npm install fast-glob ignore
-```
-
-The server exposes a REST endpoint (or handles a WebSocket message):
-
-```
-GET /api/completions/files?q=<filter>
-→ returns PlainCompletionItem[]
-```
-
-Server-side implementation in `src/server/CompletionService.ts`:
-
-```typescript
-import fg from 'fast-glob';
-import ignore from 'ignore';
-import fs from 'fs';
-import path from 'path';
-
-export class CompletionService {
-  private ig = ignore();
-  private cwd: string;
-
-  constructor(cwd: string) {
-    this.cwd = cwd;
-    // Load .gitignore if present
-    const gitignorePath = path.join(cwd, '.gitignore');
-    if (fs.existsSync(gitignorePath)) {
-      this.ig.add(fs.readFileSync(gitignorePath, 'utf8'));
-    }
-  }
-
-  async getFiles(filterText: string): Promise<PlainCompletionItem[]> {
-    const allFiles = await fg('**/*', {
-      cwd: this.cwd,
-      dot: false,
-      ignore: ['.git/**'],
-      onlyFiles: false,   // include dirs too
-      markDirectories: true,
-    });
-
-    const filtered = allFiles
-      .filter(f => !this.ig.ignores(f))
-      .filter(f => !filterText || f.toLowerCase().includes(filterText.toLowerCase()));
-
-    return buildCompletionItems(filtered); // same logic as CompletionHelpers.getFileCompletions
-  }
-}
-```
-
-**Gitignore filtering:** The VS Code version uses the Git extension's `checkIgnore()` batch API. The `ignore` package is the standard Node.js replacement — it parses `.gitignore` syntax identically. One limitation: nested `.gitignore` files inside subdirectories. We handle this by scanning for all `.gitignore` files in the workspace and loading each one with the correct base path, matching how `fast-glob`'s built-in `ignore` option works.
-
-**`PlainCompletionItem` is already framework-agnostic** — it was designed this way (`CompletionHelpers.ts` line 14). The same type can be serialized over WebSocket directly. No changes needed to the type or to the CodeMirror completion source in the webview.
-
-### Symbol Completions
-
-Symbol completions use `vscode.executeWorkspaceSymbolProvider`, which calls all registered Language Server Protocol providers. Outside VS Code, there is no built-in equivalent.
-
-**Bundling all language servers is a non-starter** — FlightPath users work across TypeScript, Python, Go, Rust, Ruby, Java, C#, and more. Any single-language AST approach (e.g. TypeScript Compiler API) would deliver zero value for everyone else. The options that actually work across languages:
-
-| Option | Fidelity | Effort | Multi-language? |
-|--------|----------|--------|----------------|
-| **A. Smart regex heuristic** — scan source files for declaration keywords per extension | ~60% of LSP coverage | Low | Yes — pattern table is extensible |
-| **B. User-supplied LSP** — user points to an existing language server binary; we speak LSP stdio protocol | Same as VS Code | Medium | Yes — any LSP server works |
-| **C. Omit entirely** — return empty array | None | Zero | N/A |
-
-**Recommendation: Option A (smart regex) as the default, with Option B as an opt-in for users who already run a language server.**
-
-This pairing means symbol completions work out of the box for common patterns, and power users who need full fidelity can wire in their own LSP without FlightPath shipping or managing any language servers.
-
-#### Option A — Smart Regex Heuristic
-
-Scan source files for top-level declaration patterns keyed by file extension. Results are cached per file by `mtime` — only changed files are rescanned.
-
-```typescript
-// src/server/CompletionService.ts
-const SYMBOL_PATTERNS: Record<string, RegExp> = {
-  // JS / TS family
-  ts:   /^(?:export\s+)?(?:(?:abstract|default)\s+)?(?:class|function\*?|const|let|var|interface|type|enum|namespace|module)\s+(\w+)/gm,
-  tsx:  /^(?:export\s+)?(?:(?:abstract|default)\s+)?(?:class|function\*?|const|let|var|interface|type|enum)\s+(\w+)/gm,
-  js:   /^(?:export\s+)?(?:class|function\*?|const|let|var)\s+(\w+)/gm,
-  mjs:  /^(?:export\s+)?(?:class|function\*?|const|let|var)\s+(\w+)/gm,
-  // Python
-  py:   /^(?:class|def|async\s+def)\s+(\w+)/gm,
-  // Go
-  go:   /^(?:func(?:\s+\([^)]+\))?\s+|type\s+|var\s+|const\s+)(\w+)/gm,
-  // Rust
-  rs:   /^(?:pub\s+)?(?:fn|struct|enum|trait|impl|type|const|static|mod)\s+(\w+)/gm,
-  // Ruby
-  rb:   /^(?:class|module|def)\s+(\w+)/gm,
-  // Java / Kotlin / C#
-  java: /^(?:public\s+|private\s+|protected\s+|static\s+)*(?:class|interface|enum|record|@interface)\s+(\w+)/gm,
-  kt:   /^(?:(?:data|sealed|abstract|open|inner)\s+)?(?:class|object|interface|fun|val|var)\s+(\w+)/gm,
-  cs:   /^(?:(?:public|private|protected|internal|static|abstract|sealed)\s+)*(?:class|interface|enum|struct|record|delegate|void|\w+)\s+(\w+)\s*[({]/gm,
-  // C / C++
-  c:    /^(?:\w[\w\s*]+)\s+(\w+)\s*\(/gm,
-  cpp:  /^(?:\w[\w\s*:]+)\s+(\w+)\s*\(/gm,
-  // PHP
-  php:  /^(?:(?:abstract|final)\s+)?(?:class|interface|trait|enum|function)\s+(\w+)/gm,
-  // Swift
-  swift:/^(?:(?:public|private|internal|open|fileprivate)\s+)?(?:class|struct|enum|protocol|func|var|let|extension|typealias)\s+(\w+)/gm,
-};
-```
-
-Results from a scan:
-```typescript
-interface SymbolMatch {
-  name: string;
-  file: string;  // workspace-relative path
-  line: number;
-  kind: string;  // "class" | "function" | "const" etc — extracted from the keyword match
-}
-```
-
-The regex approach never requires any additional dependencies and works identically across all languages in the table. New extensions can be added to the pattern table without touching any other code.
-
-#### Option B — User-Supplied Language Server (LSP stdio)
-
-For users who want full-fidelity completions and already run a language server (e.g. `typescript-language-server`, `pyright`, `rust-analyzer`, `gopls`), the standalone server can act as a minimal LSP client over stdio.
-
-**Configuration (in `flightpath server` CLI or a config file):**
-
-```yaml
-# .flightpath/server.config.yaml
-symbolLanguageServer:
-  command: "typescript-language-server"
-  args: ["--stdio"]
-  # OR
-  command: "pyright-langserver"
-  args: ["--stdio"]
-```
-
-**Server-side LSP client** (`src/server/LspSymbolClient.ts`):
-- Spawns the configured process via `child_process.spawn`
-- Sends LSP `initialize` → `workspace/symbol` requests over stdio
-- Parses the JSON-RPC response and maps `SymbolInformation[]` → `PlainCompletionItem[]`
-- Falls back to Option A regex results if the LSP process is unavailable
-
-This keeps FlightPath completely agnostic about which language server is used. The user brings their own; FlightPath just speaks the standard protocol.
-
-**LSP client dependency:** The `vscode-jsonrpc` npm package handles the JSON-RPC framing. It is already part of the VS Code ecosystem, well-maintained, and has no VS Code runtime dependency.
-
-```
-npm install vscode-jsonrpc
-```
-
-**Updated file structure:**
-
-```
-src/server/
-├── CompletionService.ts     ← Orchestrates both options; regex is default
-├── LspSymbolClient.ts       ← NEW: LSP stdio client for user-supplied servers
-```
-
-`CompletionService` checks config at startup: if a language server command is configured, instantiate `LspSymbolClient`; otherwise fall back to the regex scanner. Both implement a shared `ISymbolProvider` interface so they are swappable.
-
-### Selection Completions
-
-`getSelectionCompletions()` returns the currently selected text in VS Code editors. **This concept does not exist in a browser context** — there is no "currently open file" on the server, and the user's cursor is inside the CodeMirror editor itself.
-
-**Decision: Omit in standalone mode.** The server returns an empty array for selection completions. The `#selection:` syntax is still fully supported — users can type it manually or paste a path. The only loss is the autocomplete shortcut that pre-fills the current selection range.
-
-If we wanted to support this in a future iteration, we could let the user explicitly select text in CodeMirror and expose a "copy as #selection reference" button — but that is a UX redesign, not a simple port.
-
-### PromptLinkProvider
-
-`PromptLinkProvider` is a `vscode.DocumentLinkProvider` registered for `.prompt.md` / `.flightpath.yaml` files in the VS Code text editor. It is **not used by the CodeMirror editor in the webview**.
-
-The CodeMirror prompt editor already has its own link detection (pure client-side regex). This continues to work identically in standalone mode.
-
-`PromptLinkProvider` as a VS Code class is simply irrelevant outside VS Code. **No action needed.**
-
-### Updated File Structure
-
-```
-src/server/
-├── FlightPathServer.ts
-├── StandaloneServerAdapter.ts
-├── WebSocketMessageRouter.ts
-├── CompletionService.ts          ← NEW: file/dir/symbol completions (no VS Code)
-├── standalone-shim.js
-└── themes/
-    ├── vscode-default-dark.css
-    └── vscode-default-light.css
-```
-
-### Updated Dependencies
-
-| Package | Purpose | Already present? |
-|---------|---------|-----------------|
-| `express` | HTTP server | No — add |
-| `ws` | WebSocket server | No — add |
-| `fast-glob` | Filesystem file enumeration | No — add |
-| `ignore` | `.gitignore` parsing | No — add |
-| `vscode-jsonrpc` | JSON-RPC framing for optional LSP client | No — add |
-| `@types/ws` | TypeScript types | No — add |
-| `@types/express` | TypeScript types | No — add |
-
-`vscode-jsonrpc` is only loaded if the user configures a language server — import it lazily in `LspSymbolClient.ts` so it never adds to startup time when unused.
+Handled entirely by the Phase 1 shim. No changes to any store.
 
 ---
 
 ## Implementation Order
 
-1. **Theme CSS files** — Audit all `--vscode-*` vars, create both theme files (2–3 hours)
-2. **Shim** — `standalone-shim.js`, test in browser with a mock WS (1 hour)
-3. **StandaloneServerAdapter** — Implement PlatformAdapter (2 hours)
-4. **FlightPathServer** — HTTP + WS, serve built webview, inject shim (3 hours)
-5. **WebSocketMessageRouter** — Wire webview messages to FlightPathManager (4 hours)
-6. **CompletionService** — File/dir completions with fast-glob + ignore; multi-language regex symbol heuristic (3 hours)
-6a. **LspSymbolClient** _(optional)_ — LSP stdio client for user-supplied language servers (2 hours)
-7. **CLI ServerCommand** — `flightpath server` command (1 hour)
-8. **Manual testing** — Run a workflow from the browser, verify UI state, completions, theme switching (2 hours)
+1. **`IDashboardProvider` interface** — extract from `FlightPathWebviewProvider`; update `WorkflowOrchestrator` constructor; add `implements` to `FlightPathWebviewProvider` (1 hour)
+2. **Theme CSS files** — audit `tailwind.config.js`, create both theme files with correct codicon path `/codicons/codicon.ttf` (2–3 hours)
+3. **Shim** — `standalone-shim.js`, smoke-test in browser with a mock WS (1 hour)
+4. **`StandaloneServerAdapter`** — mirror `CliAdapter`; always `cliExecutionMode: "headless"` (1.5 hours)
+5. **`FlightPathServer`** — HTTP + WS, connection registry, broadcast, `sendInitialState`, implements `IDashboardProvider` (3 hours)
+6. **`WebSocketMessageRouter`** — all message handlers; `vscode.commands.executeCommand()` replaced with direct orchestrator calls (4 hours)
+7. **`CompletionService`** — file/dir completions with fast-glob + ignore; regex symbol heuristic (3 hours)
+7a. **`LspSymbolClient`** _(optional)_ — LSP stdio client (2 hours)
+8. **`ServerFileWatcher`** + `PlatformAdapter.createFileWatcher()` seam — chokidar, verify `PromptFileWatcher` usage path (1.5 hours)
+9. **`flightpath server` CLI command** — `program.command('server')` + `resolveServerConfig()` + `RUNNER_IDS.SERVER` constant (1 hour)
+10. **esbuild + package.json** — add externals, deps, npm script (30 min)
+11. **Manual testing** — parallel workflows from browser, switcher dropdown, pause/resume/stop per workflow, theme switching, completions (2 hours)
 
-Total: ~18 hours of implementation work.
+Total: ~21 hours of implementation work.
 
 ---
 
 ## Open Questions
 
-1. **Multi-tab support**: VS Code's `acquireVsCodeApi()` can only be called once. The shim doesn't have this restriction, so multiple browser tabs would each get their own WebSocket connection. The server should support this gracefully (separate state per connection) or explicitly reject second connections.
+1. **`WorkflowOrchestrator` and `vscode.ExtensionContext`**: The constructor currently takes `vscode.ExtensionContext`. Audit which parts of `WorkflowOrchestrator` actually use it. If it's only used for `context.extensionPath` → replace with `adapter.getExtensionPath()`. If it's used for `context.globalStorageUri` (CLI watch sessions) → pass only that path via config. The goal is removing the `ExtensionContext` param entirely.
 
-2. **File open/save dialogs**: VS Code provides file pickers. In standalone mode, `openTextFile` is a no-op. Should we wire this to a simple file path input, or leave it as unsupported?
+2. **`PromptFileWatcher` construction path**: Determine whether `WorkflowOrchestrator` or `WorkflowInstance` constructs `PromptFileWatcher` directly. If so, route it through `PlatformAdapter.createFileWatcher()` (add the optional method). If it's constructed via `ExtensionContext` removal (from Q1), it may be handled at the same time.
 
-3. **WebSocket reconnection**: If the server restarts, the shim should attempt to reconnect and re-request state. Add exponential backoff reconnect logic to the shim.
+3. **File picker (`SELECT_FILE`)**: Server has no file dialog. Options:
+   - **A** (MVP): no-op + console message; user passes `--cwd` to set workspace
+   - **B**: Serve a simple `GET /api/files?q=...` REST endpoint that returns file list; dashboard could show an inline path picker
+   - **C**: Future UX — drag-and-drop `.flightpath.yaml` onto the dashboard
 
-4. **Hot reload / watch mode**: During development of the server itself, integrating with `vite dev` proxy could provide HMR. This is a developer quality-of-life item, not required for MVP.
+4. **`WebviewSettingsSync`**: Broadcasts extension settings to the webview on connect. Verify it only calls `adapter.getConfig()` (via `ConfigurationUtils`) and not `vscode.workspace.getConfiguration()` directly. If it calls VS Code APIs directly, those specific calls need to be routed through the adapter.
 
-5. **Symbol completion fidelity**: The regex heuristic misses re-exported symbols, dynamic declarations, and decorator-wrapped classes. Users who need full fidelity can configure an LSP server — `LspSymbolClient.ts` is the only file involved. No changes to `CompletionService` or any other layer are needed when adding a new language server option.
-
-6. **Nested .gitignore files**: The `ignore` package needs a separate instance per directory to correctly resolve nested `.gitignore` files. The MVP can scan for all `.gitignore` files at startup and merge them at the root level — this is slightly over-aggressive (may keep some ignored files) but never incorrectly hides a tracked file.
+5. **Recent workflow history storage**: VS Code stores this in `context.globalState`. The server needs a file-based equivalent (e.g., `~/.flightpath/history.json` or `.flightpath/.history/recent.json` in the workspace). Determine where `WorkflowOrchestrator` reads/writes recent workflow history and what needs to change.

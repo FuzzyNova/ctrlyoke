@@ -3,6 +3,19 @@ import * as fs from "fs/promises";
 import { Log } from "./Log";
 
 /**
+ * Read a JSON file and parse it.
+ * Throws if the file cannot be read or the content is not valid JSON.
+ *
+ * @param filePath Absolute path to JSON file
+ * @returns Parsed JSON data
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function readJsonFile(filePath: string): Promise<any> {
+  const content = await fs.readFile(filePath, "utf-8");
+  return JSON.parse(content);
+}
+
+/**
  * Read JSON file, parse it, and delete it immediately.
  * Returns parsed data or null on any failure.
  *

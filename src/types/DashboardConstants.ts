@@ -111,6 +111,7 @@ export const MESSAGE_TYPES = {
   REQUEST_COMPLETIONS: "requestCompletions", // Request autocomplete suggestions
   COMPLETIONS_RESPONSE: "completionsResponse", // Return autocomplete suggestions
   OPEN_FILE: "openFile", // Open file from #file: link
+  OPEN_GIT_CHANGE: "openGitChange", // Webview -> Extension: open a git diff in a new editor
   VALIDATE_FILE_REF: "validateFileRef", // Webview -> Extension: Check if a file-ref path resolves
   FILE_REF_VALIDATION: "fileRefValidation", // Extension -> Webview: { exists: boolean, filePath: string }
 
@@ -436,6 +437,17 @@ export const LOG_LEVELS = {
   INFO: "info",
   WARN: "warn",
   ERROR: "error",
+} as const;
+
+// ============================================================================
+// ATTACHMENT PREFIXES - id namespace for <attachment> XML elements
+// ============================================================================
+export const ATTACHMENT_PREFIXES = {
+  FILE: "file",
+  SYMBOL: "symbol",
+  DIRECTORY: "directory",
+  SELECTION: "selection",
+  GIT: "git", // git:diff, git:staged, git:stash:N, git:commit:<hash>
 } as const;
 
 // ============================================================================

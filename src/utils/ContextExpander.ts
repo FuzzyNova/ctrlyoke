@@ -1,11 +1,19 @@
 import * as path from "path";
 import * as fs from "fs/promises";
-import { FileReference, parseAllFileReferences } from "./FileReferenceParser";
+import { FileReference, parseAllFileReferences, parseGitChangeReferences } from "./FileReferenceParser";
 import {
   resolveSymbol,
   buildDirectoryAttachmentXml,
 } from "./AttachmentBuilders";
 import { Log } from "./Log";
+import {
+  getCommitDiff,
+  getWorkingTreeDiff,
+  getStagedDiff,
+  getStashDiff,
+  getStashList,
+} from "./GitUtils";
+import { ATTACHMENT_PREFIXES } from "../types/DashboardConstants";
 
 
 /**
@@ -51,8 +59,9 @@ export class ContextExpander {
     try {
       // Parse all file references from prompt
       let fileReferences = parseAllFileReferences(promptText);
+      const gitRefs = parseGitChangeReferences(promptText);
 
-      if (fileReferences.length === 0) {
+      if (fileReferences.length === 0 && gitRefs.length === 0) {
         return promptText; // No attachments needed
       }
 
@@ -99,14 +108,92 @@ export class ContextExpander {
         `[ContextExpander] Total attachment size: ${(totalBytes / 1024).toFixed(1)} KB across ${validAttachments.length} attachment(s)`
       );
 
+      // Expand git change references (~diff, ~staged, ~stash:N, ~<hash>)
+      const gitAttachments = await this.expandGitChanges(gitRefs);
+
+      const allAttachments = [...validAttachments, ...gitAttachments];
+
+      if (allAttachments.length === 0) {
+        return promptText; // No valid attachments
+      }
+
       // Prepend attachments to prompt
-      const attachmentsSection = validAttachments.join("\n\n");
+      const attachmentsSection = allAttachments.join("\n\n");
       return `${attachmentsSection}\n\n${promptText}`;
     } catch (error) {
       Log.error("Error expanding context:", error);
       // Return original prompt on error
       return promptText;
     }
+  }
+
+  /**
+   * Expand ~diff, ~staged, ~stash:N, and ~<hash> git change references
+   * into attachment XML blocks.
+   */
+  private async expandGitChanges(
+    refs: ReturnType<typeof parseGitChangeReferences>
+  ): Promise<string[]> {
+    const results: string[] = [];
+
+    for (const ref of refs) {
+      // Compute attachment id for deduplication
+      let attachmentId: string;
+      if (ref.kind === "diff") {
+        attachmentId = `${ATTACHMENT_PREFIXES.GIT}:diff`;
+      } else if (ref.kind === "staged") {
+        attachmentId = `${ATTACHMENT_PREFIXES.GIT}:staged`;
+      } else if (ref.kind === "stash") {
+        attachmentId = `${ATTACHMENT_PREFIXES.GIT}:stash:${ref.stashIndex}`;
+      } else {
+        attachmentId = `${ATTACHMENT_PREFIXES.GIT}:commit:${ref.hash}`;
+      }
+
+      if (this.attachmentIds.has(attachmentId)) {
+        Log.debug(`[ContextExpander] Skipping duplicate git attachment: ${attachmentId}`);
+        continue;
+      }
+      this.attachmentIds.add(attachmentId);
+
+      try {
+        let content: string;
+        let title: string;
+
+        if (ref.kind === "diff") {
+          content = await getWorkingTreeDiff(this.workspaceRoot);
+          if (!content.trim()) {
+            content = "No uncommitted changes in working tree.";
+          }
+          title = "Working tree changes (git diff)";
+        } else if (ref.kind === "staged") {
+          content = await getStagedDiff(this.workspaceRoot);
+          if (!content.trim()) {
+            content = "No staged changes.";
+          }
+          title = "Staged changes (git diff --cached)";
+        } else if (ref.kind === "stash") {
+          const stashes = await getStashList(this.workspaceRoot);
+          const stash = stashes[ref.stashIndex!];
+          const stashLabel = stash ? stash.subject : `stash@{${ref.stashIndex}}`;
+          content = await getStashDiff(this.workspaceRoot, ref.stashIndex!);
+          title = `Stash entry ${ref.stashIndex}: ${stashLabel}`;
+        } else {
+          // commit
+          content = await getCommitDiff(this.workspaceRoot, ref.hash!);
+          const firstLine = content.split("\n")[0] || ref.hash!;
+          title = `Commit ${ref.hash!.slice(0, 7)}: ${firstLine}`;
+        }
+
+        results.push(
+          `<attachment id="${attachmentId}">\n${title}\n\n\`\`\`diff\n${content}\n\`\`\`\n</attachment>`
+        );
+      } catch (err) {
+        Log.warn(`[ContextExpander] Failed to expand git attachment ${attachmentId}:`, err);
+        // Skip on error — never throw
+      }
+    }
+
+    return results;
   }
 
   /**
