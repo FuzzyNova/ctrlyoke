@@ -36,7 +36,7 @@ export class EndConditionEvaluator {
    * Handles both space-separated and quoted arguments.
    * @returns { scriptPath: string, args: string[] }
    */
-  private parseScriptCommand(script: string): {
+  static parseScriptCommand(script: string): {
     scriptPath: string;
     args: string[];
   } {
@@ -63,7 +63,7 @@ export class EndConditionEvaluator {
 
       // Parse script command to separate path from arguments
       const { scriptPath: rawScriptPath, args: additionalArgs } =
-        this.parseScriptCommand(condition.script);
+        EndConditionEvaluator.parseScriptCommand(condition.script);
 
       // Resolve script path
       const resolvedScriptPath = await this.resolveScriptPath(

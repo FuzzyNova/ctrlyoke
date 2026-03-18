@@ -304,6 +304,24 @@ export abstract class HarnessIntegration {
   }
 
   /**
+   * Expand a block of content, logging success or warning on failure.
+   * Returns the content string, or null if nothing resolved.
+   */
+  private async expandBlockContent(
+    expander: () => Promise<string | null>,
+    successMsg: string,
+    warnMsg: string
+  ): Promise<string | null> {
+    const content = await expander();
+    if (content) {
+      Log.debug(successMsg);
+    } else {
+      Log.warn(warnMsg);
+    }
+    return content;
+  }
+
+  /**
    * Expand skill names to a <skillInstructions> block.
    * Returns null if no skills are provided or none resolve.
    */
@@ -311,20 +329,11 @@ export abstract class HarnessIntegration {
     resolvedSkills: string[],
     workspaceRoot: string | undefined
   ): Promise<string | null> {
-    const content = await SkillExpander.expandSkills(
-      resolvedSkills,
-      workspaceRoot
+    return this.expandBlockContent(
+      () => SkillExpander.expandSkills(resolvedSkills, workspaceRoot),
+      `🎯 Skills [${resolvedSkills.join(", ")}] instructions added to prompt`,
+      `⚠️ No skills resolved from [${resolvedSkills.join(", ")}], continuing without skills`
     );
-    if (content) {
-      Log.debug(
-        `🎯 Skills [${resolvedSkills.join(", ")}] instructions added to prompt`
-      );
-    } else {
-      Log.warn(
-        `⚠️ No skills resolved from [${resolvedSkills.join(", ")}], continuing without skills`
-      );
-    }
-    return content;
   }
 
   /**
@@ -335,18 +344,11 @@ export abstract class HarnessIntegration {
     resolvedAgent: string,
     workspaceRoot: string | undefined
   ): Promise<string | null> {
-    const content = await AgentExpander.expandAgent(
-      resolvedAgent,
-      workspaceRoot
+    return this.expandBlockContent(
+      () => AgentExpander.expandAgent(resolvedAgent, workspaceRoot),
+      `🤖 Agent "${resolvedAgent}" instructions added to prompt`,
+      `⚠️ Agent "${resolvedAgent}" not found, continuing without agent`
     );
-    if (content) {
-      Log.debug(`🤖 Agent "${resolvedAgent}" instructions added to prompt`);
-    } else {
-      Log.warn(
-        `⚠️ Agent "${resolvedAgent}" not found, continuing without agent`
-      );
-    }
-    return content;
   }
 
   /**

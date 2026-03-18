@@ -159,7 +159,7 @@ export class EndConditionHandler {
     } else if (action === DIALOG_ACTIONS.OPEN_SCRIPT) {
       // Try to open the script file (only if the script looks like a file path)
       if (prompt.endCondition?.script) {
-        const script = prompt.endCondition.script.split(/\s+/)[0]; // Extract first token (path)
+        const { scriptPath: script } = EndConditionEvaluator.parseScriptCommand(prompt.endCondition.script);
         if (this.looksLikeFilePath(script)) {
           try {
             if (this.openFile) {

@@ -20,6 +20,8 @@ export {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
   FINAL_PROMPT_PHASES,
+  PROMPT_PROPERTIES,
+  END_CONDITION_PROPERTIES,
   type MessageType,
   type WebviewLogLevel,
   type ExecutionState,
