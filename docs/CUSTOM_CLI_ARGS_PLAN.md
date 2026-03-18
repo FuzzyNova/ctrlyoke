@@ -1,5 +1,7 @@
 # Custom CLI Arguments Plan
 
+NOTE: Only additionalArgs have been implemented, custom args are getting de-prioritized. For doc cleanup, rename this doc to something like ADDITONAL_ARGS.md that documents the current status of addtional args and remove plan to support custom args, they are not requested and additional Args solves 90% + the model allowing none solves 90% of the use cases.
+
 ## Overview
 
 AI CLIs evolve faster than FlightPath can natively support every flag. Two complementary escape hatches bridge the gap:
