@@ -11,6 +11,7 @@ import { Log } from "../utils/Log";
 import {
   getFileCompletions,
   getHashCompletions,
+  getGitChangeCompletions,
   getPromptFileCompletions,
 } from "../completions/CompletionHelpers";
 import * as fs from "fs";
@@ -213,6 +214,18 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.OPEN_FILE, (message) => {
       this.handleOpenFile(message.path, message.lineStart, message.lineEnd);
+    });
+
+    table.set(MESSAGE_TYPES.OPEN_GIT_CHANGE, async (message) => {
+      const workspaceRoot =
+        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        return;
+      }
+      await vscode.commands.executeCommand("flightpath.openGitChange", {
+        workspaceRoot,
+        ref: message.ref,
+      });
     });
 
     table.set(MESSAGE_TYPES.VALIDATE_FILE_REF, async (message) => {
@@ -638,6 +651,10 @@ export class WebviewMessageRouter {
       return await getFileCompletions(prefix.substring(1)); // Remove @
     } else if (trigger === "#") {
       return await getHashCompletions(prefix.substring(1)); // Remove #
+    } else if (trigger === "~") {
+      const workspaceRoot =
+        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+      return await getGitChangeCompletions(workspaceRoot, prefix.substring(1)); // Remove ~
     } else if (trigger === "path") {
       return await getPromptFileCompletions(prefix);
     }

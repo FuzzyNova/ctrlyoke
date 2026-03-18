@@ -192,6 +192,79 @@ export function parseDirectoryReferences(prompt: string): FileReference[] {
   return atRefs.filter((ref) => ref.isDirectory);
 }
 
+// ============================================================================
+// Git Change References (~diff, ~staged, ~stash:N, ~<hash>)
+// ============================================================================
+
+export type GitChangeKind = "commit" | "diff" | "staged" | "stash";
+
+export interface GitChangeReference {
+  kind: GitChangeKind;
+  raw: string;         // the full matched token, e.g. "~c056e24...", "~diff", "~stash:2"
+  hash?: string;       // for kind === "commit"
+  stashIndex?: number; // for kind === "stash"
+  startOffset: number;
+  endOffset: number;
+}
+
+/**
+ * Parse ~diff, ~staged, ~stash:<N>, and ~<hash> references from prompt text.
+ *
+ * These are a distinct concept from file/symbol references and are NOT
+ * mixed into the FileReference type.
+ *
+ * @param text The prompt text to parse
+ * @returns Array of git change references in order of appearance
+ */
+export function parseGitChangeReferences(text: string): GitChangeReference[] {
+  const results: GitChangeReference[] = [];
+
+  // ~diff  — exact keyword
+  // ~staged — exact keyword
+  // ~stash:<N> — stash entry by index
+  // ~[0-9a-f]{7,40} — commit hash (case-insensitive)
+  const regex = /~(diff|staged|stash:(\d+)|([0-9a-f]{7,40}))/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    const raw = match[0];           // e.g. "~diff", "~stash:2", "~c056e24"
+    const inner = match[1];         // e.g. "diff", "stash:2", "c056e24"
+    const stashNumStr = match[2];   // defined only for stash:<N>
+    const hashStr = match[3];       // defined only for commit hash
+
+    let kind: GitChangeKind;
+    let hash: string | undefined;
+    let stashIndex: number | undefined;
+
+    const lowerInner = inner.toLowerCase();
+
+    if (lowerInner === "diff") {
+      kind = "diff";
+    } else if (lowerInner === "staged") {
+      kind = "staged";
+    } else if (stashNumStr !== undefined) {
+      kind = "stash";
+      stashIndex = parseInt(stashNumStr, 10);
+    } else if (hashStr !== undefined) {
+      kind = "commit";
+      hash = hashStr.toLowerCase();
+    } else {
+      continue; // shouldn't happen
+    }
+
+    results.push({
+      kind,
+      raw,
+      hash,
+      stashIndex,
+      startOffset: match.index,
+      endOffset: match.index + raw.length,
+    });
+  }
+
+  return results;
+}
+
 /**
  * Parse ALL file references from prompt text (all syntaxes)
  *

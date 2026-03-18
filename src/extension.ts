@@ -10,6 +10,12 @@ import {
   QUEUE_POSITION,
   type QueuePosition,
 } from "./types/DashboardConstants";
+import {
+  getCommitDiff,
+  getWorkingTreeDiff,
+  getStagedDiff,
+  getStashDiff,
+} from "./utils/GitUtils";
 import { getQueueStatus, appendToQueue } from "./flightpath/QueueOperations";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
@@ -264,8 +270,17 @@ export async function activate(context: vscode.ExtensionContext) {
         "#" // Trigger on # character for snippets
       )
     );
+
+    // Register ~ trigger for git change context (diff, staged, stash, commits)
+    context.subscriptions.push(
+      vscode.languages.registerCompletionItemProvider(
+        promptFilePatterns,
+        promptCompletionProvider,
+        "~" // Trigger on ~ character for git change references
+      )
+    );
     Log.debug(
-      "FlightPath: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @ and # triggers"
+      "FlightPath: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @, #, and ~ triggers"
     );
 
     // Register link provider for prompt files (enables Ctrl+Click navigation)
@@ -603,6 +618,55 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
+  // Open Git Change command — opens a git diff (diff/staged/stash:N/<hash>) in a new untitled editor
+  const openGitChangeCommand = vscode.commands.registerCommand(
+    "flightpath.openGitChange",
+    async (args: { ref: string; workspaceRoot?: string }) => {
+      try {
+        const workspaceRoot =
+          args.workspaceRoot ??
+          vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+          vscode.window.showErrorMessage(
+            "FlightPath: No workspace folder open."
+          );
+          return;
+        }
+
+        let content: string;
+        const ref = args.ref.toLowerCase();
+
+        if (ref === "diff") {
+          content = await getWorkingTreeDiff(workspaceRoot);
+          if (!content.trim()) {
+            content = "No uncommitted changes in working tree.";
+          }
+        } else if (ref === "staged") {
+          content = await getStagedDiff(workspaceRoot);
+          if (!content.trim()) {
+            content = "No staged changes.";
+          }
+        } else if (ref.startsWith("stash:")) {
+          const index = parseInt(ref.slice(6), 10);
+          content = await getStashDiff(workspaceRoot, index);
+        } else {
+          // Treat as commit hash
+          content = await getCommitDiff(workspaceRoot, args.ref);
+        }
+
+        const doc = await vscode.workspace.openTextDocument({
+          content,
+          language: "diff",
+        });
+        await vscode.window.showTextDocument(doc, { preview: true });
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `FlightPath: Failed to open git change: ${getErrorMessage(error)}`
+        );
+      }
+    }
+  );
+
   // Initialize Workspace command (manual reinit for existing users)
   const initWorkspaceCommand = vscode.commands.registerCommand(
     "flightpath.initWorkspace",
@@ -652,6 +716,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     createDraftPromptCommand,
     openFileWithSelectionCommand,
     clearWorkflowCommand,
+    openGitChangeCommand,
     initWorkspaceCommand
   );
 

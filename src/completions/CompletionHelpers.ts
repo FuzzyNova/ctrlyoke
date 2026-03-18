@@ -3,6 +3,12 @@ import * as path from "path";
 import { getWorkspaceSymbols } from "../utils/AttachmentBuilders";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
+import {
+  getRecentCommits,
+  getStashList,
+  type CommitInfo,
+  type StashInfo,
+} from "../utils/GitUtils";
 
 /**
  * Plain completion item (framework-agnostic)
@@ -594,12 +600,107 @@ export async function getHashCompletions(
   return items;
 }
 
+// ============================================================================
+// Git change completions (~ trigger)
+// ============================================================================
+
+interface GitCache {
+  commits: CommitInfo[];
+  stashes: StashInfo[];
+  timestamp: number;
+}
+
+let gitCache: GitCache | null = null;
+const GIT_CACHE_DURATION_MS = 10_000; // 10 seconds
+
+/**
+ * Get completions for ~ trigger (git change context: diff, staged, stash, commits)
+ */
+export async function getGitChangeCompletions(
+  workspaceRoot: string,
+  filterText: string
+): Promise<PlainCompletionItem[]> {
+  const now = Date.now();
+
+  // Refresh cache if stale
+  if (!gitCache || now - gitCache.timestamp >= GIT_CACHE_DURATION_MS) {
+    try {
+      const [commits, stashes] = await Promise.all([
+        getRecentCommits(workspaceRoot, 30),
+        getStashList(workspaceRoot),
+      ]);
+      gitCache = { commits, stashes, timestamp: now };
+    } catch {
+      gitCache = { commits: [], stashes: [], timestamp: now };
+    }
+  }
+
+  const { commits, stashes } = gitCache;
+
+  const items: PlainCompletionItem[] = [];
+
+  // Always-present: ~diff and ~staged
+  items.push({
+    label: "diff — Working tree changes",
+    kind: vscode.CompletionItemKind.Reference,
+    insertText: "diff",
+    detail: "All uncommitted changes",
+    sortText: "!000_git_0",
+    filterText: "diff working tree changes uncommitted",
+  });
+
+  items.push({
+    label: "staged — Staged changes",
+    kind: vscode.CompletionItemKind.Reference,
+    insertText: "staged",
+    detail: "Changes in the index (git add)",
+    sortText: "!000_git_1",
+    filterText: "staged index git add cached",
+  });
+
+  // Stash items
+  for (const stash of stashes) {
+    items.push({
+      label: `stash:${stash.index} — ${stash.subject}`,
+      kind: vscode.CompletionItemKind.Reference,
+      insertText: `stash:${stash.index}`,
+      detail: stash.relativeDate,
+      sortText: `!000_git_stash_${String(stash.index).padStart(3, "0")}`,
+      filterText: `stash ${stash.index} ${stash.subject} ${stash.relativeDate}`,
+    });
+  }
+
+  // Commit items — most recent first
+  commits.forEach((commit, idx) => {
+    items.push({
+      label: `${commit.shortHash} — ${commit.subject}`,
+      kind: vscode.CompletionItemKind.Reference,
+      insertText: commit.hash,
+      detail: `${commit.author}, ${commit.relativeDate}`,
+      sortText: `!001_git_commit_${String(idx).padStart(3, "0")}`,
+      filterText: `${commit.hash} ${commit.shortHash} ${commit.subject} ${commit.author}`,
+    });
+  });
+
+  // Apply filter if provided
+  if (!filterText) {
+    return items;
+  }
+  const lower = filterText.toLowerCase();
+  return items.filter(
+    (item) =>
+      item.label.toLowerCase().includes(lower) ||
+      (item.detail?.toLowerCase().includes(lower) ?? false) ||
+      (item.filterText?.toLowerCase().includes(lower) ?? false)
+  );
+}
+
 /**
  * Convert plain completion item to VS Code completion item
  */
 export function toVSCodeCompletionItem(
   item: PlainCompletionItem,
-  triggerChar: "@" | "#",
+  triggerChar: "@" | "#" | "~",
   range?: vscode.Range
 ): vscode.CompletionItem {
   const vscodeItem = new vscode.CompletionItem(item.label, item.kind);

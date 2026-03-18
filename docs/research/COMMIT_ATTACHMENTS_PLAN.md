@@ -1,5 +1,7 @@
 # Git Change Context Attachments Plan
 
+> **Status: Implemented** — See implementation in `src/utils/GitUtils.ts`, `src/utils/FileReferenceParser.ts`, `src/utils/ContextExpander.ts`, `src/completions/CompletionHelpers.ts`, `src/completions/PromptCompletionProvider.ts`, `src/completions/PromptLinkProvider.ts`, `src/types/DashboardConstants.ts`, `src/extension.ts`, `src/ui/WebviewMessageRouter.ts`, `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`.
+
 ## Overview
 
 Add `~` as a dedicated trigger for **git change context** in prompt files. Unlike `@` (files/dirs) and `#` (selections/symbols), `~` gives a pure list of change-oriented completions sorted by recency — commits, working tree diff, staged changes, and stashes — with no file paths or symbols interleaved.
@@ -244,14 +246,15 @@ gitCommit:  /~([0-9a-f]{7,40})/gi
 - `~<hash>`: same command, opens commit diff
 
 Register `flightpath.openGitChange` in `extension.ts`:
-- Accepts `{ workspaceRoot: string, kind: GitChangeKind, hash?: string, stashIndex?: number }`
-- Calls appropriate `GitUtils` function, opens result in new untitled document with `diff` language
+- Accepts `{ workspaceRoot: string, ref: string }` where `ref` is `"diff"`, `"staged"`, `"stash:<N>"`, or a commit hash
+- Calls appropriate `GitUtils` function based on `ref`, opens result in new untitled document with `diff` language
+- Both `PromptLinkProvider` (VS Code text editor) and `FlightPathWebviewProvider` (CodeMirror) delegate here — single source of truth for open logic
 
 ---
 
 ### `src/types/DashboardConstants.ts`
 
-Add git change attachment ID prefix:
+Add git change attachment ID prefix and new message type:
 
 ```typescript
 export const ATTACHMENT_PREFIXES = {
@@ -261,19 +264,119 @@ export const ATTACHMENT_PREFIXES = {
   SELECTION: "selection",
   GIT: "git",           // ← new: covers git:diff, git:staged, git:stash:N, git:commit:<hash>
 } as const;
+
+// In MESSAGE_TYPES (CodeMirror editor section):
+OPEN_GIT_CHANGE: "openGitChange",  // ← new: Webview -> Extension: open a git diff in a new editor
 ```
+
+---
+
+### `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`
+
+Wire `~` into the CodeMirror webview editor (the in-panel prompt input). The webview editor communicates with the extension host via `REQUEST_COMPLETIONS` / `COMPLETIONS_RESPONSE` messages — the same path used for `@` and `#`. No new message protocol is needed for completions; only the regex and boost logic need updating.
+
+**Changes:**
+
+1. **`customCompletions` — extend `matchBefore` regex** to include `~`:
+   ```typescript
+   // Old:
+   /@"[^"]*|@[a-zA-Z0-9_/.-]*|#"[^"]*|#[a-zA-Z0-9_/:.-]*/
+   // New:
+   /@"[^"]*|@[a-zA-Z0-9_/.-]*|#"[^"]*|#[a-zA-Z0-9_/:.-]*|~[a-zA-Z0-9:_]*/
+   ```
+   The `trigger` extracted as `before.text[0]` will be `"~"`, which `PromptCompletionProvider` routes to `getGitChangeCompletions`.
+
+2. **`handleCompletionResponse` — fix boost for `!NNN_` sortText**:
+   Git items use sortText like `!000_git_0`, `!001_git_commit_000`. The `!` prefix causes the existing `/^(\d+)_/` regex to miss them (they fall into `boost = -index`). Fix:
+   ```typescript
+   // Old:
+   const prefixMatch = item.sortText.match(/^(\d+)_/);
+   // New:
+   const prefixMatch = item.sortText.match(/^!?(\d+)_/);
+   ```
+   This preserves the intent: `!000_` items (diff, staged, stashes) get boost ~1000; `!001_` items (commits) get boost ~900.
+
+3. **`getCompletionRanges` — exclude `~` references from spell checking**:
+   ```typescript
+   // Old patterns array:
+   const patterns = [/@"[^"]*"|@[^\s@#]+/g, /#"[^"]*"|#[^\s@#]+/g];
+   // New (add ~ git refs):
+   const patterns = [
+     /@"[^"]*"|@[^\s@#~]+/g,
+     /#"[^"]*"|#[^\s@#~]+/g,
+     /~(?:diff|staged|stash:\d+|[0-9a-f]{7,40})/gi,
+   ];
+   ```
+
+4. **`createLinkDecorationExtension` — decorate `~` references as links**:
+   Add a `gitMatches` category alongside `fileMatches`, `directoryMatches`, etc.:
+   ```typescript
+   // After existing symbol pattern matching, before the combine/sort step:
+   const gitPatterns = {
+     gitFixed:  /~(diff|staged)/g,
+     gitStash:  /~(stash:\d+)/g,
+     gitCommit: /~([0-9a-f]{7,40})/gi,
+   };
+   ```
+   Push to a `gitMatches` array with:
+   ```typescript
+   { from, to, type: "git", gitRef: match[1] }
+   ```
+   Include `gitMatches` in the final `matches` combine step. Apply `data-type="git"` and `data-git-ref="<ref>"` attributes on the decoration.
+
+5. **`createClickHandlerExtension` — handle `data-type === "git"` Ctrl+Click**:
+   ```typescript
+   } else if (type === "git") {
+     const gitRef = target.getAttribute("data-git-ref");
+     vscode.postMessage({
+       type: MESSAGE_TYPES.OPEN_GIT_CHANGE,
+       ref: gitRef, // "diff", "staged", "stash:0", or a commit hash
+     });
+   }
+   ```
+
+6. **Placeholder text**: Update the default to mention `~`:
+   ```typescript
+   "Use @ for files and folders, # for selections and symbols, ~ for git changes"
+   ```
+
+---
+
+### `src/ui/FlightPathWebviewProvider.ts`
+
+Handle the `OPEN_GIT_CHANGE` message from the webview by delegating to the `flightpath.openGitChange` command registered in `extension.ts`. All GitUtils logic lives in one place (the command handler) — the webview handler is a thin dispatcher.
+
+**Changes:**
+
+In the webview message handler (`switch(message.type)`), add a `MESSAGE_TYPES.OPEN_GIT_CHANGE` case:
+
+```typescript
+case MESSAGE_TYPES.OPEN_GIT_CHANGE: {
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!workspaceRoot) { break; }
+  await vscode.commands.executeCommand("flightpath.openGitChange", {
+    workspaceRoot,
+    ref: message.ref, // "diff", "staged", "stash:0", or commit hash
+  });
+  break;
+}
+```
+
+The `flightpath.openGitChange` command (registered in `extension.ts`) owns the GitUtils call and the untitled editor open. Both the VS Code text editor link click (via `command:` URI from `PromptLinkProvider`) and the CodeMirror webview click converge on this single command handler.
 
 ---
 
 ## Implementation Order
 
 1. **`GitUtils.ts`** — Foundation; no dependencies on other changes
-2. **`FileReferenceParser.ts`** — Add `parseGitChangeReferences()` and `GitChangeReference` type
-3. **`ContextExpander.ts`** — Wire in git expansion (depends on 1 + 2)
-4. **`CompletionHelpers.ts`** — Add `getGitChangeCompletions()` (depends on 1)
-5. **`PromptCompletionProvider.ts`** — Add `~` trigger (depends on 4)
-6. **`PromptLinkProvider.ts`** + **`extension.ts`** — Add links and `flightpath.openGitChange` command (depends on 1)
-7. **`DashboardConstants.ts`** — Add `ATTACHMENT_PREFIXES.GIT`
+2. **`DashboardConstants.ts`** — Add `ATTACHMENT_PREFIXES.GIT` and `MESSAGE_TYPES.OPEN_GIT_CHANGE`
+3. **`FileReferenceParser.ts`** — Add `parseGitChangeReferences()` and `GitChangeReference` type
+4. **`ContextExpander.ts`** — Wire in git expansion (depends on 1 + 3)
+5. **`CompletionHelpers.ts`** — Add `getGitChangeCompletions()` (depends on 1)
+6. **`PromptCompletionProvider.ts`** — Add `~` trigger (depends on 5)
+7. **`PromptLinkProvider.ts`** + **`extension.ts`** — Add VS Code text editor links and `flightpath.openGitChange` command (depends on 1)
+8. **`CodeMirrorEditor.tsx`** — Add `~` regex, boost fix, spell-check exclusion, link decoration, click handler, placeholder update (depends on 2)
+9. **`FlightPathWebviewProvider.ts`** — Handle `OPEN_GIT_CHANGE` message (depends on 1 + 2)
 
 ---
 

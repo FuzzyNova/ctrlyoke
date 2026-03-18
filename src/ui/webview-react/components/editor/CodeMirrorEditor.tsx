@@ -77,7 +77,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   } = props;
   const placeholderText =
     props.placeholder ||
-    "Use @ for files and folders, # for selections and symbols";
+    "Use @ for files and folders, # for selections and symbols, ~ for git changes";
 
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -152,10 +152,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       }
 
       const completions = items.map((item, index) => {
-        // Calculate boost from sortText
+        // Calculate boost from sortText.
+        // Handles both numeric prefixes ("000_", "001_") and
+        // bang-prefixed variants ("!000_", "!001_") used by git change items.
         let boost: number;
         if (item.sortText) {
-          const prefixMatch = item.sortText.match(/^(\d+)_/);
+          const prefixMatch = item.sortText.match(/^!?(\d+)_/);
           if (prefixMatch) {
             const prefix = parseInt(prefixMatch[1]);
             boost = 1000 - prefix * 100 - index * 0.01;
@@ -256,7 +258,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       // Quoted form: @" followed by anything except a closing quote.
       // Plain form: @ followed by non-whitespace path characters.
       const before = context.matchBefore(
-        /@"[^"]*|@[a-zA-Z0-9_/.-]*|#"[^"]*|#[a-zA-Z0-9_/:.-]*/
+        /@"[^"]*|@[a-zA-Z0-9_/.-]*|#"[^"]*|#[a-zA-Z0-9_/:.-]*|~[a-zA-Z0-9:_]*/
       );
 
       if (!before) return null;
@@ -719,8 +721,13 @@ function getCompletionRanges(
 ): Array<{ from: number; to: number }> {
   const ranges: Array<{ from: number; to: number }> = [];
 
-  // Match both plain paths (@src/file.ts) and quoted paths (@"path with spaces/file.ts")
-  const patterns = [/@"[^"]*"|@[^\s@#]+/g, /#"[^"]*"|#[^\s@#]+/g];
+  // Match both plain paths (@src/file.ts) and quoted paths (@"path with spaces/file.ts"),
+  // as well as ~ git change references (~diff, ~staged, ~stash:N, ~<hash>).
+  const patterns = [
+    /@"[^"]*"|@[^\s@#~]+/g,
+    /#"[^"]*"|#[^\s@#~]+/g,
+    /~(?:diff|staged|stash:\d+|[0-9a-f]{7,40})/gi,
+  ];
 
   for (const pattern of patterns) {
     let match;
@@ -961,12 +968,56 @@ function createLinkDecorationExtension() {
             }
           );
 
+          // 5. Git change references (~diff, ~staged, ~stash:N, ~<hash>)
+          const gitMatches: any[] = [];
+
+          const gitPatterns = {
+            gitFixed:  /~(diff|staged)/g,
+            gitStash:  /~(stash:\d+)/g,
+            gitCommit: /~([0-9a-f]{7,40})/gi,
+          };
+
+          const gitFixedRegex = new RegExp(gitPatterns.gitFixed.source, "g");
+          while ((match = gitFixedRegex.exec(text)) !== null) {
+            gitMatches.push({
+              from: from + match.index,
+              to: from + match.index + match[0].length,
+              type: "git",
+              gitRef: match[1],
+            });
+          }
+
+          const gitStashRegex = new RegExp(gitPatterns.gitStash.source, "g");
+          while ((match = gitStashRegex.exec(text)) !== null) {
+            gitMatches.push({
+              from: from + match.index,
+              to: from + match.index + match[0].length,
+              type: "git",
+              gitRef: match[1],
+            });
+          }
+
+          const gitCommitRegex = new RegExp(gitPatterns.gitCommit.source, "gi");
+          while ((match = gitCommitRegex.exec(text)) !== null) {
+            // Ensure this wasn't already matched as gitFixed or gitStash
+            const matchFrom = from + match.index;
+            if (!gitMatches.some((m) => m.from === matchFrom)) {
+              gitMatches.push({
+                from: matchFrom,
+                to: from + match.index + match[0].length,
+                type: "git",
+                gitRef: match[1].toLowerCase(),
+              });
+            }
+          }
+
           // Combine all matches (with filtered directories)
           const matches = [
             ...fileMatches,
             ...filteredDirectoryMatches,
             ...lineRangeMatches,
             ...symbolMatches,
+            ...gitMatches,
           ];
 
           // Sort matches by position and add decorations
@@ -975,9 +1026,14 @@ function createLinkDecorationExtension() {
           for (const linkMatch of matches) {
             const attrs: Record<string, string> = {
               "data-type": linkMatch.type,
-              "data-path": linkMatch.path,
             };
 
+            if (linkMatch.path) {
+              attrs["data-path"] = linkMatch.path;
+            }
+            if (linkMatch.gitRef) {
+              attrs["data-git-ref"] = linkMatch.gitRef;
+            }
             if (linkMatch.lineStart) {
               attrs["data-line-start"] = linkMatch.lineStart;
             }
@@ -1099,6 +1155,13 @@ function createClickHandlerExtension(vscode: any) {
             path: path,
             lineStart: line ? parseInt(line) : undefined,
             lineEnd: line ? parseInt(line) : undefined,
+          });
+        } else if (type === "git") {
+          // ~diff, ~staged, ~stash:N, ~<hash>
+          const gitRef = target.getAttribute("data-git-ref");
+          vscode.postMessage({
+            type: MESSAGE_TYPES.OPEN_GIT_CHANGE,
+            ref: gitRef,
           });
         }
 
