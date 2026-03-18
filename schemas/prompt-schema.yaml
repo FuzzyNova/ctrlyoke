@@ -2,9 +2,10 @@ $schema: http://json-schema.org/draft-07/schema#
 title: FlightPath Prompt Schema
 type: object
 description: >-
-  Schema for FlightPath prompts. Prompts should be in final-form format with all context variables
-  (e.g., @workspace, #file:path, #selection) and slash commands (e.g., /fix, /explain) included
-  directly in the prompt text.
+  Schema for FlightPath prompts. Prompts should be in final-form format with all context references
+  (e.g., @path/to/file, @path/to/dir/, #file:path, #selection:path:line-line, #sym:path:symbol:line)
+  included directly in the prompt text. FlightPath expands these references into inline file/symbol
+  content before sending to the AI.
 oneOf:
   - title: Single Prompt
     $ref: '#/definitions/promptItem'
@@ -45,8 +46,8 @@ definitions:
       harness:
         type: string
         description: >-
-          Agent Harness/framework to use for this prompt. Determines which CLI or chat integration
-          to use. Optional - defaults to flightpath.harness setting.
+          Harness to use for this prompt. Determines which AI CLI or chat integration executes the
+          prompt. Optional - defaults to flightpath.harness setting.
         enum:
           - copilot-cli
           - copilot-chat
@@ -56,12 +57,11 @@ definitions:
       model:
         type: string
         description: >-
-          AI model to use for this prompt. Available models are queried dynamically from your
-          Copilot subscription. Use IntelliSense (Ctrl+Space) to see available models. CLI mode
-          supports limited models (claude-sonnet-4.5, claude-sonnet-4, claude-haiku-4.5, gpt-5) -
-          others will fallback to default with warning. Use 'none' to skip the --model flag entirely
-          (e.g. for custom Bedrock model strings passed via additionalArgs). Optional - defaults to
-          flightpath.copilotCliModel setting.
+          AI model to use for this prompt. Use IntelliSense (Ctrl+Space) to see available models.
+          Each harness supports different models — unsupported models fall back to the harness
+          default with a warning. Use 'none' to skip the --model flag entirely (e.g. for custom
+          Bedrock model strings passed via additionalArgs). Optional - defaults to the active
+          harness model setting.
         examples:
           - none
           - auto
@@ -210,12 +210,13 @@ definitions:
           prompt:
             type: string
             description: >-
-              The prompt to send to GitHub Copilot. Can be either: (1) Final-form prompt text with
-              context variables (@workspace, #file:path:line-line, etc.) and slash commands (/fix,
-              /explain, etc.) directly in the text, OR (2) A file path to a .prompt.md, .md, or .txt
-              file containing the prompt. File paths are resolved relative to the prompt file's
-              directory, then workspace root, then .flightpath directory. Absolute paths are also
-              supported.
+              The prompt text to send to the AI. Can be either: (1) Final-form prompt text with
+              context references expanded inline before sending — use @path/to/file or @path/to/dir/
+              for files/directories, and #file:path, #selection:path:line-line, or
+              #sym:path:symbol:line for file excerpts and symbols. OR (2) A file path to a
+              .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative
+              to the prompt file's directory, then workspace root, then .flightpath directory.
+              Absolute paths are also supported.
           _runtime:
             $ref: '#/definitions/promptRuntimeMetadata'
             description: Per-prompt runtime execution metadata (optional, added automatically during execution)
