@@ -39,6 +39,8 @@ interface DirectoryCache {
  * - Windows: %APPDATA%\Code\User\workspaceStorage\<hash>\chatSessions\*.json|*.jsonl
  * - macOS: ~/Library/Application Support/Code/User/workspaceStorage/<hash>/chatSessions/*.json|*.jsonl
  * - Linux: ~/.config/Code/User/workspaceStorage/<hash>/chatSessions/*.json|*.jsonl
+ * - WSL: /mnt/c/Users/<winuser>/AppData/Roaming/Code/User/workspaceStorage/<hash>/chatSessions/*.json|*.jsonl
+ *   (VS Code UI runs on Windows host; session files are written to Windows AppData, not Linux ~/.config)
  *
  * Format note: VS Code switched from .json to .jsonl ~Feb 2026.
  * JSONL: each line is {"kind":N,"v":{...session data...}} — same structure, wrapped in "v".
@@ -94,6 +96,95 @@ export class ChatSessionMonitor {
   }
 
   /**
+   * Detect if running inside WSL (Windows Subsystem for Linux).
+   * In WSL, VS Code's UI runs on Windows, so chat session files are written to
+   * the Windows AppData path, not the Linux ~/.config path.
+   */
+  private isWSL(): boolean {
+    return !!(
+      process.env.WSL_DISTRO_NAME ||
+      process.env.WSLENV ||
+      (process.env.PATH && process.env.PATH.includes("/mnt/c/"))
+    );
+  }
+
+  /**
+   * Find workspaceStorage paths for Windows host when running in WSL.
+   * Session files are written by the Windows VS Code process to Windows AppData,
+   * accessible from WSL at /mnt/c/Users/<username>/AppData/Roaming/...
+   *
+   * Returns array of possible paths (some may not exist).
+   */
+  private getWSLWindowsWorkspaceStorageRoots(variant: string): string[] {
+    const paths: string[] = [];
+    const windowsMountBase = "/mnt/c/Users";
+
+    // Try USERPROFILE env var first (often set in WSL to /mnt/c/Users/<winuser>)
+    const userProfile = process.env.USERPROFILE;
+    if (userProfile) {
+      const normalizedProfile = userProfile.replace(/\\/g, "/");
+      const appData = path.join(
+        normalizedProfile,
+        "AppData",
+        "Roaming"
+      );
+      paths.push(path.join(appData, variant, "User", "workspaceStorage"));
+      if (variant !== "Code") {
+        paths.push(path.join(appData, "Code", "User", "workspaceStorage"));
+      }
+    }
+
+    // Fall back: scan /mnt/c/Users/* for any Windows user profile
+    try {
+      if (fs.existsSync(windowsMountBase)) {
+        const windowsUsers = fs.readdirSync(windowsMountBase);
+        for (const winUser of windowsUsers) {
+          // Skip system accounts
+          if (
+            winUser === "Public" ||
+            winUser === "Default" ||
+            winUser === "All Users" ||
+            winUser.startsWith(".")
+          ) {
+            continue;
+          }
+          const appData = path.join(
+            windowsMountBase,
+            winUser,
+            "AppData",
+            "Roaming"
+          );
+          const variantPath = path.join(
+            appData,
+            variant,
+            "User",
+            "workspaceStorage"
+          );
+          // Avoid duplicates from USERPROFILE path above
+          if (!paths.includes(variantPath)) {
+            paths.push(variantPath);
+          }
+          if (variant !== "Code") {
+            const codePath = path.join(
+              appData,
+              "Code",
+              "User",
+              "workspaceStorage"
+            );
+            if (!paths.includes(codePath)) {
+              paths.push(codePath);
+            }
+          }
+        }
+      }
+    } catch {
+      // /mnt/c may not be accessible; ignore
+    }
+
+    return paths;
+  }
+
+  /**
    * Find VS Code's workspaceStorage directory for all variants
    * Returns array of possible paths (some may not exist)
    */
@@ -137,12 +228,24 @@ export class ChatSessionMonitor {
         );
       }
     } else {
-      // Linux
+      // Linux (including WSL)
       const configDir =
         process.env.XDG_CONFIG_HOME || path.join(homeDir, ".config");
       paths.push(path.join(configDir, variant, "User", "workspaceStorage"));
       if (variant !== "Code") {
         paths.push(path.join(configDir, "Code", "User", "workspaceStorage"));
+      }
+
+      // WSL: also search Windows AppData via /mnt/c/
+      // VS Code's UI and chat session writer run on the Windows host, so session
+      // files land in Windows AppData, not Linux ~/.config
+      if (this.isWSL()) {
+        const wslPaths = this.getWSLWindowsWorkspaceStorageRoots(variant);
+        paths.push(...wslPaths);
+        Log.debug(
+          `🐧 WSL detected — also searching Windows paths: ${wslPaths.join(", ")}`,
+          "ChatSessionMonitor"
+        );
       }
     }
 
@@ -184,12 +287,25 @@ export class ChatSessionMonitor {
     const sessionFiles: SessionFile[] = [];
     const parentMtimes = new Map<string, number>();
 
+    Log.debug(
+      `🗂️ Scanning ${possibleRoots.length} workspaceStorage root(s): ${possibleRoots.join(", ")}`,
+      "ChatSessionMonitor"
+    );
+
     for (const workspaceStorageRoot of possibleRoots) {
       try {
         await fs.promises.access(workspaceStorageRoot);
       } catch {
+        Log.debug(
+          `   ✗ Not found: ${workspaceStorageRoot}`,
+          "ChatSessionMonitor"
+        );
         continue;
       }
+      Log.debug(
+        `   ✓ Scanning: ${workspaceStorageRoot}`,
+        "ChatSessionMonitor"
+      );
 
       try {
         const workspaceHashes = await fs.promises.readdir(workspaceStorageRoot);
