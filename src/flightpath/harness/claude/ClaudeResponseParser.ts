@@ -9,6 +9,7 @@ import {
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { getClaudeContextWindowSize } from "../../../utils/ModelConstants";
 import { CliResponseParser } from "../shared/CliResponseParser";
 import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
@@ -585,7 +586,7 @@ export class ClaudeResponseParser
    * @returns True if this is a recoverable Claude CLI session error
    */
   isRecoverableSessionError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
     return (
       message.includes("--resume requires a valid session ID") ||
       message.includes("Session IDs must be in UUID format") ||

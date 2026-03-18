@@ -54,6 +54,11 @@ export enum HarnessStatus {
  * Harness integration strategies must implement.
  */
 export abstract class HarnessIntegration {
+  /** Maximum character length for prompts passed directly on the command line. */
+  private static readonly MAX_SIMPLE_PROMPT_LENGTH = 300;
+  /** Characters safe to pass directly on the command line without temp-file escaping. */
+  private static readonly SAFE_CHARS_PATTERN = /^[a-zA-Z0-9\s.,!?:;\-_()@#/]*$/;
+
   protected context: SubscriptionContainer | undefined;
   protected isAvailable: boolean = false;
   protected workflowStep: number = 0;
@@ -737,9 +742,7 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
    * @returns true if prompt can be passed directly
    */
   protected isSimplePrompt(finalPromptText: string): boolean {
-    const MAX_SIMPLE_PROMPT_LENGTH = 300;
-
-    if (finalPromptText.length > MAX_SIMPLE_PROMPT_LENGTH) {
+    if (finalPromptText.length > HarnessIntegration.MAX_SIMPLE_PROMPT_LENGTH) {
       return false;
     }
 
@@ -749,8 +752,7 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
 
     // Only allow: letters, numbers, spaces, and basic safe punctuation.
     // If anything else exists, use file-based passing.
-    const SAFE_CHARS_PATTERN = /^[a-zA-Z0-9\s.,!?:;\-_()@#/]*$/;
-    if (!SAFE_CHARS_PATTERN.test(finalPromptText)) {
+    if (!HarnessIntegration.SAFE_CHARS_PATTERN.test(finalPromptText)) {
       Log.debug(
         "📁 Prompt contains special characters, using file-based passing for safety"
       );

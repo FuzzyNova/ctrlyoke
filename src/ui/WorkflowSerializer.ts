@@ -5,6 +5,8 @@ import * as yaml from "js-yaml";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../types/DashboardConstants";
 import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
+import { readJsonFile } from "../utils/FileSystemUtils";
+import { getErrorMessage } from "../utils/ErrorUtils";
 import type { TemplateManager } from "../flightpath/TemplateManager";
 import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import type { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
@@ -100,7 +102,7 @@ export class WorkflowSerializer {
         workflowsDir,
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
+      const msg = getErrorMessage(error);
       this.postMessage({
         type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
         error: `Failed to read workflow: ${msg}`,
@@ -138,8 +140,7 @@ export class WorkflowSerializer {
     }
 
     try {
-      const rawContent = await fs.readFile(workingFilePath, "utf-8");
-      const workingFile = JSON.parse(rawContent);
+      const workingFile = await readJsonFile(workingFilePath);
 
       // Build clean PromptFile — strip all working-file-only and runtime fields.
       const WORKFLOW_FIELDS = [
@@ -240,7 +241,7 @@ export class WorkflowSerializer {
         filePath: absolutePath,
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
+      const msg = getErrorMessage(error);
       Log.error("Failed to save workflow:", error);
       this.postMessage({
         type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
@@ -310,7 +311,7 @@ export class WorkflowSerializer {
         defaultTemplateId,
       });
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      const errorMsg = getErrorMessage(error);
       vscode.window.showErrorMessage(`Failed to load templates: ${errorMsg}`);
     }
   }
@@ -365,7 +366,7 @@ export class WorkflowSerializer {
         }
       }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      const errorMsg = getErrorMessage(error);
       vscode.window.showErrorMessage(`Failed to create workflow: ${errorMsg}`);
       this.postMessage({
         type: MESSAGE_TYPES.WORKFLOW_CREATED,
@@ -487,8 +488,7 @@ export class WorkflowSerializer {
           const filePath = path.join(queueDir, file);
 
           try {
-            const content = await fs.readFile(filePath, "utf8");
-            const workingFile = JSON.parse(content);
+            const workingFile = await readJsonFile(filePath);
 
             const lastModified =
               workingFile.lastModifiedAt || workingFile.startedAt || 0;
@@ -563,7 +563,7 @@ export class WorkflowSerializer {
     } catch (error) {
       Log.error("Failed to load workflow:", error);
       vscode.window.showErrorMessage(
-        `Failed to load workflow: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to load workflow: ${getErrorMessage(error)}`
       );
     }
   }
@@ -616,7 +616,7 @@ export class WorkflowSerializer {
       } catch (error) {
         Log.error("Failed to delete workflow files:", error);
         vscode.window.showErrorMessage(
-          `Failed to delete workflow history: ${error instanceof Error ? error.message : String(error)}`
+          `Failed to delete workflow history: ${getErrorMessage(error)}`
         );
       }
     } catch (error) {
@@ -793,7 +793,7 @@ export class WorkflowSerializer {
     } catch (error) {
       Log.error("Failed to clear run history:", error);
       vscode.window.showErrorMessage(
-        `Failed to clear run history: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to clear run history: ${getErrorMessage(error)}`
       );
     }
   }

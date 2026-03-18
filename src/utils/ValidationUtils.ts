@@ -13,6 +13,20 @@ import {
 } from "./ModelConstants";
 
 /**
+ * Allowed script file extensions for end condition scripts.
+ * Single source of truth used by both validation and path detection.
+ */
+export const SCRIPT_EXTENSIONS = [
+  ".py",
+  ".js",
+  ".ts",
+  ".sh",
+  ".bat",
+  ".cmd",
+  ".ps1",
+] as const;
+
+/**
  * Build the model enum dynamically from ModelConstants (single source of truth).
  * Combines all CLI model IDs and deduplicates.
  */
@@ -335,22 +349,13 @@ export class ValidationUtils {
     }
 
     // Check file extension
-    const allowedExtensions = [
-      ".py",
-      ".js",
-      ".ts",
-      ".sh",
-      ".bat",
-      ".cmd",
-      ".ps1",
-    ];
-    const hasValidExtension = allowedExtensions.some((ext) =>
+    const hasValidExtension = SCRIPT_EXTENSIONS.some((ext) =>
       scriptPath.toLowerCase().endsWith(ext)
     );
 
     if (!hasValidExtension) {
       errors.push(
-        `Script must have one of the allowed extensions: ${allowedExtensions.join(", ")}`
+        `Script must have one of the allowed extensions: ${SCRIPT_EXTENSIONS.join(", ")}`
       );
     }
 

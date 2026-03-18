@@ -1,6 +1,7 @@
 import { SkillDiscovery, SkillInfo } from "./SkillDiscovery";
 import { Log } from "./Log";
 import { resolveWorkspaceFolder } from "./DiscoveryUtils";
+import { TtlCache } from "./TtlCache";
 
 /**
  * SkillExpander
@@ -18,13 +19,9 @@ import { resolveWorkspaceFolder } from "./DiscoveryUtils";
  *   Description: Extract text and tables from PDF files.
  */
 
-/** Cache TTL in milliseconds for discovered skills list */
-const SKILL_CACHE_TTL_MS = 5000;
-
 export class SkillExpander {
-  /** Cached skill discovery results */
-  private static cachedSkills: SkillInfo[] = [];
-  private static cacheTimestamp = 0;
+  private static readonly skillCache = new TtlCache<SkillInfo>(5000);
+
   /**
    * Expand multiple skill names to formatted prompt blocks.
    * Returns null if no skills could be resolved (all unknown).
@@ -43,20 +40,9 @@ export class SkillExpander {
     }
 
     const workspaceFolder = resolveWorkspaceFolder(workspaceRoot);
-
-    // Use cached skills list if still fresh (avoids re-scanning filesystem on every prompt)
-    const now = Date.now();
-    let allSkills: SkillInfo[];
-    if (
-      SkillExpander.cachedSkills.length > 0 &&
-      now - SkillExpander.cacheTimestamp < SKILL_CACHE_TTL_MS
-    ) {
-      allSkills = SkillExpander.cachedSkills;
-    } else {
-      allSkills = await SkillDiscovery.discoverSkills(workspaceFolder);
-      SkillExpander.cachedSkills = allSkills;
-      SkillExpander.cacheTimestamp = now;
-    }
+    const allSkills = await SkillExpander.skillCache.get(() =>
+      SkillDiscovery.discoverSkills(workspaceFolder)
+    );
 
     const resolvedBlocks: string[] = [];
 

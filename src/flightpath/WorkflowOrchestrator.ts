@@ -29,6 +29,7 @@ import {
 import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
+import { getErrorMessage } from "../utils/ErrorUtils";
 import {
   ConfigurationUtils,
   PATH_CONSTANTS,
@@ -969,7 +970,7 @@ export class WorkflowOrchestrator {
     } catch (error) {
       Log.error("Failed to resume session:", error as Error);
       vscode.window.showErrorMessage(
-        `Failed to resume session: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to resume session: ${getErrorMessage(error)}`
       );
     }
   }

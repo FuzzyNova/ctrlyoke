@@ -16,6 +16,7 @@ import { TempFileManager } from "./utils/TempFileManager";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
 import { Log } from "./utils/Log";
 import { saveIfDirty } from "./utils/FileSystemUtils";
+import { getErrorMessage } from "./utils/ErrorUtils";
 import { WorkspaceInitializer } from "./flightpath/orchestration/WorkspaceInitializer";
 import { PATH_CONSTANTS } from "./utils/ConfigurationUtils";
 
@@ -54,7 +55,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
           ]);
         } catch (error) {
           const errorMsg =
-            error instanceof Error ? error.message : String(error);
+            getErrorMessage(error);
           return new vscode.LanguageModelToolResult([
             new vscode.LanguageModelTextPart(`Error: ${errorMsg}`),
           ]);
@@ -125,7 +126,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
           ]);
         } catch (error) {
           const errorMsg =
-            error instanceof Error ? error.message : String(error);
+            getErrorMessage(error);
           return new vscode.LanguageModelToolResult([
             new vscode.LanguageModelTextPart(`Error: ${errorMsg}`),
           ]);
@@ -596,7 +597,7 @@ function registerCommands(context: vscode.ExtensionContext) {
         editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
       } catch (error) {
         vscode.window.showErrorMessage(
-          `Failed to open file: ${error instanceof Error ? error.message : String(error)}`
+          `Failed to open file: ${getErrorMessage(error)}`
         );
       }
     }

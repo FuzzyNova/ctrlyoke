@@ -29,6 +29,7 @@ import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider"
 import { IDashboardSink } from "../types/IDashboardSink";
 import type { CliEvent } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
+import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { isCli } from "../utils/RuntimeMode";
 import { PlatformAdapter } from "../platform/PlatformAdapter";
@@ -1113,7 +1114,7 @@ export class WorkflowInstance {
     } catch (error) {
       Log.error("Failed to queue prompts:", error);
       this.platform.error(
-        `Failed to queue prompts: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to queue prompts: ${getErrorMessage(error)}`
       );
     }
   }

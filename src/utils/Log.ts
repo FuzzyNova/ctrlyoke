@@ -3,6 +3,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { IS_DEV_MODE } from "./BuildConfig";
 import { ConfigurationUtils, PATH_CONSTANTS } from "./ConfigurationUtils";
+import { getErrorMessage } from "./ErrorUtils";
 
 /**
  * Log levels in order from most verbose (TRACE) to least verbose (ERROR), plus OFF.
@@ -256,7 +257,7 @@ export class Log {
       if (error) {
         this.writeLog(
           "ERROR",
-          `${message}: ${error instanceof Error ? error.message : String(error)}`,
+          `${message}: ${getErrorMessage(error)}`,
           ...args
         );
         if (error instanceof Error && error.stack) {

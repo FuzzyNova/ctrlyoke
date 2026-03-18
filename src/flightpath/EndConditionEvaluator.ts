@@ -2,6 +2,7 @@ import * as path from "path";
 import * as fs from "fs";
 import { spawn, ChildProcess } from "child_process";
 import { Log } from "../utils/Log";
+import { getErrorMessage } from "../utils/ErrorUtils";
 import { EndCondition } from "../types/FlightPathTypes";
 import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { CliProcessManager } from "../utils/CliProcessManager";
@@ -125,7 +126,7 @@ export class EndConditionEvaluator {
         stdout: "",
         stderr: "",
         result: "",
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
         duration: Date.now() - startTime,
       };
     }
@@ -305,7 +306,7 @@ export class EndConditionEvaluator {
         result: "",
         stdout: "",
         stderr: "",
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
         timeout: isTimeout,
       };
     }
