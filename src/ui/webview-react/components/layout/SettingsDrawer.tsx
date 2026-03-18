@@ -556,7 +556,7 @@ export const SettingsPanel: React.FC<{
         ref={bodyRef}
         className={`flex-1 overflow-y-auto${isCLIManaged ? " pointer-events-none opacity-60 select-none" : ""}`}
       >
-        <div className="px-4 py-3 space-y-4">
+        <div className="px-4 py-2 space-y-2">
           {/* Row 1: Harness + Model */}
           <Row narrow={isBodyNarrow}>
             <FormField
