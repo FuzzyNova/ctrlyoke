@@ -230,17 +230,17 @@ export const DiffView: React.FC<DiffViewProps> = ({
   if (!hasDiff) return null;
 
   return (
-    <div className={`my-2 ml-6 font-mono text-[11px] ${className}`}>
+    <div className={`my-2 ml-6 font-mono text-[length:var(--fp-output-font-size-sm)] ${className}`}>
       {/* Summary / toggle header */}
       <div className="flex items-center gap-2 mb-1">
         <button
           type="button"
           onClick={handleToggle}
-          className="flex items-center gap-1.5 text-[10px] text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
+          className="flex items-center gap-1.5 text-[length:var(--fp-output-font-size-xs)] text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
           title={isExpanded ? "Collapse diff" : "Expand diff"}
         >
           <i
-            className={`codicon codicon-chevron-right text-[10px] transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
+            className={`codicon codicon-chevron-right text-[length:var(--fp-output-font-size-xs)] transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
           />
           <span>
             {isExpanded ? "Hide" : "Show"} diff
@@ -268,12 +268,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 className={`flex items-baseline whitespace-pre font-inherit leading-[1.4] py-px ${styles.bg}`}
               >
                 <span
-                  className={`inline-block w-10 text-right px-1.5 select-none text-[10px] opacity-60 shrink-0 text-diff-line-num ${styles.lineNumColor}`}
+                  className={`inline-block w-10 text-right px-1.5 select-none text-[length:var(--fp-output-font-size-xs)] opacity-60 shrink-0 text-diff-line-num ${styles.lineNumColor}`}
                 >
                   {line.type !== "added" ? line.oldLineNum : ""}
                 </span>
                 <span
-                  className={`inline-block w-10 text-right px-1.5 select-none text-[10px] opacity-60 shrink-0 text-diff-line-num border-r border-diff-line-num mr-2 ${styles.lineNumColor}`}
+                  className={`inline-block w-10 text-right px-1.5 select-none text-[length:var(--fp-output-font-size-xs)] opacity-60 shrink-0 text-diff-line-num border-r border-diff-line-num mr-2 ${styles.lineNumColor}`}
                 >
                   {line.type !== "removed" ? line.newLineNum : ""}
                 </span>
@@ -364,7 +364,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
       status !== OPERATION_STATUS.FAILED ? (
       <button
         type="button"
-        className="text-[10px] font-bold uppercase text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
+        className="text-[length:var(--fp-output-font-size-xs)] font-bold uppercase text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
         title={fileUndoMode === "redo" ? `Redo changes to ${path}` : `Undo changes to ${path}`}
         onClick={() => onUndoFile(path, attemptIndex)}
       >
@@ -446,7 +446,7 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
         {onUndoFile && status !== OPERATION_STATUS.INITIATED && (
           <button
             type="button"
-            className="icon-btn py-0 px-1 ml-1 text-[10px]"
+            className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
             title={fileUndoMode === "redo" ? `Redo changes to ${path}` : `Undo changes to ${path}`}
             onClick={() => onUndoFile(path, attemptIndex)}
           >
@@ -534,7 +534,7 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
         {onUndoFile && success !== false && (
           <button
             type="button"
-            className="icon-btn py-0 px-1 ml-1 text-[10px]"
+            className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
             title={fileUndoMode === "redo" ? `Redo deletion of ${path}` : `Undo deletion of ${path}`}
             onClick={() => onUndoFile(path, attemptIndex)}
           >
@@ -633,7 +633,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
       </div>
       {result && (
         <div
-          className={`${result.success ? TOOL_RESULT_LINE : "text-bash-status-error pl-4 ml-2 text-[11px]"} flex items-start gap-1`}
+          className={`${result.success ? TOOL_RESULT_LINE : "text-bash-status-error pl-4 ml-2 text-[length:var(--fp-output-font-size-sm)]"} flex items-start gap-1`}
         >
           <span className="shrink-0">⎿</span>
           <span className="whitespace-pre-wrap break-words min-w-0">

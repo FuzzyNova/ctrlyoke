@@ -47,10 +47,10 @@ export const StatusMessage: React.FC<StatusMessageProps> = ({
 
   return (
     <div
-      className={`py-[var(--spacing-xs)] px-[var(--spacing-md)] my-[var(--spacing-xs)] border-l-[3px] rounded-sm text-[11px] text-[var(--fg-primary)] flex items-center gap-[var(--spacing-sm)] ${styles.container} ${className}`}
+      className={`py-[var(--spacing-xs)] px-[var(--spacing-md)] my-[var(--spacing-xs)] border-l-[3px] rounded-sm text-[length:var(--fp-output-font-size-sm)] text-[var(--fg-primary)] flex items-center gap-[var(--spacing-sm)] ${styles.container} ${className}`}
     >
       {displayTime && (
-        <span className="text-[var(--fg-secondary)] text-[10px] shrink-0">
+        <span className="text-[var(--fg-secondary)] text-[length:var(--fp-output-font-size-xs)] shrink-0">
           [{displayTime}]
         </span>
       )}

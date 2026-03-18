@@ -162,6 +162,16 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // vscode is a stable singleton — never changes
 
+  // Sync output font size CSS variable to the document root so all output
+  // area consumers (markdown-text prose, tool call output, etc.) pick it up.
+  const outputFontSize = useUiStore((s) => s.outputFontSize);
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--fp-output-font-size",
+      `${outputFontSize}px`
+    );
+  }, [outputFontSize]);
+
   // Sync prompts/settings collapse state before paint.
   // Runs on initial desktop mount and when returning from mobile layout
   // (desktop panels remount fresh, ongoing useEffects won't re-run unless

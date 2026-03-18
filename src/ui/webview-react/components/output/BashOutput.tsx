@@ -112,7 +112,7 @@ export const BashOutput = memo<BashOutputProps>(
       if (isRunning) {
         return (
           <span
-            className={`inline ml-2 text-[11px] font-normal ${STATUS_BADGE_STYLES.running}`}
+            className={`inline ml-2 text-[length:var(--fp-output-font-size-sm)] font-normal ${STATUS_BADGE_STYLES.running}`}
           >
             running
           </span>
@@ -123,7 +123,7 @@ export const BashOutput = memo<BashOutputProps>(
         const variant = success ? "success" : "error";
         return (
           <span
-            className={`inline ml-2 text-[11px] font-normal ${STATUS_BADGE_STYLES[variant]}`}
+            className={`inline ml-2 text-[length:var(--fp-output-font-size-sm)] font-normal ${STATUS_BADGE_STYLES[variant]}`}
           >
             (exit: {exitCode})
           </span>

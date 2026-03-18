@@ -164,6 +164,9 @@ interface UiState {
   isLoading: boolean;
   loadingMessage: string | null;
 
+  // Output / editor font size (px) — user-adjustable, persisted
+  outputFontSize: number;
+
   // Notification toast state (transient, not persisted)
   toast: {
     message: string;
@@ -230,6 +233,9 @@ interface UiActions {
   updateLoadedWorkflow: (workflow: WorkflowSummary) => void;
   setActiveWorkflowId: (id: string | null) => void;
 
+  // Output / editor font size
+  setOutputFontSize: (size: number) => void;
+
   // Loading state
   setLoading: (loading: boolean, message?: string) => void;
 
@@ -286,6 +292,7 @@ const initialState: UiState = {
   activeWorkflowId: null,
   isLoading: false,
   loadingMessage: null,
+  outputFontSize: 13,
   toast: null,
   isViewingHistory: false,
   viewingRunIndex: 0,
@@ -305,6 +312,7 @@ const persistedFields = [
   "lastDesktopSizes",
   "lastMobileSizes",
   "diffsCollapsed",
+  "outputFontSize",
 ] as const;
 
 export const useUiStore = create<UiState & UiActions>()(
@@ -463,6 +471,13 @@ export const useUiStore = create<UiState & UiActions>()(
         })),
 
       setActiveWorkflowId: (id) => set({ activeWorkflowId: id }),
+
+      // ============================================================================
+      // OUTPUT FONT SIZE
+      // ============================================================================
+
+      setOutputFontSize: (size) =>
+        set({ outputFontSize: Math.min(24, Math.max(10, size)) }),
 
       // ============================================================================
       // LOADING STATE

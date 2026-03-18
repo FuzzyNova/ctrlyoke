@@ -9,7 +9,10 @@ import type {
   CliOutput as CliOutputType,
   OutputStatusMessage,
 } from "../../types/cliEvents";
-import type { WorkspaceSnapshot, UndoRecord } from "@root/types/OutputHistoryTypes";
+import type {
+  WorkspaceSnapshot,
+  UndoRecord,
+} from "@root/types/OutputHistoryTypes";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
@@ -72,6 +75,8 @@ export const OutputSection: React.FC = () => {
   const runStates = useUiStore((s) => s.runStates);
   const diffsCollapsed = useUiStore((s) => s.diffsCollapsed);
   const toggleDiffsCollapsed = useUiStore((s) => s.toggleDiffsCollapsed);
+  const outputFontSize = useUiStore((s) => s.outputFontSize);
+  const setOutputFontSize = useUiStore((s) => s.setOutputFontSize);
 
   const outputRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -317,20 +322,44 @@ export const OutputSection: React.FC = () => {
     >
       {/* Section Header */}
       <div className="flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] px-2 border-b border-panel-border flex-shrink-0 bg-sidebar-bg">
-        {/* Left: clickable collapse area */}
-        <div
-          className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
-          onClick={toggleOutputCollapse}
-          role="button"
-          aria-label="Collapse output"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === "Enter" && toggleOutputCollapse()}
-        >
-          <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
-          <i className="codicon codicon-terminal text-[14px]" />
-          <span className="text-[11px] font-semibold uppercase tracking-wide">
-            Output
-          </span>
+        {/* Left: clickable collapse area + font size controls */}
+        <div className="flex items-center gap-1">
+          <div
+            className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
+            onClick={toggleOutputCollapse}
+            role="button"
+            aria-label="Collapse output"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && toggleOutputCollapse()}
+          >
+            <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
+            <i className="codicon codicon-terminal text-[14px]" />
+            <span className="text-[11px] font-semibold uppercase tracking-wide">
+              Output
+            </span>
+          </div>
+          {/* Font size stepper — grouped tightly, separated from title by ml-2 */}
+          <div className="flex items-center ml-3">
+            <button
+              className="icon-btn py-0 px-0.5"
+              title="Decrease font size"
+              onClick={() => setOutputFontSize(outputFontSize - 1)}
+              disabled={outputFontSize <= 10}
+            >
+              <i className="codicon codicon-sm codicon-remove" />
+            </button>
+            <span className="text-[10px] text-description-fg tabular-nums w-[20px] text-center select-none">
+              {outputFontSize}
+            </span>
+            <button
+              className="icon-btn py-0 px-0.5"
+              title="Increase font size"
+              onClick={() => setOutputFontSize(outputFontSize + 1)}
+              disabled={outputFontSize >= 24}
+            >
+              <i className="codicon codicon-sm codicon-add" />
+            </button>
+          </div>
         </div>
 
         {/* Right: controls */}
@@ -393,12 +422,12 @@ export const OutputSection: React.FC = () => {
       <div
         ref={outputRef}
         id="output-content"
-        className="font-mono text-[11px] min-h-0 p-0 flex-1 overflow-y-auto"
+        className="font-mono text-[length:var(--fp-output-font-size-sm)] min-h-0 p-0 flex-1 overflow-y-auto"
         onScroll={handleScroll}
       >
         {/* History banner: shown when viewing a historical run */}
         {isViewingHistory && historyOutputs && (
-          <div className="px-3 py-2 text-[11px] text-description-fg bg-editor-bg border-b border-widget-border flex items-center justify-between flex-shrink-0">
+          <div className="px-3 py-2 text-[length:var(--fp-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border flex items-center justify-between flex-shrink-0">
             <span>
               Run {historyOutputs.runMetadata.runId} &middot;{" "}
               {new Date(historyOutputs.runMetadata.startedAt).toLocaleString()}
@@ -441,7 +470,7 @@ export const OutputSection: React.FC = () => {
                     />
                   )}
                   {isFirstForStep && item.target.kind === "finalPrompt" && (
-                    <div className="px-3 pt-2 text-[10px] uppercase tracking-wide text-description-fg">
+                    <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
                       Final Prompt Loop {item.target.index + 1}
                     </div>
                   )}
@@ -462,18 +491,23 @@ export const OutputSection: React.FC = () => {
                 item.target.kind === "queue"
                   ? streamingChunks[item.target.index] || ""
                   : "";
-              const stepSnapshot: WorkspaceSnapshot | undefined = isViewingHistory && historyOutputs
-                ? (item.target.kind === "queue"
+              const stepSnapshot: WorkspaceSnapshot | undefined =
+                isViewingHistory && historyOutputs
+                  ? item.target.kind === "queue"
                     ? historyOutputs.steps[item.target.index]?.workspaceSnapshot
-                    : historyOutputs.finalPromptOutputs?.[item.target.index]?.workspaceSnapshot)
-                : undefined;
-              const stepUndoRecord: UndoRecord | undefined = isViewingHistory && historyOutputs
-                ? (item.target.kind === "queue"
+                    : historyOutputs.finalPromptOutputs?.[item.target.index]
+                        ?.workspaceSnapshot
+                  : undefined;
+              const stepUndoRecord: UndoRecord | undefined =
+                isViewingHistory && historyOutputs
+                  ? item.target.kind === "queue"
                     ? historyOutputs.steps[item.target.index]?.undoRecord
-                    : historyOutputs.finalPromptOutputs?.[item.target.index]?.undoRecord)
-                : undefined;
+                    : historyOutputs.finalPromptOutputs?.[item.target.index]
+                        ?.undoRecord
+                  : undefined;
               const stepKey = `${item.target.kind}:${item.target.index}`;
-              const isLastCliForStep = lastCliIndexPerStep.get(stepKey) === index;
+              const isLastCliForStep =
+                lastCliIndexPerStep.get(stepKey) === index;
               return (
                 <React.Fragment key={`cli-${index}`}>
                   {isFirstForStep && (
@@ -482,7 +516,7 @@ export const OutputSection: React.FC = () => {
                     />
                   )}
                   {isFirstForStep && item.target.kind === "finalPrompt" && (
-                    <div className="px-3 pt-2 text-[10px] uppercase tracking-wide text-description-fg">
+                    <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
                       Final Prompt Loop {item.target.index + 1}
                     </div>
                   )}
@@ -500,7 +534,11 @@ export const OutputSection: React.FC = () => {
                     allowUndoActions={allowUndoActions}
                     workspaceSnapshot={stepSnapshot}
                     undoRecord={stepUndoRecord}
-                    allStepOutputs={isLastCliForStep && allowUndoActions ? stepOutputsMap.get(stepKey) : undefined}
+                    allStepOutputs={
+                      isLastCliForStep && allowUndoActions
+                        ? stepOutputsMap.get(stepKey)
+                        : undefined
+                    }
                   />
                 </React.Fragment>
               );

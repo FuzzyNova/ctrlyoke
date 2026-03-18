@@ -40,6 +40,13 @@
   --spacing-xl: 16px;
   --spacing-2xl: 24px;
 
+  /* Output font size — controls the output panel (markdown prose, tool calls, etc.).
+     Set dynamically from uiStore.outputFontSize via App.tsx.
+     -sm and -xs are fixed offsets below the base for secondary and tertiary text. */
+  --fp-output-font-size: 13px;
+  --fp-output-font-size-sm: calc(var(--fp-output-font-size) - 1px);
+  --fp-output-font-size-xs: calc(var(--fp-output-font-size) - 2px);
+
   /* Semantic colors — used in CliOutput, StatusMessage, and base element styles below.
      All other VS Code colors are referenced directly via Tailwind tokens. */
   --bg-primary: var(--vscode-editor-background);
@@ -274,7 +281,7 @@ button .codicon {
    ============================================================================ */
 .markdown-text {
   color: var(--vscode-editor-foreground);
-  font-size: 12px;
+  font-size: var(--fp-output-font-size, 13px);
   line-height: 1.6;
 }
 
@@ -381,6 +388,20 @@ button .codicon {
 
 [data-group]:has([data-separator="active"]) [data-panel] {
   transition: none;
+}
+
+/* ============================================================================
+   Component Classes
+   ============================================================================ */
+@layer components {
+  /* Icon-only button used in panel headers and output toolbars.
+     Provides consistent hover feedback across all header action buttons. */
+  .icon-btn {
+    @apply flex items-center justify-center rounded bg-transparent border-none
+           text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg
+           transition-colors duration-100
+           disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-description-fg;
+  }
 }
 
 /* ============================================================================

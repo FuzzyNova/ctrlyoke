@@ -145,7 +145,7 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
 
   return (
     <div
-      className={`${result.success ? TOOL_RESULT_LINE : "text-bash-status-error pl-4 ml-2 text-[11px]"} flex items-start gap-1 ${className}`}
+      className={`${result.success ? TOOL_RESULT_LINE : "text-bash-status-error pl-4 ml-2 text-[length:var(--fp-output-font-size-sm)]"} flex items-start gap-1 ${className}`}
     >
       <span className="shrink-0">⎿</span>
       <span className="whitespace-pre-wrap break-words min-w-0">
@@ -842,7 +842,7 @@ export const CliOutput = memo<CliOutputProps>(
         className={`bg-[var(--bg-primary)] py-[var(--spacing-sm)] px-[var(--spacing-md)] border-b border-[var(--border-color)] ${className}`}
       >
         {/* Header */}
-        <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[11px] flex items-center gap-[var(--spacing-sm)]">
+        <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex items-center gap-[var(--spacing-sm)]">
           {timestamp && (
             <span className="output-timestamp">[{timestamp}] </span>
           )}
@@ -884,7 +884,7 @@ export const CliOutput = memo<CliOutputProps>(
 
         {/* Statistics + Prompt-level undo/redo on the same row */}
         {(statsNode || promptUndoAction) && (
-          <div className="flex items-center gap-2 mt-[var(--spacing-xs)] text-[10px] text-[var(--fg-secondary)]">
+          <div className="flex items-center gap-2 mt-[var(--spacing-xs)] text-[length:var(--fp-output-font-size-xs)] text-[var(--fg-secondary)]">
             <div className="flex-1 min-w-0">{statsNode}</div>
             {promptUndoAction && (
               <button
