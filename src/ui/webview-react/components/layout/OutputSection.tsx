@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useEffect, useRef, useMemo, useCallback, useState } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
@@ -12,8 +12,18 @@ import type {
 import type {
   WorkspaceSnapshot,
   UndoRecord,
+  UndoExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
+import { OutputMinimap, type MinimapStep } from "../output/OutputMinimap";
+import { UndoChangesDialog } from "../output/UndoChangesDialog";
+import {
+  buildUndoCandidatesForOutputs,
+  buildUndoDialogInputForPrompt,
+  getPromptUndoSummary,
+  type UndoDialogInput,
+} from "../../utils/promptUndo";
+import type { UndoFileInstruction } from "../../types/messages";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
 
@@ -30,6 +40,15 @@ interface OutputMessage {
   attemptIndex?: number;
 }
 
+interface MinimapDialogState {
+  mode: "undo" | "redo";
+  target: UndoExecutionTarget;
+  workspacePath: string;
+  input?: UndoDialogInput;
+  redoInstructions?: UndoFileInstruction[];
+  requestId: string;
+}
+
 /**
  * OutputSection Component
  *
@@ -40,6 +59,7 @@ interface OutputMessage {
  * - Export to markdown
  * - Empty state display
  * - Streaming indicator support
+ * - Output minimap rail for navigation and prompt-level undo
  *
  * Performance notes:
  * - Uses granular Zustand selectors so streaming chunk updates only cause
@@ -65,6 +85,11 @@ export const OutputSection: React.FC = () => {
   // auto-scroll effect doesn't require rebuilding allMessages.
   const streamingChunks = useWorkflowStore((s) => s.streamingChunks);
   const historyOutputs = useWorkflowStore((s) => s.historyOutputs);
+  const workspaceSnapshots = useWorkflowStore((s) => s.workspaceSnapshots);
+  const finalPromptWorkspaceSnapshots = useWorkflowStore(
+    (s) => s.finalPromptWorkspaceSnapshots
+  );
+  const undoRecords = useWorkflowStore((s) => s.undoRecords);
 
   const outputCollapsed = useUiStore((s) => s.outputCollapsed);
   const toggleOutputCollapse = useUiStore((s) => s.toggleOutputCollapse);
@@ -82,6 +107,13 @@ export const OutputSection: React.FC = () => {
   const sectionRef = useRef<HTMLElement>(null);
   const autoscrollEnabled = useRef(true);
   const isProgrammaticScroll = useRef(false);
+
+  // Scroll position tracked for the minimap viewport indicator
+  const [minimapScrollTop, setMinimapScrollTop] = useState(0);
+
+  // Shared prompt-level undo/redo dialog (owned here, triggered from minimap)
+  const [minimapDialogState, setMinimapDialogState] =
+    useState<MinimapDialogState | null>(null);
 
   // Keep --run-selector-max-h in sync with the output section height so the
   // RunSelector dropdown never overflows the panel boundary.
@@ -214,6 +246,7 @@ export const OutputSection: React.FC = () => {
       el.scrollHeight - el.scrollTop - el.clientHeight <=
       SCROLL_BOTTOM_THRESHOLD;
     autoscrollEnabled.current = atBottom;
+    setMinimapScrollTop(el.scrollTop);
   }, []);
 
   // Auto-scroll effect.
@@ -272,7 +305,7 @@ export const OutputSection: React.FC = () => {
     return map;
   }, [allMessages]);
 
-  // Map step key → all CLI outputs for that step (for prompt-level undo button on last attempt)
+  // Map step key → all CLI outputs for that step (used for minimap undo actions)
   const stepOutputsMap = useMemo(() => {
     const map = new Map<string, CliOutputType[]>();
     for (const step of stepsToRender) {
@@ -302,6 +335,129 @@ export const OutputSection: React.FC = () => {
 
   // Only show undo actions when execution is not active
   const allowUndoActions = !isExecutionActive;
+
+  // ── Minimap steps array ────────────────────────────────────────────────────
+  // Built from stepsToRender + firstIndexByStep; includes prompt-level
+  // undo/redo actions so the minimap can show them without needing CliOutput.
+  const minimapSteps = useMemo((): MinimapStep[] => {
+    if (!allowUndoActions) return [];
+
+    return stepsToRender.flatMap((step) => {
+      const key = `${step.target.kind}:${step.target.index}`;
+      const firstIdx = firstIndexByStep.get(key);
+      if (firstIdx === undefined) return [];
+
+      const kind = step.target.kind;
+      const stepIndex = step.target.index;
+      const isFinalPrompt = kind === "finalPrompt";
+      const label = isFinalPrompt
+        ? `Final Prompt Loop ${stepIndex + 1}`
+        : `Prompt ${stepIndex + 1}`;
+
+      // Only the last CLI attempt gets an undo action
+      const lastCliIdx = lastCliIndexPerStep.get(key);
+      if (lastCliIdx === undefined) return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, label, undoAction: null }];
+
+      const lastMsg = allMessages[lastCliIdx];
+      const lastOutput = lastMsg?.data as CliOutputType | undefined;
+      if (!lastOutput || lastOutput.isStreaming) {
+        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, label, undoAction: null }];
+      }
+
+      const stepOutputs = stepOutputsMap.get(key) ?? [];
+      const targetKey = isFinalPrompt
+        ? `finalPrompt-${stepIndex}`
+        : `queue-${stepIndex}`;
+      const target: UndoExecutionTarget = isFinalPrompt
+        ? { kind: "finalPrompt", loopIndex: stepIndex }
+        : { kind: "queue", stepIndex };
+
+      let effectiveSnapshot: WorkspaceSnapshot | undefined;
+      let effectiveUndoRecord: UndoRecord | undefined;
+
+      if (isViewingHistory && historyOutputs) {
+        effectiveSnapshot =
+          kind === "queue"
+            ? historyOutputs.steps[stepIndex]?.workspaceSnapshot
+            : historyOutputs.finalPromptOutputs?.[stepIndex]?.workspaceSnapshot;
+        effectiveUndoRecord =
+          kind === "queue"
+            ? historyOutputs.steps[stepIndex]?.undoRecord
+            : historyOutputs.finalPromptOutputs?.[stepIndex]?.undoRecord;
+      } else {
+        effectiveSnapshot = isFinalPrompt
+          ? finalPromptWorkspaceSnapshots[stepIndex]
+          : workspaceSnapshots[stepIndex];
+        effectiveUndoRecord = undoRecords[targetKey];
+      }
+
+      const showRedo =
+        effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true;
+
+      let undoAction: MinimapStep["undoAction"] = null;
+
+      if (showRedo && (effectiveUndoRecord?.redoInstructions?.length ?? 0) > 0) {
+        const count = effectiveUndoRecord!.redoInstructions.length;
+        const redoInstructions = effectiveUndoRecord!.redoInstructions;
+        const workspacePath = lastOutput.workingDirectory ?? "";
+        undoAction = {
+          label: `Redo ${count} change${count !== 1 ? "s" : ""}`,
+          isRedo: true,
+          onTrigger: () => {
+            setMinimapDialogState({
+              mode: "redo",
+              target,
+              workspacePath,
+              redoInstructions,
+              requestId: crypto.randomUUID(),
+            });
+          },
+        };
+      } else {
+        const candidates = buildUndoCandidatesForOutputs(
+          stepOutputs,
+          effectiveSnapshot
+        );
+        const { undoableCount } = getPromptUndoSummary(candidates);
+        if (undoableCount > 0) {
+          const workspacePath = lastOutput.workingDirectory ?? "";
+          undoAction = {
+            label: `Undo ${undoableCount} change${undoableCount !== 1 ? "s" : ""}`,
+            isRedo: false,
+            onTrigger: () => {
+              const input = buildUndoDialogInputForPrompt(
+                target,
+                stepOutputs,
+                effectiveSnapshot,
+                workspacePath
+              );
+              setMinimapDialogState({
+                mode: "undo",
+                target,
+                workspacePath,
+                input,
+                requestId: crypto.randomUUID(),
+              });
+            },
+          };
+        }
+      }
+
+      return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, label, undoAction }];
+    });
+  }, [
+    allowUndoActions,
+    stepsToRender,
+    firstIndexByStep,
+    lastCliIndexPerStep,
+    allMessages,
+    stepOutputsMap,
+    isViewingHistory,
+    historyOutputs,
+    workspaceSnapshots,
+    finalPromptWorkspaceSnapshots,
+    undoRecords,
+  ]);
 
   if (outputCollapsed) {
     return (
@@ -418,134 +574,152 @@ export const OutputSection: React.FC = () => {
         </div>
       </div>
 
-      {/* Output Content */}
-      <div
-        ref={outputRef}
-        id="output-content"
-        className="font-mono text-[length:var(--fp-output-font-size-sm)] min-h-0 p-0 flex-1 overflow-y-auto"
-        onScroll={handleScroll}
-      >
-        {/* History banner: shown when viewing a historical run */}
-        {isViewingHistory && historyOutputs && (
-          <div className="px-3 py-2 text-[length:var(--fp-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border flex items-center justify-between flex-shrink-0">
-            <span>
-              Run {historyOutputs.runMetadata.runId} &middot;{" "}
-              {new Date(historyOutputs.runMetadata.startedAt).toLocaleString()}
-              {historyOutputs.runMetadata.completedAt
-                ? " \u2713"
-                : " (incomplete)"}
-            </span>
-            {executionState === EXECUTION_STATES.RUNNING && (
-              <button
-                type="button"
-                onClick={() => {
-                  useWorkflowStore.getState().clearHistoryOutputs();
-                  useUiStore.getState().clearHistoryView();
-                }}
-                className="text-link-fg hover:underline focus:outline-none"
-              >
-                Back to Live{" "}
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-bash-status-success animate-pulse align-middle" />
-              </button>
-            )}
-          </div>
-        )}
-        {!hasOutput ? (
-          <p className="text-center text-description-fg italic p-[var(--spacing-lg)]">
-            Output will appear here during execution
-          </p>
-        ) : (
-          allMessages.map((item, index) => {
-            const isFirstForStep =
-              firstIndexByStep.get(
-                `${item.target.kind}:${item.target.index}`
-              ) === index;
-            if (item.type === "status") {
-              const statusData = item.data as OutputStatusMessage;
-              return (
-                <React.Fragment key={`status-${index}`}>
-                  {isFirstForStep && (
-                    <div
-                      id={`output-step-${item.target.kind === "queue" ? "queue" : "final"}-${item.target.index}`}
+      {/* Output Content row: scrollable output + minimap rail */}
+      <div className="flex flex-row min-h-0 flex-1">
+        {/* Scrollable output */}
+        <div
+          ref={outputRef}
+          id="output-content"
+          className="font-mono text-[length:var(--fp-output-font-size-sm)] min-h-0 p-0 flex-1 overflow-y-auto"
+          onScroll={handleScroll}
+        >
+          {/* History banner: shown when viewing a historical run */}
+          {isViewingHistory && historyOutputs && (
+            <div className="px-3 py-2 text-[length:var(--fp-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border flex items-center justify-between flex-shrink-0">
+              <span>
+                Run {historyOutputs.runMetadata.runId} &middot;{" "}
+                {new Date(historyOutputs.runMetadata.startedAt).toLocaleString()}
+                {historyOutputs.runMetadata.completedAt
+                  ? " \u2713"
+                  : " (incomplete)"}
+              </span>
+              {executionState === EXECUTION_STATES.RUNNING && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    useWorkflowStore.getState().clearHistoryOutputs();
+                    useUiStore.getState().clearHistoryView();
+                  }}
+                  className="text-link-fg hover:underline focus:outline-none"
+                >
+                  Back to Live{" "}
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-bash-status-success animate-pulse align-middle" />
+                </button>
+              )}
+            </div>
+          )}
+          {!hasOutput ? (
+            <p className="text-center text-description-fg italic p-[var(--spacing-lg)]">
+              Output will appear here during execution
+            </p>
+          ) : (
+            allMessages.map((item, index) => {
+              const isFirstForStep =
+                firstIndexByStep.get(
+                  `${item.target.kind}:${item.target.index}`
+                ) === index;
+              if (item.type === "status") {
+                const statusData = item.data as OutputStatusMessage;
+                return (
+                  <React.Fragment key={`status-${index}`}>
+                    {isFirstForStep && (
+                      <div
+                        id={`output-step-${item.target.kind === "queue" ? "queue" : "final"}-${item.target.index}`}
+                      />
+                    )}
+                    {isFirstForStep && item.target.kind === "finalPrompt" && (
+                      <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
+                        Final Prompt Loop {item.target.index + 1}
+                      </div>
+                    )}
+                    <StatusMessage
+                      message={statusData.message}
+                      severity={statusData.severity}
+                      timestamp={statusData.timestamp}
+                      timestampMs={statusData.timestampMs}
                     />
-                  )}
-                  {isFirstForStep && item.target.kind === "finalPrompt" && (
-                    <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
-                      Final Prompt Loop {item.target.index + 1}
-                    </div>
-                  )}
-                  <StatusMessage
-                    message={statusData.message}
-                    severity={statusData.severity}
-                    timestamp={statusData.timestamp}
-                    timestampMs={statusData.timestampMs}
-                  />
-                </React.Fragment>
-              );
-            } else {
-              const cliData = item.data as CliOutputType;
-              // Only pass the streaming chunk for queue-type steps.
-              // This prop changes on every token, but React.memo on CliOutput
-              // ensures only the row with a non-empty chunk re-renders.
-              const streamingChunk =
-                item.target.kind === "queue"
-                  ? streamingChunks[item.target.index] || ""
-                  : "";
-              const stepSnapshot: WorkspaceSnapshot | undefined =
-                isViewingHistory && historyOutputs
-                  ? item.target.kind === "queue"
-                    ? historyOutputs.steps[item.target.index]?.workspaceSnapshot
-                    : historyOutputs.finalPromptOutputs?.[item.target.index]
-                        ?.workspaceSnapshot
-                  : undefined;
-              const stepUndoRecord: UndoRecord | undefined =
-                isViewingHistory && historyOutputs
-                  ? item.target.kind === "queue"
-                    ? historyOutputs.steps[item.target.index]?.undoRecord
-                    : historyOutputs.finalPromptOutputs?.[item.target.index]
-                        ?.undoRecord
-                  : undefined;
-              const stepKey = `${item.target.kind}:${item.target.index}`;
-              const isLastCliForStep =
-                lastCliIndexPerStep.get(stepKey) === index;
-              return (
-                <React.Fragment key={`cli-${index}`}>
-                  {isFirstForStep && (
-                    <div
-                      id={`output-step-${item.target.kind === "queue" ? "queue" : "final"}-${item.target.index}`}
+                  </React.Fragment>
+                );
+              } else {
+                const cliData = item.data as CliOutputType;
+                // Only pass the streaming chunk for queue-type steps.
+                // This prop changes on every token, but React.memo on CliOutput
+                // ensures only the row with a non-empty chunk re-renders.
+                const streamingChunk =
+                  item.target.kind === "queue"
+                    ? streamingChunks[item.target.index] || ""
+                    : "";
+                const stepSnapshot: WorkspaceSnapshot | undefined =
+                  isViewingHistory && historyOutputs
+                    ? item.target.kind === "queue"
+                      ? historyOutputs.steps[item.target.index]?.workspaceSnapshot
+                      : historyOutputs.finalPromptOutputs?.[item.target.index]
+                          ?.workspaceSnapshot
+                    : undefined;
+                const stepUndoRecord: UndoRecord | undefined =
+                  isViewingHistory && historyOutputs
+                    ? item.target.kind === "queue"
+                      ? historyOutputs.steps[item.target.index]?.undoRecord
+                      : historyOutputs.finalPromptOutputs?.[item.target.index]
+                          ?.undoRecord
+                    : undefined;
+                return (
+                  <React.Fragment key={`cli-${index}`}>
+                    {isFirstForStep && (
+                      <div
+                        id={`output-step-${item.target.kind === "queue" ? "queue" : "final"}-${item.target.index}`}
+                      />
+                    )}
+                    {isFirstForStep && item.target.kind === "finalPrompt" && (
+                      <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
+                        Final Prompt Loop {item.target.index + 1}
+                      </div>
+                    )}
+                    <CliOutput
+                      output={cliData}
+                      stepIndex={item.target.index}
+                      stepLabel={
+                        item.target.kind === "queue"
+                          ? undefined
+                          : `Final Prompt Loop ${item.target.index + 1}`
+                      }
+                      attemptIndex={item.attemptIndex || 0}
+                      streamingChunk={streamingChunk}
+                      isExecutionActive={isExecutionActive}
+                      allowUndoActions={allowUndoActions}
+                      workspaceSnapshot={stepSnapshot}
+                      undoRecord={stepUndoRecord}
                     />
-                  )}
-                  {isFirstForStep && item.target.kind === "finalPrompt" && (
-                    <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
-                      Final Prompt Loop {item.target.index + 1}
-                    </div>
-                  )}
-                  <CliOutput
-                    output={cliData}
-                    stepIndex={item.target.index}
-                    stepLabel={
-                      item.target.kind === "queue"
-                        ? undefined
-                        : `Final Prompt Loop ${item.target.index + 1}`
-                    }
-                    attemptIndex={item.attemptIndex || 0}
-                    streamingChunk={streamingChunk}
-                    isExecutionActive={isExecutionActive}
-                    allowUndoActions={allowUndoActions}
-                    workspaceSnapshot={stepSnapshot}
-                    undoRecord={stepUndoRecord}
-                    allStepOutputs={
-                      isLastCliForStep && allowUndoActions
-                        ? stepOutputsMap.get(stepKey)
-                        : undefined
-                    }
-                  />
-                </React.Fragment>
-              );
-            }
-          })
+                  </React.Fragment>
+                );
+              }
+            })
+          )}
+        </div>
+
+        {/* Minimap rail */}
+        {hasOutput && (
+          <OutputMinimap
+            steps={minimapSteps}
+            totalMessages={allMessages.length}
+            scrollContainerRef={outputRef}
+            scrollTop={minimapScrollTop}
+          />
         )}
       </div>
+
+      {/* Shared prompt-level undo/redo dialog — triggered from minimap */}
+      {minimapDialogState && (
+        <UndoChangesDialog
+          mode={minimapDialogState.mode}
+          target={minimapDialogState.target}
+          workspacePath={minimapDialogState.workspacePath}
+          input={minimapDialogState.input}
+          redoInstructions={minimapDialogState.redoInstructions}
+          requestId={minimapDialogState.requestId}
+          onClose={() => setMinimapDialogState(null)}
+        />
+      )}
     </section>
   );
 };

@@ -16,9 +16,6 @@ import { WebviewLog } from "../../utils/logger";
 import { useWorkflowStore } from "@store/workflowStore";
 import {
   buildUndoDialogInputForSpecificEvent,
-  buildUndoCandidatesForOutputs,
-  buildUndoDialogInputForPrompt,
-  getPromptUndoSummary,
   sameFilePath,
   type UndoDialogInput,
 } from "../../utils/promptUndo";
@@ -450,11 +447,6 @@ interface CliOutputProps {
   workspaceSnapshot?: WorkspaceSnapshot;
   /** UndoRecord override — used in history mode so we don't read from the live store */
   undoRecord?: UndoRecord;
-  /**
-   * All CLI outputs for this step (initial attempt + retries).
-   * When provided for the last attempt, a prompt-level undo button is shown.
-   */
-  allStepOutputs?: CliOutputType[];
 }
 
 /**
@@ -486,7 +478,6 @@ export const CliOutput = memo<CliOutputProps>(
     className = "",
     workspaceSnapshot,
     undoRecord,
-    allStepOutputs,
   }) => {
     const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
 
@@ -797,43 +788,6 @@ export const CliOutput = memo<CliOutputProps>(
       handleCopySessionId,
     ]);
 
-    const promptUndoAction = useMemo(() => {
-      if (!allStepOutputs || output.isStreaming || !allowUndoActions) return null;
-
-      const showRedo = effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true;
-
-      if (showRedo && (effectiveUndoRecord?.redoInstructions?.length ?? 0) > 0) {
-        const count = effectiveUndoRecord!.redoInstructions.length;
-        return { label: `Redo ${count} change${count !== 1 ? "s" : ""}`, isRedo: true };
-      }
-
-      const candidates = buildUndoCandidatesForOutputs(allStepOutputs, effectiveSnapshot);
-      const { undoableCount } = getPromptUndoSummary(candidates);
-      if (undoableCount === 0) return null;
-      return { label: `Undo ${undoableCount} change${undoableCount !== 1 ? "s" : ""}`, isRedo: false };
-    }, [allStepOutputs, output.isStreaming, allowUndoActions, effectiveUndoRecord, effectiveSnapshot]);
-
-    const handlePromptUndo = useCallback(() => {
-      if (!allStepOutputs) return;
-      const newRequestId = crypto.randomUUID();
-      const showRedo = effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true;
-      if (showRedo) {
-        setDialogState({
-          mode: "redo",
-          redoInstructions: effectiveUndoRecord!.redoInstructions,
-          requestId: newRequestId,
-        });
-      } else {
-        const input = buildUndoDialogInputForPrompt(
-          target,
-          allStepOutputs,
-          effectiveSnapshot,
-          output.workingDirectory ?? ""
-        );
-        setDialogState({ mode: "undo", input, requestId: newRequestId });
-      }
-    }, [allStepOutputs, effectiveUndoRecord, effectiveSnapshot, target, output.workingDirectory]);
-
     // Format timestamp for header
     const timestamp = output.timestampMs ? formatTime(output.timestampMs) : "";
 
@@ -848,16 +802,6 @@ export const CliOutput = memo<CliOutputProps>(
           )}
           [{stepLabel ?? `Prompt ${stepIndex + 1}`}] {attemptLabel}
           {streamingIndicator}
-          {promptUndoAction && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); handlePromptUndo(); }}
-              className="ml-auto flex-shrink-0 font-normal text-link-fg hover:text-link-active-fg transition-colors"
-            >
-              <i className={`codicon ${promptUndoAction.isRedo ? "codicon-redo" : "codicon-discard"} mr-1`} />
-              {promptUndoAction.label}
-            </button>
-          )}
         </div>
 
         {/* Prompt text */}
@@ -882,20 +826,10 @@ export const CliOutput = memo<CliOutputProps>(
         {/* Response (structured or plain) */}
         {responseNode}
 
-        {/* Statistics + Prompt-level undo/redo on the same row */}
-        {(statsNode || promptUndoAction) && (
-          <div className="flex items-center gap-2 mt-[var(--spacing-xs)] text-[length:var(--fp-output-font-size-xs)] text-[var(--fg-secondary)]">
-            <div className="flex-1 min-w-0">{statsNode}</div>
-            {promptUndoAction && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); handlePromptUndo(); }}
-                className="flex-shrink-0 text-link-fg hover:text-link-active-fg transition-colors"
-              >
-                <i className={`codicon ${promptUndoAction.isRedo ? "codicon-redo" : "codicon-discard"} mr-1`} />
-                {promptUndoAction.label}
-              </button>
-            )}
+        {/* Statistics row */}
+        {statsNode && (
+          <div className="mt-[var(--spacing-xs)] text-[length:var(--fp-output-font-size-xs)] text-[var(--fg-secondary)]">
+            {statsNode}
           </div>
         )}
 
