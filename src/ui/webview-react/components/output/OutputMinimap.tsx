@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 
 // ============================================================================
 // Types
@@ -33,7 +33,11 @@ interface OutputMinimapProps {
  * - Shows a proportional position marker for each prompt boundary
  * - Renders a viewport indicator (scroll thumb)
  * - Click on any marker to scroll to that step's output
- * - Hover over a marker to reveal an undo/redo button
+ * - Hover to reveal a speech-bubble popup with step info and undo/redo action
+ *
+ * Hover fix: the popup and dot are siblings inside a single flex-row container,
+ * so moving the mouse from the dot to the popup never leaves the container and
+ * never triggers onMouseLeave.
  */
 export const OutputMinimap: React.FC<OutputMinimapProps> = ({
   steps,
@@ -42,7 +46,6 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
   scrollTop,
 }) => {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   // Compute viewport indicator dimensions
   const [viewportPct, setViewportPct] = useState({ top: 0, height: 100 });
@@ -81,8 +84,8 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
   if (steps.length === 0) return null;
 
   return (
+    // The rail itself is 14px and clips nothing — markers overflow to the left.
     <div
-      ref={containerRef}
       className="relative flex-shrink-0 w-[14px] bg-sidebar-bg border-l border-panel-border"
       aria-hidden="true"
     >
@@ -92,7 +95,8 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
         style={{
           top: `${viewportPct.top}%`,
           height: `${viewportPct.height}%`,
-          background: "var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4))",
+          background:
+            "var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4))",
           opacity: 0.5,
         }}
       />
@@ -107,10 +111,6 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
         const hasUndo = step.undoAction !== null;
         const isRedo = step.undoAction?.isRedo ?? false;
 
-        // Dot color:
-        //   redo  → green (terminal-ansiGreen)
-        //   undo  → link-fg (blue)
-        //   plain → description-fg
         const dotColor = hasUndo
           ? isRedo
             ? "var(--vscode-terminal-ansiGreen, #89d185)"
@@ -118,40 +118,60 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
           : "var(--vscode-descriptionForeground, #858585)";
 
         return (
+          // Outer row: anchored to the right edge of the rail, grows leftward.
+          // The popup + dot are flex siblings so the hover zone covers both
+          // continuously — moving from dot to popup never leaves the container.
           <div
             key={step.key}
-            className="absolute left-0 right-0 flex items-center justify-center group"
+            className="absolute right-0 flex flex-row items-center z-20"
             style={{ top: `${topPct}%`, transform: "translateY(-50%)" }}
             onMouseEnter={() => setHoveredKey(step.key)}
             onMouseLeave={() => setHoveredKey(null)}
           >
-            {/* Tooltip + undo button — shown on hover, pops to the left */}
+            {/* Speech-bubble popup — visible on hover */}
             {isHovered && (
-              <div
-                className="absolute right-[18px] flex items-center gap-1 z-10 pointer-events-auto"
-                style={{ whiteSpace: "nowrap" }}
-              >
-                {/* Step label tooltip */}
-                <span className="text-[10px] bg-dropdown-bg border border-panel-border text-foreground px-1.5 py-0.5 rounded shadow-md">
-                  {step.label}
-                </span>
+              <div className="flex items-stretch mr-[3px]">
+                {/* Bubble body */}
+                <div
+                  className="flex flex-col justify-center gap-0.5 px-2 py-1.5 rounded-l rounded-r-none bg-dropdown-bg border border-panel-border shadow-lg"
+                  style={{ whiteSpace: "nowrap" }}
+                >
+                  {/* Step label */}
+                  <span className="text-[10px] font-semibold text-foreground leading-tight">
+                    {step.label}
+                  </span>
 
-                {/* Undo/redo button */}
-                {hasUndo && step.undoAction && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      step.undoAction!.onTrigger();
-                    }}
-                    title={step.undoAction.label}
-                    className="flex items-center justify-center w-[22px] h-[22px] rounded bg-btn-bg hover:bg-btn-hover text-btn-fg transition-colors shadow-md"
-                  >
-                    <i
-                      className={`codicon ${isRedo ? "codicon-redo" : "codicon-discard"} text-[11px]`}
-                    />
-                  </button>
-                )}
+                  {/* Undo/redo action row */}
+                  {hasUndo && step.undoAction && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        step.undoAction!.onTrigger();
+                      }}
+                      className="flex items-center gap-1 text-[10px] text-link-fg hover:text-link-active-fg transition-colors leading-tight focus:outline-none"
+                    >
+                      <i
+                        className={`codicon ${isRedo ? "codicon-redo" : "codicon-discard"} text-[10px]`}
+                      />
+                      {step.undoAction.label}
+                    </button>
+                  )}
+                </div>
+
+                {/* Tail triangle pointing right toward the dot */}
+                <div
+                  className="self-center flex-shrink-0"
+                  style={{
+                    width: 0,
+                    height: 0,
+                    borderTop: "5px solid transparent",
+                    borderBottom: "5px solid transparent",
+                    borderLeft:
+                      "5px solid var(--vscode-dropdown-background, #3c3c3c)",
+                    filter: "drop-shadow(1px 0 0 var(--vscode-panel-border, rgba(128,128,128,0.35)))",
+                  }}
+                />
               </div>
             )}
 
@@ -161,9 +181,17 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
               onClick={() => handleMarkerClick(step)}
               title={step.label}
               tabIndex={0}
-              className="relative z-0 w-[8px] h-[8px] rounded-full transition-transform hover:scale-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border"
-              style={{ background: dotColor }}
-            />
+              className="w-[14px] h-[18px] flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border"
+            >
+              <span
+                className="block rounded-full transition-all duration-100"
+                style={{
+                  width: isHovered ? "10px" : "8px",
+                  height: isHovered ? "10px" : "8px",
+                  background: dotColor,
+                }}
+              />
+            </button>
           </div>
         );
       })}
