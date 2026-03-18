@@ -72,11 +72,7 @@ export class ContextExpander {
       // Resolve symbol references to actual file locations
       const resolvedRefs = await this.resolveSymbolReferences(fileReferences);
 
-      if (resolvedRefs.length === 0) {
-        return promptText; // No valid attachments after resolution
-      }
-
-      // Build attachments in parallel for performance
+      // Build file attachments in parallel for performance
       const t0 = Date.now();
       const attachmentPromises = resolvedRefs.map((ref) =>
         this.buildAttachmentForReference(ref).catch((err) => {
@@ -95,10 +91,6 @@ export class ContextExpander {
       const validAttachments = attachments.filter(
         (a) => a !== null && a !== ""
       ) as string[];
-
-      if (validAttachments.length === 0) {
-        return promptText; // No valid attachments
-      }
 
       const totalBytes = validAttachments.reduce(
         (sum, a) => sum + Buffer.byteLength(a, "utf8"),
