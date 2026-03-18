@@ -12,7 +12,7 @@ export const PANEL_COLLAPSED_SIZE_SIDEBAR = "32px";
 export const PANEL_EXPANDED_SIZE_SINGLE = "95";
 
 /** Minimum panel size as percentage for resizable panels */
-export const PANEL_MIN_SIZE_SMALL = "10";
+export const PANEL_MIN_SIZE_SMALL = "100px";
 
 /** Minimum panel size in pixels for desktop sidebar panels (prompts/settings) */
 export const PANEL_MIN_SIZE_SIDEBAR = "192px";

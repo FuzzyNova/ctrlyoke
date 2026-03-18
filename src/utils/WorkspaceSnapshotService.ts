@@ -20,6 +20,11 @@ import { Log } from "./Log";
 const execFileAsync = promisify(execFile);
 
 const MAX_CONTENT_SIZE = 512 * 1024; // 512 KB
+
+/** Normalize Windows line endings to LF before diff computation. */
+function normalizeLf(content: string): string {
+  return content.replace(/\r\n/g, "\n");
+}
 const BINARY_CHECK_SIZE = 8 * 1024; // 8 KB
 
 /** Artifact directories/files to always exclude in filesystem strategy */
@@ -343,9 +348,16 @@ export class WorkspaceSnapshotService {
               { cwd: workspacePath }
             );
             if (afterState.content !== undefined) {
-              const patchResult = Diff.structuredPatch("", "", headContent, afterState.content);
+              const patchResult = Diff.structuredPatch("", "", normalizeLf(headContent), normalizeLf(afterState.content));
               if (patchResult.hunks.length > 0) {
                 change.structuredPatch = patchResult.hunks as UnifiedDiffHunk[];
+              }
+              // headContent (from git) is always LF; detect CRLF from the after-content.
+              // If the AI kept CRLF we know the original was CRLF. If the AI normalized
+              // it we cannot tell from the snapshot alone, but core.autocrlf=true users
+              // won't see git-modified in that case anyway.
+              if (afterState.content.includes("\r\n")) {
+                change.lineEnding = "crlf";
               }
             } else {
               change.contentCaptureSkipped = true;
@@ -370,9 +382,13 @@ export class WorkspaceSnapshotService {
           afterHash: afterState.contentHash,
         };
         if (beforeState.content !== undefined && afterState.content !== undefined) {
-          const patchResult = Diff.structuredPatch("", "", beforeState.content, afterState.content);
+          const patchResult = Diff.structuredPatch("", "", normalizeLf(beforeState.content), normalizeLf(afterState.content));
           if (patchResult.hunks.length > 0) {
             change.structuredPatch = patchResult.hunks as UnifiedDiffHunk[];
+          }
+          // Detect CRLF from the in-memory before-content — no extra reads needed.
+          if (beforeState.content.includes("\r\n")) {
+            change.lineEnding = "crlf";
           }
         } else {
           change.contentCaptureSkipped = true;
@@ -460,7 +476,7 @@ export class WorkspaceSnapshotService {
           restoredFiles.push(instruction.path);
           if (currentContent !== undefined) {
             // Compute forward patch (pre-AI → AI-modified) for diff display in redo dialog
-            const fwdPatch = Diff.structuredPatch("", "", instruction.contentToRestore ?? "", currentContent);
+            const fwdPatch = Diff.structuredPatch("", "", normalizeLf(instruction.contentToRestore ?? ""), normalizeLf(currentContent));
             const structuredPatch = fwdPatch.hunks.length > 0 ? (fwdPatch.hunks as UnifiedDiffHunk[]) : undefined;
             redoInstructions.push({ path: instruction.path, action: "restore-content", contentToRestore: currentContent, structuredPatch });
           } else {
@@ -477,7 +493,10 @@ export class WorkspaceSnapshotService {
             continue;
           }
           const reversePatchStr = buildReversePatchString(instruction.structuredPatch);
-          const patched = Diff.applyPatch(currentContent, reversePatchStr);
+          // Normalize to LF before applying — the patch was computed from LF-normalized
+          // content, so context lines are LF. Normalizing ensures applyPatch matches
+          // even if the file currently has CRLF endings.
+          const patched = Diff.applyPatch(normalizeLf(currentContent), reversePatchStr);
           if (patched === false) {
             failedFiles.push({
               path: instruction.path,
@@ -485,7 +504,11 @@ export class WorkspaceSnapshotService {
             });
             continue;
           }
-          await fs.promises.writeFile(absPath, patched, "utf8");
+          // Re-apply the original line endings if the file was CRLF before the prompt ran.
+          const restoredContent = instruction.lineEnding === "crlf"
+            ? patched.replace(/\r?\n/g, "\r\n")
+            : patched;
+          await fs.promises.writeFile(absPath, restoredContent, "utf8");
           restoredFiles.push(instruction.path);
           // Redo: restore the pre-undo state (what was in the file before we reversed the patch).
           // The forward structuredPatch (before→after AI change) is the original instruction patch.

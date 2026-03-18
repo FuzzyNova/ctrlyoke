@@ -124,8 +124,6 @@ export interface SnapshotFileChange {
    * Undefined if content capture was skipped.
    */
   contentToRestore?: string;
-  /** @deprecated Legacy field — no longer used for undo logic. May be present in old history files. */
-  wasAtHead?: boolean;
   /** True if before-content was skipped due to size (>512 KB) or binary detection. */
   contentCaptureSkipped?: boolean;
   /**
@@ -138,8 +136,16 @@ export interface SnapshotFileChange {
    * Structured patch (before→after) for modified files.
    * Used for display diff and prompt-level undo via reverse-patch.
    * More storage-efficient than full contentToRestore for modified files.
+   * Always stored with LF-normalized line endings for consistent display.
    */
   structuredPatch?: UnifiedDiffHunk[];
+  /**
+   * Original line ending style of the file before the prompt ran.
+   * Only set to 'crlf' when the before-content had CRLF endings.
+   * Used by reverse-patch undo to restore the correct line endings
+   * without needing to store the full file content.
+   */
+  lineEnding?: 'crlf';
 }
 
 export interface WorkspaceSnapshot {

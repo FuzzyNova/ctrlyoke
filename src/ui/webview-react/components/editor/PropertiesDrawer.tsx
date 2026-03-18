@@ -349,7 +349,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
           Prompt Properties
         </h3>
         <button
-          className="btn-close-drawer w-7 h-7 flex items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-toolbar-hover-bg transition-all"
+          className="btn-close-drawer w-6 h-6 flex items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-toolbar-hover-bg transition-all"
           onClick={onClose}
           title="Close properties drawer"
         >
@@ -358,8 +358,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       </div>
 
       {/* Body */}
-      <div className="drawer-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4">
-        <div className="space-y-4">
+      <div className="drawer-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-2">
+        <div className="space-y-2">
           {/* Row 1: Harness + Model */}
           <div className="grid grid-cols-2 gap-4">
             {/* Harness */}

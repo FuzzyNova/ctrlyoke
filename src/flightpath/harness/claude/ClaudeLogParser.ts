@@ -5,10 +5,7 @@ import { BaseLogParser } from "../shared/BaseLogParser";
 import { BaseCliEvent, ILogParser } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
 import { getClaudeContextWindowSize } from "../../../utils/ModelConstants";
-import {
-  retryWithBackoff,
-  PermanentFailureError,
-} from "../../../utils/RetryUtils";
+import { retryWithBackoff } from "../../../utils/RetryUtils";
 import {
   UniversalCliOutput,
   ThinkingBlock,
@@ -711,10 +708,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * @remarks
    * **Normalization Rules:**
    * - Convert drive colon to double dash (Windows: `C:\` → `C--`)
-   * - Remove leading slashes (Unix: `/Users/` → `Users-`)
-   * - Replace path separators with dashes
+   * - Replace path separators with dashes (leading slash becomes a leading dash)
    * - Example Windows: `C:\dev\FlightPath` → `C--dev-FlightPath`
-   * - Example Unix: `/Users/name/dev/FlightPath` → `Users-name-dev-FlightPath`
+   * - Example Unix: `/home/name/dev/FlightPath` → `-home-name-dev-FlightPath`
    *
    * **Note:** This is based on observed Claude CLI behavior.
    * The actual normalization may vary depending on Claude CLI version.
@@ -723,10 +719,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     // Replace drive letter colon with double dash on Windows (e.g., "C:\dev\FlightPath" → "C--dev-FlightPath")
     let normalized = workspacePath.replace(/^([A-Z]):[\\\/]/i, "$1--");
 
-    // Remove leading slash on Unix (e.g., "/Users/name/dev" → "Users/name/dev")
-    normalized = normalized.replace(/^[\\\/]/, "");
-
-    // Replace path separators with dashes
+    // Replace path separators with dashes (leading slash on Unix becomes a leading dash,
+    // matching Claude CLI's observed behavior: "/home/user/dev" → "-home-user-dev")
     normalized = normalized.replace(/[\\\/]/g, "-");
 
     return normalized;

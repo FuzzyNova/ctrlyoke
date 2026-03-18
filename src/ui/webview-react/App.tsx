@@ -502,7 +502,7 @@ function App() {
         const reserved = promptsSize + settingsSize;
         const available = Math.max(1, 100 - reserved);
 
-        const minOpenSize = Number.parseFloat(PANEL_MIN_SIZE_SMALL) || 10;
+        const minOpenSize = 10;
         const desiredEditorSize = Math.max(
           minOpenSize,
           lastMobileSizes.current.editor
