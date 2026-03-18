@@ -72,6 +72,7 @@ const STATE_BADGE_CONFIG: Record<string, StateBadgeConfig> = {
 export const Header: React.FC = () => {
   const vscode = useVsCodeApi();
   const { fileName, executionState } = useWorkflowStore();
+  const hasPrompts = useWorkflowStore((s) => s.prompts.length > 0);
   const { loadedWorkflows, activeWorkflowId, newWorkflowModalOpen, closeNewWorkflowModal } = useUiStore();
 
   // Undo/redo availability — useWorkflowTemporalStore uses useState+useEffect
@@ -132,6 +133,13 @@ export const Header: React.FC = () => {
     }
   }, [vscode, activeWorkflowId]);
 
+  const canSave = hasFile && hasPrompts;
+
+  const handleSave = useCallback(() => {
+    if (!canSave) return;
+    vscode.postMessage({ type: MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST });
+  }, [vscode, canSave]);
+
   // Handlers
   const handleRun = useCallback(() => {
     if (!canRun) return;
@@ -154,9 +162,23 @@ export const Header: React.FC = () => {
   return (
     <>
       <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_1fr] gap-x-4 gap-y-1.5 items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
-        {/* Left Section: Workflow Controls + Undo/Redo buttons */}
+        {/* Left Section: Workflow Controls + Save + Undo/Redo buttons */}
         <div className="header-left flex items-center gap-2">
           <WorkflowControls />
+          {/* Save button */}
+          <button
+            className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
+              canSave
+                ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+            }`}
+            onClick={handleSave}
+            disabled={!canSave}
+            title={!hasFile ? "Load a workflow to save" : !hasPrompts ? "Add prompts to save" : "Save workflow to file"}
+            aria-label="Save workflow"
+          >
+            <i className="codicon codicon-save" />
+          </button>
           {/* Undo button */}
           <button
             className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${

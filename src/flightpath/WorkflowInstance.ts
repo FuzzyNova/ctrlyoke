@@ -48,7 +48,10 @@ import {
   type PromptStartData,
   type PromptCompleteData,
 } from "./OutputCaptureBuffer";
-export type { PromptStartData, PromptCompleteData } from "./OutputCaptureBuffer";
+export type {
+  PromptStartData,
+  PromptCompleteData,
+} from "./OutputCaptureBuffer";
 
 /**
  * WorkflowInstance
@@ -256,7 +259,11 @@ export class WorkflowInstance {
       onPromptStart: (data) => this._promptStartEmitter.fire(data),
       onPromptComplete: (data) => this._promptCompleteEmitter.fire(data),
       onStatusMessage: (stepIndex, message, severity) =>
-        this._workflowStatusMessageEmitter.fire({ stepIndex, message, severity }),
+        this._workflowStatusMessageEmitter.fire({
+          stepIndex,
+          message,
+          severity,
+        }),
       getPromptItem: (stepIndex) =>
         this.promptQueue.getState().prompts[stepIndex],
       getTotalSteps: () => this.promptQueue.getProgress().total,
@@ -773,7 +780,12 @@ export class WorkflowInstance {
 
       const workingFilePath = currentQueueState.workingFilePath ?? "";
       let historyFilePath = "";
-      if (!continueFromCurrent && !isAppendContinuation && !isIdleContinuation && workingFilePath) {
+      if (
+        !continueFromCurrent &&
+        !isAppendContinuation &&
+        !isIdleContinuation &&
+        workingFilePath
+      ) {
         const workflowId =
           this.outputHistoryManager.extractWorkflowId(workingFilePath);
         const historyInit =
@@ -818,7 +830,10 @@ export class WorkflowInstance {
                   i,
                   stepData.cliOutputs,
                   maxAttemptIndex > 0
-                    ? { currentRetry: maxAttemptIndex, maxRetries: maxAttemptIndex }
+                    ? {
+                        currentRetry: maxAttemptIndex,
+                        maxRetries: maxAttemptIndex,
+                      }
                     : undefined
                 );
               }
@@ -1113,9 +1128,7 @@ export class WorkflowInstance {
       );
     } catch (error) {
       Log.error("Failed to queue prompts:", error);
-      this.platform.error(
-        `Failed to queue prompts: ${getErrorMessage(error)}`
-      );
+      this.platform.error(`Failed to queue prompts: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1565,7 +1578,10 @@ export class WorkflowInstance {
       workingFilePath: workingFilePath || undefined,
       instanceTag: `[inst:${this.id.slice(0, 8)}]`,
       outputHistoryManager: this.outputHistoryManager,
-      getIntegrationForPrompt: (prompt: PromptItem, harnessOverride?: Harness) => {
+      getIntegrationForPrompt: (
+        prompt: PromptItem,
+        harnessOverride?: Harness
+      ) => {
         const currentIntegration = this.activeIntegration ?? activeIntegration;
         const resolvedHarness = harnessOverride || prompt.harness;
         if (
@@ -1576,14 +1592,31 @@ export class WorkflowInstance {
           Log.debug(
             `🔀 Prompt ${prompt.name || "unnamed"} switching to harness: ${resolvedHarness}`
           );
-          const overrideIntegration = this.createIntegrationForMode(resolvedHarness);
+          const overrideIntegration =
+            this.createIntegrationForMode(resolvedHarness);
           this.activeIntegration = overrideIntegration;
           return overrideIntegration;
         }
         return currentIntegration;
       },
-      captureOutputInit: (stepIndex, prompt, cliCommand, workingDirectory, timestampMs, attemptIndex, rawTextOutput) => {
-        this.outputCaptureBuffer.captureOutputInit(stepIndex, prompt, cliCommand, workingDirectory, timestampMs, attemptIndex, rawTextOutput);
+      captureOutputInit: (
+        stepIndex,
+        prompt,
+        cliCommand,
+        workingDirectory,
+        timestampMs,
+        attemptIndex,
+        rawTextOutput
+      ) => {
+        this.outputCaptureBuffer.captureOutputInit(
+          stepIndex,
+          prompt,
+          cliCommand,
+          workingDirectory,
+          timestampMs,
+          attemptIndex,
+          rawTextOutput
+        );
       },
       captureChunk: (stepIndex, chunk) => {
         this.outputCaptureBuffer.captureChunk(stepIndex, chunk);
@@ -1594,8 +1627,24 @@ export class WorkflowInstance {
       captureCompletedOutput: (stepIndex, output) => {
         this.outputCaptureBuffer.captureCompletedOutput(stepIndex, output);
       },
-      captureFinalPromptOutputInit: (loopIndex, prompt, cliCommand, workingDirectory, timestampMs, attemptIndex, rawTextOutput) => {
-        this.outputCaptureBuffer.captureFinalPromptOutputInit(loopIndex, prompt, cliCommand, workingDirectory, timestampMs, attemptIndex, rawTextOutput);
+      captureFinalPromptOutputInit: (
+        loopIndex,
+        prompt,
+        cliCommand,
+        workingDirectory,
+        timestampMs,
+        attemptIndex,
+        rawTextOutput
+      ) => {
+        this.outputCaptureBuffer.captureFinalPromptOutputInit(
+          loopIndex,
+          prompt,
+          cliCommand,
+          workingDirectory,
+          timestampMs,
+          attemptIndex,
+          rawTextOutput
+        );
       },
       captureFinalPromptChunk: (loopIndex, chunk) => {
         this.outputCaptureBuffer.captureFinalPromptChunk(loopIndex, chunk);
@@ -1604,13 +1653,24 @@ export class WorkflowInstance {
         this.outputCaptureBuffer.captureFinalPromptEvents(loopIndex, events);
       },
       captureFinalPromptCompletedOutput: (loopIndex, output) => {
-        this.outputCaptureBuffer.captureFinalPromptCompletedOutput(loopIndex, output);
+        this.outputCaptureBuffer.captureFinalPromptCompletedOutput(
+          loopIndex,
+          output
+        );
       },
       onFinalPromptStatusMessage: (loopIndex, message, severity) => {
-        this.outputCaptureBuffer.onFinalPromptStatusMessage(loopIndex, message, severity);
+        this.outputCaptureBuffer.onFinalPromptStatusMessage(
+          loopIndex,
+          message,
+          severity
+        );
       },
       onStatusMessage: (stepIndex, message, severity) => {
-        this._workflowStatusMessageEmitter.fire({ stepIndex, message, severity });
+        this._workflowStatusMessageEmitter.fire({
+          stepIndex,
+          message,
+          severity,
+        });
       },
       snapshotService: new WorkspaceSnapshotService(),
       onSnapshotCaptured: (target, snapshot) => {
@@ -2079,26 +2139,17 @@ export class WorkflowInstance {
     promptName?: string
   ): string {
     if (promptName?.trim()) {
-      return promptName
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
+      return promptName.trim();
     }
 
-    const words = text
+    const cleanWords = text
       .trim()
       .split(/\s+/)
       .slice(0, 5)
-      .map((word) =>
-        word
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-+|-+$/g, "")
-      )
+      .map((word) => word.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, ""))
       .filter((word) => word.length > 0);
 
-    return words.length > 0 ? words.join("-") : "ephemeral-prompt";
+    return cleanWords.length > 0 ? cleanWords.join(" ") : "Ephemeral Prompt";
   }
 
   /** Produces `{ key: undefined }` entries for each key in clearProperties, which

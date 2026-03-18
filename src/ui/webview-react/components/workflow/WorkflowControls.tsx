@@ -31,7 +31,6 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   const { fileName } = useWorkflowStore();
 
   const hasQueue = fileName !== null;
-  const hasPrompts = useWorkflowStore((s) => s.prompts.length > 0);
 
   // Handle new workflow (clear current)
   const handleNewWorkflow = useCallback(() => {
@@ -54,13 +53,6 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
     vscode.postMessage({ type: MESSAGE_TYPES.APPEND_FILE });
   }, [vscode, hasQueue]);
 
-  // Handle save to file action
-  const handleSaveToFile = useCallback(() => {
-    // only send save request when there's a working file and at least one prompt
-    if (!hasQueue || !hasPrompts) return;
-    vscode.postMessage({ type: MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST });
-  }, [vscode, hasQueue, hasPrompts]);
-
   // Build dropdown options
   const dropdownOptions: SplitButtonOption[] = [
     {
@@ -81,13 +73,6 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       icon: <i className="custom-icon icon-queue-from-file" />,
       onClick: handleQueueFile,
       disabled: !hasQueue,
-    },
-    {
-      label: "Save to File...",
-      value: "save-file",
-      icon: <i className="codicon codicon-save" />,
-      onClick: handleSaveToFile,
-      disabled: !hasQueue || !hasPrompts,
     },
   ];
 
