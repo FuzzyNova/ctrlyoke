@@ -38,32 +38,6 @@ FlightPath CLI is a **sibling product** sharing core code:
 
 ---
 
-## Implementation Status
-
-All phases are complete. The FlightPath CLI binary is fully implemented and builds as `out/cli.js`.
-
-### ✅ All Components Implemented
-
-| Component | File | Notes |
-|-----------|------|-------|
-| `WorkflowInstance` | `src/flightpath/WorkflowInstance.ts` | Fully extracted, self-contained execution unit |
-| `IntegrationFactory` | `src/flightpath/IntegrationFactory.ts` | Factory for detector singletons + per-run execution integrations |
-| `WorkflowOrchestrator` | `src/flightpath/WorkflowOrchestrator.ts` | Registry for parallel workflows (VS Code only) |
-| `CliIntegration` (composition) | `src/flightpath/harness/CliIntegration.ts` | Generic, works with any ICliProvider |
-| All 3 CLI providers | `src/flightpath/harness/copilot/`, `claude/`, `codex/` | Full implementations |
-| Per-run integrations | `IntegrationFactory.createForExecution()` | Isolated, non-shared, disposed after run |
-| `PlatformAdapter` interface | `src/platform/PlatformAdapter.ts` | Abstraction for VS Code vs CLI platform APIs |
-| `VsCodeAdapter` | `src/platform/VsCodeAdapter.ts` | Wraps vscode.* calls; extension behavior unchanged |
-| `CliAdapter` | `src/platform/CliAdapter.ts` | Node.js CLI implementation; maps CLI flags to settings |
-| `vscode-shim` | `src/platform/vscode-shim.ts` | Stubs vscode module for CLI bundle; routes config reads to CliAdapter |
-| `src/cli.ts` entry point | `src/cli.ts` | Commander-based CLI binary (`run`, `validate` commands) |
-| `CliTerminalFormatter` | `src/cli/CliTerminalFormatter.ts` | Chalk-based terminal renderer for headless streaming output |
-| esbuild CLI bundle | `esbuild.js` (line 215) | Builds `out/cli.js` with `#!/usr/bin/env node` banner |
-| `bin` entry | `package.json` | `"flightpath": "./out/cli.js"` |
-| `commander` + `chalk` dependencies | `package.json` | Argument parsing and colored output |
-
----
-
 ## Design Decisions
 
 The following decisions have been made for FlightPath CLI:

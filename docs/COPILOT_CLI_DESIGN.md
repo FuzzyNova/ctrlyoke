@@ -6,7 +6,7 @@ This document details FlightPath's integration with the GitHub Copilot CLI, incl
 
 FlightPath uses the GitHub Copilot CLI (`copilot`) as the default integration mode for executing prompts. CLI mode provides deterministic completion detection, structured output, and better reliability compared to Chat window automation.
 
-**Key file:** `src/flightpath/cli/CopilotCommandLineIntegration.ts`
+**Key files:** `src/flightpath/harness/copilot/CopilotCliProvider.ts`, `src/flightpath/harness/copilot/CopilotLogParser.ts`
 
 ## Current Implementation Status
 
@@ -359,73 +359,18 @@ write                 # Match file creation/modification tools
 
 ## Implementation Notes
 
-### Current Code Structure
+### Code Structure
 
-```typescript
-// src/types/CopilotTypes.ts
+The Copilot CLI integration uses a composition pattern in `src/flightpath/harness/copilot/`:
 
-interface CopilotCliOptions {
-  addDirs?: string[];
-  model?: string;
-  agent?: string;
-  resumeSession?: string;
-  // Tool permissions (per-prompt override)
-  allowedTools?: string[];
-  deniedTools?: string[];
-  // Logging (per-prompt override)
-  logLevel?: string;
-  logDir?: string;
-  // Advanced options (future use)
-  mcpConfig?: string;
-  disableParallelTools?: boolean;
-  noCustomInstructions?: boolean;
-}
-```
+- **`CopilotCliProvider.ts`** — Main provider implementing `ICliProvider`. Aggregates all components and handles session and context window augmentation via `augmentParsedOutput()`.
+- **`CopilotLogParser.ts`** — Parses JSONL event logs. Extracts responses, session IDs, and token usage from `session.truncation` events.
+- **`CopilotNotificationMonitor.ts`** — Monitors the sessionEnd hook notification file for reliable interactive-mode completion detection.
+- **`CopilotToolPermissionMapper.ts`** — Converts FlightPath tool permission settings to `--allow-tool`/`--deny-tool` CLI args.
+- **`CopilotToolBuilder.ts`** — Builds semantic CLI events from Copilot tool execution events.
+- **`CopilotResponseParser.ts`** — Parses plain-text (interactive/fallback) output.
 
-### CLI Argument Building
-
-The implementation builds args incrementally in `sendPrompt()`:
-
-```typescript
-const args: string[] = [];
-
-// Tool permissions (allowAll or custom with allow/deny patterns)
-const toolPermissions = this.getToolPermissionArgs();
-args.push(...toolPermissions);
-
-// Path access
-if (this.shouldAllowAllPaths()) {
-  args.push("--allow-all-paths");
-}
-
-// Logging
-if (this.logDirectory) {
-  args.push("--log-dir", this.logDirectory);
-}
-// Log level (hardcoded to debug for session resumption)
-const logLevelArgs = this.getLogLevelArgs();
-args.push(...logLevelArgs); // Always adds --log-level debug
-
-// Directories
-if (options.addDirs && options.addDirs.length > 0) {
-  options.addDirs.forEach((dir) => {
-    args.push("--add-dir", dir);
-  });
-}
-
-// Model
-if (options.model) {
-  args.push("--model", options.model);
-}
-
-// Agent: content is prepended into the prompt via <agentInstructions> tags
-// The --agent CLI flag is no longer used; agent handling is done in buildPromptWithInstructions()
-
-// Session resume
-if (options.resumeSession) {
-  args.push("--resume", options.resumeSession);
-}
-```
+CLI argument assembly is done in `CopilotCliProvider.buildArgs()`. The pattern is: tool permissions → path access → log level (always `debug`) → directories → model → session resume.
 
 ### Security Considerations
 
@@ -436,26 +381,13 @@ if (options.resumeSession) {
 
 ---
 
-## Implementation Tasks for Agents
+## Remaining Enhancements
 
-This section provides a clear checklist for implementing the remaining planned enhancements.
-
-### ✅ Completed Tasks
-
-| Task                      | Status  | Files Modified                                                                |
-| ------------------------- | ------- | ----------------------------------------------------------------------------- |
-| Log Directory Setting     | ✅ Done | `package.json`, `CopilotCommandLineIntegration.ts`, `copilot-instructions.md` |
-| Log Level Setting         | ✅ Done | `package.json`, `CopilotCommandLineIntegration.ts`                            |
-| Granular Tool Permissions | ✅ Done | `package.json`, `CopilotCommandLineIntegration.ts`                            |
-| Update CopilotCliOptions  | ✅ Done | `src/types/CopilotTypes.ts`                                                   |
-
-### Remaining Tasks
-
-| Task                     | Priority | Effort | Notes                          |
-| ------------------------ | -------- | ------ | ------------------------------ |
-| MCP Server Configuration | Medium   | Medium | Add custom MCP server support  |
-| Parallel Tool Execution  | Low      | Small  | Add `--disable-parallel-tools` |
-| Custom Instructions      | Low      | Small  | Add `--no-custom-instructions` |
+| Task                     | Priority | Notes                                                       |
+| ------------------------ | -------- | ----------------------------------------------------------- |
+| MCP Server Configuration | Medium   | `--additional-mcp-config` — custom MCP server support       |
+| Parallel Tool Execution  | Low      | `--disable-parallel-tools-execution` flag                   |
+| Custom Instructions      | Low      | `--no-custom-instructions` to disable AGENTS.md loading     |
 
 ---
 
@@ -590,43 +522,25 @@ Explain the structure of #file:src/ui
 
 **VS Code Chat Feature**: `#sym:symbolName`
 
-When used in VS Code Chat, referencing a symbol provides targeted code context:
+**FlightPath syntax**: `#sym:path/to/file.ts:SymbolName:lineNumber`
+
+When used in a prompt, this provides targeted code context for a specific symbol:
 
 ```markdown
-Refactor #sym:cancelImplementation to improve error handling
+Refactor #sym:src/flightpath/harness/CliIntegration.ts:executePrompt:42 to improve error handling
 ```
-
-**What VS Code attaches:**
-
-- Specific function/method/class definition
-- Precise line range for that symbol only
-- Much more targeted than full file attachment
 
 **CLI Support**: ❌ Not natively supported by Copilot or Claude CLI
 
-**FlightPath implementation**: Not yet implemented
+**FlightPath implementation**: ✅ Implemented
 
-- Would require symbol resolution via VS Code Language Server
-- Could use `vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider')` to find symbols
-- Extract symbol location and convert to line range attachment
-- **High value**: Very useful for focused refactoring prompts
+- `FileReferenceParser.parseSymbolReferences()` parses `#sym:` references from prompts
+- `ContextExpander` resolves symbol references to file + line range
+- Converted to XML `<attachment>` blocks (same as `#file:path:start-end` line ranges)
+- Quoted path syntax supported: `#sym:"path with spaces/file.ts":SymbolName:123`
+- IntelliSense completions available via `#` trigger character in `.flightpath.json` / `.prompt.md` files
 
-**Proposed FlightPath syntax extension:**
-
-```json
-{
-  "prompt": "Refactor #sym:cancelImplementation in #file:src/flightpath/cli/BaseCliIntegration.ts"
-}
-```
-
-FlightPath would:
-
-1. Parse `#sym:symbolName` from prompt
-2. Resolve symbol location using VS Code API
-3. Convert to `#selection::-` format
-4. Process as line range attachment (existing implementation)
-
-**Implementation priority**: Medium (symbol resolution adds complexity but high user value)
+**Syntax format**: `#sym:path:SymbolName:lineNumber` or `#sym:"path with spaces":SymbolName:lineNumber`
 
 ## Version Compatibility
 

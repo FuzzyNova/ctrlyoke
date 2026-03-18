@@ -8,7 +8,7 @@
 
 ## Overview
 
-This document describes Codex CLI-specific output handling in FlightPath — ANSI code stripping, the diff unavailability limitation, and Codex-specific event parsing. The implementation lives in `src/flightpath/cli/codex/CodexResponseParser.ts`.
+This document describes Codex CLI-specific output handling in FlightPath — ANSI code stripping, the diff unavailability limitation, and Codex-specific event parsing. The implementation lives in `src/flightpath/harness/codex/CodexResponseParser.ts`.
 
 > **Note on webview migration**: The original bug-fix document (in `docs/research/`) referenced `src/ui/webview/output-manager.js` and `src/ui/webview/dashboard.scss`. Those files were part of the legacy JavaScript webview that has been replaced by the React webview (`src/ui/webview-react/`). The behaviors described there are now handled by React components with Tailwind CSS.
 

@@ -1304,10 +1304,10 @@ npm test -- --grep "CodexLogParser"
 
 ### Related Documentation
 
-- **Codex CLI Provider**: `src/flightpath/cli/codex/CodexCliProvider.ts`
-- **Response Parser**: `src/flightpath/cli/codex/CodexResponseParser.ts`
-- **Notification Monitor**: `src/flightpath/cli/codex/CodexNotificationMonitor.ts`
-- **Tool Permission Mapper**: `src/flightpath/cli/codex/CodexToolPermissionMapper.ts`
+- **Codex CLI Provider**: `src/flightpath/harness/codex/CodexCliProvider.ts`
+- **Response Parser**: `src/flightpath/harness/codex/CodexResponseParser.ts`
+- **Notification Monitor**: `src/flightpath/harness/codex/CodexNotificationMonitor.ts`
+- **Tool Permission Mapper**: `src/flightpath/harness/codex/CodexToolPermissionMapper.ts`
 - **Adding New Providers**: `docs/ADDING_NEW_CLI_PROVIDER.md`
 
 ### FlightPath Architecture

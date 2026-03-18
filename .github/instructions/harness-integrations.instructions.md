@@ -3,35 +3,26 @@ applyTo: "src/flightpath/harness/**"
 ---
 
 <purpose>
-Harness integrations for GitHub Copilot, Claude Code, and Codex. Deterministic completion, structured output, no UI dependencies. Supports both interactive TUI and headless background execution modes.
+Harness integrations for GitHub Copilot, Claude Code, Codex, and OpenCode. Deterministic completion, structured output, no UI dependencies. Supports both interactive TUI and headless background execution modes.
 </purpose>
 
 <architectureOverview>
-**Composition-based architecture** (as of January 2026):
+**Composition-based architecture:**
 
-FlightPath uses **composition over inheritance** for harness integrations. This makes adding new CLI providers (Gemini, OpenCode, etc.) simple and safe:
+FlightPath uses **composition over inheritance** for harness integrations. This makes adding new CLI providers simple and safe:
 
 - **Single generic integration class** (`CliIntegration`) works with ALL providers
-- **Harness-specific logic** encapsulated in provider directories (copilot/, claude/, codex/)
+- **Harness-specific logic** encapsulated in provider directories (copilot/, claude/, codex/, opencode/)
 - **Zero core class modifications** needed when adding new providers
 - **Interface-driven design** (TypeScript guides implementation)
 - **Testable components** (no mocking needed, pure logic)
 
-### Why Composition Over Inheritance?
+**Adding a provider means:**
 
-**Before (Inheritance)**: Adding a provider meant:
-
-1. Creating a subclass of BaseCliIntegration
-2. Implementing 15+ abstract methods
-3. Modifying 3-4 shared utility classes
-4. High risk of breaking existing providers
-
-**After (Composition)**: Adding a provider means:
-
-1. Creating 4 focused classes in a new directory
-2. Implementing 4 clear interfaces
-3. ZERO modifications to core classes or other providers
-4. Complete isolation from existing providers
+1. Creating 5-6 focused classes in a new provider directory
+2. Implementing the `ICliProvider` interface
+3. ZERO modifications to `CliIntegration` or shared utilities
+4. Adding entry to `IntegrationFactory`, `HARNESS_IDS`, and package.json
 
 See: `docs/ADDING_NEW_CLI_PROVIDER.md` for step-by-step guide
 </architectureOverview>
@@ -39,25 +30,33 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for step-by-step guide
 <coreComponents>
 **CliIntegration** (src/flightpath/harness/CliIntegration.ts):
 - Generic integration class that works with ANY provider
-- Delegates all provider-specific behavior to ICliProvider instance
-- Handles execution lifecycle (interactive/headless modes)
-- Manages session continuity, cancellation, and status updates
+- Delegates all provider-specific behavior to `ICliProvider` instance
+- Handles execution lifecycle (interactive/headless modes, VS Code terminal or CLI spawn)
+- Manages session continuity, cancellation, temp file creation/cleanup, and status updates
+- Terminal tab name: `FP: {Harness}` or `FP: {Harness} · {name} [n/total]`
 - **Never needs modification** when adding new providers
+
+**IntegrationFactory** (src/flightpath/IntegrationFactory.ts):
+
+- Central factory for creating provider-specific `CliIntegration` instances
+- Methods: `createCopilotCli()`, `createClaudeCli()`, `createCodexCli()`, `createOpenCodeCli()`, `createForHarness(harness)`
+- `VsCodeIntegrationFactory` extends this with chat support
+- WorkflowOrchestrator uses this to create and cache all four integrations at startup
 
 **CliLogMonitor** (src/flightpath/harness/CliLogMonitor.ts):
 
 - Wraps `INotificationMonitor` with polling logic and file-based session end detection
-- Used by `CliIntegration` to detect when a headless AI CLI process has completed its response
+- Used by `CliIntegration` to detect when a headless AI CLI process has completed
 - Monitors hook/notification files written by the AI CLI's notify scripts
-- Not used by interactive mode (the user signals completion manually)
 
 **ICliProvider Interface** (src/flightpath/harness/shared/interfaces/ICliProvider.ts):
 
-- Main provider contract - defines what a CLI provider must implement
-- Includes: config (metadata), responseParser, notificationMonitor, toolPermissionMapper
-- Methods: buildHeadlessArgs(), buildInteractiveTuiCommand(), formatFileReference(), getMcpConfigArgs(), checkAvailability()
-- Compose 4 sub-interfaces: IResponseParser, INotificationMonitor, IToolPermissionMapper, HarnessConfig
-  </coreComponents>
+- Main provider contract — defines what a CLI provider must implement
+- **Required**: `config` (HarnessConfig), `responseParser`, `notificationMonitor`, `toolPermissionMapper`
+- **Required methods**: `buildCliArgs()`, `buildHeadlessArgs()`, `buildInteractiveTuiCommand()`, `checkAvailability()`
+- **Optional**: `logParser`, `formatFileReference()`, `getMcpConfigArgs()`, `getMcpConfigFilePath()`, `getAdditionalCleanupFilePaths()`, `getVersion()`, `getInteractiveSpawnEnv()`, `extractSessionIdFromLogs()`, `augmentParsedOutput()`
+- `HarnessConfig` fields: `name`, `displayName`, `terminalName`, `installHint`, `shouldStreamHeadlessOutput`, `usesInteractiveNotificationMonitor`, `rawTextOutput`
+</coreComponents>
 
 <providerStructure>
 Each provider is self-contained in its own directory with 5 required files:

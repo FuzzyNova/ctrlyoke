@@ -6,7 +6,13 @@ This document details FlightPath's integration with the Claude Code CLI (Anthrop
 
 FlightPath supports Claude Code CLI (`claude`) as an alternative AI provider to GitHub Copilot. Claude CLI provides deterministic completion detection, structured JSON output, and model selection (sonnet, opus, haiku).
 
-**Key file:** `src/flightpath/cli/ClaudeCommandLineIntegration.ts`
+**Key files:**
+- `src/flightpath/harness/claude/ClaudeCliProvider.ts` — Main provider (CLI args, session management, MCP config)
+- `src/flightpath/harness/claude/ClaudeResponseParser.ts` — Parses stream-json output
+- `src/flightpath/harness/claude/ClaudeLogParser.ts` — Parses JSONL log files for session discovery
+- `src/flightpath/harness/claude/ClaudeToolPermissionMapper.ts` — Converts tool permission settings to CLI args
+- `src/flightpath/harness/claude/ClaudeNotificationMonitor.ts` — Monitors Stop hook notification files
+- `src/flightpath/harness/CliIntegration.ts` — Shared CLI execution orchestration
 
 **Installation:**
 
@@ -40,8 +46,8 @@ FlightPath uses Claude's **Stop hook** for reliable completion detection in inte
 **Implementation:**
 
 - Script: `src/scripts/flightpath-claude-hook.js`
-- Settings injection: `ClaudeCommandLineIntegration.buildStopHookSettings()`
-- Monitoring: `ClaudeCommandLineIntegration.monitorNotificationFile()`
+- Settings injection: `ClaudeCliProvider.buildStopHookSettings()`
+- Monitoring: `ClaudeNotificationMonitor.monitorForCompletion()`
 
 ### Execution Modes
 
@@ -209,10 +215,12 @@ FlightPath uses Claude's **Stop hook** for reliable completion detection in inte
 
 **Current behavior:**
 
-- Session ID extracted from Claude JSON response (`session_id` field)
+- Session ID extracted from Claude JSON response (`session_id` field in the `result` message)
 - `prompt.resumeSession: true` with stored session ID uses `-r <sessionId>`
-- `prompt.resumeSession: true` without session ID uses `-c` (most recent)
-- `prompt.resumeSession: false` or undefined starts fresh session (no flags)
+- `prompt.resumeSession: true` without session ID: **no resume flag applied** (starts fresh session)
+- `prompt.resumeSession: false` or undefined: starts fresh session (no flags)
+
+**Note:** FlightPath intentionally does **not** use the `-c` (continue most recent) flag, because `-c` is global across all projects and could accidentally resume a session from a different project or a stale session from another Claude instance.
 
 ### Print Mode (Non-Interactive)
 
@@ -479,14 +487,16 @@ FlightPath uses **shared settings** for tool permissions (`cliAllowedTools`, `cl
 ### Conversion Logic
 
 ```typescript
-// From ClaudeCommandLineIntegration.ts
-private convertToolPatternToClaudeFormat(copilotPattern: string): string {
-  const match = copilotPattern.match(/^(\w+)(\(.+\))?$/);
-  if (!match) return copilotPattern;
-
-  const [, toolName, args] = match;
-  const claudeToolName = COPILOT_TO_CLAUDE_TOOL_MAP[toolName.toLowerCase()] || toolName;
-  return args ? claudeToolName + args : claudeToolName;
+// From ClaudeToolPermissionMapper.ts (convertToClaudeFormat)
+private convertToClaudeFormat(copilotPattern: string): string {
+  const parsed = this.parsePattern(copilotPattern);
+  if (!parsed) return copilotPattern;
+  const [toolName, toolArgs] = parsed;
+  const claudeName = COPILOT_TO_CLAUDE_MAP[toolName.toLowerCase()];
+  if (claudeName) {
+    return claudeName + toolArgs;
+  }
+  return copilotPattern; // MCP tool or unknown - pass through unchanged
 }
 ```
 
@@ -557,7 +567,7 @@ This enables safe automation: allow all tools but deny destructive operations.
 
 - `"copilot-cli"` - Copilot CLI (default)
 - `"claude-cli"` - Claude Code CLI
-- `"copilot-chat"` - Copilot Chat window (legacy)
+- `"copilot-chat"` - Copilot Chat window (UI automation mode)
 
 ---
 
@@ -622,79 +632,76 @@ Claude CLI fires the same events as Copilot CLI for UI integration:
 
 ## Implementation Notes
 
-### Class Hierarchy
+### Architecture
+
+FlightPath uses a provider/integration pattern:
 
 ```
-CopilotIntegration (abstract base)
+CliIntegration (shared orchestration in src/flightpath/harness/CliIntegration.ts)
     │
-    ├── BaseCliIntegration (shared CLI utilities)
-    │       │
-    │       ├── CopilotCommandLineIntegration
-    │       │
-    │       └── ClaudeCommandLineIntegration
-    │
-    └── CopilotChatIntegration (legacy UI automation)
+    └── ICliProvider (interface)
+            │
+            ├── ClaudeCliProvider       (src/flightpath/harness/claude/)
+            │       ├── ClaudeResponseParser      — stream-json parsing
+            │       ├── ClaudeLogParser            — JSONL log file parsing
+            │       ├── ClaudeNotificationMonitor  — Stop hook notifications
+            │       └── ClaudeToolPermissionMapper — Tool arg conversion
+            │
+            ├── CopilotCliProvider      (src/flightpath/harness/copilot/)
+            │
+            └── CodexCliProvider        (src/flightpath/harness/codex/)
 ```
+
+`HarnessIntegration` (abstract base in `src/flightpath/HarnessIntegration.ts`) provides shared
+prompt-building and agent expansion logic used by `CliIntegration` and `CopilotChatIntegration`.
 
 ### Key Methods
 
+| Method                           | Class                    | Purpose                                                       |
+| -------------------------------- | ------------------------ | ------------------------------------------------------------- |
+| `buildCliArgs()`                 | ClaudeCliProvider        | Construct CLI arguments from settings/prompt                  |
+| `buildHeadlessArgs()`            | ClaudeCliProvider        | Add headless-specific flags (-p, --output-format, --verbose)  |
+| `buildInteractiveTuiCommand()`   | ClaudeCliProvider        | Build command string for interactive TUI mode                 |
+| `validateAndGetModel()`          | ClaudeCliProvider        | Resolve aliases, validate, fallback if needed                 |
+| `getMcpConfigArgs()`             | ClaudeCliProvider        | Generate --mcp-config file and return args                    |
+| `buildStopHookSettings()`        | ClaudeCliProvider        | Write stop hook settings JSON, return temp file path          |
+| `checkAvailability()`            | ClaudeCliProvider        | Detect CLI availability via `claude --version`                |
+| `parse()`                        | ClaudeResponseParser     | Parse complete stream-json output to structured events        |
+| `processStreamingChunk()`        | ClaudeResponseParser     | Parse stream-json chunks for real-time content extraction     |
+| `extractSessionId()`             | ClaudeResponseParser     | Extract session ID from stream-json output                    |
+| `discoverSessionLog()`           | ClaudeLogParser          | Find matching JSONL session log by prompt text + time         |
+| `extractResponse()`              | ClaudeLogParser          | Extract full response from JSONL log events                   |
+| `buildArgs()`                    | ClaudeToolPermissionMapper | Build --permission-mode, --allowedTools, --disallowedTools  |
+| `monitorForCompletion()`         | ClaudeNotificationMonitor | Monitor Stop hook notification files for completion          |
+
+**Shared execution orchestration (in `src/flightpath/harness/CliIntegration.ts`):**
+
 | Method                      | Purpose                                                           |
 | --------------------------- | ----------------------------------------------------------------- |
-| `initialize()`              | Detect CLI availability via `claude --version`                    |
+| `initialize()`              | Detect CLI availability and set up integration                    |
 | `sendPrompt()`              | Execute prompt with all configured flags                          |
-| `buildCliArgs()`            | Construct CLI arguments from settings/prompt                      |
-| `validateAndGetModel()`     | Resolve aliases, validate, fallback if needed                     |
-| `executeInTerminal()`       | Interactive TUI mode with stop hook monitoring                    |
 | `executeHeadless()`         | Background process mode with temp file prompt                     |
-| `processStreamingChunk()`   | Parse stream-json chunks for real-time content extraction         |
-| `parseStreamJsonOutput()`   | Parse final stream-json response (delegates to CliResponseParser) |
-| `getToolPermissionArgs()`   | Build permission args (delegates to CliToolPermissionMapper)      |
-| `buildStopHookSettings()`   | Configure stop hook for interactive completion detection          |
-| `monitorNotificationFile()` | Monitor for stop hook notifications                               |
-
-**Shared Utilities (in `src/flightpath/cli/shared/`):**
-
-| Utility                                           | Purpose                                        |
-| ------------------------------------------------- | ---------------------------------------------- |
-| `CliToolPermissionMapper.convertToClaudeFormat()` | Convert Copilot tool patterns to Claude format |
-| `CliToolPermissionMapper.buildClaudeArgs()`       | Build complete permission argument list        |
-| `CliResponseParser.parseClaudeStreamJson()`       | Parse Claude stream-json output                |
-| `CliNotificationMonitor.monitorForCompletion()`   | Monitor stop hook notification files           |
+| `executeInTerminal()`       | Interactive TUI mode with stop hook monitoring                    |
 
 ### Process Execution
 
 **Headless mode (background process):**
 
-```typescript
-// Prompt written to temp file, passed as positional argument: claude "@path/to/file" -p ...
-return this.executeHeadlessWithPromptFile(
-  args,
-  promptText,
-  workflowContext,
-  async (result) => {
-    const cliResult = this.parseStreamJsonOutput(
-      result.stdout,
-      result.stderr,
-      result.exitCode
-    );
-    // Handle result...
-  }
-);
+Prompt is written to a temp file and passed as the first positional argument:
 ```
+claude "@.flightpath/temp/prompt.md" -p --output-format stream-json --verbose [other args]
+```
+Output is parsed in real-time by `ClaudeResponseParser.processStreamingChunk()` as stdout chunks arrive. On completion, `ClaudeResponseParser.parse()` extracts the full response, session ID, and token usage from the final stream-json output.
 
 **Interactive mode (TUI terminal):**
 
-```typescript
-// Uses stop hook for completion detection
-const result = await this.withInteractiveTuiExecution(args, promptText, workflowContext, async (ctx) => {
-  // Dual monitoring: TUI processing + stop hook notification
-  const tuiPromise = tuiProcessor.processStream(...);
-  const notifyPromise = this.monitorNotificationFile(...);
-  // Race between stop hook completion and TUI processing...
-});
-```
+Claude runs in a terminal panel. Completion is detected via the Stop hook:
+1. `ClaudeCliProvider.buildStopHookSettings()` writes hook config to a temp JSON file
+2. `--settings <file>` is passed to Claude CLI, registering the Stop hook
+3. When Claude finishes, the hook writes a notification file to `.flightpath/temp/claude-notifications/`
+4. `ClaudeNotificationMonitor.monitorForCompletion()` watches for this file and signals completion
 
----
+
 
 ## Future Enhancements
 

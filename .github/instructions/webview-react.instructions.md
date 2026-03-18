@@ -12,10 +12,11 @@ React-based webview UI for FlightPath dashboard. Modern component architecture w
 
 - React 19 + TypeScript
 - Vite (build system)
-- Zustand (state management)
+- Zustand + zundo (state management + undo/redo)
 - Tailwind CSS (styling)
 - CodeMirror 6 (prompt editor)
 - react-resizable-panels (layout)
+- Vitest + React Testing Library (tests)
 
 ## Build System
 
@@ -40,8 +41,6 @@ src/ui/webview-react/
 ├── postcss.config.js        # PostCSS configuration
 ├── tsconfig.json            # TypeScript config for webview
 ├── tsconfig.node.json       # TypeScript config for Vite/Node tooling
-├── MIGRATION_MAP.md         # Vanilla JS → React migration reference
-├── MIGRATION_STATUS.md      # Migration completion status
 ├── static/                  # Static assets (custom-icons.css, dictionaries)
 ├── components/              # React components
 │   ├── layout/              # Main layout sections
@@ -57,8 +56,11 @@ src/ui/webview-react/
 │   │   ├── PromptEditor.tsx      # Editor with toolbar
 │   │   └── PropertiesDrawer.tsx  # Prompt properties panel
 │   ├── prompts/             # Prompt list components
+│   │   ├── BoundaryBar.tsx       # Visual separator between queue and final prompt
+│   │   ├── FinalPromptFooter.tsx # Footer for the final prompt section
 │   │   ├── PromptCounter.tsx     # Step count badge
 │   │   ├── PromptItem.tsx        # Single prompt row
+│   │   ├── PromptItemDetails.tsx # Expanded prompt detail view
 │   │   └── StatusIcon.tsx        # Execution status icon
 │   ├── output/              # Output rendering components
 │   │   ├── BashOutput.tsx        # Shell command output block
@@ -66,9 +68,11 @@ src/ui/webview-react/
 │   │   ├── MarkdownText.tsx      # Markdown renderer
 │   │   ├── outputStyles.ts       # Shared output style constants
 │   │   ├── StatusMessage.tsx     # Status/info message block
-│   │   └── ToolCallOutput.tsx    # Tool invocation display
+│   │   ├── ToolCallOutput.tsx    # Tool invocation display
+│   │   └── UndoChangesDialog.tsx # Confirm dialog for undoing file changes
 │   ├── workflow/            # Workflow management
 │   │   ├── RecentWorkflows.tsx   # Recent files dropdown
+│   │   ├── RunningWorkflowItem.tsx # Single item in multi-workflow list
 │   │   ├── SaveWorkflowButton.tsx # Save trigger button
 │   │   ├── SaveWorkflowDialog.tsx # Save-as dialog with path/format
 │   │   ├── TemplateModal.tsx     # New workflow from template

@@ -45,7 +45,7 @@ All registered for: `*.{prompt,flightpath}.json`, `*.flightpath.{yaml,yml}`, `*.
 **Trigger character detection:**
 
 - Uses `lastIndexOf('@')` and `lastIndexOf('#')` to find most recent trigger
-- Stops if space found after trigger (user moved to next context item)
+- Stops if space found after trigger UNLESS inside a quoted path (`@"path with spaces/..."`)
 - Routes to appropriate handler based on trigger type
 
 **YAML compatibility:**
@@ -69,9 +69,9 @@ All registered for: `*.{prompt,flightpath}.json`, `*.flightpath.{yaml,yml}`, `*.
 - Returns both file AND directory completions
 - Directories have trailing slash: `@src/ui/`
 - Files use full path: `@src/extension.ts`
-- Max 500 items total (450 files + directories)
+- Paths containing spaces are automatically quoted: `@"path with spaces/file.ts"`
+- Max 500 items total (450 files + directories); directories sorted first
 - 5-second cache (`CACHE_DURATION_MS`)
-- Directories sorted first (returned before files in the array regardless of sortText)
 
 **Gitignore filtering:**
 
@@ -86,32 +86,35 @@ All registered for: `*.{prompt,flightpath}.json`, `*.flightpath.{yaml,yml}`, `*.
 
 - Uses `getWorkspaceSymbols()` from AttachmentBuilders
 - Maps `vscode.SymbolKind` to `vscode.CompletionItemKind` for proper icons
-- Format: `sym:path/to/file.ts:SymbolName:42`
+- Insert format: `sym:path/to/file.ts:SymbolName:42` (paths with spaces quoted: `sym:"path with spaces/file.ts":Name:42`)
 - Max 500 results
-- Includes function, class, method, variable, etc.
 
 **Selection completions** (`getSelectionCompletions()`):
 
 - Scans ALL visible editors (including split views)
-- Format: `file:path:startLine-endLine` (1-based line numbers)
+- Insert format: `selection:path:startLine-endLine` (1-based; paths with spaces quoted)
+- Label: `selection: filename (lines X-Y)` for multi-editor, `selection: Current Selection` for single
 - Deduplicates same file/range across multiple editors
-- Initial sortText: `!000_selection_NNN` (sorts before alphabetic entries)
+- `sortText: !000_selection_NNN` (sorts before alphabetic entries)
 - Shows preview (first 100 chars) in documentation
-- Label shows $(selection) icon + file name + line range
 
 **Hash completions** (`getHashCompletions()`):
 
 - Combines selections + symbols
-- Selections prefixed with `0_` (sorted first)
-- Symbols prefixed with `1_` (sorted second)
-- Returns plain items for conversion
+- Selections prefixed with `0_` (sorted first), symbols with `1_` (sorted second)
+
+**Prompt file completions** (`getPromptFileCompletions()`):
+
+- Returns `.prompt.md`, `.md`, `.txt` files only
+- Insert text uses `./relative/path` format
+- Max 200 results
+- Used by the webview prompt editor (not the VS Code completion provider)
 
 **Initialization:**
 
-- `initializeCompletionHelpers()` called during extension activation
+- `initializeCompletionHelpers(context)` called during extension activation
 - Sets up configuration watcher for cache invalidation
-- Clears cache when `respectGitignoreForCompletions` setting changes
-- Disposed via `disposeCompletionHelpers()`
+- `disposeCompletionHelpers()` exists but is dead code — watcher is disposed automatically via `context.subscriptions`
 
 **Performance:**
 
@@ -144,15 +147,16 @@ All registered for: `*.{prompt,flightpath}.json`, `*.flightpath.{yaml,yml}`, `*.
 
 **Supported link types:**
 
-1. `@path/to/file.ts` → Opens file at top
-2. `@path/to/dir/` → Reveals directory in File Explorer (`revealInExplorer` command)
-3. `#file:path:10-20` → Opens file with lines 10-20 selected
-4. `#sym:path:symbol:42` → Opens file at symbol line
+1. `@path/to/file.ts` or `@"path with spaces/file.ts"` → Opens file
+2. `@path/to/dir/` or `@"path with spaces/dir/"` → Reveals directory in File Explorer
+3. `#selection:path:10-20` or `#selection:"path with spaces/file":10-20` → Opens file with lines 10-20 selected
+4. `#sym:path:symbol:42` or `#sym:"path with spaces/file":symbol:42` → Opens file at symbol line
 
 **Implementation details:**
 
 - Uses VS Code `DocumentLinkProvider` API
 - Patterns stored as class fields; fresh `RegExp` instances created per helper method call (prevents state issues with global `/g` flag)
+- Each link type has a quoted and unquoted regex variant; quoted variants matched first
 - Custom command `flightpath.openFileWithSelection` for line selections
 - Workspace-relative path resolution only (no absolute paths)
 
@@ -161,12 +165,16 @@ All registered for: `*.{prompt,flightpath}.json`, `*.flightpath.{yaml,yml}`, `*.
 - File name ends with `.flightpath.json`, `.flightpath.yaml`, `.flightpath.yml`, `.prompt.md`
 - OR `document.languageId` is `prompt`, `markdown`, `yaml`, or `yml`
 
-**Pattern detection regex:**
+**Pattern detection regex (class field `patterns`):**
 
-- Full file: `/@([^\s@#]+\.[a-zA-Z0-9]+)/g` (has extension, no trailing slash)
-- Directory: `/@([^\s@#]+\/)/g` (trailing slash)
-- Line range: `/#file:([^\s:]+):(\d+)-(\d+)/g` (colon-separated format)
-- Symbol: `/#sym:([^\s:]+):([^:]+):(\d+)/g` (path:name:line format)
+- `fullFileQuoted`: `/@"([^"]+\.[a-zA-Z0-9]+)"/g`
+- `fullFile`: `/@([^\s@#"]+\.[a-zA-Z0-9]+)/g`
+- `directoryQuoted`: `/@"([^"]+\/)"/g`
+- `directory`: `/@([^\s@#"]+\/)/g`
+- `lineRangeQuoted`: `/#selection:"([^"]+)":(\d+)-(\d+)/g`
+- `lineRange`: `/#selection:([^\s:]+):(\d+)-(\d+)/g`
+- `symbolQuoted`: `/#sym:"([^"]+)":([^:]+):(\d+)/g`
+- `symbol`: `/#sym:([^\s:]+):([^:]+):(\d+)/g`
 
 **Command integration:**
 

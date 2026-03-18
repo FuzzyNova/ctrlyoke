@@ -1,13 +1,20 @@
 # Copilot CLI JSONL Event Structure Documentation
 
 **Investigation Date:** 2026-01-21
-**Log Location:** `C:\Users\natha\.copilot\session-state\`
+**Log Location:** `~/.copilot/session-state/`
 **File Format:** JSONL (one JSON object per line)
-**Copilot CLI Version:** 0.0.353 - 0.0.367
+**Copilot CLI Version:** 0.0.353 - 0.0.384+
 
 ## Overview
 
-The Copilot CLI logs all session events to JSONL files in the session-state directory. Each file is named with a session GUID (e.g., `ffacf886-9986-472f-9544-990943f46a63.jsonl`) and contains a complete record of all events for that session.
+The Copilot CLI logs all session events to JSONL files in the session-state directory.
+
+**Log File Format (version-dependent):**
+
+- **Old format (pre-v0.0.384):** Single flat file `<session-id>.jsonl`
+- **New format (v0.0.384+):** Subdirectory `<session-id>/events.jsonl`
+
+`CopilotLogParser.getLogPath(sessionId)` handles both formats automatically.
 
 ## Common Event Structure
 
@@ -216,13 +223,47 @@ All events share this base structure:
 
 **Notes:**
 
-- Emitted before every assistant turn
-- Zero removed values indicate no truncation occurred
-- Useful for monitoring conversation size
+- Emitted before every assistant turn (even when no truncation occurs — values will be equal)
+- `postTruncationTokensInMessages` = tokens actually sent to the model this turn (= input tokens for context window fill tracking)
+- Zero `tokensRemovedDuringTruncation` indicates no truncation occurred
+- FlightPath uses the last `session.truncation` event per session for context window usage stats
 
 ---
 
-### 2. Message Events
+#### session.error
+
+**Description:** Session-level errors (model call failures, API errors).
+
+**Example:**
+
+```json
+{
+  "type": "session.error",
+  "data": {
+    "errorType": "model_call",
+    "message": "Request failed with status 429: Too Many Requests",
+    "stack": "Error: ..."
+  },
+  "id": "...",
+  "timestamp": "2026-01-21T10:00:00.000Z",
+  "parentId": "..."
+}
+```
+
+**Data Fields:**
+
+- `errorType` (string): Category of error ("model_call" or other)
+- `message` (string): Human-readable error description
+- `stack` (string, optional): Stack trace for debugging
+
+**Notes:**
+
+- Surfaced as error text in FlightPath output panel
+- Does not halt session (Copilot may retry automatically)
+
+---
+
+
 
 #### user.message
 
@@ -382,6 +423,7 @@ All events share this base structure:
 - `messageId` (string): Unique message identifier
 - `content` (string): Assistant's text response (empty for tool-only messages)
 - `toolRequests` (array): List of tool calls made by assistant
+- `reasoningText` (string, optional): Inline reasoning from newer Copilot versions (replaces separate `assistant.reasoning` event)
 
 **Tool Request Object:**
 
@@ -394,6 +436,7 @@ All events share this base structure:
 - Empty `content` indicates assistant is only calling tools
 - Multiple `assistant.message` events can occur in sequence
 - Tool calls are executed asynchronously
+- Newer Copilot versions embed reasoning in `reasoningText` instead of emitting a separate `assistant.reasoning` event
 
 ---
 
@@ -785,10 +828,12 @@ function extractToolCalls(events: Event[]): ToolCall[] {
 
 ### Token Count Extraction
 
+`session.truncation` fires before every model call. `postTruncationTokensInMessages` is the token count actually sent to the model (= input tokens / context window fill). Take the last occurrence for the final session usage stat.
+
 ```typescript
-function getTokenUsage(
+function getContextWindowUsage(
   events: Event[]
-): { input: number; output: number } | null {
+): { inputTokens: number; contextWindowSize: number } | null {
   const truncationEvents = events.filter(
     (e) => e.type === "session.truncation"
   );
@@ -796,8 +841,9 @@ function getTokenUsage(
 
   const latest = truncationEvents[truncationEvents.length - 1];
   return {
-    input: latest.data.preTruncationTokensInMessages,
-    output: latest.data.postTruncationTokensInMessages,
+    // postTruncationTokensInMessages = tokens actually sent to model this turn
+    inputTokens: latest.data.postTruncationTokensInMessages,
+    contextWindowSize: latest.data.tokenLimit,
   };
 }
 ```
@@ -877,29 +923,13 @@ class CopilotLogMonitor {
 
 ### Completion Detection
 
-**Recommended approach: Multi-condition check**
+**⚠️ Do NOT use `assistant.turn_end` to detect completion.** It fires after EACH tool call, not at the end of the full response. See the note in the Turn Management Events section.
 
-```typescript
-function isSessionComplete(events: Event[]): boolean {
-  const lastEvent = events[events.length - 1];
+**Correct approach:**
 
-  // Check for explicit completion signals
-  if (lastEvent.type === "assistant.turn_end") return true;
-  if (lastEvent.type === "abort") return true;
-
-  // Check for final response pattern
-  const hasTextResponse = events.some(
-    (e) =>
-      e.type === "assistant.message" &&
-      e.data.content &&
-      e.data.content.trim().length > 0
-  );
-
-  const hasTurnEnd = events.some((e) => e.type === "assistant.turn_end");
-
-  return hasTextResponse && hasTurnEnd;
-}
-```
+- **Interactive mode:** Use the `sessionEnd` hook. Copilot fires this hook when the session truly ends, regardless of how many tool calls occurred. `CopilotNotificationMonitor` watches for the hook notification file.
+- **Headless mode (`--output-format json`):** The CLI process exits when complete. Process exit is the reliable completion signal.
+- **Log-based completion:** Never reliable for Copilot — `isComplete()` in `CopilotLogParser` always returns `false` by design.
 
 ### Error Handling
 
@@ -923,24 +953,27 @@ function getToolErrors(events: Event[]): string[] {
 
 ## Version History
 
-| Version | Changes                                                       |
-| ------- | ------------------------------------------------------------- |
-| 0.0.353 | Earliest version observed, basic event structure              |
-| 0.0.365 | Added `session.info` with MCP connection details              |
-| 0.0.367 | Current version, extended thinking with `assistant.reasoning` |
+| Version | Changes                                                                          |
+| ------- | -------------------------------------------------------------------------------- |
+| 0.0.353 | Earliest version observed, basic event structure                                 |
+| 0.0.365 | Added `session.info` with MCP connection details                                 |
+| 0.0.367 | Extended thinking with `assistant.reasoning`                                     |
+| 0.0.384 | New log layout: `<session-id>/events.jsonl` subdirectory (old: flat `.jsonl`)    |
+| Latest  | `assistant.message` now includes inline `reasoningText` field for reasoning      |
 
 ---
 
 ## Additional Resources
 
 - **Session State Directory:** `~/.copilot/session-state/`
-- **File Naming:** `{session-guid}.jsonl`
+- **File Naming (old, pre-v0.0.384):** `{session-guid}.jsonl`
+- **File Naming (new, v0.0.384+):** `{session-guid}/events.jsonl`
 - **Encoding:** UTF-8
 - **Line Endings:** Platform-specific (CRLF on Windows, LF on Unix)
 
 ---
 
-**Document Status:** Complete
+**Document Status:** Current
 **Investigation Scope:** 500+ session files analyzed
-**Event Types Documented:** 14 core types
+**Event Types Documented:** 15 core types (includes `session.error`)
 **Real-World Examples:** All examples extracted from actual session logs

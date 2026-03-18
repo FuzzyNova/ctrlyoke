@@ -101,7 +101,7 @@ The full Copilot Chat experience requires the Chat window, which has no completi
 - Too short risks cutting off long responses
 - Not a real detection, just a guess
 
-### Method 5: Chat Session File Monitoring (✨ NEW - RECOMMENDED WORKAROUND)
+### Method 5: Chat Session File Monitoring (✅ IMPLEMENTED — Current Approach)
 
 **Approach**: Monitor VS Code's internal chat session JSON files for completion markers.
 
@@ -231,13 +231,13 @@ throw new Error("Response did not complete within timeout");
 - No ambiguous "tool call in progress" signals like with logs
 - 1:1 correlation: each completed user request = 1 `result` object
 
-**Next Steps for Implementation**:
+**Implementation**: `src/flightpath/harness/chat/ChatSessionMonitor.ts`
 
-1. Find workspace hash (or make configurable)
-2. Locate most recent session file in workspace's chatSessions directory
-3. Monitor JSON file for `requests[-1].result.timings.totalElapsed > 0`
-4. Replace log-based completion detection with this method
-5. Improve from ⚠️ 70% reliability (current) to ✅ 100% (proven)
+- Scans all `workspaceStorage/*/chatSessions/*.json` and `*.jsonl` files (VS Code switched to `.jsonl` ~Feb 2026)
+- Matches the session file by searching for the prompt text in `message.text`
+- Polls every 500ms on an **inactivity-based** timeout (timeout resets when session file mtime changes)
+- Completion confirmed when `requests[-1].result.timings.totalElapsed > 0`
+- Persistent cross-workflow cache: first scan ~100ms, subsequent ~5ms
 
 ## Proposed VS Code API Solutions
 
@@ -396,24 +396,15 @@ participant.onDidCompleteResponse((event) => {
 
 **Secondary**: Option 2 (Request ID + Awaitable) would be ideal for automation use cases but requires more API changes.
 
-## Workaround Until API Exists
+## Current FlightPath Implementation
 
-**Best approach**: Use the **Chat Session File Monitoring method** (Method 5 above) for reliable completion detection.
+**Session file monitoring (Method 5) is now the only detection method used.** Log-based monitoring has been removed.
 
-For FlightPath, updated recommendations:
+1. **Session file monitoring** (`ChatSessionMonitor.ts`) — ✅ Implemented, 100% reliable
+2. **Inactivity timeout fallback** — `chatInactivityTimeout` setting (default: 300s). `treatChatTimeoutAsSuccess` (default: `true`) treats timeout as success.
+3. **CLI mode** — Most reliable; recommended for production automation (uses isolated session files)
 
-1. **Recommend CLI mode** for production automation (Copilot CLI, Claude CLI) - most reliable
-2. **Chat mode with session file monitoring** - proven 100% reliable (NEW - recommended over log monitoring)
-3. **Chat mode with log file monitoring** (legacy) - fallback for sessions with `resumeSession: false`
-   - Uses `finish reason: [stop]` marker
-   - Works reliably only for new sessions
-   - Prone to false positives for continued sessions
-4. **Chat mode with inactivity timeout** - last resort
-   - Uses `chatInactivityTimeout` setting (default 5 minutes)
-   - `treatChatTimeoutAsSuccess: true` treats timeout as completion
-   - May miss completion or wait too long
-
-## Implementation Notes
+## Recommendation
 
 The internal log format suggests VS Code/Copilot Chat already tracks:
 

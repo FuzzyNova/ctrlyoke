@@ -108,14 +108,11 @@ Creates structured FlightPath workflow files from feature requests.
 
 **Usage**: The agent creates the workflow file, then you run it with FlightPath.
 
-### Planned Agents
+#### Spec Orchestrator
 
-| Agent                 | Purpose                                                 |
-| --------------------- | ------------------------------------------------------- |
-| `flightpath-planner`  | Analyzes requirements and creates implementation plans  |
-| `flightpath-dev`      | Main implementation agent - writes code following plans |
-| `flightpath-reviewer` | Code review, testing, and quality validation            |
-| `flightpath-writer`   | Updates documentation and generates commit messages     |
+Orchestrating reviewer for spec-driven loops.
+
+**Purpose**: Reviews completed work against a spec and queues follow-up prompts if gaps remain. Used in iterative workflows where each iteration is validated against a specification before proceeding.
 
 ### Importing Agents
 
@@ -165,6 +162,14 @@ The `manifest.json` lists available agents:
       "file": "flightpath-orchestrator.agent.md",
       "tags": ["workflow", "planning", "automation"],
       "icon": "$(compass)"
+    },
+    {
+      "id": "spec-orchestrator",
+      "label": "Spec Orchestrator",
+      "description": "Orchestrating reviewer for spec-driven loops. Reviews completed work against the spec and queues follow-up prompts if gaps remain.",
+      "file": "spec-orchestrator.agent.md",
+      "tags": ["orchestration", "review", "loop"],
+      "icon": "$(sync)"
     }
   ]
 }

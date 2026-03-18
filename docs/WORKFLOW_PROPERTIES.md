@@ -82,7 +82,7 @@ Add workflow properties at the root level of your `.flightpath.yaml` file:
 
 ```yaml
 # Workflow-level properties (apply to all prompts by default)
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 agent: code-reviewer
 resumeSession: false
@@ -120,7 +120,7 @@ prompts:
 
 ```json
 {
-  "provider": "copilot-cli",
+  "harness": "copilot-cli",
   "model": "claude-sonnet-4.5",
   "agent": "code-reviewer",
   "resumeSession": false,
@@ -155,18 +155,18 @@ prompts:
 
 ## Available Properties
 
-### provider
+### harness
 
-**Type:** `"copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli"`
+**Type:** `"copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli" | "opencode-cli"`
 
-**Description:** AI provider used to execute prompts
+**Description:** The AI agent framework (harness) used to execute prompts. Determines which CLI or chat integration to use.
 
-**Default:** Falls back to `flightpath.provider` setting
+**Default:** Falls back to `flightpath.harness` setting
 
 **Example:**
 
 ```yaml
-provider: claude-cli
+harness: claude-cli
 ```
 
 ### model
@@ -191,16 +191,16 @@ model: claude-sonnet-4.5
 
 ### agent
 
-**Type:** `string` (path to `.agent.md` file)
+**Type:** `string` (agent name, without `.agent.md` extension)
 
-**Description:** Custom agent file that defines specialized instructions and behavior
+**Description:** Custom agent that defines specialized instructions. Specify the agent name only (e.g., `"code-reviewer"` for `code-reviewer.agent.md`). Agents are discovered from `.github/agents/`, `.claude/agents/`, or the user prompts directory. Use `null` to explicitly disable an inherited agent.
 
 **Default:** No agent (undefined)
 
 **Example:**
 
 ```yaml
-agent: .github/agents/code-reviewer.agent.md
+agent: code-reviewer
 ```
 
 ### resumeSession
@@ -278,8 +278,8 @@ FlightPath uses a **working file** system to track workflow execution state. Whe
 
 ### How Working Files Work
 
-1. **Load workflow** - FlightPath creates `.flightpath/.working/<filename>.working.yaml`
-2. **Properties stored** - Provider and model always included; other properties included when explicitly set
+1. **Load workflow** - FlightPath creates a working copy in `.flightpath/.queue/`
+2. **Properties stored** - Harness and model always included; other properties included when explicitly set
 3. **Runtime state** - Execution progress, completed prompts, session IDs tracked in working file
 4. **Modifications** - AI can modify working file during execution (if `allowDynamicExtension: true`)
 5. **Resume** - Working file enables resuming interrupted workflows
@@ -288,7 +288,7 @@ FlightPath uses a **working file** system to track workflow execution state. Whe
 
 **Always saved:**
 
-- `provider` - Required for execution
+- `harness` - Required for execution
 - `model` - Required for execution
 
 **Saved when explicitly set:**
@@ -301,7 +301,7 @@ FlightPath uses a **working file** system to track workflow execution state. Whe
 **Example Working File:**
 
 ```yaml
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 agent: code-reviewer
 resumeSession: true
@@ -313,7 +313,7 @@ prompts:
   - id: analyze
     prompt: "Analyze code"
     _runtime:
-      provider: copilot-cli
+      harness: copilot-cli
       model: claude-sonnet-4.5
       sessionId: abc-123
       startedAt: 1737158400000
@@ -337,7 +337,7 @@ prompts:
 
 ```yaml
 # All prompts must pass tests
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 endCondition:
   script: npm test
@@ -375,7 +375,7 @@ prompts:
 
 ```yaml
 # Standardized code review configuration
-provider: claude-cli
+harness: claude-cli
 model: sonnet
 agent: .github/agents/code-reviewer.agent.md
 resumeSession: false # Fresh context for each review phase
@@ -412,7 +412,7 @@ prompts:
 
 ```yaml
 # Workflow defaults
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 resumeSession: true
 
@@ -420,7 +420,7 @@ prompts:
   - id: analyze
     prompt: "Analyze the codebase architecture"
     # Uses workflow defaults:
-    #   provider: copilot-cli (workflow)
+    #   harness: copilot-cli (workflow)
     #   model: claude-sonnet-4.5 (workflow)
     #   resumeSession: true (workflow)
 
@@ -428,17 +428,17 @@ prompts:
     prompt: "Implement architectural improvements"
     model: gpt-5 # Prompt-level override
     # Uses:
-    #   provider: copilot-cli (workflow)
+    #   harness: copilot-cli (workflow)
     #   model: gpt-5 (prompt override)
     #   resumeSession: true (workflow)
 
   - id: review
     prompt: "Review changes for compliance"
-    provider: claude-cli # Prompt-level override
+    harness: claude-cli # Prompt-level override
     model: opus # Prompt-level override
     resumeSession: false # Prompt-level override
     # All workflow defaults overridden:
-    #   provider: claude-cli (prompt override)
+    #   harness: claude-cli (prompt override)
     #   model: opus (prompt override)
     #   resumeSession: false (prompt override)
 ```
@@ -461,7 +461,7 @@ When sharing workflows with teammates, include provider and model to ensure cons
 
 ```yaml
 # Good: Reproducible across team
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 
 prompts:
@@ -608,7 +608,7 @@ The Workflow Properties panel is disabled when:
 All prompts must pass tests before proceeding:
 
 ```yaml
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 endCondition:
   script: npm test
@@ -722,11 +722,11 @@ Review your workflow and identify repeated settings:
 # Before: Duplicated settings
 prompts:
   - prompt: "Analyze code"
-    provider: copilot-cli
+    harness: copilot-cli
     model: claude-sonnet-4.5
 
   - prompt: "Implement fixes"
-    provider: copilot-cli
+    harness: copilot-cli
     model: claude-sonnet-4.5
 ```
 
@@ -736,7 +736,7 @@ Extract common properties to workflow root:
 
 ```yaml
 # After: DRY with workflow properties
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 
 prompts:
@@ -749,7 +749,7 @@ prompts:
 Preserve prompt-level overrides that are intentional:
 
 ```yaml
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 
 prompts:
@@ -778,7 +778,7 @@ prompts:
 # Explicit workflow defaults
 # Works consistently across all users
 
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 agent: code-reviewer
 
@@ -810,9 +810,9 @@ prompts:
 
 ```yaml
 # Workflow-level properties (optional)
-provider: "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli"
+harness: "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli" | "opencode-cli"
 model: string
-agent: string
+agent: string  # Agent name only (e.g., "code-reviewer")
 resumeSession: boolean
 allowDynamicExtension: boolean
 endCondition:
@@ -828,7 +828,7 @@ prompts:
     prompt: string  # Required
 
     # Prompt-level overrides (optional)
-    provider: "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli"
+    harness: "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli" | "opencode-cli"
     model: string
     agent: string
     resumeSession: boolean
@@ -845,7 +845,7 @@ prompts:
 
 ```json
 {
-  "provider": "copilot-cli | copilot-chat | claude-cli | codex-cli",
+  "harness": "copilot-cli | copilot-chat | claude-cli | codex-cli | opencode-cli",
   "model": "string",
   "agent": "string",
   "resumeSession": true,
@@ -861,7 +861,7 @@ prompts:
     {
       "id": "string",
       "prompt": "string",
-      "provider": "copilot-cli | copilot-chat | claude-cli | codex-cli",
+      "harness": "copilot-cli | copilot-chat | claude-cli | codex-cli | opencode-cli",
       "model": "string",
       "agent": "string",
       "resumeSession": true,

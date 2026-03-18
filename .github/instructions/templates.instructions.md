@@ -9,47 +9,52 @@ Copied to `out/templates/` during build.
 
 <directory>
 `agents/` - Custom agents with manifest
-`workflows/` - Workflow templates (JSON + YAML) with manifest
-`check_condition.*` - End condition script templates (5 types)
+`workflows/` - Workflow templates (YAML) with manifest
+`check_condition.*` - End condition script templates (5 types: `.py`, `.js`, `.sh`, `.bat`, `.ps1`)
 </directory>
 
 <endConditionScripts>
-**Contract:** stdout = expected value, exit 0 = success. Supports `.py`, `.js`, `.sh`, `.bat`, `.ps1`. Include shebang, avoid network/filesystem, use subprocess (not `eval`).
+**Contract:** stdout = expected value, exit 0 = success. Include shebang. Use `subprocess`/`spawn` (not `eval`). Default to returning `"true"`.
 </endConditionScripts>
 
 <agentFormat>
-`.agent.md` with YAML frontmatter (name, description, optional: tools, model). XML structure: `<purpose>`, `<guidelines>`, optional: `<criticalRules>`, `<examples>`, `<context>`. See XML_PROMPTING_GUIDELINES.md.
+`.agent.md` files with YAML frontmatter (`name`, `description`, optional: `tools`, `model`).
+
+Two structural styles in use:
+- **XML structure** (`spec-orchestrator`): `<purpose>`, `<guidelines>`, `<criticalRules>` tags
+- **Markdown headings** (`flightpath-orchestrator`): standard `##` sections
+
+Both styles are valid. XML structure is preferred for agents that need strict behavioral rules.
 </agentFormat>
 
 <manifestFiles>
-`agents/manifest.json` - Agent metadata (id, label, description, file, tags, icon)
-`workflows/manifest.json` - Workflow metadata (same structure)
-Loaded by TemplateImporter for import commands.
+`agents/manifest.json` and `workflows/manifest.json` share the same schema:
+```json
+{ "id", "label", "description", "file", "tags": [], "icon": "$(codicon)" }
+```
+Loaded by TemplateImporter for import commands. Must be valid JSON.
 </manifestFiles>
 
 <templateVariables>
 Templates support `{variableName}` placeholder substitution:
 
-**Built-in templates** (defined in TemplateManager.BUILT_IN_TEMPLATES):
+**Built-in workflow templates** (`BUILT_IN_TEMPLATE_IDS` in TemplateManager):
 
-- `simple-feature`: `{featureDescription}`
-- `fix-tests`: `{testCommand}`
-- `full-feature`: `{featureDescription}`, `{planDocument}`
-- `spec-driven-loop`: `{specFile}`
+- `blank` — generated (no file), empty 2-prompt workflow
+- `simple-feature` — `{featureDescription}`
+- `fix-tests` — `{testCommand}`
+- `full-feature` — `{featureDescription}`, `{planDocument}`
+- `spec-driven-loop` — `{file:specFile}` (file type with `fileFilter` + `autoFillFilename`)
 
-**Reserved variables** (automatically injected, do NOT use in templates):
+**Reserved variables** (injected at runtime, do NOT use as template placeholders):
 
-- `{scriptOutput}` - Output from endCondition script
-- `{retryCount}` - Current retry attempt
-- `{maxRetries}` - Maximum retries allowed
+- `{scriptOutput}` — output from endCondition script
+- `{retryCount}` — current retry attempt
+- `{maxRetries}` — maximum retries allowed
 
-**Variable extraction**:
+**Variable extraction pattern:** `/\{(?:(file|text):)?([a-z][a-zA-Z0-9]*)\}/g`
 
-- Pattern: `/\{([a-z][a-zA-Z0-9]*)\}/g`
-- Filters out reserved variables
-- Used by TemplateManager.extractVariables()
-
-**Typed placeholder syntax** — variable type is encoded directly in the placeholder:
+**Typed placeholder syntax:**
 
 | Syntax | Type | Modal UI |
 |--------|------|----------|
@@ -57,32 +62,56 @@ Templates support `{variableName}` placeholder substitution:
 | `{text:varName}` | text (explicit) | plain text input |
 | `{file:varName}` | file | text input + Browse button (workspace-relative file picker) |
 
-This syntax works in **both built-in and custom templates** — `extractVariables()` parses the prefix. `replaceVariables()` substitutes all three forms with the user-provided value.
+`extractVariables()` parses the type prefix. `replaceVariables()` substitutes all three forms.
 
-**Advanced built-in-only metadata** (cannot be expressed in placeholder syntax, declared in `TemplateManager.BUILT_IN_TEMPLATES`):
+**`_templateMeta` block** — declare in any template (built-in YAML or custom JSON) to enrich variables with UI metadata:
 
-- `fileFilter` — glob patterns for the file picker filter (e.g. `['**/*.md', '**/*.txt']`)
-- `autoFillFilename: true` — auto-fills the workflow name from the selected file's basename
-  </templateVariables>
+```yaml
+_templateMeta:
+  name: My Template
+  description: What this does
+  variables:
+    specFile:
+      type: file
+      fileFilter: ["**/*.md", "**/*.txt"]
+      autoFillFilename: true  # auto-fills workflow filename from selected file's basename
+```
+
+- `fileFilter` — glob patterns for the file picker
+- `autoFillFilename: true` — only the first variable with this wins; others are ignored with a warning
+- `_templateMeta` is stripped from the workflow file on creation (it's authoring metadata only)
+</templateVariables>
+
+<workflowFields>
+Built-in templates use YAML (`.flightpath.yaml`). Custom templates use JSON (`.flightpath.json`).
+
+Key workflow-level fields used in templates:
+
+- `prompts[]` — main execution sequence
+- `finalPrompt` — single prompt run after all `prompts` complete; used with `agent` + `allowDynamicExtension: true` + `priorContext: all` for orchestration loops (see `spec-driven-loop`)
+- `resumeSession: true` on a prompt — continues in the same session as the previous prompt
+
+The `_templateMeta` top-level key is template-only; never appears in executed workflow files.
+</workflowFields>
 
 <contextSyntax>
 **Full file / directory attachment:** `@path/to/file.ts`, `@path/to/dir/`
-**Line range or symbol:** `#file:path`, `#file:path:startLine-endLine`, `#file:"path with spaces"`
-**Passed through (harness-handled):** `@workspace`, `#codebase`, slash commands
+**Line range:** `#file:path:startLine-endLine`
+**Template file variable:** `@{file:varName}` — substituted before parsing
 
-Use `@path` for attaching whole files in templates — it is portable across all harnesses.
-`#file:` is for line ranges and symbol excerpts only.
+Use `@path` for attaching whole files in templates — portable across all harnesses.
+`@{file:varName}` is the correct syntax for file-type template variables (note: `@` prefix outside the braces).
 </contextSyntax>
 
-<workflowGuidelines>
-Provide JSON + YAML. Use `|` for multi-line YAML. Avoid harness-specific syntax. Import target: `.flightpath/templates/`
-</workflowGuidelines>
-
 <integration>
-**TemplateManager**: Loads/extracts/substitutes variables, discovers custom templates. Paths: `out/templates/workflows/` (built-in), `.flightpath/templates/` (custom)
+**TemplateManager**: Loads/extracts/substitutes variables, discovers custom templates.
+- Built-in paths: `out/templates/workflows/` (YAML files)
+- Custom paths: `.flightpath/templates/` (JSON files, IDs prefixed with `custom:`)
+- `getAvailableTemplates()` reads `_templateMeta` from each YAML/JSON file for name, description, and variable enrichment
+
 **TemplateImporter**: Copies agents/workflows, loads manifests, handles import commands
 </integration>
 
 <build>
-Source: `src/templates/` → Output: `out/templates/` (never edit). Access via `context.extensionPath`. Manifests must be valid JSON.
+Source: `src/templates/` → Output: `out/templates/` (never edit `out/`). Access via `context.extensionPath`. Manifests must be valid JSON.
 </build>

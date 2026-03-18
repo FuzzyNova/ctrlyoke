@@ -1,6 +1,6 @@
 # CLI Log Parsing Status & Event Coverage
 
-**Last Updated:** 2026-01-28
+**Last Updated:** 2026-01-28 (event types updated 2026-02-25)
 **Purpose:** Document the current state of log event parsing across all CLI providers (Copilot, Claude, Codex) and identify gaps in coverage.
 
 ---
@@ -28,11 +28,11 @@ All three CLI providers successfully parse their respective log formats and conv
 
 ### Key Findings (Based on Actual Log Files)
 
-1. **Universal Output System:** 4 event types (`TEXT`, `TOOL_CALL`, `THINKING`, `TOOL_RESULT`) cover core use cases ✅
+1. **Universal Output System:** Rich event types covering text, tool calls, file operations, thinking, and more ✅
 2. **Tool Call Overloading:** Current approach works well - parameter normalization handles provider differences elegantly ✅
 3. **Parsing Coverage:** ✅ **All critical gaps addressed** - tool results, error events, and comprehensive metadata extracted
 4. **JSON Parsing:** Response parsers extract all important metadata (cached tokens, custom tools, execution results) ✅
-5. **Implementation Complete (as of 2026-01-28):**
+5. **Implementation Complete:**
    - **Copilot:** Tool execution results extracted (TOOL_RESULT events), session errors handled
    - **Claude:** Tool results extracted from user events, cache tokens tracked, turn duration captured
    - **Codex:** Custom tool calls supported, advanced token stats (cached/reasoning tokens) extracted
@@ -42,16 +42,24 @@ All three CLI providers successfully parse their respective log formats and conv
 
 ## Universal Output Type System
 
-**Location:** `src/types/CliOutputTypes.ts`
+**Location:** `src/types/DashboardConstants.ts` (type definitions), `src/types/CliOutputTypes.ts` (interfaces)
 
 ### Supported Event Types
 
 ```typescript
+// From DashboardConstants.ts CLI_EVENT_TYPES
 export const CLI_EVENT_TYPES = {
-  TEXT: "text", // AI response text
-  TOOL_CALL: "toolCall", // Tool invocations (Read, Write, Edit, Bash, etc.)
-  THINKING: "thinking", // Reasoning/planning blocks
-  TOOL_RESULT: "toolResult", // Tool execution results (optional)
+  TEXT: "text",               // AI response text
+  THINKING: "thinking",       // Reasoning/planning blocks
+  BASH_COMMAND: "bashCommand",// Shell command execution
+  FILE_READ: "fileRead",      // File read operations
+  FILE_WRITE: "fileWrite",    // File creation
+  FILE_EDIT: "fileEdit",      // File modification (with optional diff)
+  FILE_DELETE: "fileDelete",  // File deletion
+  MCP_TOOL_CALL: "mcpToolCall", // MCP server tool calls
+  WEB_SEARCH: "webSearch",    // Web search operations
+  TOOL_CALL: "toolCall",      // Generic/normalized tool invocations
+  TOOL_RESULT: "toolResult",  // Tool execution results
 } as const;
 ```
 
@@ -461,62 +469,22 @@ interface ToolCall {
 
 ### Special Handling: Diff Visualization
 
-**Edit operations** with `old_string` and `new_string` parameters get special rendering:
+**Edit operations** with `structuredPatch` (Claude) or `oldContent`/`newContent` (Copilot) get special diff rendering in the React dashboard via `ToolCallOutput.tsx`.
 
-**Location:** `src/ui/webview/output-manager.js` lines 169-208
+- **Claude:** Provides `structuredPatch` (unified diff with line numbers) in `FileEditData`
+- **Copilot:** Provides `oldContent`/`newContent` for diff generation
 
-```javascript
-function renderDiffVisualization(parameters) {
-  if (!parameters.old_string || !parameters.new_string) {
-    return ""; // Not an Edit operation
-  }
-
-  // Use diff library for proper line-by-line diff
-  const diff = window.Diff.diffLines(
-    parameters.old_string,
-    parameters.new_string
-  );
-
-  // Render added/removed lines with color coding
-  diff.forEach((part) => {
-    if (part.added) {
-      html += '<div class="diff-line added">+ ' + line + "</div>";
-    } else if (part.removed) {
-      html += '<div class="diff-line removed">- ' + line + "</div>";
-    }
-    // Unchanged lines omitted for clarity
-  });
-}
-```
-
-**Triggered by:** Presence of both `old_string` and `new_string` keys in `parameters`
-
-**Result:** Visual diff display in dashboard (green/red highlighting)
+**Result:** Visual diff display in dashboard (green/red highlighting via `ToolCallOutput.tsx`)
 
 ### Terminal-Style Rendering
 
-**Tool calls formatted as:** `● ToolName(keyParams)`
+Tool calls are rendered by `ToolCallOutput.tsx` in the React dashboard:
 
-```javascript
-function formatToolCallTerminalStyle(tool) {
-  const params = extractKeyParameters(tool.name, tool.parameters);
-  return `● ${tool.name}(${params})`;
-}
-```
+- File operations (`file_read`, `file_write`, `file_edit`, `file_delete`): dedicated components
+- MCP tool calls (`mcp_tool_call`): MCP-specific display
+- Generic tool calls (`tool_call`): `● ToolName(keyParams)` format
 
-**Key parameter extraction** (smart truncation):
-
-| Tool Type                 | Extracted Parameters      | Max Length    |
-| ------------------------- | ------------------------- | ------------- |
-| `bash` / `shell`          | `command`                 | 80 chars      |
-| `write` / `edit` / `read` | `file_path` (shortened)   | 50 chars      |
-| `multiedit`               | File count                | N/A           |
-| `glob`                    | `pattern`                 | Full          |
-| `grep` / `search`         | `pattern` + `path`        | 40 + 50 chars |
-| `task`                    | `description` or `prompt` | 60 chars      |
-| Default                   | First 3 keys              | 30 chars each |
-
-**Location:** `output-manager.js` lines 82-128
+Smart parameter extraction truncates long values per tool type (e.g., `bash` shows `command` up to 80 chars, file operations show shortened `file_path`).
 
 ### Why Overloading Works
 

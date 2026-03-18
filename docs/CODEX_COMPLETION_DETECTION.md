@@ -1,7 +1,7 @@
 # Codex CLI Completion Detection
 
 **Status**: ✅ Implemented (December 2025)  
-**Integration**: CodexCommandLineIntegration.ts  
+**Integration**: CodexCliProvider.ts  
 **Related Files**: src/scripts/flightpath-codex-notify.js
 
 ## Overview
@@ -57,7 +57,7 @@ When `agent-turn-complete` events occur, Codex executes the notification script 
 
 ### 2. Integration Configuration
 
-**Method**: `CodexCommandLineIntegration.buildCliArgs()`
+**Method**: `CodexCliProvider.buildCliArgs()`
 
 For interactive mode, adds:
 
@@ -67,7 +67,7 @@ For interactive mode, adds:
 
 ### 3. Completion Monitoring
 
-**Method**: `CodexCommandLineIntegration.monitorNotificationFile()`
+**Method**: `CodexNotificationMonitor` (via `CodexCliProvider.notificationMonitor`)
 
 Two monitoring modes:
 
@@ -254,10 +254,11 @@ Codex provides the workspace path in `notification.cwd`, which the handler scrip
 
 | File                                                  | Purpose                                      |
 | ----------------------------------------------------- | -------------------------------------------- |
-| `src/scripts/flightpath-codex-notify.js`              | Notification handler script                  |
-| `src/flightpath/cli/CodexCommandLineIntegration.ts`   | Main integration logic                       |
-| `src/flightpath/cli/shared/CliNotificationMonitor.ts` | Shared monitoring utilities                  |
-| `esbuild.js`                                          | Copies notification script to `out/scripts/` |
+| `src/scripts/flightpath-codex-notify.js`                      | Notification handler script                  |
+| `src/flightpath/harness/codex/CodexCliProvider.ts`            | Main integration logic                       |
+| `src/flightpath/harness/codex/CodexNotificationMonitor.ts`    | Codex notification monitor                   |
+| `src/flightpath/harness/shared/CliNotificationMonitor.ts`     | Shared monitoring utilities                  |
+| `esbuild.js`                                                  | Copies notification script to `out/scripts/` |
 
 ## Change Log
 

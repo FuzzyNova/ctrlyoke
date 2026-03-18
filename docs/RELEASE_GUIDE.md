@@ -117,8 +117,6 @@ Before publishing, ensure:
 - [ ] `CHANGELOG.md` - Version history
 - [ ] `LICENSE` - License file (MIT, Apache-2.0, etc.)
 - [ ] `images/icon.png` - Extension icon (at least 128x128px, PNG format, NOT SVG)
-  - **Note:** Currently only SVG files exist in `images/`. A PNG icon must be created before publishing.
-  - See `images/README.md` for design recommendations
 
 ### Content Requirements
 

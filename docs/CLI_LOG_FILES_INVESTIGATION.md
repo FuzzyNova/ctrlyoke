@@ -1,16 +1,12 @@
 # CLI Log Files: Cross-Provider Reference
 
-## Status: IMPLEMENTED (January 2026)
-
-**This document captures the investigation findings that led to the CLI log file migration. The approach was fully adopted — all three CLI providers now use JSONL log file monitoring in interactive mode instead of TUI screen parsing.**
-
 **Related:** [CLI Log Parsing Status](./CLI_LOG_PARSING_STATUS.md)
 
 ---
 
 ## Overview
 
-All three CLI providers (Claude Code, GitHub Copilot, OpenAI Codex) maintain structured JSONL log files that FlightPath uses as the primary data source for interactive mode response monitoring. This eliminated the need for TUI screen parsing, ANSI stripping, and screen deduplication.
+All four CLI providers (Claude Code, GitHub Copilot, OpenAI Codex, OpenCode) maintain structured JSONL log files that FlightPath uses as the primary data source for interactive mode response monitoring. The CLI is spawned in a VS Code terminal (TUI is visible to the user), while FlightPath watches the provider's native JSONL log files for structured events.
 
 **Implementation:** `src/flightpath/harness/shared/BaseLogParser.ts` + four provider-specific subclasses.
 
@@ -211,8 +207,4 @@ FlightPath uses **prompt content matching** as the universal session discovery s
 
 **Why not most-recent file?** Multiple CLI sessions may run concurrently. Matching on prompt content is robust to race conditions.
 
----
 
-## Investigation Date
-
-2026-01-18 (findings validated by implementation, January-February 2026)

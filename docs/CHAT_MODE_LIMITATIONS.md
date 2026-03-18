@@ -182,73 +182,29 @@ const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
 
 ## Parallel Execution Limitation
 
-### Single Session Assumption
+### Improved Session Isolation (Session File Monitoring)
 
-**Critical Limitation**: FlightPath's Chat mode **assumes only one chat session is active at a time**.
+FlightPath's Chat mode completion detection uses **VS Code's internal chatSessions JSON files** (`workspaceStorage/*/chatSessions/*.json|*.jsonl`). Unlike the old log-file approach, session files contain per-request structure and prompt text, which allows FlightPath to match the specific prompt it sent.
 
-**Why this matters:**
+**How it works**: `ChatSessionMonitor` searches all session files for the exact prompt text it submitted, then monitors only that session file for `requests[-1].result.timings.totalElapsed > 0`.
 
-- Chat completion detection relies on parsing Copilot's log file (`copilot-language-server.log`)
-- The log file does **not include session IDs** in the `finish reason: [stop]` markers
-- FlightPath simply looks for the **next** `[stop]` marker after sending a prompt
-- If multiple chat sessions are running concurrently, FlightPath may detect completion from the **wrong session**
+**Remaining limitation**: If VS Code creates a new session file before the prompt is written (before `findSessionFileByPromptText()` can match it), there is a brief window where the session file has not yet been identified. In practice this is handled by a retry loop in `waitForCompletion()`.
 
-**Problem Scenarios:**
+**Concurrent workflow risk**: Running two FlightPath workflows in Chat mode simultaneously with identical prompt text could theoretically cause one to latch onto the other's session file. In practice this is unlikely, but the safest approach remains **one Chat mode workflow at a time**.
 
-1. **User manually interacts with Copilot Chat** while FlightPath workflow is running:
-   - User's manual prompt completes first
-   - FlightPath detects this as workflow completion
-   - Actual workflow prompt may still be processing
-   - **Result**: Premature completion, workflow fails
+**Problem Scenarios (reduced but not eliminated):**
 
-2. **Multiple FlightPath workflows** running simultaneously:
-   - Both workflows send prompts to chat
-   - Both poll for `[stop]` markers
-   - Each may detect the other's completion
-   - **Result**: Race conditions, unpredictable failures
+1. **Manual user interaction**: If the user sends a chat message with the same text as the current prompt, the monitor may latch to the wrong session. Unique prompt text makes this very unlikely.
 
-3. **Multiple VS Code windows** with FlightPath active:
-   - All windows share the same global log file
-   - All workflows poll the same log
-   - **Result**: Cross-contamination of completion detection
+2. **Multiple FlightPath workflows** with identical first prompts: Same-text collision risk; use unique prompts.
 
-**Current Behavior:**
-
-```typescript
-// CopilotChatIntegration polls log file
-private async pollForLogCompletion(): Promise<void> {
-  // Simply looks for NEXT occurrence of "[stop]"
-  // No session ID tracking - assumes single active session
-  const stopMarker = /finish reason: \[stop\]/;
-  // ...
-}
-```
-
-**No Session ID in Logs:**
-
-```
-# Actual log format (no session identifier)
-[Trace - 10:30:45 AM] Sending request 'getCompletions - (123)'.
-[Trace - 10:30:48 AM] finish reason: [stop]
-
-# What we'd need (but don't have)
-[Trace - 10:30:48 AM] finish reason: [stop] session: abc123
-```
-
-**Workarounds:**
-
-1. **Don't use Copilot Chat manually** while FlightPath workflow is running
-2. **Run only one FlightPath workflow** at a time in Chat mode
-3. **Use CLI mode instead** - CLI properly isolates sessions via `--resume-session` flag
-
-**Why CLI mode doesn't have this issue:**
+**CLI mode has no parallel execution issues:**
 
 - CLI creates isolated session files (`.copilot-session-<uuid>.json`)
-- Each session has unique log entries
-- FlightPath tracks the specific session ID
+- Each session has a unique ID tracked by FlightPath
 - No cross-contamination possible
 
-**Recommendation**: For automated workflows, prefer **CLI mode** which properly supports concurrent execution and session isolation.
+**Recommendation**: For automated concurrent workflows, use **CLI mode**.
 
 ### Completion Detection Behavior by Mode
 
@@ -276,9 +232,8 @@ Until then, agent mode enforcement is the safest approach.
 | ------------------------------------ | -------------------------------------------------- | -------------------------------------------------- |
 | **No API for mode detection**        | Can't verify ask/plan/agent mode                   | Force agent mode via setting                       |
 | **No API for agent selection**       | Can't select custom agents programmatically        | Manually select agent before workflow              |
-| **No session ID in logs**            | Can't distinguish between concurrent sessions      | Run one workflow at a time                         |
-| **Shared global log file**           | Multiple VS Code windows interfere with each other | Use CLI mode or single window                      |
-| **Single `[stop]` marker detection** | Any chat completion triggers detection             | Don't interact with Chat manually during workflows |
+| **Session file match window**        | Brief window before session file is identified     | Retry loop handles this automatically              |
+| **Identical-prompt collision**       | Two simultaneous workflows with same prompt text   | Use unique prompt text; prefer CLI for concurrency |
 
 **General Recommendation**: Use **CLI mode** for production workflows. Chat mode is best for:
 

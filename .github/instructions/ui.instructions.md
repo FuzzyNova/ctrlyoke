@@ -8,39 +8,53 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 </purpose>
 
 <architecture>
-**FlightPathWebviewProvider:** Single unified provider (replaced old FlightPathDashboardProvider and FlightPathSettingsProvider)
-- Implements vscode.WebviewViewProvider for sidebar panel
-- Loads React app from out/ui/webview-react/
-- Handles message routing between extension and React UI
-- Harness availability driven by WorkflowOrchestrator via `notifyHarnessAvailability()` (not polled in constructor)
-- Discovers available agents (`AgentDiscovery`) and skills (`SkillDiscovery`) in background on construction
-- Injects webview resource URIs into Vite-built HTML (assets, typo.js, codicons, custom-icons.css, spell-check dictionaries, logo)
+**FlightPathWebviewProvider:** Coordination hub — lifecycle/HTML generation and public update API.
+- Implements `vscode.WebviewViewProvider` for sidebar panel
+- Loads React app from `out/ui/webview-react/` (Vite-built)
+- Injects webview resource URIs into HTML (assets, typo.js, codicons, custom-icons.css, spell-check dictionaries, logo)
 - `localResourceRoots`: webview-react dir + images dir
+- Constructs and holds three delegate classes; harness availability driven by WorkflowOrchestrator via `notifyHarnessAvailability()` (not polled in constructor)
+- Listens for model registry updates (`onModelsLoaded`) and config changes to forward to webview
 
-**StatusBarManager:** Status bar item manager
+**WebviewSettingsSync:** Settings/config management and broadcast.
+- Builds and sends `INIT`, `GLOBAL_SETTINGS_UPDATED`, `MODEL_OPTIONS_UPDATE`, `HARNESS_STATUS_UPDATE`, `AGENTS_UPDATE`, `SKILLS_UPDATE` messages
+- Tracks harness availability for all 5 harnesses
+- Discovers agents (`AgentDiscovery`) and skills (`SkillDiscovery`) in background
+- Handles all settings change messages from webview (harness, model, agent, execution mode, resume session, dynamic queue, workflow properties, set-as-default, get/update config)
+- Config read/write gated to `flightpath.*` keys (security allowlist)
 
-- Updates based on queue state and harness status
+**WebviewMessageRouter:** Dispatch table replacing a monolithic switch statement.
+- Routes all incoming webview messages via a `Map<string, handler>` dispatch table
+- Serializes handlers through a `routeQueue` promise chain (prevents concurrent execution)
+- Delegates to `WebviewSettingsSync`, `WorkflowSerializer`, or orchestrator commands
+
+**WorkflowSerializer:** Workflow persistence operations.
+- Save workflow to disk (YAML or JSON), strips runtime/working-file-only fields
+- Export output as markdown
+- New workflow creation (template modal: select, create, browse variables, set default)
+- Workflow history (recent workflows, load, remove, clear)
+- Run history (load, clear)
+
+**StatusBarManager:** Status bar item (`flightpath.openPanel` command).
 - **Queue execution states:**
-  - `$(compass)` idle (default)
-  - `$(compass-dot) N/M` running (progress counter)
-  - `$(debug-pause)` paused
-  - `$(check)` completed — auto-hides after 5s
-  - `$(error)` error — requires acknowledgment
-- **Harness/Copilot status states:**
-  - `$(compass)` Initializing — checking availability
-  - `$(compass)` Waiting — polling for Copilot (N/M attempts)
-  - `$(compass-active)` Ready
-  - `$(warning)` Setup Required
-- Colors: ThemeColor for automatic theme adaptation
-- Progress: Current = completed prompts, displays "N/M" counter
+  - `$(compass) FlightPath` — idle (default)
+  - `$(compass-dot) FlightPath N/M` — running (prominentBackground)
+  - `$(debug-pause) FlightPath N/M` — paused (warningBackground)
+  - `$(check) FlightPath Complete` — completed, auto-hides after 5s
+  - `$(error) FlightPath Error` — error (errorBackground)
+- **Harness status states (shown when idle):**
+  - `$(compass) FlightPath - Initializing...` — checking availability
+  - `$(compass) FlightPath - Waiting for Copilot (N/M)` — polling
+  - `$(compass-active) FlightPath - Ready`
+  - `$(warning) FlightPath - Setup Required`
+- Uses `vscode.ThemeColor` for background colors
 
-**Icons:** Custom icon system in src/ui/icons/
-
-- SVG source files (not copied to output): append.svg, append-next.svg, from-template.svg, load-from-file.svg, queue-from-file.svg
+**Icons:** Custom icon system in `src/ui/icons/`
+- SVG source files: append.svg, append-next.svg, from-template.svg, load-from-file.svg, queue-from-file.svg
 - Auto-converted to CSS via `npm run generate-icons` (runs as part of precompile)
-- Output: src/ui/webview-react/custom-icons.css
+- Output: `src/ui/webview-react/custom-icons.css`
 - Usage: `<i class="custom-icon icon-{name}"></i>`
-  </architecture>
+</architecture>
 
 <terminology>
 **Critical:** "Provider" has been renamed to "harness" throughout the codebase
@@ -76,42 +90,49 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
   </webviewLifecycle>
 
 <harnessAvailability>
-**Four harnesses tracked:**
+**Five harnesses tracked:**
 - COPILOT_CLI: GitHub Copilot CLI executable
 - COPILOT_CHAT: GitHub Copilot Chat extension
-- CLAUDE_CLI: Claude Code CLI executable  
+- CLAUDE_CLI: Claude Code CLI executable
 - CODEX_CLI: Codex CLI executable
+- OPENCODE_CLI: OpenCode CLI executable
 
 **Availability checks:**
-
 - CLI harnesses: Execute --version command
 - Chat harness: Check VS Code extension activation
 - Status: "checking" → "available" | "unavailable"
-- Results cached and sent to webview for harness dropdown
+- Results cached in `WebviewSettingsSync.harnessStatus` and sent to webview for harness dropdown
+- `notifyHarnessAvailability(harnessId, available)` on `WebviewSettingsSync` updates status and pushes `HARNESS_STATUS_UPDATE`
 
 **Model availability:**
-
-- Copilot: Dynamic discovery via ModelRegistry (vscode.lm API)
-- Claude: Static list from CLAUDE_CLI_MODEL_LABELS
-- Codex: Static list from CODEX_CLI_MODEL_LABELS
-  </harnessAvailability>
+- Copilot Chat: Dynamic discovery via ModelRegistry (vscode.lm API)
+- Copilot CLI: CLI-supported model IDs from ModelRegistry
+- Claude CLI: Static list from `CLAUDE_CLI_MODEL_LABELS`
+- Codex CLI: Static list from `CODEX_CLI_MODEL_LABELS`
+- OpenCode CLI: Dynamic IDs from `getOpenCodeModelIdsSync()`
+- All harness model options include a `{ value: "none", label: "None (skip --model flag)" }` entry (except Copilot Chat)
+</harnessAvailability>
 
 <criticalPatterns>
 **vscodeApi capture:** Must happen BEFORE React modules load (acquireVsCodeApi only callable once)
-**CSP policy:** script-src for vscodeApi, style-src for Tailwind inline styles, img-src for data URIs
-**Circular dependency:** FlightPathWebviewProvider created first, setWorkflowOrchestrator() called after
-**Resource URIs:** All assets loaded via webview.asWebviewUri() for security
-**Message validation:** Validate harness IDs against VALID_HARNESSES constant
+**CSP policy:** Nonce-based script-src (no unsafe-inline), style-src allows inline (Tailwind), img-src allows data URIs and https
+**Circular dependency:** FlightPathWebviewProvider created first, `setWorkflowOrchestrator()` called after
+**Resource URIs:** All assets loaded via `webview.asWebviewUri()` for security
+**Message validation:** Validate harness IDs against `VALID_HARNESSES` in WebviewSettingsSync (5 entries)
+**routeQueue:** All webview messages are serialized through a chained promise — never process two messages concurrently
 **No emoji:** Use codicons or custom-icons only
 </criticalPatterns>
 
 <relatedFiles>
-- src/ui/webview-react/ - React UI implementation (separate instructions file)
-- ../../flightpath/WorkflowOrchestrator.ts - Orchestration, calls webview update methods and notifyHarnessAvailability()
-- DashboardConstants.ts - MESSAGE_TYPES, EXECUTION_STATES, HARNESS_IDS
-- ModelRegistry.ts - Runtime model discovery
-- ModelConstants.ts - Model display names and mappings
-- TemplateManager.ts - Workflow template discovery
-- AgentDiscovery.ts - Agent file discovery (src/utils/)
-- SkillDiscovery.ts - Skill file discovery (src/utils/)
+- `src/ui/WebviewSettingsSync.ts` — settings/config management and harness availability tracking
+- `src/ui/WebviewMessageRouter.ts` — dispatch table for all webview → extension messages
+- `src/ui/WorkflowSerializer.ts` — save/export/template/history operations
+- `src/ui/webview-react/` — React UI implementation (separate instructions file)
+- `src/flightpath/WorkflowOrchestrator.ts` — calls webview update methods and `notifyHarnessAvailability()`
+- `src/types/DashboardConstants.ts` — MESSAGE_TYPES, EXECUTION_STATES, HARNESS_IDS, HARNESS_STATUS_STRINGS
+- `src/utils/ModelRegistry.ts` — runtime model discovery
+- `src/utils/ModelConstants.ts` — model display names and static model lists
+- `src/flightpath/TemplateManager.ts` — workflow template discovery
+- `src/utils/AgentDiscovery.ts` — agent file discovery
+- `src/utils/SkillDiscovery.ts` — skill file discovery
 </relatedFiles>

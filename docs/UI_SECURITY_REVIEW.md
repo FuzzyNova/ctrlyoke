@@ -1,6 +1,6 @@
 # UI Security Review — src/ui (2026-02-27)
 
-**Audit status — last verified 2026-03-07. 2 of 5 recommendations still pending.**
+**Audit status — last verified 2026-03-07. 2 of 6 recommendations still pending.**
 
 Summary
 

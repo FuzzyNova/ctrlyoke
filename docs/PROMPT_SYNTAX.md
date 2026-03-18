@@ -4,7 +4,7 @@
 
 FlightPath supports rich context references in prompts using a syntax aligned with CLI standards while adding workspace intelligence features. This document defines the syntax, completion behavior, and migration path.
 
-**Last Updated**: 2026-01-12
+**Last Updated**: 2026-06-13
 
 ---
 
@@ -23,10 +23,10 @@ FlightPath supports rich context references in prompts using a syntax aligned wi
 - ✅ Model completions in "model" field
 - ✅ Works in JSON and Markdown prompt files
 - ✅ Migration script: `scripts/migrate-prompt-syntax.mjs`
+- ✅ `@path/` directory structure references (trailing slash) — completions + runtime XML attachment
 
 **What's NOT Implemented Yet**:
 
-- ❌ `@path/` directory structure references (trailing slash)
 - ❌ Deprecation warnings for legacy `#file:path` without line ranges
 
 **Breaking Change Applied**: `#file:path` for full files is DEPRECATED. Use `@path` instead.
@@ -78,7 +78,7 @@ Line ranges (`#selection::-`) continue to use `#file:` syntax.
 
 ---
 
-### Directory Structure: `@path\to\directory\` _(Planned)_
+### Directory Structure: `@path\to\directory\` ✅ IMPLEMENTED
 
 **Purpose**: Attach directory structure (file tree, no content)
 
@@ -97,14 +97,14 @@ Line ranges (`#selection::-`) continue to use `#file:` syntax.
 }
 ```
 
-**Behavior** _(when implemented)_:
+**Behavior**:
 
 - **FlightPath handles**: Detects trailing slash, reads directory tree, wraps in XML attachment
 - **No content**: Shows file names and structure only
 - **CLI alignment**: Claude natively recognizes `@path/` as directory (no conversion needed)
 - Useful for "explain module" or "understand organization" prompts
-
-**Priority**: Medium (useful for architectural questions)
+- **Completions**: Directory paths appear in `@` completions with trailing slash
+- **Link navigation**: Ctrl+Click on `@dir/` reveals directory in File Explorer
 
 ---
 
@@ -232,7 +232,7 @@ FlightPath plans to use **two separate completion handlers** to avoid performanc
 **Items**:
 
 - ✅ Workspace files (cached, max 500 items)
-- ⬜ Directories (trailing slash detection for `@path/`) _(planned)_
+- ✅ Directories (trailing slash, sorted before files in the list)
 
 **Performance**:
 
@@ -245,8 +245,8 @@ FlightPath plans to use **two separate completion handlers** to avoid performanc
 ```
 @src/extension.ts                    (file - src/)
 @package.json                        (file - Root)
+@src/flightpath/                     (directory)
 @src/flightpath/PromptQueue.ts       (file - src/flightpath/)
-@src/flightpath/                     (directory - 8 files) [PLANNED]
 ```
 
 #### Handler 2: `#` Completion (Selections + Symbols) ✅ IMPLEMENTED
@@ -388,7 +388,7 @@ The migration from `#file:path` to `@path` for full files has been completed.
 | Syntax Type           | Purpose                  | Who Handles      | Example                                 | Notes                                  |
 | --------------------- | ------------------------ | ---------------- | --------------------------------------- | -------------------------------------- |
 | `@path`               | Full file content        | CLI (native)     | `@src/extension.ts`                     | CLI attaches entire file               |
-| `@path/`              | Full directory structure | FlightPath (XML) | `@src/flightpath/`                      | Trailing slash = directory _(planned)_ |
+| `@path/`              | Full directory structure | FlightPath (XML) | `@src/flightpath/`                      | Trailing slash = directory tree (XML)  |
 | `#selection::-`    | Line range snippet       | FlightPath (XML) | `#selection::-`          | Extracts specific lines                |
 | `#sym:path:name:line` | Symbol snippet           | FlightPath (XML) | `#sym:src/file.ts:FlightPathManager:42` | Resolves to exact symbol location      |
 
@@ -420,7 +420,7 @@ The migration from `#file:path` to `@path` for full files has been completed.
 | Symbol completions               | ✅ Done | -        | Inserts `sym:path:name:line`, dynamic refresh as you type   |
 | Model completions                | ✅ Done | -        | Dynamic model list in "model" field                         |
 | Migration script                 | ✅ Done | -        | `scripts/migrate-prompt-syntax.mjs`                         |
-| `@path/` directory refs          | ⬜ TODO | LOW      | Trailing slash detection, directory tree attachment         |
+| `@path/` directory refs          | ✅ Done | -        | Completions + runtime XML tree via `buildDirectoryAttachmentXml` |
 | `#sym:path:name:line` resolution | ✅ Done | -        | Resolves symbols to exact line range using document symbols |
 | Deprecation warnings             | ⬜ TODO | LOW      | Show hints when using `#file:` for full files               |
 
@@ -478,7 +478,7 @@ _User typed `#`, selected "Current Selection" from completions, which inserted `
 
 _FlightPath resolves symbol location using exact line match, extracts code, wraps in XML_
 
-### Directory Structure _(Future)_
+### Directory Structure ✅ IMPLEMENTED
 
 ```json
 {
@@ -498,7 +498,7 @@ _Trailing slash indicates directory. FlightPath reads directory tree (no file co
 
 _Full architecture doc + specific code snippet_
 
-### Directory Structure + Files _(Future)_
+### Directory Structure + Files ✅ IMPLEMENTED
 
 ```json
 {
@@ -509,46 +509,6 @@ _Full architecture doc + specific code snippet_
 _Directory tree context + specific file content_
 
 ---
-
-## Implementation Roadmap
-
-### Phase 1: Add `@` Completion Handler ✅ COMPLETED
-
-**Status**: Implemented in `PromptCompletionProvider.ts` and `extension.ts`
-
-**Completed Changes**:
-
-1. ✅ Registered both `@` and `#` completion triggers in `extension.ts`
-2. ✅ Added `getAtCompletions()` for full file references
-3. ✅ Updated `getHashCompletions()` to show selections only (no files)
-4. ✅ Added `@path` parsing via unified `FileReferenceParser.ts` module:
-   - `parseAtReferences()`, `parseFileReferences()`, `parseSymbolReferences()`
-   - `parseAllFileReferences()` combines all syntaxes
-   - Used by all CLI integrations and Chat mode
-
-### Phase 2: Migration Tooling ✅ COMPLETED
-
-**Status**: Migration script created and executed
-
-**Completed**:
-
-1. ✅ **Migration Script**: `scripts/migrate-prompt-syntax.mjs`
-   - Scans `manual-test/`, `src/templates/`, `.flightpath/`
-   - Converts `#file:path` → `@path` (preserves line ranges)
-   - 14 files updated, 144 replacements made
-
-**Future Enhancements** (optional):
-
-- Code Action Provider for one-click conversion
-- Deprecation diagnostics for legacy syntax
-
-### Phase 3: Documentation & Communication ✅ COMPLETED
-
-1. ✅ Updated all templates to use `@path` for full files
-2. ✅ Updated `docs/PROMPT_SYNTAX.md` with implemented status
-3. ✅ Updated `docs/CONTEXT_ATTACHMENT_IMPLEMENTATION.md`
-4. ⬜ Update CHANGELOG with breaking change notice (on release)
-5. ⬜ Update copilot-instructions.md examples
 
 ## Related Documentation
 
@@ -566,7 +526,7 @@ _Directory tree context + specific file content_
 **Full Content** (`@` prefix):
 
 - `@workspace:name/path` - Files from specific workspace folder (multi-root workspaces)
-- `@path/to/dir/` - Directory structure (trailing slash = directory, already planned)
+- `@workspace:name/path` - Files from specific workspace folder (multi-root workspaces)
 
 **Snippets** (`#` prefix):
 

@@ -42,7 +42,7 @@ When FlightPath executes a prompt with a CLI provider (Copilot CLI, Claude CLI, 
 
 ```yaml
 prompts:
-  - id: analyze
+  - name: "Analyze security issues"
     prompt: "Analyze security issues"
     _runtime:
       provider: copilot-cli
@@ -51,7 +51,7 @@ prompts:
       startedAt: 1705170000000
       completedAt: 1705170123000
 
-  - id: implement
+  - name: "Implement fixes"
     prompt: "Implement fixes"
     sessionId: 1 # ← Use session from prompt 1 (analyze)
     _runtime:
@@ -75,15 +75,15 @@ Reference another prompt's session by its position in the workflow (1-based inde
 
 ```yaml
 prompts:
-  - id: analyze
+  - name: "Analyze codebase for bugs"
     prompt: "Analyze the codebase for bugs"
     # No sessionId - starts new session
 
-  - id: implement
+  - name: "Fix bugs"
     prompt: "Fix the bugs found"
     sessionId: 1 # Use session from prompt 1 (analyze)
 
-  - id: verify
+  - name: "Verify fixes"
     prompt: "Verify all bugs are fixed"
     sessionId: 1 # Also use session from prompt 1
 ```
@@ -116,7 +116,7 @@ Provide the exact session ID string to resume.
 
 ```yaml
 prompts:
-  - id: resume-work
+  - name: "Resume work"
     prompt: "Continue the feature implementation"
     sessionId: "550e8400-e29b-41d4-a716-446655440000"
 ```
@@ -154,26 +154,28 @@ Automatically continue from the previous prompt's session.
 
 ```yaml
 prompts:
-  - id: step1
+  - name: "First step"
     prompt: "First step"
     # Starts new session
 
-  - id: step2
+  - name: "Second step"
     prompt: "Second step"
     resumeSession: true
-    # Auto-resumes session from step1
+    # Auto-resumes session from step 1
 
-  - id: step3
+  - name: "Third step"
     prompt: "Third step"
     resumeSession: true
-    # Auto-resumes session from step2 (same as step1)
+    # Auto-resumes session from step 2 (same as step 1)
 ```
 
 **How it works:**
 
 1. No `sessionId` specified + `resumeSession: true`
-2. FlightPath looks at previous prompt's `_runtime.sessionId`
+2. FlightPath looks at the previous prompt's `_runtime.sessionId`
 3. Automatically uses that session ID
+
+> **Note:** If no previous session is available (e.g., first prompt in workflow), FlightPath starts a **new session**. The global `-c` (continue most recent) flag is intentionally not used because it could resume sessions from unrelated projects.
 
 **Benefits:**
 
@@ -207,23 +209,23 @@ FlightPath **automatically validates provider compatibility** when resuming sess
 
 ```yaml
 prompts:
-  - id: claude-analyze
+  - name: "Analyze codebase architecture"
     provider: claude-cli
     prompt: "Analyze codebase architecture"
     # Creates Claude session: abc-123
 
-  - id: copilot-review
+  - name: "Review code quality"
     provider: copilot-cli
     prompt: "Review code quality"
     # Creates Copilot session: xyz-789
 
-  - id: claude-implement
+  - name: "Implement improvements"
     provider: claude-cli
     prompt: "Implement improvements"
     resumeSession: true # No sessionId specified
     # ✅ Auto-resumes Claude session abc-123 (skips Copilot session)
 
-  - id: copilot-test
+  - name: "Add tests"
     provider: copilot-cli
     prompt: "Add tests"
     resumeSession: true # No sessionId specified
@@ -236,12 +238,12 @@ prompts:
 
 ```yaml
 prompts:
-  - id: step1
+  - name: "Analyze code"
     provider: claude-cli
     prompt: "Analyze code"
     # Creates Claude session: abc-123
 
-  - id: step2
+  - name: "Review analysis"
     provider: copilot-cli
     prompt: "Review analysis"
     sessionId: 1 # ⚠️ Trying to use Claude session with Copilot!
@@ -289,7 +291,7 @@ prompts:
 
   - provider: copilot-cli
     prompt: "Step 3"
-    # New Copilot session (no Claude sessions to resume)
+    # New Copilot session (no previous Copilot session to resume)
 
   - provider: copilot-cli
     prompt: "Step 4"
@@ -334,11 +336,11 @@ FlightPath follows a strict precedence order when determining which session to u
 
 ```yaml
 prompts:
-  - id: analyze
+  - name: "Analyze code"
     prompt: "Analyze code"
     # Starts new session (default)
 
-  - id: implement
+  - name: "Implement changes"
     sessionId: 1 # ← Explicit reference wins
     resumeSession: false # ← Ignored (sessionId takes precedence)
 ```
@@ -351,10 +353,10 @@ prompts:
 
 ```yaml
 prompts:
-  - id: step1
+  - name: "First step"
     prompt: "First step"
 
-  - id: step2
+  - name: "Second step"
     resumeSession: true # ← No sessionId, so check resumeSession
 ```
 
@@ -368,11 +370,11 @@ prompts:
 resumeSession: true # Workflow default
 
 prompts:
-  - id: step1
+  - name: "First step"
     prompt: "First step"
     # No prompt-level override → Uses workflow default
 
-  - id: step2
+  - name: "Second step"
     prompt: "Second step"
     # Also uses workflow default (auto-resume)
 ```
@@ -396,7 +398,7 @@ prompts:
 
 ```yaml
 prompts:
-  - id: analyze
+  - name: "Analyze security issues"
     prompt: "Analyze security issues"
     model: claude-sonnet-4.5
     _runtime:
@@ -427,14 +429,14 @@ _runtime:
 
 ```yaml
 prompts:
-  - id: step1
+  - name: "Step 1"
     _runtime:
       sessionId: abc-123 # ← First session
 
-  - id: step2
+  - name: "Step 2"
     sessionId: 1
     _runtime:
-      sessionId: abc-123 # ← Should match step1
+      sessionId: abc-123 # ← Should match step 1
 ```
 
 **Troubleshoot retries:**
@@ -543,12 +545,12 @@ FlightPath validates session IDs before execution:
 
 ```yaml
 prompts:
-  - id: step1
-    provider: copilot-cli
+  - provider: copilot-cli
+    prompt: "..."
     # Creates Copilot session
 
-  - id: step2
-    provider: claude-cli # ⚠️ Different provider!
+  - provider: claude-cli # ⚠️ Different provider!
+    prompt: "..."
     sessionId: 1 # References Copilot session
 ```
 
@@ -725,10 +727,10 @@ sessionId: "thread_abc123xyz789"
 
 ```yaml
 prompts:
-  - id: analyze
+  - name: "Analyze security issues"
     prompt: "Analyze security issues"
 
-  - id: implement
+  - name: "Fix security issues"
     prompt: "Fix security issues"
     sessionId: 1 # Clear: Continue from analysis
 ```
@@ -743,19 +745,19 @@ prompts:
 
 ```yaml
 prompts:
-  - id: analyze
+  - name: "Analyze codebase"
     prompt: "Analyze codebase"
     # New session (default)
 
-  - id: plan
+  - name: "Create implementation plan"
     prompt: "Create implementation plan"
     sessionId: 1 # Continue analysis
 
-  - id: implement
+  - name: "Implement the plan"
     prompt: "Implement the plan"
     resumeSession: false # Fresh session for implementation
 
-  - id: test
+  - name: "Add tests"
     prompt: "Add tests"
     sessionId: 3 # Continue implementation session
 ```
@@ -771,15 +773,15 @@ prompts:
 ```yaml
 prompts:
   # Phase 1: Code review (shared session)
-  - id: security-review
+  - name: "Review security"
     prompt: "Review security"
 
-  - id: performance-review
+  - name: "Review performance"
     prompt: "Review performance"
     sessionId: 1 # Share context with security review
 
   # Phase 2: Implementation (new session)
-  - id: implement-fixes
+  - name: "Implement all fixes"
     prompt: "Implement all fixes"
     resumeSession: false # Start fresh for implementation
 ```

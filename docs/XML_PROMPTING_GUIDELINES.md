@@ -17,7 +17,7 @@ This means:
 
 This is a **perfect** solution for embedding automation directives without cluttering the UI!
 
-**Note**: The `<criticalInstruction>` tag is used for Dynamic Queue Extension instructions when enabled. It informs Copilot about the MCP tools available (`flightpath_queue_status`, `flightpath_append_queue`) for extending workflows. Completion detection for Chat mode is handled via log file monitoring (`ChatLogMonitor.ts`).
+**Note**: The `<criticalInstruction>` tag is used for Dynamic Queue Extension instructions when enabled. It informs Copilot about the MCP tools available (`flightpath_queue_status`, `flightpath_append_queue`) for extending workflows. Completion detection for Chat mode is handled via VS Code chat session file monitoring (`ChatSessionMonitor.ts`).
 
 ## Why XML?
 
@@ -62,9 +62,9 @@ If you need additional steps to complete this task, you can extend the workflow.
 - Dynamic queue instructions wrapped in `<criticalInstruction>` XML tag → Hidden from chat UI but processed by Copilot
 - This gives us clean chat history while maintaining automation functionality
 
-**Completion Detection**: FlightPath now uses **log file monitoring** instead of tool callbacks. The extension monitors `GitHub Copilot Chat.log` for `finish reason: [stop]` markers to detect when Copilot has finished responding.
+**Completion Detection**: FlightPath uses **VS Code chat session file monitoring** for Chat mode. The extension monitors VS Code's internal `chatSessions/*.json` files for response-complete markers to detect when Copilot has finished responding. This replaced the earlier log-file approach for improved reliability.
 
-**Implementation**: See `ChatLogMonitor.ts` → `waitForCompletion()` method
+**Implementation**: See `ChatSessionMonitor.ts` (used by `CopilotChatIntegration.ts`)
 
 ### Why User Prompts Aren't Wrapped in XML
 
@@ -201,7 +201,7 @@ XML works great with:
 ```
 
 **What user sees in chat**: `/fix #file:src/extension.ts Fix the activation error`
-**How completion is detected**: Log file monitoring detects `finish reason: [stop]` marker
+**How completion is detected**: VS Code chat session file monitoring via `ChatSessionMonitor.ts`
 
 ### Complex Prompt with User-Defined XML Structure
 
@@ -272,7 +272,7 @@ To verify XML structure works:
 1. Check console logs in VS Code Output panel (FlightPath channel)
 2. Look for log messages showing the prompt being sent
 3. Verify the full prompt shows proper XML tags when dynamic queue is enabled
-4. For Chat mode, completion is detected via log file monitoring (`finish reason: [stop]`)
+4. For Chat mode, completion is detected via session file monitoring (`ChatSessionMonitor.ts`)
 
 ## References
 

@@ -1,3 +1,12 @@
+# TUI Visuals Reference
+
+Reference screenshots of the terminal UIs for the three harnesses FlightPath supports
+(Copilot CLI, OpenAI Codex, Claude Code). Useful for understanding approval dialogs,
+command prompt patterns, and visual chrome when working on harness integrations
+(`src/flightpath/harness/`).
+
+---
+
 #Here is copilot's tui
 
 ```
