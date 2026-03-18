@@ -15,7 +15,6 @@ import {
   canStopExecution,
   STATUS_ICONS,
   STATUS_COLORS,
-  STATUS_LABELS,
 } from "@utils/status";
 import { STEP_STATUS, EXECUTION_STATES } from "@/types/messages";
 

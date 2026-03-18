@@ -70,7 +70,7 @@ function makeFileDeleteEvent(path: string) {
 
 function makeCliOutput(events: unknown[]): CliOutput {
   return {
-    structured: { events: events as CliOutput["structured"]["events"], metadata: {} },
+    structured: { events: events as NonNullable<CliOutput["structured"]>["events"], metadata: {} },
   } as unknown as CliOutput;
 }
 

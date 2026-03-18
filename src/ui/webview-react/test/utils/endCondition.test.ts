@@ -127,7 +127,7 @@ describe("buildEndConditionFromValues", () => {
   });
 
   it("omits timeout when equal to default", () => {
-    const result = buildEndConditionFromValues({ ...base, enabled: true }) as Record<string, unknown>;
+    const result = buildEndConditionFromValues({ ...base, enabled: true }) as unknown as Record<string, unknown>;
     expect(result?.timeout).toBeUndefined();
   });
 
@@ -136,7 +136,7 @@ describe("buildEndConditionFromValues", () => {
       ...base,
       enabled: true,
       timeout: "5000",
-    }) as Record<string, unknown>;
+    }) as unknown as Record<string, unknown>;
     expect(result?.timeout).toBe(5000);
   });
 
@@ -145,7 +145,7 @@ describe("buildEndConditionFromValues", () => {
       ...base,
       enabled: true,
       maxRetries: "3",
-    }) as Record<string, unknown>;
+    }) as unknown as Record<string, unknown>;
     expect(result?.maxRetries).toBe(3);
   });
 
@@ -154,7 +154,7 @@ describe("buildEndConditionFromValues", () => {
       ...base,
       enabled: true,
       retryPrompt: "Please fix the test failures.",
-    }) as Record<string, unknown>;
+    }) as unknown as Record<string, unknown>;
     expect(result?.retryPrompt).toBe("Please fix the test failures.");
   });
 

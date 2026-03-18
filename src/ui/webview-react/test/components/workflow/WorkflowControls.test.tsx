@@ -22,7 +22,7 @@ beforeEach(() => {
   useWorkflowStore.getState().resetWorkflow();
   useWorkflowStore.temporal.getState().clear();
   // Reset the vscodeApi mock on each test
-  (window.vscodeApi as { postMessage: ReturnType<typeof vi.fn> }).postMessage = postMessageSpy;
+  (window.vscodeApi as unknown as { postMessage: ReturnType<typeof vi.fn> }).postMessage = postMessageSpy;
   postMessageSpy.mockClear();
 });
 

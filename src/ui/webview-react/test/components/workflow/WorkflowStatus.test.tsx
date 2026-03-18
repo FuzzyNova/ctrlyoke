@@ -20,7 +20,7 @@ beforeEach(() => {
   useWorkflowStore.temporal.getState().clear();
   useUiStore.getState().resetUi();
   useSettingsStore.getState().resetSettings();
-  (window.vscodeApi as { postMessage: ReturnType<typeof vi.fn> }).postMessage = postMessageSpy;
+  (window.vscodeApi as unknown as { postMessage: ReturnType<typeof vi.fn> }).postMessage = postMessageSpy;
   postMessageSpy.mockClear();
 });
 

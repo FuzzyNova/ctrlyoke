@@ -26,6 +26,7 @@ function makeOutput(overrides: Partial<CliOutput> = {}): CliOutput {
     elapsed: 100,
     timestampMs: Date.now(),
     attemptIndex: 0,
+    isStreaming: false,
     ...overrides,
   };
 }
