@@ -162,7 +162,10 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
         const maxScroll = el.scrollHeight - el.clientHeight;
         // Scale mouse delta by the same ratio as thumb height → rail height
         const scrollDelta = (delta / railHeight) * el.scrollHeight;
-        el.scrollTop = Math.max(0, Math.min(maxScroll, startScrollTop + scrollDelta));
+        el.scrollTop = Math.max(
+          0,
+          Math.min(maxScroll, startScrollTop + scrollDelta)
+        );
       };
 
       const onUp = () => {
@@ -208,17 +211,20 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
     (step: MinimapStep) => {
       const el = scrollContainerRef.current;
       if (!el) return;
-      el.scrollTo({ top: step.scrollFraction * el.scrollHeight, behavior: "smooth" });
+      el.scrollTo({
+        top: step.scrollFraction * el.scrollHeight,
+        behavior: "smooth",
+      });
     },
     [scrollContainerRef]
   );
 
   if (steps.length === 0) return null;
 
-  const canScroll =
-    scrollContainerRef.current
-      ? scrollContainerRef.current.scrollHeight > scrollContainerRef.current.clientHeight
-      : false;
+  const canScroll = scrollContainerRef.current
+    ? scrollContainerRef.current.scrollHeight >
+      scrollContainerRef.current.clientHeight
+    : false;
 
   return (
     // The rail itself is 14px and clips nothing — markers overflow to the left.
@@ -315,7 +321,7 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
           height: `${viewportPct.height}%`,
           background:
             "var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4))",
-          opacity: isDragging ? 0.8 : isThumbHovered ? 0.65 : 0.5,
+          opacity: isDragging ? 0.98 : isThumbHovered ? 0.9 : 0.75,
           cursor: isDragging ? "grabbing" : canScroll ? "grab" : "default",
           transition: isDragging ? "none" : "opacity 0.1s",
         }}
@@ -353,7 +359,10 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
           <div
             key={step.key}
             className="absolute right-0 flex flex-row items-center z-20"
-            style={{ top: `clamp(9px, ${topPct}%, calc(100% - 9px))`, transform: "translateY(-50%)" }}
+            style={{
+              top: `clamp(3px, ${topPct}%, calc(100% - 3px))`,
+              transform: "translateY(-50%)",
+            }}
             onMouseEnter={() => setHoveredKey(step.key)}
             onMouseLeave={() => setHoveredKey(null)}
           >
@@ -418,23 +427,18 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
               </div>
             )}
 
-            {/* Marker dot — click scrolls to step */}
+            {/* Marker pill — click scrolls to step */}
             <button
               type="button"
               onClick={() => handleMarkerClick(step)}
               title={step.label}
               tabIndex={0}
-              className="w-[14px] h-[18px] flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border"
-            >
-              <span
-                className="block rounded-full transition-all duration-100"
-                style={{
-                  width: isHovered ? "10px" : "8px",
-                  height: isHovered ? "10px" : "8px",
-                  background: dotColor,
-                }}
-              />
-            </button>
+              className="w-[14px] flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-all duration-100"
+              style={{
+                height: isHovered ? "6px" : "4px",
+                background: dotColor,
+              }}
+            />
           </div>
         );
       })}
