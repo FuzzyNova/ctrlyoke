@@ -161,6 +161,7 @@ export class WorkflowOrchestrator {
       [HARNESS_IDS.CLAUDE_CLI, this.claudeCliIntegration],
       [HARNESS_IDS.CODEX_CLI, this.codexCliIntegration],
       [HARNESS_IDS.OPENCODE_CLI, this.openCodeCliIntegration],
+      [HARNESS_IDS.QWEN_CLI, this.qwenCliIntegration],
     ];
     for (const [harnessId, integration] of allIntegrations) {
       context.subscriptions.push(

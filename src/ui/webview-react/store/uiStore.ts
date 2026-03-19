@@ -118,6 +118,11 @@ interface UiState {
   // Diff display — when true all DiffView instances render collapsed (summary only),
   // keeping the DOM lean for runs with many large file edits.
   diffsCollapsed: boolean;
+  // Monotonic counter bumped on every "expand all" / "collapse all" action.
+  // DiffView includes this in its useEffect deps so the effect fires even when
+  // diffsCollapsed doesn't change (e.g. user manually collapsed one diff while
+  // diffsCollapsed was already false, then presses "Expand all" again).
+  diffResetVersion: number;
 
   // Persisted panel sizes — restored to useRef on mount, written back on resize
   lastDesktopSizes: PanelSizes;
@@ -189,6 +194,9 @@ interface UiActions {
   setOutputCollapsed: (collapsed: boolean) => void;
   setEditorCollapsed: (collapsed: boolean) => void;
   toggleDiffsCollapsed: () => void;
+  setDiffsCollapsed: (collapsed: boolean) => void;
+  expandAllDiffs: () => void;
+  collapseAllDiffs: () => void;
 
   // Panel sizes (persisted, written from App.tsx resize handlers)
   setLastDesktopSizes: (sizes: Partial<PanelSizes>) => void;
@@ -275,6 +283,7 @@ const initialState: UiState = {
   outputCollapsed: false,
   editorCollapsed: false,
   diffsCollapsed: true, // collapsed by default to keep the DOM lean
+  diffResetVersion: 0,
   lastDesktopSizes: { ...DEFAULT_DESKTOP_SIZES },
   lastMobileSizes: { ...DEFAULT_MOBILE_SIZES },
   propertiesDrawerOpen: false,
@@ -349,6 +358,20 @@ export const useUiStore = create<UiState & UiActions>()(
 
       toggleDiffsCollapsed: () =>
         set((state) => ({ diffsCollapsed: !state.diffsCollapsed })),
+
+      setDiffsCollapsed: (collapsed) => set({ diffsCollapsed: collapsed }),
+
+      expandAllDiffs: () =>
+        set((state) => ({
+          diffsCollapsed: false,
+          diffResetVersion: state.diffResetVersion + 1,
+        })),
+
+      collapseAllDiffs: () =>
+        set((state) => ({
+          diffsCollapsed: true,
+          diffResetVersion: state.diffResetVersion + 1,
+        })),
 
       // ============================================================================
       // PANEL SIZES

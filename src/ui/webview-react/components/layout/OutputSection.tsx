@@ -102,7 +102,8 @@ export const OutputSection: React.FC = () => {
   const runTimestamps = useUiStore((s) => s.runTimestamps);
   const runStates = useUiStore((s) => s.runStates);
   const diffsCollapsed = useUiStore((s) => s.diffsCollapsed);
-  const toggleDiffsCollapsed = useUiStore((s) => s.toggleDiffsCollapsed);
+  const expandAllDiffs = useUiStore((s) => s.expandAllDiffs);
+  const collapseAllDiffs = useUiStore((s) => s.collapseAllDiffs);
   const outputFontSize = useUiStore((s) => s.outputFontSize);
   const setOutputFontSize = useUiStore((s) => s.setOutputFontSize);
 
@@ -328,9 +329,22 @@ export const OutputSection: React.FC = () => {
     };
 
     measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(container);
-    return () => observer.disconnect();
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(container);
+    // Watch for individual diff expand/collapse — DiffView stamps data-diff-collapsed
+    // on [data-diff-anchor] elements, but the container's clientHeight doesn't change
+    // (it's overflow-y-auto with fixed visual height), so ResizeObserver won't fire.
+    // MutationObserver catches the attribute change and triggers a re-measure.
+    const mutationObserver = new MutationObserver(measure);
+    mutationObserver.observe(container, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ["data-diff-collapsed"],
+    });
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+    };
   }, [allMessages, stepsToRender, diffsCollapsed]);
 
   // Export handler
@@ -397,6 +411,14 @@ export const OutputSection: React.FC = () => {
 
   // Check if there's any output
   const hasOutput = allMessages.length > 0;
+
+  // Derive whether any diff is currently collapsed from DOM measurements.
+  // Falls back to the store value before the DOM has been measured.
+  // Used to show the correct "Expand all" vs "Collapse all" button label.
+  const anyDiffCollapsed =
+    diffMeasurements.size === 0
+      ? diffsCollapsed
+      : Array.from(diffMeasurements.values()).some((m) => m.isCollapsed);
 
   const isExecutionActive =
     executionState === EXECUTION_STATES.RUNNING ||
@@ -727,11 +749,11 @@ export const OutputSection: React.FC = () => {
           {hasOutput && (
             <button
               className="icon-btn py-0 px-2"
-              title={diffsCollapsed ? "Expand all diffs" : "Collapse all diffs"}
-              onClick={toggleDiffsCollapsed}
+              title={anyDiffCollapsed ? "Expand all diffs" : "Collapse all diffs"}
+              onClick={() => anyDiffCollapsed ? expandAllDiffs() : collapseAllDiffs()}
             >
               <i
-                className={`codicon codicon-sm ${diffsCollapsed ? "codicon-diff" : "codicon-diff-ignored"}`}
+                className={`codicon codicon-sm ${anyDiffCollapsed ? "codicon-diff" : "codicon-diff-ignored"}`}
               />
             </button>
           )}

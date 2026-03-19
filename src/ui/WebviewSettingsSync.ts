@@ -82,6 +82,14 @@ export class WebviewSettingsSync {
       available: false,
       status: HARNESS_STATUS_STRINGS.CHECKING,
     },
+    [HARNESS_IDS.OPENCODE_CLI]: {
+      available: false,
+      status: HARNESS_STATUS_STRINGS.CHECKING,
+    },
+    [HARNESS_IDS.QWEN_CLI]: {
+      available: false,
+      status: HARNESS_STATUS_STRINGS.CHECKING,
+    },
   };
 
   // Validation constants
@@ -91,6 +99,7 @@ export class WebviewSettingsSync {
     HARNESS_IDS.CLAUDE_CLI,
     HARNESS_IDS.CODEX_CLI,
     HARNESS_IDS.OPENCODE_CLI,
+    HARNESS_IDS.QWEN_CLI,
   ] as const;
 
   private static readonly VALID_EXECUTION_MODES = [

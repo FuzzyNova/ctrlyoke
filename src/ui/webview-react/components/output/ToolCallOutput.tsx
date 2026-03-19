@@ -153,23 +153,21 @@ export const DiffView: React.FC<DiffViewProps> = ({
   actionSlot,
   className = "",
 }) => {
-  // Track whether the user has manually toggled this instance.
-  // When null → follow globallyCollapsed; when boolean → user override.
-  const userOverride = useRef<boolean | null>(null);
+  const diffResetVersion = useUiStore((s) => s.diffResetVersion);
   const [isExpanded, setIsExpanded] = useState(!globallyCollapsed);
 
-  // When the global flag changes (e.g. user clicks "Expand all diffs"),
-  // apply it only if the user hasn't manually interacted with this instance.
+  // When the global flag changes or the reset version is bumped (e.g. user clicks
+  // "Expand all" / "Collapse all"), always snap to the global state.
+  // diffResetVersion is included so the effect fires even when globallyCollapsed
+  // doesn't change — e.g. diffsCollapsed is already false but the user manually
+  // collapsed one diff and then clicks "Expand all" again.
   useEffect(() => {
-    if (userOverride.current === null) {
-      setIsExpanded(!globallyCollapsed);
-    }
-  }, [globallyCollapsed]);
+    setIsExpanded(!globallyCollapsed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globallyCollapsed, diffResetVersion]);
 
   const handleToggle = () => {
-    const next = !isExpanded;
-    userOverride.current = next;
-    setIsExpanded(next);
+    setIsExpanded((prev) => !prev);
   };
 
   // Compute diff lines lazily — only when expanded.
