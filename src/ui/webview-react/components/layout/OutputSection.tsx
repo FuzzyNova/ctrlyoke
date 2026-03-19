@@ -7,6 +7,9 @@ import { PanelBar, RunSelector } from "../shared";
 import { generateMarkdownExport, formatTime } from "@utils/outputUtils";
 import type {
   CliOutput as CliOutputType,
+  CliEvent,
+  FileEditData,
+  FileWriteData,
   OutputStatusMessage,
 } from "../../types/cliEvents";
 import type {
@@ -15,7 +18,8 @@ import type {
   UndoExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
-import { OutputMinimap, type MinimapStep } from "../output/OutputMinimap";
+import { CLI_EVENT_TYPES } from "../../types/cliEvents";
+import { OutputMinimap, type MinimapStep, type MinimapDiffBlock, type DiffRun } from "../output/OutputMinimap";
 import { UndoChangesDialog } from "../output/UndoChangesDialog";
 import {
   buildUndoDialogInputForPrompt,
@@ -114,6 +118,11 @@ export const OutputSection: React.FC = () => {
   const [stepScrollFractions, setStepScrollFractions] = useState<Map<string, number>>(
     new Map()
   );
+
+  // DOM measurements for diff anchor elements (anchorId → position + collapse state)
+  const [diffMeasurements, setDiffMeasurements] = useState<
+    Map<string, { startFraction: number; heightFraction: number; isCollapsed: boolean }>
+  >(new Map());
 
   // Shared prompt-level undo/redo dialog (owned here, triggered from minimap)
   const [minimapDialogState, setMinimapDialogState] =
@@ -280,6 +289,8 @@ export const OutputSection: React.FC = () => {
       const { scrollHeight } = container;
       if (scrollHeight === 0) return;
       const containerTop = container.getBoundingClientRect().top;
+
+      // Measure step anchor positions
       const fractions = new Map<string, number>();
       for (const step of stepsToRender) {
         const kindSlug = step.target.kind === "queue" ? "queue" : "final";
@@ -293,13 +304,34 @@ export const OutputSection: React.FC = () => {
         }
       }
       setStepScrollFractions(fractions);
+
+      // Measure diff anchor elements so the minimap can render colored overlays.
+      // data-diff-anchor divs wrap file-operation events in StructuredOutput and
+      // reflect the actual rendered height (collapsed or expanded).
+      const diffAnchors = container.querySelectorAll<HTMLElement>("[data-diff-anchor]");
+      const newDiffMeasurements = new Map<string, { startFraction: number; heightFraction: number; isCollapsed: boolean }>();
+      diffAnchors.forEach((el) => {
+        const pixelTop =
+          el.getBoundingClientRect().top - containerTop + container.scrollTop;
+        // Read actual collapse state set by DiffView's useEffect on the anchor.
+        // Fall back to the global diffsCollapsed default when the attribute isn't
+        // stamped yet (e.g. before DiffView's first effect flush).
+        const attrVal = el.getAttribute("data-diff-collapsed");
+        const isCollapsed = attrVal !== null ? attrVal === "true" : diffsCollapsed;
+        newDiffMeasurements.set(el.id, {
+          startFraction: pixelTop / scrollHeight,
+          heightFraction: el.offsetHeight / scrollHeight,
+          isCollapsed,
+        });
+      });
+      setDiffMeasurements(newDiffMeasurements);
     };
 
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [allMessages, stepsToRender]);
+  }, [allMessages, stepsToRender, diffsCollapsed]);
 
   // Export handler
   const handleExport = useCallback(() => {
@@ -373,6 +405,71 @@ export const OutputSection: React.FC = () => {
   // Only show undo actions when execution is not active
   const allowUndoActions = !isExecutionActive;
 
+  // ── Diff line count helper ─────────────────────────────────────────────────
+
+  /**
+   * Extract diff statistics and run sequence for a single CLI event.
+   * Returns added/removed totals (for collapsed display) plus an ordered
+   * runs array (for expanded VS Code-style minimap strips).
+   * Runs are only populated when structuredPatch hunk data is available.
+   */
+  function computeDiffStats(
+    event: CliEvent
+  ): { added: number; removed: number; runs: DiffRun[] } {
+    if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
+      const data = event.data as FileEditData;
+      if (data.structuredPatch && data.structuredPatch.length > 0) {
+        let added = 0;
+        let removed = 0;
+        const runs: DiffRun[] = [];
+        let currentType: DiffRun["type"] | null = null;
+        let currentCount = 0;
+
+        const flushRun = () => {
+          if (currentType !== null && currentCount > 0) {
+            runs.push({ type: currentType, count: currentCount });
+          }
+        };
+
+        for (const hunk of data.structuredPatch) {
+          for (const line of hunk.lines) {
+            const lineType: DiffRun["type"] =
+              line[0] === "+" ? "added" : line[0] === "-" ? "removed" : "context";
+            if (lineType === "added") added++;
+            else if (lineType === "removed") removed++;
+            if (lineType === currentType) {
+              currentCount++;
+            } else {
+              flushRun();
+              currentType = lineType;
+              currentCount = 1;
+            }
+          }
+        }
+        flushRun();
+        return { added, removed, runs };
+      }
+      if (data.oldContent && data.newContent) {
+        // No hunk data — rough estimate, no run sequence available
+        return {
+          added: data.newContent.split("\n").length,
+          removed: data.oldContent.split("\n").length,
+          runs: [],
+        };
+      }
+      return { added: 0, removed: 0, runs: [] };
+    }
+    if (event.type === CLI_EVENT_TYPES.FILE_WRITE) {
+      const data = event.data as FileWriteData;
+      const lines = data.content ? data.content.split("\n").length : 1;
+      return { added: lines, removed: 0, runs: [{ type: "added", count: lines }] };
+    }
+    if (event.type === CLI_EVENT_TYPES.FILE_DELETE) {
+      return { added: 0, removed: 1, runs: [{ type: "removed", count: 1 }] };
+    }
+    return { added: 0, removed: 0, runs: [] };
+  }
+
   // ── Minimap steps array ────────────────────────────────────────────────────
   // Built from stepsToRender + firstIndexByStep; includes prompt-level
   // undo/redo actions so the minimap can show them without needing CliOutput.
@@ -400,13 +497,13 @@ export const OutputSection: React.FC = () => {
       const lastCliIdx = lastCliIndexPerStep.get(key);
       const noActions: MinimapStep["undoActions"] = { undo: null, redo: null };
       if (lastCliIdx === undefined) {
-        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions: noActions }];
+        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions: noActions, diffBlocks: [] }];
       }
 
       const lastMsg = allMessages[lastCliIdx];
       const lastOutput = lastMsg?.data as CliOutputType | undefined;
       if (!lastOutput || lastOutput.isStreaming) {
-        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions: noActions }];
+        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions: noActions, diffBlocks: [] }];
       }
 
       const stepOutputs = stepOutputsMap.get(key) ?? [];
@@ -485,8 +582,40 @@ export const OutputSection: React.FC = () => {
           : null,
       };
 
-      return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions }];
+      // Build diff blocks for this step: one entry per file-operation event that
+      // has a DOM measurement anchor (set by StructuredOutput when not hideDiff).
+      const kindSlug = isFinalPrompt ? "fp" : "q";
+      const diffBlocks: MinimapDiffBlock[] = [];
+      for (const output of stepOutputs) {
+        const typedOutput = output as CliOutputType & { attemptIndex?: number };
+        const attemptIdx = typedOutput.attemptIndex ?? 0;
+        const anchorPrefix = `fp-diff-${kindSlug}-${stepIndex}-a${attemptIdx}`;
+        const events = typedOutput.structured?.events ?? [];
+        events.forEach((event, eventIndex) => {
+          if (
+            event.type !== CLI_EVENT_TYPES.FILE_EDIT &&
+            event.type !== CLI_EVENT_TYPES.FILE_WRITE &&
+            event.type !== CLI_EVENT_TYPES.FILE_DELETE
+          ) return;
+          const anchorId = `${anchorPrefix}-e${eventIndex}`;
+          const measurement = diffMeasurements.get(anchorId);
+          if (!measurement || measurement.heightFraction < 0.0005) return;
+          const stats = computeDiffStats(event);
+          if (stats.added + stats.removed === 0) return;
+          diffBlocks.push({
+            scrollFraction: measurement.startFraction,
+            heightFraction: measurement.heightFraction,
+            addedLines: stats.added,
+            removedLines: stats.removed,
+            runs: stats.runs,
+            isCollapsed: measurement.isCollapsed,
+          });
+        });
+      }
+
+      return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions, diffBlocks }];
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     allowUndoActions,
     stepsToRender,
@@ -495,6 +624,7 @@ export const OutputSection: React.FC = () => {
     allMessages,
     stepOutputsMap,
     stepScrollFractions,
+    diffMeasurements,
     isViewingHistory,
     historyOutputs,
     workspaceSnapshots,

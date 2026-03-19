@@ -4,6 +4,33 @@ import React, { useState, useCallback, useEffect, useRef } from "react";
 // Types
 // ============================================================================
 
+/** A single contiguous run of same-type diff lines. */
+export interface DiffRun {
+  type: "added" | "removed" | "context";
+  count: number;
+}
+
+/** A single file-edit diff region to visualize in the minimap rail. */
+export interface MinimapDiffBlock {
+  /** 0–1 fraction of the scroll area where this diff starts */
+  scrollFraction: number;
+  /** 0–1 fraction of the scroll area the diff occupies (DOM-measured) */
+  heightFraction: number;
+  /** Total added lines — used for the collapsed 5px line split */
+  addedLines: number;
+  /** Total removed lines — used for the collapsed 5px line split */
+  removedLines: number;
+  /**
+   * Ordered sequence of diff runs extracted from structuredPatch.
+   * When present, the expanded minimap overlay uses per-run color strips
+   * (matching VS Code's diff minimap) rather than a simple two-color split.
+   * Empty when only oldContent/newContent is available (no hunk data).
+   */
+  runs: DiffRun[];
+  /** Whether the diff is currently collapsed in the output view (tracked via data-diff-collapsed attribute). */
+  isCollapsed: boolean;
+}
+
 export interface MinimapStep {
   key: string;
   kind: "queue" | "finalPrompt";
@@ -20,6 +47,8 @@ export interface MinimapStep {
     undo: { label: string; onTrigger: () => void } | null;
     redo: { label: string; onTrigger: () => void } | null;
   };
+  /** Diff regions within this step — rendered as colored overlays on the rail. */
+  diffBlocks: MinimapDiffBlock[];
 }
 
 interface OutputMinimapProps {
@@ -32,6 +61,13 @@ interface OutputMinimapProps {
 // OutputMinimap
 // ============================================================================
 
+// CSS variable references for diff colors — these match VS Code's minimap gutter
+// diff decorations, so the minimap colors align with the editor's diff theme.
+const DIFF_REMOVED_COLOR =
+  "var(--vscode-minimapGutter-deletedBackground, rgba(214,80,80,0.55))";
+const DIFF_ADDED_COLOR =
+  "var(--vscode-minimapGutter-addedBackground, rgba(100,185,100,0.55))";
+
 /**
  * A narrow rail on the right side of the output panel that doubles as the
  * scrollbar for the output content area.
@@ -42,6 +78,10 @@ interface OutputMinimapProps {
  * - Click on any marker to scroll to that step's output
  * - Hover to reveal a speech-bubble popup with step info and undo/redo actions
  *   (stacked vertically when both are available — mixed state)
+ * - Renders colored diff overlays for file edits (red = removed, green = added):
+ *   - Collapsed diffs → 5px horizontal line, split red/green proportionally
+ *   - Expanded diffs  → vertical band with red on top, green on bottom,
+ *     proportional to removed/added line counts
  *
  * Marker positions use real pixel fractions (offsetTop / scrollHeight) so they
  * align with the actual rendered position of each step — not an index fraction.
@@ -189,6 +229,84 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
       onMouseDown={handleRailMouseDown}
       style={{ cursor: canScroll ? "pointer" : "default" }}
     >
+      {/* Diff overlays — rendered below thumb and markers */}
+      {steps.map((step) => (
+        <React.Fragment key={`diffs-${step.key}`}>
+          {step.diffBlocks.map((block, blockIdx) => {
+            const significantLines = block.addedLines + block.removedLines;
+            if (significantLines === 0) return null;
+
+            const removedFraction = block.removedLines / significantLines;
+
+            if (block.isCollapsed) {
+              // Collapsed: fixed 2px horizontal line, left portion red, right green
+              return (
+                <div
+                  key={blockIdx}
+                  className="absolute left-0 right-0 pointer-events-none"
+                  style={{
+                    top: `clamp(0px, ${block.scrollFraction * 100}%, calc(100% - 2px))`,
+                    height: "2px",
+                    background: `linear-gradient(to right,
+                      ${DIFF_REMOVED_COLOR} 0%,
+                      ${DIFF_REMOVED_COLOR} ${removedFraction * 100}%,
+                      ${DIFF_ADDED_COLOR} ${removedFraction * 100}%,
+                      ${DIFF_ADDED_COLOR} 100%
+                    )`,
+                  }}
+                />
+              );
+            }
+
+            // Expanded: per-run color strips matching VS Code's diff minimap style.
+            // Each run gets a proportional slice of the block height; context = transparent.
+            let background: string;
+            if (block.runs.length > 0) {
+              const totalRunLines = block.runs.reduce((s, r) => s + r.count, 0);
+              if (totalRunLines > 0) {
+                const stops: string[] = [];
+                let pct = 0;
+                for (const run of block.runs) {
+                  const end = pct + (run.count / totalRunLines) * 100;
+                  const color =
+                    run.type === "removed"
+                      ? DIFF_REMOVED_COLOR
+                      : run.type === "added"
+                        ? DIFF_ADDED_COLOR
+                        : "transparent";
+                  // Hard stop: same color repeated at start and end of each run
+                  stops.push(`${color} ${pct}%`, `${color} ${end}%`);
+                  pct = end;
+                }
+                background = `linear-gradient(to bottom, ${stops.join(", ")})`;
+              } else {
+                background = "transparent";
+              }
+            } else {
+              // Fallback when no run data (oldContent/newContent path): simple split
+              background = `linear-gradient(to bottom,
+                ${DIFF_REMOVED_COLOR} 0%,
+                ${DIFF_REMOVED_COLOR} ${removedFraction * 100}%,
+                ${DIFF_ADDED_COLOR} ${removedFraction * 100}%,
+                ${DIFF_ADDED_COLOR} 100%
+              )`;
+            }
+
+            return (
+              <div
+                key={blockIdx}
+                className="absolute left-0 right-0 pointer-events-none"
+                style={{
+                  top: `${block.scrollFraction * 100}%`,
+                  height: `${block.heightFraction * 100}%`,
+                  background,
+                }}
+              />
+            );
+          })}
+        </React.Fragment>
+      ))}
+
       {/* Draggable viewport thumb (replaces native scrollbar) */}
       <div
         className="absolute left-0 right-0 rounded-sm"

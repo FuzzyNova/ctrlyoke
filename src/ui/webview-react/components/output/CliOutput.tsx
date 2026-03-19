@@ -336,6 +336,14 @@ interface StructuredOutputProps {
   onUndoFile?: (path: string, eventIndex: number) => void;
   fileUndoMode?: "undo" | "redo";
   className?: string;
+  /**
+   * Prefix used to generate stable DOM IDs for file-operation events so the
+   * minimap can measure their position and height. When provided, each
+   * FILE_EDIT (that renders its diff), FILE_WRITE, and FILE_DELETE event is
+   * wrapped in a `<div id="${stepKey}-e${index}" data-diff-anchor>` so
+   * OutputSection can measure scroll fractions via querySelectorAll.
+   */
+  stepKey?: string;
 }
 
 /**
@@ -365,6 +373,7 @@ const StructuredOutput = memo<StructuredOutputProps>(
     onUndoFile,
     fileUndoMode = "undo",
     className = "",
+    stepKey,
   }) => {
     // For FILE_EDIT INITIATED events that have a matching COMPLETED event later
     // in the list for the same path, hide the diff (but keep the tool line
@@ -410,9 +419,22 @@ const StructuredOutput = memo<StructuredOutputProps>(
           // Use original index for stable keys — events are append-only during
           // streaming, so the original position never changes for existing items.
           const eventKey = `event-${originalIndex}`;
-          return (
+
+          // Wrap file-operation events in a measurement div so the minimap can
+          // query their position and height via data-diff-anchor. Skip FILE_EDIT
+          // events that have hideDiff=true — those render only the tool call
+          // line (no diff content), so their height doesn't represent the diff.
+          const isFileOp =
+            event.type === CLI_EVENT_TYPES.FILE_EDIT ||
+            event.type === CLI_EVENT_TYPES.FILE_WRITE ||
+            event.type === CLI_EVENT_TYPES.FILE_DELETE;
+          const shouldAnchor =
+            isFileOp &&
+            !!stepKey &&
+            !(event.type === CLI_EVENT_TYPES.FILE_EDIT && hideDiff);
+
+          const singleEvent = (
             <SingleEvent
-              key={eventKey}
               event={event}
               eventKey={eventKey}
               rawTextOutput={rawTextOutput}
@@ -422,6 +444,20 @@ const StructuredOutput = memo<StructuredOutputProps>(
               hideDiff={hideDiff}
             />
           );
+
+          if (shouldAnchor) {
+            return (
+              <div
+                key={eventKey}
+                id={`${stepKey}-e${originalIndex}`}
+                data-diff-anchor="true"
+              >
+                {singleEvent}
+              </div>
+            );
+          }
+
+          return <React.Fragment key={eventKey}>{singleEvent}</React.Fragment>;
         })}
       </div>
     );
@@ -516,6 +552,11 @@ export const CliOutput = memo<CliOutputProps>(
     const targetKey = isFinalPrompt
       ? `finalPrompt-${stepIndex}`
       : `queue-${stepIndex}`;
+
+    // Prefix for diff measurement anchor IDs in StructuredOutput.
+    // Format: fp-diff-{kind}-{stepIndex}-a{attemptIndex}
+    // Matches the lookup key used in OutputSection minimapSteps computation.
+    const diffAnchorPrefix = `fp-diff-${isFinalPrompt ? "fp" : "q"}-${stepIndex}-a${attemptIndex}`;
 
     const effectiveUndoRecord = undoRecord ?? undoRecordsFromStore[targetKey];
     const effectiveSnapshot =
@@ -644,6 +685,7 @@ export const CliOutput = memo<CliOutputProps>(
               rawTextOutput={rawTextOutput}
               onUndoFile={allowUndoActions ? onUndoFile : undefined}
               fileUndoMode={fileUndoMode}
+              stepKey={diffAnchorPrefix}
             />
           </>
         );
@@ -657,6 +699,7 @@ export const CliOutput = memo<CliOutputProps>(
             rawTextOutput={rawTextOutput}
             onUndoFile={allowUndoActions ? onUndoFile : undefined}
             fileUndoMode={fileUndoMode}
+            stepKey={diffAnchorPrefix}
           />
         );
       }
@@ -704,6 +747,7 @@ export const CliOutput = memo<CliOutputProps>(
       allowUndoActions,
       onUndoFile,
       fileUndoMode,
+      diffAnchorPrefix,
     ]);
 
     // Token stats — memoized separately; only changes when the run completes

@@ -203,6 +203,22 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
   const hasDiff = estimatedLineCount > 0;
 
+  // Ref on the wrapper div so we can traverse up to the diff anchor and
+  // stamp data-diff-collapsed whenever expand/collapse state changes.
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Propagate actual collapse state to the nearest [data-diff-anchor] wrapper
+  // so OutputSection's measurement can read the true state rather than
+  // inferring it from rendered height.
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const anchor = el.closest<HTMLElement>("[data-diff-anchor]");
+    if (anchor) {
+      anchor.setAttribute("data-diff-collapsed", isExpanded ? "false" : "true");
+    }
+  }, [isExpanded]);
+
   // Async HLJS highlighting — runs in useEffect so it never blocks the paint.
   // When diffLines changes (expand) we kick off highlighting and set the result
   // once it's done. Until then, plain (un-highlighted) text is shown.
@@ -230,7 +246,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
   if (!hasDiff) return null;
 
   return (
-    <div className={`my-2 ml-6 font-mono text-[length:var(--fp-output-font-size-sm)] ${className}`}>
+    <div ref={wrapperRef} className={`my-2 ml-6 font-mono text-[length:var(--fp-output-font-size-sm)] ${className}`}>
       {/* Summary / toggle header */}
       <div className="flex items-center gap-2 mb-1">
         <button
