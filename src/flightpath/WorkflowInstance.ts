@@ -539,6 +539,19 @@ export class WorkflowInstance {
   }
 
   /**
+   * Load an inline prompt string into the queue without a file.
+   * Behaves like loading a single-prompt .prompt.md file.
+   */
+  loadPromptString(promptText: string): void {
+    this.promptQueue.clearQueue();
+    this.filePath = "";
+    const promptFile: PromptFile = { prompts: [{ prompt: promptText }] };
+    this.currentPromptFile = { filePath: "<inline>", promptFile };
+    this.promptQueue.loadPrompts(promptFile);
+    this.propagateWorkflowNameToIntegrations();
+  }
+
+  /**
    * Restore a workflow from a working file.
    * Shared helper used by resumeWorkflow and loadWorkingFile.
    */

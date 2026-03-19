@@ -32,7 +32,7 @@ program
   .version(version);
 
 program
-  .command("run <file>")
+  .command("run [file]")
   .description("Execute a prompt or workflow file")
   .option(
     "-H, --harness <harness>",
@@ -70,6 +70,7 @@ program
     collectRepeatable,
     [] as string[]
   )
+  .option("-p, --prompt <text>", "Inline prompt string (alternative to file)")
   .option("--resume <session-id>", "Resume an existing session by ID")
   .option(
     "--new-session",
@@ -79,7 +80,7 @@ program
   .option("-q, --quiet", "Suppress all output except errors")
   .option("--verbose", "Show debug information")
   .option("--no-color", "Disable colored output")
-  .action(async (file: string, options: RunOptions) => {
+  .action(async (file: string | undefined, options: RunOptions) => {
     await runCommand(file, options);
   });
 
@@ -106,6 +107,7 @@ interface RunOptions {
   denyTool: string[];
   allowAllTools?: boolean;
   addDir: string[];
+  prompt?: string;
   resume?: string;
   newSession?: boolean;
   json?: boolean;
@@ -153,12 +155,21 @@ function resolveHarness(harnessStr: string): Harness {
 
 // ---- Commands ----
 
-async function runCommand(file: string, options: RunOptions): Promise<void> {
+async function runCommand(file: string | undefined, options: RunOptions): Promise<void> {
   if (options.color === false) {
     process.env.NO_COLOR = "1";
   }
 
-  const resolvedFile = path.resolve(file);
+  if (!file && !options.prompt) {
+    console.error(chalk.red("Error: Provide a file argument or --prompt <text>"));
+    process.exit(2);
+  }
+  if (file && options.prompt) {
+    console.error(chalk.red("Error: --prompt cannot be used together with a file argument"));
+    process.exit(2);
+  }
+
+  const resolvedFile = file ? path.resolve(file) : undefined;
   const workingDir = options.cwd ?? process.cwd();
 
   // Redirect all Log.* output to .flightpath/logs/flightpath-<timestamp>.log.
@@ -231,7 +242,7 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
       console.log(chalk.bold(`FlightPath CLI v${version}`));
       console.log(chalk.dim("━".repeat(52)));
       console.log();
-      console.log(`Running: ${chalk.cyan(path.basename(resolvedFile))}`);
+      console.log(`Running: ${chalk.cyan(resolvedFile ? path.basename(resolvedFile) : "<inline prompt>")}`);
       console.log(
         `Harness: ${chalk.yellow(config.harness)}${config.model ? chalk.dim(" (" + config.model + ")") : ""}`
       );
@@ -324,7 +335,11 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
   });
 
   try {
-    await instance.loadPromptFile(resolvedFile);
+    if (options.prompt) {
+      instance.loadPromptString(options.prompt);
+    } else {
+      await instance.loadPromptFile(resolvedFile!);
+    }
 
     // Acquire the process lock after loading so workingFilePath is available
     const queueStateAfterLoad = instance.promptQueue.getState();
