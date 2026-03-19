@@ -18,9 +18,8 @@ import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
 import { OutputMinimap, type MinimapStep } from "../output/OutputMinimap";
 import { UndoChangesDialog } from "../output/UndoChangesDialog";
 import {
-  buildUndoCandidatesForOutputs,
   buildUndoDialogInputForPrompt,
-  getPromptUndoSummary,
+  computePromptUndoActions,
   type UndoDialogInput,
 } from "../../utils/promptUndo";
 import type { UndoFileInstruction } from "../../types/messages";
@@ -354,14 +353,17 @@ export const OutputSection: React.FC = () => {
         ? `Final Prompt Loop ${stepIndex + 1}`
         : `Prompt ${stepIndex + 1}`;
 
-      // Only the last CLI attempt gets an undo action
+      // Only the last CLI attempt gets undo/redo actions
       const lastCliIdx = lastCliIndexPerStep.get(key);
-      if (lastCliIdx === undefined) return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, label, undoAction: null }];
+      const noActions: MinimapStep["undoActions"] = { undo: null, redo: null };
+      if (lastCliIdx === undefined) {
+        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, label, undoActions: noActions }];
+      }
 
       const lastMsg = allMessages[lastCliIdx];
       const lastOutput = lastMsg?.data as CliOutputType | undefined;
       if (!lastOutput || lastOutput.isStreaming) {
-        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, label, undoAction: null }];
+        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, label, undoActions: noActions }];
       }
 
       const stepOutputs = stepOutputsMap.get(key) ?? [];
@@ -391,59 +393,51 @@ export const OutputSection: React.FC = () => {
         effectiveUndoRecord = undoRecords[targetKey];
       }
 
-      const showRedo =
-        effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true;
+      const workspacePath = lastOutput.workingDirectory ?? "";
+      const actions = computePromptUndoActions(
+        stepOutputs,
+        effectiveUndoRecord,
+        effectiveSnapshot
+      );
 
-      let undoAction: MinimapStep["undoAction"] = null;
+      const undoActions: MinimapStep["undoActions"] = {
+        redo: actions.redo
+          ? {
+              label: actions.redo.label,
+              onTrigger: () => {
+                setMinimapDialogState({
+                  mode: "redo",
+                  target,
+                  workspacePath,
+                  redoInstructions: effectiveUndoRecord!.redoInstructions,
+                  requestId: crypto.randomUUID(),
+                });
+              },
+            }
+          : null,
+        undo: actions.undo
+          ? {
+              label: actions.undo.label,
+              onTrigger: () => {
+                const input = buildUndoDialogInputForPrompt(
+                  target,
+                  stepOutputs,
+                  effectiveSnapshot,
+                  workspacePath
+                );
+                setMinimapDialogState({
+                  mode: "undo",
+                  target,
+                  workspacePath,
+                  input,
+                  requestId: crypto.randomUUID(),
+                });
+              },
+            }
+          : null,
+      };
 
-      if (showRedo && (effectiveUndoRecord?.redoInstructions?.length ?? 0) > 0) {
-        const count = effectiveUndoRecord!.redoInstructions.length;
-        const redoInstructions = effectiveUndoRecord!.redoInstructions;
-        const workspacePath = lastOutput.workingDirectory ?? "";
-        undoAction = {
-          label: `Redo ${count} change${count !== 1 ? "s" : ""}`,
-          isRedo: true,
-          onTrigger: () => {
-            setMinimapDialogState({
-              mode: "redo",
-              target,
-              workspacePath,
-              redoInstructions,
-              requestId: crypto.randomUUID(),
-            });
-          },
-        };
-      } else {
-        const candidates = buildUndoCandidatesForOutputs(
-          stepOutputs,
-          effectiveSnapshot
-        );
-        const { undoableCount } = getPromptUndoSummary(candidates);
-        if (undoableCount > 0) {
-          const workspacePath = lastOutput.workingDirectory ?? "";
-          undoAction = {
-            label: `Undo ${undoableCount} change${undoableCount !== 1 ? "s" : ""}`,
-            isRedo: false,
-            onTrigger: () => {
-              const input = buildUndoDialogInputForPrompt(
-                target,
-                stepOutputs,
-                effectiveSnapshot,
-                workspacePath
-              );
-              setMinimapDialogState({
-                mode: "undo",
-                target,
-                workspacePath,
-                input,
-                requestId: crypto.randomUUID(),
-              });
-            },
-          };
-        }
-      }
-
-      return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, label, undoAction }];
+      return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, label, undoActions }];
     });
   }, [
     allowUndoActions,
@@ -663,6 +657,7 @@ export const OutputSection: React.FC = () => {
                       : historyOutputs.finalPromptOutputs?.[item.target.index]
                           ?.undoRecord
                     : undefined;
+                const stepKey = `${item.target.kind}:${item.target.index}`;
                 return (
                   <React.Fragment key={`cli-${index}`}>
                     {isFirstForStep && (
@@ -689,6 +684,11 @@ export const OutputSection: React.FC = () => {
                       allowUndoActions={allowUndoActions}
                       workspaceSnapshot={stepSnapshot}
                       undoRecord={stepUndoRecord}
+                      allStepOutputs={
+                        lastCliIndexPerStep.get(stepKey) === index && allowUndoActions
+                          ? stepOutputsMap.get(stepKey)
+                          : undefined
+                      }
                     />
                   </React.Fragment>
                 );

@@ -16,6 +16,8 @@ import { WebviewLog } from "../../utils/logger";
 import { useWorkflowStore } from "@store/workflowStore";
 import {
   buildUndoDialogInputForSpecificEvent,
+  buildUndoDialogInputForPrompt,
+  computePromptUndoActions,
   sameFilePath,
   type UndoDialogInput,
 } from "../../utils/promptUndo";
@@ -447,6 +449,11 @@ interface CliOutputProps {
   workspaceSnapshot?: WorkspaceSnapshot;
   /** UndoRecord override — used in history mode so we don't read from the live store */
   undoRecord?: UndoRecord;
+  /**
+   * All CLI outputs for this step (initial attempt + retries).
+   * When provided for the last attempt, a prompt-level undo button is shown.
+   */
+  allStepOutputs?: CliOutputType[];
 }
 
 /**
@@ -478,6 +485,7 @@ export const CliOutput = memo<CliOutputProps>(
     className = "",
     workspaceSnapshot,
     undoRecord,
+    allStepOutputs,
   }) => {
     const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
 
@@ -695,7 +703,6 @@ export const CliOutput = memo<CliOutputProps>(
       rawTextOutput,
       allowUndoActions,
       onUndoFile,
-      attemptIndex,
       fileUndoMode,
     ]);
 
@@ -788,6 +795,46 @@ export const CliOutput = memo<CliOutputProps>(
       handleCopySessionId,
     ]);
 
+    // Compute available undo/redo actions via shared utility.
+    // Both can be non-null simultaneously in mixed state (some files undone,
+    // others not). Guard on allStepOutputs presence and streaming/active state.
+    const promptUndoActions = useMemo(() => {
+      if (!allStepOutputs || output.isStreaming || !allowUndoActions) {
+        return { undo: null, redo: null };
+      }
+      return computePromptUndoActions(
+        allStepOutputs,
+        effectiveUndoRecord,
+        effectiveSnapshot
+      );
+    }, [
+      allStepOutputs,
+      output.isStreaming,
+      allowUndoActions,
+      effectiveUndoRecord,
+      effectiveSnapshot,
+    ]);
+
+    const handlePromptUndo = useCallback(() => {
+      if (!allStepOutputs) return;
+      const input = buildUndoDialogInputForPrompt(
+        target,
+        allStepOutputs,
+        effectiveSnapshot,
+        output.workingDirectory ?? ""
+      );
+      setDialogState({ mode: "undo", input, requestId: crypto.randomUUID() });
+    }, [allStepOutputs, effectiveSnapshot, target, output.workingDirectory]);
+
+    const handlePromptRedo = useCallback(() => {
+      if (!effectiveUndoRecord?.redoInstructions?.length) return;
+      setDialogState({
+        mode: "redo",
+        redoInstructions: effectiveUndoRecord.redoInstructions,
+        requestId: crypto.randomUUID(),
+      });
+    }, [effectiveUndoRecord]);
+
     // Format timestamp for header
     const timestamp = output.timestampMs ? formatTime(output.timestampMs) : "";
 
@@ -802,6 +849,36 @@ export const CliOutput = memo<CliOutputProps>(
           )}
           [{stepLabel ?? `Prompt ${stepIndex + 1}`}] {attemptLabel}
           {streamingIndicator}
+          {(promptUndoActions.undo || promptUndoActions.redo) && (
+            <div className="ml-auto flex items-center gap-2 flex-shrink-0 font-normal">
+              {promptUndoActions.undo && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePromptUndo();
+                  }}
+                  className="text-link-fg hover:text-link-active-fg transition-colors"
+                >
+                  <i className="codicon codicon-discard mr-1" />
+                  {promptUndoActions.undo.label}
+                </button>
+              )}
+              {promptUndoActions.redo && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePromptRedo();
+                  }}
+                  className="text-terminal-ansiGreen hover:opacity-80 transition-opacity"
+                >
+                  <i className="codicon codicon-redo mr-1" />
+                  {promptUndoActions.redo.label}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Prompt text */}

@@ -23,6 +23,7 @@ import type {
   UndoExecutionTarget,
   UndoDialogScope,
   PromptChangeType,
+  UndoRecord,
 } from "@root/types/OutputHistoryTypes";
 
 export interface UndoDialogInput {
@@ -396,6 +397,60 @@ export function buildUndoDialogInputForSpecificEvent(
     eventAttributedFiles: [candidate],
     snapshotOnlyFiles: [],
     workspacePath,
+  };
+}
+
+// ============================================================================
+// Shared prompt-level undo/redo action computation
+// ============================================================================
+
+/**
+ * The available undo and redo actions for a prompt step.
+ * Both can be non-null simultaneously — "mixed state" — when the user has
+ * undone some files in the step but not all of them.
+ */
+export interface PromptUndoActions {
+  undo: { label: string; count: number } | null;
+  redo: { label: string; count: number } | null;
+}
+
+/**
+ * Compute which prompt-level undo/redo actions are available for a step.
+ *
+ * Used by both CliOutput (header button) and OutputSection (minimap popup)
+ * so the logic is never duplicated.
+ */
+export function computePromptUndoActions(
+  allStepOutputs: CliOutput[],
+  effectiveUndoRecord: UndoRecord | undefined,
+  effectiveSnapshot: WorkspaceSnapshot | undefined
+): PromptUndoActions {
+  // Redo: files that were previously undone and can be redone.
+  // Only available while isRedone is falsy (a redo resets the record).
+  const redoCount =
+    effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
+      ? (effectiveUndoRecord.redoInstructions?.length ?? 0)
+      : 0;
+
+  // Undo: files that can still be undone (may coexist with redo in mixed state).
+  const candidates = buildUndoCandidatesForOutputs(allStepOutputs, effectiveSnapshot);
+  const { undoableCount } = getPromptUndoSummary(candidates);
+
+  return {
+    undo:
+      undoableCount > 0
+        ? {
+            label: `Undo ${undoableCount} change${undoableCount !== 1 ? "s" : ""}`,
+            count: undoableCount,
+          }
+        : null,
+    redo:
+      redoCount > 0
+        ? {
+            label: `Redo ${redoCount} change${redoCount !== 1 ? "s" : ""}`,
+            count: redoCount,
+          }
+        : null,
   };
 }
 
