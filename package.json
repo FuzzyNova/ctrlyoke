@@ -421,18 +421,20 @@
             "copilot-chat",
             "claude-cli",
             "codex-cli",
-            "opencode-cli"
+            "opencode-cli",
+            "qwen-cli"
           ],
           "enumDescriptions": [
             "Use Copilot CLI (command-line automation - DEFAULT, better reliability & control)",
             "Use Copilot Chat window (UI automation - less reliable than CLI modes)",
             "Use Claude Code CLI (Anthropic's Claude AI via command line)",
             "Use Codex CLI (OpenAI's code-specialized CLI)",
-            "Use OpenCode CLI for multi-provider AI coding assistance"
+            "Use OpenCode CLI for multi-provider AI coding assistance",
+            "Use Qwen Code CLI (Qwen3-Coder models via command line)"
           ],
           "default": "copilot-cli",
           "description": "Choose which harness/framework to use for AI execution",
-          "markdownDescription": "Choose which harness (agent framework/CLI tool) to use for AI execution.\n\n- **Copilot CLI** (default): Best reliability with GitHub Copilot\n- **Claude CLI**: Uses Anthropic's Claude Code CLI\n- **Codex CLI**: Uses OpenAI's Codex code-specialized CLI\n- **Copilot Chat**: UI automation (less reliable than CLI modes)"
+          "markdownDescription": "Choose which harness (agent framework/CLI tool) to use for AI execution.\n\n- **Copilot CLI** (default): Best reliability with GitHub Copilot\n- **Claude CLI**: Uses Anthropic's Claude Code CLI\n- **Codex CLI**: Uses OpenAI's Codex code-specialized CLI\n- **Qwen CLI**: Uses Qwen Code CLI with Qwen3-Coder models\n- **Copilot Chat**: UI automation (less reliable than CLI modes)"
         },
         "flightpath.scriptTimeout": {
           "order": 11,
@@ -849,6 +851,44 @@
           "default": "",
           "description": "[OpenCode CLI] Extra CLI flags appended to FlightPath's standard argument set",
           "markdownDescription": "**OpenCode CLI Only.** Extra CLI flags appended to FlightPath's standard argument set. FlightPath continues to manage model, session, and output format flags normally. Prompt-level and workflow-level `additionalArgs` take precedence over this global setting. Example: `--thinking true --variant fast`"
+        },
+        "flightpath.qwenCliModel": {
+          "order": 430,
+          "type": "string",
+          "enum": [
+            "coder-model",
+            "qwen-3-coder",
+            "qwen-3-max",
+            "qwen-3-max-thinking"
+          ],
+          "enumDescriptions": [
+            "Qwen Coder (default, balanced performance)",
+            "Qwen 3 Coder (coding-optimized)",
+            "Qwen 3 Max (most capable)",
+            "Qwen 3 Max Thinking (enhanced reasoning)"
+          ],
+          "default": "coder-model",
+          "description": "[Qwen Code CLI] Default AI model",
+          "markdownDescription": "**Qwen Code CLI Only.** Default AI model for Qwen Code CLI. **coder-model** (default) provides balanced performance. Prompts can override this with `\"model\": \"qwen-3-max\"` or other supported models."
+        },
+        "flightpath.qwenCliApprovalMode": {
+          "order": 431,
+          "type": "string",
+          "enum": [
+            "plan",
+            "default",
+            "auto-edit",
+            "yolo"
+          ],
+          "enumDescriptions": [
+            "Read-only mode, no tool execution",
+            "Prompt for approval before tool execution (safe)",
+            "Auto-approve read/edit, prompt for dangerous ops (recommended)",
+            "Auto-approve all tools (dangerous, use with caution)"
+          ],
+          "default": "default",
+          "description": "[Qwen Code CLI] Tool approval mode",
+          "markdownDescription": "**Qwen Code CLI Only.** Tool approval mode when `cliToolPermissions` is set to **custom**. **default** (recommended) prompts for approval before tool execution. **auto-edit** auto-approves read/edit operations. **yolo** bypasses all approval prompts (dangerous)."
         },
         "flightpath.codexSandboxMode": {
           "order": 411,

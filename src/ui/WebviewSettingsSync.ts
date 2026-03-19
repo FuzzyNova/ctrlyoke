@@ -19,6 +19,7 @@ import {
   getModelDisplayName,
   CLAUDE_CLI_MODEL_LABELS,
   CODEX_CLI_MODEL_LABELS,
+  QWEN_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import { Harness } from "../types/FlightPathTypes";
 import { readJsonFile } from "../utils/FileSystemUtils";
@@ -587,12 +588,21 @@ export class WebviewSettingsSync {
       })),
     ];
 
+    const qwenCliOptions = [
+      noneOption,
+      ...Object.entries(QWEN_CLI_MODEL_LABELS).map(([value, label]) => ({
+        value,
+        label,
+      })),
+    ];
+
     return {
       [HARNESS_IDS.COPILOT_CLI]: copilotCliOptions,
       [HARNESS_IDS.COPILOT_CHAT]: copilotChatOptions,
       [HARNESS_IDS.CLAUDE_CLI]: claudeCliOptions,
       [HARNESS_IDS.CODEX_CLI]: codexCliOptions,
       [HARNESS_IDS.OPENCODE_CLI]: openCodeCliOptions,
+      [HARNESS_IDS.QWEN_CLI]: qwenCliOptions,
     };
   }
 

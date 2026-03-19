@@ -97,6 +97,7 @@ export class WorkflowOrchestrator {
   private readonly claudeCliIntegration: CliIntegration;
   private readonly codexCliIntegration: CliIntegration;
   private readonly openCodeCliIntegration: CliIntegration;
+  private readonly qwenCliIntegration: CliIntegration;
 
   // Orchestration helpers
   private readonly templateImporter: TemplateImporter;
@@ -125,6 +126,7 @@ export class WorkflowOrchestrator {
     this.claudeCliIntegration = this.integrationFactory.createClaudeCli();
     this.codexCliIntegration = this.integrationFactory.createCodexCli();
     this.openCodeCliIntegration = this.integrationFactory.createOpenCodeCli();
+    this.qwenCliIntegration = this.integrationFactory.createQwenCli();
 
     // Status bar
     this.statusBarManager = new StatusBarManager(context);
@@ -469,6 +471,7 @@ export class WorkflowOrchestrator {
           [Harness.CodexCli]: "Codex CLI",
           [Harness.CopilotCli]: "Copilot CLI",
           [Harness.OpenCodeCli]: "OpenCode CLI",
+          [Harness.QwenCli]: "Qwen Code CLI",
         }[integrationMode] || "Copilot CLI";
       Log.info(`🔄 Default integration: ${modeLabel}`);
 
@@ -478,6 +481,7 @@ export class WorkflowOrchestrator {
         this.claudeCliIntegration.initialize(),
         this.codexCliIntegration.initialize(),
         this.openCodeCliIntegration.initialize(),
+        this.qwenCliIntegration.initialize(),
       ]);
 
       if (this.currentWorkspaceFolder) {
@@ -1184,6 +1188,8 @@ export class WorkflowOrchestrator {
         return this.codexCliIntegration;
       case Harness.OpenCodeCli:
         return this.openCodeCliIntegration;
+      case Harness.QwenCli:
+        return this.qwenCliIntegration;
       case Harness.CopilotCli:
       default:
         return this.copilotCliIntegration;
@@ -1195,6 +1201,7 @@ export class WorkflowOrchestrator {
     this.claudeCliIntegration.setWorkflowName(name);
     this.codexCliIntegration.setWorkflowName(name);
     this.openCodeCliIntegration.setWorkflowName(name);
+    this.qwenCliIntegration.setWorkflowName(name);
   }
 
   private updateStatusBar(): void {

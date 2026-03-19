@@ -356,6 +356,17 @@ export const ConfigurationUtils = {
   },
 
   // ============================================================
+  // QWEN CLI SETTINGS
+  // ============================================================
+
+  /**
+   * Get Qwen CLI model
+   */
+  getQwenCliModel(): string {
+    return getConfig().get<string>("qwenCliModel", "coder-model");
+  },
+
+  // ============================================================
   // CODEX CLI SETTINGS
   // ============================================================
 

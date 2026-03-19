@@ -256,6 +256,7 @@ export const HARNESS_IDS = {
   CLAUDE_CLI: "claude-cli",
   CODEX_CLI: "codex-cli",
   OPENCODE_CLI: "opencode-cli",
+  QWEN_CLI: "qwen-cli",
 } as const;
 
 // ============================================================================
@@ -270,6 +271,7 @@ export const HARNESS_INFO = {
   [HARNESS_IDS.CLAUDE_CLI]: { name: "Claude CLI", shortName: "Claude CLI" },
   [HARNESS_IDS.CODEX_CLI]: { name: "Codex CLI", shortName: "Codex CLI" },
   [HARNESS_IDS.OPENCODE_CLI]: { name: "OpenCode CLI", shortName: "OpenCode" },
+  [HARNESS_IDS.QWEN_CLI]: { name: "Qwen Code CLI", shortName: "Qwen Code" },
 } as const;
 
 // ============================================================================
@@ -291,6 +293,7 @@ export const DEFAULT_MODELS = {
   [HARNESS_IDS.CLAUDE_CLI]: "sonnet",
   [HARNESS_IDS.CODEX_CLI]: "gpt-5.2-codex",
   [HARNESS_IDS.OPENCODE_CLI]: "anthropic/claude-sonnet-4-6",
+  [HARNESS_IDS.QWEN_CLI]: "coder-model",
 } as const;
 
 // ============================================================================
@@ -316,6 +319,17 @@ export const CODEX_CLI_MODELS = [
   { value: "gpt-5.1-codex-max", label: "GPT 5.1 Codex Max" },
   { value: "gpt-5.2", label: "GPT 5.2" },
   { value: "gpt-5.1-codex-mini", label: "GPT 5.1 Codex Mini" },
+] as const;
+
+// ============================================================================
+// QWEN CLI MODELS - Static options (from Qwen Code CLI documentation)
+// ============================================================================
+export const QWEN_CLI_MODELS = [
+  { value: "none", label: "None (skip --model flag)" },
+  { value: "coder-model", label: "Qwen Coder" },
+  { value: "qwen-3-coder", label: "Qwen 3 Coder" },
+  { value: "qwen-3-max", label: "Qwen 3 Max" },
+  { value: "qwen-3-max-thinking", label: "Qwen 3 Max Thinking" },
 ] as const;
 
 // ============================================================================

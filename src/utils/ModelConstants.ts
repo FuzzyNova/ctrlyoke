@@ -208,6 +208,41 @@ export const OPENCODE_CLI_FALLBACK_MODELS = [
   "opencode/claude-sonnet-4-6",
 ] as const;
 
+// ============================================================================
+// QWEN CLI MODELS
+// Qwen Code CLI supported models (from Qwen documentation)
+// ============================================================================
+export const QWEN_CLI_MODELS = [
+  "coder-model",
+  "qwen-3-coder",
+  "qwen-3-max",
+  "qwen-3-max-thinking",
+] as const;
+
+/**
+ * Qwen CLI model display names
+ */
+export const QWEN_CLI_MODEL_LABELS: Record<string, string> = {
+  "coder-model": "Qwen Coder",
+  "qwen-3-coder": "Qwen 3 Coder",
+  "qwen-3-max": "Qwen 3 Max",
+  "qwen-3-max-thinking": "Qwen 3 Max Thinking",
+} as const;
+
+/**
+ * Get the Qwen CLI model name (identity function for now)
+ *
+ * @param model The model identifier
+ * @returns The Qwen CLI model name, or undefined if not recognized
+ */
+export function getQwenModelName(model: string): string | undefined {
+  if (QWEN_CLI_MODELS.includes(model as any)) {
+    return model;
+  }
+  // Accept any model string - Qwen CLI will validate
+  return model || undefined;
+}
+
 /**
  * Get the context window size for a Claude CLI model.
  *
@@ -269,3 +304,18 @@ export type ClaudeCliModelAlias = (typeof CLAUDE_CLI_MODELS)[number];
 
 // Type exports for Codex CLI
 export type CodexCliModel = (typeof CODEX_CLI_MODELS)[number];
+
+// Type exports for Qwen CLI
+export type QwenCliModel = (typeof QWEN_CLI_MODELS)[number];
+
+/**
+ * Get the context window size for a Qwen CLI model.
+ * Qwen models use a 256k token context window.
+ *
+ * @param modelId The model identifier (e.g. "coder-model", "qwen-3-max")
+ * @returns Context window size in tokens
+ */
+export function getQwenContextWindowSize(modelId: string): number {
+  // All Qwen models use 256k context window
+  return 256_000;
+}
