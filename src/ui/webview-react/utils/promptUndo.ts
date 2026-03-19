@@ -216,7 +216,11 @@ export function buildUndoCandidatesForOutputs(
 
     return {
       path: filePath,
-      changeType: accum.changeType,
+      // Prefer the snapshot's changeType — it is authoritative about whether the
+      // file existed before the prompt started. FILE_WRITE events are always mapped
+      // to "created" by eventTypeToChangeType, but the AI may FILE_WRITE an existing
+      // file (which the snapshot correctly records as "modified").
+      changeType: snapEntry?.changeType ?? accum.changeType,
       tier: "tier1",
       instruction,
       oldContent: displayPatch ? undefined : accum.oldContent,
