@@ -7,7 +7,7 @@ import {
   CliEvent,
   TokenUsage,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { getClaudeContextWindowSize } from "../../../utils/ModelConstants";
@@ -185,7 +185,7 @@ export class ClaudeResponseParser
         model,
         usage: tokenUsage,
         cliVersion,
-        harness: "claude-cli",
+        harness: HARNESS_IDS.CLAUDE_CLI,
       },
     };
   }

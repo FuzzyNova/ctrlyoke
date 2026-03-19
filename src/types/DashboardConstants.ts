@@ -280,6 +280,8 @@ export const EXECUTION_MODES = {
   HEADLESS: "headless",
 } as const;
 
+export type ExecutionMode = (typeof EXECUTION_MODES)[keyof typeof EXECUTION_MODES];
+
 // ============================================================================
 // DEFAULT MODELS - Default model per harness
 // ============================================================================

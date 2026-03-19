@@ -1668,13 +1668,13 @@ export class WorkflowOrchestrator {
           startedAt?: number;
         };
 
-        let finalState = workingFile._runtime?.executionState ?? "stopped";
+        let finalState = workingFile._runtime?.executionState ?? EXECUTION_STATES.STOPPED;
 
         // If still shows "running", normalize to "stopped" on disk
-        if (finalState === "running") {
-          finalState = "stopped";
+        if (finalState === EXECUTION_STATES.RUNNING) {
+          finalState = EXECUTION_STATES.STOPPED;
           if (workingFile._runtime) {
-            workingFile._runtime.executionState = "stopped";
+            workingFile._runtime.executionState = EXECUTION_STATES.STOPPED;
           }
           try {
             const tmpPath = workingFilePath + ".tmp";

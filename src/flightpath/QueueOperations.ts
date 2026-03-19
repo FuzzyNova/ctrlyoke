@@ -15,6 +15,7 @@ import {
 } from "../types/FlightPathTypes";
 import {
   QUEUE_POSITION,
+  STEP_STATUS,
   type QueuePosition,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -106,7 +107,7 @@ export function getQueueStatus(
       workflowName,
       currentIndex: state.currentIndex,
       totalPrompts: state.prompts.length,
-      completedPrompts: state.results.filter((r) => r.status === "completed")
+      completedPrompts: state.results.filter((r) => r.status === STEP_STATUS.COMPLETED)
         .length,
       executionState: state.status,
       maxQueueSize: unlimitedMode ? 0 : maxQueueSize, // 0 means unlimited
@@ -116,7 +117,7 @@ export function getQueueStatus(
     prompts: state.prompts.map((p, index) => ({
       index,
       prompt: p.prompt,
-      status: state.results[index]?.status || "pending",
+      status: state.results[index]?.status || STEP_STATUS.PENDING,
       model: p.model,
       retryCount: state.results[index]?.retryCount,
     })),

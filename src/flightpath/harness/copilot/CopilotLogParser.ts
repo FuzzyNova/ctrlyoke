@@ -16,7 +16,7 @@ import {
   ToolResultData,
   UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
 
 // ============================================================================
 // Copilot Log Event Type Definitions
@@ -510,7 +510,7 @@ export class CopilotLogParser extends BaseLogParser {
       metadata: {
         sessionId,
         model,
-        harness: "copilot-cli",
+        harness: HARNESS_IDS.COPILOT_CLI,
         usage:
           effectiveInputTokens > 0 || outputTokens > 0
             ? {

@@ -14,7 +14,7 @@ import {
   ToolResultData,
   TokenUsage,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
 import { CODEX_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
 
 // ============================================================================
@@ -641,8 +641,7 @@ export class CodexLogParser extends BaseLogParser {
         sessionId,
         model,
         cliVersion,
-        harness: "codex-cli",
-        usage,
+        harness: HARNESS_IDS.CODEX_CLI,
       },
     };
   }

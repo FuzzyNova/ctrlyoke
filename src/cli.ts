@@ -8,14 +8,14 @@ import type { ResolvedCliConfig } from "./platform/CliAdapter";
 import { registerCliAdapter } from "./platform/vscode-shim";
 import { IntegrationFactory } from "./flightpath/IntegrationFactory";
 import { WorkflowInstance } from "./flightpath/WorkflowInstance";
-import { EXECUTION_STATES, STEP_STATUS } from "./types/DashboardConstants";
+import { EXECUTION_STATES, STEP_STATUS, HARNESS_IDS, EXECUTION_MODES, RUNNER_IDS } from "./types/DashboardConstants";
+import type { ExecutionMode } from "./types/DashboardConstants";
 import { Harness } from "./types/FlightPathTypes";
 import type { QueueState, WorkflowRunnerLock } from "./types/FlightPathTypes";
 import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
 import { Log } from "./utils/Log";
 import { WorkflowLockManager } from "./utils/WorkflowLockManager";
 import { setRuntimeMode } from "./utils/RuntimeMode";
-import { RUNNER_IDS } from "./types/DashboardConstants";
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);
@@ -37,7 +37,7 @@ program
   .option(
     "-H, --harness <harness>",
     "AI harness: copilot-cli, claude-cli, codex-cli",
-    "copilot-cli"
+    HARNESS_IDS.COPILOT_CLI
   )
   .option("-m, --model <model>", "Model to use")
   .option(
@@ -129,23 +129,23 @@ function collectRepeatable(value: string, previous: string[]): string[] {
  */
 function getExecutionMode(
   options: Pick<RunOptions, "headless" | "interactive">
-): "interactive" | "headless" {
-  if (options.headless) return "headless";
-  if (options.interactive) return "interactive";
+): ExecutionMode {
+  if (options.headless) return EXECUTION_MODES.HEADLESS;
+  if (options.interactive) return EXECUTION_MODES.INTERACTIVE;
   return process.stdout.isTTY && process.stdin.isTTY
-    ? "interactive"
-    : "headless";
+    ? EXECUTION_MODES.INTERACTIVE
+    : EXECUTION_MODES.HEADLESS;
 }
 
 // ---- Helper: map harness string to Harness enum ----
 
 function resolveHarness(harnessStr: string): Harness {
   switch (harnessStr) {
-    case "claude-cli":
+    case HARNESS_IDS.CLAUDE_CLI:
       return Harness.ClaudeCli;
-    case "codex-cli":
+    case HARNESS_IDS.CODEX_CLI:
       return Harness.CodexCli;
-    case "copilot-cli":
+    case HARNESS_IDS.COPILOT_CLI:
     default:
       return Harness.CopilotCli;
   }
@@ -175,10 +175,10 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
     (options.allowTool && options.allowTool.length > 0) ||
     (options.denyTool && options.denyTool.length > 0);
   const allowAllTools =
-    options.allowAllTools ?? (executionMode === "headless" && !hasCustomTools);
+    options.allowAllTools ?? (executionMode === EXECUTION_MODES.HEADLESS && !hasCustomTools);
 
   const config: ResolvedCliConfig = {
-    harness: options.harness || "copilot-cli",
+    harness: options.harness || HARNESS_IDS.COPILOT_CLI,
     model: options.model,
     cwd: workingDir,
     timeout: parseInt(options.timeout, 10) * 1000,
@@ -219,8 +219,7 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
   }
 
   if (!options.quiet && !options.json) {
-    if (executionMode === "interactive") {
-      // In interactive mode the terminal belongs to the AI CLI — keep the
+    if (executionMode === EXECUTION_MODES.INTERACTIVE) {
       // FlightPath header minimal so it doesn't clutter the user's session.
       console.log(
         chalk.dim(
@@ -257,7 +256,7 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
   // Subscriptions go on the instance (not detectorIntegration) because WorkflowInstance
   // creates a fresh execution integration via the factory and forwards events from it.
   // Interactive mode passes the AI CLI's stdout straight through — no subscription needed.
-  if (executionMode === "headless" && !options.quiet && !options.json) {
+  if (executionMode === EXECUTION_MODES.HEADLESS && !options.quiet && !options.json) {
     instance.onPromptStart((data) => {
       CliTerminalFormatter.renderPromptHeader(data);
     });
@@ -398,7 +397,7 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
     } else if (!options.quiet) {
       // In interactive mode the AI CLI TUI may leave the terminal with a hidden
       // cursor or stale attributes when killed. Reset before printing the summary.
-      if (executionMode === "interactive") {
+      if (executionMode === EXECUTION_MODES.INTERACTIVE) {
         process.stdout.write("\x1b[?25h\x1b[0m\r\n");
       }
       console.log();

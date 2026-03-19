@@ -4,6 +4,7 @@ import { PromptFileParser } from "../PromptFileParser";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 import { PromptItem, WorkingFile } from "../../types/FlightPathTypes";
+import { EXECUTION_STATES } from "../../types/DashboardConstants";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 
 /**
@@ -239,11 +240,11 @@ export class WorkspaceSessionManager {
 
           // Determine status icon
           let statusIcon = "⏸"; // Default paused/idle
-          if (runtime?.executionState === "completed") {
+          if (runtime?.executionState === EXECUTION_STATES.COMPLETED) {
             statusIcon = "✓";
-          } else if (runtime?.executionState === "error") {
+          } else if (runtime?.executionState === EXECUTION_STATES.ERROR) {
             statusIcon = "✗";
-          } else if (runtime?.executionState === "running") {
+          } else if (runtime?.executionState === EXECUTION_STATES.RUNNING) {
             statusIcon = "▶";
           }
 

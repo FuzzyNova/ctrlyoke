@@ -15,6 +15,10 @@ import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
 import { Log } from "../../utils/Log";
+import {
+  EXECUTION_MODES,
+  type ExecutionMode,
+} from "../../types/DashboardConstants";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { ICliProvider } from "./shared/interfaces/ICliProvider";
 import { CliOutputFormatter } from "./shared/CliOutputFormatter";
@@ -34,15 +38,12 @@ const SESSION_START_POLL_MS = 100;
 /**
  * Execution mode for CLI integrations
  */
-export type CliExecutionMode = "interactive" | "headless";
+export type CliExecutionMode = ExecutionMode;
 
 /**
  * Execution mode constants
  */
-export const CLI_EXECUTION_MODE = {
-  INTERACTIVE: "interactive" as const,
-  HEADLESS: "headless" as const,
-};
+export const CLI_EXECUTION_MODE = EXECUTION_MODES;
 
 /**
  * Warning messages
@@ -197,7 +198,7 @@ export class CliIntegration extends HarnessIntegration {
   protected getExecutionMode(): CliExecutionMode {
     return this.platform.getConfig<string>(
       "cliExecutionMode",
-      "interactive"
+      EXECUTION_MODES.INTERACTIVE
     ) as CliExecutionMode;
   }
 

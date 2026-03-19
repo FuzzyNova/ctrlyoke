@@ -7,6 +7,7 @@ import { UniversalCliOutput, CliEvent } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
+  HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { CliResponseParser } from "../shared/CliResponseParser";
@@ -220,7 +221,7 @@ export class CodexResponseParser
               contextWindowSize: CODEX_CLI_CONTEXT_WINDOW_SIZE,
             }
           : undefined,
-        harness: "codex-cli",
+        harness: HARNESS_IDS.CODEX_CLI,
       },
     };
   }

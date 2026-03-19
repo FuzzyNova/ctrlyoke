@@ -12,7 +12,7 @@ import {
   CliEvent,
   TextData,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
 import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
 
 /**
@@ -267,8 +267,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       metadata: {
         sessionId,
         model,
-        harness: "claude-cli",
-        elapsed: turnDurationMs,
+        harness: HARNESS_IDS.CLAUDE_CLI,
         usage:
           totalInputTokens > 0 || totalOutputTokens > 0
             ? {

@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { WorkflowRunnerLock } from "../types/FlightPathTypes";
-import { RUNNER_IDS, LOCK_STATUS } from "../types/DashboardConstants";
+import { RUNNER_IDS, LOCK_STATUS, EXECUTION_STATES } from "../types/DashboardConstants";
 import type { LockStatus } from "../types/DashboardConstants";
 import { Log } from "./Log";
 
@@ -130,7 +130,7 @@ export class WorkflowLockManager {
       const content = await fs.promises.readFile(lockPath, "utf8");
       lock = JSON.parse(content) as WorkflowRunnerLock;
     } catch {
-      return "none";
+      return LOCK_STATUS.NONE;
     }
 
     const pidAlive = isPidAlive(lock.pid);
@@ -189,7 +189,7 @@ export class WorkflowLockManager {
         continue;
       }
 
-      if (workingFile._runtime?.executionState !== "running") {
+      if (workingFile._runtime?.executionState !== EXECUTION_STATES.RUNNING) {
         continue;
       }
 
@@ -210,7 +210,7 @@ export class WorkflowLockManager {
 
       // Normalize the working file to "stopped"
       if (workingFile._runtime) {
-        workingFile._runtime.executionState = "stopped";
+        workingFile._runtime.executionState = EXECUTION_STATES.STOPPED;
       }
       try {
         const tmpPath = workingFilePath + ".tmp";

@@ -4,6 +4,7 @@ import {
   HARNESS_IDS,
   HARNESS_STATUS_STRINGS,
   EXECUTION_STATES,
+  EXECUTION_MODES,
   DEFAULT_MODELS,
   type HarnessStatusString,
 } from "../types/DashboardConstants";
@@ -92,8 +93,8 @@ export class WebviewSettingsSync {
   ] as const;
 
   private static readonly VALID_EXECUTION_MODES = [
-    "interactive",
-    "headless",
+    EXECUTION_MODES.INTERACTIVE,
+    EXECUTION_MODES.HEADLESS,
   ] as const;
 
   constructor(

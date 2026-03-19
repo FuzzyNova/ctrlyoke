@@ -7,7 +7,7 @@ import {
   CliEvent,
   TokenUsage,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
 import { COPILOT_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
 import { CliResponseParser } from "../shared/CliResponseParser";
 import { CopilotToolBuilder } from "./CopilotToolBuilder";
@@ -196,7 +196,7 @@ export class CopilotResponseParser
         sessionId,
         model,
         usage,
-        harness: "copilot-cli",
+        harness: HARNESS_IDS.COPILOT_CLI,
         rawTextOutput: false,
       },
     };
@@ -248,7 +248,7 @@ export class CopilotResponseParser
               contextWindowSize: COPILOT_CLI_CONTEXT_WINDOW_SIZE,
             }
           : undefined,
-        harness: "copilot-cli",
+        harness: HARNESS_IDS.COPILOT_CLI,
         // Plain text output is pre-formatted by Copilot; skip markdown pipeline.
         rawTextOutput: true,
       },

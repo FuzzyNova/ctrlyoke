@@ -9,7 +9,7 @@ import {
   BashCommandData,
   FileDeleteData,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import { CLI_EVENT_TYPES, HARNESS_IDS, STEP_STATUS } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 
 /**
@@ -265,7 +265,7 @@ export class ChatSessionParser {
         metadata: {
           sessionId: this.extractSessionId(sessionFilePath),
           model: "unknown",
-          harness: "copilot-chat",
+          harness: HARNESS_IDS.COPILOT_CHAT,
         },
       };
     }
@@ -422,7 +422,7 @@ export class ChatSessionParser {
         sessionId,
         model: this.normalizeModelId(request.modelId),
         elapsed: request.result.timings.totalElapsed,
-        harness: "copilot-chat",
+        harness: HARNESS_IDS.COPILOT_CHAT,
       },
     };
   }
@@ -468,7 +468,7 @@ export class ChatSessionParser {
           data: {
             path: (params.filePath as string) || "",
             content: (params.content as string) || "",
-            status: "completed",
+            status: STEP_STATUS.COMPLETED,
           } satisfies FileWriteData,
         },
       ];
@@ -483,7 +483,7 @@ export class ChatSessionParser {
             path: (params.filePath as string) || "",
             oldContent: params.oldString as string | undefined,
             newContent: params.newString as string | undefined,
-            status: "completed",
+            status: STEP_STATUS.COMPLETED,
           } satisfies FileEditData,
         },
       ];
@@ -507,7 +507,7 @@ export class ChatSessionParser {
           path: r.filePath || "",
           oldContent: r.oldString,
           newContent: r.newString,
-          status: "completed",
+          status: STEP_STATUS.COMPLETED,
         } satisfies FileEditData,
       }));
     }
@@ -519,7 +519,7 @@ export class ChatSessionParser {
           timestamp: ts,
           data: {
             command: (params.command as string) || "",
-            status: "completed",
+            status: STEP_STATUS.COMPLETED,
           } satisfies BashCommandData,
         },
       ];
@@ -532,7 +532,7 @@ export class ChatSessionParser {
           timestamp: ts,
           data: {
             path: (params.filePath as string) || "",
-            status: "completed",
+            status: STEP_STATUS.COMPLETED,
           } satisfies FileReadData,
         },
       ];
@@ -666,7 +666,7 @@ export class ChatSessionParser {
       metadata: {
         sessionId,
         model: "unknown",
-        harness: "copilot-chat",
+        harness: HARNESS_IDS.COPILOT_CHAT,
       },
     };
   }

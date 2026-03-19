@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { DynamicQueueConfig, Harness } from "../types/FlightPathTypes";
+import { HARNESS_IDS, EXECUTION_MODES } from "../types/DashboardConstants";
 
 /**
  * Configuration namespace for FlightPath settings
@@ -141,19 +142,19 @@ export const ConfigurationUtils = {
     const mode = getConfig().get<string>("harness", Harness.CopilotCli);
 
     switch (mode) {
-      case "copilot-chat":
+      case HARNESS_IDS.COPILOT_CHAT:
       case Harness.CopilotChat:
         return Harness.CopilotChat;
-      case "claude-cli":
+      case HARNESS_IDS.CLAUDE_CLI:
       case Harness.ClaudeCli:
         return Harness.ClaudeCli;
-      case "codex-cli":
+      case HARNESS_IDS.CODEX_CLI:
       case Harness.CodexCli:
         return Harness.CodexCli;
-      case "opencode-cli":
+      case HARNESS_IDS.OPENCODE_CLI:
       case Harness.OpenCodeCli:
         return Harness.OpenCodeCli;
-      case "copilot-cli":
+      case HARNESS_IDS.COPILOT_CLI:
       case Harness.CopilotCli:
       default:
         return Harness.CopilotCli;
@@ -299,7 +300,7 @@ export const ConfigurationUtils = {
    * Get CLI execution mode (interactive terminal or headless)
    */
   getCliExecutionMode(): string {
-    return getConfig().get<string>("cliExecutionMode", "interactive");
+    return getConfig().get<string>("cliExecutionMode", EXECUTION_MODES.INTERACTIVE);
   },
 
   /**
