@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react";
+import { STEP_STATUS } from "../../types/messages";
 import type { StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
 import type { PromptDetails } from "./PromptItem";
@@ -116,7 +117,7 @@ export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
       )}
 
       {/* Compact stats — for completed prompts */}
-      {status === "completed" &&
+      {status === STEP_STATUS.COMPLETED &&
         (contextPct !== undefined ||
           sessionId ||
           durationSeconds !== undefined) && (

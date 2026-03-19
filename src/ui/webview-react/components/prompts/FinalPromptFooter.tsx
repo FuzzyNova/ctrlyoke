@@ -2,10 +2,11 @@ import React from "react";
 import { StatusIcon } from "./StatusIcon";
 import { PromptItemDetails } from "./PromptItemDetails";
 import type { PromptOverride } from "./PromptItemDetails";
-import type {
-  PromptItem,
-  StepStatus,
-  FinalPromptPhase,
+import {
+  FINAL_PROMPT_PHASES,
+  type PromptItem,
+  type StepStatus,
+  type FinalPromptPhase,
 } from "../../types/messages";
 import type { CliOutput } from "../../store/workflowStore";
 
@@ -96,7 +97,7 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
           {/* Phase badge */}
           {phase && (
             <div className="mt-0.5text-[10px] opacity-75">
-              {phase === "finalPrompt" ? "Final Prompt" : "Queue"}
+              {phase === FINAL_PROMPT_PHASES.FINAL_PROMPT ? "Final Prompt" : "Queue"}
             </div>
           )}
 

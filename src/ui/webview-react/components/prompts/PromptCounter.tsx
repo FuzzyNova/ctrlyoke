@@ -1,6 +1,6 @@
 import React from "react";
 import { useWorkflowStore } from "../../store/workflowStore";
-import { EXECUTION_STATES } from "../../types/messages";
+import { EXECUTION_STATES, STEP_STATUS } from "../../types/messages";
 
 interface PromptCounterProps {
   className?: string;
@@ -21,7 +21,7 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
   const { prompts, totalSteps, executionState } = useWorkflowStore();
 
   // Calculate completed count based on prompt statuses
-  const completedCount = prompts.filter((p) => p.status === "completed").length;
+  const completedCount = prompts.filter((p) => p.status === STEP_STATUS.COMPLETED).length;
 
   // Determine if workflow is actively running
   const isRunning =

@@ -22,6 +22,7 @@ export {
   FINAL_PROMPT_PHASES,
   PROMPT_PROPERTIES,
   END_CONDITION_PROPERTIES,
+  EXECUTION_MODES,
   type MessageType,
   type WebviewLogLevel,
   type ExecutionState,

@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   HARNESS_IDS,
+  HARNESS_STATUS_STRINGS,
   type HarnessId,
   type HarnessStatusString,
 } from "../../types/messages";
@@ -105,7 +106,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
 }) => {
   const status = harnessStatus?.[harness];
   const isAvailable = status?.available !== false;
-  const isChecking = status?.status === "checking";
+  const isChecking = status?.status === HARNESS_STATUS_STRINGS.CHECKING;
   const name = HARNESS_DISPLAY_NAMES[harness] ?? harness;
 
   if (isHidden) {

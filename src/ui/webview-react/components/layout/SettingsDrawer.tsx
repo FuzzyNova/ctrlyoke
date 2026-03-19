@@ -7,7 +7,7 @@ import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
-import { MESSAGE_TYPES, type PriorContext } from "../../types/messages";
+import { MESSAGE_TYPES, EXECUTION_MODES, type PriorContext } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
@@ -23,6 +23,9 @@ import {
   PriorContextSelect,
 } from "../shared";
 
+const BUTTON_STATE = { IDLE: "idle", SUCCESS: "success", FADING: "fading" } as const;
+type ButtonState = (typeof BUTTON_STATE)[keyof typeof BUTTON_STATE];
+
 /**
  * Set as Default link with animation
  */
@@ -31,16 +34,16 @@ const SetAsDefaultButton: React.FC<{
   show: boolean;
   onSetDefault: () => void;
 }> = ({ show, onSetDefault }) => {
-  const [state, setState] = useState<"idle" | "success" | "fading">("idle");
+  const [state, setState] = useState<ButtonState>(BUTTON_STATE.IDLE);
 
   const handleClick = useCallback(() => {
     onSetDefault();
-    setState("success");
-    setTimeout(() => setState("fading"), 2000);
-    setTimeout(() => setState("idle"), 2300);
+    setState(BUTTON_STATE.SUCCESS);
+    setTimeout(() => setState(BUTTON_STATE.FADING), 2000);
+    setTimeout(() => setState(BUTTON_STATE.IDLE), 2300);
   }, [onSetDefault]);
 
-  if (!show && state === "idle") return null;
+  if (!show && state === BUTTON_STATE.IDLE) return null;
 
   return (
     <a
@@ -49,11 +52,11 @@ const SetAsDefaultButton: React.FC<{
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && handleClick()}
       className={`text-[10px] font-semibold uppercase text-link-fg hover:underline cursor-pointer transition-colors ${
-        state === "success" ? "text-green-500" : ""
-      } ${state === "fading" ? "opacity-0" : ""}`}
+        state === BUTTON_STATE.SUCCESS ? "text-green-500" : ""
+      } ${state === BUTTON_STATE.FADING ? "opacity-0" : ""}`}
       title="Set this as the default for new workflows"
     >
-      {state === "success" ? "✓ Default" : "Set as Default"}
+      {state === BUTTON_STATE.SUCCESS ? "✓ Default" : "Set as Default"}
     </a>
   );
 };
@@ -1017,9 +1020,9 @@ export const SettingsPanel: React.FC<{
         className={`flex items-center justify-center gap-1 px-2 border-t border-panel-border flex-shrink-0 py-2${isCLIManaged ? " pointer-events-none opacity-60" : ""}`}
       >
         <IconToggleButton
-          active={globalSettings.executionMode === "interactive"}
+          active={globalSettings.executionMode === EXECUTION_MODES.INTERACTIVE}
           onToggle={(active) =>
-            handleExecutionModeChange(active ? "interactive" : "headless")
+            handleExecutionModeChange(active ? EXECUTION_MODES.INTERACTIVE : EXECUTION_MODES.HEADLESS)
           }
           activeIcon="debug-console"
           inactiveIcon="terminal"

@@ -42,6 +42,13 @@ interface FileRow {
 }
 
 // ============================================================================
+// Local state constants
+// ============================================================================
+
+const RESULT_STATE = { IDLE: "idle", SUCCESS: "success", PARTIAL: "partial", ERROR: "error" } as const;
+const DIALOG_MODE = { UNDO: "undo", REDO: "redo" } as const;
+
+// ============================================================================
 // Helpers
 // ============================================================================
 
@@ -220,7 +227,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   // ── Shared checked state ───────────────────────────────────────────────────
   // Pre-check all undoable tier1 files (undo mode); all redo files (redo mode)
   const initialChecked = useMemo(() => {
-    if (mode === "redo") {
+    if (mode === DIALOG_MODE.REDO) {
       return new Set(redoRows.map((r) => r.path));
     }
     const s = new Set<string>();
@@ -232,7 +239,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
 
   const [checkedPaths, setCheckedPaths] = useState<Set<string>>(initialChecked);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [resultState, setResultState] = useState<"idle" | "success" | "partial" | "error">("idle");
+  const [resultState, setResultState] = useState<"idle" | "success" | "partial" | "error">(RESULT_STATE.IDLE);
 
   const undoResult = useWorkflowStore((s) => s.undoResults[requestId]);
   const clearUndoResult = useWorkflowStore((s) => s.clearUndoResult);
@@ -241,11 +248,11 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   useEffect(() => {
     if (!undoResult) return;
     if (undoResult.failedFiles.length === 0) {
-      setResultState("success");
+      setResultState(RESULT_STATE.SUCCESS);
     } else if (undoResult.restoredFiles.length > 0) {
-      setResultState("partial");
+      setResultState(RESULT_STATE.PARTIAL);
     } else {
-      setResultState("error");
+      setResultState(RESULT_STATE.ERROR);
     }
     setIsSubmitting(false);
     // Auto-close after a brief delay so the user sees the result
@@ -257,8 +264,8 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   }, [undoResult, requestId, clearUndoResult, onClose]);
 
   // ── Checkable rows count ───────────────────────────────────────────────────
-  const checkableCount = mode === "redo" ? redoRows.length : allUndoRows.filter((r) => r.instruction !== null).length;
-  const checkedCount = mode === "redo"
+  const checkableCount = mode === DIALOG_MODE.REDO ? redoRows.length : allUndoRows.filter((r) => r.instruction !== null).length;
+  const checkedCount = mode === DIALOG_MODE.REDO
     ? redoRows.filter((r) => checkedPaths.has(r.path)).length
     : allUndoRows.filter((r) => r.instruction !== null && checkedPaths.has(r.path)).length;
   const allCheckableChecked = checkedCount === checkableCount && checkableCount > 0;
@@ -277,7 +284,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   function handleSelectAll() {
     if (allCheckableChecked) {
       setCheckedPaths(new Set());
-    } else if (mode === "redo") {
+    } else if (mode === DIALOG_MODE.REDO) {
       setCheckedPaths(new Set(redoRows.map((r) => r.path)));
     } else {
       const undoableRows = allUndoRows.filter((r) => r.instruction !== null);
@@ -286,7 +293,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   }
 
   function handleConfirm() {
-    if (mode === "redo") {
+    if (mode === DIALOG_MODE.REDO) {
       const selectedInstructions = redoRows
         .filter((r) => checkedPaths.has(r.path))
         .map((r) => r.instruction);
@@ -317,16 +324,16 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
     }
   }
 
-  const canConfirm = checkedCount > 0 && !isSubmitting && resultState === "idle";
+  const canConfirm = checkedCount > 0 && !isSubmitting && resultState === RESULT_STATE.IDLE;
 
-  const dialogTitle = mode === "redo"
+  const dialogTitle = mode === DIALOG_MODE.REDO
     ? "Redo Changes"
     : input?.scope.mode === "singleFile"
       ? `Undo changes — ${input.scope.path}`
       : "Undo prompt changes";
 
-  const confirmLabel = mode === "redo" ? `Redo Selected (${checkedCount})` : `Undo Selected (${checkedCount})`;
-  const submittingLabel = mode === "redo" ? "Redoing…" : "Undoing…";
+  const confirmLabel = mode === DIALOG_MODE.REDO ? `Redo Selected (${checkedCount})` : `Undo Selected (${checkedCount})`;
+  const submittingLabel = mode === DIALOG_MODE.REDO ? "Redoing…" : "Undoing…";
 
   const footer = (
     <>
@@ -349,12 +356,12 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   return (
     <Modal isOpen title={dialogTitle} onClose={onClose} size="lg" footer={footer}>
       {/* Result banner */}
-      {resultState !== "idle" && (
+      {resultState !== RESULT_STATE.IDLE && (
         <ResultBanner result={resultState} undoResult={undoResult} mode={mode} />
       )}
 
       {/* Tier 2 warning (undo mode only) */}
-      {mode === "undo" && hasTier2 && resultState === "idle" && (
+      {mode === DIALOG_MODE.UNDO && hasTier2 && resultState === RESULT_STATE.IDLE && (
         <div className="mb-3 flex gap-2 rounded px-3 py-2 text-xs bg-severity-warning-bg text-warning-fg border border-warning-fg border-opacity-30">
           <span className="shrink-0">⚠️</span>
           <span>
@@ -365,7 +372,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
       )}
 
       {/* Select all toggle */}
-      {checkableCount > 0 && resultState === "idle" && (
+      {checkableCount > 0 && resultState === RESULT_STATE.IDLE && (
         <div className="mb-2 flex items-center justify-between">
           <span className="text-xs text-description-fg">
             {checkedCount} of {checkableCount} file{checkableCount !== 1 ? "s" : ""} selected
@@ -381,7 +388,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
       )}
 
       {/* File list */}
-      {mode === "redo" ? (
+      {mode === DIALOG_MODE.REDO ? (
         redoRows.length === 0 ? (
           <p className="text-sm text-description-fg">No redo instructions available.</p>
         ) : (
@@ -471,9 +478,9 @@ interface ResultBannerProps {
 }
 
 const ResultBanner: React.FC<ResultBannerProps> = ({ result, undoResult, mode }) => {
-  const successVerb = mode === "redo" ? "re-applied" : "restored";
-  const failVerb = mode === "redo" ? "Redo" : "Undo";
-  if (result === "success") {
+  const successVerb = mode === DIALOG_MODE.REDO ? "re-applied" : "restored";
+  const failVerb = mode === DIALOG_MODE.REDO ? "Redo" : "Undo";
+  if (result === RESULT_STATE.SUCCESS) {
     return (
       <div className="mb-3 flex gap-2 rounded px-3 py-2 text-xs bg-severity-info-bg text-info-fg border border-info-fg border-opacity-30">
         <span>✅</span>
@@ -485,7 +492,7 @@ const ResultBanner: React.FC<ResultBannerProps> = ({ result, undoResult, mode })
     );
   }
 
-  if (result === "partial") {
+  if (result === RESULT_STATE.PARTIAL) {
     return (
       <div className="mb-3 flex gap-2 rounded px-3 py-2 text-xs bg-severity-warning-bg text-warning-fg border border-warning-fg border-opacity-30">
         <span>⚠️</span>
