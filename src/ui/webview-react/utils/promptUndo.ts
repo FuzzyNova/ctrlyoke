@@ -291,23 +291,41 @@ export function getPromptUndoSummary(candidates: UndoFileCandidate[]): {
   };
 }
 
-/** Build the full dialog input for a prompt-level undo. */
+/**
+ * Build the full dialog input for a prompt-level undo.
+ *
+ * @param excludePaths - Files already undone (from redoInstructions) that
+ *   should not appear in the undo dialog. Matched via sameFilePath so that
+ *   absolute CLI paths and workspace-relative snapshot paths compare correctly.
+ */
 export function buildUndoDialogInputForPrompt(
   target: UndoExecutionTarget,
   cliOutputs: CliOutput[],
   snapshot: WorkspaceSnapshot | undefined,
-  workspacePath: string
+  workspacePath: string,
+  excludePaths?: UndoFileInstruction[]
 ): UndoDialogInput {
   const scope: UndoDialogScope = { mode: "prompt", target };
-  const candidates = buildUndoCandidatesForOutputs(cliOutputs, snapshot);
+  const allCandidates = buildUndoCandidatesForOutputs(cliOutputs, snapshot);
+
+  // Strip out files already undone (present in redo instructions).
+  const candidates =
+    excludePaths && excludePaths.length > 0
+      ? allCandidates.filter(
+          (c) => !excludePaths.some((ep) => sameFilePath(c.path, ep.path))
+        )
+      : allCandidates;
+
   const tier2Paths = new Set(
     candidates.filter((c) => c.tier === "tier2").map((c) => c.path)
   );
   return {
     scope,
     eventAttributedFiles: candidates.filter((c) => c.tier === "tier1"),
-    snapshotOnlyFiles: (snapshot?.changedFiles ?? []).filter((s) =>
-      tier2Paths.has(s.path)
+    snapshotOnlyFiles: (snapshot?.changedFiles ?? []).filter(
+      (s) =>
+        tier2Paths.has(s.path) &&
+        !(excludePaths ?? []).some((ep) => sameFilePath(s.path, ep.path))
     ),
     workspacePath,
   };
@@ -433,7 +451,19 @@ export function computePromptUndoActions(
       : 0;
 
   // Undo: files that can still be undone (may coexist with redo in mixed state).
-  const candidates = buildUndoCandidatesForOutputs(allStepOutputs, effectiveSnapshot);
+  // Exclude paths already undone (present in redoInstructions) so the count
+  // and dialog only show the remaining undoable files.
+  const redoInstructions =
+    effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
+      ? (effectiveUndoRecord.redoInstructions ?? [])
+      : [];
+  const allCandidates = buildUndoCandidatesForOutputs(allStepOutputs, effectiveSnapshot);
+  const candidates =
+    redoInstructions.length > 0
+      ? allCandidates.filter(
+          (c) => !redoInstructions.some((ri) => sameFilePath(c.path, ri.path))
+        )
+      : allCandidates;
   const { undoableCount } = getPromptUndoSummary(candidates);
 
   return {

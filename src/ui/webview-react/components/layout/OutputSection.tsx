@@ -110,6 +110,11 @@ export const OutputSection: React.FC = () => {
   // Scroll position tracked for the minimap viewport indicator
   const [minimapScrollTop, setMinimapScrollTop] = useState(0);
 
+  // Real pixel fractions for each step anchor (key → offsetTop / scrollHeight)
+  const [stepScrollFractions, setStepScrollFractions] = useState<Map<string, number>>(
+    new Map()
+  );
+
   // Shared prompt-level undo/redo dialog (owned here, triggered from minimap)
   const [minimapDialogState, setMinimapDialogState] =
     useState<MinimapDialogState | null>(null);
@@ -263,6 +268,39 @@ export const OutputSection: React.FC = () => {
     }
   }, [allMessages, streamingChunks]);
 
+  // Measure real pixel positions of step anchor divs so the minimap can
+  // place markers at their true scroll fractions (not an index fraction).
+  // Re-runs whenever allMessages changes (content height changes) and uses a
+  // ResizeObserver to catch in-progress content growth.
+  useEffect(() => {
+    const container = outputRef.current;
+    if (!container) return;
+
+    const measure = () => {
+      const { scrollHeight } = container;
+      if (scrollHeight === 0) return;
+      const containerTop = container.getBoundingClientRect().top;
+      const fractions = new Map<string, number>();
+      for (const step of stepsToRender) {
+        const kindSlug = step.target.kind === "queue" ? "queue" : "final";
+        const anchor = document.getElementById(
+          `output-step-${kindSlug}-${step.target.index}`
+        );
+        if (anchor) {
+          const pixelPos =
+            anchor.getBoundingClientRect().top - containerTop + container.scrollTop;
+          fractions.set(`${step.target.kind}:${step.target.index}`, pixelPos / scrollHeight);
+        }
+      }
+      setStepScrollFractions(fractions);
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [allMessages, stepsToRender]);
+
   // Export handler
   const handleExport = useCallback(() => {
     const vscode = getVsCodeApi();
@@ -353,17 +391,22 @@ export const OutputSection: React.FC = () => {
         ? `Final Prompt Loop ${stepIndex + 1}`
         : `Prompt ${stepIndex + 1}`;
 
+      // Real pixel fraction — falls back to index fraction until DOM is measured
+      const scrollFraction =
+        stepScrollFractions.get(key) ??
+        firstIdx / Math.max(1, allMessages.length);
+
       // Only the last CLI attempt gets undo/redo actions
       const lastCliIdx = lastCliIndexPerStep.get(key);
       const noActions: MinimapStep["undoActions"] = { undo: null, redo: null };
       if (lastCliIdx === undefined) {
-        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, label, undoActions: noActions }];
+        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions: noActions }];
       }
 
       const lastMsg = allMessages[lastCliIdx];
       const lastOutput = lastMsg?.data as CliOutputType | undefined;
       if (!lastOutput || lastOutput.isStreaming) {
-        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, label, undoActions: noActions }];
+        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions: noActions }];
       }
 
       const stepOutputs = stepOutputsMap.get(key) ?? [];
@@ -419,11 +462,16 @@ export const OutputSection: React.FC = () => {
           ? {
               label: actions.undo.label,
               onTrigger: () => {
+                const alreadyUndone =
+                  effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
+                    ? effectiveUndoRecord.redoInstructions
+                    : undefined;
                 const input = buildUndoDialogInputForPrompt(
                   target,
                   stepOutputs,
                   effectiveSnapshot,
-                  workspacePath
+                  workspacePath,
+                  alreadyUndone
                 );
                 setMinimapDialogState({
                   mode: "undo",
@@ -437,7 +485,7 @@ export const OutputSection: React.FC = () => {
           : null,
       };
 
-      return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, label, undoActions }];
+      return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions }];
     });
   }, [
     allowUndoActions,
@@ -446,6 +494,7 @@ export const OutputSection: React.FC = () => {
     lastCliIndexPerStep,
     allMessages,
     stepOutputsMap,
+    stepScrollFractions,
     isViewingHistory,
     historyOutputs,
     workspaceSnapshots,
@@ -574,7 +623,7 @@ export const OutputSection: React.FC = () => {
         <div
           ref={outputRef}
           id="output-content"
-          className="font-mono text-[length:var(--fp-output-font-size-sm)] min-h-0 p-0 flex-1 overflow-y-auto"
+          className="font-mono text-[length:var(--fp-output-font-size-sm)] min-h-0 p-0 flex-1 overflow-y-auto scrollbar-hide"
           onScroll={handleScroll}
         >
           {/* History banner: shown when viewing a historical run */}
@@ -701,7 +750,6 @@ export const OutputSection: React.FC = () => {
         {hasOutput && (
           <OutputMinimap
             steps={minimapSteps}
-            totalMessages={allMessages.length}
             scrollContainerRef={outputRef}
             scrollTop={minimapScrollTop}
           />

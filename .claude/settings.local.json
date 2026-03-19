@@ -81,7 +81,8 @@
       "WebFetch(domain:api.npmjs.org)",
       "Bash(cd:*)",
       "Bash(gh issue:*)",
-      "Bash(npm show:*)"
+      "Bash(npm show:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "ask": []

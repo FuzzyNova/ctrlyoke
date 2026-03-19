@@ -817,14 +817,20 @@ export const CliOutput = memo<CliOutputProps>(
 
     const handlePromptUndo = useCallback(() => {
       if (!allStepOutputs) return;
+      // Exclude files already undone (in redoInstructions) from the dialog.
+      const alreadyUndone =
+        effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
+          ? effectiveUndoRecord.redoInstructions
+          : undefined;
       const input = buildUndoDialogInputForPrompt(
         target,
         allStepOutputs,
         effectiveSnapshot,
-        output.workingDirectory ?? ""
+        output.workingDirectory ?? "",
+        alreadyUndone
       );
       setDialogState({ mode: "undo", input, requestId: crypto.randomUUID() });
-    }, [allStepOutputs, effectiveSnapshot, target, output.workingDirectory]);
+    }, [allStepOutputs, effectiveSnapshot, effectiveUndoRecord, target, output.workingDirectory]);
 
     const handlePromptRedo = useCallback(() => {
       if (!effectiveUndoRecord?.redoInstructions?.length) return;
