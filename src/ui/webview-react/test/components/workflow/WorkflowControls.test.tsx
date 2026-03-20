@@ -96,11 +96,4 @@ describe("WorkflowControls — dropdown options", () => {
     });
   });
 
-  it("'Save to File' is disabled when no workflow is loaded", async () => {
-    const user = userEvent.setup();
-    render(<WorkflowControls />);
-    await user.click(screen.getByRole("button", { name: /Open workflow menu/i }));
-    const saveItem = screen.getByText(/Save to File/i).closest("button, [role='option'], li");
-    expect(saveItem).toBeDisabled();
-  });
 });

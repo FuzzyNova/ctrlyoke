@@ -89,7 +89,8 @@
       "Bash(for f:*)",
       "Bash(do echo:*)",
       "Read(//home/nathan/dev/flightpath/**)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(sed:*)"
     ],
     "deny": [],
     "ask": []

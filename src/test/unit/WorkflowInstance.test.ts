@@ -148,7 +148,7 @@ suite("WorkflowInstance finalPrompt replay", () => {
       startedAt: Date.now(),
     });
 
-    (instance as any).finalPromptCompletedOutputs.set(0, {
+    (instance as any).outputCaptureBuffer.finalPromptCompletedOutputs.set(0, {
       outputs: [
         {
           prompt: "final-loop",
@@ -160,7 +160,7 @@ suite("WorkflowInstance finalPrompt replay", () => {
       ],
     });
 
-    (instance as any).finalPromptOutputBuffer.set(0, {
+    (instance as any).outputCaptureBuffer.finalPromptOutputBuffer.set(0, {
       prompt: "final-loop",
       cliCommand: "mock final cmd",
       workingDirectory: process.cwd(),
@@ -177,7 +177,7 @@ suite("WorkflowInstance finalPrompt replay", () => {
       rawTextOutput: true,
     });
 
-    (instance as any).finalPromptStatusMessages.set(0, [
+    (instance as any).outputCaptureBuffer.finalPromptStatusMessages.set(0, [
       {
         message: "final prompt validating",
         severity: "info",

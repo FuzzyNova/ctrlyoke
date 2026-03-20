@@ -157,6 +157,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         }
       | undefined;
     let model: string | undefined;
+    let elapsed: number | undefined;
 
     for (const event of events as ClaudeProviderEvent[]) {
       // Extract session ID from any event
@@ -246,8 +247,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         }
       }
 
-      // Process system events for turn duration (metadata only, not currently used)
-      // if (event.type === "system" && event.subtype === "turn_duration") { ... }
+      // Process system events for turn duration
+      if (event.type === "system" && event.subtype === "turn_duration" && typeof event.durationMs === "number") {
+        elapsed = event.durationMs;
+      }
     }
 
     // Compute context window occupancy from last assistant turn only.
@@ -265,6 +268,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         sessionId,
         model,
         harness: HARNESS_IDS.CLAUDE_CLI,
+        elapsed,
         usage:
           totalInputTokens > 0 || totalOutputTokens > 0
             ? {

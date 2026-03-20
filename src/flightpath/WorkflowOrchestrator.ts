@@ -110,6 +110,7 @@ export class WorkflowOrchestrator {
   // Initialization gates
   private dashboardReady: boolean = false;
   private orchestratorInitialized: boolean = false;
+  private startupAutoLoadTriggered: boolean = false;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -507,7 +508,7 @@ export class WorkflowOrchestrator {
         Log.debug(
           "Dashboard was ready before init — triggering deferred auto-load"
         );
-        await this.triggerAutoLoad();
+        await this.triggerStartupAutoLoadIfReady();
       }
     } catch (error) {
       this.orchestratorInitialized = true;
@@ -523,12 +524,25 @@ export class WorkflowOrchestrator {
     this.dashboardReady = true;
 
     if (this.orchestratorInitialized) {
-      await this.triggerAutoLoad();
+      await this.triggerStartupAutoLoadIfReady();
     } else {
       Log.debug(
         "Orchestrator not yet initialized — deferring auto-load until init completes"
       );
     }
+  }
+
+  private async triggerStartupAutoLoadIfReady(): Promise<void> {
+    if (
+      this.startupAutoLoadTriggered ||
+      !this.dashboardReady ||
+      !this.orchestratorInitialized
+    ) {
+      return;
+    }
+
+    this.startupAutoLoadTriggered = true;
+    await this.triggerAutoLoad();
   }
 
   private async triggerAutoLoad(): Promise<void> {
