@@ -6,9 +6,11 @@ import { BaseCliEvent, ILogParser } from "../shared/interfaces/ILogParser";
 import {
   UniversalCliOutput,
   CliEvent,
+  TokenUsage,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
 import { GeminiToolBuilder } from "./GeminiToolBuilder";
+import { getGeminiContextWindowSize } from "../../../utils/ModelConstants";
 
 export class GeminiLogParser extends BaseLogParser implements ILogParser {
   private workspaceRoot?: string;
@@ -74,17 +76,26 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
       }
     }
 
+    let tokenUsage: TokenUsage | undefined;
+    if (usage) {
+      const inputTokens = usage.input_tokens || 0;
+      const outputTokens = usage.output_tokens || 0;
+      tokenUsage = {
+        inputTokens,
+        outputTokens,
+        totalTokens: usage.total_tokens || inputTokens + outputTokens,
+        contextWindowUsedTokens: inputTokens + outputTokens,
+        contextWindowSize: getGeminiContextWindowSize(model ?? ""),
+      };
+    }
+
     return {
       events: outputEvents,
       metadata: {
         sessionId,
         model,
         harness: HARNESS_IDS.GEMINI_CLI,
-        usage: usage ? {
-          inputTokens: usage.input_tokens || 0,
-          outputTokens: usage.output_tokens || 0,
-          totalTokens: usage.total_tokens || (usage.input_tokens || 0) + (usage.output_tokens || 0),
-        } : undefined,
+        usage: tokenUsage,
       },
     };
   }

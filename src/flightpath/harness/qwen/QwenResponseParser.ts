@@ -20,6 +20,7 @@ import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliResponseParser } from "../shared/CliResponseParser";
 import { CliEventMapper } from "../shared/CliEventMapper";
+import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
 
 /**
  * Extended usage statistics from Qwen Code CLI.
@@ -147,12 +148,14 @@ export class QwenResponseParser
     // Build normalized token usage
     let tokenUsage: TokenUsage | undefined;
     if (usage) {
+      const inputTokens = usage.input_tokens || 0;
+      const outputTokens = usage.output_tokens || 0;
       tokenUsage = {
-        inputTokens: usage.input_tokens || 0,
-        outputTokens: usage.output_tokens || 0,
-        totalTokens:
-          usage.total_tokens ||
-          (usage.input_tokens || 0) + (usage.output_tokens || 0),
+        inputTokens,
+        outputTokens,
+        totalTokens: usage.total_tokens || inputTokens + outputTokens,
+        contextWindowUsedTokens: inputTokens + outputTokens,
+        contextWindowSize: getQwenContextWindowSize(model ?? ""),
       };
     }
 

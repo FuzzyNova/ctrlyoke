@@ -19,6 +19,7 @@ import {
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES, HARNESS_IDS, OPERATION_STATUS } from "../../../types/DashboardConstants";
 import { CliEventMapper } from "../shared/CliEventMapper";
+import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
 
 /**
  * Qwen Code CLI Log Parser
@@ -235,6 +236,8 @@ export class QwenLogParser extends BaseLogParser {
             inputTokens: totalInputTokens,
             outputTokens: totalOutputTokens,
             totalTokens: totalInputTokens + totalOutputTokens,
+            contextWindowUsedTokens: totalInputTokens + totalOutputTokens,
+            contextWindowSize: getQwenContextWindowSize(model ?? ""),
           }
         : undefined;
 
