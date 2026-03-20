@@ -60,7 +60,7 @@ src/flightpath/harness/
 └── codex/                     ← CodexCliProvider + 4 supporting classes
 ```
 
-Adding a new harness requires creating a new directory only — zero changes to `CliIntegration` or shared utilities. See `docs/ADDING_NEW_CLI_PROVIDER.md`.
+Adding a new harness requires changes across multiple layers (harness directory, types, wiring, settings, UI). See `docs/ADDING_NEW_CLI_HARNESS.md` for the complete guide.
 
 ## Key Subsystems
 
@@ -322,7 +322,7 @@ npm test                 # Run Mocha test suite
 
 ### Adding a New CLI Harness
 
-See `docs/ADDING_NEW_CLI_PROVIDER.md`. Create 5 files in `src/flightpath/harness/<name>/`. Zero changes to `CliIntegration.ts` or shared utilities required.
+See `docs/ADDING_NEW_CLI_HARNESS.md`. Creates files in `src/flightpath/harness/<name>/` plus required changes to types, wiring, settings, and UI layers.
 
 ### Adding a New Prompt Property
 

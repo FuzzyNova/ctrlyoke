@@ -9,22 +9,14 @@ Harness integrations for GitHub Copilot, Claude Code, Codex, and OpenCode. Deter
 <architectureOverview>
 **Composition-based architecture:**
 
-FlightPath uses **composition over inheritance** for harness integrations. This makes adding new CLI providers simple and safe:
+FlightPath uses **composition over inheritance** for harness integrations:
 
-- **Single generic integration class** (`CliIntegration`) works with ALL providers
-- **Harness-specific logic** encapsulated in provider directories (copilot/, claude/, codex/, opencode/)
-- **Zero core class modifications** needed when adding new providers
+- **Single generic integration class** (`CliIntegration`) works with ALL harnesses
+- **Harness-specific logic** encapsulated in harness directories (copilot/, claude/, codex/, opencode/, gemini/, qwen/)
 - **Interface-driven design** (TypeScript guides implementation)
 - **Testable components** (no mocking needed, pure logic)
 
-**Adding a provider means:**
-
-1. Creating 5-6 focused classes in a new provider directory
-2. Implementing the `ICliProvider` interface
-3. ZERO modifications to `CliIntegration` or shared utilities
-4. Adding entry to `IntegrationFactory`, `HARNESS_IDS`, and package.json
-
-See: `docs/ADDING_NEW_CLI_PROVIDER.md` for step-by-step guide
+**Adding a harness requires changes across multiple layers** — harness directory, types, wiring, settings, and UI. See `docs/ADDING_NEW_CLI_HARNESS.md` for the complete guide.
 </architectureOverview>
 
 <coreComponents>
@@ -34,7 +26,7 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for step-by-step guide
 - Handles execution lifecycle (interactive/headless modes, VS Code terminal or CLI spawn)
 - Manages session continuity, cancellation, temp file creation/cleanup, and status updates
 - Terminal tab name: `FP: {Harness}` or `FP: {Harness} · {name} [n/total]`
-- **Never needs modification** when adding new providers
+- Rarely needs modification when adding new harnesses (changes only when new shared capabilities are needed)
 
 **IntegrationFactory** (src/flightpath/IntegrationFactory.ts):
 
@@ -286,38 +278,20 @@ this.chatIntegration = new CopilotChatIntegration(this.context);
 // flightpath.harness setting using HARNESS_IDS constants.
 ```
 
-**Key benefit**: Adding new provider only requires:
-
-1. Creating provider class (e.g., GeminiCliProvider)
-2. Instantiating `new CliIntegration(new GeminiCliProvider(), ...)` alongside the others
-3. Adding HARNESS_IDS entry and package.json enum value
-4. NO modifications to CliIntegration or shared utilities
-
-See: `docs/ADDING_NEW_CLI_PROVIDER.md` for complete guide
+See: `docs/ADDING_NEW_CLI_HARNESS.md` for the complete guide to adding a new harness.
 </factoryPattern>
 
-<addingNewProviders>
-**To add a new CLI provider** (e.g., Gemini, OpenCode):
+<addingNewHarnesses>
+**To add a new CLI harness** — see `docs/ADDING_NEW_CLI_HARNESS.md` for the full guide.
 
-1. Create provider directory: `src/flightpath/harness/gemini/`
-2. Implement 5 required classes:
-   - GeminiCliProvider.ts (implements ICliProvider)
-   - GeminiResponseParser.ts (implements IResponseParser)
-   - GeminiNotificationMonitor.ts (implements INotificationMonitor)
-   - GeminiToolPermissionMapper.ts (implements IToolPermissionMapper)
-   - GeminiLogParser.ts (extends BaseLogParser, implements ILogParser)
-3. Instantiate alongside other integrations in WorkflowOrchestrator
-4. Add HARNESS_IDS entry and settings to package.json (model, harness enum value)
-5. Test with manual-test workflows
+Summary of required layers:
 
-**No modifications needed to**:
-
-- CliIntegration.ts (generic class)
-- Shared utilities (CliNotificationMonitor, CliResponseParser, CliToolPermissionMapper, etc.)
-- Other provider directories (copilot/, claude/, codex/)
-- Core interfaces (ICliProvider, IResponseParser, etc.)
-
-See: `docs/ADDING_NEW_CLI_PROVIDER.md` for detailed step-by-step guide with code templates
+1. **Harness directory** (`src/flightpath/harness/<name>/`) — 5-6 files implementing ICliProvider, IResponseParser, INotificationMonitor, IToolPermissionMapper, and BaseLogParser
+2. **Hook script** (`src/scripts/flightpath-<name>-hook.js`) — if hook-based completion detection
+3. **Type layer** — add `Harness` enum value, `HARNESS_IDS` entry, display names, and model list in `DashboardConstants.ts` and `FlightPathTypes.ts`
+4. **Wiring layer** — factory method in `IntegrationFactory.ts`, integration field/lifecycle in `WorkflowOrchestrator.ts`
+5. **Settings layer** — model/args getters in `ConfigurationUtils.ts`, model arrays in `ModelConstants.ts`, settings in `package.json`
+6. **UI layer** — availability state and model options in `WebviewSettingsSync.ts`, display name and group in `HarnessDropdown.tsx`, initial state in `settingsStore.ts`
 </addingNewProviders>
 
 <testingProviders>

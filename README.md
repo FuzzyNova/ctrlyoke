@@ -278,7 +278,7 @@ Supported: `@workspace`, `#file:path`, `#file:path:start-end`, `#selection`, sla
 
 ---
 
-📚 **[Quick Start Guide](./QUICK_START.md)** | 📖 **[Session Management](./docs/SESSION_MANAGEMENT.md)** | 🔧 **[Adding a New Harness](./docs/ADDING_NEW_CLI_PROVIDER.md)**
+📚 **[Quick Start Guide](./QUICK_START.md)** | 📖 **[Session Management](./docs/SESSION_MANAGEMENT.md)** | 🔧 **[Adding a New Harness](./docs/ADDING_NEW_CLI_HARNESS.md)**
 
 ---
 

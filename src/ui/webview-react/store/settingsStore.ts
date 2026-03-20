@@ -10,6 +10,7 @@ import {
   CLAUDE_CLI_MODELS as CLAUDE_CLI_MODEL_LIST,
   CODEX_CLI_MODELS as CODEX_CLI_MODEL_LIST,
   QWEN_CLI_MODELS as QWEN_CLI_MODEL_LIST,
+  GEMINI_CLI_MODELS as GEMINI_CLI_MODEL_LIST,
 } from "@root/types/DashboardConstants";
 
 /**
@@ -168,6 +169,7 @@ interface SettingsActions {
 const CLAUDE_CLI_MODELS: ModelOption[] = [...CLAUDE_CLI_MODEL_LIST];
 const CODEX_CLI_MODELS: ModelOption[] = [...CODEX_CLI_MODEL_LIST];
 const QWEN_CLI_MODELS: ModelOption[] = [...QWEN_CLI_MODEL_LIST];
+const GEMINI_CLI_MODELS: ModelOption[] = [...GEMINI_CLI_MODEL_LIST];
 
 const initialGlobalSettings: GlobalSettings = {
   harness: HARNESS_IDS.COPILOT_CLI as HarnessId,
@@ -210,6 +212,10 @@ const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {
     available: false,
     status: HARNESS_STATUS_STRINGS.CHECKING,
   },
+  [HARNESS_IDS.GEMINI_CLI]: {
+    available: false,
+    status: HARNESS_STATUS_STRINGS.CHECKING,
+  },
 };
 
 const initialState: SettingsState = {
@@ -220,6 +226,7 @@ const initialState: SettingsState = {
     [HARNESS_IDS.CODEX_CLI]: CODEX_CLI_MODELS,
     [HARNESS_IDS.OPENCODE_CLI]: [],
     [HARNESS_IDS.QWEN_CLI]: QWEN_CLI_MODELS,
+    [HARNESS_IDS.GEMINI_CLI]: GEMINI_CLI_MODELS,
   },
   availableAgents: [],
   availableSkills: [],

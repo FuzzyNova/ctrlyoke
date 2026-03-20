@@ -16,6 +16,7 @@ export const HARNESS_DISPLAY_NAMES: Record<HarnessId, string> = {
   [HARNESS_IDS.CODEX_CLI]: "Codex",
   [HARNESS_IDS.OPENCODE_CLI]: "OpenCode",
   [HARNESS_IDS.QWEN_CLI]: "Qwen Code",
+  [HARNESS_IDS.GEMINI_CLI]: "Gemini",
 };
 
 // ─── Grouping ─────────────────────────────────────────────────────────────────
@@ -26,6 +27,7 @@ export const CLI_HARNESSES: HarnessId[] = [
   HARNESS_IDS.CODEX_CLI,
   HARNESS_IDS.OPENCODE_CLI,
   HARNESS_IDS.QWEN_CLI,
+  HARNESS_IDS.GEMINI_CLI,
 ];
 
 export const CHAT_HARNESSES: HarnessId[] = [HARNESS_IDS.COPILOT_CHAT];

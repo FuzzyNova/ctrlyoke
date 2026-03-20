@@ -7,6 +7,7 @@ import { ClaudeCliProvider } from "./harness/claude/ClaudeCliProvider";
 import { CodexCliProvider } from "./harness/codex/CodexCliProvider";
 import { OpenCodeCliProvider } from "./harness/opencode/OpenCodeCliProvider";
 import { QwenCliProvider } from "./harness/qwen/QwenCliProvider";
+import { GeminiCliProvider } from "./harness/gemini/GeminiCliProvider";
 
 /**
  * IntegrationFactory
@@ -59,6 +60,12 @@ export class IntegrationFactory {
     return new CliIntegration(provider, this.platform, registerWithContext);
   }
 
+  /** Create a new Gemini CLI integration */
+  createGeminiCli(registerWithContext: boolean = true): CliIntegration {
+    const provider = new GeminiCliProvider();
+    return new CliIntegration(provider, this.platform, registerWithContext);
+  }
+
   /** Create a new integration for the given harness (CLI harnesses only) */
   createForHarness(
     harness: Harness,
@@ -73,6 +80,8 @@ export class IntegrationFactory {
         return this.createOpenCodeCli(registerWithContext);
       case Harness.QwenCli:
         return this.createQwenCli(registerWithContext);
+      case Harness.GeminiCli:
+        return this.createGeminiCli(registerWithContext);
       case Harness.CopilotCli:
       default:
         return this.createCopilotCli(registerWithContext);

@@ -98,6 +98,7 @@ export class WorkflowOrchestrator {
   private readonly codexCliIntegration: CliIntegration;
   private readonly openCodeCliIntegration: CliIntegration;
   private readonly qwenCliIntegration: CliIntegration;
+  private readonly geminiCliIntegration: CliIntegration;
 
   // Orchestration helpers
   private readonly templateImporter: TemplateImporter;
@@ -127,6 +128,7 @@ export class WorkflowOrchestrator {
     this.codexCliIntegration = this.integrationFactory.createCodexCli();
     this.openCodeCliIntegration = this.integrationFactory.createOpenCodeCli();
     this.qwenCliIntegration = this.integrationFactory.createQwenCli();
+    this.geminiCliIntegration = this.integrationFactory.createGeminiCli();
 
     // Status bar
     this.statusBarManager = new StatusBarManager(context);
@@ -162,6 +164,7 @@ export class WorkflowOrchestrator {
       [HARNESS_IDS.CODEX_CLI, this.codexCliIntegration],
       [HARNESS_IDS.OPENCODE_CLI, this.openCodeCliIntegration],
       [HARNESS_IDS.QWEN_CLI, this.qwenCliIntegration],
+      [HARNESS_IDS.GEMINI_CLI, this.geminiCliIntegration],
     ];
     for (const [harnessId, integration] of allIntegrations) {
       context.subscriptions.push(
@@ -473,6 +476,7 @@ export class WorkflowOrchestrator {
           [Harness.CopilotCli]: "Copilot CLI",
           [Harness.OpenCodeCli]: "OpenCode CLI",
           [Harness.QwenCli]: "Qwen Code CLI",
+          [Harness.GeminiCli]: "Gemini CLI",
         }[integrationMode] || "Copilot CLI";
       Log.info(`🔄 Default integration: ${modeLabel}`);
 
@@ -483,6 +487,7 @@ export class WorkflowOrchestrator {
         this.codexCliIntegration.initialize(),
         this.openCodeCliIntegration.initialize(),
         this.qwenCliIntegration.initialize(),
+        this.geminiCliIntegration.initialize(),
       ]);
 
       if (this.currentWorkspaceFolder) {
@@ -1191,6 +1196,8 @@ export class WorkflowOrchestrator {
         return this.openCodeCliIntegration;
       case Harness.QwenCli:
         return this.qwenCliIntegration;
+      case Harness.GeminiCli:
+        return this.geminiCliIntegration;
       case Harness.CopilotCli:
       default:
         return this.copilotCliIntegration;
@@ -1203,6 +1210,7 @@ export class WorkflowOrchestrator {
     this.codexCliIntegration.setWorkflowName(name);
     this.openCodeCliIntegration.setWorkflowName(name);
     this.qwenCliIntegration.setWorkflowName(name);
+    this.geminiCliIntegration.setWorkflowName(name);
   }
 
   private updateStatusBar(): void {

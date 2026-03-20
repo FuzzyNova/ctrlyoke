@@ -1256,7 +1256,7 @@ export class ClineLogParser implements ILogParser {
 
 - **Cline CLI GitHub:** https://github.com/cline/cline
 - **Cline CLI Version:** 3.74.0 (as of March 2026)
-- **FlightPath Harness Guide:** `docs/ADDING_NEW_CLI_PROVIDER.md`
+- **FlightPath Harness Guide:** `docs/ADDING_NEW_CLI_HARNESS.md`
 - **Claude Integration:** `src/flightpath/harness/claude/` (reference implementation)
 - **Codex Integration:** `src/flightpath/harness/codex/` (reference implementation)
 - **OpenCode Integration:** `src/flightpath/harness/opencode/` (reference implementation)

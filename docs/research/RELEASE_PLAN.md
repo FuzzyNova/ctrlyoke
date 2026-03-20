@@ -150,7 +150,7 @@ Not strict blockers, but expected by marketplace reviewers and important for fir
 
 The README is in good shape but needs a pass before public release:
 
-- [ ] Verify all doc links (`./docs/QUEUE_APPEND_FEATURE.md`, `./docs/SESSION_MANAGEMENT.md`, `./docs/ADDING_NEW_CLI_PROVIDER.md`) exist
+- [ ] Verify all doc links (`./docs/QUEUE_APPEND_FEATURE.md`, `./docs/SESSION_MANAGEMENT.md`, `./docs/ADDING_NEW_CLI_HARNESS.md`) exist
 - [ ] Add OpenCode CLI (`opencode-cli`) to the harnesses table (it's in settings but missing from the README table)
 - [ ] Verify quick-start instructions work end-to-end with the current CLI tool versions
 - [ ] Add a **Screenshots** section with at least one screenshot of the dashboard in action — this significantly increases Marketplace click-through rate

@@ -939,7 +939,7 @@ export class QwenNotificationMonitor implements INotificationMonitor {
 ## Appendix C: References
 
 - **Qwen Code GitHub:** https://github.com/QwenLM/qwen-code
-- **FlightPath Harness Guide:** `docs/ADDING_NEW_CLI_PROVIDER.md`
+- **FlightPath Harness Guide:** `docs/ADDING_NEW_CLI_HARNESS.md`
 - **Claude Integration:** `src/flightpath/harness/claude/` (reference implementation)
 - **Research Document:** `docs/research/QWEN_INTEGRATION_RESEARCH.md`
 

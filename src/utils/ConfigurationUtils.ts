@@ -68,6 +68,8 @@ function getModelSettingKeyForHarness(harness: Harness): string {
       return "codexCliModel";
     case Harness.OpenCodeCli:
       return "openCodeCliModel";
+    case Harness.GeminiCli:
+      return "geminiCliModel";
     default:
       return "copilotCliModel";
   }
@@ -87,6 +89,8 @@ function getAdditionalArgsSettingKeyForHarness(harness: Harness): string {
       return "codexCliAdditionalArgs";
     case Harness.OpenCodeCli:
       return "openCodeCliAdditionalArgs";
+    case Harness.GeminiCli:
+      return "geminiCliAdditionalArgs";
     default:
       return "copilotCliAdditionalArgs";
   }
@@ -154,6 +158,9 @@ export const ConfigurationUtils = {
       case HARNESS_IDS.OPENCODE_CLI:
       case Harness.OpenCodeCli:
         return Harness.OpenCodeCli;
+      case HARNESS_IDS.GEMINI_CLI:
+      case Harness.GeminiCli:
+        return Harness.GeminiCli;
       case HARNESS_IDS.COPILOT_CLI:
       case Harness.CopilotCli:
       default:
@@ -239,6 +246,10 @@ export const ConfigurationUtils = {
         return ConfigurationUtils.getCodexCliModel();
       case Harness.OpenCodeCli:
         return ConfigurationUtils.getOpenCodeCliModel();
+      case Harness.GeminiCli:
+        return ConfigurationUtils.getGeminiCliModel();
+      case Harness.QwenCli:
+        return ConfigurationUtils.getQwenCliModel();
       default:
         // Fallback to Copilot CLI model
         return ConfigurationUtils.getCliModel();
@@ -364,6 +375,17 @@ export const ConfigurationUtils = {
    */
   getQwenCliModel(): string {
     return getConfig().get<string>("qwenCliModel", "coder-model");
+  },
+
+  // ============================================================
+  // GEMINI CLI SETTINGS
+  // ============================================================
+
+  /**
+   * Get Gemini CLI model
+   */
+  getGeminiCliModel(): string {
+    return getConfig().get<string>("geminiCliModel", "auto-gemini-3");
   },
 
   // ============================================================

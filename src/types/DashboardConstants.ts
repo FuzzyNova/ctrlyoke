@@ -257,6 +257,7 @@ export const HARNESS_IDS = {
   CODEX_CLI: "codex-cli",
   OPENCODE_CLI: "opencode-cli",
   QWEN_CLI: "qwen-cli",
+  GEMINI_CLI: "gemini-cli",
 } as const;
 
 // ============================================================================
@@ -272,6 +273,7 @@ export const HARNESS_INFO = {
   [HARNESS_IDS.CODEX_CLI]: { name: "Codex CLI", shortName: "Codex CLI" },
   [HARNESS_IDS.OPENCODE_CLI]: { name: "OpenCode CLI", shortName: "OpenCode" },
   [HARNESS_IDS.QWEN_CLI]: { name: "Qwen Code CLI", shortName: "Qwen Code" },
+  [HARNESS_IDS.GEMINI_CLI]: { name: "Gemini CLI", shortName: "Gemini" },
 } as const;
 
 // ============================================================================
@@ -294,6 +296,7 @@ export const DEFAULT_MODELS = {
   [HARNESS_IDS.CODEX_CLI]: "gpt-5.2-codex",
   [HARNESS_IDS.OPENCODE_CLI]: "anthropic/claude-sonnet-4-6",
   [HARNESS_IDS.QWEN_CLI]: "coder-model",
+  [HARNESS_IDS.GEMINI_CLI]: "auto-gemini-3",
 } as const;
 
 // ============================================================================
@@ -330,6 +333,16 @@ export const QWEN_CLI_MODELS = [
   { value: "qwen-3-coder", label: "Qwen 3 Coder" },
   { value: "qwen-3-max", label: "Qwen 3 Max" },
   { value: "qwen-3-max-thinking", label: "Qwen 3 Max Thinking" },
+] as const;
+
+// ============================================================================
+// GEMINI CLI MODELS - Static options (from Gemini CLI documentation)
+// ============================================================================
+export const GEMINI_CLI_MODELS = [
+  { value: "none", label: "None (skip --model flag)" },
+  { value: "auto-gemini-3", label: "Auto Gemini 3" },
+  { value: "gemini-3-pro", label: "Gemini 3 Pro" },
+  { value: "gemini-3-flash", label: "Gemini 3 Flash" },
 ] as const;
 
 // ============================================================================

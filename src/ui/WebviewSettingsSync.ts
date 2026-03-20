@@ -20,6 +20,7 @@ import {
   CLAUDE_CLI_MODEL_LABELS,
   CODEX_CLI_MODEL_LABELS,
   QWEN_CLI_MODEL_LABELS,
+  GEMINI_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import { Harness } from "../types/FlightPathTypes";
 import { readJsonFile } from "../utils/FileSystemUtils";
@@ -90,6 +91,10 @@ export class WebviewSettingsSync {
       available: false,
       status: HARNESS_STATUS_STRINGS.CHECKING,
     },
+    [HARNESS_IDS.GEMINI_CLI]: {
+      available: false,
+      status: HARNESS_STATUS_STRINGS.CHECKING,
+    },
   };
 
   // Validation constants
@@ -100,6 +105,7 @@ export class WebviewSettingsSync {
     HARNESS_IDS.CODEX_CLI,
     HARNESS_IDS.OPENCODE_CLI,
     HARNESS_IDS.QWEN_CLI,
+    HARNESS_IDS.GEMINI_CLI,
   ] as const;
 
   private static readonly VALID_EXECUTION_MODES = [
@@ -471,6 +477,8 @@ export class WebviewSettingsSync {
       [HARNESS_IDS.CLAUDE_CLI]: this.getModelForHarness(Harness.ClaudeCli),
       [HARNESS_IDS.CODEX_CLI]: this.getModelForHarness(Harness.CodexCli),
       [HARNESS_IDS.OPENCODE_CLI]: this.getModelForHarness(Harness.OpenCodeCli),
+      [HARNESS_IDS.QWEN_CLI]: this.getModelForHarness(Harness.QwenCli),
+      [HARNESS_IDS.GEMINI_CLI]: this.getModelForHarness(Harness.GeminiCli),
     };
 
     const harnessDefaultAdditionalArgs = {
@@ -486,6 +494,10 @@ export class WebviewSettingsSync {
       ),
       [HARNESS_IDS.OPENCODE_CLI]:
         ConfigurationUtils.getAdditionalArgsForHarness(Harness.OpenCodeCli),
+      [HARNESS_IDS.QWEN_CLI]:
+        ConfigurationUtils.getAdditionalArgsForHarness(Harness.QwenCli),
+      [HARNESS_IDS.GEMINI_CLI]:
+        ConfigurationUtils.getAdditionalArgsForHarness(Harness.GeminiCli),
     };
 
     return {
@@ -605,6 +617,14 @@ export class WebviewSettingsSync {
       })),
     ];
 
+    const geminiCliOptions = [
+      noneOption,
+      ...Object.entries(GEMINI_CLI_MODEL_LABELS).map(([value, label]) => ({
+        value,
+        label,
+      })),
+    ];
+
     return {
       [HARNESS_IDS.COPILOT_CLI]: copilotCliOptions,
       [HARNESS_IDS.COPILOT_CHAT]: copilotChatOptions,
@@ -612,6 +632,7 @@ export class WebviewSettingsSync {
       [HARNESS_IDS.CODEX_CLI]: codexCliOptions,
       [HARNESS_IDS.OPENCODE_CLI]: openCodeCliOptions,
       [HARNESS_IDS.QWEN_CLI]: qwenCliOptions,
+      [HARNESS_IDS.GEMINI_CLI]: geminiCliOptions,
     };
   }
 

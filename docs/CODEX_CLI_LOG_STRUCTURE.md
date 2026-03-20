@@ -1308,7 +1308,7 @@ npm test -- --grep "CodexLogParser"
 - **Response Parser**: `src/flightpath/harness/codex/CodexResponseParser.ts`
 - **Notification Monitor**: `src/flightpath/harness/codex/CodexNotificationMonitor.ts`
 - **Tool Permission Mapper**: `src/flightpath/harness/codex/CodexToolPermissionMapper.ts`
-- **Adding New Providers**: `docs/ADDING_NEW_CLI_PROVIDER.md`
+- **Adding New Providers**: `docs/ADDING_NEW_CLI_HARNESS.md`
 
 ### FlightPath Architecture
 

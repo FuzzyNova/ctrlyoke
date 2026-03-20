@@ -319,3 +319,51 @@ export function getQwenContextWindowSize(modelId: string): number {
   // All Qwen models use 256k context window
   return 256_000;
 }
+
+// ============================================================================
+// GEMINI CLI MODELS
+// Gemini CLI supported models
+// ============================================================================
+export const GEMINI_CLI_MODELS = [
+  "gemini-3-pro",
+  "gemini-3-flash",
+  "auto-gemini-3",
+] as const;
+
+/**
+ * Gemini CLI model display names
+ */
+export const GEMINI_CLI_MODEL_LABELS: Record<string, string> = {
+  "gemini-3-pro": "Gemini 3 Pro",
+  "gemini-3-flash": "Gemini 3 Flash",
+  "auto-gemini-3": "Auto Gemini 3",
+} as const;
+
+/**
+ * Get the Gemini CLI model name (identity function for now)
+ *
+ * @param model The model identifier
+ * @returns The Gemini CLI model name, or undefined if not recognized
+ */
+export function getGeminiModelName(model: string): string | undefined {
+  if (GEMINI_CLI_MODELS.includes(model as any)) {
+    return model;
+  }
+  // Accept any model string - Gemini CLI will validate
+  return model || undefined;
+}
+
+// Type exports for Gemini CLI
+export type GeminiCliModel = (typeof GEMINI_CLI_MODELS)[number];
+
+/**
+ * Get the context window size for a Gemini CLI model.
+ * Gemini models use a 1M token context window by default.
+ *
+ * @param modelId The model identifier (e.g. "gemini-3-pro")
+ * @returns Context window size in tokens
+ */
+export function getGeminiContextWindowSize(modelId: string): number {
+  // Gemini models typically have 1M+ context window
+  return 1_000_000;
+}

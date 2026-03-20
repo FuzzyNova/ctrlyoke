@@ -82,7 +82,10 @@
       "Bash(cd:*)",
       "Bash(gh issue:*)",
       "Bash(npm show:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "WebFetch(domain:geminicli.com)",
+      "Bash(qwen --version)",
+      "Bash(qwen --help)"
     ],
     "deny": [],
     "ask": []

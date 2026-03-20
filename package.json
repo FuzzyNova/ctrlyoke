@@ -422,7 +422,8 @@
             "claude-cli",
             "codex-cli",
             "opencode-cli",
-            "qwen-cli"
+            "qwen-cli",
+            "gemini-cli"
           ],
           "enumDescriptions": [
             "Use Copilot CLI (command-line automation - DEFAULT, better reliability & control)",
@@ -430,11 +431,12 @@
             "Use Claude Code CLI (Anthropic's Claude AI via command line)",
             "Use Codex CLI (OpenAI's code-specialized CLI)",
             "Use OpenCode CLI for multi-provider AI coding assistance",
-            "Use Qwen Code CLI (Qwen3-Coder models via command line)"
+            "Use Qwen Code CLI (Qwen3-Coder models via command line)",
+            "Use Gemini CLI (Google's Gemini models via command line)"
           ],
           "default": "copilot-cli",
           "description": "Choose which harness/framework to use for AI execution",
-          "markdownDescription": "Choose which harness (agent framework/CLI tool) to use for AI execution.\n\n- **Copilot CLI** (default): Best reliability with GitHub Copilot\n- **Claude CLI**: Uses Anthropic's Claude Code CLI\n- **Codex CLI**: Uses OpenAI's Codex code-specialized CLI\n- **Qwen CLI**: Uses Qwen Code CLI with Qwen3-Coder models\n- **Copilot Chat**: UI automation (less reliable than CLI modes)"
+          "markdownDescription": "Choose which harness (agent framework/CLI tool) to use for AI execution.\n\n- **Copilot CLI** (default): Best reliability with GitHub Copilot\n- **Claude CLI**: Uses Anthropic's Claude Code CLI\n- **Codex CLI**: Uses OpenAI's Codex code-specialized CLI\n- **Qwen CLI**: Uses Qwen Code CLI with Qwen3-Coder models\n- **Gemini CLI**: Uses Google's Gemini CLI\n- **Copilot Chat**: UI automation (less reliable than CLI modes)"
         },
         "flightpath.scriptTimeout": {
           "order": 11,
@@ -889,6 +891,29 @@
           "default": "default",
           "description": "[Qwen Code CLI] Tool approval mode",
           "markdownDescription": "**Qwen Code CLI Only.** Tool approval mode when `cliToolPermissions` is set to **custom**. **default** (recommended) prompts for approval before tool execution. **auto-edit** auto-approves read/edit operations. **yolo** bypasses all approval prompts (dangerous)."
+        },
+        "flightpath.geminiCliModel": {
+          "order": 440,
+          "type": "string",
+          "default": "auto-gemini-3",
+          "description": "[Gemini CLI] Model for Gemini CLI execution. Set to 'none' to skip the --model flag and pass a custom model via additionalArgs.",
+          "enum": [
+            "gemini-3-pro",
+            "gemini-3-flash",
+            "auto-gemini-3"
+          ],
+          "enumDescriptions": [
+            "Gemini 3 Pro",
+            "Gemini 3 Flash",
+            "Auto Gemini 3 (default, adaptive model selection)"
+          ]
+        },
+        "flightpath.geminiCliAdditionalArgs": {
+          "order": 441,
+          "type": "string",
+          "default": "",
+          "description": "[Gemini CLI] Extra CLI flags appended to FlightPath's standard argument set",
+          "markdownDescription": "**Gemini CLI Only.** Extra CLI flags appended to FlightPath's standard argument set. FlightPath continues to manage model, session, and output format flags normally. Prompt-level and workflow-level `additionalArgs` take precedence over this global setting. Example: `--approval-mode yolo`"
         },
         "flightpath.codexSandboxMode": {
           "order": 411,

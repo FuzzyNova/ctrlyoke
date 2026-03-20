@@ -36,6 +36,7 @@ export enum Harness {
   CodexCli = "codex-cli", // Codex CLI
   OpenCodeCli = "opencode-cli", // OpenCode CLI
   QwenCli = "qwen-cli", // Qwen Code CLI
+  GeminiCli = "gemini-cli", // Gemini CLI
 }
 
 /**

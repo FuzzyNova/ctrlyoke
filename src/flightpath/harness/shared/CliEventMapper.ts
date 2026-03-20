@@ -55,6 +55,7 @@ export class CliEventMapper {
     "execute_command",
     "run_command",
     "shell_command",
+    "run_shell_command",
   ]);
 
   /** Tool names that map to FILE_READ */
@@ -63,6 +64,13 @@ export class CliEventMapper {
     "read_file",
     "view",
     "cat",
+    "list_directory",
+    "ls",
+    "dir",
+    "grep_search",
+    "grep",
+    "search_files",
+    "glob",
   ]);
 
   /** Tool names that map to FILE_WRITE */
@@ -81,6 +89,7 @@ export class CliEventMapper {
     "replace_string_in_file",
     "multiedit",
     "apply_patch",
+    "replace",
   ]);
 
   /** Tool names that map to FILE_DELETE */
@@ -96,6 +105,8 @@ export class CliEventMapper {
     "web_search",
     "search",
     "webfetch",
+    "google_web_search",
+    "web_fetch",
   ]);
 
   /**

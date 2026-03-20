@@ -1,5 +1,8 @@
 import { exec } from "child_process";
 import { promisify } from "util";
+import * as path from "path";
+import * as os from "os";
+import * as fs from "fs/promises";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
@@ -8,7 +11,7 @@ import { QwenResponseParser } from "./QwenResponseParser";
 import { QwenNotificationMonitor } from "./QwenNotificationMonitor";
 import { QwenToolPermissionMapper } from "./QwenToolPermissionMapper";
 import { QwenLogParser } from "./QwenLogParser";
-import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import { ConfigurationUtils, PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -87,7 +90,7 @@ export class QwenCliProvider implements ICliProvider {
   async buildCliArgs(
     _prompt: PromptItem,
     isInteractive: boolean,
-    _extensionPath: string,
+    extensionPath: string,
     workspaceRoot: string | undefined,
     sessionId: string | undefined,
     workflowContext?: {
@@ -151,7 +154,7 @@ export class QwenCliProvider implements ICliProvider {
       Log.info(`Extra CLI args applied (${appendTokens.length} tokens)`);
     }
 
-    // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
+    // Tool permissions (headless only) / interactive hook setup
     if (!isInteractive) {
       const permissionConfig = {
         mode: ConfigurationUtils.getCliToolPermissions(),
@@ -161,11 +164,153 @@ export class QwenCliProvider implements ICliProvider {
       const toolPermissionArgs =
         this.toolPermissionMapper.buildArgs(permissionConfig);
       args.push(...toolPermissionArgs);
+    } else {
+      // Interactive mode: enable experimental hooks and write Stop hook to .qwen/settings.json
+      args.push("--experimental-hooks");
+      if (workspaceRoot) {
+        await this.buildInteractiveHookSettings(extensionPath, workspaceRoot);
+        Log.debug(`🔔 Configured Stop hook for Qwen completion detection`);
+      }
     }
 
     Log.debug(`🔧 Qwen CLI arguments: ${JSON.stringify(args)}`);
 
     return args;
+  }
+
+  /**
+   * Merge FlightPath hooks into .qwen/settings.json and pre-trust them in
+   * ~/.qwen/trusted_hooks.json so Qwen doesn't prompt the user for approval.
+   *
+   * Backs up the original settings file to .flightpath/temp/qwen-settings-backup.json
+   * so cleanupWorkspaceArtifacts() can restore it after the workflow completes.
+   * If the backup already exists (multi-prompt workflow), skips the backup step.
+   */
+  private async buildInteractiveHookSettings(
+    extensionPath: string,
+    workspaceRoot: string
+  ): Promise<void> {
+    const scriptPath = path.join(
+      extensionPath,
+      "out",
+      "scripts",
+      "flightpath-qwen-hook.js"
+    );
+    const notifyDir =
+      this.notificationMonitor.getNotificationDirectory(workspaceRoot);
+
+    const hookConfig = this.notificationMonitor.buildHookConfig(
+      scriptPath,
+      notifyDir,
+      workspaceRoot
+    );
+    if (hookConfig.type !== "json") {
+      throw new Error("Unexpected hook config type for Qwen CLI");
+    }
+
+    const qwenDir = path.join(workspaceRoot, ".qwen");
+    const settingsPath = path.join(qwenDir, "settings.json");
+    const tempDir = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.TEMP_DIR
+    );
+    const backupPath = path.join(tempDir, "qwen-settings-backup.json");
+
+    // Read existing settings (if any)
+    let existingSettings: Record<string, unknown> = {};
+    try {
+      const content = await fs.readFile(settingsPath, "utf-8");
+      existingSettings = JSON.parse(content);
+    } catch {
+      // File doesn't exist or invalid JSON — start fresh
+    }
+
+    // Back up the original only once (skip if backup already exists for this workflow run)
+    try {
+      await fs.access(backupPath);
+      // Backup exists — already set up by a prior prompt in this workflow
+    } catch {
+      await fs.mkdir(tempDir, { recursive: true });
+      await fs.writeFile(
+        backupPath,
+        JSON.stringify(existingSettings, null, 2),
+        "utf-8"
+      );
+    }
+
+    // Merge FlightPath hooks section into the settings (overwrite hooks key only)
+    const mergedSettings = {
+      ...existingSettings,
+      hooks: (hookConfig.config as Record<string, unknown>)["hooks"],
+    };
+    await fs.mkdir(qwenDir, { recursive: true });
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify(mergedSettings, null, 2),
+      "utf-8"
+    );
+
+    // Pre-trust the hook commands in ~/.qwen/trusted_hooks.json
+    // Key format: "${name}:${command}" where name defaults to ""
+    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
+    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
+    const hookCommand = `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`;
+    const hookKey = `:${hookCommand}`;
+
+    const globalQwenDir = path.join(os.homedir(), ".qwen");
+    const trustedHooksPath = path.join(globalQwenDir, "trusted_hooks.json");
+
+    let trustedHooks: Record<string, string[]> = {};
+    try {
+      const content = await fs.readFile(trustedHooksPath, "utf-8");
+      trustedHooks = JSON.parse(content);
+    } catch {
+      // File doesn't exist — start fresh
+    }
+
+    if (!trustedHooks[workspaceRoot]) {
+      trustedHooks[workspaceRoot] = [];
+    }
+    if (!trustedHooks[workspaceRoot].includes(hookKey)) {
+      trustedHooks[workspaceRoot].push(hookKey);
+    }
+
+    await fs.mkdir(globalQwenDir, { recursive: true });
+    await fs.writeFile(
+      trustedHooksPath,
+      JSON.stringify(trustedHooks, null, 2),
+      "utf-8"
+    );
+  }
+
+  /**
+   * Restore .qwen/settings.json from the backup created by buildInteractiveHookSettings().
+   * Called by CliIntegration.cleanupWorkflowArtifacts() after workflow completion.
+   */
+  async cleanupWorkspaceArtifacts(workspaceRoot: string): Promise<void> {
+    const backupPath = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.TEMP_DIR,
+      "qwen-settings-backup.json"
+    );
+    const settingsPath = path.join(workspaceRoot, ".qwen", "settings.json");
+
+    try {
+      const backup = await fs.readFile(backupPath, "utf-8");
+      const backupSettings = JSON.parse(backup);
+
+      if (Object.keys(backupSettings).length === 0) {
+        // Original settings file didn't exist — remove the one we created
+        await fs.unlink(settingsPath).catch(() => {});
+      } else {
+        await fs.writeFile(settingsPath, backup, "utf-8");
+      }
+      await fs.unlink(backupPath).catch(() => {});
+    } catch {
+      // Backup doesn't exist (headless run or no interactive session started)
+    }
   }
 
   /**

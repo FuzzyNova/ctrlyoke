@@ -187,6 +187,21 @@ export interface ICliProvider {
   getAdditionalCleanupFilePaths?(workspaceRoot: string): string[];
 
   /**
+   * Restore workspace files modified during interactive hook setup.
+   *
+   * Used by providers that write (and must restore) workspace-level config files
+   * for hook registration (e.g., Gemini writes .gemini/settings.json, Qwen writes
+   * .qwen/settings.json). Called by CliIntegration.cleanupWorkflowArtifacts()
+   * after the workflow completes.
+   *
+   * Providers that only delete temp files should use getAdditionalCleanupFilePaths()
+   * instead — this method is specifically for backup-and-restore patterns.
+   *
+   * @param workspaceRoot Workspace root directory
+   */
+  cleanupWorkspaceArtifacts?(workspaceRoot: string): Promise<void>;
+
+  /**
    * Check if CLI is available on the system
    * @returns True if CLI executable found
    */

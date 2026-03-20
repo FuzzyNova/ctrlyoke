@@ -113,6 +113,93 @@ function getWorkspaceRootFromNotifyDir(notifyDir) {
   return path.join(notifyDir, "..", "..", "..");
 }
 
+/**
+ * Initialize the debug logger for a stdin-based hook script.
+ *
+ * Derives the workspace root from the notification directory (argv[2]),
+ * checks whether diagnostic logging is enabled, and returns a configured
+ * logger. Returns a no-op logger if diagnostics are disabled or if any
+ * step fails — hook scripts must never crash due to logging setup.
+ *
+ * @param {string} scriptName - Base name for the log file (e.g., 'flightpath-claude-hook')
+ * @param {string|undefined} notifyDir - Notification directory path (argv[2])
+ * @returns {function(string, object=): void} Configured logger function
+ */
+function initializeLogger(scriptName, notifyDir) {
+  try {
+    if (notifyDir) {
+      const workspaceRoot = getWorkspaceRootFromNotifyDir(notifyDir);
+      if (isDiagnosticLogsEnabled(workspaceRoot)) {
+        const logsDir = getLogsDirFromNotifyDir(notifyDir);
+        return createLogger(getDebugLogPath(logsDir, scriptName));
+      }
+    }
+  } catch {
+    // Ignore — return no-op logger below
+  }
+  return createLogger(null);
+}
+
+/**
+ * Read all stdin as a single JSON object and invoke a callback.
+ *
+ * Handles readline setup, line buffering, JSON parsing, debug logging,
+ * and error reporting. If JSON parsing fails or the callback throws an
+ * unhandled exception, logs the error and exits with code 1.
+ *
+ * The callback receives the parsed hook input object. It may call
+ * process.exit() directly for validation errors or success — any
+ * uncaught exception it throws is caught here.
+ *
+ * @param {string} scriptPrefix - Prefix for console.error messages (e.g., 'FlightPath Claude Hook')
+ * @param {function} debugLog - Logger returned by initializeLogger or createLogger
+ * @param {function(object): void} callback - Called with parsed JSON on success
+ */
+function readStdinJson(scriptPrefix, debugLog, callback) {
+  const readline = require("readline");
+
+  debugLog("📥 Starting stdin read...");
+  let inputData = "";
+  let lineCount = 0;
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: false,
+  });
+
+  rl.on("line", (line) => {
+    lineCount++;
+    inputData += line;
+    debugLog(`📝 Line ${lineCount} received`, { line, length: line.length });
+  });
+
+  rl.on("close", () => {
+    debugLog("🔚 Stdin closed", {
+      totalLines: lineCount,
+      totalLength: inputData.length,
+      rawInput: inputData,
+    });
+
+    try {
+      debugLog("🔍 Attempting to parse JSON...");
+      const hookInput = JSON.parse(inputData);
+      debugLog("✅ JSON parsed successfully", { parsedData: hookInput });
+      callback(hookInput);
+    } catch (error) {
+      debugLog("❌ ERROR: Exception during processing", {
+        message: error.message,
+        stack: error.stack,
+        inputData,
+      });
+      console.error(
+        `${scriptPrefix}: Error processing hook input:`,
+        error.message
+      );
+      process.exit(1);
+    }
+  });
+}
+
 module.exports = {
   isDiagnosticLogsEnabled,
   getDebugLogPath,
@@ -120,4 +207,6 @@ module.exports = {
   createLogger,
   getLogsDirFromNotifyDir,
   getWorkspaceRootFromNotifyDir,
+  initializeLogger,
+  readStdinJson,
 };
