@@ -385,7 +385,7 @@ export const ConfigurationUtils = {
    * Get Gemini CLI model
    */
   getGeminiCliModel(): string {
-    return getConfig().get<string>("geminiCliModel", "auto-gemini-3");
+    return getConfig().get<string>("geminiCliModel", "gemini-2.5-pro");
   },
 
   // ============================================================

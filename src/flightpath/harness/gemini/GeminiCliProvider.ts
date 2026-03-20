@@ -264,12 +264,14 @@ export class GeminiCliProvider implements ICliProvider {
     if (requestedModel === MODEL_NONE) {
       return undefined;
     }
-    return getGeminiModelName(requestedModel || "auto-gemini-3");
+    return getGeminiModelName(requestedModel || "gemini-2.5-pro");
   }
 
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
+    // Note: Quotes are needed because spawn with shell:true doesn't auto-quote spaces/special chars
+    const quotedPrompt = `"${prompt.replace(/"/g, '\\"')}"`;
     return [
-      "--prompt", prompt,
+      "--prompt", quotedPrompt,
       "--output-format", "stream-json",
       ...baseArgs,
     ];

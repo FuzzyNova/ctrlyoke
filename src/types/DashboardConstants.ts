@@ -296,7 +296,7 @@ export const DEFAULT_MODELS = {
   [HARNESS_IDS.CODEX_CLI]: "gpt-5.2-codex",
   [HARNESS_IDS.OPENCODE_CLI]: "anthropic/claude-sonnet-4-6",
   [HARNESS_IDS.QWEN_CLI]: "coder-model",
-  [HARNESS_IDS.GEMINI_CLI]: "auto-gemini-3",
+  [HARNESS_IDS.GEMINI_CLI]: "gemini-2.5-pro",
 } as const;
 
 // ============================================================================
@@ -329,10 +329,7 @@ export const CODEX_CLI_MODELS = [
 // ============================================================================
 export const QWEN_CLI_MODELS = [
   { value: "none", label: "None (skip --model flag)" },
-  { value: "coder-model", label: "Qwen Coder" },
-  { value: "qwen-3-coder", label: "Qwen 3 Coder" },
-  { value: "qwen-3-max", label: "Qwen 3 Max" },
-  { value: "qwen-3-max-thinking", label: "Qwen 3 Max Thinking" },
+  { value: "coder-model", label: "Qwen Coder (Qwen 3.5 Plus)" },
 ] as const;
 
 // ============================================================================
@@ -340,9 +337,12 @@ export const QWEN_CLI_MODELS = [
 // ============================================================================
 export const GEMINI_CLI_MODELS = [
   { value: "none", label: "None (skip --model flag)" },
-  { value: "auto-gemini-3", label: "Auto Gemini 3" },
-  { value: "gemini-3-pro", label: "Gemini 3 Pro" },
-  { value: "gemini-3-flash", label: "Gemini 3 Flash" },
+  { value: "gemini-3-pro-preview", label: "Gemini 3 Pro (Preview)" },
+  { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (Preview)" },
+  { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite (Preview)" },
+  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite" },
 ] as const;
 
 // ============================================================================

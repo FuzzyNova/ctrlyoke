@@ -120,14 +120,6 @@ export class QwenCliProvider implements ICliProvider {
     // Agent handling is done via prompt prepending in HarnessIntegration.buildPromptText()
     // AgentExpander reads the agent file and injects <agentInstructions> into the prompt.
 
-    // Add workspace directories
-    if (workspaceRoot) {
-      const workspaceDirs = CliProviderUtils.getWorkspaceDirs(workspaceRoot);
-      workspaceDirs.forEach((dir) => {
-        args.push("--add-dir", dir);
-      });
-    }
-
     // Session management: Resume with explicit session ID
     const shouldResume = CliProviderUtils.shouldResumeSession(
       resolvedResumeSession,
@@ -352,7 +344,6 @@ export class QwenCliProvider implements ICliProvider {
       `"${prompt}"`,
       "--output-format",
       "stream-json",
-      "--verbose",
       ...baseArgs,
     ];
   }

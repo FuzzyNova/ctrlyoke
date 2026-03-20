@@ -858,20 +858,14 @@
           "order": 430,
           "type": "string",
           "enum": [
-            "coder-model",
-            "qwen-3-coder",
-            "qwen-3-max",
-            "qwen-3-max-thinking"
+            "coder-model"
           ],
           "enumDescriptions": [
-            "Qwen Coder (default, balanced performance)",
-            "Qwen 3 Coder (coding-optimized)",
-            "Qwen 3 Max (most capable)",
-            "Qwen 3 Max Thinking (enhanced reasoning)"
+            "Qwen Coder (Qwen 3.5 Plus)"
           ],
           "default": "coder-model",
           "description": "[Qwen Code CLI] Default AI model",
-          "markdownDescription": "**Qwen Code CLI Only.** Default AI model for Qwen Code CLI. **coder-model** (default) provides balanced performance. Prompts can override this with `\"model\": \"qwen-3-max\"` or other supported models."
+          "markdownDescription": "**Qwen Code CLI Only.** Default AI model for Qwen Code CLI. Currently only `coder-model` (Qwen 3.5 Plus) is supported."
         },
         "flightpath.qwenCliApprovalMode": {
           "order": 431,
@@ -895,17 +889,23 @@
         "flightpath.geminiCliModel": {
           "order": 440,
           "type": "string",
-          "default": "auto-gemini-3",
+          "default": "gemini-2.5-pro",
           "description": "[Gemini CLI] Model for Gemini CLI execution. Set to 'none' to skip the --model flag and pass a custom model via additionalArgs.",
           "enum": [
-            "gemini-3-pro",
-            "gemini-3-flash",
-            "auto-gemini-3"
+            "gemini-3-pro-preview",
+            "gemini-3-flash-preview",
+            "gemini-3.1-flash-lite-preview",
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite"
           ],
           "enumDescriptions": [
-            "Gemini 3 Pro",
-            "Gemini 3 Flash",
-            "Auto Gemini 3 (default, adaptive model selection)"
+            "Gemini 3 Pro (Preview)",
+            "Gemini 3 Flash (Preview)",
+            "Gemini 3.1 Flash Lite (Preview)",
+            "Gemini 2.5 Pro (stable, default)",
+            "Gemini 2.5 Flash",
+            "Gemini 2.5 Flash Lite"
           ]
         },
         "flightpath.geminiCliAdditionalArgs": {
