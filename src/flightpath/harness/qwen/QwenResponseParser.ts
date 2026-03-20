@@ -239,7 +239,7 @@ export class QwenResponseParser
           type: CLI_EVENT_TYPES.TOOL_RESULT,
           timestamp: Date.now(),
           data: {
-            toolCallId: contentBlock.tool_call_id,
+            toolCallId: contentBlock.tool_use_id,
             result: {
               success: !contentBlock.is_error,
               output: contentBlock.content,
@@ -273,7 +273,7 @@ export class QwenResponseParser
   ): CliEvent {
     // Use CliEventMapper for consistent tool classification
     const classification = CliEventMapper.classifyTool(toolName);
-    const path = (toolInput.path ?? toolInput.file_path) as string | undefined;
+    const path = (toolInput.path ?? toolInput.file_path ?? toolInput.absolute_path ?? toolInput.pattern) as string | undefined;
 
     switch (classification.type) {
       case CLI_EVENT_TYPES.BASH_COMMAND:
