@@ -681,6 +681,10 @@ export class WorkflowInstance {
         `isIdleContinuation=${isIdleContinuation}`
     );
 
+    // Declared outside try so the catch block can finalize history on early errors
+    // (errors thrown before startWorkflowExecution, which has its own finally block).
+    let historyFilePath = "";
+
     try {
       Log.info(`FlightPath: Executing loaded prompt file: ${filePath}`);
 
@@ -791,7 +795,6 @@ export class WorkflowInstance {
       const totalPrompts = currentQueueState.prompts.length;
 
       const workingFilePath = currentQueueState.workingFilePath ?? "";
-      let historyFilePath = "";
       if (
         !continueFromCurrent &&
         !isAppendContinuation &&
@@ -923,6 +926,20 @@ export class WorkflowInstance {
     } catch (error) {
       Log.error("Failed to execute prompt file:", error);
       await this.promptQueue.markErrored();
+      // Finalize the history run if it was initialized before the error occurred
+      // (errors thrown between initializeRun and startWorkflowExecution; the latter
+      // has its own finally block that handles finalization for errors within execution).
+      if (historyFilePath) {
+        await this.outputHistoryManager
+          .finalizeRun(
+            historyFilePath,
+            EXECUTION_STATES.ERROR,
+            this.promptQueue.getProgress().total
+          )
+          .catch((err) =>
+            Log.warn("Failed to finalize history run on early error:", err)
+          );
+      }
       this.platform.error(`FlightPath: Execution failed: ${error}`);
     }
   }

@@ -475,6 +475,8 @@ export class WorkflowExecutor {
       return this.handlePromptSendFailure(
         integration,
         context,
+        target,
+        prompt,
         legacyStepIndex
       );
     }
@@ -1235,7 +1237,9 @@ export class WorkflowExecutor {
   private async handlePromptSendFailure(
     integration: HarnessIntegration,
     context: WorkflowExecutionContext,
-    currentIndex: number
+    target: ExecutionTarget,
+    prompt: PromptItem,
+    legacyStepIndex: number
   ): Promise<boolean> {
     const queueState = this.promptQueue.getState();
     if (queueState.stopped) {
@@ -1249,18 +1253,72 @@ export class WorkflowExecutor {
 
     const failureReason = integration.getLastFailureReason();
     const stepLabel =
-      currentIndex >= 0
-        ? `prompt ${currentIndex + 1}`
-        : `finalPrompt loop ${Math.abs(currentIndex)}`;
+      legacyStepIndex >= 0
+        ? `prompt ${legacyStepIndex + 1}`
+        : `finalPrompt loop ${Math.abs(legacyStepIndex)}`;
     this.platform.error(`Failed to execute ${stepLabel}: ${failureReason}`);
 
     await this.promptQueue.markErrored();
 
-    if (context.dashboardProvider && currentIndex >= 0) {
-      context.dashboardProvider.updateStepStatus(currentIndex, {
+    if (context.dashboardProvider && legacyStepIndex >= 0) {
+      context.dashboardProvider.updateStepStatus(legacyStepIndex, {
         state: STEP_STATUS.FAILED,
         message: failureReason,
       });
+    }
+
+    // Write a final (non-streaming) error CLI output so the failure is visible
+    // in the dashboard and persisted to history. This replaces the initial
+    // isStreaming:true output that was set up before sendPrompt was called.
+    const errorCliOutput = {
+      prompt: prompt.prompt,
+      response: "",
+      isStreaming: false,
+      elapsed: 0,
+      tokens: undefined,
+      cliCommand: context.shouldShowCliCommand
+        ? integration.getLastCliCommand()
+        : undefined,
+      workingDirectory: context.workspaceFolderPath,
+      timestampMs: Date.now(),
+      attemptIndex: 0,
+      rawTextOutput: integration.rawTextOutput || undefined,
+      errorMessage: failureReason,
+    };
+
+    if (context.dashboardProvider && legacyStepIndex >= 0) {
+      context.dashboardProvider.updateCliOutput(legacyStepIndex, errorCliOutput);
+    } else if (context.dashboardProvider && target.kind === "finalPrompt") {
+      context.dashboardProvider.updateFinalPromptOutput(
+        target.loopIndex,
+        errorCliOutput
+      );
+    }
+
+    if (legacyStepIndex >= 0) {
+      context.captureCompletedOutput?.(legacyStepIndex, errorCliOutput);
+    } else if (target.kind === "finalPrompt") {
+      context.captureFinalPromptCompletedOutput?.(
+        target.loopIndex,
+        errorCliOutput
+      );
+    }
+
+    if (context.historyFilePath && context.outputHistoryManager) {
+      const key = this.getExecutionKey(target);
+      const statusMessages = this.stepStatusMessages.get(key) ?? [];
+      await context.outputHistoryManager
+        .saveExecutionOutput(
+          context.historyFilePath,
+          target.kind === "queue"
+            ? { kind: "queue", stepIndex: target.stepIndex }
+            : { kind: "finalPrompt", loopIndex: target.loopIndex },
+          [errorCliOutput],
+          statusMessages
+        )
+        .catch((err) =>
+          Log.warn("Failed to save error output to history:", err)
+        );
     }
 
     return false;

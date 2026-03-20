@@ -950,6 +950,18 @@ export const CliOutput = memo<CliOutputProps>(
           </div>
         )}
 
+        {/* Error message */}
+        {output.errorMessage && (
+          <div
+            className={`${OUTPUT_BLOCK_BASE} border-l-severity-error text-error-fg`}
+          >
+            {timestamp && (
+              <span className="opacity-70">[{timestamp}] </span>
+            )}
+            Error: {output.errorMessage}
+          </div>
+        )}
+
         {/* Response (structured or plain) */}
         {responseNode}
 

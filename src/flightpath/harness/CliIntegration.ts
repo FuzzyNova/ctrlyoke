@@ -1,4 +1,5 @@
 import type * as vscode from "vscode";
+import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
@@ -269,11 +270,14 @@ export class CliIntegration extends HarnessIntegration {
    * Create a fresh VS Code terminal for interactive execution.
    * Always creates a new terminal, disposing any existing one first.
    */
-  protected async createFreshTerminal(): Promise<vscode.Terminal> {
+  protected async createFreshTerminal(
+    env?: Record<string, string>
+  ): Promise<vscode.Terminal> {
     this.disposeTerminalIfExists();
     return await this.processManager.createTerminal(
       this.buildTerminalName(),
-      this.getWorkspaceRoot()
+      this.getWorkspaceRoot(),
+      env
     );
   }
 
@@ -681,10 +685,16 @@ export class CliIntegration extends HarnessIntegration {
       }
 
       // 2. Spawn CLI in terminal (TUI displays for user)
+      // Generate a per-run ID so the hook script writes a uniquely-named start file.
+      // This eliminates the parallel-workflow race in waitForSessionStart: each run's
+      // hook writes {runId}-start.json, and waitForSessionStart watches only that file.
+      // The ID travels to the hook via FLIGHTPATH_RUN_ID in the terminal's process env.
+      const runId = crypto.randomUUID();
       const startResult = await this.startCliProcess(
         args,
         promptText,
-        workflowContext
+        workflowContext,
+        { FLIGHTPATH_RUN_ID: runId }
       );
       tempFilePaths = startResult.tempFilePaths; // Store for cleanup in finally
 
@@ -741,6 +751,7 @@ export class CliIntegration extends HarnessIntegration {
               pollMs: SESSION_START_POLL_MS,
             },
             startTime,
+            runId,
             () => this.isCancelling
           );
 
@@ -849,7 +860,8 @@ export class CliIntegration extends HarnessIntegration {
   private async startCliProcess(
     args: string[],
     promptText: string,
-    workflowContext?: WorkflowContext
+    workflowContext?: WorkflowContext,
+    env?: Record<string, string>
   ): Promise<{
     terminal: vscode.Terminal;
     execution: vscode.TerminalShellExecution;
@@ -899,7 +911,7 @@ export class CliIntegration extends HarnessIntegration {
       this.currentPromptTotal = workflowContext.allPrompts.length;
     }
 
-    const terminal = await this.createFreshTerminal();
+    const terminal = await this.createFreshTerminal(env);
     Log.info(`🖥️ Opened terminal: "${this.buildTerminalName()}"`);
     terminal.show();
 

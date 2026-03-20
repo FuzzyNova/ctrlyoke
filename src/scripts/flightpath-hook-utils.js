@@ -129,7 +129,12 @@ function initializeLogger(scriptName, notifyDir) {
   try {
     if (notifyDir) {
       const workspaceRoot = getWorkspaceRootFromNotifyDir(notifyDir);
-      if (isDiagnosticLogsEnabled(workspaceRoot)) {
+      // Check env var first (injected into hook command when setting is on),
+      // then fall back to flag file check. Matches mcp-server.ts pattern.
+      const enabled =
+        process.env.FLIGHTPATH_DIAGNOSTIC_LOGS === "true" ||
+        isDiagnosticLogsEnabled(workspaceRoot);
+      if (enabled) {
         const logsDir = getLogsDirFromNotifyDir(notifyDir);
         return createLogger(getDebugLogPath(logsDir, scriptName));
       }

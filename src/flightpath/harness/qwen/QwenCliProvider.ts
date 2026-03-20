@@ -191,14 +191,20 @@ export class QwenCliProvider implements ICliProvider {
     const notifyDir =
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
 
-    const hookConfig = this.notificationMonitor.buildHookConfig(
-      scriptPath,
-      notifyDir,
-      workspaceRoot
-    );
-    if (hookConfig.type !== "json") {
-      throw new Error("Unexpected hook config type for Qwen CLI");
-    }
+    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
+    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
+
+    // Inject diagnostic logs env var into hook command when the setting is on.
+    // This is how the setting reaches the hook script (which can't read VS Code settings).
+    const diagnosticLogs = ConfigurationUtils.isDiagnosticLogsEnabled();
+    const cmdPrefix = diagnosticLogs ? "FLIGHTPATH_DIAGNOSTIC_LOGS=true " : "";
+    const command = `${cmdPrefix}node "${normalizedScriptPath}" "${normalizedNotifyDir}"`;
+
+    const hooksSection = {
+      SessionStart: [{ hooks: [{ type: "command", command }] }],
+      UserPromptSubmit: [{ hooks: [{ type: "command", command }] }],
+      Stop: [{ hooks: [{ type: "command", command }] }],
+    };
 
     const qwenDir = path.join(workspaceRoot, ".qwen");
     const settingsPath = path.join(qwenDir, "settings.json");
@@ -234,7 +240,7 @@ export class QwenCliProvider implements ICliProvider {
     // Merge FlightPath hooks section into the settings (overwrite hooks key only)
     const mergedSettings = {
       ...existingSettings,
-      hooks: (hookConfig.config as Record<string, unknown>)["hooks"],
+      hooks: hooksSection,
     };
     await fs.mkdir(qwenDir, { recursive: true });
     await fs.writeFile(
@@ -243,12 +249,12 @@ export class QwenCliProvider implements ICliProvider {
       "utf-8"
     );
 
-    // Pre-trust the hook commands in ~/.qwen/trusted_hooks.json
-    // Key format: "${name}:${command}" where name defaults to ""
-    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
-    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
-    const hookCommand = `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`;
-    const hookKey = `:${hookCommand}`;
+    // Pre-trust hook commands in ~/.qwen/trusted_hooks.json.
+    // Key format: "${name}:${command}" where name defaults to "".
+    // Register BOTH the base command and the diagnostic-prefixed variant so that
+    // toggling flightpath.enableDiagnosticLogs between runs doesn't break trust.
+    const baseCommand = `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`;
+    const diagCommand = `FLIGHTPATH_DIAGNOSTIC_LOGS=true ${baseCommand}`;
 
     const globalQwenDir = path.join(os.homedir(), ".qwen");
     const trustedHooksPath = path.join(globalQwenDir, "trusted_hooks.json");
@@ -264,8 +270,11 @@ export class QwenCliProvider implements ICliProvider {
     if (!trustedHooks[workspaceRoot]) {
       trustedHooks[workspaceRoot] = [];
     }
-    if (!trustedHooks[workspaceRoot].includes(hookKey)) {
-      trustedHooks[workspaceRoot].push(hookKey);
+    for (const cmd of [baseCommand, diagCommand]) {
+      const key = `:${cmd}`;
+      if (!trustedHooks[workspaceRoot].includes(key)) {
+        trustedHooks[workspaceRoot].push(key);
+      }
     }
 
     await fs.mkdir(globalQwenDir, { recursive: true });
@@ -303,6 +312,11 @@ export class QwenCliProvider implements ICliProvider {
     } catch {
       // Backup doesn't exist (headless run or no interactive session started)
     }
+
+    // Qwen Code CLI creates settings.json.orig as its own backup when it reads our
+    // settings.json. Clean it up since the user didn't have it before we ran.
+    const origPath = path.join(workspaceRoot, ".qwen", "settings.json.orig");
+    await fs.unlink(origPath).catch(() => {});
   }
 
   /**

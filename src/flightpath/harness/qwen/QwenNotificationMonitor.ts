@@ -24,10 +24,21 @@ export class QwenNotificationMonitor
   implements INotificationMonitor
 {
   /**
+   * Qwen's reliable session-start signal is UserPromptSubmit, not SessionStart.
+   * SessionStart fires fire-and-forget in AppContainer's useEffect and may not
+   * complete before the session ends on fast prompts launched via `-i`.
+   */
+  protected override getStartHookEvents(): string[] {
+    return ["SessionStart", "UserPromptSubmit"];
+  }
+
+  /**
    * Build hook configuration for Qwen Code CLI.
    *
    * Returns a JSON object that QwenCliProvider merges into .qwen/settings.json.
-   * Uses SessionStart + Stop (same event names as Claude).
+   * Registers SessionStart, UserPromptSubmit, and Stop.
+   * UserPromptSubmit is the reliable start signal (SessionStart may not fire on
+   * fast `-i` prompts due to fire-and-forget useEffect timing in AppContainer).
    */
   buildHookConfig(
     scriptPath: string,
@@ -43,6 +54,7 @@ export class QwenNotificationMonitor
       config: {
         hooks: {
           SessionStart: [{ hooks: [{ type: "command", command }] }],
+          UserPromptSubmit: [{ hooks: [{ type: "command", command }] }],
           Stop: [{ hooks: [{ type: "command", command }] }],
         },
       },

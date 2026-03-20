@@ -193,12 +193,17 @@ export class CliProcessManager {
    * Create a fresh VS Code terminal with specified name.
    * Disposes existing terminal if present.
    */
-  async createTerminal(name: string, cwd?: string): Promise<vscode.Terminal> {
+  async createTerminal(
+    name: string,
+    cwd?: string,
+    env?: Record<string, string>
+  ): Promise<vscode.Terminal> {
     this.disposeTerminal();
 
     this.terminal = vscode.window.createTerminal({
       name,
       cwd: cwd || this.workspaceRoot,
+      env,
     });
 
     return this.terminal;

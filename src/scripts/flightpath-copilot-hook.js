@@ -96,12 +96,16 @@ function main() {
       }
 
       // Use same file naming convention as flightpath-claude-hook.js:
-      //   sessionStart → {sessionId}-start.json
+      //   sessionStart → {runId|sessionId}-start.json  (runId when FLIGHTPATH_RUN_ID set)
       //   sessionEnd   → {sessionId}-stop.json
       const safeSessionId = sessionId ? path.basename(sessionId) : null;
+      const runId = process.env.FLIGHTPATH_RUN_ID
+        ? path.basename(process.env.FLIGHTPATH_RUN_ID)
+        : null;
+      const startPrefix = runId || safeSessionId;
       const filename = safeSessionId
         ? hookType === "sessionStart"
-          ? `${safeSessionId}-start.json`
+          ? `${startPrefix}-start.json`
           : `${safeSessionId}-stop.json`
         : `${hookType}-${Date.now()}.json`;
       const notifyFile = path.join(notifyDir, filename);

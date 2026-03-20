@@ -126,6 +126,12 @@ export interface CliOutput {
    * the UI can skip the Streamdown pipeline even before the final parse completes.
    */
   rawTextOutput?: boolean;
+  /**
+   * Error message when the step failed before or during execution
+   * (e.g., prompt send failure, session log not found).
+   * When set, the UI renders this with a red border below the CLI command.
+   */
+  errorMessage?: string;
 }
 
 // ============================================================================

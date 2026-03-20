@@ -85,7 +85,11 @@
       "mcp__ide__getDiagnostics",
       "WebFetch(domain:geminicli.com)",
       "Bash(qwen --version)",
-      "Bash(qwen --help)"
+      "Bash(qwen --help)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//home/nathan/dev/flightpath/**)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []

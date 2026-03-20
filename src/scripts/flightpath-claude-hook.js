@@ -87,10 +87,17 @@ function main() {
     }
 
     const safeSessionId = path.basename(sessionId);
+    // For start events, use FLIGHTPATH_RUN_ID as the file prefix when set.
+    // This gives each parallel workflow its own uniquely-named start file so
+    // waitForSessionStart can do a direct lookup instead of a wildcard scan.
+    const runId = process.env.FLIGHTPATH_RUN_ID
+      ? path.basename(process.env.FLIGHTPATH_RUN_ID)
+      : null;
+    const startPrefix = runId || safeSessionId;
     const notifyFile = path.join(
       notifyDir,
       hookEvent === "SessionStart"
-        ? `${safeSessionId}-start.json`
+        ? `${startPrefix}-start.json`
         : `${safeSessionId}-stop.json`
     );
 

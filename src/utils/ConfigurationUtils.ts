@@ -89,6 +89,8 @@ function getAdditionalArgsSettingKeyForHarness(harness: Harness): string {
       return "codexCliAdditionalArgs";
     case Harness.OpenCodeCli:
       return "openCodeCliAdditionalArgs";
+    case Harness.QwenCli:
+      return "qwenCliAdditionalArgs";
     case Harness.GeminiCli:
       return "geminiCliAdditionalArgs";
     default:

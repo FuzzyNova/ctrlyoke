@@ -32,6 +32,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const { initializeLogger, readStdinJson } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-qwen-hook";
@@ -39,6 +40,27 @@ const SCRIPT_PREFIX = "FlightPath Qwen Hook";
 
 function main() {
   const notifyDir = process.argv[2];
+
+  // Unconditional invocation log — written before any flag checks so we can confirm
+  // the hook script is being called at all, regardless of diagnostic settings.
+  try {
+    const logsDir = notifyDir
+      ? path.join(notifyDir, "..", "..", "logs")
+      : null;
+    const logFile = logsDir
+      ? path.join(logsDir, `${SCRIPT_NAME}-debug.log`)
+      : path.join(os.tmpdir(), `${SCRIPT_NAME}-invocations.log`);
+    if (logsDir) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+    fs.appendFileSync(
+      logFile,
+      `[${new Date().toISOString()}] invoked argv=${JSON.stringify(process.argv)}\n`
+    );
+  } catch {
+    // Never block hook execution on logging
+  }
+
   const debugLog = initializeLogger(SCRIPT_NAME, notifyDir);
 
   debugLog("🚀 Qwen hook script invoked", {
@@ -67,8 +89,8 @@ function main() {
       allFields: Object.keys(hookInput),
     });
 
-    if (hookEvent !== "SessionStart" && hookEvent !== "Stop") {
-      debugLog("⏭️ Ignoring non-SessionStart/Stop hook event", { hookEvent });
+    if (hookEvent !== "SessionStart" && hookEvent !== "UserPromptSubmit" && hookEvent !== "Stop") {
+      debugLog("⏭️ Ignoring unhandled hook event", { hookEvent });
       process.exit(0);
     }
 
@@ -88,17 +110,23 @@ function main() {
     }
 
     const safeSessionId = path.basename(sessionId);
+    const isStartEvent = hookEvent === "SessionStart" || hookEvent === "UserPromptSubmit";
+    // For start events, use FLIGHTPATH_RUN_ID as the file prefix when set.
+    // This gives each parallel workflow its own uniquely-named start file so
+    // waitForSessionStart can do a direct lookup instead of a wildcard scan.
+    const runId = process.env.FLIGHTPATH_RUN_ID
+      ? path.basename(process.env.FLIGHTPATH_RUN_ID)
+      : null;
+    const startPrefix = runId || safeSessionId;
     const notifyFile = path.join(
       notifyDir,
-      hookEvent === "SessionStart"
-        ? `${safeSessionId}-start.json`
-        : `${safeSessionId}-stop.json`
+      isStartEvent ? `${startPrefix}-start.json` : `${safeSessionId}-stop.json`
     );
 
     const notifyData = {
       timestamp: Date.now(),
       sessionId,
-      status: hookEvent === "SessionStart" ? "started" : "completed",
+      status: isStartEvent ? "started" : "completed",
       hookEvent,
       transcriptPath: hookInput.transcript_path,
       permissionMode: hookInput.permission_mode,

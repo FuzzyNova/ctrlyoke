@@ -88,11 +88,16 @@ function main() {
     // Normalize AfterAgent → "Stop" so NotificationMonitorBase works unchanged
     const isCompletion = hookEvent === "AfterAgent";
     const safeSessionId = path.basename(sessionId);
+    // For start events, use FLIGHTPATH_RUN_ID as the file prefix when set.
+    const runId = process.env.FLIGHTPATH_RUN_ID
+      ? path.basename(process.env.FLIGHTPATH_RUN_ID)
+      : null;
+    const startPrefix = runId || safeSessionId;
     const notifyFile = path.join(
       notifyDir,
       isCompletion
         ? `${safeSessionId}-stop.json`
-        : `${safeSessionId}-start.json`
+        : `${startPrefix}-start.json`
     );
 
     const notifyData = {

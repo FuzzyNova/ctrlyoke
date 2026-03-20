@@ -123,21 +123,28 @@ export interface INotificationMonitor {
    *
    * @param config Monitoring configuration
    * @param startTime Execution start time
+   * @param runId Per-run ID set via FLIGHTPATH_RUN_ID env var; when provided, the
+   *   hook writes {runId}-start.json and this method does a direct lookup instead
+   *   of a wildcard scan — eliminating the parallel-workflow race.
    * @param onCancel Cancellation callback
    * @returns NotificationResult with session ID in data.sessionId (if provided by CLI)
    */
   waitForSessionStart?(
     config: NotificationConfig,
     startTime: Date,
+    runId?: string,
     onCancel?: () => boolean
   ): Promise<NotificationResult>;
 
   /**
-   * Cleanup notification files after completion
+   * Cleanup notification files after completion or cancellation
    *
-   * Called after completion is detected to clean up any remaining notification files.
-   * Harnesses can override this to handle harness-specific cleanup
-   * (e.g., deleting the -start.json file that was left from session start)
+   * Called after every run (success, failure, or cancellation) to remove
+   * both the -start.json and -stop.json files for the session.
+   *
+   * The stop file may be orphaned when completion is detected via the log file
+   * before monitorForCompletion() polls for it (the monitor exits early via the
+   * cancel callback and never reads/deletes the stop file).
    *
    * @param sessionId Session ID
    * @param directory Notification directory
@@ -190,6 +197,20 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
 
   abstract getNotificationDirectory(workspaceRoot: string): string;
 
+  // ── Overridable defaults ──────────────────────────────────────────────────
+
+  /**
+   * Hook event names that indicate a session has started.
+   *
+   * Default: ["SessionStart"] — overridden by harnesses that use a different
+   * event as their reliable session-start signal (e.g., Qwen uses UserPromptSubmit
+   * because SessionStart fires fire-and-forget and may not complete before the
+   * session ends on fast prompts).
+   */
+  protected getStartHookEvents(): string[] {
+    return ["SessionStart"];
+  }
+
   // ── Concrete (shared two-file format) ────────────────────────────────────
 
   /**
@@ -228,17 +249,19 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
       try {
         if (sessionId) {
           const stopFile = path.join(config.directory, `${sessionId}-stop.json`);
-          const data = await this.readNotificationFile(stopFile);
+          if (await this.isFileNewerThan(stopFile, startTime)) {
+            const data = await this.readNotificationFile(stopFile);
 
-          if (data?.hookEvent === "Stop" && data?.status === "completed") {
-            Log.info(`✅ Completion detected via Stop hook (session: ${sessionId})`);
-            try {
-              fs.unlinkSync(stopFile);
-              Log.debug("🗑️ Cleaned up Stop notification file");
-            } catch (error) {
-              Log.debug(`Failed to cleanup Stop file: ${error}`);
+            if (data?.hookEvent === "Stop" && data?.status === "completed") {
+              Log.info(`✅ Completion detected via Stop hook (session: ${sessionId})`);
+              try {
+                fs.unlinkSync(stopFile);
+                Log.debug("🗑️ Cleaned up Stop notification file");
+              } catch (error) {
+                Log.debug(`Failed to cleanup Stop file: ${error}`);
+              }
+              return { completed: true, data };
             }
-            return { completed: true, data };
           }
         } else {
           const files = await this.findNotificationFiles(
@@ -281,19 +304,21 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
    * Wait for session start via {sessionId}-start.json with hookEvent: "SessionStart".
    *
    * Scans for any *-start.json file newer than startTime.
-   * Does NOT delete the file — cleanupNotificationFiles() handles it after completion.
+   * Does NOT delete the file — cleanupNotificationFiles() removes both start
+   * and stop files after the run completes or is cancelled.
    *
    * Returns the full notification data; callers use data.sessionId.
    */
   async waitForSessionStart(
     config: NotificationConfig,
     startTime: Date,
+    runId?: string,
     onCancel?: () => boolean
   ): Promise<NotificationResult> {
     const pollMs = config.pollMs || 100;
 
     Log.debug(
-      `[NotificationMonitorBase] Waiting for SessionStart notification (timeout: ${config.timeoutMs}ms)`
+      `[NotificationMonitorBase] Waiting for SessionStart notification (timeout: ${config.timeoutMs}ms, runId: ${runId ?? "none"})`
     );
 
     while (Date.now() - startTime.getTime() < config.timeoutMs) {
@@ -302,21 +327,49 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
         return { completed: false, error: "User cancelled execution" };
       }
 
-      const files = await this.findNotificationFiles(
-        config.directory,
-        /-start\.json$/
-      );
-
-      for (const file of files) {
+      if (runId) {
+        // Direct lookup — no wildcard scan, no parallel-workflow race.
+        // The hook wrote {runId}-start.json because FLIGHTPATH_RUN_ID was set in its env.
+        const file = path.join(config.directory, `${runId}-start.json`);
         if (await this.isFileNewerThan(file, startTime)) {
           const data = await this.readNotificationFile(file);
 
-          if (data?.hookEvent === "SessionStart" && data?.sessionId) {
+          if (this.getStartHookEvents().includes(data?.hookEvent) && data?.sessionId) {
             Log.debug(
-              `[NotificationMonitorBase] Found SessionStart notification: ${data.sessionId}`
+              `[NotificationMonitorBase] Found session-start notification (${data.hookEvent}): ${data.sessionId}`
             );
-            // NOTE: Do NOT delete — cleanupNotificationFiles() removes it after completion
+            // Delete immediately — this file belongs exclusively to this run
+            try {
+              fs.unlinkSync(file);
+              Log.debug("🗑️ Cleaned up run-scoped SessionStart notification file");
+            } catch (error) {
+              Log.debug(`Failed to cleanup SessionStart file: ${error}`);
+            }
             return { completed: true, data };
+          }
+        }
+      } else {
+        // Wildcard scan — legacy path for harnesses that don't set FLIGHTPATH_RUN_ID.
+        // isFileNewerThan guards against stale files but parallel-workflow safety
+        // depends on non-overlapping start times.
+        const files = await this.findNotificationFiles(
+          config.directory,
+          /-start\.json$/
+        );
+
+        for (const file of files) {
+          if (await this.isFileNewerThan(file, startTime)) {
+            const data = await this.readNotificationFile(file);
+
+            if (this.getStartHookEvents().includes(data?.hookEvent) && data?.sessionId) {
+              Log.debug(
+                `[NotificationMonitorBase] Found session-start notification (${data.hookEvent}): ${data.sessionId}`
+              );
+              // NOTE: Do NOT delete here — cleanupNotificationFiles() removes both
+              // start and stop files after the run, keeping parallel workflows safe
+              // (two concurrent workflows must each be able to read their own start file)
+              return { completed: true, data };
+            }
           }
         }
       }
@@ -332,20 +385,25 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
   }
 
   /**
-   * Cleanup the {sessionId}-start.json file after session completion.
-   * The stop file is already deleted by monitorForCompletion().
+   * Cleanup notification files after session completion or cancellation.
+   *
+   * Deletes both the start and stop files for the given session. The start file
+   * is normally deleted immediately by waitForSessionStart(), but may linger if
+   * the session aborted early. The stop file may be orphaned if completion was
+   * detected via the log file before monitorForCompletion() polled for it.
    */
   async cleanupNotificationFiles(
     sessionId: string,
     directory: string
   ): Promise<void> {
-    const startFile = path.join(directory, `${sessionId}-start.json`);
-    try {
-      fs.unlinkSync(startFile);
-      Log.debug("🗑️ Cleaned up SessionStart notification file");
-    } catch (error) {
-      // Ignore — file might not exist or already deleted
-      Log.debug(`SessionStart file cleanup skipped: ${error}`);
+    for (const suffix of ["-start.json", "-stop.json"]) {
+      const file = path.join(directory, `${sessionId}${suffix}`);
+      try {
+        fs.unlinkSync(file);
+        Log.debug(`🗑️ Cleaned up notification file: ${path.basename(file)}`);
+      } catch {
+        // Ignore — file may not exist (already deleted or never created)
+      }
     }
   }
 

@@ -4,6 +4,7 @@ import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
+import { retryWithBackoff } from "../../../utils/RetryUtils";
 import {
   UniversalCliOutput,
   CliEvent,
@@ -16,6 +17,9 @@ import {
   McpToolCallData,
   WebSearchData,
   ToolCall,
+  ThinkingBlock,
+  TextData,
+  UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES, HARNESS_IDS, OPERATION_STATUS } from "../../../types/DashboardConstants";
 import { CliEventMapper } from "../shared/CliEventMapper";
@@ -34,16 +38,27 @@ import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
  * - Sanitization: `C:\dev\FlightPath` → `c--dev-flightpath`
  *
  * **Event Types:**
- * 1. `system` - Session initialization with session_id
- * 2. `assistant` - Assistant messages with content blocks (thinking, text, tool_use)
- * 3. `user` - User messages and tool_result blocks
- * 4. `result` - Final statistics with usage, costs, permission_denials
+ * 1. `system`      - Telemetry/context; subtype `"at_command"` or `"ui_telemetry"`
+ * 2. `user`        - User message; `message.parts[].text`
+ * 3. `assistant`   - AI response; `message.parts[]` with text, thinking, and functionCall parts
+ * 4. `tool_result` - Tool execution result; `message.parts[].functionResponse`
  *
- * **Content Block Types (in assistant/user events):**
- * - `thinking` - Extended thinking (field: `thinking`)
- * - `text` - Response text (field: `text`)
- * - `tool_use` - Tool invocation (fields: `id`, `name`, `input`)
- * - `tool_result` - Tool execution result (in user events)
+ * **Message Part Types (Gemini-style, NOT Claude content blocks):**
+ * - `{ text }` - Response text
+ * - `{ text, thought: true }` - Internal thinking block
+ * - `{ functionCall: { id, name, args } }` - Tool invocation (in assistant events)
+ * - `{ functionResponse: { id, name, response } }` - Tool result (in tool_result events)
+ *
+ * **Usage Metadata (top-level on assistant events):**
+ * - `promptTokenCount` - Input tokens (includes cached)
+ * - `candidatesTokenCount` - Output text tokens
+ * - `thoughtsTokenCount` - Output thinking tokens
+ * - `cachedContentTokenCount` - Cache hit tokens
+ * - `totalTokenCount` - Total tokens for this call
+ *
+ * **Completion Detection:**
+ * No `stop_reason` or `result` event. A session is complete when an assistant
+ * event has no `functionCall` parts (pure text/thinking response).
  *
  * **Session Discovery:**
  * - Uses `findModifiedSessionLogs()` to get recently modified files
@@ -64,23 +79,67 @@ import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
  */
 
 /**
+ * A single part in a Qwen message's `parts` array.
+ *
+ * Qwen uses a Gemini-style message format where content is broken into typed
+ * parts rather than Claude-style typed content blocks.
+ */
+interface QwenMessagePart {
+  /** Plain text content. Present with `thought: true` for thinking blocks. */
+  text?: string;
+  /** When true, this text part is an internal thinking/reasoning block. */
+  thought?: boolean;
+  /** Tool invocation initiated by the assistant. */
+  functionCall?: {
+    id: string;
+    name: string;
+    args: Record<string, any>;
+  };
+  /** Tool execution result returned to the assistant. */
+  functionResponse?: {
+    id: string;
+    name: string;
+    response: {
+      output?: string;
+      error?: string;
+    };
+  };
+}
+
+/**
  * Provider-specific event type for internal loop bodies.
  *
- * Extends BaseCliEvent with typed properties for Qwen's log event structure.
+ * Extends BaseCliEvent with typed properties for Qwen's actual JSONL log format.
+ *
+ * **Actual event types (from log files):**
+ * - `system`      — session/tool telemetry; subtype is `"at_command"` or `"ui_telemetry"`
+ * - `user`        — initial user message; message.parts contains {text} blocks
+ * - `assistant`   — AI response; message.parts contains text, thinking, and functionCall blocks
+ * - `tool_result` — tool execution result; message.parts contains functionResponse blocks
  */
 interface QwenProviderEvent extends BaseCliEvent {
-  message?: Record<string, any>;
+  uuid?: string;
+  parentUuid?: string | null;
   sessionId?: string;
-  subtype?: string;
-  toolUseResult?: Record<string, any>;
-  data?: Record<string, any>;
-  result?: string;
-  usage?: Record<string, any>;
   model?: string;
-  is_error?: boolean;
-  errors?: string[];
-  permission_denials?: any[];
-  session_id?: string;
+  message?: {
+    role: string;
+    parts: QwenMessagePart[];
+  };
+  usageMetadata?: {
+    promptTokenCount: number;
+    candidatesTokenCount: number;
+    thoughtsTokenCount: number;
+    totalTokenCount: number;
+    cachedContentTokenCount: number;
+  };
+  subtype?: string;
+  systemPayload?: Record<string, any>;
+  toolCallResult?: {
+    callId: string;
+    status: "success" | "error";
+    resultDisplay?: string;
+  };
 }
 
 export class QwenLogParser extends BaseLogParser {
@@ -103,11 +162,13 @@ export class QwenLogParser extends BaseLogParser {
    * Extract complete response from Qwen log events
    *
    * Processes Qwen JSONL events and combines:
-   * - Text content from assistant messages
-   * - Tool calls (tool_use events)
-   * - Thinking blocks (extended thinking feature)
-   * - Tool results from user events
-   * - Metadata (session ID, usage stats, model info)
+   * - Text and thinking content from `assistant` event `message.parts`
+   * - Tool calls from `functionCall` parts in assistant events
+   * - Tool results from `tool_result` events (separate from user events)
+   * - Token usage from `usageMetadata` (Gemini-style field, not message.usage)
+   * - Cache hit tokens from `usageMetadata.cachedContentTokenCount`
+   * - Model from top-level `model` field (not message.model)
+   * - Session ID from top-level `sessionId` field (present on all event types)
    *
    * @param events - Array of parsed Qwen log events
    * @returns UniversalCliOutput - Standardized response object
@@ -117,120 +178,156 @@ export class QwenLogParser extends BaseLogParser {
     let sessionId: string | undefined;
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
+    let totalCachedTokens = 0;
+    let lastAssistantUsage: QwenProviderEvent["usageMetadata"] | undefined;
     let model: string | undefined;
+    // Maps callId → full file path so tool_result events can get the path from the
+    // original functionCall args (resultDisplay.fileName is basename only)
+    const callPathMap = new Map<string, string>();
 
     for (const event of events as QwenProviderEvent[]) {
-      // Extract session ID from any event
+      // Extract session ID from top-level field (present on all event types)
       if (event.sessionId && !sessionId) {
         sessionId = event.sessionId;
       }
 
-      // Get timestamp for events
       const timestamp = event.timestamp
         ? new Date(event.timestamp).getTime()
         : Date.now();
 
-      // Process assistant messages
-      if (event.type === "assistant" && event.message?.content) {
-        // Process content blocks in order they appear
-        for (const contentBlock of event.message.content) {
-          // THINKING - Extract thinking text
-          if (contentBlock.type === "thinking" && contentBlock.thinking) {
+      // ASSISTANT — process parts array (text, thinking, functionCall)
+      if (event.type === "assistant" && event.message?.parts) {
+        for (const part of event.message.parts) {
+          // THINKING — text part with thought: true
+          if (part.text && part.thought === true) {
             outputEvents.push({
               type: CLI_EVENT_TYPES.THINKING,
               timestamp,
               data: {
-                text: contentBlock.thinking,
+                text: part.text,
                 label: "Extended Thinking",
-              },
+              } as ThinkingBlock,
             });
           }
 
-          // TEXT - Extract text content
-          if (contentBlock.type === "text" && contentBlock.text) {
+          // TEXT — plain text response (no thought flag)
+          if (part.text && part.thought !== true) {
             outputEvents.push({
               type: CLI_EVENT_TYPES.TEXT,
               timestamp,
-              data: {
-                text: contentBlock.text,
-              },
+              data: { text: part.text } as TextData,
             });
           }
 
-          // TOOL_USE - Map to semantic event types
-          if (contentBlock.type === "tool_use") {
+          // TOOL_USE — functionCall block
+          if (part.functionCall) {
+            const args = part.functionCall.args || {};
+            // Track file path for later correlation with tool_result resultDisplay
+            const fp = (args.absolute_path ?? args.file_path ?? args.path) as string | undefined;
+            if (fp) {
+              callPathMap.set(part.functionCall.id, fp);
+            }
             outputEvents.push(
               this.buildToolInitiatedEvent(
-                contentBlock.name,
-                contentBlock.input || {},
-                contentBlock.id,
+                part.functionCall.name,
+                args,
+                part.functionCall.id,
                 timestamp
               )
             );
           }
         }
 
-        // Extract usage stats
-        if (event.message.usage) {
-          const usage = event.message.usage;
-          totalInputTokens += usage.input_tokens || 0;
-          totalOutputTokens += usage.output_tokens || 0;
+        // Token usage is on usageMetadata at top level of assistant event
+        if (event.usageMetadata) {
+          const u = event.usageMetadata;
+          totalInputTokens += u.promptTokenCount || 0;
+          // Output = candidate tokens + thinking tokens (both count toward billing)
+          totalOutputTokens += (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0);
+          totalCachedTokens += u.cachedContentTokenCount || 0;
+          lastAssistantUsage = u;
         }
 
-        // Extract model info
-        if (event.message.model && !model) {
-          model = event.message.model;
+        // Model is a top-level field on assistant events
+        if (event.model && !model) {
+          model = event.model;
         }
       }
 
-      // Process user events for tool results
-      if (event.type === "user" && Array.isArray(event.message?.content)) {
-        for (const contentBlock of event.message.content) {
-          if (contentBlock.type === "tool_result") {
+      // TOOL_RESULT — separate event type (not nested in user events)
+      if (event.type === "tool_result" && event.message?.parts) {
+        for (const part of event.message.parts) {
+          if (part.functionResponse) {
+            const resp = part.functionResponse.response;
+            const isError = !!resp.error;
             outputEvents.push({
               type: CLI_EVENT_TYPES.TOOL_RESULT,
               timestamp,
               data: {
-                toolCallId: contentBlock.tool_call_id,
+                toolCallId: part.functionResponse.id,
                 result: {
-                  success: !contentBlock.is_error,
-                  output: contentBlock.content,
-                  error: contentBlock.is_error ? contentBlock.content : undefined,
+                  success: !isError,
+                  output: resp.output,
+                  error: isError ? resp.error : undefined,
                 },
               },
             });
           }
         }
-      }
 
-      // Process result event for final metadata
-      if (event.type === "result") {
-        if (event.session_id) {
-          sessionId = event.session_id;
-        }
-        if (event.usage) {
-          totalInputTokens = event.usage.input_tokens || 0;
-          totalOutputTokens = event.usage.output_tokens || 0;
-        }
-        if (event.model && !model) {
-          model = event.model;
-        }
-        if (event.permission_denials && event.permission_denials.length > 0) {
-          Log.warn(
-            `[QwenLogParser] Permission denials: ${JSON.stringify(event.permission_denials)}`
-          );
+        // Emit COMPLETED semantic events from structured result metadata.
+        // toolCallResult.resultDisplay provides fileDiff, originalContent, and newContent
+        // for edit/write operations — richer than what's in functionResponse.response.
+        const tcr = event.toolCallResult;
+        if (tcr && tcr.resultDisplay && typeof tcr.resultDisplay === "object") {
+          const rd = tcr.resultDisplay as Record<string, any>;
+          const toolName = event.message.parts[0]?.functionResponse?.name;
+          const fullPath = callPathMap.get(tcr.callId) ?? rd.fileName ?? "unknown";
+          const succeeded = tcr.status === "success";
+
+          if (toolName === "edit" && rd.fileDiff) {
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.FILE_EDIT,
+              timestamp,
+              data: {
+                path: fullPath,
+                oldContent: rd.originalContent || undefined,
+                newContent: rd.newContent || undefined,
+                structuredPatch: this.parseUnifiedDiff(rd.fileDiff as string),
+                status: OPERATION_STATUS.COMPLETED,
+                success: succeeded,
+              } as FileEditData,
+            });
+          } else if (toolName === "write_file" && rd.newContent !== undefined) {
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.FILE_WRITE,
+              timestamp,
+              data: {
+                path: fullPath,
+                content: rd.newContent as string,
+                status: OPERATION_STATUS.COMPLETED,
+                success: succeeded,
+              } as FileWriteData,
+            });
+          }
         }
       }
     }
 
-    // Build token usage
+    // Context window state = last assistant turn's prompt token count.
+    // This represents current occupancy, not cumulative billing totals.
+    const contextWindowUsedTokens = lastAssistantUsage
+      ? lastAssistantUsage.promptTokenCount || 0
+      : undefined;
+
     const tokenUsage: TokenUsage | undefined =
       totalInputTokens > 0 || totalOutputTokens > 0
         ? {
             inputTokens: totalInputTokens,
             outputTokens: totalOutputTokens,
             totalTokens: totalInputTokens + totalOutputTokens,
-            contextWindowUsedTokens: totalInputTokens + totalOutputTokens,
+            cachedInputTokens: totalCachedTokens > 0 ? totalCachedTokens : undefined,
+            contextWindowUsedTokens,
             contextWindowSize: getQwenContextWindowSize(model ?? ""),
           }
         : undefined;
@@ -242,6 +339,9 @@ export class QwenLogParser extends BaseLogParser {
         model,
         harness: HARNESS_IDS.QWEN_CLI,
         usage: tokenUsage,
+        ...(totalCachedTokens > 0
+          ? { cacheTokens: { read: totalCachedTokens } }
+          : {}),
       },
     };
   }
@@ -265,7 +365,12 @@ export class QwenLogParser extends BaseLogParser {
   ): CliEvent {
     // Use CliEventMapper for consistent tool classification
     const classification = CliEventMapper.classifyTool(toolName);
-    const path = (toolInput.path ?? toolInput.file_path) as string | undefined;
+    // Qwen tools use: absolute_path (read_file), file_path (edit, write_file), path
+    const filePath = (
+      toolInput.absolute_path ??
+      toolInput.file_path ??
+      toolInput.path
+    ) as string | undefined;
 
     switch (classification.type) {
       case CLI_EVENT_TYPES.BASH_COMMAND:
@@ -288,7 +393,7 @@ export class QwenLogParser extends BaseLogParser {
           type: CLI_EVENT_TYPES.FILE_READ,
           timestamp,
           data: {
-            path: path || "unknown",
+            path: filePath || "unknown",
             status: OPERATION_STATUS.INITIATED,
           } as FileReadData,
         };
@@ -298,7 +403,7 @@ export class QwenLogParser extends BaseLogParser {
           type: CLI_EVENT_TYPES.FILE_WRITE,
           timestamp,
           data: {
-            path: path || "unknown",
+            path: filePath || "unknown",
             content:
               ((toolInput.content ?? toolInput.file_text) as string | undefined) ||
               "",
@@ -325,7 +430,7 @@ export class QwenLogParser extends BaseLogParser {
           type: CLI_EVENT_TYPES.FILE_EDIT,
           timestamp,
           data: {
-            path: path || "unknown",
+            path: filePath || "unknown",
             oldContent,
             newContent,
             status: OPERATION_STATUS.INITIATED,
@@ -338,7 +443,7 @@ export class QwenLogParser extends BaseLogParser {
           type: CLI_EVENT_TYPES.FILE_DELETE,
           timestamp,
           data: {
-            path: path || "unknown",
+            path: filePath || "unknown",
           } as FileDeleteData,
         };
 
@@ -385,30 +490,24 @@ export class QwenLogParser extends BaseLogParser {
   /**
    * Check if event indicates completion
    *
-   * Qwen events are complete when:
-   * - Event type is "result" (final statistics)
-   * - OR assistant event with stop_reason (not null/undefined)
+   * Qwen has no `stop_reason` field or `result` event type. A session is
+   * complete when an `assistant` event contains no `functionCall` parts —
+   * if it had tool calls, Qwen would continue with a `tool_result` event
+   * and another API round.
    *
    * @param event - Single parsed Qwen log event
    * @returns True if event signals completion
    */
   isComplete(event: BaseCliEvent): boolean {
-    // Result event indicates final completion
-    if (event.type === "result") {
-      return true;
+    // Qwen has no stop_reason or result event. An assistant event is the final
+    // response when it contains no functionCall parts — if it did have tool calls,
+    // Qwen would have continued with tool_result events and another API round.
+    if (event.type !== "assistant") {
+      return false;
     }
 
-    // Assistant event with stop_reason indicates turn completion
-    if (event.type === "assistant") {
-      const e = event as QwenProviderEvent;
-      const stopReason = e.message?.stop_reason;
-      // stop_reason null/undefined means still streaming
-      if (stopReason !== null && stopReason !== undefined) {
-        return true;
-      }
-    }
-
-    return false;
+    const parts = (event as QwenProviderEvent).message?.parts ?? [];
+    return !parts.some((p) => p.functionCall !== undefined);
   }
 
   /**
@@ -427,7 +526,6 @@ export class QwenLogParser extends BaseLogParser {
     sessionId?: string
   ): Promise<string | null> {
     try {
-      // Get Qwen project directory for current workspace
       const projectDir = this.getQwenProjectDirectory();
       if (!projectDir) {
         Log.debug("[QwenLogParser] No Qwen project directory found");
@@ -436,7 +534,6 @@ export class QwenLogParser extends BaseLogParser {
 
       const chatsDir = path.join(projectDir, "chats");
 
-      // Check if chats directory exists
       if (!fs.existsSync(chatsDir)) {
         Log.debug("[QwenLogParser] No chats directory found");
         return null;
@@ -444,59 +541,67 @@ export class QwenLogParser extends BaseLogParser {
 
       Log.debug(`[QwenLogParser] Searching for session logs in: ${chatsDir}`);
 
-      // FAST PATH: If session ID provided, construct direct file path
+      // FAST PATH: session ID → direct file lookup with retry
+      // (Qwen writes the log file within ~50-100ms of the hook firing)
       if (sessionId) {
         const logPath = path.join(chatsDir, `${sessionId}.jsonl`);
 
-        if (fs.existsSync(logPath)) {
-          const stats = fs.statSync(logPath);
-          if (stats.mtime >= startTime) {
+        const result = await retryWithBackoff(async () => {
+          if (fs.existsSync(logPath)) {
+            const stats = fs.statSync(logPath);
+            if (stats.mtime >= startTime) {
+              return logPath;
+            }
             Log.debug(
-              `[QwenLogParser] Found session log via session ID: ${logPath}`
-            );
-            return logPath;
-          } else {
-            Log.debug(
-              `[QwenLogParser] Session log exists but not recent (mtime: ${stats.mtime})`
+              `[QwenLogParser] Session log exists but not yet updated (mtime: ${stats.mtime.toISOString()}, startTime: ${startTime.toISOString()}), will retry...`
             );
           }
+          return null;
+        }, {
+          onRetry: (attempt, max, delay) => {
+            if (attempt > 1) {
+              Log.debug(
+                `[QwenLogParser] Session log not ready (attempt ${attempt}/${max}), retrying in ${delay}ms...`
+              );
+            }
+          },
+        });
+
+        if (result) {
+          Log.debug(`[QwenLogParser] Found session log via session ID: ${result}`);
+          return result;
+        } else {
+          Log.debug(`[QwenLogParser] Session log file not found after retries: ${logPath}`);
         }
       }
 
-      // FALLBACK: Get candidate log files modified after startTime
+      // FALLBACK: scan recently modified files and match by prompt text
       const candidates = this.findModifiedSessionLogs(chatsDir, startTime);
       if (candidates.length === 0) {
         Log.debug("[QwenLogParser] No candidate log files found");
         return null;
       }
 
-      Log.debug(
-        `[QwenLogParser] Found ${candidates.length} candidate log files`
-      );
+      Log.debug(`[QwenLogParser] Found ${candidates.length} candidate log files`);
 
-      // Prepare prompt text for matching (first 100 chars)
       const promptPrefix = this.normalizePromptForMatching(
         promptText.substring(0, 100)
       );
 
-      // Check each candidate for matching prompt text
       for (const candidatePath of candidates) {
         try {
-          // Read first 10 events from log file
           const events = await this.readFirstNJsonlEvents(candidatePath, 10);
 
-          // Look for user event with matching prompt text
+          // Qwen user events have message.parts[].text (Gemini-style)
           for (const event of events as QwenProviderEvent[]) {
-            if (event.type === "user" && event.message?.content) {
-              for (const contentBlock of event.message.content) {
-                if (contentBlock.type === "text" && contentBlock.text) {
+            if (event.type === "user" && event.message?.parts) {
+              for (const part of event.message.parts) {
+                if (part.text) {
                   const logPromptPrefix = this.normalizePromptForMatching(
-                    contentBlock.text.substring(0, 100)
+                    part.text.substring(0, 100)
                   );
                   if (logPromptPrefix === promptPrefix) {
-                    Log.debug(
-                      `[QwenLogParser] Found matching session log: ${candidatePath}`
-                    );
+                    Log.debug(`[QwenLogParser] Found matching session log: ${candidatePath}`);
                     return candidatePath;
                   }
                 }
@@ -504,11 +609,7 @@ export class QwenLogParser extends BaseLogParser {
             }
           }
         } catch (error) {
-          // Skip files that can't be read or parsed
-          Log.debug(
-            `[QwenLogParser] Error reading candidate ${candidatePath}:`,
-            error
-          );
+          Log.debug(`[QwenLogParser] Error reading candidate ${candidatePath}:`, error);
           continue;
         }
       }
@@ -547,11 +648,11 @@ export class QwenLogParser extends BaseLogParser {
   extractContentFromEvent(event: BaseCliEvent): string | undefined {
     const e = event as QwenProviderEvent;
 
-    // Qwen assistant: Extract text from content array
-    if (e.type === "assistant" && e.message?.content) {
-      const textContent = e.message.content
-        .filter((c: any) => c.type === "text")
-        .map((c: any) => c.text)
+    // Qwen assistant: extract non-thinking text parts from message.parts
+    if (e.type === "assistant" && e.message?.parts) {
+      const textContent = e.message.parts
+        .filter((p) => p.text !== undefined && p.thought !== true)
+        .map((p) => p.text as string)
         .join("");
       return textContent || undefined;
     }
@@ -562,11 +663,67 @@ export class QwenLogParser extends BaseLogParser {
   /**
    * Format Qwen metadata into statistics string
    *
-   * @param metadata - Metadata from extractResponse() (sessionId, model, usage)
+   * Extends common parts (session, model, tokens) with Qwen-specific fields:
+   * - Cache read tokens (cachedContentTokenCount from usageMetadata)
+   *
+   * @param metadata - Metadata from extractResponse() (sessionId, model, usage, cacheTokens)
    * @returns Formatted statistics string
    */
   formatStatistics(metadata: BaseCliEvent): string {
-    return this.buildCommonStatisticsParts(metadata).join(" | ");
+    const parts = this.buildCommonStatisticsParts(metadata);
+    const meta = metadata as Record<string, any>;
+
+    // Cache read tokens (Qwen reports cache hits via cachedContentTokenCount)
+    if (meta.cacheTokens?.read > 0) {
+      parts.push(`Cache: ${meta.cacheTokens.read} read`);
+    }
+
+    return parts.join(" | ");
+  }
+
+  /**
+   * Parse a unified diff string into structured hunk objects for UI rendering.
+   *
+   * Qwen provides `toolCallResult.resultDisplay.fileDiff` as a standard unified
+   * diff string. This converts it to `UnifiedDiffHunk[]` so the dashboard can
+   * render line-numbered diffs exactly as it does for Claude's `structuredPatch`.
+   *
+   * @param diffStr - Unified diff string (e.g. from `fileDiff` in resultDisplay)
+   * @returns Array of parsed hunks, empty if no valid hunk headers found
+   */
+  private parseUnifiedDiff(diffStr: string): UnifiedDiffHunk[] {
+    const hunks: UnifiedDiffHunk[] = [];
+    const lines = diffStr.split("\n");
+    let current: UnifiedDiffHunk | null = null;
+    // Matches: @@ -oldStart[,oldLines] +newStart[,newLines] @@
+    const hunkHeader = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+
+    for (const line of lines) {
+      const match = hunkHeader.exec(line);
+      if (match) {
+        if (current) {
+          hunks.push(current);
+        }
+        current = {
+          oldStart: parseInt(match[1], 10),
+          oldLines: match[2] !== undefined ? parseInt(match[2], 10) : 1,
+          newStart: parseInt(match[3], 10),
+          newLines: match[4] !== undefined ? parseInt(match[4], 10) : 1,
+          lines: [],
+        };
+        continue;
+      }
+
+      if (current && (line.startsWith("+") || line.startsWith("-") || line.startsWith(" "))) {
+        current.lines.push(line);
+      }
+    }
+
+    if (current) {
+      hunks.push(current);
+    }
+
+    return hunks;
   }
 
   /**
@@ -578,9 +735,10 @@ export class QwenLogParser extends BaseLogParser {
    *
    * @remarks
    * **Path Sanitization:**
-   * - Replaces path separators and colons with dashes
    * - Lowercases the path
-   * - Example: `/Users/name/dev/FlightPath` → `--users-name-dev-flightpath`
+   * - Replaces all path separators (/ \ :) with dashes
+   * - Strips any remaining non-alphanumeric, non-dash characters
+   * - Example: `/home/user/dev/FlightPath` → `-home-user-dev-flightpath`
    * - Windows: `C:\dev\FlightPath` → `c--dev-flightpath`
    */
   private getQwenProjectDirectory(): string | null {
@@ -591,10 +749,12 @@ export class QwenLogParser extends BaseLogParser {
       return null;
     }
 
-    // Sanitize workspace path for Qwen's naming convention
+    // Sanitize workspace path for Qwen's naming convention.
+    // All path separators (/ \ :) become dashes; other non-alphanumeric chars are stripped.
+    // Example: /home/user/dev/FlightPath → -home-user-dev-flightpath
     const sanitizedPath = workspacePath
       .toLowerCase()
-      .replace(/[:\\]/g, "-")
+      .replace(/[:\\/]/g, "-")
       .replace(/[^a-z0-9-]/g, "");
 
     const baseDir = path.join(os.homedir(), ".qwen", "projects");
