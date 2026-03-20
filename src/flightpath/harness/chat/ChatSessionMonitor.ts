@@ -52,7 +52,6 @@ interface DirectoryCache {
  * - Cache automatically cleared on VS Code restart
  */
 export class ChatSessionMonitor {
-  private context: vscode.ExtensionContext;
   private sessionFilePath: string | null = null;
   private requestCountBeforeSend: number = 0;
   private promptText: string = ""; // Store prompt text for session matching
@@ -66,8 +65,7 @@ export class ChatSessionMonitor {
   private dirCache: DirectoryCache | null = null;
   private static readonly DIR_CACHE_TTL_MS = 2000; // Re-scan directories every 2s max
 
-  constructor(context: vscode.ExtensionContext) {
-    this.context = context;
+  constructor(_context: vscode.ExtensionContext) {
   }
 
   /**
@@ -425,21 +423,6 @@ export class ChatSessionMonitor {
     return sessionFiles;
   }
 
-  /**
-   * Find the most recently modified session file
-   */
-  private async findMostRecentSessionFile(): Promise<string | null> {
-    const allFiles = await this.findAllSessionFiles();
-
-    if (allFiles.length === 0) {
-      return null;
-    }
-
-    // Sort by modification time (most recent first)
-    allFiles.sort((a, b) => b.mtime - a.mtime);
-
-    return allFiles[0].path;
-  }
 
   /**
    * Find session file containing our specific prompt text

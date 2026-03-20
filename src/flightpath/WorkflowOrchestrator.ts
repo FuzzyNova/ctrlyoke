@@ -4,7 +4,6 @@ import * as path from "path";
 import { HarnessIntegration, HarnessStatus } from "./HarnessIntegration";
 import { CopilotChatIntegration } from "./harness/chat/CopilotChatIntegration";
 import { CliIntegration } from "./harness/CliIntegration";
-import { IntegrationFactory } from "./IntegrationFactory";
 import { VsCodeIntegrationFactory } from "./VsCodeIntegrationFactory";
 import { WorkflowInstance } from "./WorkflowInstance";
 import { PromptQueue } from "./PromptQueue";

@@ -5,7 +5,6 @@ import {
   WorkflowExecutionContext,
 } from "../../flightpath/WorkflowExecutor";
 import { PromptQueue } from "../../flightpath/PromptQueue";
-import { PromptFileParser } from "../../flightpath/PromptFileParser";
 import { EndConditionEvaluator } from "../../flightpath/EndConditionEvaluator";
 import { EndConditionHandler } from "../../flightpath/EndConditionHandler";
 import { HarnessIntegration } from "../../flightpath/HarnessIntegration";
@@ -124,7 +123,6 @@ function makeContext(
 
 function makeExecutor(queue: PromptQueue): WorkflowExecutor {
   const platform = new MockPlatform();
-  const parser = new PromptFileParser(platform);
   const evaluator = new EndConditionEvaluator(platform);
   const handler = new EndConditionHandler(
     evaluator,
@@ -132,7 +130,7 @@ function makeExecutor(queue: PromptQueue): WorkflowExecutor {
     () => undefined,
     platform
   );
-  return new WorkflowExecutor(queue, parser, handler, evaluator, platform);
+  return new WorkflowExecutor(queue, handler, evaluator, platform);
 }
 
 suite("WorkflowExecutor finalPrompt phase 2", () => {

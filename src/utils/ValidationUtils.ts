@@ -1,8 +1,6 @@
-import Ajv, { JSONSchemaType, ValidateFunction } from "ajv";
+import Ajv, { JSONSchemaType } from "ajv";
 import {
-  PromptFile,
   PromptItem,
-  EndCondition,
   Harness,
 } from "../types/FlightPathTypes";
 import { Log } from "./Log";

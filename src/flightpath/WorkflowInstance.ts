@@ -240,7 +240,6 @@ export class WorkflowInstance {
     );
     this.workflowExecutor = new WorkflowExecutor(
       this.promptQueue,
-      this.promptFileParser,
       this.endConditionHandler,
       this.endConditionEvaluator,
       this.platform
@@ -1070,8 +1069,6 @@ export class WorkflowInstance {
 
       if (currentSize === 0) {
         Log.debug("Empty workflow, creating new workflow in IDLE state");
-        const displayName =
-          queueState.workflowName || PromptQueue.extractWorkflowName(filePath);
         const workflowType = queueState.workflowName
           ? `workflow "${queueState.workflowName}"`
           : "new workflow";

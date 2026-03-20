@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { ConfigurationUtils, PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
+import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
 /**
  * Manifest structure for agents

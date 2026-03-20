@@ -6,7 +6,6 @@ import {
 } from "../../utils/ConfigurationUtils";
 import {
   WorkflowOutputHistory,
-  StepOutput,
   OutputExecutionTarget,
   OutputTimelineEntry,
   WorkspaceSnapshot,
@@ -37,9 +36,9 @@ export class OutputHistoryManager {
   /** Absolute path to .flightpath/.history/ */
   readonly historyBaseDir: string;
 
-  constructor(private workspaceFolderPath: string) {
+  constructor(private _workspaceFolderPath: string) {
     this.historyBaseDir = path.join(
-      workspaceFolderPath,
+      this._workspaceFolderPath,
       PATH_CONSTANTS.FLIGHTPATH_DIR,
       PATH_CONSTANTS.HISTORY_DIR
     );

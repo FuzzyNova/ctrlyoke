@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
 import { Harness } from "../types/FlightPathTypes";
 import { HarnessIntegration } from "./HarnessIntegration";

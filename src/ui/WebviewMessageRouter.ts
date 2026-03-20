@@ -27,7 +27,6 @@ import type {
   RedoPromptChangesMessage,
   UndoRecord,
 } from "../types/WebviewMessageTypes";
-import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 
 /**

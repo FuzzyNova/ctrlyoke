@@ -38,9 +38,9 @@ export class OpenCodeNotificationMonitor
    * written to .opencode/plugin/ before execution, not CLI arguments.
    */
   buildHookConfig(
-    scriptPath: string,
-    notifyDir: string,
-    workspaceRoot: string
+    _scriptPath: string,
+    _notifyDir: string,
+    _workspaceRoot: string
   ): HookConfig {
     return { type: "none" };
   }

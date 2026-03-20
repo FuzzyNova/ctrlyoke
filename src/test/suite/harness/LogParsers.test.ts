@@ -11,7 +11,6 @@ import {
   ToolCall,
   ThinkingBlock,
   TextData,
-  ToolResultData,
   FileWriteData,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";

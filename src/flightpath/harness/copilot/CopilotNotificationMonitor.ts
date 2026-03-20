@@ -1,4 +1,3 @@
-import * as path from "path";
 import {
   INotificationMonitor,
   HookConfig,
@@ -38,7 +37,7 @@ export class CopilotNotificationMonitor
   buildHookConfig(
     scriptPath: string,
     notifyDir: string,
-    workspaceRoot: string
+    _workspaceRoot: string
   ): HookConfig {
     // Normalize Windows drive letter to lowercase for stable output (VS Code returns
     // uppercase from GUI launches, lowercase from CLI launches — normalize to avoid

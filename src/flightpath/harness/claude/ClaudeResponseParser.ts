@@ -524,31 +524,6 @@ export class ClaudeResponseParser
   }
 
   /**
-   * Extract usage statistics from Claude result JSON
-   *
-   * @param json Result object with usage field
-   * @returns Normalized usage statistics
-   */
-  private extractUsageStats(json: any):
-    | {
-        input_tokens: number;
-        output_tokens: number;
-        total_tokens?: number;
-      }
-    | undefined {
-    if (!json.usage) {
-      return undefined;
-    }
-
-    const { input_tokens, output_tokens } = json.usage;
-    return {
-      input_tokens,
-      output_tokens,
-      total_tokens: json.usage.total_tokens || input_tokens + output_tokens,
-    };
-  }
-
-  /**
    * Extract extended usage statistics with cache tokens and service tier
    *
    * Extracts additional fields:

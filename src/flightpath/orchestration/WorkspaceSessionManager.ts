@@ -21,7 +21,7 @@ import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 export class WorkspaceSessionManager {
   constructor(
     private promptFileParser: PromptFileParser,
-    private readonly platform: PlatformAdapter
+    _platform: PlatformAdapter
   ) {}
 
   /**

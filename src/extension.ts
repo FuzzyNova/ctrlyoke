@@ -39,13 +39,13 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
     const queueStatusTool = vscode.lm.registerTool("flightpath_queue_status", {
       prepareInvocation: async (
         _parameters: unknown,
-        token: vscode.CancellationToken
+        _token: vscode.CancellationToken
       ) => {
         return {
           invocationMessage: "Getting FlightPath queue status...",
         };
       },
-      invoke: async (_parameters: unknown, token: vscode.CancellationToken) => {
+      invoke: async (_parameters: unknown, _token: vscode.CancellationToken) => {
         try {
           const promptQueue = workflowOrchestrator.getActivePromptQueue();
 
@@ -73,13 +73,13 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
     const queueAppendTool = vscode.lm.registerTool("flightpath_append_queue", {
       prepareInvocation: async (
         _parameters: unknown,
-        token: vscode.CancellationToken
+        _token: vscode.CancellationToken
       ) => {
         return {
           invocationMessage: "Appending prompts to FlightPath queue...",
         };
       },
-      invoke: async (parameters: unknown, token: vscode.CancellationToken) => {
+      invoke: async (parameters: unknown, _token: vscode.CancellationToken) => {
         try {
           const promptQueue = workflowOrchestrator.getActivePromptQueue();
 

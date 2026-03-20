@@ -56,7 +56,11 @@ class TestHarness extends HarnessIntegration {
     promptText: string,
     contextItems: { index: number; name?: string; prompt?: string; text: string; type?: "finalPrompt" }[]
   ) {
-    return (this as any).insertPriorContext(promptText, contextItems);
+    if (contextItems.length === 0) {
+      return promptText;
+    }
+    const xml = (this as any).buildPriorContextXml(contextItems);
+    return `${xml}\n\n${promptText}`;
   }
 }
 

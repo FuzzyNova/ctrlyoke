@@ -1,5 +1,4 @@
 import * as assert from "assert";
-import * as vscode from "vscode";
 import { PromptFileParser } from "../flightpath/PromptFileParser";
 import { PromptQueue } from "../flightpath/PromptQueue";
 import { ValidationUtils } from "../utils/ValidationUtils";

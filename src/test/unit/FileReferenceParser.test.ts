@@ -6,7 +6,6 @@ import {
   parseSymbolReferences,
   parseDirectoryReferences,
   parseAllFileReferences,
-  FileReference,
 } from "../../utils/FileReferenceParser";
 
 suite("FileReferenceParser", () => {

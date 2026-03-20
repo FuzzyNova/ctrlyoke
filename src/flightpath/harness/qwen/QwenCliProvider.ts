@@ -359,7 +359,7 @@ export class QwenCliProvider implements ICliProvider {
    * @returns Complete command string
    */
   buildInteractiveTuiCommand(baseArgs: string[], promptText: string): string {
-    return `${this.config.name} "${promptText.replace(/"/g, '\\"')}" ${baseArgs.join(" ")}`;
+    return `${this.config.name} -i "${promptText.replace(/"/g, '\\"')}" ${baseArgs.join(" ")}`;
   }
 
   /**

@@ -52,7 +52,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
    */
   provideDocumentLinks(
     document: vscode.TextDocument,
-    token: vscode.CancellationToken
+    _token: vscode.CancellationToken
   ): vscode.DocumentLink[] | undefined {
     // Only provide links for prompt files
     if (!this.isPromptFile(document)) {

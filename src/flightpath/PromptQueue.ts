@@ -81,7 +81,6 @@ export class PromptQueue {
   private workflowFile?: PromptFile; // Store complete workflow file with workflow-level properties
   private finalPromptRuntime?: FinalPromptRuntimeState;
   private onStateChanged = new TypedEmitter<QueueState>();
-  private isPaused: boolean = false;
   private currentRetryCount: number = 0; // Track retry attempts for current prompt
   private readonly workingFileManager: WorkingFileManager;
 
@@ -373,7 +372,6 @@ export class PromptQueue {
     }
 
     this.state.status = EXECUTION_STATES.RUNNING;
-    this.isPaused = false;
     this.state.stopped = false; // Clear stopped flag when starting
     this.emitStateChange();
 
@@ -391,7 +389,6 @@ export class PromptQueue {
       return;
     }
 
-    this.isPaused = true;
     this.state.status = EXECUTION_STATES.PAUSED;
     this.state.pausedTime = Date.now(); // Record when paused
 
@@ -442,7 +439,6 @@ export class PromptQueue {
       }
     }
 
-    this.isPaused = false;
     this.state.stopped = false; // Clear stopped flag when resuming
     this.state.status = EXECUTION_STATES.RUNNING;
     this.emitStateChange();
@@ -458,7 +454,6 @@ export class PromptQueue {
    * Sets state to CANCELLING - call confirmedStopped() once process actually exits
    */
   stop(): void {
-    this.isPaused = false;
     this.state.status = EXECUTION_STATES.CANCELLING; // Cancelling, not stopped yet
     this.state.stopped = true; // Set stopped flag for executor loop
 
@@ -550,7 +545,6 @@ export class PromptQueue {
    * Updates working file to clear completedPrompts array
    */
   async restart(): Promise<void> {
-    this.isPaused = false;
     this.state.currentIndex = 0;
     this.state.status = EXECUTION_STATES.IDLE;
     this.state.stopped = false;
@@ -673,7 +667,6 @@ export class PromptQueue {
       return;
     }
 
-    const currentPrompt = this.state.prompts[this.state.currentIndex];
     const currentResult = this.state.results[this.state.currentIndex];
 
     currentResult.status = STEP_STATUS.COMPLETED;
@@ -1249,8 +1242,7 @@ export class PromptQueue {
           `appendPrompts: Setting to STOPPED (appended to COMPLETED queue, ${this.state.completedIndices.size} prompts previously completed, user can Resume)`
         );
         this.state.status = EXECUTION_STATES.STOPPED;
-        this.isPaused = false;
-        this.state.stopped = true; // Mark as stopped so Resume will work
+            this.state.stopped = true; // Mark as stopped so Resume will work
       } else {
         Log.info(
           `appendPrompts: NOT changing state (current: ${previousStatus}, willRunImmediately: ${willRunImmediately}, completed count: ${this.state.completedIndices.size})`

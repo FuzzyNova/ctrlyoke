@@ -11,7 +11,6 @@ import { PromptQueue } from "./PromptQueue";
 import {
   PromptItem,
   EndCondition,
-  EXECUTION_STATES,
 } from "../types/FlightPathTypes";
 import {
   QUEUE_POSITION,
@@ -19,7 +18,6 @@ import {
   type QueuePosition,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
-import * as vscode from "vscode";
 
 /**
  * Queue status response (single source for both MCP and Language Model Tools)

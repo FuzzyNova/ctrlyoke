@@ -12,7 +12,6 @@ import {
   CliEvent,
   TextData,
   ToolResultData,
-  TokenUsage,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
 import { CODEX_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
@@ -20,21 +19,6 @@ import { CODEX_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
 // ============================================================================
 // Codex Log Event Payload Types
 // ============================================================================
-
-/**
- * Base structure for all Codex log events
- */
-interface CodexLogEvent {
-  timestamp: string;
-  type: "session_meta" | "turn_context" | "event_msg" | "response_item";
-  payload: CodexEventPayload;
-}
-
-type CodexEventPayload =
-  | CodexSessionMetaPayload
-  | CodexTurnContextPayload
-  | CodexEventMsgPayload
-  | CodexResponseItemPayload;
 
 /**
  * Session metadata (session_meta event)
@@ -56,146 +40,6 @@ interface CodexSessionMetaPayload {
   };
 }
 
-/**
- * Turn context (turn_context event)
- */
-interface CodexTurnContextPayload {
-  cwd: string;
-  approval_policy: string;
-  sandbox_policy: {
-    type: string;
-    writable_roots: string[];
-    network_access: boolean;
-    exclude_tmpdir_env_var: boolean;
-    exclude_slash_tmp: boolean;
-  };
-  model: string;
-  effort: string;
-  summary: string;
-  user_instructions: string;
-  truncation_policy: {
-    mode: string;
-    limit: number;
-  };
-}
-
-/**
- * Event message payloads (event_msg event)
- */
-type CodexEventMsgPayload =
-  | CodexUserMessagePayload
-  | CodexAgentMessagePayload
-  | CodexTokenCountPayload
-  | CodexTurnCompletedPayload;
-
-interface CodexUserMessagePayload {
-  type: "user_message";
-  message: string;
-  images?: unknown[];
-  local_images?: unknown[];
-  text_elements?: unknown[];
-}
-
-interface CodexAgentMessagePayload {
-  type: "agent_message";
-  message: string;
-}
-
-interface CodexTokenCountPayload {
-  type: "token_count";
-  info: {
-    total_token_usage: CodexTokenUsage;
-    last_token_usage: CodexTokenUsage;
-    model_context_window: number;
-  } | null;
-  rate_limits: {
-    primary: unknown | null;
-    secondary: unknown | null;
-    credits: unknown | null;
-    plan_type: unknown | null;
-  };
-}
-
-interface CodexTokenUsage {
-  input_tokens: number;
-  cached_input_tokens: number;
-  output_tokens: number;
-  reasoning_output_tokens: number;
-  total_tokens: number;
-}
-
-interface CodexTurnCompletedPayload {
-  type: "turn.completed";
-}
-
-/**
- * Response item payloads (response_item event)
- */
-type CodexResponseItemPayload =
-  | CodexMessagePayload
-  | CodexReasoningPayload
-  | CodexFunctionCallPayload
-  | CodexFunctionCallOutputPayload
-  | CodexCustomToolCallPayload
-  | CodexCustomToolCallOutputPayload
-  | CodexAssistantContentPayload;
-
-interface CodexMessagePayload {
-  type: "message";
-  role: "developer" | "assistant";
-  content: Array<{
-    type: "input_text" | "output_text";
-    text: string;
-  }>;
-}
-
-interface CodexReasoningPayload {
-  type: "reasoning";
-  summary: unknown[];
-  content: string | null;
-  encrypted_content: string;
-}
-
-interface CodexFunctionCallPayload {
-  type: "function_call";
-  name: string;
-  arguments: string; // JSON string
-  call_id: string;
-}
-
-interface CodexFunctionCallOutputPayload {
-  type: "function_call_output";
-  call_id: string;
-  output: string;
-}
-
-interface CodexCustomToolCallPayload {
-  type: "custom_tool_call";
-  name: string;
-  input: string;
-  call_id: string;
-  status: "completed" | "in_progress" | "failed";
-}
-
-interface CodexCustomToolCallOutputPayload {
-  type: "custom_tool_call_output";
-  call_id: string;
-  output: string; // JSON-encoded
-}
-
-/**
- * Assistant content (response_item with role="assistant")
- */
-interface CodexAssistantContentPayload {
-  role: "assistant";
-  content: Array<{
-    type: "input_text" | "output_text" | "tool_use" | "thinking";
-    text?: string;
-    name?: string;
-    input?: Record<string, unknown>;
-    id?: string;
-  }>;
-}
 
 /**
  * Codex CLI log parser
@@ -622,9 +466,15 @@ export class CodexLogParser extends BaseLogParser {
     }
 
     // Build token usage object if we have any token data
-    let usage: TokenUsage | undefined;
+    const metadata: Record<string, any> = {
+      sessionId,
+      model,
+      cliVersion,
+      harness: HARNESS_IDS.CODEX_CLI,
+    };
+
     if (totalInputTokens > 0 || totalOutputTokens > 0) {
-      usage = {
+      metadata.usage = {
         inputTokens: totalInputTokens,
         outputTokens: totalOutputTokens,
         totalTokens: totalInputTokens + totalOutputTokens,
@@ -637,12 +487,7 @@ export class CodexLogParser extends BaseLogParser {
 
     return {
       events: outputEvents,
-      metadata: {
-        sessionId,
-        model,
-        cliVersion,
-        harness: HARNESS_IDS.CODEX_CLI,
-      },
+      metadata,
     };
   }
 

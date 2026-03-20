@@ -15,10 +15,8 @@ export interface HarnessDetailedStatus {
 
 export class StatusBarManager {
   private statusBarItem: vscode.StatusBarItem;
-  private context: vscode.ExtensionContext;
 
   constructor(context: vscode.ExtensionContext) {
-    this.context = context;
     this.statusBarItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Left,
       100

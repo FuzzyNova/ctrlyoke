@@ -6,9 +6,7 @@ import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   PromptFile,
-  PromptItem,
   EXECUTION_STATES,
-  ExecutionProperties,
 } from "../../types/FlightPathTypes";
 import { FlightPathWebviewProvider } from "../../ui/FlightPathWebviewProvider";
 

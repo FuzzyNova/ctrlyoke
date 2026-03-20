@@ -6,7 +6,6 @@ import { promisify } from "util";
 import * as Diff from "diff";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import type {
-  WorkspaceSnapshot,
   SnapshotFileChange,
   PromptChangeType,
 } from "../types/OutputHistoryTypes";

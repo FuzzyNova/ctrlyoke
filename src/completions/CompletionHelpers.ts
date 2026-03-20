@@ -317,14 +317,6 @@ export function initializeCompletionHelpers(
   context.subscriptions.push(configWatcher);
 }
 
-/**
- * Dispose resources
- * NOTE: Dead code — configWatcher is pushed to context.subscriptions and
- * disposed automatically by VS Code. Kept as private for potential future use.
- */
-function disposeCompletionHelpers(): void {
-  configWatcher?.dispose();
-}
 
 /**
  * Get file completions for @ trigger
@@ -700,7 +692,7 @@ export async function getGitChangeCompletions(
  */
 export function toVSCodeCompletionItem(
   item: PlainCompletionItem,
-  triggerChar: "@" | "#" | "~",
+  _triggerChar: "@" | "#" | "~",
   range?: vscode.Range
 ): vscode.CompletionItem {
   const vscodeItem = new vscode.CompletionItem(item.label, item.kind);

@@ -1,7 +1,5 @@
-import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
-import { randomUUID } from "crypto";
 import { Log } from "./Log";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
 

@@ -1,14 +1,12 @@
 import * as assert from "assert";
 import {
   CliOutputFormatter,
-  DashboardOutput,
 } from "../../flightpath/harness/shared/CliOutputFormatter";
 import {
   UniversalCliOutput,
   ToolCall,
   ThinkingBlock,
   OutputMetadata,
-  ToolResult,
   CliEvent,
   TextData,
 } from "../../types/CliOutputTypes";
@@ -59,25 +57,6 @@ suite("CliOutputFormatter Tests", () => {
         text: "thinking text",
         ...overrides,
       } as ThinkingBlock,
-    };
-  }
-
-  // Helper to create a test tool call (for compatibility)
-  function createToolCall(overrides: Partial<ToolCall> = {}): ToolCall {
-    return {
-      name: "test_tool",
-      parameters: {},
-      ...overrides,
-    };
-  }
-
-  // Helper to create a test thinking block (for compatibility)
-  function createThinkingBlock(
-    overrides: Partial<ThinkingBlock> = {}
-  ): ThinkingBlock {
-    return {
-      text: "thinking text",
-      ...overrides,
     };
   }
 

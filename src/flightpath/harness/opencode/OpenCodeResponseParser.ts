@@ -47,7 +47,7 @@ export class OpenCodeResponseParser
   /**
    * Parse complete JSONL output into structured result
    */
-  parse(stdout: string, stderr: string, exitCode: number): UniversalCliOutput {
+  parse(stdout: string, _stderr: string, _exitCode: number): UniversalCliOutput {
     const events: CliEvent[] = [];
     let sessionId: string | undefined;
     const tokenUsage: TokenUsage = {

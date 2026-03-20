@@ -271,10 +271,6 @@ suite("CliToolPermissionMapper", () => {
     });
 
     test("valid parenthesized pattern does not warn", () => {
-      const warnings = CliToolPermissionMapper.validatePatterns([
-        "shell(git:*)",
-        "write(src/*))",
-      ]);
       // shell(git:*) is valid; write(src/*)) has matching parens but extra close - let's just check shell(*) is fine
       const shellWarnings = CliToolPermissionMapper.validatePatterns([
         "shell(*)",

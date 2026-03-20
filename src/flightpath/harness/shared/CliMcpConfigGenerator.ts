@@ -1,5 +1,4 @@
 import * as path from "path";
-import { Log } from "../../../utils/Log";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 
 /**

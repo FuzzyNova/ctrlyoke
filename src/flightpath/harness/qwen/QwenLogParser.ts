@@ -118,8 +118,6 @@ export class QwenLogParser extends BaseLogParser {
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let model: string | undefined;
-    let isError = false;
-    let errorMessage: string | undefined;
 
     for (const event of events as QwenProviderEvent[]) {
       // Extract session ID from any event
@@ -216,10 +214,6 @@ export class QwenLogParser extends BaseLogParser {
         }
         if (event.model && !model) {
           model = event.model;
-        }
-        if (event.is_error) {
-          isError = true;
-          errorMessage = event.errors?.join("; ") || event.result || "Unknown error";
         }
         if (event.permission_denials && event.permission_denials.length > 0) {
           Log.warn(

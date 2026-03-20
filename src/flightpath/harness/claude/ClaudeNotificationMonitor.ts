@@ -38,7 +38,7 @@ export class ClaudeNotificationMonitor
   buildHookConfig(
     scriptPath: string,
     notifyDir: string,
-    workspaceRoot: string
+    _workspaceRoot: string
   ): HookConfig {
     // Convert paths to forward slashes (works on Windows and avoids escaping issues)
     const normalizedScriptPath = scriptPath.replace(/\\/g, "/");

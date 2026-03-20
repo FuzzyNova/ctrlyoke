@@ -1,5 +1,5 @@
-import { CliResult, UnifiedDiffHunk } from "../../../types/CliOutputTypes";
 import { Log } from "../../../utils/Log";
+import { UnifiedDiffHunk } from "../../../types/CliOutputTypes";
 
 /**
  * Generic CLI response structure (normalized across all CLIs)

@@ -69,8 +69,8 @@ export async function resolveSymbol(
 
     const fileUri = vscode.Uri.joinPath(workspaceFolders[0].uri, filePath);
 
-    // Open document to query symbols
-    const document = await vscode.workspace.openTextDocument(fileUri);
+    // Open document to query symbols (needed for symbol provider to work)
+    await vscode.workspace.openTextDocument(fileUri);
 
     // Get document symbols
     const symbols = (await vscode.commands.executeCommand(

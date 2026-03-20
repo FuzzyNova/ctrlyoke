@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import * as path from "path";
 import { getAvailableModelsSync } from "../utils/ModelRegistry";
 import { Log } from "../utils/Log";
 import {
@@ -39,8 +38,8 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   async provideCompletionItems(
     document: vscode.TextDocument,
     position: vscode.Position,
-    token: vscode.CancellationToken,
-    context: vscode.CompletionContext
+    _token: vscode.CancellationToken,
+    _context: vscode.CompletionContext
   ): Promise<vscode.CompletionList | undefined> {
     // For JSON files, check for model context first
     if (document.languageId === "json" || document.languageId === "jsonc") {
@@ -376,7 +375,6 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
     const colonIndex = line.indexOf(":", modelMatch.index!);
     const openQuoteIndex = line.indexOf('"', colonIndex);
-    const partialText = line.substring(openQuoteIndex + 1, position.character);
 
     for (const model of models) {
       const item = new vscode.CompletionItem(

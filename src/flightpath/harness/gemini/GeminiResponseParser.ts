@@ -8,7 +8,6 @@ import {
   TokenUsage,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
-import { Log } from "../../../utils/Log";
 import { getGeminiContextWindowSize } from "../../../utils/ModelConstants";
 import { CliResponseParser } from "../shared/CliResponseParser";
 import { GeminiToolBuilder } from "./GeminiToolBuilder";

@@ -1,5 +1,4 @@
 import * as assert from "assert";
-import * as path from "path";
 import { suite, test } from "mocha";
 import { CliMcpConfigGenerator } from "../../flightpath/harness/shared/CliMcpConfigGenerator";
 

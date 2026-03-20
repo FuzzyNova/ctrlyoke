@@ -698,7 +698,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
   private async sendPromptWithDirectAutomation(
     chatPrompt: string,
     rawPromptText: string,
-    isNewChatSession: boolean = true
+    _isNewChatSession: boolean = true
   ): Promise<boolean> {
     try {
       // Step 1: Open/Focus Copilot Chat using configured location

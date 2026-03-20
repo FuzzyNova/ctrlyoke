@@ -73,7 +73,7 @@ suite("PromptFileSplitter Tests", () => {
       );
 
       // Verify each chunk is under limits
-      result.chunks.forEach((chunk, idx) => {
+      result.chunks.forEach((_chunk, idx) => {
         assert.ok(
           result.tokenCounts[idx] <= 15000,
           `Chunk ${idx} has ${result.tokenCounts[idx]} tokens (should be ≤15000)`
@@ -105,7 +105,7 @@ suite("PromptFileSplitter Tests", () => {
       );
 
       // Verify each chunk is under token limit
-      result.chunks.forEach((chunk, idx) => {
+      result.chunks.forEach((_chunk, idx) => {
         assert.ok(
           result.tokenCounts[idx] <= 15000,
           `Chunk ${idx} has ${result.tokenCounts[idx]} tokens (should be ≤15000)`
@@ -281,7 +281,7 @@ suite("PromptFileSplitter Tests", () => {
       assert.strictEqual(result.needsSplit, true);
 
       // Verify chunks respect custom limits
-      result.chunks.forEach((chunk, idx) => {
+      result.chunks.forEach((_chunk, idx) => {
         assert.ok(
           result.tokenCounts[idx] <= 10000,
           `Chunk ${idx} exceeds custom token limit`
@@ -314,7 +314,7 @@ suite("PromptFileSplitter Tests", () => {
       assert.ok(result.chunks.length >= 2, "Should split long line");
 
       // Each chunk should be under token limit
-      result.chunks.forEach((chunk, idx) => {
+      result.chunks.forEach((_chunk, idx) => {
         assert.ok(
           result.tokenCounts[idx] <= 15000,
           `Chunk ${idx} exceeds token limit`
@@ -412,7 +412,7 @@ suite("PromptFileSplitter Tests", () => {
       assert.ok(result.chunks.length >= 5, "Should create multiple chunks");
 
       // All chunks should be under limits
-      result.chunks.forEach((chunk, idx) => {
+      result.chunks.forEach((_chunk, idx) => {
         assert.ok(result.tokenCounts[idx] <= 15000);
         assert.ok(result.lineCounts[idx] <= 1800);
       });

@@ -465,19 +465,6 @@ export abstract class HarnessIntegration {
     return `<priorContext>\n${steps}\n</priorContext>`;
   }
 
-  /**
-   * Build the <priorContext> XML block and prepend it to promptText.
-   * Kept for backward compatibility with tests that call this via (this as any).
-   */
-  private insertPriorContext(
-    promptText: string,
-    contextItems: PriorContextItem[]
-  ): string {
-    if (contextItems.length === 0) {
-      return promptText;
-    }
-    return `${this.buildPriorContextXml(contextItems)}\n\n${promptText}`;
-  }
 
   /**
    * Build the fully assembled prompt for sending to AI.

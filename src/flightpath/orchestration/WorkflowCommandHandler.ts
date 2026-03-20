@@ -27,12 +27,12 @@ export class WorkflowCommandHandler {
   private templateManager: TemplateManager;
 
   constructor(
-    private context: vscode.ExtensionContext,
-    private promptFileParser: PromptFileParser,
+    _context: vscode.ExtensionContext,
+    _promptFileParser: PromptFileParser,
     private endConditionEvaluator: EndConditionEvaluator,
     private currentWorkspaceFolder?: vscode.WorkspaceFolder
   ) {
-    this.templateManager = new TemplateManager(context);
+    this.templateManager = new TemplateManager(_context);
   }
 
   /**

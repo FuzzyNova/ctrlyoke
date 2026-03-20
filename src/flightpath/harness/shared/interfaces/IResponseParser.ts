@@ -1,4 +1,3 @@
-import { CliResult } from "../../../../types/CliOutputTypes";
 import { UniversalCliOutput, CliEvent } from "../../../../types/CliOutputTypes";
 
 /**
@@ -146,7 +145,7 @@ export abstract class ResponseParserBase implements IResponseParser {
    * @param error The error to check
    * @returns False by default (no recovery)
    */
-  isRecoverableSessionError(error: unknown): boolean {
+  isRecoverableSessionError(_error: unknown): boolean {
     return false;
   }
 }

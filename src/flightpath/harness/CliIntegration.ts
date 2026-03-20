@@ -1197,7 +1197,7 @@ export class CliIntegration extends HarnessIntegration {
   /**
    * Log response to output channel with formatting
    */
-  protected logResponse(response: string, statistics?: string): void {
+  protected logResponse(_response: string, statistics?: string): void {
     if (this.shouldShowOutput()) {
       if (statistics) {
         Log.appendLine(`\n[STATISTICS] ${statistics}`);
@@ -1286,7 +1286,7 @@ export class CliIntegration extends HarnessIntegration {
    * Handle initialization errors with logging.
    */
   protected handleInitializationError(
-    type: "command_failed" | "exception",
+    _type: "command_failed" | "exception",
     error: unknown
   ): void {
     this.isAvailable = false;
@@ -1564,7 +1564,7 @@ export class CliIntegration extends HarnessIntegration {
    */
   async sendPrompt(
     prompt: PromptItem,
-    needsCompletionDetection: boolean = true,
+    _needsCompletionDetection: boolean = true,
     workflowContext?: {
       promptIndex: number;
       allPrompts: PromptItem[];

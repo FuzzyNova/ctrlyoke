@@ -14,7 +14,6 @@ import {
   FINAL_PROMPT_PHASES,
 } from "../types/DashboardConstants";
 import { PromptQueue } from "./PromptQueue";
-import { PromptFileParser } from "./PromptFileParser";
 import { HarnessIntegration } from "./HarnessIntegration";
 import {
   EndConditionHandler,
@@ -131,7 +130,6 @@ export class WorkflowExecutor {
 
   constructor(
     private readonly promptQueue: PromptQueue,
-    private readonly promptFileParser: PromptFileParser,
     private readonly endConditionHandler: EndConditionHandler,
     private readonly endConditionEvaluator: EndConditionEvaluator,
     private readonly platform: PlatformAdapter
@@ -796,7 +794,7 @@ export class WorkflowExecutor {
    * users can stop manually at any time.
    */
   private async waitForResponseComplete(
-    prompt: PromptItem,
+    _prompt: PromptItem,
     integration: HarnessIntegration
   ): Promise<string> {
     return new Promise<string>((resolve) => {
@@ -1222,7 +1220,7 @@ export class WorkflowExecutor {
 
   private updateDashboardForPromptStart(
     context: WorkflowExecutionContext,
-    prompt: PromptItem,
+    _prompt: PromptItem,
     currentIndex: number
   ): void {
     if (!context.dashboardProvider) {

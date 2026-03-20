@@ -1,4 +1,3 @@
-import * as path from "path";
 import {
   INotificationMonitor,
   NotificationConfig,
@@ -7,7 +6,6 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import { Log } from "../../../utils/Log";
 
 /**
  * Codex CLI Notification Monitor
@@ -80,8 +78,8 @@ export class CodexNotificationMonitor
    */
   buildHookConfig(
     scriptPath: string,
-    notifyDir: string,
-    workspaceRoot: string
+    _notifyDir: string,
+    _workspaceRoot: string
   ): HookConfig {
     // Convert to forward slashes (works on Windows and avoids escaping issues)
     const normalizedPath = scriptPath.replace(/\\/g, "/");
