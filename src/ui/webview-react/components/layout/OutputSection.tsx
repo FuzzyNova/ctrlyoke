@@ -496,8 +496,6 @@ export const OutputSection: React.FC = () => {
   // Built from stepsToRender + firstIndexByStep; includes prompt-level
   // undo/redo actions so the minimap can show them without needing CliOutput.
   const minimapSteps = useMemo((): MinimapStep[] => {
-    if (!allowUndoActions) return [];
-
     return stepsToRender.flatMap((step) => {
       const key = `${step.target.kind}:${step.target.index}`;
       const firstIdx = firstIndexByStep.get(key);
@@ -515,20 +513,57 @@ export const OutputSection: React.FC = () => {
         stepScrollFractions.get(key) ??
         firstIdx / Math.max(1, allMessages.length);
 
+      const noActions: MinimapStep["undoActions"] = { undo: null, redo: null };
+      const stepOutputs = stepOutputsMap.get(key) ?? [];
+
+      // Always build diff blocks so overlays update in real time during execution.
+      const kindSlug = isFinalPrompt ? "fp" : "q";
+      const diffBlocks: MinimapDiffBlock[] = [];
+      for (const output of stepOutputs) {
+        const typedOutput = output as CliOutputType & { attemptIndex?: number };
+        const attemptIdx = typedOutput.attemptIndex ?? 0;
+        const anchorPrefix = `fp-diff-${kindSlug}-${stepIndex}-a${attemptIdx}`;
+        const events = typedOutput.structured?.events ?? [];
+        events.forEach((event, eventIndex) => {
+          if (
+            event.type !== CLI_EVENT_TYPES.FILE_EDIT &&
+            event.type !== CLI_EVENT_TYPES.FILE_WRITE &&
+            event.type !== CLI_EVENT_TYPES.FILE_DELETE
+          ) return;
+          const anchorId = `${anchorPrefix}-e${eventIndex}`;
+          const measurement = diffMeasurements.get(anchorId);
+          if (!measurement || measurement.heightFraction < 0.0005) return;
+          const stats = computeDiffStats(event);
+          if (stats.added + stats.removed === 0) return;
+          diffBlocks.push({
+            scrollFraction: measurement.startFraction,
+            heightFraction: measurement.heightFraction,
+            addedLines: stats.added,
+            removedLines: stats.removed,
+            runs: stats.runs,
+            isCollapsed: measurement.isCollapsed,
+          });
+        });
+      }
+
+      // Skip undo actions while execution is active — scrollbar and diff overlays
+      // are still rendered so the rail is usable during a running prompt.
+      if (!allowUndoActions) {
+        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions: noActions, diffBlocks }];
+      }
+
       // Only the last CLI attempt gets undo/redo actions
       const lastCliIdx = lastCliIndexPerStep.get(key);
-      const noActions: MinimapStep["undoActions"] = { undo: null, redo: null };
       if (lastCliIdx === undefined) {
-        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions: noActions, diffBlocks: [] }];
+        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions: noActions, diffBlocks }];
       }
 
       const lastMsg = allMessages[lastCliIdx];
       const lastOutput = lastMsg?.data as CliOutputType | undefined;
       if (!lastOutput || lastOutput.isStreaming) {
-        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions: noActions, diffBlocks: [] }];
+        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions: noActions, diffBlocks }];
       }
 
-      const stepOutputs = stepOutputsMap.get(key) ?? [];
       const targetKey = isFinalPrompt
         ? `finalPrompt-${stepIndex}`
         : `queue-${stepIndex}`;
@@ -603,37 +638,6 @@ export const OutputSection: React.FC = () => {
             }
           : null,
       };
-
-      // Build diff blocks for this step: one entry per file-operation event that
-      // has a DOM measurement anchor (set by StructuredOutput when not hideDiff).
-      const kindSlug = isFinalPrompt ? "fp" : "q";
-      const diffBlocks: MinimapDiffBlock[] = [];
-      for (const output of stepOutputs) {
-        const typedOutput = output as CliOutputType & { attemptIndex?: number };
-        const attemptIdx = typedOutput.attemptIndex ?? 0;
-        const anchorPrefix = `fp-diff-${kindSlug}-${stepIndex}-a${attemptIdx}`;
-        const events = typedOutput.structured?.events ?? [];
-        events.forEach((event, eventIndex) => {
-          if (
-            event.type !== CLI_EVENT_TYPES.FILE_EDIT &&
-            event.type !== CLI_EVENT_TYPES.FILE_WRITE &&
-            event.type !== CLI_EVENT_TYPES.FILE_DELETE
-          ) return;
-          const anchorId = `${anchorPrefix}-e${eventIndex}`;
-          const measurement = diffMeasurements.get(anchorId);
-          if (!measurement || measurement.heightFraction < 0.0005) return;
-          const stats = computeDiffStats(event);
-          if (stats.added + stats.removed === 0) return;
-          diffBlocks.push({
-            scrollFraction: measurement.startFraction,
-            heightFraction: measurement.heightFraction,
-            addedLines: stats.added,
-            removedLines: stats.removed,
-            runs: stats.runs,
-            isCollapsed: measurement.isCollapsed,
-          });
-        });
-      }
 
       return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions, diffBlocks }];
     });
