@@ -435,19 +435,21 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
-   * Create categorized temp files (agent, skills, excerpts, prompt) and
+   * Create categorized temp files (agent, skills, context, excerpts, prompt) and
    * return the structured instruction string that references all of them.
    *
-   * Agent and excerpt files are split on token/line limits; skills and prompt
-   * are written as single files (almost never large enough to require splitting).
+   * Agent and excerpt files are split on token/line limits; skills, context, and
+   * prompt are written as single files (context must not be split mid-XML).
    *
    * @param sections Prompt sections from buildPromptSections()
    * @param workflowContext Optional workflow context for meaningful filenames
+   * @param contextContent Optional prior context + criticalInstruction block
    * @returns Object with tempFilePaths (for cleanup) and promptWithInstruction
    */
   protected async createCategorizedPromptFiles(
     sections: PromptSections,
-    workflowContext?: WorkflowContext
+    workflowContext?: WorkflowContext,
+    contextContent?: string
   ): Promise<PromptFileResult> {
     const workspaceRoot = this.getWorkspaceRoot();
     if (!workspaceRoot) {
@@ -496,6 +498,20 @@ export class CliIntegration extends HarnessIntegration {
       this.formatDirectFileRef(p)
     );
 
+    // Prior context: <priorContext> + <criticalInstruction> blocks — single file,
+    // never split (XML structure must not be torn apart mid-element)
+    let contextRef: string | null = null;
+    if (contextContent) {
+      const contextPath = await tempMgr.createCategoryFile(
+        contextContent,
+        "context",
+        filePath,
+        stepNumber
+      );
+      allTempFilePaths.push(contextPath);
+      contextRef = fmtRef(contextPath);
+    }
+
     // Excerpts: selection/sym/git/dir attachment blocks, split if large
     const excerptRefs: string[] = [];
     if (sections.excerptContent) {
@@ -534,6 +550,7 @@ export class CliIntegration extends HarnessIntegration {
         agentRefs,
         skillRef,
         directRefs,
+        contextRef,
         excerptRefs,
         promptRefs
       ),
@@ -547,6 +564,7 @@ export class CliIntegration extends HarnessIntegration {
    *   Following these agent instructions @agent.1.md[, @agent.2.md],
    *   using these available skills @skills.md,
    *   using these file references @src/foo.ts, @src/bar.ts,
+   *   with this prior conversation context @context.md,
    *   and these attachment excerpts @excerpts.1.md[, @excerpts.2.md],
    *   follow the instructions in @prompt.md
    *
@@ -555,6 +573,7 @@ export class CliIntegration extends HarnessIntegration {
    * @param agentRefs Formatted file refs for agent files
    * @param skillRef Formatted file ref for skills file, or null
    * @param directRefs Formatted direct workspace file refs
+   * @param contextRef Formatted file ref for prior context file, or null
    * @param excerptRefs Formatted file refs for excerpt files
    * @param promptRefs Formatted file refs for prompt files
    */
@@ -562,6 +581,7 @@ export class CliIntegration extends HarnessIntegration {
     agentRefs: string[],
     skillRef: string | null,
     directRefs: string[],
+    contextRef: string | null,
     excerptRefs: string[],
     promptRefs: string[]
   ): string {
@@ -577,6 +597,10 @@ export class CliIntegration extends HarnessIntegration {
 
     if (directRefs.length > 0) {
       clauses.push(`using these file references ${directRefs.join(", ")}`);
+    }
+
+    if (contextRef) {
+      clauses.push(`with this prior conversation context ${contextRef}`);
     }
 
     if (excerptRefs.length > 0) {

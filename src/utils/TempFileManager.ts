@@ -185,7 +185,7 @@ export class TempFileManager {
    */
   async createCategoryFile(
     content: string,
-    category: "agent" | "skills" | "excerpts" | "prompt",
+    category: "agent" | "skills" | "context" | "excerpts" | "prompt",
     originalFilePath?: string,
     stepNumber?: number,
     partNumber?: number

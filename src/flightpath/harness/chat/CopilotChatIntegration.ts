@@ -897,6 +897,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
   private formatCategorizedChatInstruction(
     agentFileNames: string[],
     skillFileName: string | undefined,
+    contextFileName: string | undefined,
     excerptFileNames: string[],
     promptFileNames: string[]
   ): string {
@@ -915,6 +916,9 @@ export class CopilotChatIntegration extends HarnessIntegration {
     if (skillFileName) {
       contextParts.push(`using skills in ${skillFileName}`);
     }
+    if (contextFileName) {
+      contextParts.push(`with prior conversation context in ${contextFileName}`);
+    }
     if (excerptFileNames.length > 0) {
       contextParts.push(
         `with attachment excerpts in ${excerptFileNames.join(", ")}`
@@ -932,10 +936,11 @@ export class CopilotChatIntegration extends HarnessIntegration {
    * chat via VS Code commands, and return a structured instruction string.
    *
    * File categories written:
-   *   - .agent.prompt.md  — agent instructions (wrapped in <agentInstructions>)
-   *   - .skills.prompt.md — skill block
+   *   - .agent.prompt.md   — agent instructions (wrapped in <agentInstructions>)
+   *   - .skills.prompt.md  — skill block
+   *   - .context.prompt.md — prior context (<priorContext> + <criticalInstruction>)
    *   - .excerpts.prompt.md — inline excerpt content (line-numbered)
-   *   - .prompt.md        — user prompt text + optional workflow context
+   *   - .prompt.md         — user prompt text only
    *
    * Direct file refs (full-file @path references) are attached as actual workspace
    * files — no temp copy needed.
@@ -960,6 +965,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
     const agentFileNames: string[] = [];
     const excerptFileNames: string[] = [];
     let skillFileName: string | undefined;
+    let contextFileName: string | undefined;
     const promptFileNames: string[] = [];
 
     // 1. Agent file(s)
@@ -993,7 +999,19 @@ export class CopilotChatIntegration extends HarnessIntegration {
       await this.attachFileToChat(absPath);
     }
 
-    // 4. Excerpt file(s)
+    // 4. Prior context file — single file, never split (XML must not be torn apart)
+    if (workflowContextText) {
+      const contextPath = await tempMgr.createCategoryFile(
+        workflowContextText,
+        "context",
+        workflowFilePath,
+        stepNumber
+      );
+      tempFilePaths.push(contextPath);
+      contextFileName = path.basename(contextPath);
+    }
+
+    // 5. Excerpt file(s)
     if (sections.excerptContent) {
       const { chunks } = splitter.split(sections.excerptContent);
       const excerptPaths = await tempMgr.createCategorySplitFiles(
@@ -1006,11 +1024,8 @@ export class CopilotChatIntegration extends HarnessIntegration {
       excerptFileNames.push(...excerptPaths.map((p) => path.basename(p)));
     }
 
-    // 5. Prompt file(s) — user prompt with optional workflow context prepended
-    const promptContent = workflowContextText
-      ? `${workflowContextText}\n\n${sections.userPromptText}`
-      : sections.userPromptText;
-    const { chunks: promptChunks } = splitter.split(promptContent);
+    // 6. Prompt file(s) — user prompt text only (context is in its own file)
+    const { chunks: promptChunks } = splitter.split(sections.userPromptText);
     for (let i = 0; i < promptChunks.length; i++) {
       const partNumber = promptChunks.length > 1 ? i + 1 : undefined;
       const promptPath = await tempMgr.createCategoryFile(
@@ -1034,13 +1049,14 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
     Log.debug(
       `📁 Chat categorized: ${agentFileNames.length} agent, ${skillFileName ? 1 : 0} skills, ` +
-        `${sections.directFileRefs.length} direct, ${excerptFileNames.length} excerpt, ` +
-        `${promptFileNames.length} prompt file(s)`
+        `${sections.directFileRefs.length} direct, ${contextFileName ? 1 : 0} context, ` +
+        `${excerptFileNames.length} excerpt, ${promptFileNames.length} prompt file(s)`
     );
 
     return this.formatCategorizedChatInstruction(
       agentFileNames,
       skillFileName,
+      contextFileName,
       excerptFileNames,
       promptFileNames
     );
