@@ -10,6 +10,7 @@ import { AgentExpander } from "../utils/AgentExpander";
 import { SkillExpander } from "../utils/SkillExpander";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ContextExpander } from "../utils/ContextExpander";
+import type { SplitContext } from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
 import { ResolvedProperties } from "../utils/PropertyResolver";
 import { shouldInjectExtensionInstructions } from "../utils/PromptIdentity";
@@ -36,6 +37,24 @@ type PriorContextItem = {
   /** "finalPrompt" when the item originates from a finalPrompt loop (not a queue prompt). */
   type?: "finalPrompt";
 };
+
+/**
+ * Categorized sections of a prompt — used for typed file splitting.
+ * Each category is written to its own temp file so the harness (and Copilot's
+ * auto-summarizer) can navigate the content without stripping the user prompt.
+ */
+export interface PromptSections {
+  /** Expanded <skillInstructions> block, or null if no skills */
+  skillContent: string | null;
+  /** Expanded agent file content (without wrapper tags), or null if no agent */
+  agentContent: string | null;
+  /** Absolute paths for full-file @path refs — harness reads these directly */
+  directFileRefs: string[];
+  /** Embedded XML attachment blocks for selection/sym/git/dir content, or null */
+  excerptContent: string | null;
+  /** The raw user prompt text (with @path tokens preserved as-is) */
+  userPromptText: string;
+}
 
 /**
  * Harness initialization status
@@ -220,6 +239,58 @@ export abstract class HarnessIntegration {
   abstract getIntegrationMode(): string;
 
   /**
+   * Build prompt sections from prompt item, separating content by category.
+   *
+   * Unlike buildPromptText() which merges everything into one blob, this method
+   * returns each category separately so callers can write them to typed files:
+   *   agent instructions → <ts>-<name>.agent.prompt.md
+   *   skills             → <ts>-<name>.skills.prompt.md
+   *   direct file refs   → @path inline in instruction string (harness auto-reads)
+   *   excerpts           → <ts>-<name>.excerpts.prompt.md
+   *   user prompt        → <ts>-<name>.prompt.md
+   *
+   * @param prompt The prompt item to build sections for
+   * @param resolvedAgent Optional resolved agent name
+   * @param resolvedSkills Optional resolved skill names
+   * @returns Categorized prompt sections
+   */
+  protected async buildPromptSections(
+    prompt: PromptItem,
+    resolvedAgent?: string,
+    resolvedSkills?: string[]
+  ): Promise<PromptSections> {
+    const userPromptText = prompt.prompt.trim();
+    const workspaceRoot = this.getWorkspaceRoot();
+
+    // Expand context into direct file refs + excerpt blocks (split, not merged)
+    let splitContext: SplitContext = { directFileRefs: [], excerptBlocks: "" };
+    if (workspaceRoot) {
+      try {
+        const expander = new ContextExpander(workspaceRoot);
+        splitContext = await expander.expandContextSplit(userPromptText);
+      } catch (error) {
+        Log.error("[HarnessIntegration] Error in expandContextSplit:", error);
+      }
+    }
+
+    const skillContent = resolvedSkills?.length
+      ? await this.expandSkillBlock(resolvedSkills, workspaceRoot)
+      : null;
+
+    const agentContent = resolvedAgent
+      ? await this.expandAgentBlock(resolvedAgent, workspaceRoot)
+      : null;
+
+    return {
+      skillContent,
+      agentContent,
+      directFileRefs: splitContext.directFileRefs,
+      excerptContent: splitContext.excerptBlocks || null,
+      userPromptText,
+    };
+  }
+
+  /**
    * Build prompt text from prompt item.
    * Assembles in the canonical section order (without priorContext or criticalInstruction):
    *   <skillInstructions> → <agentInstructions> → <attachment> blocks → user prompt
@@ -325,7 +396,7 @@ export abstract class HarnessIntegration {
    * Expand skill names to a <skillInstructions> block.
    * Returns null if no skills are provided or none resolve.
    */
-  private async expandSkillBlock(
+  protected async expandSkillBlock(
     resolvedSkills: string[],
     workspaceRoot: string | undefined
   ): Promise<string | null> {
@@ -364,7 +435,7 @@ export abstract class HarnessIntegration {
    * @param currentIndex 0-based index of the prompt being built
    * @param finalPromptResponseTexts Per-loop finalPrompt response texts (indexed by loopIndex)
    */
-  private gatherPriorContextItems(
+  protected gatherPriorContextItems(
     priorContext: PriorContext,
     allPrompts: PromptItem[],
     currentIndex: number,
@@ -449,7 +520,7 @@ export abstract class HarnessIntegration {
    * Build the <priorContext> XML block from gathered context items.
    * finalPrompt loop items carry type="finalPrompt" on the <step> element.
    */
-  private buildPriorContextXml(contextItems: PriorContextItem[]): string {
+  protected buildPriorContextXml(contextItems: PriorContextItem[]): string {
     const steps = contextItems
       .map((item) => {
         const typeAttr = item.type ? ` type="${item.type}"` : "";
@@ -465,6 +536,101 @@ export abstract class HarnessIntegration {
     return `<priorContext>\n${steps}\n</priorContext>`;
   }
 
+
+  /**
+   * Build the `<criticalInstruction>` dynamic queue block for this prompt.
+   * Returns an empty string when dynamic queue extension is disabled or injection is not needed.
+   */
+  protected buildCriticalInstruction(
+    prompt: PromptItem,
+    promptIndex: number,
+    allPrompts: PromptItem[],
+    allowDynamicExtension?: boolean
+  ): string {
+    const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
+    const shouldEnableDynamicExtension =
+      allowDynamicExtension ?? dynamicQueueConfig.enabled;
+
+    if (!shouldEnableDynamicExtension) {
+      return "";
+    }
+    if (!shouldInjectExtensionInstructions(prompt, shouldEnableDynamicExtension)) {
+      return "";
+    }
+
+    const { maxQueueSize, maxWorkflowExecutionTime, unlimitedMode } =
+      dynamicQueueConfig;
+    const currentSize = allPrompts.length;
+    const currentIndex = promptIndex + 1;
+    const totalPrompts = allPrompts.length;
+    const maxSizeDisplay = unlimitedMode
+      ? "unlimited"
+      : maxQueueSize.toString();
+    const maxTimeDisplay =
+      unlimitedMode || maxWorkflowExecutionTime === -1
+        ? "unlimited"
+        : `${maxWorkflowExecutionTime}s`;
+
+    return `<criticalInstruction>
+FlightPath workflow: Step ${currentIndex}/${totalPrompts} (${currentSize}/${maxSizeDisplay} prompts, ${maxTimeDisplay} max time)
+
+You have access to flightpath_queue_status and flightpath_append_queue tools. Use them if you need additional steps to complete this task. Only extend the queue if truly necessary.
+</criticalInstruction>`;
+  }
+
+  /**
+   * Build the additional workflow-context text (prior context + critical instruction)
+   * for injection into the prompt file section of a categorized split.
+   *
+   * Used by CopilotChatIntegration and any other integration that builds
+   * categorized prompt files and needs to include workflow context in the
+   * prompt file (rather than in the blob from buildPromptWithInstructions).
+   *
+   * @returns Assembled text block, or empty string if nothing to inject
+   */
+  protected buildWorkflowContextText(
+    prompt: PromptItem,
+    promptIndex: number,
+    allPrompts: PromptItem[],
+    allowDynamicExtension?: boolean,
+    resolvedPriorContext?: PriorContext,
+    finalPromptResponseTexts?: string[]
+  ): string {
+    const blocks: string[] = [];
+
+    // Prior context block
+    if (resolvedPriorContext !== undefined && resolvedPriorContext !== "none") {
+      const contextItems = this.gatherPriorContextItems(
+        resolvedPriorContext,
+        allPrompts,
+        promptIndex,
+        finalPromptResponseTexts ?? []
+      );
+      if (contextItems.length > 0) {
+        const isFinalPromptContext =
+          resolvedPriorContext === "finalPromptAll" ||
+          resolvedPriorContext === "finalPromptPrevious";
+        Log.debug(
+          `🔗 Injecting ${isFinalPromptContext ? "finalPrompt" : "prior"} context for prompt ${promptIndex + 1}: ` +
+            `${contextItems.length} step(s) from indices [${contextItems.map((c) => c.index + 1).join(", ")}]`
+        );
+        blocks.push(this.buildPriorContextXml(contextItems));
+      }
+    }
+
+    // Dynamic queue instruction
+    const criticalInstruction = this.buildCriticalInstruction(
+      prompt,
+      promptIndex,
+      allPrompts,
+      allowDynamicExtension
+    );
+    if (criticalInstruction) {
+      blocks.push(criticalInstruction);
+    }
+
+    return blocks.join("\n\n");
+  }
 
   /**
    * Build the fully assembled prompt for sending to AI.
@@ -550,42 +716,12 @@ export abstract class HarnessIntegration {
     }
 
     // 5. Dynamic queue instruction (injected just before user prompt)
-    const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
-    const shouldEnableDynamicExtension =
-      allowDynamicExtension ?? dynamicQueueConfig.enabled;
-
-    let criticalInstruction = "";
-    if (shouldEnableDynamicExtension) {
-      const shouldInject = shouldInjectExtensionInstructions(
-        prompt,
-        shouldEnableDynamicExtension
-      );
-
-      if (shouldInject) {
-        // Get integration mode to determine instruction format
-        const integrationMode = this.getIntegrationMode();
-        void integrationMode; // reserved for per-harness customization
-
-        const { maxQueueSize, maxWorkflowExecutionTime, unlimitedMode } =
-          dynamicQueueConfig;
-        const currentSize = allPrompts.length;
-        const currentIndex = promptIndex + 1; // 1-based for display
-        const totalPrompts = allPrompts.length;
-        const maxSizeDisplay = unlimitedMode
-          ? "unlimited"
-          : maxQueueSize.toString();
-        const maxTimeDisplay =
-          unlimitedMode || maxWorkflowExecutionTime === -1
-            ? "unlimited"
-            : `${maxWorkflowExecutionTime}s`;
-
-        criticalInstruction = `<criticalInstruction>
-FlightPath workflow: Step ${currentIndex}/${totalPrompts} (${currentSize}/${maxSizeDisplay} prompts, ${maxTimeDisplay} max time)
-
-You have access to flightpath_queue_status and flightpath_append_queue tools. Use them if you need additional steps to complete this task. Only extend the queue if truly necessary.
-</criticalInstruction>`;
-      }
-    }
+    const criticalInstruction = this.buildCriticalInstruction(
+      prompt,
+      promptIndex,
+      allPrompts,
+      allowDynamicExtension
+    );
 
     // Assemble in canonical order:
     //   skills → agent → priorContext → attachments → criticalInstruction → userPrompt

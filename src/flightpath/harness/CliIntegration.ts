@@ -13,6 +13,9 @@ import {
 } from "../../types/FlightPathTypes";
 import { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
+import type { PromptSections } from "../HarnessIntegration";
+import { TempFileManager } from "../../utils/TempFileManager";
+import { PromptFileSplitter } from "../../utils/PromptFileSplitter";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
 import { Log } from "../../utils/Log";
@@ -388,6 +391,208 @@ export class CliIntegration extends HarnessIntegration {
     const allButLast = fileRefs.slice(0, -1).join(", ");
     const last = fileRefs[fileRefs.length - 1];
     return `Follow instructions in ${allButLast}, and ${last} `;
+  }
+
+  // ============================================================
+  // CATEGORIZED PROMPT FILE CREATION (opt-in)
+  // ============================================================
+
+  /**
+   * Whether this harness uses categorized prompt file splitting.
+   * When true, sendPrompt() routes through createCategorizedPromptFiles()
+   * instead of createPromptFileWithReference(). Override in provider-specific
+   * subclasses to enable the new behaviour per harness.
+   * Default: false (backward-compatible single-blob approach).
+   */
+  protected useCategorizedFileSplitting(): boolean {
+    return false;
+  }
+
+  /**
+   * Format a workspace-relative or absolute path as a direct file reference,
+   * with space-quoting applied when the path contains spaces.
+   * Uses the provider's formatFileReference() override for harness-specific prefix.
+   */
+  private formatDirectFileRef(absolutePath: string): string {
+    const workspaceRoot = this.getWorkspaceRoot() ?? "";
+    const relativePath = path.relative(workspaceRoot, absolutePath);
+    const quoted = relativePath.includes(" ")
+      ? `"${relativePath}"`
+      : relativePath;
+    return this.provider.formatFileReference?.(quoted) ?? `@${quoted}`;
+  }
+
+  /**
+   * Format a temp-file relative path as a file reference using the provider's
+   * harness-specific prefix (e.g. "@path" for Copilot, "path" for Claude).
+   */
+  private formatTempFileRef(
+    tempMgr: TempFileManager,
+    absolutePath: string
+  ): string {
+    const relativePath = tempMgr.getRelativePath(absolutePath);
+    return this.provider.formatFileReference?.(relativePath) ?? `@${relativePath}`;
+  }
+
+  /**
+   * Create categorized temp files (agent, skills, excerpts, prompt) and
+   * return the structured instruction string that references all of them.
+   *
+   * Agent and excerpt files are split on token/line limits; skills and prompt
+   * are written as single files (almost never large enough to require splitting).
+   *
+   * @param sections Prompt sections from buildPromptSections()
+   * @param workflowContext Optional workflow context for meaningful filenames
+   * @returns Object with tempFilePaths (for cleanup) and promptWithInstruction
+   */
+  protected async createCategorizedPromptFiles(
+    sections: PromptSections,
+    workflowContext?: WorkflowContext
+  ): Promise<PromptFileResult> {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      throw new Error("No workspace root available for categorized temp files");
+    }
+
+    const tempMgr = new TempFileManager(workspaceRoot);
+    const splitter = new PromptFileSplitter(this.getTempFileSplitConfig());
+    const allTempFilePaths: string[] = [];
+    const filePath = workflowContext?.filePath;
+    const stepNumber = workflowContext
+      ? workflowContext.promptIndex + 1
+      : undefined;
+
+    const fmtRef = (p: string) => this.formatTempFileRef(tempMgr, p);
+
+    // Agent: wrap in tags, split if large
+    const agentRefs: string[] = [];
+    if (sections.agentContent) {
+      const agentText = `<agentInstructions>\n${sections.agentContent}\n</agentInstructions>`;
+      const agentPaths = await tempMgr.createCategorySplitFiles(
+        splitter.split(agentText).chunks,
+        "agent",
+        filePath,
+        stepNumber
+      );
+      allTempFilePaths.push(...agentPaths);
+      agentRefs.push(...agentPaths.map(fmtRef));
+    }
+
+    // Skills: single file (almost never large enough to split)
+    let skillRef: string | null = null;
+    if (sections.skillContent) {
+      const skillPath = await tempMgr.createCategoryFile(
+        sections.skillContent,
+        "skills",
+        filePath,
+        stepNumber
+      );
+      allTempFilePaths.push(skillPath);
+      skillRef = fmtRef(skillPath);
+    }
+
+    // Direct file refs: workspace files the harness reads natively — no temp file
+    const directRefs = sections.directFileRefs.map((p) =>
+      this.formatDirectFileRef(p)
+    );
+
+    // Excerpts: selection/sym/git/dir attachment blocks, split if large
+    const excerptRefs: string[] = [];
+    if (sections.excerptContent) {
+      const excerptPaths = await tempMgr.createCategorySplitFiles(
+        splitter.split(sections.excerptContent).chunks,
+        "excerpts",
+        filePath,
+        stepNumber
+      );
+      allTempFilePaths.push(...excerptPaths);
+      excerptRefs.push(...excerptPaths.map(fmtRef));
+    }
+
+    // User prompt: own file (with split support for very large prompts)
+    const promptSplit = splitter.split(sections.userPromptText);
+    const promptPaths: string[] = [];
+    for (let i = 0; i < promptSplit.chunks.length; i++) {
+      const partNumber = promptSplit.chunks.length > 1 ? i + 1 : undefined;
+      const p = await tempMgr.createCategoryFile(
+        promptSplit.chunks[i],
+        "prompt",
+        filePath,
+        stepNumber,
+        partNumber
+      );
+      promptPaths.push(p);
+    }
+    allTempFilePaths.push(...promptPaths);
+    const promptRefs = promptPaths.map(fmtRef);
+
+    Log.info(`📁 Categorized prompt files: ${allTempFilePaths.length} file(s)`);
+
+    return {
+      tempFilePaths: allTempFilePaths,
+      promptWithInstruction: this.formatCategorizedReferences(
+        agentRefs,
+        skillRef,
+        directRefs,
+        excerptRefs,
+        promptRefs
+      ),
+    };
+  }
+
+  /**
+   * Format categorized file references into a structured instruction string.
+   *
+   * Format (absent categories omitted):
+   *   Following these agent instructions @agent.1.md[, @agent.2.md],
+   *   using these available skills @skills.md,
+   *   using these file references @src/foo.ts, @src/bar.ts,
+   *   and these attachment excerpts @excerpts.1.md[, @excerpts.2.md],
+   *   follow the instructions in @prompt.md
+   *
+   * When only a prompt exists: "Follow instructions in @prompt.md "
+   *
+   * @param agentRefs Formatted file refs for agent files
+   * @param skillRef Formatted file ref for skills file, or null
+   * @param directRefs Formatted direct workspace file refs
+   * @param excerptRefs Formatted file refs for excerpt files
+   * @param promptRefs Formatted file refs for prompt files
+   */
+  protected formatCategorizedReferences(
+    agentRefs: string[],
+    skillRef: string | null,
+    directRefs: string[],
+    excerptRefs: string[],
+    promptRefs: string[]
+  ): string {
+    const clauses: string[] = [];
+
+    if (agentRefs.length > 0) {
+      clauses.push(`Following these agent instructions ${agentRefs.join(", ")}`);
+    }
+
+    if (skillRef) {
+      clauses.push(`using these available skills ${skillRef}`);
+    }
+
+    if (directRefs.length > 0) {
+      clauses.push(`using these file references ${directRefs.join(", ")}`);
+    }
+
+    if (excerptRefs.length > 0) {
+      clauses.push(
+        `and these attachment excerpts ${excerptRefs.join(", ")}`
+      );
+    }
+
+    const followClause = `follow the instructions in ${promptRefs.join(", ")}`;
+
+    if (clauses.length === 0) {
+      // Simple case: only a prompt file
+      return `Follow instructions in ${promptRefs.join(", ")} `;
+    }
+
+    return clauses.join(",\n") + `,\n${followClause} `;
   }
 
   // ============================================================

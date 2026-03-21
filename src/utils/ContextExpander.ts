@@ -17,6 +17,17 @@ import { ATTACHMENT_PREFIXES } from "../types/DashboardConstants";
 
 
 /**
+ * Result of context splitting — separates direct file references from embedded excerpts.
+ * Used by categorized prompt file creation (CLI and Chat harnesses).
+ */
+export interface SplitContext {
+  /** Absolute paths for full-file @path refs — no embedding, harness reads directly */
+  directFileRefs: string[];
+  /** Embedded XML attachment blocks for selection/sym/git/dir content */
+  excerptBlocks: string;
+}
+
+/**
  * ContextExpander - Unified context expansion utility
  *
  * Handles all FlightPath context reference expansion:
@@ -116,6 +127,99 @@ export class ContextExpander {
       Log.error("Error expanding context:", error);
       // Return original prompt on error
       return promptText;
+    }
+  }
+
+  /**
+   * Split context references into direct file refs and embedded excerpt blocks.
+   *
+   * Unlike expandContext() which embeds everything as attachment XML, this method
+   * separates references into two categories:
+   *
+   * - **directFileRefs**: absolute paths for full-file @path refs (no line range, no
+   *   directory). The harness auto-reads these — no embedding needed, always correct
+   *   line numbers, satisfies read-before-edit constraints.
+   *
+   * - **excerptBlocks**: embedded XML for content that has no real file path at the
+   *   right granularity: #selection, #sym, ~diff/~staged/~stash/~commit, @dir/.
+   *   Line numbers are prefixed (format: `    N→content`) for accuracy.
+   *
+   * @param promptText Original prompt with context references
+   * @returns Separated direct file refs and embedded excerpt XML
+   */
+  async expandContextSplit(promptText: string): Promise<SplitContext> {
+    const directFileRefs: string[] = [];
+    const excerptParts: string[] = [];
+
+    try {
+      const fileReferences = parseAllFileReferences(promptText);
+      const gitRefs = parseGitChangeReferences(promptText);
+
+      if (fileReferences.length === 0 && gitRefs.length === 0) {
+        return { directFileRefs: [], excerptBlocks: "" };
+      }
+
+      // Resolve symbol references to actual file locations
+      const resolvedRefs = await this.resolveSymbolReferences(fileReferences);
+
+      for (const ref of resolvedRefs) {
+        const attachmentId = this.getAttachmentId(ref);
+
+        if (this.attachmentIds.has(attachmentId)) {
+          Log.debug(`[ContextExpander] Skipping duplicate: ${attachmentId}`);
+          continue;
+        }
+        this.attachmentIds.add(attachmentId);
+
+        if (ref.isDirectory) {
+          // Directory listings → excerpt (synthetic, no single file path)
+          const xml = await buildDirectoryAttachmentXml(
+            ref.path,
+            this.workspaceRoot
+          ).catch((err) => {
+            Log.error(
+              `[ContextExpander] Failed directory attachment ${ref.path}:`,
+              err
+            );
+            return null;
+          });
+          if (xml) {
+            excerptParts.push(xml);
+          }
+        } else if (ref.startLine && ref.endLine) {
+          // Line ranges (selection/symbol) → excerpt with numbered lines
+          const xml = await this.buildAttachmentXml(
+            ref.path,
+            ref.startLine,
+            ref.endLine,
+            ref.symbolName
+          ).catch((err) => {
+            Log.error(
+              `[ContextExpander] Failed excerpt attachment ${ref.path}:`,
+              err
+            );
+            return null;
+          });
+          if (xml) {
+            excerptParts.push(xml);
+          }
+        } else {
+          // Full-file ref → return absolute path for direct @-reference
+          directFileRefs.push(this.resolveWorkspacePath(ref.path));
+        }
+      }
+
+      // Git diffs → excerpt blocks (carry their own line number format)
+      const gitAttachments = await this.expandGitChanges(gitRefs);
+      excerptParts.push(...gitAttachments);
+
+      return {
+        directFileRefs,
+        excerptBlocks: excerptParts.join("\n\n"),
+      };
+    } catch (error) {
+      Log.error("[ContextExpander] Error in expandContextSplit:", error);
+      return { directFileRefs: [], excerptBlocks: "" };
     }
   }
 
@@ -351,11 +455,18 @@ ${rawContent}
     // Extract line range (0-indexed slice)
     const lines = rawContent.split("\n");
     const slicedLines = lines.slice(startLine - 1, endLine);
-    const content = slicedLines.join("\n");
 
     Log.debug(
       `[ContextExpander] Sliced ${filePath} lines ${startLine}-${endLine} (${slicedLines.length} lines of ${lines.length})`
     );
+
+    // Prefix each line with its 1-based source line number: "    N→content"
+    // This matches Claude Code's own output format and prevents line-number confusion
+    // when harnesses try to edit based on embedded excerpt content.
+    const numberedLines = slicedLines.map(
+      (line, i) => `    ${startLine + i}→${line}`
+    );
+    const content = numberedLines.join("\n");
 
     // Build attachment with symbol-aware ID and description
     const attachmentId = symbolName

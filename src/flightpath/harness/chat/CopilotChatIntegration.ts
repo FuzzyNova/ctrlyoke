@@ -8,13 +8,15 @@ import { ChatSessionMonitor } from "./ChatSessionMonitor";
 import { ChatSessionParser } from "./ChatSessionParser";
 import { NativeAttachmentHandler } from "./NativeAttachmentHandler";
 import { Log } from "../../../utils/Log";
-import type { SplitConfig } from "../../../utils/PromptFileSplitter";
+import { PromptFileSplitter, type SplitConfig } from "../../../utils/PromptFileSplitter";
+import { TempFileManager } from "../../../utils/TempFileManager";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { AgentExpander } from "../../../utils/AgentExpander";
 import { CliOutputFormatter } from "../shared/CliOutputFormatter";
 import { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import { ResolvedProperties } from "../../../utils/PropertyResolver";
 import type { PromptQueue } from "../../PromptQueue";
+import type { PromptSections } from "../../HarnessIntegration";
 
 /**
  * GitHub Copilot Chat Integration - UI automation with session file monitoring.
@@ -802,13 +804,11 @@ export class CopilotChatIntegration extends HarnessIntegration {
    * **useNativeAttachments=true** (opt-in):
    *   Uses VS Code's native `attachFile`/`attachSelection` commands for clean UI.
    *   Agent is handled via agent-specific chat window commands (see openAgentSpecificChat).
-   *   Skills are NOT supported in this mode (VS Code has no native skill API).
+   *   Skills are written to a temp file and attached (no native VS Code skills API).
    *
    * **useNativeAttachments=false** (default):
-   *   Builds fully expanded temp prompt files (with agent, skills, and context
-   *   embedded), then attaches those temp files to chat using native file
-   *   attachment commands. The typed prompt becomes a short instruction:
-   *   "Follow instructions in prompt1.md and prompt2.md"
+   *   Creates categorized typed temp files (agent, skills, excerpts, prompt),
+   *   attaches them to chat, and returns a structured instruction string.
    *   This gives a uniform experience matching CLI harnesses.
    */
   protected async buildPromptText(
@@ -816,142 +816,234 @@ export class CopilotChatIntegration extends HarnessIntegration {
     resolvedAgent?: string,
     resolvedSkills?: string[]
   ): Promise<string> {
-    // Check if native attachments are enabled for chat mode
     const useNativeAttachments =
       ConfigurationUtils.shouldUseChatNativeAttachments();
 
     if (useNativeAttachments) {
-      // Native attachments: use VS Code commands to attach files directly.
-      // Agent is handled by opening agent-specific chat window (sendPrompt).
-      // Skills NOT supported in this mode.
-      return await this.attachmentHandler.processAttachments(prompt.prompt);
-    }
-
-    // Non-native attachments: build fully expanded prompt (with agent, skills,
-    // context references), write to temp file(s), attach to chat, and return
-    // a short instruction referencing the files.
-    return await this.buildTempFilePrompt(
-      prompt,
-      resolvedAgent,
-      resolvedSkills
-    );
-  }
-
-  /**
-   * Build expanded prompt, write to temp file(s), attach them to chat,
-   * and return a short "Follow instructions in ..." message.
-   *
-   * This mirrors the CLI flow: agent + skills + context are embedded in
-   * temp .prompt.md files, giving a uniform experience across all harnesses.
-   */
-  private async buildTempFilePrompt(
-    prompt: PromptItem,
-    resolvedAgent?: string,
-    resolvedSkills?: string[]
-  ): Promise<string> {
-    const expandedText = await super.buildPromptText(
-      prompt,
-      resolvedAgent,
-      resolvedSkills
-    );
-    return this.wrapInTempFilePrompt(expandedText, prompt.prompt.trim());
-  }
-
-  /**
-   * Write already-expanded prompt text to temp file(s), attach them to chat,
-   * and return a short "Follow instructions in ..." string.
-   *
-   * Falls back to inline text for simple prompts (fast path) and when no
-   * workspace root is available.
-   *
-   * When rawPromptText is supplied and context was prepended to it, the context
-   * (agent, skills, attachments) is written to one or more files using the
-   * smaller chat split limits, and the prompt itself always gets its own dedicated
-   * file. This prevents Copilot's auto-summarizer from stripping the prompt text
-   * (which would otherwise end up at the end of a large context file).
-   */
-  private async wrapInTempFilePrompt(
-    expandedText: string,
-    rawPromptText?: string
-  ): Promise<string> {
-    if (!this.getWorkspaceRoot()) {
-      Log.warn("No workspace root, falling back to inline prompt");
-      return expandedText;
-    }
-
-    // Fast path: simple prompts (short, no special chars) can be typed inline —
-    // no temp file I/O or attachment commands needed.
-    if (this.isSimplePrompt(expandedText)) {
-      Log.debug(`📝 Simple prompt - using inline (fast path)`);
-      return expandedText;
-    }
-
-    // Detect whether context was prepended before the user prompt.
-    // buildPromptText / buildPromptWithInstructions always assembles sections with
-    // sections.join("\n\n"), placing rawPromptText as the final section.
-    const separator = "\n\n";
-    const hasContext =
-      rawPromptText !== undefined &&
-      expandedText !== rawPromptText &&
-      expandedText.endsWith(separator + rawPromptText);
-
-    let allTempFilePaths: string[];
-
-    if (hasContext && rawPromptText) {
-      const contextText = expandedText.slice(
-        0,
-        -(separator.length + rawPromptText.length)
+      // Native path: attachment handler handles @path refs and line selections.
+      // Agent is handled by openAgentSpecificChat. Skills written to temp file.
+      const sections = await this.buildPromptSections(
+        prompt,
+        undefined,
+        resolvedSkills
       );
-
-      // Context files: smaller limits via getTempFileSplitConfig override,
-      // with attachment-boundary awareness
-      const { tempFilePaths: contextPaths } =
-        await this.createTempPromptFiles(contextText);
-
-      // Prompt always gets its own dedicated file — never merged with context
-      const { tempFilePaths: promptPaths } =
-        await this.createTempPromptFiles(rawPromptText);
-
-      allTempFilePaths = [...contextPaths, ...promptPaths];
-      Log.debug(
-        `📁 Chat split: ${contextPaths.length} context file(s) + 1 prompt file`
+      const processedPrompt = await this.attachmentHandler.processAttachments(
+        prompt.prompt
       );
-    } else {
-      // No context to separate: write as single blob (still uses smaller limits)
-      const { tempFilePaths } = await this.createTempPromptFiles(expandedText);
-      allTempFilePaths = tempFilePaths;
-    }
-
-    // Track temp files for cleanup after execution
-    this.pendingTempFiles.push(...allTempFilePaths);
-
-    // Attach each temp file to chat using native file attachment
-    for (const filePath of allTempFilePaths) {
-      try {
-        const uri = vscode.Uri.file(filePath);
-        await vscode.commands.executeCommand(
-          "workbench.action.chat.attachFile",
-          uri
-        );
-        Log.info(`📎 Attached to chat: ${path.basename(filePath)}`);
-        // Small delay between attachments to prevent race conditions
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      } catch (error) {
-        Log.error(
-          `❌ Failed to attach temp file: ${path.basename(filePath)}`,
-          error
-        );
+      if (sections.skillContent) {
+        await this.attachSkillsAsTempFile(sections.skillContent);
       }
+      return processedPrompt;
     }
 
-    // Build short instruction referencing the files (bare filenames - no @ prefix)
-    const fileNames = allTempFilePaths.map((fp) => path.basename(fp));
-    if (fileNames.length === 1) {
-      return `Follow instructions in ${fileNames[0]}`;
+    // Non-native path: categorized typed temp files
+    const sections = await this.buildPromptSections(
+      prompt,
+      resolvedAgent,
+      resolvedSkills
+    );
+    if (
+      !sections.agentContent &&
+      !sections.skillContent &&
+      sections.directFileRefs.length === 0 &&
+      !sections.excerptContent &&
+      this.isSimplePrompt(sections.userPromptText)
+    ) {
+      return sections.userPromptText;
     }
-    // Natural language: "file1, file2, and file3"
-    const last = fileNames.pop()!;
-    return `Follow instructions in ${fileNames.join(", ")}, and ${last}`;
+    return this.buildAndAttachCategorizedFiles(sections);
+  }
+
+  /** Attach a file to Copilot Chat via VS Code command with a small delay. */
+  private async attachFileToChat(absolutePath: string): Promise<void> {
+    try {
+      const uri = vscode.Uri.file(absolutePath);
+      await vscode.commands.executeCommand(
+        "workbench.action.chat.attachFile",
+        uri
+      );
+      Log.info(`📎 Attached to chat: ${path.basename(absolutePath)}`);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    } catch (error) {
+      Log.error(
+        `❌ Failed to attach file: ${path.basename(absolutePath)}`,
+        error
+      );
+    }
+  }
+
+  /**
+   * Write skill content to a typed temp file and attach it to chat.
+   * Used for the native attachments path, which has no VS Code skills API.
+   */
+  private async attachSkillsAsTempFile(skillContent: string): Promise<void> {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      return;
+    }
+    const tempMgr = new TempFileManager(workspaceRoot);
+    const filePath = await tempMgr.createCategoryFile(
+      skillContent,
+      "skills"
+    );
+    this.pendingTempFiles.push(filePath);
+    await this.attachFileToChat(filePath);
+  }
+
+  /**
+   * Format the typed chat instruction string referencing attached file basenames.
+   * Matches the structured format used by CLI harnesses.
+   */
+  private formatCategorizedChatInstruction(
+    agentFileNames: string[],
+    skillFileName: string | undefined,
+    excerptFileNames: string[],
+    promptFileNames: string[]
+  ): string {
+    const last = promptFileNames[promptFileNames.length - 1];
+    const promptTarget =
+      promptFileNames.length === 1
+        ? last
+        : `${promptFileNames.slice(0, -1).join(", ")}, and ${last}`;
+
+    const contextParts: string[] = [];
+    if (agentFileNames.length > 0) {
+      contextParts.push(
+        `following agent instructions in ${agentFileNames.join(", ")}`
+      );
+    }
+    if (skillFileName) {
+      contextParts.push(`using skills in ${skillFileName}`);
+    }
+    if (excerptFileNames.length > 0) {
+      contextParts.push(
+        `with attachment excerpts in ${excerptFileNames.join(", ")}`
+      );
+    }
+
+    if (contextParts.length === 0) {
+      return `Follow instructions in ${promptTarget}`;
+    }
+    return `${contextParts.join(", ")}, follow the instructions in ${promptTarget}`;
+  }
+
+  /**
+   * Build categorized typed temp files from prompt sections, attach them to
+   * chat via VS Code commands, and return a structured instruction string.
+   *
+   * File categories written:
+   *   - .agent.prompt.md  — agent instructions (wrapped in <agentInstructions>)
+   *   - .skills.prompt.md — skill block
+   *   - .excerpts.prompt.md — inline excerpt content (line-numbered)
+   *   - .prompt.md        — user prompt text + optional workflow context
+   *
+   * Direct file refs (full-file @path references) are attached as actual workspace
+   * files — no temp copy needed.
+   */
+  private async buildAndAttachCategorizedFiles(
+    sections: PromptSections,
+    workflowContextText?: string,
+    workflowFilePath?: string,
+    stepNumber?: number
+  ): Promise<string> {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      Log.warn("No workspace root — falling back to inline prompt");
+      return workflowContextText
+        ? `${workflowContextText}\n\n${sections.userPromptText}`
+        : sections.userPromptText;
+    }
+
+    const tempMgr = new TempFileManager(workspaceRoot);
+    const splitter = new PromptFileSplitter(this.getTempFileSplitConfig());
+    const tempFilePaths: string[] = [];
+    const agentFileNames: string[] = [];
+    const excerptFileNames: string[] = [];
+    let skillFileName: string | undefined;
+    const promptFileNames: string[] = [];
+
+    // 1. Agent file(s)
+    if (sections.agentContent) {
+      const wrapped = `<agentInstructions>\n${sections.agentContent}\n</agentInstructions>`;
+      const { chunks } = splitter.split(wrapped);
+      const agentPaths = await tempMgr.createCategorySplitFiles(
+        chunks,
+        "agent",
+        workflowFilePath,
+        stepNumber
+      );
+      tempFilePaths.push(...agentPaths);
+      agentFileNames.push(...agentPaths.map((p) => path.basename(p)));
+    }
+
+    // 2. Skills file
+    if (sections.skillContent) {
+      const skillPath = await tempMgr.createCategoryFile(
+        sections.skillContent,
+        "skills",
+        workflowFilePath,
+        stepNumber
+      );
+      tempFilePaths.push(skillPath);
+      skillFileName = path.basename(skillPath);
+    }
+
+    // 3. Direct file refs — attach actual workspace files (no temp copy)
+    for (const absPath of sections.directFileRefs) {
+      await this.attachFileToChat(absPath);
+    }
+
+    // 4. Excerpt file(s)
+    if (sections.excerptContent) {
+      const { chunks } = splitter.split(sections.excerptContent);
+      const excerptPaths = await tempMgr.createCategorySplitFiles(
+        chunks,
+        "excerpts",
+        workflowFilePath,
+        stepNumber
+      );
+      tempFilePaths.push(...excerptPaths);
+      excerptFileNames.push(...excerptPaths.map((p) => path.basename(p)));
+    }
+
+    // 5. Prompt file(s) — user prompt with optional workflow context prepended
+    const promptContent = workflowContextText
+      ? `${workflowContextText}\n\n${sections.userPromptText}`
+      : sections.userPromptText;
+    const { chunks: promptChunks } = splitter.split(promptContent);
+    for (let i = 0; i < promptChunks.length; i++) {
+      const partNumber = promptChunks.length > 1 ? i + 1 : undefined;
+      const promptPath = await tempMgr.createCategoryFile(
+        promptChunks[i],
+        "prompt",
+        workflowFilePath,
+        stepNumber,
+        partNumber
+      );
+      tempFilePaths.push(promptPath);
+      promptFileNames.push(path.basename(promptPath));
+    }
+
+    // Track all temp files for cleanup after execution
+    this.pendingTempFiles.push(...tempFilePaths);
+
+    // Attach all typed temp files to chat
+    for (const fp of tempFilePaths) {
+      await this.attachFileToChat(fp);
+    }
+
+    Log.debug(
+      `📁 Chat categorized: ${agentFileNames.length} agent, ${skillFileName ? 1 : 0} skills, ` +
+        `${sections.directFileRefs.length} direct, ${excerptFileNames.length} excerpt, ` +
+        `${promptFileNames.length} prompt file(s)`
+    );
+
+    return this.formatCategorizedChatInstruction(
+      agentFileNames,
+      skillFileName,
+      excerptFileNames,
+      promptFileNames
+    );
   }
 
   /**
@@ -992,31 +1084,70 @@ export class CopilotChatIntegration extends HarnessIntegration {
     },
     isResumedSession?: boolean
   ): Promise<string> {
-    // Native attachments mode: files are attached via VS Code native commands,
-    // agent is handled by openAgentSpecificChat. Send only the raw prompt text —
-    // no inline expansion of agent, skills, or file references.
     if (ConfigurationUtils.shouldUseChatNativeAttachments()) {
-      return (await this.buildPromptText(prompt)).trim();
+      // Native path: attachment handler handles @path refs, skills written to
+      // temp file. Agent handled by openAgentSpecificChat in sendPrompt.
+      return (
+        await this.buildPromptText(
+          prompt,
+          workflowContext?.resolvedProperties?.agent,
+          workflowContext?.resolvedProperties?.skills
+        )
+      ).trim();
     }
 
-    // Build the fully expanded text (with workflow context if available), then
-    // route through temp file wrapping. This prevents large attachment blocks
-    // from being sent via the `type` command.
-    const expandedText = workflowContext
-      ? await this.buildPromptWithInstructions(
+    // Non-native path: categorized typed temp files (agent, skills, excerpts, prompt)
+    const omitAgentsAndSkills =
+      isResumedSession && ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume();
+    if (omitAgentsAndSkills) {
+      Log.debug("⏭️ Omitting agent and skill blocks (resuming existing session)");
+    }
+
+    const resolvedAgent = omitAgentsAndSkills
+      ? undefined
+      : workflowContext?.resolvedProperties?.agent;
+    const resolvedSkills = omitAgentsAndSkills
+      ? undefined
+      : workflowContext?.resolvedProperties?.skills;
+
+    const sections = await this.buildPromptSections(
+      prompt,
+      resolvedAgent,
+      resolvedSkills
+    );
+
+    // Fast path: simple prompts with no context attachments
+    if (
+      !sections.agentContent &&
+      !sections.skillContent &&
+      sections.directFileRefs.length === 0 &&
+      !sections.excerptContent &&
+      this.isSimplePrompt(sections.userPromptText)
+    ) {
+      Log.debug(`📝 Simple prompt — using inline (fast path)`);
+      return sections.userPromptText;
+    }
+
+    // Build workflow context text (priorContext block + criticalInstruction)
+    const rawContextText = workflowContext
+      ? this.buildWorkflowContextText(
           prompt,
           workflowContext.promptIndex,
           workflowContext.allPrompts,
           workflowContext.resolvedProperties?.allowDynamicExtension,
-          workflowContext.resolvedProperties?.agent,
-          workflowContext.resolvedProperties?.skills,
           workflowContext.resolvedProperties?.priorContext,
-          workflowContext.promptQueue?.getFinalPromptResponseTexts(),
-          isResumedSession
+          workflowContext.promptQueue?.getFinalPromptResponseTexts()
         )
-      : await super.buildPromptText(prompt);
+      : "";
 
-    return (await this.wrapInTempFilePrompt(expandedText, prompt.prompt.trim())).trim();
+    return (
+      await this.buildAndAttachCategorizedFiles(
+        sections,
+        rawContextText || undefined,
+        workflowContext?.filePath,
+        workflowContext ? workflowContext.promptIndex + 1 : undefined
+      )
+    ).trim();
   }
 
   /** Get the last parsed structured output (tool calls, thinking blocks, metadata) */
