@@ -53,7 +53,7 @@ export class PromptFileSplitter {
 
   // Conservative defaults: avoid Claude's 2K line limit, keep file sizes manageable
   private static readonly DEFAULT_CONFIG: Required<SplitConfig> = {
-    maxTokensPerFile: 15000,
+    maxTokensPerFile: 10000, // Claude Code CLI limit is 10K tokens per file
     maxLinesPerFile: 1800, // 90% of Claude's 2K line limit
     minChunkSize: 3000,
     splitOnAttachmentBoundaries: true,

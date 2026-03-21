@@ -9,21 +9,15 @@ import {
   UniversalCliOutput,
   CliEvent,
   TokenUsage,
-  BashCommandData,
-  FileReadData,
-  FileWriteData,
   FileEditData,
-  FileDeleteData,
-  McpToolCallData,
-  WebSearchData,
-  ToolCall,
+  FileWriteData,
   ThinkingBlock,
   TextData,
   UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES, HARNESS_IDS, OPERATION_STATUS } from "../../../types/DashboardConstants";
-import { CliEventMapper } from "../shared/CliEventMapper";
 import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
+import { QwenToolBuilder } from "./QwenToolBuilder";
 
 /**
  * Qwen Code CLI Log Parser
@@ -228,7 +222,7 @@ export class QwenLogParser extends BaseLogParser {
               callPathMap.set(part.functionCall.id, fp);
             }
             outputEvents.push(
-              this.buildToolInitiatedEvent(
+              QwenToolBuilder.buildInitiatedEvent(
                 part.functionCall.name,
                 args,
                 part.functionCall.id,
@@ -344,147 +338,6 @@ export class QwenLogParser extends BaseLogParser {
           : {}),
       },
     };
-  }
-
-  /**
-   * Build a tool initiated event with semantic type mapping
-   *
-   * Maps Qwen functionCall format to FlightPath semantic event types.
-   *
-   * @param toolName The tool name (e.g., "Bash", "Write", "Read")
-   * @param toolInput The tool input parameters
-   * @param toolCallId The tool call ID
-   * @param timestamp Event timestamp
-   * @returns Structured CLI event
-   */
-  private buildToolInitiatedEvent(
-    toolName: string,
-    toolInput: any,
-    toolCallId: string,
-    timestamp: number
-  ): CliEvent {
-    // Use CliEventMapper for consistent tool classification
-    const classification = CliEventMapper.classifyTool(toolName);
-    // Qwen tools use: absolute_path (read_file), file_path (edit, write_file), path
-    const filePath = (
-      toolInput.absolute_path ??
-      toolInput.file_path ??
-      toolInput.path
-    ) as string | undefined;
-
-    switch (classification.type) {
-      case CLI_EVENT_TYPES.BASH_COMMAND:
-        return {
-          type: CLI_EVENT_TYPES.BASH_COMMAND,
-          timestamp,
-          data: {
-            command:
-              ((toolInput.command ?? toolInput.cmd) as string | undefined) ||
-              "unknown",
-            workingDir: (toolInput.working_dir ??
-              toolInput.cwd ??
-              toolInput.workingDir) as string | undefined,
-            status: OPERATION_STATUS.INITIATED,
-          } as BashCommandData,
-        };
-
-      case CLI_EVENT_TYPES.FILE_READ:
-        return {
-          type: CLI_EVENT_TYPES.FILE_READ,
-          timestamp,
-          data: {
-            path: filePath || "unknown",
-            status: OPERATION_STATUS.INITIATED,
-          } as FileReadData,
-        };
-
-      case CLI_EVENT_TYPES.FILE_WRITE:
-        return {
-          type: CLI_EVENT_TYPES.FILE_WRITE,
-          timestamp,
-          data: {
-            path: filePath || "unknown",
-            content:
-              ((toolInput.content ?? toolInput.file_text) as string | undefined) ||
-              "",
-            status: OPERATION_STATUS.INITIATED,
-          } as FileWriteData,
-        };
-
-      case CLI_EVENT_TYPES.FILE_EDIT: {
-        const oldContent = (
-          toolInput.oldString ??
-          toolInput.old_string ??
-          toolInput.oldContent ??
-          toolInput.old_content ??
-          toolInput.old_str
-        ) as string | undefined;
-        const newContent = (
-          toolInput.newString ??
-          toolInput.new_string ??
-          toolInput.newContent ??
-          toolInput.new_content ??
-          toolInput.new_str
-        ) as string | undefined;
-        return {
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp,
-          data: {
-            path: filePath || "unknown",
-            oldContent,
-            newContent,
-            status: OPERATION_STATUS.INITIATED,
-          } as FileEditData,
-        };
-      }
-
-      case CLI_EVENT_TYPES.FILE_DELETE:
-        return {
-          type: CLI_EVENT_TYPES.FILE_DELETE,
-          timestamp,
-          data: {
-            path: filePath || "unknown",
-          } as FileDeleteData,
-        };
-
-      case CLI_EVENT_TYPES.WEB_SEARCH:
-        return {
-          type: CLI_EVENT_TYPES.WEB_SEARCH,
-          timestamp,
-          data: {
-            query: (toolInput.query as string) || "",
-          } as WebSearchData,
-        };
-
-      case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
-        const mcp = classification as {
-          type: typeof CLI_EVENT_TYPES.MCP_TOOL_CALL;
-          server: string;
-          tool: string;
-        };
-        return {
-          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-          timestamp,
-          data: {
-            server: mcp.server,
-            tool: mcp.tool,
-            parameters: toolInput,
-          } as McpToolCallData,
-        };
-      }
-
-      default:
-        // Generic TOOL_CALL fallback
-        return {
-          type: CLI_EVENT_TYPES.TOOL_CALL,
-          timestamp,
-          data: {
-            name: toolName,
-            parameters: toolInput,
-            id: toolCallId,
-          } as ToolCall,
-        };
-    }
   }
 
   /**

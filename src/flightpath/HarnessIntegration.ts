@@ -623,7 +623,7 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
 
   /**
    * Create temp prompt file(s) from expanded prompt text.
-   * Handles large-prompt splitting (>20K tokens or >1800 lines) via PromptFileSplitter.
+   * Handles large-prompt splitting (>10K tokens or >1800 lines) via PromptFileSplitter.
    * Logs creation stats for debugging.
    *
    * This is the single implementation shared by all harnesses that use temp files

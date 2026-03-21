@@ -278,7 +278,7 @@ export class GeminiCliProvider implements ICliProvider {
   }
 
   buildInteractiveTuiCommand(baseArgs: string[], promptText: string): string {
-    return `gemini --prompt "${promptText.replace(/"/g, '\\"')}" ${baseArgs.join(" ")}`;
+    return `gemini --prompt-interactive "${promptText.replace(/"/g, '\\"')}" ${baseArgs.join(" ")}`;
   }
 
   async getMcpConfigArgs(

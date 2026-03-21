@@ -1,1 +1,2 @@
-test in directory with spaces
+you were able to read me even though I'm inside a directory with spaces, good job!!
+

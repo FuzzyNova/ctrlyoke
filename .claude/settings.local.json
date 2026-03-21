@@ -90,7 +90,8 @@
       "Bash(do echo:*)",
       "Read(//home/nathan/dev/flightpath/**)",
       "Bash(done)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(gemini --help)"
     ],
     "deny": [],
     "ask": []
