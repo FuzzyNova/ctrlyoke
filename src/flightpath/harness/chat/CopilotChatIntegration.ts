@@ -896,8 +896,8 @@ export class CopilotChatIntegration extends HarnessIntegration {
    */
   private formatCategorizedChatInstruction(
     agentFileNames: string[],
-    skillFileName: string | undefined,
-    contextFileName: string | undefined,
+    skillFileNames: string[],
+    contextFileNames: string[],
     excerptFileNames: string[],
     promptFileNames: string[]
   ): string {
@@ -913,11 +913,13 @@ export class CopilotChatIntegration extends HarnessIntegration {
         `following agent instructions in ${agentFileNames.join(", ")}`
       );
     }
-    if (skillFileName) {
-      contextParts.push(`using skills in ${skillFileName}`);
+    if (skillFileNames.length > 0) {
+      contextParts.push(`using skills in ${skillFileNames.join(", ")}`);
     }
-    if (contextFileName) {
-      contextParts.push(`with prior conversation context in ${contextFileName}`);
+    if (contextFileNames.length > 0) {
+      contextParts.push(
+        `with prior conversation context in ${contextFileNames.join(", ")}`
+      );
     }
     if (excerptFileNames.length > 0) {
       contextParts.push(
@@ -963,9 +965,9 @@ export class CopilotChatIntegration extends HarnessIntegration {
     const splitter = new PromptFileSplitter(this.getTempFileSplitConfig());
     const tempFilePaths: string[] = [];
     const agentFileNames: string[] = [];
+    const skillFileNames: string[] = [];
+    const contextFileNames: string[] = [];
     const excerptFileNames: string[] = [];
-    let skillFileName: string | undefined;
-    let contextFileName: string | undefined;
     const promptFileNames: string[] = [];
 
     // 1. Agent file(s)
@@ -982,16 +984,16 @@ export class CopilotChatIntegration extends HarnessIntegration {
       agentFileNames.push(...agentPaths.map((p) => path.basename(p)));
     }
 
-    // 2. Skills file
+    // 2. Skills file(s) — split if large (rare, but handled for completeness)
     if (sections.skillContent) {
-      const skillPath = await tempMgr.createCategoryFile(
-        sections.skillContent,
+      const skillPaths = await tempMgr.createCategorySplitFiles(
+        splitter.split(sections.skillContent).chunks,
         "skills",
         workflowFilePath,
         stepNumber
       );
-      tempFilePaths.push(skillPath);
-      skillFileName = path.basename(skillPath);
+      tempFilePaths.push(...skillPaths);
+      skillFileNames.push(...skillPaths.map((p) => path.basename(p)));
     }
 
     // 3. Direct file refs — attach actual workspace files (no temp copy)
@@ -999,16 +1001,17 @@ export class CopilotChatIntegration extends HarnessIntegration {
       await this.attachFileToChat(absPath);
     }
 
-    // 4. Prior context file — single file, never split (XML must not be torn apart)
+    // 4. Prior context file(s) — split on <step> boundaries so no file exceeds
+    //    the token limit; <criticalInstruction> appended to the last chunk
     if (workflowContextText) {
-      const contextPath = await tempMgr.createCategoryFile(
-        workflowContextText,
+      const contextPaths = await tempMgr.createCategorySplitFiles(
+        splitter.splitContextContent(workflowContextText).chunks,
         "context",
         workflowFilePath,
         stepNumber
       );
-      tempFilePaths.push(contextPath);
-      contextFileName = path.basename(contextPath);
+      tempFilePaths.push(...contextPaths);
+      contextFileNames.push(...contextPaths.map((p) => path.basename(p)));
     }
 
     // 5. Excerpt file(s)
@@ -1048,15 +1051,15 @@ export class CopilotChatIntegration extends HarnessIntegration {
     }
 
     Log.debug(
-      `📁 Chat categorized: ${agentFileNames.length} agent, ${skillFileName ? 1 : 0} skills, ` +
-        `${sections.directFileRefs.length} direct, ${contextFileName ? 1 : 0} context, ` +
+      `📁 Chat categorized: ${agentFileNames.length} agent, ${skillFileNames.length} skills, ` +
+        `${sections.directFileRefs.length} direct, ${contextFileNames.length} context, ` +
         `${excerptFileNames.length} excerpt, ${promptFileNames.length} prompt file(s)`
     );
 
     return this.formatCategorizedChatInstruction(
       agentFileNames,
-      skillFileName,
-      contextFileName,
+      skillFileNames,
+      contextFileNames,
       excerptFileNames,
       promptFileNames
     );

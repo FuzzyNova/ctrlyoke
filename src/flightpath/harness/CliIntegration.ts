@@ -480,17 +480,17 @@ export class CliIntegration extends HarnessIntegration {
       agentRefs.push(...agentPaths.map(fmtRef));
     }
 
-    // Skills: single file (almost never large enough to split)
-    let skillRef: string | null = null;
+    // Skills: split if large (rare, but handled for completeness)
+    const skillRefs: string[] = [];
     if (sections.skillContent) {
-      const skillPath = await tempMgr.createCategoryFile(
-        sections.skillContent,
+      const skillPaths = await tempMgr.createCategorySplitFiles(
+        splitter.split(sections.skillContent).chunks,
         "skills",
         filePath,
         stepNumber
       );
-      allTempFilePaths.push(skillPath);
-      skillRef = fmtRef(skillPath);
+      allTempFilePaths.push(...skillPaths);
+      skillRefs.push(...skillPaths.map(fmtRef));
     }
 
     // Direct file refs: workspace files the harness reads natively — no temp file
@@ -498,18 +498,18 @@ export class CliIntegration extends HarnessIntegration {
       this.formatDirectFileRef(p)
     );
 
-    // Prior context: <priorContext> + <criticalInstruction> blocks — single file,
-    // never split (XML structure must not be torn apart mid-element)
-    let contextRef: string | null = null;
+    // Prior context: split on <step> boundaries so no file exceeds the token
+    // limit. <criticalInstruction> is appended to the last chunk.
+    const contextRefs: string[] = [];
     if (contextContent) {
-      const contextPath = await tempMgr.createCategoryFile(
-        contextContent,
+      const contextPaths = await tempMgr.createCategorySplitFiles(
+        splitter.splitContextContent(contextContent).chunks,
         "context",
         filePath,
         stepNumber
       );
-      allTempFilePaths.push(contextPath);
-      contextRef = fmtRef(contextPath);
+      allTempFilePaths.push(...contextPaths);
+      contextRefs.push(...contextPaths.map(fmtRef));
     }
 
     // Excerpts: selection/sym/git/dir attachment blocks, split if large
@@ -548,9 +548,9 @@ export class CliIntegration extends HarnessIntegration {
       tempFilePaths: allTempFilePaths,
       promptWithInstruction: this.formatCategorizedReferences(
         agentRefs,
-        skillRef,
+        skillRefs,
         directRefs,
-        contextRef,
+        contextRefs,
         excerptRefs,
         promptRefs
       ),
@@ -571,17 +571,17 @@ export class CliIntegration extends HarnessIntegration {
    * When only a prompt exists: "Follow instructions in @prompt.md "
    *
    * @param agentRefs Formatted file refs for agent files
-   * @param skillRef Formatted file ref for skills file, or null
+   * @param skillRefs Formatted file refs for skills files (split if large)
    * @param directRefs Formatted direct workspace file refs
-   * @param contextRef Formatted file ref for prior context file, or null
+   * @param contextRefs Formatted file refs for prior context files (split on step boundaries)
    * @param excerptRefs Formatted file refs for excerpt files
    * @param promptRefs Formatted file refs for prompt files
    */
   protected formatCategorizedReferences(
     agentRefs: string[],
-    skillRef: string | null,
+    skillRefs: string[],
     directRefs: string[],
-    contextRef: string | null,
+    contextRefs: string[],
     excerptRefs: string[],
     promptRefs: string[]
   ): string {
@@ -591,16 +591,18 @@ export class CliIntegration extends HarnessIntegration {
       clauses.push(`Following these agent instructions ${agentRefs.join(", ")}`);
     }
 
-    if (skillRef) {
-      clauses.push(`using these available skills ${skillRef}`);
+    if (skillRefs.length > 0) {
+      clauses.push(`using these available skills ${skillRefs.join(", ")}`);
     }
 
     if (directRefs.length > 0) {
       clauses.push(`using these file references ${directRefs.join(", ")}`);
     }
 
-    if (contextRef) {
-      clauses.push(`with this prior conversation context ${contextRef}`);
+    if (contextRefs.length > 0) {
+      clauses.push(
+        `with this prior conversation context ${contextRefs.join(", ")}`
+      );
     }
 
     if (excerptRefs.length > 0) {

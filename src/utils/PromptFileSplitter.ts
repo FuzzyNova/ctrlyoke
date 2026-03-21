@@ -377,6 +377,92 @@ export class PromptFileSplitter {
   }
 
   /**
+   * Split prior-context XML on <step> boundaries.
+   *
+   * Groups <step>…</step> elements from the <priorContext> block greedily into
+   * chunks that fit within maxTokensPerFile. A step that exceeds the limit by
+   * itself is emitted as its own oversized chunk rather than being split
+   * mid-XML (XML must remain valid). The <criticalInstruction> block (if
+   * present) is appended to the last chunk.
+   *
+   * Falls back to split() when no <priorContext> block is detected (e.g. the
+   * text is only a <criticalInstruction>).
+   */
+  splitContextContent(text: string): SplitResult {
+    // Fast path: entire block fits in one file
+    if (!this.needsSplitting(text)) {
+      return {
+        needsSplit: false,
+        chunks: [text],
+        tokenCounts: [this.countTokens(text)],
+        lineCounts: [this.countLines(text)],
+      };
+    }
+
+    // Extract <priorContext>…</priorContext> inner content
+    const pcMatch = text.match(/^<priorContext>([\s\S]*?)<\/priorContext>/m);
+    if (!pcMatch) {
+      // No priorContext block — fall back to regular paragraph splitting
+      return this.split(text);
+    }
+
+    // Extract individual <step> elements (lazy, top-level only)
+    const stepPattern = /<step[^>]*>[\s\S]*?<\/step>/g;
+    const steps: string[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = stepPattern.exec(pcMatch[1])) !== null) {
+      steps.push(m[0]);
+    }
+
+    if (steps.length === 0) {
+      return this.split(text);
+    }
+
+    // Extract trailing <criticalInstruction> (appended to the last chunk)
+    const critMatch = text.match(
+      /\n*(<criticalInstruction>[\s\S]*<\/criticalInstruction>)\s*$/
+    );
+    const critSuffix = critMatch ? `\n\n${critMatch[1]}` : "";
+
+    // Overhead of the <priorContext>…</priorContext> wrapper per chunk
+    const wrapperTokens = this.countTokens("<priorContext>\n</priorContext>");
+
+    // Greedy packing of steps into chunks
+    const chunks: string[] = [];
+    let currentSteps: string[] = [];
+    let currentTokens = wrapperTokens;
+
+    for (const step of steps) {
+      const stepTokens = this.countTokens(step);
+      if (
+        currentTokens + stepTokens > this.config.maxTokensPerFile &&
+        currentSteps.length > 0
+      ) {
+        // Flush current chunk (no critSuffix — only the last chunk gets it)
+        chunks.push(
+          `<priorContext>\n${currentSteps.join("\n")}\n</priorContext>`
+        );
+        currentSteps = [step];
+        currentTokens = wrapperTokens + stepTokens;
+      } else {
+        // Add to current chunk (even if this step alone exceeds the limit)
+        currentSteps.push(step);
+        currentTokens += stepTokens;
+      }
+    }
+
+    // Last chunk: append <criticalInstruction>
+    chunks.push(
+      `<priorContext>\n${currentSteps.join("\n")}\n</priorContext>${critSuffix}`
+    );
+
+    const tokenCounts = chunks.map((c) => this.countTokens(c));
+    const lineCounts = chunks.map((c) => this.countLines(c));
+
+    return { needsSplit: chunks.length > 1, chunks, tokenCounts, lineCounts };
+  }
+
+  /**
    * Force character-level split for extremely long lines
    * Adds continuation markers to preserve context
    *

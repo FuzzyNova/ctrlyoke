@@ -225,7 +225,7 @@ export class TempFileManager {
    */
   async createCategorySplitFiles(
     chunks: string[],
-    category: "agent" | "excerpts",
+    category: "agent" | "skills" | "context" | "excerpts",
     originalFilePath?: string,
     stepNumber?: number
   ): Promise<string[]> {
