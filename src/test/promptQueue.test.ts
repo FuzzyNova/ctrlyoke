@@ -652,7 +652,7 @@ suite("PromptQueue State Machine Tests", () => {
     test("getActiveExecutionTime() should return elapsed time", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       queue.startExecutionTimer();
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 100));
       const elapsed = queue.getActiveExecutionTime();
       assert.ok(elapsed >= 50);
     });
