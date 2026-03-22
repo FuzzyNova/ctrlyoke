@@ -23,7 +23,7 @@ Shared utilities for file system operations, logging, validation, CLI process ma
 
 **AttachmentBuilders:** XML attachment building for file/directory/symbol references. Resolves symbols to file locations with line ranges.
 
-**PromptFileSplitter:** Intelligently splits large prompts into chunks respecting token limits (15K default) and line limits (1800 for Claude's 2K limit). Splits on paragraph boundaries, then lines, then sentences.
+**PromptFileSplitter:** Intelligently splits large prompts into chunks respecting token limits (10K default — Claude Code CLI per-file limit) and line limits (1800 for Claude's 2K limit). Two split methods: `split()` — splits on `</attachment>` boundaries first, then paragraphs/lines; `splitContextContent()` — splits prior-context XML on `<step>` boundaries, keeping XML valid (never tears mid-element), appending `<criticalInstruction>` only to the last chunk.
 
 **ModelRegistry:** Queries Copilot models via `vscode.lm.selectChatModels()`, filters CLI-supported models, emits events on load.
 
@@ -45,7 +45,7 @@ Shared utilities for file system operations, logging, validation, CLI process ma
 
 **SkillExpander:** Expands skill names to concise prompt blocks for injection. Progressive disclosure: only name, path, description included (~10-20 tokens per skill). Full SKILL.md body NOT included. Output wrapped in `<skillInstructions>` tags.
 
-**TempFileManager:** Manages temp files in .flightpath/temp/. Creates unique prompt files with debugging-friendly names, cleanup after execution, orphaned file cleanup on activation.
+**TempFileManager:** Manages temp files in `.flightpath/temp/`. Creates unique prompt files with debugging-friendly names, cleanup after execution, orphaned file cleanup on activation. Supports **categorized file creation** for prompt splitting: `createCategoryFile(content, category, ...)` creates a single typed file; `createCategorySplitFiles(chunks, category, ...)` creates multiple split parts. Categories: `agent` (`.agent.prompt.md`), `skills` (`.skills.prompt.md`), `context` (`.context.prompt.md`), `excerpts` (`.excerpts.prompt.md`), `prompt` (`.prompt.md`). Split parts are numbered `.1.prompt.md`, `.2.prompt.md`, etc.; single-part files omit the number.
 
 **RetryUtils:** Retry with exponential backoff for transient failures. Supports fixed/custom delays, PermanentFailureError for immediate abort, common for file polling and CLI log discovery.
 
@@ -69,7 +69,7 @@ Shared utilities for file system operations, logging, validation, CLI process ma
 </keyUtilities>
 
 <terminology>
-**Harness** (not "provider"): Execution framework/integration layer (CopilotCli, CopilotChat, ClaudeCli, CodexCli). All code uses "harness" terminology consistently.
+**Harness** (not "provider"): Execution framework/integration layer (CopilotCli, CopilotChat, ClaudeCli, CodexCli, OpenCodeCli, QwenCli, GeminiCli). All code uses "harness" terminology consistently.
 </terminology>
 
 <relatedComponents>

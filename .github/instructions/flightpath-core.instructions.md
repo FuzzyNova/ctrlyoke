@@ -33,8 +33,8 @@ Orchestration, parsing, queue, validation, and template management. Top-level `s
 
 <workflowOrchestrator>
 **Registry role:** Manages the map of `WorkflowInstance` objects; owns cross-cutting resources.
-**Five detector integrations** created once at startup (shared): `copilotCli`, `copilotChat`, `claudeCli`, `codexCli`, `openCodeCli`
-**Harness selection:** Supports copilot-cli (default), copilot-chat, claude-cli, codex-cli, opencode-cli
+**Seven detector integrations** created once at startup (shared): `copilotCli`, `copilotChat`, `claudeCli`, `codexCli`, `openCodeCli`, `qwenCli`, `geminiCli`
+**Harness selection:** Supports copilot-cli (default), copilot-chat, claude-cli, codex-cli, opencode-cli, qwen-cli, gemini-cli
 **WorkflowInstance registry:** `workflows` Map (running/paused instances), `viewedInstance` (displayed in dashboard)
 **CLI session tracking:** `cliSessions` Map for `CliWatchSession` objects that watch CLI-managed workflows
 **Orchestrator-scoped helpers:** `TemplateImporter`, `WorkflowCommandHandler`, `WorkspaceSessionManager`, `PromptFileParser`
@@ -170,6 +170,8 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 - `./harness/claude/ClaudeCliProvider.ts` — Claude CLI harness
 - `./harness/codex/CodexCliProvider.ts` — Codex CLI harness
 - `./harness/opencode/OpenCodeCliProvider.ts` — OpenCode CLI harness
+- `./harness/qwen/QwenCliProvider.ts` — Qwen Code CLI harness
+- `./harness/gemini/GeminiCliProvider.ts` — Gemini CLI harness
 - `./harness/chat/CopilotChatIntegration.ts` — Chat harness (VS Code-only)
 - `./orchestration/*.ts` — Orchestration helpers (8 classes)
 - `../types/FlightPathTypes.ts` — Core types (Harness enum, PromptItem, WorkingFile, etc.)

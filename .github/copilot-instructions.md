@@ -21,14 +21,17 @@ Automate AI coding assistants (GitHub Copilot, Claude Code, Codex) through struc
 
 ## Harness Model
 
-FlightPath supports four **harnesses** (execution strategies for AI interactions):
+FlightPath supports seven **harnesses** (execution strategies for AI interactions):
 
-| Harness ID     | Description                                                            |
-| -------------- | ---------------------------------------------------------------------- |
-| `copilot-cli`  | GitHub Copilot CLI (default) — log file monitoring, session resumption |
-| `claude-cli`   | Anthropic Claude Code CLI — JSON streaming, hook-based completion      |
-| `codex-cli`    | OpenAI Codex CLI — JSONL events, notify hook                           |
-| `copilot-chat` | Copilot Chat window — session file monitoring, UI automation fallback  |
+| Harness ID     | Description                                                                    |
+| -------------- | ------------------------------------------------------------------------------ |
+| `copilot-cli`  | GitHub Copilot CLI (default) — log file monitoring, session resumption         |
+| `claude-cli`   | Anthropic Claude Code CLI — JSON streaming, hook-based completion              |
+| `codex-cli`    | OpenAI Codex CLI — JSONL events, notify hook                                   |
+| `opencode-cli` | OpenCode CLI — JSONL events, plugin-based completion, config-file permissions  |
+| `qwen-cli`     | Qwen Code CLI — JSONL events, log-based session discovery, hook completion     |
+| `gemini-cli`   | Google Gemini CLI — JSON streaming, hook-based completion, MCP config support  |
+| `copilot-chat` | Copilot Chat window — session file monitoring, UI automation fallback          |
 
 > **Critical terminology:** Always say **harness** (not "provider"). The term "provider" is reserved for VS Code API class names (`CompletionItemProvider`, `WebviewViewProvider`).
 
@@ -40,7 +43,7 @@ User loads workflow (.flightpath.yaml/.json/.prompt.md)
     → PromptQueue (state machine: idle → running → paused/completed/error)
     → WorkflowExecutor (sequential prompt loop)
         → PropertyResolver (3-tier: prompt > workflow > settings)
-        → HarnessIntegration (abstract base, 4 concrete implementations)
+        → HarnessIntegration (abstract base, 7 concrete implementations)
             → CliIntegration / CopilotChatIntegration
         → EndConditionHandler (retry orchestration)
             → EndConditionEvaluator (isolated child process)
@@ -57,7 +60,10 @@ src/flightpath/harness/
 ├── shared/interfaces/         ← ICliProvider, IResponseParser, INotificationMonitor, IToolPermissionMapper, ILogParser
 ├── copilot/                   ← CopilotCliProvider + 4 supporting classes
 ├── claude/                    ← ClaudeCliProvider + 4 supporting classes
-└── codex/                     ← CodexCliProvider + 4 supporting classes
+├── codex/                     ← CodexCliProvider + 4 supporting classes
+├── opencode/                  ← OpenCodeCliProvider + 5 supporting classes
+├── qwen/                      ← QwenCliProvider + 5 supporting classes
+└── gemini/                    ← GeminiCliProvider + 5 supporting classes
 ```
 
 Adding a new harness requires changes across multiple layers (harness directory, types, wiring, settings, UI). See `docs/ADDING_NEW_CLI_HARNESS.md` for the complete guide.
@@ -271,11 +277,14 @@ All settings accessed via `src/utils/ConfigurationUtils.ts`. Prefix: `flightpath
 
 | Setting                     | Default             | Description                                                              |
 | --------------------------- | ------------------- | ------------------------------------------------------------------------ |
-| `harness`                   | `copilot-cli`       | Active harness: `copilot-cli`, `copilot-chat`, `claude-cli`, `codex-cli` |
+| `harness`                   | `copilot-cli`       | Active harness: `copilot-cli`, `copilot-chat`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `gemini-cli` |
 | `cliExecutionMode`          | `interactive`       | `interactive` (terminal) or `headless` (background process)              |
 | `copilotCliModel`           | `claude-sonnet-4.5` | Default model for Copilot CLI                                            |
 | `claudeCliModel`            | `sonnet`            | Default model for Claude CLI                                             |
-| `codexCliModel`             | `gpt-5.1-codex`     | Default model for Codex CLI                                              |
+| `codexCliModel`             | `gpt-5.2-codex`     | Default model for Codex CLI                                              |
+| `openCodeCliModel`          | (provider default)  | Default model for OpenCode CLI (provider/model format)                   |
+| `qwenCliModel`              | `coder-model`       | Default model for Qwen Code CLI                                          |
+| `geminiCliModel`            | `gemini-2.5-pro`    | Default model for Gemini CLI                                             |
 | `cliToolPermissions`        | `allowAll`          | `dangerouslyAllowAll`, `allowAll`, or `custom`                           |
 | `cliAllowedTools`           | `[]`                | Tool allow patterns (Copilot format, auto-converted for Claude/Codex)    |
 | `cliDeniedTools`            | `[]`                | Tool deny patterns (takes precedence over allow)                         |

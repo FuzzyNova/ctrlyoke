@@ -3,7 +3,7 @@ applyTo: "src/flightpath/harness/**"
 ---
 
 <purpose>
-Harness integrations for GitHub Copilot, Claude Code, Codex, and OpenCode. Deterministic completion, structured output, no UI dependencies. Supports both interactive TUI and headless background execution modes.
+Harness integrations for GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Gemini CLI. Deterministic completion, structured output, no UI dependencies. Supports both interactive TUI and headless background execution modes.
 </purpose>
 
 <architectureOverview>
@@ -31,9 +31,9 @@ FlightPath uses **composition over inheritance** for harness integrations:
 **IntegrationFactory** (src/flightpath/IntegrationFactory.ts):
 
 - Central factory for creating provider-specific `CliIntegration` instances
-- Methods: `createCopilotCli()`, `createClaudeCli()`, `createCodexCli()`, `createOpenCodeCli()`, `createForHarness(harness)`
+- Methods: `createCopilotCli()`, `createClaudeCli()`, `createCodexCli()`, `createOpenCodeCli()`, `createQwenCli()`, `createGeminiCli()`, `createForHarness(harness)`
 - `VsCodeIntegrationFactory` extends this with chat support
-- WorkflowOrchestrator uses this to create and cache all four integrations at startup
+- WorkflowOrchestrator uses this to create and cache all integrations at startup
 
 **CliLogMonitor** (src/flightpath/harness/CliLogMonitor.ts):
 
@@ -224,14 +224,17 @@ Key settings (see package.json for full list):
 
 **Execution Mode**:
 
-- `flightpath.harness`: "copilot-cli" | "claude-cli" | "codex-cli" | "copilot-chat"
+- `flightpath.harness`: "copilot-cli" | "claude-cli" | "codex-cli" | "opencode-cli" | "qwen-cli" | "gemini-cli" | "copilot-chat"
 - `flightpath.cliExecutionMode`: "interactive" | "headless" (default: interactive)
 
 **Models** (per provider):
 
 - `flightpath.copilotCliModel`: "claude-sonnet-4.5" | "gpt-5" | etc.
 - `flightpath.claudeCliModel`: "sonnet" | "opus" | "haiku"
-- `flightpath.codexCliModel`: "gpt-5.1-codex" | "gpt-5.1-codex-max" | etc.
+- `flightpath.codexCliModel`: "gpt-5.2-codex" | "gpt-5.2-codex-max" | etc.
+- `flightpath.openCodeCliModel`: provider/model format (e.g. "anthropic/claude-sonnet-4-6")
+- `flightpath.qwenCliModel`: "coder-model" | etc.
+- `flightpath.geminiCliModel`: "gemini-2.5-pro" | etc.
 
 **Tool Permissions** (shared across all CLIs):
 
@@ -256,27 +259,7 @@ Key settings (see package.json for full list):
   </configuration>
 
 <factoryPattern>
-**WorkflowOrchestrator** instantiates ALL integrations eagerly at startup, then routes execution to the active harness:
-
-```typescript
-// WorkflowOrchestrator.ts — all integrations created upfront
-this.copilotCliIntegration = new CliIntegration(
-  new CopilotCliProvider(),
-  this.context
-);
-this.claudeCliIntegration = new CliIntegration(
-  new ClaudeCliProvider(),
-  this.context
-);
-this.codexCliIntegration = new CliIntegration(
-  new CodexCliProvider(),
-  this.context
-);
-this.chatIntegration = new CopilotChatIntegration(this.context);
-
-// Harness availability checked for all integrations; active one selected via
-// flightpath.harness setting using HARNESS_IDS constants.
-```
+**WorkflowOrchestrator** instantiates ALL integrations eagerly at startup via `IntegrationFactory`, then routes execution to the active harness. All seven integrations (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, gemini-cli, copilot-chat) are created at startup. Availability is checked for all; the active one is selected via the `flightpath.harness` setting using `HARNESS_IDS` constants.
 
 See: `docs/ADDING_NEW_CLI_HARNESS.md` for the complete guide to adding a new harness.
 </factoryPattern>
@@ -387,11 +370,72 @@ Summary of required layers:
 **Tool Permissions**: Same as Copilot (auto-converted from shared settings)
 **File Reference**: `-f path/to/file.ts`
 **MCP Config**: Not supported
-**Models**: GPT-5 variants (gpt-5.1-codex, gpt-5.1-codex-max, gpt-5.2)
+**Models**: GPT-5 variants (gpt-5.2-codex, gpt-5.3-codex, gpt-5.1-codex, gpt-5.1-codex-max, etc.)
 
 **Session Resumption**: `--resume <thread-id>`
 
 **See**: CodexCliProvider.ts, CodexNotificationMonitor.ts, CodexResponseParser.ts, `docs/CODEX_CLI_INTEGRATION.md`
+
+---
+
+### OpenCode CLI (OpenCodeCliProvider)
+
+**Completion Detection**:
+
+- **Headless**: JSONL events (`session.status` idle events) via `--format json`
+- **Interactive**: TypeScript plugin written to `.opencode/plugin/flightpath-completion-hook.js` before each run; the plugin fires on session status changes
+- **Monitoring**: Plugin-based (not hook file polling)
+- **Session ID**: Extracted from JSONL events
+
+**Output Format**: JSONL streaming (`--format json`, `opencode run "prompt"` for headless; `opencode --prompt "..."` for interactive)
+**Tool Permissions**: Config-file driven (`opencode.json`); `OpenCodeToolPermissionMapper` returns `[]` (no CLI permission args)
+**File Reference**: Not applicable (prompt passed inline or as `-f` arg depending on mode)
+**MCP Config**: Not supported
+**Models**: `provider/model` format (e.g. `anthropic/claude-sonnet-4-6`, `openai/gpt-5`)
+
+**Session Resumption**: `-s <sessionId>`
+
+**See**: OpenCodeCliProvider.ts, OpenCodeNotificationMonitor.ts, OpenCodeResponseParser.ts
+
+---
+
+### Qwen Code CLI (QwenCliProvider)
+
+**Completion Detection**:
+
+- **Headless**: Process exit + JSONL events
+- **Interactive**: Hook/notify file (writes to `.flightpath/temp/qwen-notifications/`)
+- **Session ID**: From `system.init` or `result` JSONL events; fallback via log file analysis (`QwenLogParser`)
+
+**Output Format**: JSONL streaming
+**Tool Permissions**: `--approval-mode`, `-y`, `--allowed-tools`, `--exclude-tools` (via `QwenToolPermissionMapper`)
+**File Reference**: Prompt passed inline or via temp file
+**MCP Config**: Not supported
+**Models**: e.g. `coder-model` (via `--model`)
+
+**Session Resumption**: `--continue` flag
+
+**See**: QwenCliProvider.ts, QwenNotificationMonitor.ts, QwenResponseParser.ts, QwenLogParser.ts
+
+---
+
+### Gemini CLI (GeminiCliProvider)
+
+**Completion Detection**:
+
+- **Headless**: JSON streaming events
+- **Interactive**: Stop hook (writes JSON to `.flightpath/temp/gemini-notifications/`)
+- **Session ID**: Extracted from JSON `init` events
+
+**Output Format**: JSON streaming
+**Tool Permissions**: Mode-based via `GeminiToolPermissionMapper`
+**File Reference**: Prompt passed inline or via temp file
+**MCP Config**: Supported (`getMcpConfigArgs()` / `getMcpConfigFilePath()`)
+**Models**: `gemini-2.5-pro` | etc. (via `--model`)
+
+**Session Resumption**: Via session ID flag
+
+**See**: GeminiCliProvider.ts, GeminiNotificationMonitor.ts, GeminiResponseParser.ts
 
 </providerSpecifics>
 

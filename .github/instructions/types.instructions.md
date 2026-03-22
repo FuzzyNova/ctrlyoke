@@ -17,7 +17,7 @@ Core data structures and constants for FlightPath extension. TypeScript strict m
 
 **`PriorContext` type:** `"all" | "previous" | "none" | "finalPromptAll" | "finalPromptPrevious" | number[]` — controls injection of prior prompt outputs as XML context before the prompt text.
 
-**`Harness` enum:** `CopilotCli` | `CopilotChat` | `ClaudeCli` | `CodexCli` | `OpenCodeCli` — values: `"copilot-cli"` | `"copilot-chat"` | `"claude-cli"` | `"codex-cli"` | `"opencode-cli"`
+**`Harness` enum:** `CopilotCli` | `CopilotChat` | `ClaudeCli` | `CodexCli` | `OpenCodeCli` | `QwenCli` | `GeminiCli` — values: `"copilot-cli"` | `"copilot-chat"` | `"claude-cli"` | `"codex-cli"` | `"opencode-cli"` | `"qwen-cli"` | `"gemini-cli"`
 
 **`ExecutionProperties` interface** — shared by `PromptFile`, `PromptItem`, `PromptRuntimeMetadata`. Three-tier precedence: prompt-level > workflow-level > global settings.
 
@@ -64,7 +64,7 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 <cliOutputTypes>
 **File: CliOutputTypes.ts**
 
-**Universal CLI output types** for standardizing output across all CLI harnesses (Copilot, Claude, Codex, OpenCode).
+**Universal CLI output types** for standardizing output across all CLI harnesses (Copilot, Claude, Codex, OpenCode, Qwen, Gemini).
 
 **Key types:**
 
@@ -154,11 +154,11 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 - `STEP_STATUS` — `pending | sent | running | completed | failed | cancelled | skipped`
 - `FINAL_PROMPT_PHASES` — `queue | finalPrompt`
 - `ACTION_TYPES` — `run | queue | runNext | queueNext | runBeforeCurrent`
-- `HARNESS_IDS` — `copilot-cli | copilot-chat | claude-cli | codex-cli | opencode-cli`
+- `HARNESS_IDS` — `copilot-cli | copilot-chat | claude-cli | codex-cli | opencode-cli | qwen-cli | gemini-cli`
 - `HARNESS_INFO` — display names per harness (name, shortName)
 - `EXECUTION_MODES` — `interactive | headless`
 - `DEFAULT_MODELS` — default model per harness
-- `CLAUDE_CLI_MODELS`, `CODEX_CLI_MODELS` — static model option arrays
+- `CLAUDE_CLI_MODELS`, `CODEX_CLI_MODELS`, `QWEN_CLI_MODELS`, `GEMINI_CLI_MODELS` — static model option arrays
 - `HARNESS_STATUS_STRINGS` — `checking | available | unavailable`
 - `UI_STRINGS` — loading/checking text
 - `QUEUE_POSITION` — `next | end | beforeCurrent`
