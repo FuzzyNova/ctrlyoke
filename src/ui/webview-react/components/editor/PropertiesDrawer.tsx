@@ -12,6 +12,7 @@ import {
   modelNamespaceForHarness,
   getResumeSessionOptions,
 } from "../../types/dropdownNamespaces";
+import { SESSION_ID_SENTINELS } from "../../types/messages";
 import {
   CustomSelect,
   HarnessDropdown,
@@ -283,7 +284,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 
   const resolvedResumeSession =
     workflowProperties.resumeSession ?? globalSettings.resumeSession;
-  const defaultResumeSessionLabel = `Default (${resolvedResumeSession ? "Yes" : "No"})`;
+  const resolvedSessionId = workflowProperties.sessionId;
+  const defaultResumeSessionLabel =
+    resolvedResumeSession && resolvedSessionId === SESSION_ID_SENTINELS.FINAL_PROMPT
+      ? "Default (Final Prompt Session)"
+      : `Default (${resolvedResumeSession ? "Yes" : "No"})`;
 
   const resolvedAllowDynamic =
     workflowProperties.allowDynamicExtension ??
@@ -579,16 +584,28 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 value={
                   properties.resumeSession === undefined
                     ? "default"
-                    : properties.resumeSession
-                      ? "yes"
-                      : "no"
+                    : properties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT && properties.resumeSession
+                      ? SESSION_ID_SENTINELS.FINAL_PROMPT
+                      : properties.resumeSession
+                        ? "yes"
+                        : "no"
                 }
-                onChange={(v) =>
-                  setProperty(
-                    "resumeSession",
-                    v === "default" ? undefined : v === "yes"
-                  )
-                }
+                onChange={(v) => {
+                  if (v === SESSION_ID_SENTINELS.FINAL_PROMPT) {
+                    setProperty("resumeSession", true);
+                    setProperty("sessionId", SESSION_ID_SENTINELS.FINAL_PROMPT);
+                  } else if (v === "default") {
+                    setProperty("resumeSession", undefined);
+                    if (properties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT) {
+                      setProperty("sessionId", "");
+                    }
+                  } else {
+                    if (properties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT) {
+                      setProperty("sessionId", "");
+                    }
+                    setProperty("resumeSession", v === "yes");
+                  }
+                }}
                 options={[
                   ...getResumeSessionOptions(defaultResumeSessionLabel),
                 ]}
@@ -597,7 +614,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               {/* Session ID — expands directly below, no label */}
               <div
                 className={`transition-all duration-300 ${
-                  properties.resumeSession === true
+                  properties.resumeSession === true && properties.sessionId !== SESSION_ID_SENTINELS.FINAL_PROMPT
                     ? "max-h-[60px] opacity-100"
                     : "max-h-0 opacity-0 overflow-hidden"
                 }`}

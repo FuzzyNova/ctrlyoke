@@ -379,9 +379,10 @@ export const QUEUE_POSITION = {
 // ============================================================================
 export const SESSION_ID_SENTINELS = {
   /**
-   * Resume the session established by the previous finalPrompt loop iteration.
-   * On the first iteration (no prior session) a new session is started.
-   * Only meaningful on a finalPrompt item.
+   * Resume the session established by the most recent finalPrompt execution.
+   * Works on any prompt (queue or finalPrompt phase): if a finalPrompt session
+   * exists it is reused, otherwise a new session starts. Useful for workflows
+   * where newly-appended queue prompts should continue the finalPrompt conversation.
    */
   FINAL_PROMPT: "finalPrompt",
 } as const;

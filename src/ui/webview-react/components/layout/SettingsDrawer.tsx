@@ -7,7 +7,7 @@ import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
-import { MESSAGE_TYPES, EXECUTION_MODES, type PriorContext } from "../../types/messages";
+import { MESSAGE_TYPES, EXECUTION_MODES, SESSION_ID_SENTINELS, type PriorContext } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
@@ -347,20 +347,22 @@ export const SettingsPanel: React.FC<{
   );
 
   const handleResumeSessionChange = useCallback(
-    (checked: boolean) => {
-      const updates: Partial<WorkflowProperties> = {
-        resumeSession: checked,
-      };
-
-      // Clear session ID when resume is disabled
-      if (!checked) {
+    (v: string) => {
+      if (v === SESSION_ID_SENTINELS.FINAL_PROMPT) {
+        setSessionIdInput(SESSION_ID_SENTINELS.FINAL_PROMPT);
+        postWorkflowPropertiesUpdate({ resumeSession: true, sessionId: SESSION_ID_SENTINELS.FINAL_PROMPT });
+        return;
+      }
+      const checked = v === "yes";
+      const updates: Partial<WorkflowProperties> = { resumeSession: checked };
+      // Clear session ID when disabling or when switching away from Final Prompt Session
+      if (!checked || workflowProperties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT) {
         setSessionIdInput("");
         updates.sessionId = undefined;
       }
-
       postWorkflowPropertiesUpdate(updates);
     },
-    [postWorkflowPropertiesUpdate]
+    [postWorkflowPropertiesUpdate, workflowProperties.sessionId]
   );
 
   const handleSessionIdChange = useCallback(
@@ -751,7 +753,7 @@ export const SettingsPanel: React.FC<{
             <FormField
               label="Resume Session"
               htmlFor="settings-resume-session"
-              description="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number)."
+              description="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number). 'Final Prompt Session' resumes the session established by the Final Prompt gate."
               setAsDefaultButton={
                 <SetAsDefaultButton
                   property="resumeSession"
@@ -767,14 +769,20 @@ export const SettingsPanel: React.FC<{
             >
               <CustomSelect
                 id="settings-resume-session"
-                value={effectiveResumeSession ? "yes" : "no"}
-                onChange={(v) => handleResumeSessionChange(v === "yes")}
+                value={
+                  workflowProperties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT && effectiveResumeSession
+                    ? SESSION_ID_SENTINELS.FINAL_PROMPT
+                    : effectiveResumeSession
+                    ? "yes"
+                    : "no"
+                }
+                onChange={handleResumeSessionChange}
                 options={[...getResumeSessionOptions()]}
               />
-              {/* Session ID input — visible only when resume session is enabled */}
+              {/* Session ID input — visible only when resume session is enabled and not using Final Prompt Session */}
               <div
                 className={`transition-all duration-300 ${
-                  effectiveResumeSession
+                  effectiveResumeSession && workflowProperties.sessionId !== SESSION_ID_SENTINELS.FINAL_PROMPT
                     ? "max-h-[40px] opacity-100 mt-1"
                     : "max-h-0 opacity-0 overflow-hidden"
                 }`}

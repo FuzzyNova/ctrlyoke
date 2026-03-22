@@ -23,6 +23,7 @@ export {
   PROMPT_PROPERTIES,
   END_CONDITION_PROPERTIES,
   EXECUTION_MODES,
+  SESSION_ID_SENTINELS,
   type MessageType,
   type WebviewLogLevel,
   type ExecutionState,

@@ -83,8 +83,8 @@ export class SessionResolver {
    * @param promptIndex Current prompt's index in queue (0-based)
    * @param allPrompts All prompts in queue (with runtime metadata)
    * @param workflow Workflow file for workflow-level defaults (optional)
-   * @param finalPromptSessionId Session ID from the previous finalPrompt loop iteration.
-   *   Only used when sessionId is the "finalPrompt" sentinel.
+   * @param finalPromptSessionId Session ID from the most recent finalPrompt execution.
+   *   Used when sessionId is the "finalPrompt" sentinel on any prompt.
    * @returns Resolved session ID or undefined for new session
    */
   static resolve(
