@@ -31,6 +31,50 @@ import { CLI_EVENT_TYPES } from "../types/cliEvents";
  * concatenated into a single event so the UI renders them as continuous text
  * instead of one React element per streaming token.
  */
+/**
+ * Merge incoming structured events into an existing CliOutput array.
+ * Finds or creates the isStreaming buffer at attemptIndex 0 and appends events
+ * using mergeStreamingEvents so consecutive text/thinking deltas are coalesced.
+ */
+function applyStreamingEventsToOutputs(outputs: CliOutput[], events: any[]): CliOutput[] {
+  const streamingIdx = outputs.findIndex(
+    (o) => o.isStreaming && (o.attemptIndex ?? 0) === 0
+  );
+
+  if (streamingIdx < 0) {
+    return [
+      ...outputs,
+      {
+        prompt: "",
+        response: "",
+        structured: {
+          events: mergeStreamingEvents([], events),
+          metadata: {},
+        },
+        elapsed: 0,
+        isStreaming: true,
+        timestampMs: Date.now(),
+        attemptIndex: 0,
+      },
+    ];
+  }
+
+  const streamingBuffer = outputs[streamingIdx];
+  const existingStructured = streamingBuffer.structured as any;
+  return [
+    ...outputs.slice(0, streamingIdx),
+    {
+      ...streamingBuffer,
+      structured: {
+        ...existingStructured,
+        events: mergeStreamingEvents(existingStructured?.events || [], events),
+        metadata: existingStructured?.metadata || {},
+      },
+    },
+    ...outputs.slice(streamingIdx + 1),
+  ];
+}
+
 function mergeStreamingEvents(existing: any[], incoming: any[]): any[] {
   const result = [...existing];
   for (const event of incoming) {
@@ -85,6 +129,7 @@ interface WorkflowState {
 
   // Streaming state (for incremental output)
   streamingChunks: Record<number, string>;
+  finalPromptStreamingChunks: Record<number, string>;
 
   // Self-contained history snapshot for the currently-viewed historical run.
   // When isViewingHistory=true (in uiStore), OutputSection renders from historyOutputs
@@ -135,6 +180,8 @@ interface WorkflowActions {
   appendStreamingChunk: (stepIndex: number, chunk: string) => void;
   clearStreamingChunk: (stepIndex: number) => void;
   appendStreamingEvents: (stepIndex: number, events: any[]) => void;
+  appendFinalPromptStreamingChunk: (loopIndex: number, chunk: string) => void;
+  appendFinalPromptStreamingEvents: (loopIndex: number, events: any[]) => void;
 
   // Retry management
   setRetryState: (
@@ -256,6 +303,7 @@ const initialState: WorkflowState = {
   statusMessages: {},
   finalPromptStatusMessages: {},
   streamingChunks: {},
+  finalPromptStreamingChunks: {},
   historyOutputs: null,
   workspaceSnapshots: {},
   finalPromptWorkspaceSnapshots: {},
@@ -524,59 +572,34 @@ export const useWorkflowStore = create<
 
       appendStreamingEvents: (stepIndex, events) => {
         useWorkflowStore.temporal.getState().pause();
-        set((state) => {
-          const outputs = state.cliOutputs[stepIndex] || [];
-          let newOutputs: CliOutput[];
+        set((state) => ({
+          cliOutputs: {
+            ...state.cliOutputs,
+            [stepIndex]: applyStreamingEventsToOutputs(state.cliOutputs[stepIndex] || [], events),
+          },
+        }));
+        useWorkflowStore.temporal.getState().resume();
+      },
 
-          // Find the streaming buffer for attemptIndex 0 (streaming is always initial attempt)
-          const streamingIdx = outputs.findIndex(
-            (o) => o.isStreaming && (o.attemptIndex ?? 0) === 0
-          );
+      appendFinalPromptStreamingChunk: (loopIndex, chunk) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => ({
+          finalPromptStreamingChunks: {
+            ...state.finalPromptStreamingChunks,
+            [loopIndex]: (state.finalPromptStreamingChunks[loopIndex] || "") + chunk,
+          },
+        }));
+        useWorkflowStore.temporal.getState().resume();
+      },
 
-          if (streamingIdx < 0) {
-            // No streaming buffer yet — create one with explicit attemptIndex
-            newOutputs = [
-              ...outputs,
-              {
-                prompt: "",
-                response: "",
-                structured: {
-                  events: mergeStreamingEvents([], events),
-                  metadata: {},
-                },
-                elapsed: 0,
-                isStreaming: true,
-                timestampMs: Date.now(),
-                attemptIndex: 0,
-              },
-            ];
-          } else {
-            // Append events to existing streaming buffer, merging consecutive text/thinking deltas
-            const streamingBuffer = outputs[streamingIdx];
-            const existingStructured = streamingBuffer.structured as any;
-            const existingEvents = existingStructured?.events || [];
-
-            newOutputs = [
-              ...outputs.slice(0, streamingIdx),
-              {
-                ...streamingBuffer,
-                structured: {
-                  ...existingStructured,
-                  events: mergeStreamingEvents(existingEvents, events),
-                  metadata: existingStructured?.metadata || {},
-                },
-              },
-              ...outputs.slice(streamingIdx + 1),
-            ];
-          }
-
-          return {
-            cliOutputs: {
-              ...state.cliOutputs,
-              [stepIndex]: newOutputs,
-            },
-          };
-        });
+      appendFinalPromptStreamingEvents: (loopIndex, events) => {
+        useWorkflowStore.temporal.getState().pause();
+        set((state) => ({
+          finalPromptOutputs: {
+            ...state.finalPromptOutputs,
+            [loopIndex]: applyStreamingEventsToOutputs(state.finalPromptOutputs[loopIndex] || [], events),
+          },
+        }));
         useWorkflowStore.temporal.getState().resume();
       },
 
@@ -701,6 +724,7 @@ export const useWorkflowStore = create<
           statusMessages: {},
           finalPromptStatusMessages: {},
           streamingChunks: {},
+          finalPromptStreamingChunks: {},
         });
         t.resume();
         t.clear();
@@ -800,6 +824,7 @@ export const useWorkflowStore = create<
             statusMessages: newStatusMessages,
             streamingChunks: newStreamingChunks,
             finalPromptOutputs: {},
+            finalPromptStreamingChunks: {},
             finalPromptStatusMessages: {},
             finalPromptStatus: null,
             finalPromptLoopCount: 0,
@@ -878,6 +903,7 @@ export const useWorkflowStore = create<
           statusMessages: {},
           finalPromptStatusMessages: {},
           streamingChunks: {},
+          finalPromptStreamingChunks: {},
           finalPromptStatus: null,
           finalPromptLoopCount: 0,
           finalPromptPhase: null,

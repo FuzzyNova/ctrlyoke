@@ -451,6 +451,24 @@ export interface FinalPromptOutputMessage {
 }
 
 /**
+ * finalPrompt streaming chunk message (extension -> webview)
+ */
+export interface FinalPromptStreamingChunkMessage {
+  type: typeof MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK;
+  loopIndex: number;
+  chunk: string;
+}
+
+/**
+ * finalPrompt streaming events message (extension -> webview)
+ */
+export interface FinalPromptStreamingEventsMessage {
+  type: typeof MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS;
+  loopIndex: number;
+  events: CliEvent[];
+}
+
+/**
  * Model options update message (extension -> webview)
  */
 export interface ModelOptionsUpdateMessage {
@@ -830,6 +848,8 @@ export type IncomingMessage =
   | UpdateFinalPromptMessage
   | FinalPromptStatusChangedMessage
   | FinalPromptOutputMessage
+  | FinalPromptStreamingChunkMessage
+  | FinalPromptStreamingEventsMessage
   | { type: typeof MESSAGE_TYPES.EXECUTION_COMPLETED }
   | PromptsExtendedMessage
   | PromptDeletedMessage

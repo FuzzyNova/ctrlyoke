@@ -544,6 +544,24 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // FINAL_PROMPT_STREAMING_CHUNK - Incremental streaming text chunk for finalPrompt
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK] = (message) => {
+    useWorkflowStore
+      .getState()
+      .appendFinalPromptStreamingChunk(message.loopIndex, message.chunk || "");
+  };
+
+  // --------------------------------------------------------------------------
+  // FINAL_PROMPT_STREAMING_EVENTS - Structured streaming events for finalPrompt
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS] = (message) => {
+    useWorkflowStore
+      .getState()
+      .appendFinalPromptStreamingEvents(message.loopIndex, message.events || []);
+  };
+
+  // --------------------------------------------------------------------------
   // CLI_OUTPUT - Complete CLI output for a step
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CLI_OUTPUT] = (message) => {

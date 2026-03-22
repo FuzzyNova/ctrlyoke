@@ -87,6 +87,7 @@ export const OutputSection: React.FC = () => {
   // streamingChunks changes on every token — keep it isolated so the
   // auto-scroll effect doesn't require rebuilding allMessages.
   const streamingChunks = useWorkflowStore((s) => s.streamingChunks);
+  const finalPromptStreamingChunks = useWorkflowStore((s) => s.finalPromptStreamingChunks);
   const historyOutputs = useWorkflowStore((s) => s.historyOutputs);
   const workspaceSnapshots = useWorkflowStore((s) => s.workspaceSnapshots);
   const finalPromptWorkspaceSnapshots = useWorkflowStore(
@@ -276,7 +277,7 @@ export const OutputSection: React.FC = () => {
         isProgrammaticScroll.current = false;
       });
     }
-  }, [allMessages, streamingChunks]);
+  }, [allMessages, streamingChunks, finalPromptStreamingChunks]);
 
   // Measure real pixel positions of step anchor divs so the minimap can
   // place markers at their true scroll fractions (not an index fraction).
@@ -841,13 +842,13 @@ export const OutputSection: React.FC = () => {
                 );
               } else {
                 const cliData = item.data as CliOutputType;
-                // Only pass the streaming chunk for queue-type steps.
+                // Pass the streaming chunk for the active streaming step.
                 // This prop changes on every token, but React.memo on CliOutput
                 // ensures only the row with a non-empty chunk re-renders.
                 const streamingChunk =
                   item.target.kind === "queue"
                     ? streamingChunks[item.target.index] || ""
-                    : "";
+                    : finalPromptStreamingChunks[item.target.index] || "";
                 const stepSnapshot: WorkspaceSnapshot | undefined =
                   isViewingHistory && historyOutputs
                     ? item.target.kind === "queue"

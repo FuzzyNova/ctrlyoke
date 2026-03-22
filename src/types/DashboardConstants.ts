@@ -28,6 +28,8 @@ export const MESSAGE_TYPES = {
   UPDATE_FINAL_PROMPT: "updateFinalPrompt", // Bidirectional: webview updates workflow-level finalPrompt; extension pushes latest finalPrompt
   FINAL_PROMPT_STATUS_CHANGED: "finalPromptStatusChanged", // Granular runtime status updates for finalPrompt phase
   FINAL_PROMPT_OUTPUT: "finalPromptOutput", // CLI output for finalPrompt keyed by loop index
+  FINAL_PROMPT_STREAMING_CHUNK: "finalPromptStreamingChunk", // Incremental streaming text chunk for finalPrompt
+  FINAL_PROMPT_STREAMING_EVENTS: "finalPromptStreamingEvents", // Structured streaming events for finalPrompt
   QUEUE_SIZE_LIMIT_REACHED: "queueSizeLimitReached",
   EXECUTION_TIME_LIMIT_REACHED: "executionTimeLimitReached",
 

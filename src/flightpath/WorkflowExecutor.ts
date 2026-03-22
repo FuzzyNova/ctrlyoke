@@ -991,6 +991,10 @@ export class WorkflowExecutor {
         );
       } else if (target.kind === "finalPrompt") {
         context.captureFinalPromptChunk?.(target.loopIndex, chunk);
+        context.dashboardProvider?.updateFinalPromptStreamingChunk(
+          target.loopIndex,
+          chunk
+        );
       }
     });
 
@@ -1003,6 +1007,10 @@ export class WorkflowExecutor {
         );
       } else if (target.kind === "finalPrompt") {
         context.captureFinalPromptEvents?.(target.loopIndex, events);
+        context.dashboardProvider?.updateFinalPromptStreamingEvents(
+          target.loopIndex,
+          events
+        );
       }
     });
 

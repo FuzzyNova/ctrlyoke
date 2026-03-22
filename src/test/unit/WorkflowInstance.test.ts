@@ -113,6 +113,8 @@ suite("WorkflowInstance finalPrompt replay", () => {
       updateFinalPromptOutput: (loopIndex: number, output: any) => {
         finalPromptOutputCalls.push({ loopIndex, output });
       },
+      updateFinalPromptStreamingChunk: () => {},
+      updateFinalPromptStreamingEvents: () => {},
       updateStatusMessage: (
         stepIndex: number,
         message: string,
@@ -243,6 +245,8 @@ suite("WorkflowInstance eager working file creation", () => {
       updateFinalPrompt: () => {},
       updateFinalPromptStatus: () => {},
       updateFinalPromptOutput: () => {},
+      updateFinalPromptStreamingChunk: () => {},
+      updateFinalPromptStreamingEvents: () => {},
       updateStatusMessage: () => {},
       notifyWorkflowStateReset: () => {},
       notifyStartPositionSet: () => {},
@@ -311,6 +315,8 @@ suite("WorkflowInstance append-and-continue", () => {
       updateFinalPrompt: () => {},
       updateFinalPromptStatus: () => {},
       updateFinalPromptOutput: () => {},
+      updateFinalPromptStreamingChunk: () => {},
+      updateFinalPromptStreamingEvents: () => {},
       updateStatusMessage: () => {},
       notifyWorkflowStateReset: () => {},
       notifyStartPositionSet: () => {},
@@ -376,6 +382,8 @@ suite("WorkflowInstance append-and-continue", () => {
       updateFinalPrompt: () => {},
       updateFinalPromptStatus: () => {},
       updateFinalPromptOutput: () => {},
+      updateFinalPromptStreamingChunk: () => {},
+      updateFinalPromptStreamingEvents: () => {},
       updateStatusMessage: () => {},
       notifyWorkflowStateReset: () => {},
       notifyStartPositionSet: () => {},

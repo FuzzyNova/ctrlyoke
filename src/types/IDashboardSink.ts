@@ -98,6 +98,10 @@ export interface IDashboardSink {
 
   updateFinalPromptOutput(loopIndex: number, output: unknown): void;
 
+  updateFinalPromptStreamingChunk(loopIndex: number, chunk: string): void;
+
+  updateFinalPromptStreamingEvents(loopIndex: number, events: CliEvent[]): void;
+
   notifyWorkflowStateReset(prompts: any[]): void;
 
   notifyStartPositionSet(prompts: PromptItem[], currentIndex: number): void;

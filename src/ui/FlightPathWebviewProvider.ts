@@ -518,6 +518,22 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
+  public updateFinalPromptStreamingChunk(loopIndex: number, chunk: string): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK,
+      loopIndex,
+      chunk,
+    });
+  }
+
+  public updateFinalPromptStreamingEvents(loopIndex: number, events: CliEvent[]): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS,
+      loopIndex,
+      events,
+    });
+  }
+
   /**
    * Notify webview that workflow execution state was reset.
    * Only resets prompt statuses and execution state — does not touch CLI outputs

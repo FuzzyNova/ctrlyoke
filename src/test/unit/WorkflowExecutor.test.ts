@@ -332,6 +332,8 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
       updateFinalPromptOutput: (loopIndex: number, output: unknown) => {
         outputUpdates.push({ loopIndex, output });
       },
+      updateFinalPromptStreamingChunk: () => {},
+      updateFinalPromptStreamingEvents: () => {},
     } as any;
 
     queue.loadPrompts({
