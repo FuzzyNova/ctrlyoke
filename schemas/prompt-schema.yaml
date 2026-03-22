@@ -131,8 +131,9 @@ definitions:
         description: >-
           Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to
           resume), a number (prompt reference: 1 = use session from first prompt), or the special
-          value "finalPrompt" (resume the session established by the previous finalPrompt loop
-          iteration — on the first iteration a new session starts). When omitted and
+          value "finalPrompt" (resume the session established by the most recent finalPrompt
+          execution — works on any prompt, not just the finalPrompt item; on first pass when no
+          finalPrompt session exists yet, a new session starts). When omitted and
           resumeSession=true, automatically resumes previous prompt's session. Working file runtime
           metadata stores the actual session ID used during execution.
       skills:
