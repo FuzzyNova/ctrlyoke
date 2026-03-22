@@ -15,7 +15,26 @@ import { GeminiToolBuilder } from "./GeminiToolBuilder";
 /**
  * Gemini CLI Response Parser
  *
- * Parses Gemini CLI stream-json output format.
+ * Parses Gemini CLI `--output-format stream-json` output. Each line is a JSON object.
+ *
+ * **Stream-JSON Event Types:**
+ * | Type          | Key fields                                              |
+ * |---------------|---------------------------------------------------------|
+ * | `init`        | `session_id`, `model`, `timestamp`                      |
+ * | `message`     | `role` ("user"/"assistant"), `content`, `delta?: true`  |
+ * | `tool_use`    | `tool_name`, `tool_id`, `parameters`                   |
+ * | `tool_result` | `tool_id`, `status`, `output`                           |
+ * | `result`      | `status`, `stats.{input_tokens, output_tokens, cached}` |
+ *
+ * **Token Stats (in `result.stats`):**
+ * - `input_tokens` — total prompt tokens (includes cache hits)
+ * - `output_tokens` — generated tokens
+ * - `cached` — cache hit tokens (subset of input_tokens)
+ * - `total_tokens`, `duration_ms`, `tool_calls`, `models`
+ *
+ * **Streaming notes:**
+ * - Multiple `message/assistant` objects with `delta: true` arrive as chunks
+ * - Each is a partial text chunk; the full text is accumulated across them
  */
 export class GeminiResponseParser
   extends ResponseParserBase
@@ -24,7 +43,7 @@ export class GeminiResponseParser
   parse(stdout: string, stderr: string, exitCode: number): UniversalCliOutput {
     const events: CliEvent[] = [];
     let sessionId: string | undefined;
-    let usage: any | undefined;
+    let usage: Record<string, number> | undefined;
     let model: string | undefined;
     let cliVersion: string | undefined;
 
@@ -37,37 +56,37 @@ export class GeminiResponseParser
         cliVersion = json.version;
       }
 
-      if (json.type === "message" && json.role === "assistant") {
-        if (json.content) {
-          events.push({
-            type: CLI_EVENT_TYPES.TEXT,
-            timestamp: Date.now(),
-            data: { text: json.content },
-          });
-        }
+      if (json.type === "message" && json.role === "assistant" && json.content) {
+        events.push({
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp: Date.now(),
+          data: { text: json.content as string },
+        });
       }
 
       if (json.type === "tool_use") {
         events.push(
           GeminiToolBuilder.buildInitiatedEvent(
-            json.tool_name,
-            json.parameters || {},
-            json.tool_id,
+            json.tool_name as string,
+            (json.parameters as Record<string, unknown>) || {},
+            json.tool_id as string | undefined,
             Date.now()
           )
         );
       }
 
       if (json.type === "tool_result") {
+        const isError = json.status === "error";
         events.push({
           type: CLI_EVENT_TYPES.TOOL_RESULT,
           timestamp: Date.now(),
           data: {
-            toolCallId: json.tool_id,
+            toolCallId: (json.tool_id as string) || "",
             result: {
-              success: json.status === "success",
-              output: json.result,
-              error: json.status === "error" ? json.result : undefined,
+              // Gemini uses `output` field (not `result`) for tool result content
+              success: !isError,
+              output: json.output as string | undefined,
+              error: isError ? (json.output as string | undefined) : undefined,
             },
           },
         });
@@ -75,10 +94,10 @@ export class GeminiResponseParser
 
       if (json.type === "result") {
         if (json.stats) {
-          usage = json.stats;
+          usage = json.stats as Record<string, number>;
         }
         if (json.session_id) {
-          sessionId = json.session_id;
+          sessionId = json.session_id as string;
         }
       }
     }
@@ -93,12 +112,14 @@ export class GeminiResponseParser
 
     let tokenUsage: TokenUsage | undefined;
     if (usage) {
-      const inputTokens = usage.input_tokens || 0;
-      const outputTokens = usage.output_tokens || 0;
+      const inputTokens = (usage.input_tokens as number) || 0;
+      const outputTokens = (usage.output_tokens as number) || 0;
+      const cachedTokens = (usage.cached as number) || 0;
       tokenUsage = {
         inputTokens,
         outputTokens,
-        totalTokens: usage.total_tokens || inputTokens + outputTokens,
+        totalTokens: (usage.total_tokens as number) || inputTokens + outputTokens,
+        cachedInputTokens: cachedTokens > 0 ? cachedTokens : undefined,
         contextWindowUsedTokens: inputTokens + outputTokens,
         contextWindowSize: getGeminiContextWindowSize(model ?? ""),
       };
@@ -134,31 +155,32 @@ export class GeminiResponseParser
         events.push({
           type: CLI_EVENT_TYPES.TEXT,
           timestamp: Date.now(),
-          data: { text: json.content },
+          data: { text: json.content as string },
         });
       }
 
       if (json.type === "tool_use") {
         events.push(
           GeminiToolBuilder.buildInitiatedEvent(
-            json.tool_name,
-            json.parameters || {},
-            json.tool_id,
+            json.tool_name as string,
+            (json.parameters as Record<string, unknown>) || {},
+            json.tool_id as string | undefined,
             Date.now()
           )
         );
       }
 
       if (json.type === "tool_result") {
+        const isError = json.status === "error";
         events.push({
           type: CLI_EVENT_TYPES.TOOL_RESULT,
           timestamp: Date.now(),
           data: {
-            toolCallId: json.tool_id,
+            toolCallId: (json.tool_id as string) || "",
             result: {
-              success: json.status === "success",
-              output: json.result,
-              error: json.status === "error" ? json.result : undefined,
+              success: !isError,
+              output: json.output as string | undefined,
+              error: isError ? (json.output as string | undefined) : undefined,
             },
           },
         });
@@ -171,7 +193,13 @@ export class GeminiResponseParser
   extractSessionId(output: string): string | undefined {
     const { objects } = CliResponseParser.extractJsonObjectsFromStream(output);
     for (const json of objects) {
-      if (json.session_id) return json.session_id;
+      if (json.type === "init" && json.session_id) {
+        return json.session_id as string;
+      }
+      // Also present in result event
+      if (json.type === "result" && json.session_id) {
+        return json.session_id as string;
+      }
     }
     return undefined;
   }
@@ -182,9 +210,10 @@ export class GeminiResponseParser
     const { objects } = CliResponseParser.extractJsonObjectsFromStream(output);
     for (const json of objects) {
       if (json.type === "result" && json.stats) {
+        const stats = json.stats as Record<string, number>;
         return {
-          prompt: json.stats.input_tokens || 0,
-          completion: json.stats.output_tokens || 0,
+          prompt: stats.input_tokens || 0,
+          completion: stats.output_tokens || 0,
         };
       }
     }
