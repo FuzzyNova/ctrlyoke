@@ -91,7 +91,12 @@
       "Read(//home/nathan/dev/flightpath/**)",
       "Bash(done)",
       "Bash(sed:*)",
-      "Bash(gemini --help)"
+      "Bash(gemini --help)",
+      "Read(//home/nathan/.gemini/tmp/**)",
+      "Read(//home/nathan/.gemini/**)",
+      "Bash(gemini --prompt \"say hello\" --output-format stream-json)",
+      "Bash(gemini --prompt \"say hello\" --model gemini-2.5-flash --output-format stream-json)",
+      "Bash(gemini --prompt \"list files in /tmp directory using shell command\" --model gemini-2.5-flash --output-format stream-json --yolo)"
     ],
     "deny": [],
     "ask": []
