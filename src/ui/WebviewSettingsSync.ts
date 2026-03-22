@@ -1,14 +1,17 @@
 import * as vscode from "vscode";
+import * as fs from "fs/promises";
+import * as path from "path";
 import {
   MESSAGE_TYPES,
   HARNESS_IDS,
   HARNESS_STATUS_STRINGS,
+  HARNESS_INFO,
   EXECUTION_STATES,
   EXECUTION_MODES,
   DEFAULT_MODELS,
   type HarnessStatusString,
 } from "../types/DashboardConstants";
-import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import {
   getAvailableModelsSync,
@@ -217,6 +220,9 @@ export class WebviewSettingsSync {
       type: MESSAGE_TYPES.MODEL_OPTIONS_UPDATE,
       data: { modelOptions },
     });
+    this.writeCapabilities(modelOptions).catch((err) =>
+      Log.warn("Failed to write capabilities.json:", err)
+    );
   }
 
   /**
@@ -227,6 +233,9 @@ export class WebviewSettingsSync {
       type: MESSAGE_TYPES.HARNESS_STATUS_UPDATE,
       data: { harnessStatus: this.harnessStatus },
     });
+    this.writeCapabilities(this.buildModelOptions()).catch((err) =>
+      Log.warn("Failed to write capabilities.json:", err)
+    );
   }
 
   /**
@@ -299,6 +308,13 @@ export class WebviewSettingsSync {
     this.postMessage({
       type: MESSAGE_TYPES.WORKFLOW_UNLOADED,
     });
+  }
+
+  /**
+   * Return the current harness status map (for in-process callers).
+   */
+  getHarnessStatus(): Record<string, HarnessStatus> {
+    return this.harnessStatus;
   }
 
   /**
@@ -454,6 +470,48 @@ export class WebviewSettingsSync {
   // ============================================================================
   // Internal Helpers
   // ============================================================================
+
+  /**
+   * Write capabilities.json to the workspace .flightpath/ directory.
+   * Read by the MCP server (separate process) for harness/model validation.
+   */
+  private async writeCapabilities(
+    modelOptions: Record<string, Array<{ value: string; label: string }>>
+  ): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+      return;
+    }
+
+    const workspaceRoot = workspaceFolders[0].uri.fsPath;
+    const capabilitiesPath = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CAPABILITIES_FILE
+    );
+
+    const harnessEntries = Object.values(HARNESS_IDS).map((id) => {
+      const status = this.harnessStatus[id];
+      const options = modelOptions[id] ?? [];
+      // Filter out the "none" sentinel value
+      const models = options
+        .filter((m) => m.value !== "none")
+        .map((m) => ({ value: m.value, label: m.label }));
+      return {
+        id,
+        displayName: (HARNESS_INFO as Record<string, { name: string }>)[id]?.name ?? id,
+        available: status?.available ?? false,
+        models,
+      };
+    });
+
+    const capabilities = {
+      generatedAt: Date.now(),
+      harnesses: harnessEntries,
+    };
+
+    await fs.writeFile(capabilitiesPath, JSON.stringify(capabilities, null, 2), "utf8");
+  }
 
   /**
    * Build global settings object from current VS Code configuration.

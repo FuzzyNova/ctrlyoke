@@ -39,6 +39,7 @@ import { withFileLock } from "./utils/FileLockUtils";
 const FLIGHTPATH_DIR = ".flightpath";
 const LOGS_DIR = "logs";
 const QUEUE_DIR = ".queue";
+const CAPABILITIES_FILE = "capabilities.json";
 
 // Initialize log file only when diagnostic logging is explicitly enabled.
 // FLIGHTPATH_DIAGNOSTIC_LOGS=true is passed by the extension when
@@ -158,7 +159,7 @@ class FlightPathMCPServer {
           },
           {
             name: "flightpath_append_queue",
-            description: `Append prompts to the current FlightPath workflow queue. Use when you want to extend the workflow with additional tasks. Supports inserting after current position ('${QUEUE_POSITION.NEXT}') or at end of queue ('${QUEUE_POSITION.END}').`,
+            description: `Append prompts to the current FlightPath workflow queue. Use when you want to extend the workflow with additional tasks. Supports inserting after current position ('${QUEUE_POSITION.NEXT}') or at end of queue ('${QUEUE_POSITION.END}'). Call flightpath_capabilities first to get valid harness IDs and model values.`,
             inputSchema: {
               type: "object",
               properties: {
@@ -174,7 +175,22 @@ class FlightPathMCPServer {
                       model: {
                         type: "string",
                         description:
-                          "Optional model override (e.g., 'claude-sonnet-4.5', 'gpt-5')",
+                          "Model override for this prompt. Call flightpath_capabilities to get valid model values per harness.",
+                      },
+                      harness: {
+                        type: "string",
+                        description:
+                          "Harness override for this prompt. If omitted, uses the workflow default. Call flightpath_capabilities to get installed harness IDs and their available models.",
+                      },
+                      resumeSession: {
+                        type: "boolean",
+                        description:
+                          "Continue a prior prompt's conversation session. Must be true to enable session resumption. Default: false (new session).",
+                      },
+                      sessionId: {
+                        type: "number",
+                        description:
+                          "1-based prompt number whose session to resume. Requires resumeSession: true. Omit to resume the immediately preceding prompt's session.",
                       },
                     },
                     required: ["prompt"],
@@ -191,13 +207,33 @@ class FlightPathMCPServer {
                   description:
                     'Source identifier (e.g., "copilot-cli", "claude-cli", "AI-generated testing tasks")',
                 },
-                reason: {
-                  type: "string",
-                  description:
-                    "Optional explanation for why these prompts are being added",
-                },
               },
               required: ["prompts", "position"],
+            },
+          },
+          {
+            name: "flightpath_capabilities",
+            description:
+              "Get available harnesses and their supported models on this machine. Call this before appending prompts with harness or model overrides to ensure you use valid values. Returns only harnesses that are installed and detected as available.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+            },
+          },
+          {
+            name: "flightpath_read_output",
+            description:
+              "Read the AI response text from completed prompts in the current workflow. Use this to inspect prior results before deciding what to add next.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                indices: {
+                  type: "array",
+                  items: { type: "number" },
+                  description:
+                    "Zero-based indices of prompts to read. Omit or pass empty array to read all prompts.",
+                },
+              },
             },
           },
         ],
@@ -229,6 +265,16 @@ class FlightPathMCPServer {
               );
               log("append_queue completed successfully");
               log("Result:", JSON.stringify(result, null, 2));
+              return result;
+            case "flightpath_capabilities":
+              log("Handling capabilities...");
+              result = await this.handleCapabilities();
+              log("capabilities completed successfully");
+              return result;
+            case "flightpath_read_output":
+              log("Handling read_output...");
+              result = await this.handleReadOutput(args);
+              log("read_output completed successfully");
               return result;
             default:
               throw new Error(`Unknown tool: ${name}`);
@@ -321,6 +367,8 @@ class FlightPathMCPServer {
     const response = {
       metadata: {
         workflowName: queueData.workflowName,
+        harness: queueData.harness ?? null,
+        model: queueData.model ?? null,
         currentIndex: runtime.currentIndex,
         totalPrompts: prompts.length,
         completedPrompts: completedCount,
@@ -352,19 +400,18 @@ class FlightPathMCPServer {
       prompts,
       position,
       source = "MCP Tool",
-      reason,
     } = args as {
-      prompts: PromptItem[];
+      prompts: Array<
+        PromptItem & { resumeSession?: boolean; sessionId?: number; harness?: string }
+      >;
       position: QueuePosition;
       source?: string;
-      reason?: string;
     };
 
     log("Parsed arguments:", {
       promptCount: prompts?.length || 0,
       position,
       source,
-      reason,
     });
 
     // Validate inputs
@@ -389,6 +436,37 @@ class FlightPathMCPServer {
       throw new Error(
         "No active FlightPath workflow found. Start a workflow in VS Code first."
       );
+    }
+
+    // Validate harness/model against capabilities.json (best-effort: skip if file absent)
+    const capabilities = await this.readCapabilities();
+    if (capabilities) {
+      for (const p of prompts) {
+        const promptHarness = p.harness;
+        const promptModel = p.model;
+        if (promptHarness) {
+          const harnessEntry = capabilities.harnesses.find(
+            (h: any) => h.id === promptHarness
+          );
+          if (!harnessEntry) {
+            const available = capabilities.harnesses
+              .filter((h: any) => h.available)
+              .map((h: any) => h.id)
+              .join(", ");
+            throw new Error(
+              `Invalid harness '${promptHarness}'. Available harnesses: ${available || "(none)"}`
+            );
+          }
+          if (promptModel && harnessEntry.models.length > 0) {
+            const modelValues = harnessEntry.models.map((m: any) => m.value);
+            if (!modelValues.includes(promptModel)) {
+              throw new Error(
+                `Invalid model '${promptModel}' for harness '${promptHarness}'. Valid models: ${modelValues.join(", ")}`
+              );
+            }
+          }
+        }
+      }
     }
 
     let response: {
@@ -541,6 +619,111 @@ class FlightPathMCPServer {
         {
           type: "text",
           text: JSON.stringify(response, null, 2),
+        },
+      ],
+    };
+  }
+
+  /**
+   * Read and parse .flightpath/capabilities.json.
+   * Returns null if the file does not exist or cannot be parsed.
+   */
+  private async readCapabilities(): Promise<any | null> {
+    const capabilitiesPath = path.join(
+      this.workspaceRoot,
+      FLIGHTPATH_DIR,
+      CAPABILITIES_FILE
+    );
+    try {
+      const content = await fs.readFile(capabilitiesPath, "utf8");
+      return JSON.parse(content);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Handle flightpath_capabilities tool invocation.
+   * Returns available harnesses and their supported models.
+   */
+  private async handleCapabilities() {
+    const capabilities = await this.readCapabilities();
+
+    if (!capabilities) {
+      throw new Error(
+        "capabilities.json not found. Start a workflow in VS Code first to initialize harness detection."
+      );
+    }
+
+    // Filter to available harnesses only
+    const availableHarnesses = (capabilities.harnesses as any[])
+      .filter((h) => h.available)
+      .map((h) => ({
+        id: h.id,
+        displayName: h.displayName,
+        available: true,
+        models: (h.models as any[]).map((m) => m.value),
+      }));
+
+    const response = {
+      generatedAt: capabilities.generatedAt,
+      harnesses: availableHarnesses,
+    };
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(response, null, 2),
+        },
+      ],
+    };
+  }
+
+  /**
+   * Handle flightpath_read_output tool invocation.
+   * Returns AI response text from completed prompts.
+   */
+  private async handleReadOutput(args: any) {
+    const workingFile = await this.findActiveWorkingFile();
+
+    if (!workingFile) {
+      throw new Error(
+        "No active FlightPath workflow found. Start a workflow in VS Code first."
+      );
+    }
+
+    const fileContent = await fs.readFile(workingFile, "utf8");
+    const queueData: WorkingFile = JSON.parse(fileContent);
+    const allPrompts = queueData.prompts || [];
+
+    const runtime = queueData._runtime || {
+      currentIndex: 0,
+      executionState: EXECUTION_STATES.IDLE,
+    };
+
+    const requestedIndices: number[] =
+      Array.isArray(args?.indices) && args.indices.length > 0
+        ? args.indices
+        : allPrompts.map((_: any, i: number) => i);
+
+    const outputs = requestedIndices
+      .filter((i) => i >= 0 && i < allPrompts.length)
+      .map((i) => {
+        const p = allPrompts[i];
+        return {
+          index: i,
+          prompt: p.prompt,
+          status: this.getPromptStatus(i, runtime, allPrompts),
+          responseText: p._runtime?.responseText ?? null,
+        };
+      });
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ outputs }, null, 2),
         },
       ],
     };

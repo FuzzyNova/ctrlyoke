@@ -11,6 +11,7 @@ import { PromptQueue } from "./PromptQueue";
 import {
   PromptItem,
   EndCondition,
+  type Harness,
 } from "../types/FlightPathTypes";
 import {
   QUEUE_POSITION,
@@ -25,6 +26,8 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 export interface QueueStatusResponse {
   metadata: {
     workflowName: string | null;
+    harness: string | null;
+    model: string | null;
     currentIndex: number;
     totalPrompts: number;
     completedPrompts: number;
@@ -43,17 +46,39 @@ export interface QueueStatusResponse {
 }
 
 /**
+ * Read output request (single source for both MCP and Language Model Tools)
+ */
+export interface ReadOutputRequest {
+  /** Zero-based indices of prompts to read. Omit or empty to read all. */
+  indices?: number[];
+}
+
+/**
+ * Read output response (single source for both MCP and Language Model Tools)
+ */
+export interface ReadOutputResponse {
+  outputs: Array<{
+    index: number;
+    prompt: string;
+    status: string;
+    responseText: string | null;
+  }>;
+}
+
+/**
  * Append prompts request (single source for both MCP and Language Model Tools)
  */
 export interface AppendPromptsRequest {
   prompts: Array<{
     prompt: string;
     model?: string;
+    harness?: string;
+    resumeSession?: boolean;
+    sessionId?: number;
     endCondition?: EndCondition;
   }>;
   position: QueuePosition;
   source: string;
-  reason?: string;
 }
 
 /**
@@ -100,9 +125,13 @@ export function getQueueStatus(
       .replace(/-\d{4}-\d{2}-\d{2}T.*$/, "");
   }
 
+  const workflowFile = queue.getWorkflowFile();
+
   return {
     metadata: {
       workflowName,
+      harness: workflowFile.harness ?? null,
+      model: workflowFile.model ?? null,
       currentIndex: state.currentIndex,
       totalPrompts: state.prompts.length,
       completedPrompts: state.results.filter((r) => r.status === STEP_STATUS.COMPLETED)
@@ -120,6 +149,41 @@ export function getQueueStatus(
       retryCount: state.results[index]?.retryCount,
     })),
   };
+}
+
+/**
+ * Read AI response text from completed prompts
+ * Single-sourced logic used by MCP server and Language Model Tools
+ * @param queue The PromptQueue instance
+ * @param request Indices to read (empty/undefined = all prompts)
+ * @returns Output entries for each requested prompt
+ */
+export function readQueueOutput(
+  queue: PromptQueue,
+  request: ReadOutputRequest
+): ReadOutputResponse {
+  const state = queue.getState();
+  const allPrompts = state.prompts;
+
+  const indices =
+    !request.indices || request.indices.length === 0
+      ? allPrompts.map((_, i) => i)
+      : request.indices;
+
+  const outputs = indices
+    .filter((i) => i >= 0 && i < allPrompts.length)
+    .map((i) => {
+      const prompt = allPrompts[i];
+      const result = state.results[i];
+      return {
+        index: i,
+        prompt: prompt.prompt,
+        status: result?.status || STEP_STATUS.PENDING,
+        responseText: prompt._runtime?.responseText ?? null,
+      };
+    });
+
+  return { outputs };
 }
 
 /**
@@ -159,6 +223,9 @@ export async function appendToQueue(
   const promptItems: PromptItem[] = request.prompts.map((p) => ({
     prompt: p.prompt,
     model: p.model,
+    harness: p.harness as Harness | undefined,
+    resumeSession: p.resumeSession,
+    sessionId: p.sessionId,
     endCondition: p.endCondition,
   }));
 

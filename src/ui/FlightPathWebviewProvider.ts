@@ -815,6 +815,13 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   /**
+   * Expose the settings sync instance for in-process callers (e.g. LM Tools).
+   */
+  public getSettingsSync(): WebviewSettingsSync {
+    return this.settingsSync;
+  }
+
+  /**
    * Open new workflow modal in the webview
    */
   public openNewWorkflowModal(): void {

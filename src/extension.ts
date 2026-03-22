@@ -16,7 +16,7 @@ import {
   getStagedDiff,
   getStashDiff,
 } from "./utils/GitUtils";
-import { getQueueStatus, appendToQueue } from "./flightpath/QueueOperations";
+import { getQueueStatus, appendToQueue, readQueueOutput } from "./flightpath/QueueOperations";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
@@ -96,14 +96,19 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
           const request = {
             prompts: (Array.isArray(params.prompts)
               ? params.prompts
-              : []) as Array<{ prompt: string; model?: string }>,
+              : []) as Array<{
+              prompt: string;
+              model?: string;
+              harness?: string;
+              resumeSession?: boolean;
+              sessionId?: number;
+            }>,
             position: (typeof params.position === "string"
               ? params.position
               : QUEUE_POSITION.END) as QueuePosition,
             source: (typeof params.source === "string"
               ? params.source
               : "VS Code Chat") as string,
-            reason: params.reason as string | undefined,
           };
 
           const result = await appendToQueue(promptQueue, request);
@@ -131,8 +136,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
             new vscode.LanguageModelTextPart(JSON.stringify(result, null, 2)),
           ]);
         } catch (error) {
-          const errorMsg =
-            getErrorMessage(error);
+          const errorMsg = getErrorMessage(error);
           return new vscode.LanguageModelToolResult([
             new vscode.LanguageModelTextPart(`Error: ${errorMsg}`),
           ]);
@@ -140,9 +144,104 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
       },
     });
 
-    context.subscriptions.push(queueStatusTool, queueAppendTool);
+    // Tool 3: flightpath_capabilities (read harness/model availability)
+    const capabilitiesTool = vscode.lm.registerTool(
+      "flightpath_capabilities",
+      {
+        prepareInvocation: async (
+          _parameters: unknown,
+          _token: vscode.CancellationToken
+        ) => {
+          return {
+            invocationMessage: "Getting FlightPath capabilities...",
+          };
+        },
+        invoke: async (
+          _parameters: unknown,
+          _token: vscode.CancellationToken
+        ) => {
+          try {
+            const settingsSync = webviewProvider.getSettingsSync();
+            const modelOptions = settingsSync.buildModelOptions();
+            const harnessStatus = settingsSync.getHarnessStatus();
+
+            const harnesses = Object.keys(harnessStatus)
+              .filter((id) => harnessStatus[id].available)
+              .map((id) => {
+                const options = modelOptions[id] ?? [];
+                return {
+                  id,
+                  available: true,
+                  models: options
+                    .filter((m: { value: string; label: string }) => m.value !== "none")
+                    .map((m: { value: string; label: string }) => m.value),
+                };
+              });
+
+            return new vscode.LanguageModelToolResult([
+              new vscode.LanguageModelTextPart(
+                JSON.stringify(
+                  { generatedAt: Date.now(), harnesses },
+                  null,
+                  2
+                )
+              ),
+            ]);
+          } catch (error) {
+            const errorMsg = getErrorMessage(error);
+            return new vscode.LanguageModelToolResult([
+              new vscode.LanguageModelTextPart(`Error: ${errorMsg}`),
+            ]);
+          }
+        },
+      }
+    );
+
+    // Tool 4: flightpath_read_output (read AI response from completed prompts)
+    const readOutputTool = vscode.lm.registerTool("flightpath_read_output", {
+      prepareInvocation: async (
+        _parameters: unknown,
+        _token: vscode.CancellationToken
+      ) => {
+        return {
+          invocationMessage: "Reading FlightPath prompt outputs...",
+        };
+      },
+      invoke: async (parameters: unknown, _token: vscode.CancellationToken) => {
+        try {
+          const promptQueue = workflowOrchestrator.getActivePromptQueue();
+
+          if (!promptQueue) {
+            throw new Error("FlightPath queue not initialized");
+          }
+
+          const params = parameters as Record<string, unknown> | null;
+          const indices = Array.isArray(params?.indices)
+            ? (params!.indices as number[])
+            : [];
+
+          const result = readQueueOutput(promptQueue, { indices });
+
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(JSON.stringify(result, null, 2)),
+          ]);
+        } catch (error) {
+          const errorMsg = getErrorMessage(error);
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(`Error: ${errorMsg}`),
+          ]);
+        }
+      },
+    });
+
+    context.subscriptions.push(
+      queueStatusTool,
+      queueAppendTool,
+      capabilitiesTool,
+      readOutputTool
+    );
     Log.debug(
-      "FlightPath: Registered Language Model Tools (flightpath_queue_status, flightpath_append_queue)"
+      "FlightPath: Registered Language Model Tools (flightpath_queue_status, flightpath_append_queue, flightpath_capabilities, flightpath_read_output)"
     );
   } catch (error) {
     Log.warn(

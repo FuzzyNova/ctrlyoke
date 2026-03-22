@@ -43,6 +43,9 @@ export const PATH_CONSTANTS = {
 
   /** Skills directory name (subdirectory of FLIGHTPATH_DIR) */
   SKILLS_DIR: "skills",
+
+  /** Capabilities file name (written by extension, read by MCP server) */
+  CAPABILITIES_FILE: "capabilities.json",
 } as const;
 
 /**
