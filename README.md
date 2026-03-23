@@ -12,12 +12,12 @@ Rather than manually typing prompts and waiting for responses, FlightPath lets y
 
 ```yaml
 prompts:
-  - id: analyze
+  - name: analyze
     prompt: |
       Analyze @workspace for security vulnerabilities.
       Focus on input validation and authentication.
 
-  - id: fix
+  - name: fix
     prompt: |
       Fix the issues identified in the analysis.
     endCondition:
@@ -185,16 +185,16 @@ endCondition:
   returns: "true"
 
 prompts:
-  - id: analyze
+  - name: analyze
     prompt: |
       Analyze @workspace for security vulnerabilities.
 
-  - id: implement
+  - name: implement
     prompt: |
       Fix the identified issues.
     resumeSession: true # Continue conversation from previous prompt
 
-  - id: verify
+  - name: verify
     prompt: |
       Verify the fixes are complete and tests pass.
     endCondition:
@@ -210,15 +210,15 @@ Control which prompts share conversation context:
 
 ```yaml
 prompts:
-  - id: research
+  - name: research
     prompt: "Research the problem"
     # Starts new session
 
-  - id: implement
+  - name: implement
     prompt: "Implement the solution"
     sessionId: 1 # Resume session from prompt 1 (numeric reference)
 
-  - id: review
+  - name: review
     prompt: "Review for edge cases"
     newChatSession: true # Start completely fresh
 ```

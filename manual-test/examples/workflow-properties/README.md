@@ -97,7 +97,7 @@ endCondition:
 
 ```yaml
 prompts:
-  - id: special-task
+  - name: special-task
     prompt: "Complex task requiring best model"
     model: claude-opus # Override workflow default
 ```
@@ -106,7 +106,7 @@ prompts:
 
 ```yaml
 prompts:
-  - id: documentation
+  - name: documentation
     prompt: "Update README"
     endCondition: null # Skip workflow validation
 ```
@@ -148,15 +148,15 @@ endCondition:
 
 # Prompts
 prompts:
-  - id: step-1
+  - name: step-1
     prompt: "First step"
     # Inherits all workflow properties
 
-  - id: step-2
+  - name: step-2
     prompt: "Second step with override"
     model: gpt-5 # Override workflow model
 
-  - id: step-3
+  - name: step-3
     prompt: "Third step"
     endCondition: null # Disable workflow validation
 ```

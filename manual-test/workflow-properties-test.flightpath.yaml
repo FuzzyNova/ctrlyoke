@@ -8,7 +8,7 @@ resumeSession: true
 allowDynamicExtension: false
 
 prompts:
-  - id: step1-inherit-all
+  - name: step1-inherit-all
     prompt: |
       Echo "Step 1: I should inherit all workflow properties"
       # Expected resolved properties:
@@ -17,7 +17,7 @@ prompts:
       # - resumeSession: true (workflow)
       # - allowDynamicExtension: false (workflow)
 
-  - id: step2-override-model
+  - name: step2-override-model
     prompt: |
       Echo "Step 2: I override the model but inherit other properties"
     model: claude-haiku-4.5 # Prompt-level override
@@ -27,7 +27,7 @@ prompts:
     # - resumeSession: true (workflow)
     # - allowDynamicExtension: false (workflow)
 
-  - id: step3-override-session
+  - name: step3-override-session
     prompt: |
       Echo "Step 3: I start a new session but inherit model and harness"
     resumeSession: false # Prompt-level override
@@ -37,7 +37,7 @@ prompts:
     # - resumeSession: false (prompt override)
     # - allowDynamicExtension: false (workflow)
 
-  - id: step4-multiple-overrides
+  - name: step4-multiple-overrides
     prompt: |
       Echo "Step 4: I override multiple properties"
     model: gpt-5

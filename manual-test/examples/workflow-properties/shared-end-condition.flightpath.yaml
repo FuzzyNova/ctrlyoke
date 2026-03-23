@@ -33,7 +33,7 @@ endCondition:
 # Prompts
 prompts:
   # Step 1: Implement authentication feature
-  - id: implement-auth
+  - name: implement-auth
     prompt: |
       Implement a user authentication feature with the following requirements:
 
@@ -47,7 +47,7 @@ prompts:
     # Inherits workflow end condition - tests will run after completion
 
   # Step 2: Add comprehensive tests
-  - id: add-auth-tests
+  - name: add-auth-tests
     prompt: |
       Add comprehensive tests for the authentication feature:
 
@@ -60,7 +60,7 @@ prompts:
     # Inherits workflow end condition - tests will run after completion
 
   # Step 3: Update documentation
-  - id: update-docs
+  - name: update-docs
     prompt: |
       Update the project documentation for the new authentication feature:
 

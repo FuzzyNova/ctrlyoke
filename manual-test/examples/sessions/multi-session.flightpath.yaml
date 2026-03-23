@@ -17,7 +17,7 @@ prompts:
   # PHASE 1: Analysis (Session 1)
   # ============================================================
 
-  - id: analyze-security
+  - name: analyze-security
     prompt: |
       Analyze the FlightPath codebase for potential security vulnerabilities.
 
@@ -28,7 +28,7 @@ prompts:
       - Session management security
     # No sessionId or newChatSession → Starts new session (Session 1)
 
-  - id: analyze-performance
+  - name: analyze-performance
     prompt: |
       Based on the security analysis, also review performance characteristics.
 
@@ -44,7 +44,7 @@ prompts:
   # ============================================================
   # PHASE 2: Implementation (Session 2 - Fresh Context)
   # ============================================================
-  - id: implement-security-fixes
+  - name: implement-security-fixes
     prompt: |
       Implement fixes for the security vulnerabilities identified in the analysis.
 
@@ -57,7 +57,7 @@ prompts:
     # We want a clean slate for implementation, without the analysis
     # context potentially biasing the implementation approach
 
-  - id: implement-performance-improvements
+  - name: implement-performance-improvements
     prompt: |
       Implement the performance improvements identified in the analysis.
 
@@ -73,7 +73,7 @@ prompts:
   # ============================================================
   # PHASE 3: Verification (Session 3 - Independent Review)
   # ============================================================
-  - id: verify-changes
+  - name: verify-changes
     prompt: |
       Independently verify that all changes meet requirements.
 
@@ -101,18 +101,18 @@ prompts:
 
 # Runtime Metadata Example (after execution):
 # prompts:
-#   - id: analyze-security
+#   - name: analyze-security
 #     _runtime:
 #       sessionId: "550e8400-e29b-41d4-a716-446655440000"  # Session 1
-#   - id: analyze-performance
+#   - name: analyze-performance
 #     _runtime:
 #       sessionId: "550e8400-e29b-41d4-a716-446655440000"  # Session 1 (same)
-#   - id: implement-security
+#   - name: implement-security
 #     _runtime:
 #       sessionId: "a1b2c3d4-e5f6-7890-1234-567890abcdef"  # Session 2 (new)
-#   - id: implement-performance
+#   - name: implement-performance
 #     _runtime:
 #       sessionId: "a1b2c3d4-e5f6-7890-1234-567890abcdef"  # Session 2 (same)
-#   - id: verify-changes
+#   - name: verify-changes
 #     _runtime:
 #       sessionId: "9876fedc-ba98-7654-3210-fedcba987654"  # Session 3 (new)

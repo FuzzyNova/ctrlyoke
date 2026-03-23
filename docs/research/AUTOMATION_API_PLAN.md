@@ -79,7 +79,7 @@ done
 ```yaml
 # security-scan.flightpath.yaml
 prompts:
-  - id: scan
+  - name: scan
     prompt: |
       Scan the repository at {{repoPath}} for security vulnerabilities.
       Write a report to {{reportDir}}/security-report.md.

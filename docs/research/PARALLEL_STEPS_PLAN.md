@@ -33,20 +33,20 @@ model: sonnet
 
 prompts:
   # Sequential step first
-  - id: setup
+  - name: setup
     prompt: Read the codebase and summarize the architecture.
 
   # Parallel group: all run concurrently, next step waits for all
   - parallel:
-    - id: research-auth
+    - name: research-auth
       prompt: Research best practices for authentication in this codebase.
-    - id: research-db
+    - name: research-db
       prompt: Research the database schema and suggest normalizations.
-    - id: research-perf
+    - name: research-perf
       prompt: Profile the hot paths and identify performance bottlenecks.
 
   # Resumes after ALL three parallel steps complete
-  - id: synthesize
+  - name: synthesize
     prompt: |
       Based on the research in prior steps, produce an implementation plan.
 ```
@@ -62,11 +62,11 @@ prompts:
 
 ```yaml
 prompts:
-  - id: research-auth
+  - name: research-auth
     prompt: ...
-  - id: research-db
+  - name: research-db
     prompt: ...
-  - id: synthesize
+  - name: synthesize
     dependsOn: [research-auth, research-db]
     prompt: ...
 ```
@@ -78,7 +78,7 @@ to implement and validate. Reserve for a future phase if users ask for it.
 
 ```yaml
 prompts:
-  - id: research-auth
+  - name: research-auth
     group: research
     parallel: true
     prompt: ...
@@ -179,7 +179,7 @@ Two modes, configurable at the group level:
 - parallel:
     failFast: true   # default: true — cancel remaining steps if one fails
     steps:
-      - id: research-auth
+      - name: research-auth
         ...
 ```
 

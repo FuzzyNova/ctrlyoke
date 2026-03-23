@@ -799,14 +799,14 @@ prompts:
 resumeSession: true
 
 prompts:
-  - id: step1
+  - name: step1
     prompt: "First step"
 
-  - id: step2
+  - name: step2
     prompt: "Second step"
     # Auto-resumes from step1
 
-  - id: step3
+  - name: step3
     prompt: "Third step"
     resumeSession: false # Override: Start fresh here
 ```
@@ -821,16 +821,16 @@ prompts:
 
 ```yaml
 prompts:
-  - id: step1
+  - name: step1
     _runtime:
       sessionId: abc-123
 
-  - id: step2
+  - name: step2
     sessionId: 1
     _runtime:
       sessionId: abc-123 # ✅ Should match step1
 
-  - id: step3
+  - name: step3
     sessionId: 1
     _runtime:
       sessionId: abc-123 # ✅ Should match step1
@@ -852,24 +852,24 @@ model: claude-sonnet-4.5
 
 prompts:
   # Phase 1: Analysis (Session A)
-  - id: analyze-security
+  - name: analyze-security
     prompt: "Analyze codebase for security vulnerabilities"
 
-  - id: analyze-performance
+  - name: analyze-performance
     prompt: "Analyze performance bottlenecks"
     sessionId: 1 # Continue from security analysis
 
   # Phase 2: Implementation (Session B - fresh context)
-  - id: implement-security
+  - name: implement-security
     prompt: "Implement security fixes"
     resumeSession: false
 
-  - id: implement-performance
+  - name: implement-performance
     prompt: "Implement performance improvements"
     sessionId: 3 # Continue from security implementation
 
   # Phase 3: Verification (Session C - independent review)
-  - id: verify-all
+  - name: verify-all
     prompt: "Verify all changes meet requirements"
     resumeSession: false
 ```
@@ -886,14 +886,14 @@ model: claude-sonnet-4.5
 resumeSession: true # Workflow default: Share sessions
 
 prompts:
-  - id: write-tests
+  - name: write-tests
     prompt: "Write comprehensive tests for authentication module"
 
-  - id: implement-feature
+  - name: implement-feature
     prompt: "Implement authentication to pass the tests"
     # Auto-resumes from write-tests
 
-  - id: refactor
+  - name: refactor
     prompt: "Refactor implementation for better maintainability"
     # Auto-resumes (continues same session)
 ```
@@ -909,11 +909,11 @@ provider: copilot-cli
 model: claude-sonnet-4.5
 
 prompts:
-  - id: continue-work
+  - name: continue-work
     prompt: "Continue implementing the user dashboard feature"
     sessionId: "550e8400-e29b-41d4-a716-446655440000" # From previous run
 
-  - id: add-tests
+  - name: add-tests
     prompt: "Add tests for the dashboard"
     sessionId: 1 # Continue from resumed session
 ```
@@ -936,7 +936,7 @@ prompts:
 
 ```yaml
 prompts:
-  - id: string # Optional identifier
+  - name: string # Optional display label
     prompt: string # Prompt text (required)
 
     # Session management

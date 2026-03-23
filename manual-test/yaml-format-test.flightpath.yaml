@@ -2,7 +2,7 @@
 # Tests that FlightPath correctly parses YAML workflows
 
 prompts:
-  - id: test-yaml
+  - name: test-yaml
     prompt: |
       This is a FlightPath YAML test. Reply with "YAML parsing successful" if you receive this.
 

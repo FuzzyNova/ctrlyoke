@@ -5,12 +5,12 @@ harness: copilot-cli
 model: gpt-5-mini
 
 prompts:
-  - id: remember-info
+  - name: remember-info
     prompt: |
       We are testing FlightPath session management. Remember: My favorite color is orange.
     resumeSession: false
 
-  - id: recall-info
+  - name: recall-info
     prompt: |
       What is my favorite color?
     resumeSession: true

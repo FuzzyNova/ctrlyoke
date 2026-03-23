@@ -20,7 +20,7 @@ resumeSession: false # Fresh context for each review phase
 # Prompts
 prompts:
   # Phase 1: Security Review
-  - id: security-review
+  - name: security-review
     prompt: |
       Review the latest code changes for security vulnerabilities.
 
@@ -37,7 +37,7 @@ prompts:
     # Full-power model needed for security analysis
 
   # Phase 2: Performance Review
-  - id: performance-review
+  - name: performance-review
     prompt: |
       Analyze performance implications of the code changes.
 
@@ -53,7 +53,7 @@ prompts:
     # Uses: claude-cli, haiku (overridden), code-reviewer agent, new session
 
   # Phase 3: Style Review
-  - id: style-review
+  - name: style-review
     prompt: |
       Review code style, naming conventions, and best practices.
 

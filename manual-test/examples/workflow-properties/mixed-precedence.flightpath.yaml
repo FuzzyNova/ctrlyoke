@@ -19,7 +19,7 @@ resumeSession: true
 # Prompts
 prompts:
   # Prompt 1: No overrides - uses all workflow defaults
-  - id: analyze
+  - name: analyze
     prompt: |
       Analyze the codebase architecture and identify potential improvements.
 
@@ -37,7 +37,7 @@ prompts:
     #   resumeSession: true (from workflow)
 
   # Prompt 2: Model override only - demonstrates partial override
-  - id: implement
+  - name: implement
     prompt: |
       Based on the analysis, implement the following architectural improvements:
 
@@ -54,7 +54,7 @@ prompts:
     #   resumeSession: true (from workflow)
 
   # Prompt 3: Complete override - demonstrates all properties overridden
-  - id: review
+  - name: review
     prompt: |
       Review the architectural changes for compliance and quality:
 

@@ -2,12 +2,12 @@
 # Tests multi-step workflows with session continuity in YAML format
 
 prompts:
-  - id: step1
+  - name: step1
     prompt: |
       This is step 1. Remember the number: 42
     resumeSession: false
 
-  - id: step2
+  - name: step2
     prompt: |
       What number did I tell you to remember in step 1?
     resumeSession: true

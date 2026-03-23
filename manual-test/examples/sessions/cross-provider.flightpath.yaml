@@ -13,7 +13,7 @@ prompts:
   # Example 1: Cross-Harness Warning (Incompatible)
   # ============================================================
 
-  - id: copilot-analysis
+  - name: copilot-analysis
     harness: copilot-cli
     model: claude-sonnet-4.5
     prompt: |
@@ -22,7 +22,7 @@ prompts:
     # Creates Copilot CLI session (UUID format)
     # Example sessionId: "550e8400-e29b-41d4-a716-446655440000"
 
-  - id: claude-implementation
+  - name: claude-implementation
     harness: claude-cli
     model: sonnet
     prompt: |
@@ -38,12 +38,12 @@ prompts:
   # ⚠️ Warning: sessionId references prompt with different harness
   #    (copilot-cli vs claude-cli). Starting new session instead.
   # Runtime Metadata After Execution:
-  # - id: copilot-analysis
+  # - name: copilot-analysis
   #   _runtime:
   #     harness: copilot-cli
   #     sessionId: "550e8400-e29b-41d4-a716-446655440000"  # Copilot UUID
   #
-  # - id: claude-implementation
+  # - name: claude-implementation
   #   _runtime:
   #     harness: claude-cli
   #     sessionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"  # Claude UUID (NEW)
@@ -51,13 +51,13 @@ prompts:
   # ============================================================
   # Example 2: Same Harness - Valid Session Sharing
   # ============================================================
-  - id: copilot-step1
+  - name: copilot-step1
     harness: copilot-cli
     model: claude-sonnet-4.5
     prompt: "First step with Copilot"
     # Creates Copilot session
 
-  - id: copilot-step2
+  - name: copilot-step2
     harness: copilot-cli
     model: gpt-5
     prompt: "Second step with Copilot"
@@ -66,13 +66,13 @@ prompts:
     # Note: Different models (sonnet vs gpt-5) but same harness is OK
 
   # Runtime Metadata After Execution:
-  # - id: copilot-step1
+  # - name: copilot-step1
   #   _runtime:
   #     harness: copilot-cli
   #     model: claude-sonnet-4.5
   #     sessionId: "abc-123-copilot"
   #
-  # - id: copilot-step2
+  # - name: copilot-step2
   #   _runtime:
   #     harness: copilot-cli
   #     model: gpt-5
@@ -80,14 +80,14 @@ prompts:
   # ============================================================
   # Example 3: Harness-Specific Session Formats
   # ============================================================
-  - id: codex-step
+  - name: codex-step
     harness: codex-cli
     model: gpt-5.1-codex
     prompt: "Implement feature with Codex"
     # Creates Codex session (thread_xxx format)
     # Example sessionId: "thread_abc123xyz789"
 
-  - id: copilot-step
+  - name: copilot-step
     harness: copilot-cli
     model: claude-sonnet-4.5
     prompt: "Review with Copilot"
@@ -105,27 +105,27 @@ prompts:
   # ============================================================
   # Example 4: Correct Mixed-Harness Workflow
   # ============================================================
-  - id: analysis-phase
+  - name: analysis-phase
     harness: copilot-cli
     model: claude-sonnet-4.5
     prompt: "Analyze codebase structure"
     # Copilot session 1
 
-  - id: continued-analysis
+  - name: continued-analysis
     harness: copilot-cli
     model: claude-sonnet-4.5
     prompt: "Deep dive into session management"
     sessionId: 7 # ✅ Valid: Same harness (copilot-cli)
     # Resumes Copilot session 1
 
-  - id: implementation-phase
+  - name: implementation-phase
     harness: claude-cli
     model: opus
     prompt: "Implement the improvements"
     resumeSession: false # ✅ Explicit: Start fresh with Claude
     # Creates new Claude session (not trying to reuse Copilot session)
 
-  - id: continued-implementation
+  - name: continued-implementation
     harness: claude-cli
     model: sonnet
     prompt: "Add tests for the implementation"

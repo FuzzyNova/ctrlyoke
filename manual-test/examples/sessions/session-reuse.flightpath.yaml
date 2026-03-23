@@ -18,7 +18,7 @@ prompts:
   # TDD Workflow: Write Tests → Implement → Refactor
   # ============================================================
 
-  - id: write-tests
+  - name: write-tests
     prompt: |
       Write comprehensive unit tests for a new PromptSessionResolver utility.
 
@@ -33,7 +33,7 @@ prompts:
     # No sessionId → Starts new session (Session 1)
     # This is the first prompt, so it creates the initial context
 
-  - id: implement-resolver
+  - name: implement-resolver
     prompt: |
       Implement the PromptSessionResolver class to pass all the tests.
 
@@ -48,7 +48,7 @@ prompts:
     # Auto-resumes from write-tests
     # Copilot has full context of the test requirements
 
-  - id: refactor-for-clarity
+  - name: refactor-for-clarity
     prompt: |
       Refactor the PromptSessionResolver implementation for better clarity.
 
@@ -60,7 +60,7 @@ prompts:
     # Auto-resumes from implement-resolver
     # Copilot knows the implementation details and test requirements
 
-  - id: add-integration-tests
+  - name: add-integration-tests
     prompt: |
       Add integration tests that verify PromptSessionResolver works with:
       - Real working file examples
@@ -71,7 +71,7 @@ prompts:
     # Auto-resumes - full context of tests, implementation, and refactoring
     # Copilot can reference all previous decisions
 
-  - id: update-documentation
+  - name: update-documentation
     prompt: |
       Update documentation to reflect the new PromptSessionResolver:
 
@@ -94,19 +94,19 @@ prompts:
 # If you don't want to rely on workflow-level default, you can be explicit:
 #
 # prompts:
-#   - id: write-tests
+#   - name: write-tests
 #     # Starts new session
 #
-#   - id: implement-resolver
+#   - name: implement-resolver
 #     sessionId: 1  # Explicit: Use session from write-tests
 #
-#   - id: refactor-for-clarity
+#   - name: refactor-for-clarity
 #     sessionId: 1  # Explicit: Use session from write-tests
 #
-#   - id: add-integration-tests
+#   - name: add-integration-tests
 #     sessionId: 1  # Explicit: Use session from write-tests
 #
-#   - id: update-documentation
+#   - name: update-documentation
 #     sessionId: 1  # Explicit: Use session from write-tests
 
 # Expected Session Flow:
@@ -120,19 +120,19 @@ prompts:
 # All prompts will have the SAME sessionId in _runtime:
 #
 # prompts:
-#   - id: write-tests
+#   - name: write-tests
 #     _runtime:
 #       sessionId: "550e8400-e29b-41d4-a716-446655440000"
-#   - id: implement-resolver
+#   - name: implement-resolver
 #     _runtime:
 #       sessionId: "550e8400-e29b-41d4-a716-446655440000"
-#   - id: refactor-for-clarity
+#   - name: refactor-for-clarity
 #     _runtime:
 #       sessionId: "550e8400-e29b-41d4-a716-446655440000"
-#   - id: add-integration-tests
+#   - name: add-integration-tests
 #     _runtime:
 #       sessionId: "550e8400-e29b-41d4-a716-446655440000"
-#   - id: update-documentation
+#   - name: update-documentation
 #     _runtime:
 #       sessionId: "550e8400-e29b-41d4-a716-446655440000"
 

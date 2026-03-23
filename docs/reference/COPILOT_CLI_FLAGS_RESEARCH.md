@@ -617,7 +617,7 @@ case warrants it.
 ```yaml
 # In workflow YAML schema
 prompts:
-  - id: my-prompt
+  - name: my-prompt
     prompt: Do something complex.
     extraArgs: "--secret-env-vars MY_API_KEY --no-custom-instructions"
 ```

@@ -1,5 +1,5 @@
 prompts:
-  - id: test-all-properties
+  - name: test-all-properties
     prompt: |
       This is a test prompt to verify all properties sync correctly to the dashboard UI.
 
@@ -29,7 +29,7 @@ prompts:
 
         Please fix the issues and try again.
 
-  - id: test-minimal-properties
+  - name: test-minimal-properties
     prompt: |
       This is a test prompt with NO end condition properties.
 

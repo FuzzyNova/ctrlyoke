@@ -409,7 +409,7 @@ export class WorkflowCommandHandler {
 # Multi-step AI automation with validation
 
 prompts:
-  - id: analyze
+  - name: analyze
     prompt: |
       Analyze this codebase for potential bugs and code quality issues.
 
@@ -420,7 +420,7 @@ prompts:
 
       Provide specific recommendations with examples.
 
-  - id: fix
+  - name: fix
     prompt: |
       Fix any issues found in the previous analysis.
 

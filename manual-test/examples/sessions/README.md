@@ -107,11 +107,11 @@ Select: manual-test/session-examples/cross-harness.flightpath.yaml
 
 ```yaml
 prompts:
-  - id: analyze
+  - name: analyze
     prompt: "Analyze code"
     # Starts new session
 
-  - id: implement
+  - name: implement
     prompt: "Fix issues"
     sessionId: 1 # Use session from prompt 1
 ```
@@ -128,7 +128,7 @@ prompts:
 
 ```yaml
 prompts:
-  - id: resume-work
+  - name: resume-work
     prompt: "Continue previous work"
     sessionId: "550e8400-e29b-41d4-a716-446655440000"
 ```
@@ -145,10 +145,10 @@ prompts:
 
 ```yaml
 prompts:
-  - id: step1
+  - name: step1
     prompt: "First step"
 
-  - id: step2
+  - name: step2
     prompt: "Second step"
     newChatSession: false # Auto-resume from step1
 ```
@@ -174,16 +174,16 @@ cat .flightpath/.working/multi-session.working.yaml
 
 ```yaml
 prompts:
-  - id: analyze
+  - name: analyze
     _runtime:
       sessionId: "abc-123" # Session 1
 
-  - id: implement
+  - name: implement
     sessionId: 1
     _runtime:
       sessionId: "abc-123" # ✅ Same as analyze
 
-  - id: verify
+  - name: verify
     newChatSession: true
     _runtime:
       sessionId: "xyz-789" # Session 2 (different)
@@ -261,12 +261,12 @@ Look for: "Session resolved: ..." messages
 
    ```yaml
    # Phase 1: Analysis (shared session)
-   - id: security-review
-   - id: performance-review
+   - name: security-review
+   - name: performance-review
      sessionId: 1
 
    # Phase 2: Implementation (new session)
-   - id: implement
+   - name: implement
      newChatSession: true
    ```
 

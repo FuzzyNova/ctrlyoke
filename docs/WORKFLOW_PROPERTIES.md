@@ -101,16 +101,16 @@ endCondition:
 
 # Prompts inherit workflow properties
 prompts:
-  - id: analyze
+  - name: analyze
     prompt: "Analyze the codebase for bugs"
     # Uses: copilot-cli, claude-sonnet-4.5, code-reviewer
 
-  - id: implement
+  - name: implement
     prompt: "Implement improvements"
     model: gpt-5 # Override: Use different model
     # Uses: copilot-cli, gpt-5 (overridden), code-reviewer
 
-  - id: document
+  - name: document
     prompt: "Update documentation"
     endCondition: null # Override: Disable validation for docs
     # Uses: copilot-cli, claude-sonnet-4.5, code-reviewer
@@ -265,7 +265,7 @@ endCondition:
 
 ```yaml
 prompts:
-  - id: docs
+  - name: docs
     prompt: "Update documentation"
     endCondition: null # Override workflow-level validation
 ```
@@ -310,7 +310,7 @@ endCondition:
   returns: "true"
 
 prompts:
-  - id: analyze
+  - name: analyze
     prompt: "Analyze code"
     _runtime:
       harness: copilot-cli
@@ -350,15 +350,15 @@ endCondition:
     Please fix the failing tests before moving to the next step.
 
 prompts:
-  - id: implement-auth
+  - name: implement-auth
     prompt: "Implement user authentication feature"
     # Will run tests after completion
 
-  - id: add-auth-tests
+  - name: add-auth-tests
     prompt: "Add comprehensive tests for authentication"
     # Will run tests after completion
 
-  - id: update-docs
+  - name: update-docs
     prompt: "Update authentication documentation"
     endCondition: null # Skip validation for documentation
 ```
@@ -381,18 +381,18 @@ agent: .github/agents/code-reviewer.agent.md
 resumeSession: false # Fresh context for each review phase
 
 prompts:
-  - id: security-review
+  - name: security-review
     prompt: |
       Review the latest changes for security vulnerabilities.
       Focus on: authentication, authorization, input validation, data exposure.
 
-  - id: performance-review
+  - name: performance-review
     prompt: |
       Analyze performance implications of the changes.
       Identify bottlenecks, inefficient algorithms, resource leaks.
     model: haiku # Override: Use faster model for performance check
 
-  - id: style-review
+  - name: style-review
     prompt: |
       Check code style, naming conventions, and best practices.
       Suggest improvements for readability and maintainability.
@@ -417,14 +417,14 @@ model: claude-sonnet-4.5
 resumeSession: true
 
 prompts:
-  - id: analyze
+  - name: analyze
     prompt: "Analyze the codebase architecture"
     # Uses workflow defaults:
     #   harness: copilot-cli (workflow)
     #   model: claude-sonnet-4.5 (workflow)
     #   resumeSession: true (workflow)
 
-  - id: implement
+  - name: implement
     prompt: "Implement architectural improvements"
     model: gpt-5 # Prompt-level override
     # Uses:
@@ -432,7 +432,7 @@ prompts:
     #   model: gpt-5 (prompt override)
     #   resumeSession: true (workflow)
 
-  - id: review
+  - name: review
     prompt: "Review changes for compliance"
     harness: claude-cli # Prompt-level override
     model: opus # Prompt-level override
@@ -507,11 +507,11 @@ Add comments explaining prompt-level overrides:
 
 ```yaml
 prompts:
-  - id: security-audit
+  - name: security-audit
     prompt: "Audit for security issues"
     model: opus # Override: Use most capable model for security
 
-  - id: format-code
+  - name: format-code
     prompt: "Apply code formatting"
     model: haiku # Override: Simple task, use fast model
 ```
@@ -627,15 +627,15 @@ Different agents for different phases:
 
 ```yaml
 prompts:
-  - id: plan
+  - name: plan
     agent: architect
     prompt: "Design system architecture"
 
-  - id: implement
+  - name: implement
     agent: developer
     prompt: "Implement the design"
 
-  - id: review
+  - name: review
     agent: reviewer
     prompt: "Review implementation"
 ```
@@ -824,7 +824,7 @@ endCondition:
 
 # Required
 prompts:
-  - id: string  # Optional
+  - name: string  # Optional display label
     prompt: string  # Required
 
     # Prompt-level overrides (optional)

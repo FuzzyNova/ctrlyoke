@@ -235,11 +235,11 @@ endCondition:
   returns: "true"
 
 prompts:
-  - id: analyze
+  - name: analyze
     prompt: |
       Analyze the architecture and suggest improvements.
 
-  - id: implement
+  - name: implement
     prompt: |
       Implement the suggested improvements.
     resumeSession: true # Continue conversation from previous prompt
