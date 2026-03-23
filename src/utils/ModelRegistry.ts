@@ -215,6 +215,17 @@ async function queryChatModels(): Promise<void> {
  */
 async function queryOpenCodeModels(): Promise<void> {
   try {
+    // Check availability before querying models to avoid a noisy error when OpenCode is not installed
+    try {
+      await execAsync("opencode --version", { timeout: 5000 });
+    } catch {
+      Log.debug(
+        "OpenCode CLI not available, skipping model query — using fallback list"
+      );
+      cachedOpenCodeModelIds = [...OPENCODE_CLI_FALLBACK_MODELS];
+      return;
+    }
+
     Log.debug(
       "Querying OpenCode for available models via 'opencode models --verbose'..."
     );

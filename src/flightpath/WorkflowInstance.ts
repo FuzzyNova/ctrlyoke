@@ -1254,6 +1254,23 @@ export class WorkflowInstance {
         );
       }
 
+      // Populate VS Code defaults and write them (along with any explicit
+      // initialProperties) to the file BEFORE notifying the webview.
+      // This ensures sendWorkflowPropertiesToSettings() — called inside
+      // updateFileSelected — reads a file that already contains the correct
+      // values (e.g. additionalArgs harness default, resumeSession from an
+      // in-progress user selection), preventing a brief reversion in the UI.
+      // onlyIfUndefined ensures concurrent calls don't stomp each other.
+      const explicitValues = options?.initialProperties ?? {};
+      const defaults =
+        PromptFileLoader.populateSettingsDefaults(explicitValues);
+      const allInitialValues = { ...defaults, ...explicitValues };
+      if (Object.keys(allInitialValues).length > 0) {
+        await this.promptQueue.updateWorkingFileProperties(allInitialValues, {
+          onlyIfUndefined: true,
+        });
+      }
+
       // Notify the webview so the WorkflowStatus header transitions from
       // "No workflow loaded" to showing the new workflow name.
       if (this.dashboardSink) {
@@ -1264,19 +1281,6 @@ export class WorkflowInstance {
           [],
           workflowName
         );
-      }
-
-      // Populate VS Code defaults, using initialProperties as "already-set" so
-      // dependent lookups work correctly (e.g. harness change → correct model).
-      // onlyIfUndefined ensures concurrent calls don't overwrite each other's
-      // defaults; the caller's explicit write (after this) always wins.
-      const explicitValues = options?.initialProperties ?? {};
-      const defaults =
-        PromptFileLoader.populateSettingsDefaults(explicitValues);
-      if (Object.keys(defaults).length > 0) {
-        await this.promptQueue.updateWorkingFileProperties(defaults, {
-          onlyIfUndefined: true,
-        });
       }
     } catch (error) {
       Log.error("Failed to eagerly create working file:", error);

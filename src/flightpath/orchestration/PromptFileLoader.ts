@@ -337,6 +337,13 @@ export class PromptFileLoader {
     if (explicitValues.priorContext === undefined) {
       defaults.priorContext = ConfigurationUtils.getPriorContext();
     }
+    if (explicitValues.additionalArgs === undefined) {
+      defaults.additionalArgs = ConfigurationUtils.getAdditionalArgsForHarness(
+        effectiveHarness as Parameters<
+          typeof ConfigurationUtils.getAdditionalArgsForHarness
+        >[0]
+      );
+    }
 
     return defaults;
   }
