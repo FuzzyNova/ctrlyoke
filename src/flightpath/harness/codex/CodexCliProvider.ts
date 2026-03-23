@@ -106,7 +106,7 @@ export class CodexCliProvider implements ICliProvider {
 
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
     const resolvedModel = workflowContext?.resolvedProperties?.model;
-    // Agent handling is done via prompt prepending in HarnessIntegration.buildPromptText()
+    // Agent handling is done via buildPromptSections() → createCategorizedPromptFiles().
     // No provider-specific agent flags needed.
     const resolvedResumeSession =
       workflowContext?.resolvedProperties?.resumeSession;

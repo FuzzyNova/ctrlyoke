@@ -8,13 +8,12 @@ import {
 } from "../types/CliOutputTypes";
 import { AgentExpander } from "../utils/AgentExpander";
 import { SkillExpander } from "../utils/SkillExpander";
-import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ContextExpander } from "../utils/ContextExpander";
 import type { SplitContext } from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
 import { ResolvedProperties } from "../utils/PropertyResolver";
 import { TempFileManager } from "../utils/TempFileManager";
-import { PromptFileSplitter, SplitConfig } from "../utils/PromptFileSplitter";
+import { SplitConfig } from "../utils/PromptFileSplitter";
 import type { PromptQueue } from "./PromptQueue";
 
 /**
@@ -240,8 +239,7 @@ export abstract class HarnessIntegration {
   /**
    * Build prompt sections from prompt item, separating content by category.
    *
-   * Unlike buildPromptText() which merges everything into one blob, this method
-   * returns each category separately so callers can write them to typed files:
+   * Returns each category separately so callers can write them to typed files:
    *   agent instructions → <ts>-<name>.agent.prompt.md
    *   skills             → <ts>-<name>.skills.prompt.md
    *   direct file refs   → @path inline in instruction string (harness auto-reads)
@@ -347,90 +345,6 @@ export abstract class HarnessIntegration {
     }
 
     return clauses.join(joinSeparator) + `${joinSeparator}${followClause} `;
-  }
-
-  /**
-   * Build prompt text from prompt item.
-   * Assembles in the canonical section order (without priorContext):
-   *   <skillInstructions> → <agentInstructions> → <attachment> blocks → user prompt
-   *
-   * Used by CopilotChatIntegration when building temp files for attachment.
-   * For the full prompt sent to AI (including priorContext and injected instructions),
-   * see buildPromptWithInstructions.
-   *
-   * @param prompt The prompt item to build text for
-   * @param resolvedAgent Optional resolved agent name
-   * @param resolvedSkills Optional resolved skill names
-   */
-  protected async buildPromptText(
-    prompt: PromptItem,
-    resolvedAgent?: string,
-    resolvedSkills?: string[]
-  ): Promise<string> {
-    const userPromptText = prompt.prompt.trim();
-    const workspaceRoot = this.getWorkspaceRoot();
-
-    // Expand context references to get just the attachment section
-    const attachmentSection = await this.expandContextOnly(userPromptText);
-
-    // Build skill block
-    const skillContent = resolvedSkills?.length
-      ? await this.expandSkillBlock(resolvedSkills, workspaceRoot)
-      : null;
-
-    // Build agent block
-    const agentContent = resolvedAgent
-      ? await this.expandAgentBlock(resolvedAgent, workspaceRoot)
-      : null;
-
-    // Assemble: skills → agent → attachments → userPrompt
-    const sections: string[] = [];
-    if (skillContent) {
-      sections.push(skillContent);
-    }
-    if (agentContent) {
-      sections.push(
-        `<agentInstructions>\n${agentContent}\n</agentInstructions>`
-      );
-    }
-    if (attachmentSection) {
-      sections.push(attachmentSection);
-    }
-    sections.push(userPromptText);
-
-    return sections.join("\n\n");
-  }
-
-  /**
-   * Expand context references in the prompt and return ONLY the attachment XML section.
-   * Returns an empty string if no workspace is available or no file references are found.
-   */
-  private async expandContextOnly(userPromptText: string): Promise<string> {
-    const workspaceRoot = this.getWorkspaceRoot();
-    if (!workspaceRoot) {
-      Log.warn("No workspace root, skipping context expansion");
-      return "";
-    }
-    try {
-      const expander = new ContextExpander(workspaceRoot);
-      const expanded = await expander.expandContext(userPromptText);
-      if (expanded === userPromptText) {
-        return ""; // No attachments were added
-      }
-      // ContextExpander returns: `${attachmentsSection}\n\n${promptText}`
-      // Strip the trailing "\n\n" + userPromptText to isolate the attachment section.
-      const suffix = "\n\n" + userPromptText;
-      if (expanded.endsWith(suffix)) {
-        return expanded.slice(0, -suffix.length);
-      }
-      Log.warn(
-        "Unexpected ContextExpander output format, skipping attachments"
-      );
-      return "";
-    } catch (error) {
-      Log.error("Error expanding context:", error);
-      return "";
-    }
   }
 
   /**
@@ -602,7 +516,7 @@ export abstract class HarnessIntegration {
    *
    * Used by CopilotChatIntegration and any other integration that builds
    * categorized prompt files and needs to include workflow context in the
-   * prompt file (rather than in the blob from buildPromptWithInstructions).
+   * prompt file section.
    *
    * @returns Assembled text block, or empty string if nothing to inject
    */
@@ -635,176 +549,12 @@ export abstract class HarnessIntegration {
   }
 
   /**
-   * Build the fully assembled prompt for sending to AI.
-   *
-   * Section order (canonical):
-   *   <skillInstructions> → <agentInstructions> → <priorContext>
-   *   → <attachment> blocks → user prompt
-   *
-   * @param prompt The prompt item
-   * @param promptIndex Current prompt index
-   * @param allPrompts All prompts in the workflow
-   * @param resolvedAgent Resolved agent name for prompt prepending
-   * @param resolvedSkills Resolved skill names for frontmatter injection
-   * @param resolvedPriorContext Prior context injection setting
-   * @param finalPromptResponseTexts Per-loop finalPrompt response texts (for "finalPromptAll"/"finalPromptPrevious")
-   * @param isResumedSession Whether this prompt is continuing an existing session.
-   *   When true and `flightpath.omitAgentsAndSkillsOnResume` is enabled, agent and skill
-   *   blocks are omitted to prevent duplicate instructions in the resumed session.
-   * @returns Fully assembled prompt text
-   */
-  protected async buildPromptWithInstructions(
-    prompt: PromptItem,
-    promptIndex: number,
-    allPrompts: PromptItem[],
-    resolvedAgent?: string,
-    resolvedSkills?: string[],
-    resolvedPriorContext?: PriorContext,
-    finalPromptResponseTexts?: string[],
-    isResumedSession?: boolean
-  ): Promise<string> {
-    const userPromptText = prompt.prompt.trim();
-    const workspaceRoot = this.getWorkspaceRoot();
-
-    // 1. Attachment section (file/directory context references)
-    const attachmentSection = await this.expandContextOnly(userPromptText);
-
-    // Determine whether to omit agent/skill blocks for this prompt.
-    // When the setting is enabled and this prompt resumes an existing session,
-    // the harness already has those instructions from the first message.
-    const omitAgentsAndSkills =
-      isResumedSession &&
-      ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume();
-
-    if (omitAgentsAndSkills) {
-      Log.debug(
-        "⏭️ Omitting agent and skill blocks (resuming existing session)"
-      );
-    }
-
-    // 2. Skill block
-    const skillContent =
-      !omitAgentsAndSkills && resolvedSkills?.length
-        ? await this.expandSkillBlock(resolvedSkills, workspaceRoot)
-        : null;
-
-    // 3. Agent block
-    const agentContent =
-      !omitAgentsAndSkills && resolvedAgent
-        ? await this.expandAgentBlock(resolvedAgent, workspaceRoot)
-        : null;
-
-    // 4. Prior context block
-    let priorContextBlock = "";
-    if (resolvedPriorContext !== undefined && resolvedPriorContext !== "none") {
-      const contextItems = this.gatherPriorContextItems(
-        resolvedPriorContext,
-        allPrompts,
-        promptIndex,
-        finalPromptResponseTexts ?? []
-      );
-      if (contextItems.length > 0) {
-        priorContextBlock = this.buildPriorContextXml(contextItems);
-        const isFinalPromptContext =
-          resolvedPriorContext === "finalPromptAll" ||
-          resolvedPriorContext === "finalPromptPrevious";
-        Log.debug(
-          `🔗 Injecting ${isFinalPromptContext ? "finalPrompt" : "prior"} context for prompt ${promptIndex + 1}: ` +
-            `${contextItems.length} step(s) from indices [${contextItems.map((c) => c.index + 1).join(", ")}]`
-        );
-      }
-    }
-
-    // Assemble in canonical order:
-    //   skills → agent → priorContext → attachments → userPrompt
-    const sections: string[] = [];
-    if (skillContent) {
-      sections.push(skillContent);
-    }
-    if (agentContent) {
-      sections.push(
-        `<agentInstructions>\n${agentContent}\n</agentInstructions>`
-      );
-    }
-    if (priorContextBlock) {
-      sections.push(priorContextBlock);
-    }
-    if (attachmentSection) {
-      sections.push(attachmentSection);
-    }
-    sections.push(userPromptText);
-
-    return sections.join("\n\n");
-  }
-
-  /**
    * Return the SplitConfig to use when creating temp prompt files.
    * Override in subclasses to apply harness-specific limits.
    * Default returns undefined (PromptFileSplitter uses its built-in defaults).
    */
   protected getTempFileSplitConfig(): SplitConfig | undefined {
     return undefined;
-  }
-
-  /**
-   * Create temp prompt file(s) from expanded prompt text.
-   * Handles large-prompt splitting (>10K tokens or >1800 lines) via PromptFileSplitter.
-   * Logs creation stats for debugging.
-   *
-   * This is the single implementation shared by all harnesses that use temp files
-   * (CliIntegration for file-reference passing; CopilotChatIntegration for attachment).
-   *
-   * @param promptText The full expanded prompt text to write
-   * @param filePath Optional workflow file path (for meaningful temp filenames)
-   * @param promptNumber Optional 1-based prompt number (for meaningful temp filenames)
-   * @returns Absolute file paths and workspace-relative paths for each created file
-   */
-  protected async createTempPromptFiles(
-    promptText: string,
-    filePath?: string,
-    promptNumber?: number
-  ): Promise<{ tempFilePaths: string[]; relativePaths: string[] }> {
-    const workspaceRoot = this.getWorkspaceRoot();
-    if (!workspaceRoot) {
-      throw new Error("No workspace root available for temp file");
-    }
-
-    const tempMgr = new TempFileManager(workspaceRoot);
-    const splitter = new PromptFileSplitter(this.getTempFileSplitConfig());
-    const splitResult = splitter.split(promptText);
-
-    let tempFilePaths: string[];
-
-    if (!splitResult.needsSplit) {
-      const tempFilePath = await tempMgr.createPromptFile(
-        promptText,
-        filePath,
-        promptNumber
-      );
-      tempFilePaths = [tempFilePath];
-      Log.info(
-        `📁 Temp file: ${tempMgr.getRelativePath(tempFilePath)} ` +
-          `(${splitResult.tokenCounts[0]} tokens, ${splitResult.lineCounts[0]} lines)`
-      );
-    } else {
-      tempFilePaths = await tempMgr.createSplitPromptFiles(
-        splitResult.chunks,
-        filePath,
-        promptNumber
-      );
-      Log.info(`📁 Prompt split into ${splitResult.chunks.length} files:`);
-      splitResult.chunks.forEach((_, idx) => {
-        Log.info(
-          `   ${idx + 1}. ${tempMgr.getRelativePath(tempFilePaths[idx])} ` +
-            `(${splitResult.tokenCounts[idx]} tokens, ${splitResult.lineCounts[idx]} lines)`
-        );
-      });
-    }
-
-    const relativePaths = tempFilePaths.map((fp) =>
-      tempMgr.getRelativePath(fp)
-    );
-    return { tempFilePaths, relativePaths };
   }
 
   /**

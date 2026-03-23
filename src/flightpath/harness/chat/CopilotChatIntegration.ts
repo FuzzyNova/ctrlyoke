@@ -811,7 +811,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
    *   attaches them to chat, and returns a structured instruction string.
    *   This gives a uniform experience matching CLI harnesses.
    */
-  protected async buildPromptText(
+  private async buildPromptText(
     prompt: PromptItem,
     resolvedAgent?: string,
     resolvedSkills?: string[]

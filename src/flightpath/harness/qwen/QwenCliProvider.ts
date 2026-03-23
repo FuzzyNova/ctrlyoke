@@ -117,7 +117,7 @@ export class QwenCliProvider implements ICliProvider {
       args.push("--model", model);
     }
 
-    // Agent handling is done via prompt prepending in HarnessIntegration.buildPromptText()
+    // Agent handling is done via buildPromptSections() → createCategorizedPromptFiles().
     // AgentExpander reads the agent file and injects <agentInstructions> into the prompt.
 
     // Session management: Resume with explicit session ID

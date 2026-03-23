@@ -128,7 +128,7 @@ export class ClaudeCliProvider implements ICliProvider {
       args.push("--model", model);
     }
 
-    // Agent handling is now done via prompt prepending in HarnessIntegration.buildPromptText()
+    // Agent handling is done via buildPromptSections() → createCategorizedPromptFiles().
     // AgentExpander reads the agent file and injects <agentInstructions> into the prompt.
     // This fixes the previously broken Claude CLI --agent flag (GitHub issue #9930).
 
