@@ -14,6 +14,7 @@ import {
 import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
 import {
   EXECUTION_STATES,
+  FINAL_PROMPT_PHASES,
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
@@ -168,7 +169,7 @@ export class OutputHistoryManager {
 
     try {
       const history = await this.readHistory(historyFilePath);
-      if (target.kind === "queue") {
+      if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
         const existing =
           history.promptOutputs[target.stepIndex]?.cliOutputs ?? [];
         history.promptOutputs[target.stepIndex] = {
@@ -204,7 +205,7 @@ export class OutputHistoryManager {
     }
 
     const key =
-      target.kind === "queue"
+      target.kind === FINAL_PROMPT_PHASES.QUEUE
         ? `queue:${target.stepIndex}`
         : `final:${target.loopIndex}`;
     const firstOutputAt =
@@ -272,7 +273,7 @@ export class OutputHistoryManager {
     }
     try {
       const history = await this.readHistory(historyFilePath);
-      if (target.kind === "queue") {
+      if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
         if (history.promptOutputs[target.stepIndex]) {
           history.promptOutputs[target.stepIndex].workspaceSnapshot = snapshot;
         }
@@ -449,7 +450,7 @@ export class OutputHistoryManager {
     try {
       const history = await this.readHistory(historyFilePath);
       const stepOutput =
-        target.kind === "queue"
+        target.kind === FINAL_PROMPT_PHASES.QUEUE
           ? history.promptOutputs[target.stepIndex]
           : history.finalPromptOutputs?.[target.loopIndex];
       if (stepOutput) {
@@ -473,7 +474,7 @@ export class OutputHistoryManager {
     try {
       const history = await this.readHistory(historyFilePath);
       const stepOutput =
-        target.kind === "queue"
+        target.kind === FINAL_PROMPT_PHASES.QUEUE
           ? history.promptOutputs[target.stepIndex]
           : history.finalPromptOutputs?.[target.loopIndex];
       if (stepOutput?.undoRecord) {

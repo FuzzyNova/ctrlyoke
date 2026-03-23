@@ -17,7 +17,7 @@ import type {
   UndoRecord,
   UndoExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
-import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
+import { MESSAGE_TYPES, EXECUTION_STATES, FINAL_PROMPT_PHASES } from "../../types/messages";
 import { CLI_EVENT_TYPES } from "../../types/cliEvents";
 import { OutputMinimap, type MinimapStep, type MinimapDiffBlock, type DiffRun } from "../output/OutputMinimap";
 import { UndoChangesDialog } from "../output/UndoChangesDialog";
@@ -295,7 +295,7 @@ export const OutputSection: React.FC = () => {
       // Measure step anchor positions
       const fractions = new Map<string, number>();
       for (const step of stepsToRender) {
-        const kindSlug = step.target.kind === "queue" ? "queue" : "final";
+        const kindSlug = step.target.kind === FINAL_PROMPT_PHASES.QUEUE ? "queue" : "final";
         const anchor = document.getElementById(
           `output-step-${kindSlug}-${step.target.index}`
         );
@@ -525,7 +525,7 @@ export const OutputSection: React.FC = () => {
 
       const kind = step.target.kind;
       const stepIndex = step.target.index;
-      const isFinalPrompt = kind === "finalPrompt";
+      const isFinalPrompt = kind === FINAL_PROMPT_PHASES.FINAL_PROMPT;
       const label = isFinalPrompt
         ? `Final Prompt Loop ${stepIndex + 1}`
         : `Prompt ${stepIndex + 1}`;
@@ -598,11 +598,11 @@ export const OutputSection: React.FC = () => {
 
       if (isViewingHistory && historyOutputs) {
         effectiveSnapshot =
-          kind === "queue"
+          kind === FINAL_PROMPT_PHASES.QUEUE
             ? historyOutputs.steps[stepIndex]?.workspaceSnapshot
             : historyOutputs.finalPromptOutputs?.[stepIndex]?.workspaceSnapshot;
         effectiveUndoRecord =
-          kind === "queue"
+          kind === FINAL_PROMPT_PHASES.QUEUE
             ? historyOutputs.steps[stepIndex]?.undoRecord
             : historyOutputs.finalPromptOutputs?.[stepIndex]?.undoRecord;
       } else {
@@ -845,10 +845,10 @@ export const OutputSection: React.FC = () => {
                   <React.Fragment key={`status-${index}`}>
                     {isFirstForStep && (
                       <div
-                        id={`output-step-${item.target.kind === "queue" ? "queue" : "final"}-${item.target.index}`}
+                        id={`output-step-${item.target.kind === FINAL_PROMPT_PHASES.QUEUE ? "queue" : "final"}-${item.target.index}`}
                       />
                     )}
-                    {isFirstForStep && item.target.kind === "finalPrompt" && (
+                    {isFirstForStep && item.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT && (
                       <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
                         Final Prompt Loop {item.target.index + 1}
                       </div>
@@ -867,19 +867,19 @@ export const OutputSection: React.FC = () => {
                 // This prop changes on every token, but React.memo on CliOutput
                 // ensures only the row with a non-empty chunk re-renders.
                 const streamingChunk =
-                  item.target.kind === "queue"
+                  item.target.kind === FINAL_PROMPT_PHASES.QUEUE
                     ? streamingChunks[item.target.index] || ""
                     : finalPromptStreamingChunks[item.target.index] || "";
                 const stepSnapshot: WorkspaceSnapshot | undefined =
                   isViewingHistory && historyOutputs
-                    ? item.target.kind === "queue"
+                    ? item.target.kind === FINAL_PROMPT_PHASES.QUEUE
                       ? historyOutputs.steps[item.target.index]?.workspaceSnapshot
                       : historyOutputs.finalPromptOutputs?.[item.target.index]
                           ?.workspaceSnapshot
                     : undefined;
                 const stepUndoRecord: UndoRecord | undefined =
                   isViewingHistory && historyOutputs
-                    ? item.target.kind === "queue"
+                    ? item.target.kind === FINAL_PROMPT_PHASES.QUEUE
                       ? historyOutputs.steps[item.target.index]?.undoRecord
                       : historyOutputs.finalPromptOutputs?.[item.target.index]
                           ?.undoRecord
@@ -889,10 +889,10 @@ export const OutputSection: React.FC = () => {
                   <React.Fragment key={`cli-${index}`}>
                     {isFirstForStep && (
                       <div
-                        id={`output-step-${item.target.kind === "queue" ? "queue" : "final"}-${item.target.index}`}
+                        id={`output-step-${item.target.kind === FINAL_PROMPT_PHASES.QUEUE ? "queue" : "final"}-${item.target.index}`}
                       />
                     )}
-                    {isFirstForStep && item.target.kind === "finalPrompt" && (
+                    {isFirstForStep && item.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT && (
                       <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
                         Final Prompt Loop {item.target.index + 1}
                       </div>
@@ -901,7 +901,7 @@ export const OutputSection: React.FC = () => {
                       output={cliData}
                       stepIndex={item.target.index}
                       stepLabel={
-                        item.target.kind === "queue"
+                        item.target.kind === FINAL_PROMPT_PHASES.QUEUE
                           ? undefined
                           : `Final Prompt Loop ${item.target.index + 1}`
                       }

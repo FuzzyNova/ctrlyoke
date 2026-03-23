@@ -1,10 +1,10 @@
-import { ExecutionState } from "./DashboardConstants";
+import { ExecutionState, FINAL_PROMPT_PHASES } from "./DashboardConstants";
 import { CliOutput, StatusMessage, UndoFileInstruction } from "./WebviewMessageTypes";
 import type { UnifiedDiffHunk } from "./CliOutputTypes";
 
 export type OutputExecutionTarget =
-  | { kind: "queue"; stepIndex: number }
-  | { kind: "finalPrompt"; loopIndex: number };
+  | { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }
+  | { kind: typeof FINAL_PROMPT_PHASES.FINAL_PROMPT; loopIndex: number };
 
 export interface OutputTimelineEntry {
   key: string;

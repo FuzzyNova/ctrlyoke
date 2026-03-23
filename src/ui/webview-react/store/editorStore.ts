@@ -3,6 +3,7 @@ import type { VsCodeApi } from "../types/vscode";
 import type { PromptItem } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type { PriorContext } from "../types/messages";
+import { FINAL_PROMPT_PHASES } from "../types/messages";
 
 /** Property is inherited from workflow/settings when undefined. */
 export type Inheritable<T> = T | undefined;
@@ -78,15 +79,15 @@ export interface SavedNewPromptState {
  * Only valid for edit-mode targets (queue / finalPrompt).
  */
 function selectionTargetKey(target: EditorSelectionTarget): string {
-  if (target.kind === "queue") return `queue:${target.index}`;
-  if (target.kind === "finalPrompt") return "finalPrompt";
+  if (target.kind === FINAL_PROMPT_PHASES.QUEUE) return `queue:${target.index}`;
+  if (target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) return "finalPrompt";
   return "";
 }
 
 export type EditorSelectionTarget =
   | { kind: "newPrompt" }
-  | { kind: "queue"; index: number }
-  | { kind: "finalPrompt" };
+  | { kind: typeof FINAL_PROMPT_PHASES.QUEUE; index: number }
+  | { kind: typeof FINAL_PROMPT_PHASES.FINAL_PROMPT };
 
 /**
  * Editor state - Prompt editing mode and content
@@ -225,7 +226,7 @@ export const useEditorStore = create<
   // ============================================================================
 
   selectPrompt: (target, promptData = null) => {
-    if (typeof target === "object" && target?.kind === "finalPrompt") {
+    if (typeof target === "object" && target?.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
       if (promptData) {
         get().enterEditMode(-1, promptData);
       }
@@ -235,7 +236,7 @@ export const useEditorStore = create<
     const resolvedIndex =
       typeof target === "number"
         ? target
-        : typeof target === "object" && target?.kind === "queue"
+        : typeof target === "object" && target?.kind === FINAL_PROMPT_PHASES.QUEUE
           ? target.index
           : null;
 
@@ -701,7 +702,7 @@ export const useEditorStore = create<
 
   isEditMode: () => get().selectionTarget.kind !== "newPrompt",
 
-  isFinalPromptMode: () => get().selectionTarget.kind === "finalPrompt",
+  isFinalPromptMode: () => get().selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT,
 
   getPromptProperties: () => {
     const { promptText, promptName, properties } = get();

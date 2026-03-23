@@ -3,7 +3,7 @@ import { useWorkflowStore } from "../../store/workflowStore";
 import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
-import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
+import { MESSAGE_TYPES, EXECUTION_STATES, RUNNER_IDS } from "../../types/messages";
 import { RecentWorkflows } from "./RecentWorkflows";
 import { RunningWorkflowItem } from "./RunningWorkflowItem";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
@@ -40,7 +40,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const { globalSettings } = useSettingsStore();
 
   const isCLIManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === "cli";
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === RUNNER_IDS.CLI;
 
   // Local state
   const [isEditing, setIsEditing] = useState(false);

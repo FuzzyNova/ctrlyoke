@@ -18,6 +18,7 @@ import {
   STEP_STATUS,
   EXECUTION_STATES,
   FINAL_PROMPT_PHASES,
+  RUNNER_IDS,
   type StepStatus,
 } from "../../types/messages";
 import { sendMessage } from "../../hooks/useMessageHandler";
@@ -128,7 +129,7 @@ export const PromptsPanel: React.FC<{
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === "cli";
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === RUNNER_IDS.CLI;
   const { selectionTarget, selectPrompt, selectFinalPrompt, deselect } =
     useEditorStore();
   const { workflowProperties, globalSettings } = useSettingsStore();
@@ -535,7 +536,7 @@ export const PromptsPanel: React.FC<{
       // Cancel any active queue-prompt selection — the selected index may now
       // refer to a different prompt after reorder.
       const editorStore = useEditorStore.getState();
-      if (editorStore.selectionTarget.kind === "queue") {
+      if (editorStore.selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE) {
         editorStore.cancelEdit();
       }
     },
@@ -628,7 +629,7 @@ export const PromptsPanel: React.FC<{
                 const details = getPromptDetails(prompt, index);
                 const latestOutput = getLatestOutput(index);
                 const isSelected =
-                  selectionTarget.kind === "queue" &&
+                  selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE &&
                   selectionTarget.index === index;
                 const harnessModel = getPromptHarnessModel(prompt);
                 const overrides = getPromptOverrides(prompt);
@@ -706,7 +707,7 @@ export const PromptsPanel: React.FC<{
                   const latestOutput = getLatestOutput(index);
                   const isCurrent = isRunning && isCurrentStep;
                   const isSelected =
-                    selectionTarget.kind === "queue" &&
+                    selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE &&
                     selectionTarget.index === index;
                   const harnessModel = getPromptHarnessModel(prompt);
                   const overrides = getPromptOverrides(prompt);
@@ -774,7 +775,7 @@ export const PromptsPanel: React.FC<{
         loopCount={finalPromptLoopCount}
         phase={finalPromptPhase}
         isExpanded={finalPromptFooterExpanded}
-        isSelected={selectionTarget.kind === "finalPrompt"}
+        isSelected={selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT}
         isReadOnly={
           isCLIManaged ||
           (finalPromptPhase === FINAL_PROMPT_PHASES.FINAL_PROMPT &&

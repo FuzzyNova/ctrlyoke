@@ -7,7 +7,7 @@ import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
-import { MESSAGE_TYPES, EXECUTION_MODES, SESSION_ID_SENTINELS, type PriorContext } from "../../types/messages";
+import { MESSAGE_TYPES, EXECUTION_MODES, SESSION_ID_SENTINELS, RUNNER_IDS, type PriorContext } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
@@ -125,7 +125,7 @@ export const SettingsPanel: React.FC<{
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === "cli";
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === RUNNER_IDS.CLI;
   const {
     availableAgents,
     availableSkills,

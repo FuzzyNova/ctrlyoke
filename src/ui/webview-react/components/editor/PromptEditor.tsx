@@ -12,6 +12,7 @@ import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
   STEP_STATUS,
+  FINAL_PROMPT_PHASES,
 } from "../../types/messages";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 
@@ -83,9 +84,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const isFileRef = looksLikeFilePath(promptText.trim());
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const selectedPromptStatus =
-    selectionTarget.kind === "queue"
+    selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE
       ? prompts[selectionTarget.index]?.status
-      : selectionTarget.kind === "finalPrompt"
+      : selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
         ? finalPromptStatus
         : null;
   const isPromptCompleted = selectedPromptStatus === STEP_STATUS.COMPLETED;
@@ -396,7 +397,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     const { properties: propertyValues, clearProperties } =
       getPropertyValues(true);
 
-    if (selectionTarget.kind === "queue") {
+    if (selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE) {
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_PROMPT,
         index: selectionTarget.index,
@@ -405,7 +406,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         clearProperties,
         promptName: promptName.trim(),
       });
-    } else if (selectionTarget.kind === "finalPrompt") {
+    } else if (selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
         finalPrompt: {
@@ -435,7 +436,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     if (selectionTarget.kind === "newPrompt") return;
     if (!globalSettings.confirmDeleteOperations) {
       // Skip modal — user opted out of delete confirmation
-      if (selectionTarget.kind === "queue") {
+      if (selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE) {
         vscode.postMessage({
           type: MESSAGE_TYPES.DELETE_PROMPT,
           index: selectionTarget.index,
@@ -461,7 +462,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const handleDeleteConfirm = useCallback(() => {
     if (selectionTarget.kind === "newPrompt") return;
 
-    if (selectionTarget.kind === "queue") {
+    if (selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE) {
       vscode.postMessage({
         type: MESSAGE_TYPES.DELETE_PROMPT,
         index: selectionTarget.index,
@@ -594,7 +595,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       {/* Editor Footer with actions (outside wrapper, not covered by drawer) */}
       <EditorFooter
         isEditMode={isEditMode}
-        isFinalPromptMode={selectionTarget.kind === "finalPrompt"}
+        isFinalPromptMode={selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT}
         isPromptCompleted={isPromptCompleted}
         isPromptBeingSent={isPromptBeingSent}
         isPromptActivelyRunning={isPromptActivelyRunning}
@@ -620,9 +621,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         onConfirm={handleDeleteConfirm}
         title="Delete Prompt"
         message={
-          selectionTarget.kind === "finalPrompt"
+          selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
             ? "Disable final prompt?"
-            : `Are you sure you want to delete prompt ${selectionTarget.kind === "queue" ? selectionTarget.index + 1 : 1}?`
+            : `Are you sure you want to delete prompt ${selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE ? selectionTarget.index + 1 : 1}?`
         }
         detail="This action cannot be undone."
       />

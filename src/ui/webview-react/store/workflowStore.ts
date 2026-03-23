@@ -5,6 +5,7 @@ import type { TemporalState } from "zundo";
 import {
   EXECUTION_STATES,
   STEP_STATUS,
+  FINAL_PROMPT_PHASES,
   type ExecutionState,
   type StepStatus,
   type FinalPromptPhase,
@@ -917,7 +918,7 @@ export const useWorkflowStore = create<
 
       setWorkspaceSnapshot: (target, snapshot) => {
         useWorkflowStore.temporal.getState().pause();
-        if (target.kind === "queue") {
+        if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
           set((state) => ({
             workspaceSnapshots: { ...state.workspaceSnapshots, [target.stepIndex]: snapshot },
           }));
@@ -930,7 +931,7 @@ export const useWorkflowStore = create<
       },
 
       setUndoRecord: (target, record) => {
-        const key = target.kind === "queue"
+        const key = target.kind === FINAL_PROMPT_PHASES.QUEUE
           ? `queue-${target.stepIndex}`
           : `finalPrompt-${target.loopIndex}`;
         useWorkflowStore.temporal.getState().pause();
@@ -942,7 +943,7 @@ export const useWorkflowStore = create<
         useWorkflowStore.temporal.getState().pause();
         set((state) => {
           if (!state.historyOutputs) return {};
-          if (target.kind === "queue") {
+          if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
             const step = state.historyOutputs.steps[target.stepIndex];
             if (!step) return {};
             return {

@@ -4,6 +4,7 @@ import { getErrorMessage } from "../utils/ErrorUtils";
 import {
   MESSAGE_TYPES,
   LOG_LEVELS,
+  FINAL_PROMPT_PHASES,
   type WebviewLogLevel,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -922,7 +923,7 @@ export class WebviewMessageRouter {
           const history =
             await outputHistoryManager.loadHistory(historyFilePath);
           const stepOutput = (
-            target.kind === "queue"
+            target.kind === FINAL_PROMPT_PHASES.QUEUE
               ? history.promptOutputs[target.stepIndex]
               : history.finalPromptOutputs?.[target.loopIndex]
           ) as { undoRecord?: import("../types/OutputHistoryTypes").UndoRecord } | undefined;

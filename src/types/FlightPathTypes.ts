@@ -4,6 +4,7 @@ import {
   ExecutionState,
   FinalPromptPhase,
   StepStatus,
+  type RunnerId,
 } from "./DashboardConstants";
 
 /**
@@ -252,7 +253,7 @@ export interface WorkflowSummary {
   startedAt?: number;
   completedAt?: number;
   /** Set to "cli" when the workflow is being executed by the FlightPath CLI. Undefined means vscode-managed. */
-  managedBy?: "vscode" | "cli";
+  managedBy?: RunnerId;
 }
 
 /** Returns the 1-indexed step number for display (logs, UI labels). currentStep is 0-indexed internally. */

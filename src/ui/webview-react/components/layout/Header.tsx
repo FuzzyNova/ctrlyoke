@@ -4,7 +4,7 @@ import {
   useWorkflowTemporalStore,
 } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
-import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
+import { MESSAGE_TYPES, EXECUTION_STATES, RUNNER_IDS } from "../../types/messages";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
@@ -110,7 +110,7 @@ export const Header: React.FC = () => {
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === "cli";
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === RUNNER_IDS.CLI;
 
   // Derived state
   const isRunning = executionState === EXECUTION_STATES.RUNNING;

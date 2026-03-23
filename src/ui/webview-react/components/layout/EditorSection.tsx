@@ -5,6 +5,7 @@ import { useWorkflowStore } from "../../store/workflowStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { PromptEditor } from "../editor/PromptEditor";
 import { PanelBar } from "../shared";
+import { FINAL_PROMPT_PHASES, RUNNER_IDS } from "../../types/messages";
 
 /**
  * EditorSection - Collapsible section containing the prompt editor
@@ -28,7 +29,7 @@ export const EditorSection: React.FC = () => {
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === "cli";
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === RUNNER_IDS.CLI;
 
   const isEditMode = selectionTarget.kind !== "newPrompt";
   const totalPrompts = prompts.length;
@@ -37,7 +38,7 @@ export const EditorSection: React.FC = () => {
   // Generate mode indicator text
   const getModeText = () => {
     if (isEditMode) {
-      if (selectionTarget.kind === "finalPrompt") {
+      if (selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
         return "Editing: Final Prompt";
       }
       return `Editing: Prompt ${selectionTarget.index + 1} of ${totalPrompts}`;

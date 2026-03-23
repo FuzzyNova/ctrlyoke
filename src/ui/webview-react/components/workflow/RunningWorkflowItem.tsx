@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { EXECUTION_STATES } from "../../types/messages";
+import { EXECUTION_STATES, RUNNER_IDS } from "../../types/messages";
 import type { WorkflowSummary } from "../../types/messages";
 
 interface RunningWorkflowItemProps {
@@ -106,7 +106,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       </span>
 
       {/* Action buttons — CLI pill for CLI-managed workflows, pause/stop for VS Code-managed */}
-      {workflow.managedBy === "cli" ? (
+      {workflow.managedBy === RUNNER_IDS.CLI ? (
         <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-600 text-white flex-shrink-0">
           CLI
         </span>
