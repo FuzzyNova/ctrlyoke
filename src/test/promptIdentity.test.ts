@@ -84,59 +84,23 @@ suite("PromptIdentity Tests", () => {
   });
 
   suite("shouldInjectExtensionInstructions", () => {
-    test("should return true when prompt allowDynamicExtension is explicitly true", () => {
+    test("should return true when resolved allowDynamicExtension is true", () => {
       assert.strictEqual(
-        shouldInjectExtensionInstructions({
-          prompt: "First",
-          allowDynamicExtension: true,
-        }),
+        shouldInjectExtensionInstructions({ prompt: "First" }, true),
         true
       );
     });
 
-    test("should return false when prompt allowDynamicExtension is explicitly false", () => {
+    test("should return false when resolved allowDynamicExtension is false", () => {
       assert.strictEqual(
-        shouldInjectExtensionInstructions({
-          prompt: "First",
-          allowDynamicExtension: false,
-        }),
+        shouldInjectExtensionInstructions({ prompt: "First" }, false),
         false
       );
     });
 
-    test("should return false when prompt has no allowDynamicExtension flag", () => {
+    test("should return false when resolved allowDynamicExtension is undefined", () => {
       assert.strictEqual(
         shouldInjectExtensionInstructions({ prompt: "Last" }),
-        false
-      );
-    });
-
-    test("should return false when global allowDynamicExtension is false, even with prompt-level true", () => {
-      assert.strictEqual(
-        shouldInjectExtensionInstructions(
-          { prompt: "First", allowDynamicExtension: true },
-          false
-        ),
-        false
-      );
-    });
-
-    test("should return true when global allowDynamicExtension is true and prompt-level is true", () => {
-      assert.strictEqual(
-        shouldInjectExtensionInstructions(
-          { prompt: "First", allowDynamicExtension: true },
-          true
-        ),
-        true
-      );
-    });
-
-    test("should return false for prompts without explicit flag regardless of position in queue", () => {
-      assert.strictEqual(
-        shouldInjectExtensionInstructions(
-          { prompt: "Last prompt, no flag" },
-          true
-        ),
         false
       );
     });

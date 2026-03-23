@@ -605,8 +605,9 @@ export class CliIntegration extends HarnessIntegration {
     }
 
     if (excerptRefs.length > 0) {
+      const excerptPrefix = clauses.length === 0 ? "using" : "and";
       clauses.push(
-        `and these attachment excerpts ${excerptRefs.join(", ")}`
+        `${excerptPrefix} these attachment excerpts ${excerptRefs.join(", ")}`
       );
     }
 

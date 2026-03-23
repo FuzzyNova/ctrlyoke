@@ -16,9 +16,8 @@ export function hashPromptContent(promptText: string): string {
  * Extension instructions are only injected when explicitly enabled via allowDynamicExtension.
  */
 export function shouldInjectExtensionInstructions(
-  prompt: PromptItem,
+  _prompt: PromptItem,
   allowDynamicExtension?: boolean
 ): boolean {
-  if (allowDynamicExtension === false) return false;
-  return prompt.allowDynamicExtension === true;
+  return allowDynamicExtension === true;
 }
