@@ -87,6 +87,12 @@ export class CopilotLogParser extends BaseLogParser {
    * Copilot may send multiple assistant.message events for a single response.
    */
 
+  /** Tracks in-flight tool calls across streaming events for extractStructuredEventsFromEvent. */
+  private pendingStreamingTools = new Map<
+    string,
+    { toolName: string; args: Record<string, unknown>; timestamp: number }
+  >();
+
   /**
    * Extract complete response from Copilot log events
    *
@@ -543,6 +549,10 @@ export class CopilotLogParser extends BaseLogParser {
    * Used during real-time log monitoring to extract displayable content
    * as events are written to the log file.
    *
+   * @deprecated Superseded by `extractStructuredEventsFromEvent` in the streaming path,
+   * which emits typed CliEvents (TEXT, THINKING, BASH_COMMAND, TOOL_RESULT, etc.) instead of
+   * plain strings. This method is retained only for the BaseLogParser default fallback.
+   *
    * @param event - Single parsed Copilot log event
    * @returns Text content to display, or undefined if no displayable content
    *
@@ -570,15 +580,23 @@ export class CopilotLogParser extends BaseLogParser {
       return data.content;
     }
 
-    // Assistant reasoning content (prefixed for visibility)
+    // Inline reasoning (new format: reasoningText in assistant.message)
+    // Streaming this gives users visible progress while Copilot thinks
+    if (event.type === "assistant.message" && data?.reasoningText) {
+      return `[Thinking] ${data.reasoningText}`;
+    }
+
+    // Assistant reasoning content (old format: separate assistant.reasoning event)
     if (event.type === "assistant.reasoning" && data?.content) {
       return `[Reasoning] ${data.content}`;
     }
 
-    // Tool execution result content
-    if (event.type === "tool.execution_complete" && data?.result?.content) {
-      return data.result.content;
-    }
+    // NOTE: tool.execution_complete results are intentionally NOT streamed here.
+    // Emitting raw tool result content (file contents, command output, etc.) as
+    // plain text chunks produces garbled output — no ⎿ prefix, no structure, all
+    // concatenated together. Tool results are properly rendered via extractResponse()
+    // which builds typed CliEvents (BASH_COMMAND, FILE_READ, TOOL_RESULT, etc.)
+    // at completion. During streaming, only assistant text/reasoning is surfaced.
 
     // Session error content
     if (event.type === "session.error" && data) {
@@ -588,6 +606,137 @@ export class CopilotLogParser extends BaseLogParser {
     }
 
     return undefined;
+  }
+
+  /**
+   * Extract structured CliEvents from a single Copilot log event for streaming.
+   *
+   * Full override of the BaseLogParser default. Produces typed CliEvents
+   * (TEXT, THINKING, BASH_COMMAND, FILE_READ, FILE_WRITE, FILE_EDIT, TOOL_RESULT, etc.)
+   * identical to the events emitted by `extractResponse()` — but processed one event at
+   * a time. Uses `pendingStreamingTools` (instance state) to carry tool call context
+   * across consecutive event calls, mirroring the local `pendingTools` map in
+   * `extractResponse()`.
+   *
+   * @param event - Single parsed Copilot log event
+   * @returns Array of CliEvents to emit; empty if the event produces no streamable output
+   */
+  override extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
+    const ev = event as CopilotProviderEvent;
+    const timestamp = ev.timestamp
+      ? new Date(ev.timestamp as string | number).getTime()
+      : Date.now();
+    const data = ev.data;
+    const results: CliEvent[] = [];
+
+    if (!data) {
+      return results;
+    }
+
+    // assistant.message: text content and inline reasoning (new format)
+    if (ev.type === "assistant.message") {
+      if (data.content) {
+        results.push({
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp,
+          data: { text: data.content } as TextData,
+        });
+      }
+      if (data.reasoningText) {
+        results.push({
+          type: CLI_EVENT_TYPES.THINKING,
+          timestamp,
+          data: {
+            text: data.reasoningText,
+            label: "Reasoning",
+            timestamp,
+          } as ThinkingBlock,
+        });
+      }
+      return results;
+    }
+
+    // assistant.reasoning: old-format chain-of-thought (separate event)
+    if (ev.type === "assistant.reasoning" && data.content) {
+      results.push({
+        type: CLI_EVENT_TYPES.THINKING,
+        timestamp,
+        data: {
+          text: data.content,
+          label: "Reasoning",
+          timestamp,
+        } as ThinkingBlock,
+      });
+      return results;
+    }
+
+    // session.error: surface as TEXT
+    if (ev.type === "session.error") {
+      const errorCode = data.errorType || "UNKNOWN";
+      const errorMessage = data.message || "Unknown error";
+      results.push({
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp,
+        data: { text: `Error [${errorCode}]: ${errorMessage}` } as TextData,
+      });
+      return results;
+    }
+
+    // tool.execution_start: store pending state AND emit the semantic initiated event
+    if (ev.type === "tool.execution_start") {
+      this.pendingStreamingTools.set(data.toolCallId, {
+        toolName: data.toolName,
+        args: data.arguments || {},
+        timestamp,
+      });
+      results.push(
+        CopilotToolBuilder.buildInitiatedEvent(
+          data.toolName,
+          data.arguments || {},
+          data.toolCallId,
+          timestamp
+        )
+      );
+      return results;
+    }
+
+    // tool.execution_complete: emit completed events + TOOL_RESULT, then clean up
+    if (ev.type === "tool.execution_complete") {
+      const pending = this.pendingStreamingTools.get(data.toolCallId);
+      if (pending) {
+        results.push(
+          ...CopilotToolBuilder.buildCompletedEvents(
+            pending.toolName,
+            pending.args,
+            data
+          )
+        );
+        this.pendingStreamingTools.delete(data.toolCallId);
+      }
+
+      const toolResultRaw = data.result?.content;
+      const toolResultStr =
+        typeof toolResultRaw === "string"
+          ? toolResultRaw
+          : toolResultRaw
+            ? JSON.stringify(toolResultRaw)
+            : undefined;
+      results.push({
+        type: CLI_EVENT_TYPES.TOOL_RESULT,
+        timestamp,
+        data: {
+          toolCallId: data.toolCallId,
+          result: {
+            success: data.success,
+            output: toolResultStr,
+            error: data.success ? undefined : toolResultStr,
+          },
+        } as ToolResultData,
+      });
+      return results;
+    }
+
+    return results;
   }
 
   /**

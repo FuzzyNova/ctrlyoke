@@ -1,7 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import { BaseCliEvent, ILogParser } from "./interfaces/ILogParser";
-import { UniversalCliOutput } from "../../../types/CliOutputTypes";
+import { CliEvent, TextData, UniversalCliOutput } from "../../../types/CliOutputTypes";
+import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 
@@ -131,6 +132,30 @@ export abstract class BaseLogParser implements ILogParser {
    * @returns Text content to display, or undefined if no content
    */
   abstract extractContentFromEvent(event: BaseCliEvent): string | undefined;
+
+  /**
+   * Extract structured CliEvents from a single log event for streaming.
+   *
+   * Default implementation delegates to `extractContentFromEvent` and wraps
+   * any returned string in a TEXT CliEvent. Harnesses that emit richer events
+   * (tool cards, thinking blocks, etc.) should override this method directly.
+   *
+   * @param event - Single parsed log event
+   * @returns Array of CliEvents; empty if event has no streamable content
+   */
+  extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
+    const text = this.extractContentFromEvent(event);
+    if (text === undefined) {
+      return [];
+    }
+    return [
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: Date.now(),
+        data: { text } as TextData,
+      },
+    ];
+  }
 
   /**
    * Format metadata into human-readable statistics string

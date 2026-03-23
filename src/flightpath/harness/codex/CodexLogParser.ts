@@ -127,6 +127,15 @@ export class CodexLogParser extends BaseLogParser {
     new Map();
 
   /**
+   * Streaming-path tool call tracking map
+   *
+   * Parallel to toolCallMap but exclusively used by extractStructuredEventsFromEvent
+   * so that streaming state never contaminates extractResponse()'s toolCallMap.
+   */
+  private pendingStreamingCalls: Map<string, { type: string; toolName: string }> =
+    new Map();
+
+  /**
    * Extract complete response from Codex log events
    *
    * Combines multiple response_item events with nested payloads into a single
@@ -857,6 +866,229 @@ export class CodexLogParser extends BaseLogParser {
     }
 
     return undefined;
+  }
+
+  /**
+   * Extract structured CliEvents from a single Codex log event for streaming
+   *
+   * Overrides the base class default to emit richer events: tool call initiation
+   * and completion pairs, thinking blocks, and text — mirroring extractResponse()
+   * event-by-event.  Uses pendingStreamingCalls (not toolCallMap) so this path
+   * never interferes with extractResponse().
+   *
+   * @param event - Single parsed Codex log event
+   * @returns Array of CliEvents to emit; empty if event produces no output
+   */
+  extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
+    const e = event as CodexProviderEvent;
+    const timestamp = e.timestamp
+      ? new Date(e.timestamp).getTime()
+      : Date.now();
+    const results: CliEvent[] = [];
+
+    // event_msg:agent_message → TEXT
+    if (e.type === "event_msg" && e.payload?.type === "agent_message") {
+      results.push({
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp,
+        data: { text: e.payload.message } as TextData,
+      });
+      return results;
+    }
+
+    // response_item with role="assistant" content array
+    if (e.type === "response_item" && e.payload?.role === "assistant") {
+      const content = e.payload.content;
+      if (Array.isArray(content)) {
+        for (const item of content) {
+          if (
+            (item.type === "input_text" || item.type === "output_text") &&
+            item.text
+          ) {
+            results.push({
+              type: CLI_EVENT_TYPES.TEXT,
+              timestamp,
+              data: { text: item.text } as TextData,
+            });
+          }
+
+          if (item.type === "tool_use") {
+            const toolName = item.name?.toLowerCase() || "";
+            const params = (item.input || {}) as Record<string, unknown>;
+            const callId = item.id as string | undefined;
+            const toolEvent = CodexToolBuilder.buildLogToolInitiatedEvent(
+              toolName,
+              params,
+              callId,
+              timestamp
+            );
+            if (callId && CodexToolBuilder.needsCompletionTracking(toolEvent.type)) {
+              this.pendingStreamingCalls.set(callId, { type: toolEvent.type, toolName });
+            }
+            results.push(toolEvent);
+          }
+
+          if (item.type === "thinking" && item.text) {
+            results.push({
+              type: CLI_EVENT_TYPES.THINKING,
+              timestamp,
+              data: { text: item.text, label: "Thinking" } as ThinkingBlock,
+            });
+          }
+        }
+      }
+      return results;
+    }
+
+    // response_item:reasoning → THINKING
+    if (e.type === "response_item" && e.payload?.type === "reasoning") {
+      const reasoningText =
+        e.payload.content ||
+        (e.payload.encrypted_content ? "[Encrypted reasoning]" : null);
+      if (reasoningText) {
+        results.push({
+          type: CLI_EVENT_TYPES.THINKING,
+          timestamp,
+          data: { text: reasoningText, label: "Reasoning" } as ThinkingBlock,
+        });
+      }
+      return results;
+    }
+
+    // response_item:function_call → INITIATED
+    if (e.type === "response_item" && e.payload?.type === "function_call") {
+      let params: Record<string, unknown> =
+        e.payload.arguments || e.payload.input || {};
+      if (typeof params === "string") {
+        try {
+          params = JSON.parse(params);
+        } catch {
+          params = { raw: params };
+        }
+      }
+      const functionName = e.payload.name?.toLowerCase() || "";
+      const callId = (e.payload.call_id ?? e.payload.id) as string | undefined;
+      const toolEvent = CodexToolBuilder.buildLogToolInitiatedEvent(
+        functionName,
+        params,
+        callId,
+        timestamp
+      );
+      if (callId && CodexToolBuilder.needsCompletionTracking(toolEvent.type)) {
+        this.pendingStreamingCalls.set(callId, {
+          type: toolEvent.type,
+          toolName: functionName,
+        });
+      }
+      results.push(toolEvent);
+      return results;
+    }
+
+    // response_item:function_call_output → TOOL_RESULT COMPLETED
+    if (
+      e.type === "response_item" &&
+      e.payload?.type === "function_call_output"
+    ) {
+      const callId = e.payload.call_id as string | undefined;
+      const toolInfo = callId
+        ? this.pendingStreamingCalls.get(callId)
+        : undefined;
+      const isBash = toolInfo?.type === CLI_EVENT_TYPES.BASH_COMMAND;
+      results.push(
+        CodexToolBuilder.buildFunctionCallOutputCompletedEvent(
+          isBash,
+          e.payload.output || "",
+          callId,
+          timestamp
+        )
+      );
+      if (callId) {
+        this.pendingStreamingCalls.delete(callId);
+      }
+      return results;
+    }
+
+    // response_item:custom_tool_call → INITIATED
+    if (
+      e.type === "response_item" &&
+      e.payload?.type === "custom_tool_call"
+    ) {
+      const toolName = e.payload.name?.toLowerCase() || "";
+      const input = e.payload.input;
+      let params: Record<string, unknown> =
+        typeof input === "string"
+          ? { input }
+          : (input as Record<string, unknown>) || {};
+      if (typeof input === "string") {
+        try {
+          params = JSON.parse(input) as Record<string, unknown>;
+        } catch {
+          params = { input };
+        }
+      }
+      const callId = e.payload.call_id as string | undefined;
+      const toolEvent = CodexToolBuilder.buildLogToolInitiatedEvent(
+        toolName,
+        params,
+        callId,
+        timestamp
+      );
+      if (callId && CodexToolBuilder.needsCompletionTracking(toolEvent.type)) {
+        this.pendingStreamingCalls.set(callId, { type: toolEvent.type, toolName });
+      }
+      results.push(toolEvent);
+      return results;
+    }
+
+    // response_item:custom_tool_call_output → TOOL_RESULT COMPLETED
+    if (
+      e.type === "response_item" &&
+      e.payload?.type === "custom_tool_call_output"
+    ) {
+      const callId = e.payload.call_id as string | undefined;
+      const toolInfo = callId
+        ? this.pendingStreamingCalls.get(callId)
+        : undefined;
+      let parsedOutput: Record<string, any> = {};
+      let outputText: string = e.payload.output as string;
+      try {
+        parsedOutput = JSON.parse(e.payload.output as string) as Record<
+          string,
+          any
+        >;
+        outputText =
+          (parsedOutput.output as string) || (e.payload.output as string);
+      } catch {
+        // Use raw output if not JSON
+      }
+      const exitCode = parsedOutput.metadata?.exit_code as number | undefined;
+      const success = exitCode === 0 || exitCode === undefined;
+      if (toolInfo) {
+        results.push(
+          CodexToolBuilder.buildCustomToolCallCompletedEvent(
+            toolInfo,
+            exitCode,
+            success,
+            outputText,
+            callId,
+            timestamp
+          )
+        );
+        this.pendingStreamingCalls.delete(callId!);
+      } else {
+        results.push({
+          type: CLI_EVENT_TYPES.TOOL_RESULT,
+          timestamp,
+          data: {
+            toolCallId: callId,
+            result: { success, output: outputText },
+          } as ToolResultData,
+        });
+      }
+      return results;
+    }
+
+    return results;
   }
 
   /**

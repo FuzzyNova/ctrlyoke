@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import { UniversalCliOutput } from "../../../../types/CliOutputTypes";
+import { CliEvent, UniversalCliOutput } from "../../../../types/CliOutputTypes";
 
 /**
  * Minimal base type for CLI log events across all harnesses.
@@ -212,27 +212,45 @@ export interface ILogParser {
   extractSessionId(events: BaseCliEvent[]): string | null;
 
   /**
-   * Extract text content from a single log event for streaming
+   * Extract structured CliEvents from a single log event for streaming
    *
-   * Parses harness-specific event format to extract displayable text content.
-   * Used during log file watching to stream content to output in real-time.
+   * The primary streaming method. Parses harness-specific event format and
+   * returns typed CliEvent objects for real-time display during interactive mode.
+   * Replaces the plain-text `extractContentFromEvent` path in CliLogMonitor so
+   * that tool calls, tool results, thinking blocks, and text all stream with
+   * proper structure — identical to the final `extractResponse()` output.
    *
    * @param event - Single parsed log event (harness-specific format)
-   * @returns Text content to display, or undefined if event has no displayable content
+   * @returns Array of CliEvents to emit; empty array if event produces no output
    *
    * @remarks
-   * Harness-specific formats:
-   * - **Copilot**: `{ type: "assistant.message", data: { content: "..." } }`
-   * - **Copilot Reasoning**: `{ type: "assistant.reasoning", data: { content: "..." } }`
-   * - **Claude**: `{ type: "assistant", message: { content: [{ type: "text", text: "..." }] } }`
-   * - **Codex**: `{ type: "text", content: "..." }` or `{ payload: { type: "text", text: "..." } }`
+   * The base class provides a default implementation that delegates to
+   * `extractContentFromEvent` and wraps any returned string in a TEXT CliEvent.
+   * Harnesses that want richer streaming (tool cards, thinking blocks, etc.)
+   * should override this method directly.
+   *
+   * **Copilot** overrides this with stateful tool tracking so that
+   * `tool.execution_start` / `tool.execution_complete` pairs produce the same
+   * semantic events (BASH_COMMAND, FILE_READ, TOOL_RESULT, …) as `extractResponse()`.
    *
    * @example
    * ```typescript
-   * const event = { type: "assistant.message", data: { content: "Hello world" } };
-   * const text = parser.extractContentFromEvent(event);
-   * // "Hello world"
+   * const event = { type: "assistant.message", data: { content: "Hello", reasoningText: "thinking..." } };
+   * const events = parser.extractStructuredEventsFromEvent(event);
+   * // [{ type: "text", data: { text: "Hello" } }, { type: "thinking", data: { text: "thinking..." } }]
    * ```
+   */
+  extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[];
+
+  /**
+   * Extract text content from a single log event for streaming
+   *
+   * @deprecated Use `extractStructuredEventsFromEvent` for structured streaming.
+   * This method remains for the default BaseLogParser implementation of
+   * `extractStructuredEventsFromEvent`.
+   *
+   * @param event - Single parsed log event (harness-specific format)
+   * @returns Text content to display, or undefined if event has no displayable content
    */
   extractContentFromEvent(event: BaseCliEvent): string | undefined;
 

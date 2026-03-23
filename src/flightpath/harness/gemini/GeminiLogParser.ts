@@ -491,6 +491,82 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
   }
 
   /**
+   * Extract structured CliEvents from a single Gemini log event for streaming.
+   *
+   * Mirrors the per-message logic in `extractResponse` so that thoughts,
+   * text, tool calls, and tool results all stream with proper structure during
+   * interactive mode.
+   *
+   * A single `gemini` log message can produce multiple CliEvents:
+   * - One THINKING event per thought block
+   * - One TEXT event for the response content
+   * - One INITIATED tool event + one TOOL_RESULT event per tool call
+   */
+  extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
+    const msg = event as unknown as GeminiLogMessage;
+    const cliEvents: CliEvent[] = [];
+
+    if (msg.type !== "gemini") {
+      return cliEvents;
+    }
+
+    const isoTimestamp = msg.timestamp as unknown as string | undefined;
+    const timestamp = isoTimestamp ? new Date(isoTimestamp).getTime() : Date.now();
+
+    if (msg.thoughts) {
+      for (const thought of msg.thoughts) {
+        cliEvents.push({
+          type: CLI_EVENT_TYPES.THINKING,
+          timestamp,
+          data: {
+            text: `**${thought.subject}**\n\n${thought.description}`,
+            label: thought.subject,
+          } as ThinkingBlock,
+        });
+      }
+    }
+
+    if (msg.content && typeof msg.content === "string" && msg.content.trim()) {
+      cliEvents.push({
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp,
+        data: { text: msg.content } as TextData,
+      });
+    }
+
+    if (msg.toolCalls) {
+      for (const tc of msg.toolCalls) {
+        cliEvents.push(
+          GeminiToolBuilder.buildInitiatedEvent(tc.name, tc.args || {}, tc.id, timestamp)
+        );
+
+        const funcResponse = tc.result?.[0]?.functionResponse;
+        if (funcResponse) {
+          const isError = !!funcResponse.response?.error || tc.status === "error";
+          cliEvents.push({
+            type: CLI_EVENT_TYPES.TOOL_RESULT,
+            timestamp,
+            data: {
+              toolCallId: tc.id,
+              result: {
+                success: !isError,
+                output: funcResponse.response?.output,
+                error: isError
+                  ? (funcResponse.response?.error ?? funcResponse.response?.output)
+                  : undefined,
+              },
+            },
+          });
+        }
+
+        this.emitStructuredResultEvent(tc, timestamp, cliEvents);
+      }
+    }
+
+    return cliEvents;
+  }
+
+  /**
    * Extract displayable text content from a single Gemini log event.
    *
    * Used by CliLogMonitor for streaming text to the output panel as events arrive.

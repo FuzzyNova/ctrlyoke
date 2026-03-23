@@ -195,6 +195,60 @@ export class OpenCodeLogParser extends BaseLogParser {
     return (event as Record<string, any>).part?.text as string | undefined;
   }
 
+  /**
+   * Extract structured CliEvents from a single OpenCode log event for streaming.
+   *
+   * OpenCode events are already strongly typed by `convertPartToEvent`, so this
+   * mirrors the `extractResponse` switch exactly but for a single event:
+   * - `text`               → TEXT CliEvent
+   * - `thinking`           → THINKING CliEvent
+   * - `tool_use`           → semantic INITIATED event via mapOpenCodeToolPartToCliEvent
+   *
+   * step_start and step_finish carry no displayable content and produce no events.
+   */
+  extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
+    const e = event as Record<string, any>;
+    const cliEvents: CliEvent[] = [];
+    const timestamp = e.timestamp as number | undefined;
+
+    switch (event.type) {
+      case "text": {
+        const text = e.part?.text as string | undefined;
+        if (text) {
+          cliEvents.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp,
+            data: { text },
+          });
+        }
+        break;
+      }
+      case CLI_EVENT_TYPES.THINKING: {
+        const text = e.part?.text as string | undefined;
+        if (text) {
+          cliEvents.push({
+            type: CLI_EVENT_TYPES.THINKING,
+            timestamp,
+            data: { text },
+          });
+        }
+        break;
+      }
+      case "tool_use": {
+        const part = e.part as Record<string, any> | undefined;
+        if (part) {
+          const toolEvent = mapOpenCodeToolPartToCliEvent(timestamp, part);
+          if (toolEvent) {
+            cliEvents.push(toolEvent);
+          }
+        }
+        break;
+      }
+    }
+
+    return cliEvents;
+  }
+
   extractResponse(events: BaseCliEvent[]): UniversalCliOutput {
     const cliEvents: CliEvent[] = [];
     let sessionId: string | undefined;

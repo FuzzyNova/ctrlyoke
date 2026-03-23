@@ -1098,7 +1098,7 @@ export class CliIntegration extends HarnessIntegration {
       notificationMonitor: this.provider.notificationMonitor,
       getWorkspaceRoot: () => this.getWorkspaceRoot(),
       isCancelling: () => this.isCancelling,
-      onStreamingChunk: (chunk) => this.streamingChunkEmitter.fire(chunk),
+      onStreamingEvents: (events) => this.streamingEventsEmitter.fire(events),
       onResponseComplete: (msg) => this.responseCompleteEmitter.fire(msg),
       logResponse: (response, statistics) =>
         this.logResponse(response, statistics),

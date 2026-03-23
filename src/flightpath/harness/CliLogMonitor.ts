@@ -1,5 +1,5 @@
 import type * as fs from "fs";
-import type { CliResult, UniversalCliOutput } from "../../types/CliOutputTypes";
+import type { CliEvent, CliResult, UniversalCliOutput } from "../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
@@ -34,8 +34,8 @@ export interface LogMonitorDependencies {
   getWorkspaceRoot: () => string | undefined;
   /** Returns true when the user has requested cancellation */
   isCancelling: () => boolean;
-  /** Callback for streaming text chunks to output panel */
-  onStreamingChunk: (chunk: string) => void;
+  /** Callback for streaming structured CliEvents to the output panel */
+  onStreamingEvents: (events: CliEvent[]) => void;
   /** Callback fired when the full response is complete */
   onResponseComplete: (message: string) => void;
   /** Callback to log the response (respects showCliOutput setting) */
@@ -131,9 +131,9 @@ export class CliLogMonitor {
             continue;
           }
           events.push(event);
-          const content = parser.extractContentFromEvent(event);
-          if (content) {
-            this.deps.onStreamingChunk(content);
+          const streamingEvents = parser.extractStructuredEventsFromEvent(event);
+          if (streamingEvents.length > 0) {
+            this.deps.onStreamingEvents(streamingEvents);
           }
         }
 
@@ -212,10 +212,10 @@ export class CliLogMonitor {
       const processEvent = (event: BaseCliEvent, source: string) => {
         events.push(event);
 
-        // Stream content to output window (delegates to harness's log parser)
-        const content = parser.extractContentFromEvent(event);
-        if (content) {
-          this.deps.onStreamingChunk(content);
+        // Stream structured events to output window (delegates to harness's log parser)
+        const streamingEvents = parser.extractStructuredEventsFromEvent(event);
+        if (streamingEvents.length > 0) {
+          this.deps.onStreamingEvents(streamingEvents);
         }
 
         // Check completion via log file (fallback for harnesses without notification monitor)

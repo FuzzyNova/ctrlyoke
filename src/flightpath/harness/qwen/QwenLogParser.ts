@@ -493,6 +493,80 @@ export class QwenLogParser extends BaseLogParser {
   }
 
   /**
+   * Extract structured CliEvents from a single Qwen log event for streaming.
+   *
+   * Mirrors the per-event logic in `extractResponse` so that thinking blocks,
+   * text, tool invocations, and tool results all stream with proper structure.
+   *
+   * A single `assistant` event can produce multiple CliEvents (one per part).
+   * `tool_result` events emit TOOL_RESULT CliEvents.
+   *
+   * Note: The callPathMap used by `extractResponse` for resolving full file paths
+   * on tool_result events is not available here (requires cross-event state).
+   * Tool results are emitted with the information available in the single event.
+   */
+  extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
+    const e = event as QwenProviderEvent;
+    const cliEvents: CliEvent[] = [];
+
+    const timestamp = e.timestamp ? new Date(e.timestamp).getTime() : Date.now();
+
+    if (e.type === "assistant" && e.message?.parts) {
+      for (const part of e.message.parts) {
+        if (part.text && part.thought === true) {
+          cliEvents.push({
+            type: CLI_EVENT_TYPES.THINKING,
+            timestamp,
+            data: { text: part.text, label: "Extended Thinking" } as ThinkingBlock,
+          });
+        }
+
+        if (part.text && part.thought !== true) {
+          cliEvents.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp,
+            data: { text: part.text } as TextData,
+          });
+        }
+
+        if (part.functionCall) {
+          cliEvents.push(
+            QwenToolBuilder.buildInitiatedEvent(
+              part.functionCall.name,
+              part.functionCall.args || {},
+              part.functionCall.id,
+              timestamp
+            )
+          );
+        }
+      }
+    }
+
+    if (e.type === "tool_result" && e.message?.parts) {
+      for (const part of e.message.parts) {
+        if (part.functionResponse) {
+          const resp = part.functionResponse.response;
+          const isError = !!resp.error;
+          cliEvents.push({
+            type: CLI_EVENT_TYPES.TOOL_RESULT,
+            timestamp,
+            data: {
+              toolCallId: part.functionResponse.id,
+              result: {
+                success: !isError,
+                output: resp.output,
+                error: isError ? resp.error : undefined,
+              },
+            },
+          });
+        }
+      }
+    }
+
+    return cliEvents;
+  }
+
+  /**
    * Extract text content from a single Qwen log event for streaming
    *
    * @param event - Single parsed Qwen log event

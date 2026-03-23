@@ -11,6 +11,7 @@ import {
   ThinkingBlock,
   CliEvent,
   TextData,
+  ToolResultData,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
 import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
@@ -82,6 +83,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * Falls back to process.cwd() when not set (CLI mode).
    */
   private workspaceRoot?: string;
+
+  /** Maps tool_use id → tool name for associating streaming tool results with their calls. */
+  private pendingStreamingToolUses = new Map<string, string>();
 
   /**
    * Set the workspace root directory for session log discovery.
@@ -601,6 +605,94 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     }
 
     return undefined;
+  }
+
+  /**
+   * Extract structured CliEvents from a single Claude log event for streaming.
+   *
+   * Overrides the BaseLogParser default to emit rich semantic events:
+   * - `assistant` text blocks → TEXT
+   * - `assistant` thinking blocks → THINKING
+   * - `assistant` tool_use blocks → semantic INITIATED event (BASH_COMMAND, FILE_READ, etc.)
+   * - `user` tool_result blocks → TOOL_RESULT (looks up tool name from pendingStreamingToolUses)
+   * - `progress` bash_progress → TEXT (same as extractContentFromEvent)
+   */
+  override extractStructuredEventsFromEvent(event: BaseCliEvent): CliEvent[] {
+    const events: CliEvent[] = [];
+    const e = event as ClaudeProviderEvent;
+    const timestamp = e.timestamp
+      ? new Date(e.timestamp as number).getTime()
+      : Date.now();
+
+    if (e.type === "assistant" && e.message?.content) {
+      for (const block of e.message.content) {
+        if (block.type === "text" && block.text) {
+          events.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp,
+            data: { text: block.text } as TextData,
+          });
+        }
+
+        if (block.type === "thinking" && block.thinking) {
+          events.push({
+            type: CLI_EVENT_TYPES.THINKING,
+            timestamp,
+            data: { text: block.thinking, label: "Extended Thinking" } as ThinkingBlock,
+          });
+        }
+
+        if (block.type === "tool_use") {
+          events.push(
+            ClaudeToolBuilder.buildInitiatedEvent(
+              block.name,
+              block.input || {},
+              block.id,
+              timestamp
+            )
+          );
+          if (block.id && block.name) {
+            this.pendingStreamingToolUses.set(block.id, block.name);
+          }
+        }
+      }
+    }
+
+    if (e.type === "user" && Array.isArray(e.message?.content)) {
+      for (const block of e.message.content) {
+        if (block.type === "tool_result") {
+          const outputText = ClaudeToolBuilder.extractToolResultText(block.content);
+          events.push({
+            type: CLI_EVENT_TYPES.TOOL_RESULT,
+            timestamp,
+            data: {
+              toolCallId: block.tool_use_id,
+              result: {
+                success: !block.is_error,
+                output: outputText,
+                error: block.is_error ? outputText : undefined,
+              },
+            } as ToolResultData,
+          });
+          if (block.tool_use_id) {
+            this.pendingStreamingToolUses.delete(block.tool_use_id);
+          }
+        }
+      }
+    }
+
+    if (e.type === "progress" && e.data?.type === "bash_progress") {
+      const text = e.data.output || e.data.fullOutput;
+      if (text) {
+        events.push({
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp,
+          data: { text } as TextData,
+        });
+      }
+    }
+
+    return events;
   }
 
   /**
