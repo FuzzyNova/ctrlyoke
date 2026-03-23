@@ -17,6 +17,8 @@ export {
   END_CONDITION_DEFAULTS,
 } from "./editorStore";
 export { useSettingsStore } from "./settingsStore";
+export { useTerminalStore } from "./terminalStore";
+export type { TerminalSession, SessionKind } from "./terminalStore";
 
 // Types from workflowStore
 export type {

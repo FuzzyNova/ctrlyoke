@@ -29,6 +29,7 @@ import type {
   UndoRecord,
 } from "../types/WebviewMessageTypes";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
+import { getPtyProcessManager } from "../flightpath/harness/PtyProcessManager";
 
 /**
  * WebviewMessageRouter
@@ -99,6 +100,29 @@ export class WebviewMessageRouter {
       const orchestrator = this.getOrchestrator();
       if (orchestrator) {
         await orchestrator.setDashboardReady();
+      }
+      // Reconnect active PTY sessions to the fresh webview
+      const ptyManager = getPtyProcessManager();
+      if (ptyManager) {
+        for (const session of ptyManager.getAllSessions()) {
+          this.postMessage({
+            type: MESSAGE_TYPES.TERMINAL_STARTED,
+            workflowId: session.workflowId,
+            sessionId: session.id,
+            stepName: session.stepName,
+            kind: session.kind,
+          });
+          // Flush reconnect buffer
+          for (const chunk of session.reconnectBuffer) {
+            this.postMessage({
+              type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+              workflowId: session.workflowId,
+              sessionId: session.id,
+              data: chunk,
+            });
+          }
+          session.clearReconnectBuffer();
+        }
       }
     });
 
@@ -467,6 +491,65 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.REDO_PROMPT_CHANGES, async (message) => {
       await this.handleRedoPromptChanges(message as RedoPromptChangesMessage);
+    });
+
+    // ── Terminal I/O ─────────────────────────────────────────────────────
+    table.set(MESSAGE_TYPES.TERMINAL_INPUT, async (msg) => {
+      const ptyManager = getPtyProcessManager();
+      if (ptyManager && msg.sessionId && msg.data) {
+        ptyManager.writeToSession(msg.sessionId as string, msg.data as string);
+      }
+    });
+
+    table.set(MESSAGE_TYPES.TERMINAL_RESIZE, async (msg) => {
+      const ptyManager = getPtyProcessManager();
+      if (ptyManager && msg.sessionId && msg.cols && msg.rows) {
+        ptyManager.resizeSession(msg.sessionId as string, msg.cols as number, msg.rows as number);
+      }
+    });
+
+    table.set(MESSAGE_TYPES.TERMINAL_SPAWN_SHELL, async (msg) => {
+      const ptyManager = getPtyProcessManager();
+      const postMsg = this.postMessage;
+      if (!ptyManager || !msg.workflowId) return;
+      const workflowId = msg.workflowId as string;
+      const cwd = (msg.cwd as string | undefined) ?? process.cwd();
+      const session = ptyManager.spawnShell({
+        workflowId,
+        cwd,
+        onData: (s, chunk) => {
+          postMsg({ type: MESSAGE_TYPES.TERMINAL_OUTPUT, workflowId: s.workflowId, sessionId: s.id, data: chunk });
+        },
+        onExit: (s, exitCode) => {
+          postMsg({ type: MESSAGE_TYPES.TERMINAL_ENDED, workflowId: s.workflowId, sessionId: s.id, kind: s.kind, exitCode });
+        },
+      });
+      postMsg({ type: MESSAGE_TYPES.TERMINAL_STARTED, workflowId, sessionId: session.id, stepName: session.stepName, kind: "shell" });
+    });
+
+    table.set(MESSAGE_TYPES.TERMINAL_RESTART_SHELL, async (msg) => {
+      const ptyManager = getPtyProcessManager();
+      const postMsg = this.postMessage;
+      if (!ptyManager || !msg.sessionId || !msg.workflowId) return;
+      const workflowId = msg.workflowId as string;
+      const newSession = ptyManager.restartShellSession(msg.sessionId as string, {
+        onData: (s, chunk) => {
+          postMsg({ type: MESSAGE_TYPES.TERMINAL_OUTPUT, workflowId: s.workflowId, sessionId: s.id, data: chunk });
+        },
+        onExit: (s, exitCode) => {
+          postMsg({ type: MESSAGE_TYPES.TERMINAL_ENDED, workflowId: s.workflowId, sessionId: s.id, kind: s.kind, exitCode });
+        },
+      });
+      if (newSession) {
+        postMsg({ type: MESSAGE_TYPES.TERMINAL_STARTED, workflowId, sessionId: newSession.id, stepName: newSession.stepName, kind: "shell" });
+      }
+    });
+
+    table.set(MESSAGE_TYPES.TERMINAL_CLOSE_SHELL, async (msg) => {
+      const ptyManager = getPtyProcessManager();
+      if (ptyManager && msg.sessionId) {
+        ptyManager.killSession(msg.sessionId as string);
+      }
     });
 
     return table;

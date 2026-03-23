@@ -439,6 +439,38 @@ window.vscodeApi = acquireVsCodeApi();
     this.postMessage({ type: MESSAGE_TYPES.EXECUTION_COMPLETED });
   }
 
+  /** Notify webview that a terminal PTY session started */
+  public notifyTerminalStarted(workflowId: string, sessionId: string, stepName: string, kind: string): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.TERMINAL_STARTED,
+      workflowId,
+      sessionId,
+      stepName,
+      kind,
+    });
+  }
+
+  /** Stream PTY output bytes to the webview terminal */
+  public notifyTerminalOutput(workflowId: string, sessionId: string, data: string): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+      workflowId,
+      sessionId,
+      data,
+    });
+  }
+
+  /** Notify webview that a PTY session ended */
+  public notifyTerminalEnded(workflowId: string, sessionId: string, kind: string, exitCode: number): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.TERMINAL_ENDED,
+      workflowId,
+      sessionId,
+      kind,
+      exitCode,
+    });
+  }
+
   public notifyQueueExtended(
     addedCount: number,
     currentSize: number,
@@ -869,6 +901,11 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   private postMessage(message: any): void {
+    this.view?.webview.postMessage(message);
+  }
+
+  /** Public postMessage for use by PtyProcessManager (terminal output routing) */
+  public postMessagePublic(message: unknown): void {
     this.view?.webview.postMessage(message);
   }
 }

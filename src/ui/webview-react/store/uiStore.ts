@@ -172,6 +172,11 @@ interface UiState {
   // Output / editor font size (px) — user-adjustable, persisted
   outputFontSize: number;
 
+  // Terminal tab state (per workflow, defaults to 'output')
+  activeOutputTabs: Record<string, 'output' | 'terminal'>;
+  // Workflows with at least one running terminal session
+  terminalActiveWorkflows: Set<string>;
+
   // Notification toast state (transient, not persisted)
   toast: {
     message: string;
@@ -254,6 +259,10 @@ interface UiActions {
   ) => void;
   hideToast: () => void;
 
+  // Terminal tab switching
+  setActiveOutputTab: (workflowId: string, tab: 'output' | 'terminal') => void;
+  setTerminalSessionActive: (workflowId: string, active: boolean) => void;
+
   // Run history view
   setHistoryView: (
     runIndex: number,
@@ -303,6 +312,8 @@ const initialState: UiState = {
   loadingMessage: null,
   outputFontSize: 13,
   toast: null,
+  activeOutputTabs: {},
+  terminalActiveWorkflows: new Set<string>(),
   isViewingHistory: false,
   viewingRunIndex: 0,
   availableRuns: 0,
@@ -522,6 +533,26 @@ export const useUiStore = create<UiState & UiActions>()(
         }),
 
       hideToast: () => set({ toast: null }),
+
+      // ============================================================================
+      // TERMINAL TAB STATE
+      // ============================================================================
+
+      setActiveOutputTab: (workflowId: string, tab: 'output' | 'terminal') =>
+        set((state) => ({
+          activeOutputTabs: { ...state.activeOutputTabs, [workflowId]: tab },
+        })),
+
+      setTerminalSessionActive: (workflowId: string, active: boolean) =>
+        set((state) => {
+          const next = new Set(state.terminalActiveWorkflows);
+          if (active) {
+            next.add(workflowId);
+          } else {
+            next.delete(workflowId);
+          }
+          return { terminalActiveWorkflows: next };
+        }),
 
       // ============================================================================
       // RUN HISTORY VIEW

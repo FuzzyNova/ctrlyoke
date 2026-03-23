@@ -18,9 +18,12 @@ import { TempFileManager } from "../../utils/TempFileManager";
 import { PromptFileSplitter } from "../../utils/PromptFileSplitter";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
+import { getPtyProcessManager, ptyPostMessage } from "./PtyProcessManager";
+import type { PtySession } from "./PtyProcessManager";
 import { Log } from "../../utils/Log";
 import {
   EXECUTION_MODES,
+  MESSAGE_TYPES,
   type ExecutionMode,
 } from "../../types/DashboardConstants";
 import { getErrorMessage } from "../../utils/ErrorUtils";
@@ -135,6 +138,9 @@ export class CliIntegration extends HarnessIntegration {
 
   // Interactive terminal mode properties
   protected currentExecution?: vscode.TerminalShellExecution;
+
+  /** Active PTY session for interactive mode (node-pty path) */
+  private currentPtySession?: PtySession;
 
   /** Workflow display name used for VS Code terminal tab naming */
   private workflowName?: string;
@@ -1055,26 +1061,84 @@ export class CliIntegration extends HarnessIntegration {
       this.currentPromptTotal = workflowContext.allPrompts.length;
     }
 
-    const terminal = await this.createFreshTerminal(env);
-    Log.info(`🖥️ Opened terminal: "${this.buildTerminalName()}"`);
-    if (tempFilePaths.length > 0) {
-      Log.debug(`📁 Interactive mode using ${tempFilePaths.length} temp file(s)`);
-    }
-    terminal.show();
-
     this.promptReadyEmitter.fire({
       fullPrompt: promptArgument,
       cliCommand: this.lastCliCommand,
     });
 
-    this.streamingChunkEmitter.fire(
-      "📺 Interactive mode: Output is streaming to the VS Code terminal.\n" +
-        "   View the terminal for real-time output.\n\n"
-    );
+    const ptyManager = getPtyProcessManager();
+    if (ptyManager) {
+      // PTY path: spawn via node-pty and route I/O to webview
+      const workflowId = workflowContext?.filePath ?? this.workflowName ?? "unknown";
+      const stepName = workflowContext
+        ? (workflowContext.allPrompts[workflowContext.promptIndex]?.name ??
+           `Step ${workflowContext.promptIndex + 1}`)
+        : "interactive";
 
-    const shellIntegration = await this.waitForShellIntegration(terminal);
-    const execution = shellIntegration.executeCommand(tuiCommand);
-    this.currentExecution = execution;
+      const shell = process.platform === "win32" ? "cmd.exe" : (process.env.SHELL ?? "/bin/bash");
+      const shellArgs = process.platform === "win32" ? ["/c", String(tuiCommand)] : ["-c", String(tuiCommand)];
+      const cwd = this.getWorkspaceRoot() ?? process.cwd();
+      const mergedEnv = env ? { ...process.env, ...env } : process.env;
+
+      const session = ptyManager.spawnPty({
+        workflowId,
+        stepName,
+        kind: "ai-cli",
+        command: shell,
+        args: shellArgs,
+        cwd,
+        env: mergedEnv,
+        onData: (s, chunk) => {
+          ptyPostMessage({
+            type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+            workflowId: s.workflowId,
+            sessionId: s.id,
+            data: chunk,
+          });
+        },
+        onExit: (s, exitCode) => {
+          ptyPostMessage({
+            type: MESSAGE_TYPES.TERMINAL_ENDED,
+            workflowId: s.workflowId,
+            sessionId: s.id,
+            kind: s.kind,
+            exitCode,
+          });
+          if (this.currentPtySession === s) {
+            this.currentPtySession = undefined;
+          }
+        },
+      });
+
+      this.currentPtySession = session;
+
+      ptyPostMessage({
+        type: MESSAGE_TYPES.TERMINAL_STARTED,
+        workflowId,
+        sessionId: session.id,
+        stepName,
+        kind: "ai-cli",
+      });
+
+      Log.info(`🖥️ PTY session spawned: "${stepName}" (${session.id.slice(0, 8)})`);
+    } else {
+      // Fallback: VS Code terminal path (when PtyProcessManager not initialized)
+      const terminal = await this.createFreshTerminal(env);
+      Log.info(`🖥️ Opened terminal: "${this.buildTerminalName()}"`);
+      if (tempFilePaths.length > 0) {
+        Log.debug(`📁 Interactive mode using ${tempFilePaths.length} temp file(s)`);
+      }
+      terminal.show();
+
+      this.streamingChunkEmitter.fire(
+        "📺 Interactive mode: Output is streaming to the VS Code terminal.\n" +
+          "   View the terminal for real-time output.\n\n"
+      );
+
+      const shellIntegration = await this.waitForShellIntegration(terminal);
+      const execution = shellIntegration.executeCommand(tuiCommand);
+      this.currentExecution = execution;
+    }
   }
 
   /**
@@ -1491,6 +1555,15 @@ export class CliIntegration extends HarnessIntegration {
     Log.debug(
       `⏹️ CLI Integration cancel called (harness: ${this.provider.config.displayName})`
     );
+
+    // Kill active PTY session if one exists (interactive mode via node-pty)
+    if (this.currentPtySession) {
+      const ptyManager = getPtyProcessManager();
+      if (ptyManager) {
+        ptyManager.killSession(this.currentPtySession.id);
+      }
+      this.currentPtySession = undefined;
+    }
 
     // Check if we have an actively running process or execution.
     // In headless mode, the child process lives in processManager.

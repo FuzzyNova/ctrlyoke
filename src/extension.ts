@@ -25,6 +25,7 @@ import { saveIfDirty } from "./utils/FileSystemUtils";
 import { getErrorMessage } from "./utils/ErrorUtils";
 import { WorkspaceInitializer } from "./flightpath/orchestration/WorkspaceInitializer";
 import { PATH_CONSTANTS } from "./utils/ConfigurationUtils";
+import { initPtyProcessManager } from "./flightpath/harness/PtyProcessManager";
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: FlightPathWebviewProvider;
@@ -318,6 +319,11 @@ export async function activate(context: vscode.ExtensionContext) {
       )
     );
     Log.debug("FlightPath: React webview provider registered");
+
+    // Initialize PTY process manager (must be after webviewProvider is created)
+    const ptyManager = initPtyProcessManager((msg) => webviewProvider.postMessagePublic(msg));
+    context.subscriptions.push(ptyManager);
+    Log.debug("FlightPath: PTY process manager initialized");
 
     // Initialize FlightPath orchestrator with React webview provider
     workflowOrchestrator = new WorkflowOrchestrator(context, webviewProvider);

@@ -184,6 +184,16 @@ export const MESSAGE_TYPES = {
   UNDO_RECORD_UPDATED: "undoRecordUpdated",
   // Prompt undo — Webview → Extension: request to redo previously undone changes
   REDO_PROMPT_CHANGES: "redoPromptChanges",
+
+  // Terminal I/O — bidirectional between extension/server and webview
+  TERMINAL_OUTPUT:        "terminalOutput",       // extension → webview: { workflowId, sessionId, data }
+  TERMINAL_INPUT:         "terminalInput",        // webview → extension: { workflowId, sessionId, data }
+  TERMINAL_RESIZE:        "terminalResize",       // webview → extension: { workflowId, sessionId, cols, rows }
+  TERMINAL_STARTED:       "terminalStarted",      // extension → webview: { workflowId, sessionId, stepName, kind }
+  TERMINAL_ENDED:         "terminalEnded",        // extension → webview: { workflowId, sessionId, kind, exitCode }
+  TERMINAL_SPAWN_SHELL:   "terminalSpawnShell",   // webview → extension: { workflowId, cwd }
+  TERMINAL_RESTART_SHELL: "terminalRestartShell", // webview → extension: { workflowId, sessionId }
+  TERMINAL_CLOSE_SHELL:   "terminalCloseShell",   // webview → extension: { workflowId, sessionId }
 } as const;
 
 // ============================================================================

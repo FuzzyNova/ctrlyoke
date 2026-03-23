@@ -21,6 +21,8 @@ import { MESSAGE_TYPES, EXECUTION_STATES, FINAL_PROMPT_PHASES } from "../../type
 import { CLI_EVENT_TYPES } from "../../types/cliEvents";
 import { OutputMinimap, type MinimapStep, type MinimapDiffBlock, type DiffRun } from "../output/OutputMinimap";
 import { UndoChangesDialog } from "../output/UndoChangesDialog";
+import { TerminalView } from "../output/TerminalView";
+import { useTerminalStore } from "@store/terminalStore";
 import {
   buildUndoDialogInputForPrompt,
   computePromptUndoActions,
@@ -107,6 +109,21 @@ export const OutputSection: React.FC = () => {
   const collapseAllDiffs = useUiStore((s) => s.collapseAllDiffs);
   const outputFontSize = useUiStore((s) => s.outputFontSize);
   const setOutputFontSize = useUiStore((s) => s.setOutputFontSize);
+
+  // Terminal tab state
+  const activeWorkflowId = useUiStore((s) => s.activeWorkflowId);
+  const activeOutputTab = useUiStore((s) =>
+    s.activeOutputTabs[activeWorkflowId ?? ""] ?? "output"
+  );
+  const setActiveOutputTab = useUiStore((s) => s.setActiveOutputTab);
+  const terminalActiveWorkflows = useUiStore((s) => s.terminalActiveWorkflows);
+  const terminalSessions = useTerminalStore((s) =>
+    s.sessions[activeWorkflowId ?? ""] ?? []
+  );
+  const showTerminalTab = terminalSessions.length > 0;
+  const terminalSessionActive = activeWorkflowId
+    ? terminalActiveWorkflows.has(activeWorkflowId)
+    : false;
 
   const outputRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -699,8 +716,9 @@ export const OutputSection: React.FC = () => {
     >
       {/* Section Header */}
       <div className="flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] px-2 border-b border-panel-border flex-shrink-0 bg-sidebar-bg">
-        {/* Left: clickable collapse area + font size controls */}
+        {/* Left: clickable collapse area + tab buttons + font size controls */}
         <div className="flex items-center gap-1">
+          {/* Collapse affordance — chevron + icon only (narrower click target) */}
           <div
             className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
             onClick={toggleOutputCollapse}
@@ -711,92 +729,139 @@ export const OutputSection: React.FC = () => {
           >
             <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
             <i className="codicon codicon-terminal text-[14px]" />
-            <span className="text-[11px] font-semibold uppercase tracking-wide">
+          </div>
+
+          {/* Output / Terminal tab buttons */}
+          {showTerminalTab ? (
+            <div className="flex items-center ml-1">
+              <button
+                className={`text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 transition-colors
+                  ${activeOutputTab === "output"
+                    ? "text-foreground border-b border-foreground"
+                    : "text-description-fg hover:text-foreground"}`}
+                onClick={() =>
+                  activeWorkflowId && setActiveOutputTab(activeWorkflowId, "output")
+                }
+              >
+                Output
+              </button>
+              <button
+                className={`text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 flex items-center gap-1 transition-colors
+                  ${activeOutputTab === "terminal"
+                    ? "text-foreground border-b border-foreground"
+                    : "text-description-fg hover:text-foreground"}`}
+                onClick={() =>
+                  activeWorkflowId && setActiveOutputTab(activeWorkflowId, "terminal")
+                }
+              >
+                Terminal
+                {terminalSessionActive && (
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                )}
+              </button>
+            </div>
+          ) : (
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-description-fg ml-1">
               Output
             </span>
-          </div>
-          {/* Font size stepper — grouped tightly, separated from title by ml-2 */}
-          <div className="flex items-center ml-3">
-            <button
-              className="icon-btn py-0 px-0.5"
-              title="Decrease font size"
-              onClick={() => setOutputFontSize(outputFontSize - 1)}
-              disabled={outputFontSize <= 10}
-            >
-              <i className="codicon codicon-sm codicon-remove" />
-            </button>
-            <span className="text-[10px] text-description-fg tabular-nums w-[20px] text-center select-none">
-              {outputFontSize}
-            </span>
-            <button
-              className="icon-btn py-0 px-0.5"
-              title="Increase font size"
-              onClick={() => setOutputFontSize(outputFontSize + 1)}
-              disabled={outputFontSize >= 24}
-            >
-              <i className="codicon codicon-sm codicon-add" />
-            </button>
-          </div>
+          )}
+
+          {/* Font size stepper — Output tab only */}
+          {activeOutputTab === "output" && (
+            <div className="flex items-center ml-2">
+              <button
+                className="icon-btn py-0 px-0.5"
+                title="Decrease font size"
+                onClick={() => setOutputFontSize(outputFontSize - 1)}
+                disabled={outputFontSize <= 10}
+              >
+                <i className="codicon codicon-sm codicon-remove" />
+              </button>
+              <span className="text-[10px] text-description-fg tabular-nums w-[20px] text-center select-none">
+                {outputFontSize}
+              </span>
+              <button
+                className="icon-btn py-0 px-0.5"
+                title="Increase font size"
+                onClick={() => setOutputFontSize(outputFontSize + 1)}
+                disabled={outputFontSize >= 24}
+              >
+                <i className="codicon codicon-sm codicon-add" />
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Right: controls */}
+        {/* Right: controls — Output tab only */}
         <div className="ml-auto flex items-center gap-2">
-          {availableRuns > 0 && (
-            <RunSelector
-              availableRuns={availableRuns}
-              currentRunIndex={viewingRunIndex}
-              isViewingHistory={isViewingHistory}
-              isLiveRunActive={executionState === EXECUTION_STATES.RUNNING}
-              runTimestamps={runTimestamps}
-              runStates={runStates}
-              onSelectRun={(runIndex) => {
-                const vscode = getVsCodeApi();
-                if (vscode) {
-                  vscode.postMessage({
-                    type: MESSAGE_TYPES.LOAD_RUN_HISTORY,
-                    runIndex,
-                  });
-                }
-              }}
-              onBackToLive={() => {
-                useWorkflowStore.getState().clearHistoryOutputs();
-                useUiStore.getState().clearHistoryView();
-              }}
-              onClearHistory={() => {
-                const vscode = getVsCodeApi();
-                if (vscode) {
-                  vscode.postMessage({
-                    type: MESSAGE_TYPES.CLEAR_RUN_HISTORY,
-                  });
-                }
-              }}
-            />
+          {activeOutputTab === "output" && (
+            <>
+              {availableRuns > 0 && (
+                <RunSelector
+                  availableRuns={availableRuns}
+                  currentRunIndex={viewingRunIndex}
+                  isViewingHistory={isViewingHistory}
+                  isLiveRunActive={executionState === EXECUTION_STATES.RUNNING}
+                  runTimestamps={runTimestamps}
+                  runStates={runStates}
+                  onSelectRun={(runIndex) => {
+                    const vscode = getVsCodeApi();
+                    if (vscode) {
+                      vscode.postMessage({
+                        type: MESSAGE_TYPES.LOAD_RUN_HISTORY,
+                        runIndex,
+                      });
+                    }
+                  }}
+                  onBackToLive={() => {
+                    useWorkflowStore.getState().clearHistoryOutputs();
+                    useUiStore.getState().clearHistoryView();
+                  }}
+                  onClearHistory={() => {
+                    const vscode = getVsCodeApi();
+                    if (vscode) {
+                      vscode.postMessage({
+                        type: MESSAGE_TYPES.CLEAR_RUN_HISTORY,
+                      });
+                    }
+                  }}
+                />
+              )}
+              {hasOutput && (
+                <button
+                  className="icon-btn py-0 px-2"
+                  title={anyDiffCollapsed ? "Expand all diffs" : "Collapse all diffs"}
+                  onClick={() => anyDiffCollapsed ? expandAllDiffs() : collapseAllDiffs()}
+                >
+                  <i
+                    className={`codicon codicon-sm ${anyDiffCollapsed ? "codicon-diff" : "codicon-diff-ignored"}`}
+                  />
+                </button>
+              )}
+              <button
+                className="icon-btn py-0 px-2"
+                id="export-btn"
+                title="Export output to markdown"
+                onClick={handleExport}
+                disabled={!hasOutput}
+              >
+                <i className="codicon codicon-sm codicon-export" />
+              </button>
+            </>
           )}
-          {hasOutput && (
-            <button
-              className="icon-btn py-0 px-2"
-              title={anyDiffCollapsed ? "Expand all diffs" : "Collapse all diffs"}
-              onClick={() => anyDiffCollapsed ? expandAllDiffs() : collapseAllDiffs()}
-            >
-              <i
-                className={`codicon codicon-sm ${anyDiffCollapsed ? "codicon-diff" : "codicon-diff-ignored"}`}
-              />
-            </button>
-          )}
-          <button
-            className="icon-btn py-0 px-2"
-            id="export-btn"
-            title="Export output to markdown"
-            onClick={handleExport}
-            disabled={!hasOutput}
-          >
-            <i className="codicon codicon-sm codicon-export" />
-          </button>
         </div>
       </div>
 
-      {/* Output Content row: scrollable output + minimap rail */}
-      <div className="flex flex-row min-h-0 flex-1">
+      {/* Output Content: toggle between Output view and Terminal view */}
+      {activeOutputTab === "terminal" ? (
+        <div className="flex flex-row min-h-0 flex-1">
+          <TerminalView
+            workflowId={activeWorkflowId ?? ""}
+            workspaceRoot={undefined}
+          />
+        </div>
+      ) : (
+        <div className="flex flex-row min-h-0 flex-1">
         {/* Scrollable output */}
         <div
           ref={outputRef}
@@ -933,6 +998,7 @@ export const OutputSection: React.FC = () => {
           />
         )}
       </div>
+      )}
 
       {/* Shared prompt-level undo/redo dialog — triggered from minimap */}
       {minimapDialogState && (

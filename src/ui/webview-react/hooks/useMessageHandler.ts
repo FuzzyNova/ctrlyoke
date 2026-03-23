@@ -27,6 +27,8 @@ import {
   type UndoRecordUpdatedMessage,
 } from "../types/messages";
 import { WebviewLog } from "@utils/logger";
+import { useTerminalStore } from "../store/terminalStore";
+import { terminalRegistry } from "../terminalRegistry";
 
 // ============================================================================
 // Types
@@ -450,6 +452,16 @@ function createMessageHandlers(): MessageHandlerMap {
 
     // Mark editor as having active queue
     editorStore.setHasActiveQueue(true);
+
+    // Clear previous ai-cli terminal sessions (shell sessions survive)
+    const wfId = message.workflowId ?? useUiStore.getState().activeWorkflowId;
+    if (wfId) {
+      const aiCliSessionIds = (useTerminalStore.getState().sessions[wfId] ?? [])
+        .filter((s) => s.kind === "ai-cli")
+        .map((s) => s.id);
+      terminalRegistry.clearAiCliSessions(wfId, aiCliSessionIds);
+      useTerminalStore.getState().clearAiCliSessions(wfId);
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -1088,6 +1100,75 @@ function createMessageHandlers(): MessageHandlerMap {
     if (!m.target || !m.undoRecord) return;
     useWorkflowStore.getState().setUndoRecord(m.target, m.undoRecord);
     useWorkflowStore.getState().updateHistoryStepUndoRecord(m.target, m.undoRecord);
+  };
+
+  // ========================================================================
+  // TERMINAL I/O
+  // ========================================================================
+
+  handlers[MESSAGE_TYPES.TERMINAL_OUTPUT] = (message: any) => {
+    const { workflowId, sessionId, data } = message;
+    if (!workflowId || !sessionId || !data) return;
+
+    // If the registry entry exists, write directly to xterm (no Zustand, no re-renders)
+    const entry = terminalRegistry.get(workflowId, sessionId);
+    if (entry) {
+      entry.term.write(data as string);
+    } else {
+      // Terminal not yet mounted — buffer the output
+      useTerminalStore.getState().pushPendingOutput(workflowId, sessionId, data as string);
+    }
+  };
+
+  handlers[MESSAGE_TYPES.TERMINAL_STARTED] = (message: any) => {
+    const { workflowId, sessionId, stepName, kind } = message;
+    if (!workflowId || !sessionId) return;
+
+    const { addSession } = useTerminalStore.getState();
+    addSession({
+      id: sessionId,
+      workflowId,
+      stepName: stepName ?? "terminal",
+      kind: kind ?? "ai-cli",
+      status: "running",
+      pendingOutput: [],
+    });
+
+    // Update terminal active status
+    useUiStore.getState().setTerminalSessionActive(workflowId, true);
+
+    // Auto-switch to Terminal tab when an ai-cli session starts
+    if (kind === "ai-cli") {
+      useUiStore.getState().setActiveOutputTab(workflowId, "terminal");
+    }
+  };
+
+  handlers[MESSAGE_TYPES.TERMINAL_ENDED] = (message: any) => {
+    const { workflowId, sessionId, kind, exitCode } = message;
+    if (!workflowId || !sessionId) return;
+
+    const termStore = useTerminalStore.getState();
+    termStore.endSession(workflowId, sessionId, exitCode ?? 0);
+
+    // Freeze ai-cli sessions in the registry (disables onData)
+    if (kind === "ai-cli") {
+      terminalRegistry.freeze(workflowId, sessionId);
+    }
+
+    // Check if all running sessions for this workflow have ended
+    const sessions = termStore.sessions[workflowId] ?? [];
+    const hasRunningSessions = sessions.some((s) => s.status === "running");
+
+    if (!hasRunningSessions) {
+      useUiStore.getState().setTerminalSessionActive(workflowId, false);
+
+      // Auto-switch back to Output tab when all ai-cli sessions are done,
+      // but only if the user has no shell sessions open
+      const hasShellSessions = sessions.some((s) => s.kind === "shell");
+      if (!hasShellSessions) {
+        useUiStore.getState().setActiveOutputTab(workflowId, "output");
+      }
+    }
   };
 
   return handlers;
