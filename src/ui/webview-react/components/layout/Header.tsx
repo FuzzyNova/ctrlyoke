@@ -1,5 +1,8 @@
 import React, { useCallback } from "react";
-import { useWorkflowStore, useWorkflowTemporalStore } from "@store/workflowStore";
+import {
+  useWorkflowStore,
+  useWorkflowTemporalStore,
+} from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
@@ -73,7 +76,12 @@ export const Header: React.FC = () => {
   const vscode = useVsCodeApi();
   const { fileName, executionState } = useWorkflowStore();
   const hasPrompts = useWorkflowStore((s) => s.prompts.length > 0);
-  const { loadedWorkflows, activeWorkflowId, newWorkflowModalOpen, closeNewWorkflowModal } = useUiStore();
+  const {
+    loadedWorkflows,
+    activeWorkflowId,
+    newWorkflowModalOpen,
+    closeNewWorkflowModal,
+  } = useUiStore();
 
   // Undo/redo availability — useWorkflowTemporalStore uses useState+useEffect
   // (not useSyncExternalStore) to avoid React 18 concurrent mode error #185.
@@ -83,13 +91,21 @@ export const Header: React.FC = () => {
   const handleUndo = useCallback(() => {
     useWorkflowStore.temporal.getState().undo();
     const { prompts, finalPrompt } = useWorkflowStore.getState();
-    vscode.postMessage({ type: MESSAGE_TYPES.UNDO_REDO_SYNC, prompts, finalPrompt });
+    vscode.postMessage({
+      type: MESSAGE_TYPES.UNDO_REDO_SYNC,
+      prompts,
+      finalPrompt,
+    });
   }, [vscode]);
 
   const handleRedo = useCallback(() => {
     useWorkflowStore.temporal.getState().redo();
     const { prompts, finalPrompt } = useWorkflowStore.getState();
-    vscode.postMessage({ type: MESSAGE_TYPES.UNDO_REDO_SYNC, prompts, finalPrompt });
+    vscode.postMessage({
+      type: MESSAGE_TYPES.UNDO_REDO_SYNC,
+      prompts,
+      finalPrompt,
+    });
   }, [vscode]);
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
@@ -129,7 +145,10 @@ export const Header: React.FC = () => {
 
   const handleStopCliRun = useCallback(() => {
     if (activeWorkflowId) {
-      vscode.postMessage({ type: MESSAGE_TYPES.STOP_CLI_RUN, workflowId: activeWorkflowId });
+      vscode.postMessage({
+        type: MESSAGE_TYPES.STOP_CLI_RUN,
+        workflowId: activeWorkflowId,
+      });
     }
   }, [vscode, activeWorkflowId]);
 
@@ -174,7 +193,13 @@ export const Header: React.FC = () => {
             }`}
             onClick={handleSave}
             disabled={!canSave}
-            title={!hasFile ? "Load a workflow to save" : !hasPrompts ? "Add prompts to save" : "Save workflow to file"}
+            title={
+              !hasFile
+                ? "Load a workflow to save"
+                : !hasPrompts
+                  ? "Add prompts to save"
+                  : "Save workflow to file"
+            }
             aria-label="Save workflow"
           >
             <i className="codicon codicon-save" />
@@ -213,7 +238,10 @@ export const Header: React.FC = () => {
         <SaveWorkflowDialog />
 
         {/* Template Modal — controlled by uiStore.newWorkflowModalOpen */}
-        <TemplateModal isOpen={newWorkflowModalOpen} onClose={closeNewWorkflowModal} />
+        <TemplateModal
+          isOpen={newWorkflowModalOpen}
+          onClose={closeNewWorkflowModal}
+        />
 
         {/* Center Section: Workflow Status - own row on narrow, perfectly centered on wide via 1fr/auto/1fr grid */}
         <div className="header-center order-last sm:order-none col-span-2 sm:col-span-1 justify-self-center w-full sm:w-auto flex items-center justify-center min-w-0">
@@ -245,7 +273,7 @@ export const Header: React.FC = () => {
             aria-label={isRerun ? "Restart from beginning" : "Run"}
           >
             <i
-              className={`codicon ${isRerun ? "codicon-debug-restart" : "codicon-debug-start"}`}
+              className={`codicon ${isRerun ? "codicon-refresh" : "codicon-debug-start"}`}
             />
           </button>
 
@@ -283,11 +311,7 @@ export const Header: React.FC = () => {
             }`}
             onClick={isCLIManaged ? handleStopCliRun : handleStop}
             disabled={!canStop && !isCLIManaged}
-            title={
-              isCLIManaged
-                ? "Stop CLI run"
-                : "Stop execution"
-            }
+            title={isCLIManaged ? "Stop CLI run" : "Stop execution"}
             aria-label="Stop"
           >
             <i className="codicon codicon-debug-stop" />

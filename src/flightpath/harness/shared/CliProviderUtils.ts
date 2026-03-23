@@ -78,7 +78,6 @@ export class CliProviderUtils {
    * its own getMcpConfigArgs (for format-specific config generation), but
    * the decision logic and PromptIdentity check are shared here.
    *
-   * @param prompt - The prompt item
    * @param workflowContext - Workflow context with resolved properties
    * @param workspaceRoot - Workspace root directory
    * @param extensionPath Extension installation directory
@@ -86,7 +85,6 @@ export class CliProviderUtils {
    * @returns CLI arguments to add, or empty array if MCP not needed
    */
   static async buildMcpConfigBlock(
-    prompt: unknown,
     workflowContext:
       | {
           promptIndex: number;
@@ -115,18 +113,6 @@ export class CliProviderUtils {
       dynamicQueueConfig.enabled;
 
     if (!allowDynamicExtension) {
-      return [];
-    }
-
-    const {
-      shouldInjectExtensionInstructions,
-    } = require("../../../utils/PromptIdentity");
-    const shouldInject = shouldInjectExtensionInstructions(
-      prompt,
-      allowDynamicExtension
-    );
-
-    if (!shouldInject) {
       return [];
     }
 

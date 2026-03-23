@@ -204,8 +204,16 @@ export class ContextExpander {
             excerptParts.push(xml);
           }
         } else {
-          // Full-file ref → return absolute path for direct @-reference
-          directFileRefs.push(this.resolveWorkspacePath(ref.path));
+          // Full-file ref → return absolute path for direct @-reference (only if it exists)
+          const absolutePath = this.resolveWorkspacePath(ref.path);
+          try {
+            await fs.access(absolutePath);
+            directFileRefs.push(absolutePath);
+          } catch {
+            Log.warn(
+              `[ContextExpander] File not found, skipping: ${absolutePath}`
+            );
+          }
         }
       }
 

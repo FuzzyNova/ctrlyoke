@@ -82,7 +82,7 @@ export class ClaudeCliProvider implements ICliProvider {
    * @returns Complete CLI arguments array (without prompt - that's handled separately)
    */
   async buildCliArgs(
-    prompt: PromptItem,
+    _prompt: PromptItem,
     isInteractive: boolean,
     extensionPath: string,
     workspaceRoot: string | undefined,
@@ -104,7 +104,6 @@ export class ClaudeCliProvider implements ICliProvider {
 
     // MCP configuration (when dynamic queue extension is enabled)
     const mcpArgs = await CliProviderUtils.buildMcpConfigBlock(
-      prompt,
       workflowContext,
       workspaceRoot,
       extensionPath,

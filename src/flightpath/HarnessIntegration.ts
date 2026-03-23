@@ -13,7 +13,6 @@ import { ContextExpander } from "../utils/ContextExpander";
 import type { SplitContext } from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
 import { ResolvedProperties } from "../utils/PropertyResolver";
-import { shouldInjectExtensionInstructions } from "../utils/PromptIdentity";
 import { TempFileManager } from "../utils/TempFileManager";
 import { PromptFileSplitter, SplitConfig } from "../utils/PromptFileSplitter";
 import type { PromptQueue } from "./PromptQueue";
@@ -291,8 +290,68 @@ export abstract class HarnessIntegration {
   }
 
   /**
+   * Format categorized file references into a structured instruction string.
+   *
+   * Single source of truth for both CLI and Chat harnesses.
+   *
+   * Format (absent categories omitted):
+   *   Following these agent instructions <agentRefs>,
+   *   using these available skills <skillRefs>,
+   *   using these file references <directRefs>,
+   *   with this prior conversation context <contextRefs>,
+   *   and these attachment excerpts <excerptRefs>,
+   *   follow the instructions in <promptRefs>
+   *
+   * When only a prompt exists: "Follow instructions in <promptRefs> "
+   *
+   * The excerpt prefix is "using" when it is the first clause, "and" otherwise.
+   *
+   * @param joinSeparator Separator between clauses — ",\n" for CLI, ", " for Chat
+   */
+  protected static formatCategorizedInstruction(
+    agentRefs: string[],
+    skillRefs: string[],
+    directRefs: string[],
+    contextRefs: string[],
+    excerptRefs: string[],
+    promptRefs: string[],
+    joinSeparator = ",\n"
+  ): string {
+    const clauses: string[] = [];
+
+    if (agentRefs.length > 0) {
+      clauses.push(`Following these agent instructions ${agentRefs.join(", ")}`);
+    }
+    if (skillRefs.length > 0) {
+      clauses.push(`using these available skills ${skillRefs.join(", ")}`);
+    }
+    if (directRefs.length > 0) {
+      clauses.push(`using these file references ${directRefs.join(", ")}`);
+    }
+    if (contextRefs.length > 0) {
+      clauses.push(
+        `with this prior conversation context ${contextRefs.join(", ")}`
+      );
+    }
+    if (excerptRefs.length > 0) {
+      const excerptPrefix = clauses.length === 0 ? "using" : "and";
+      clauses.push(
+        `${excerptPrefix} these attachment excerpts ${excerptRefs.join(", ")}`
+      );
+    }
+
+    const followClause = `follow the instructions in ${promptRefs.join(", ")}`;
+
+    if (clauses.length === 0) {
+      return `Follow instructions in ${promptRefs.join(", ")} `;
+    }
+
+    return clauses.join(joinSeparator) + `${joinSeparator}${followClause} `;
+  }
+
+  /**
    * Build prompt text from prompt item.
-   * Assembles in the canonical section order (without priorContext or criticalInstruction):
+   * Assembles in the canonical section order (without priorContext):
    *   <skillInstructions> → <agentInstructions> → <attachment> blocks → user prompt
    *
    * Used by CopilotChatIntegration when building temp files for attachment.
@@ -538,47 +597,6 @@ export abstract class HarnessIntegration {
 
 
   /**
-   * Build the `<criticalInstruction>` dynamic queue block for this prompt.
-   * Returns an empty string when dynamic queue extension is disabled or injection is not needed.
-   */
-  protected buildCriticalInstruction(
-    prompt: PromptItem,
-    promptIndex: number,
-    allPrompts: PromptItem[],
-    allowDynamicExtension?: boolean
-  ): string {
-    const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
-    const shouldEnableDynamicExtension =
-      allowDynamicExtension ?? dynamicQueueConfig.enabled;
-
-    if (!shouldEnableDynamicExtension) {
-      return "";
-    }
-    if (!shouldInjectExtensionInstructions(prompt, shouldEnableDynamicExtension)) {
-      return "";
-    }
-
-    const { maxQueueSize, maxWorkflowExecutionTime, unlimitedMode } =
-      dynamicQueueConfig;
-    const currentSize = allPrompts.length;
-    const currentIndex = promptIndex + 1;
-    const totalPrompts = allPrompts.length;
-    const maxSizeDisplay = unlimitedMode
-      ? "unlimited"
-      : maxQueueSize.toString();
-    const maxTimeDisplay =
-      unlimitedMode || maxWorkflowExecutionTime === -1
-        ? "unlimited"
-        : `${maxWorkflowExecutionTime}s`;
-
-    return `<criticalInstruction>
-FlightPath workflow: Step ${currentIndex}/${totalPrompts} (${currentSize}/${maxSizeDisplay} prompts, ${maxTimeDisplay} max time)
-
-You have access to flightpath_queue_status and flightpath_append_queue tools. Use them if you need additional steps to complete this task. Only extend the queue if truly necessary.
-</criticalInstruction>`;
-  }
-
-  /**
    * Build the additional workflow-context text (prior context + critical instruction)
    * for injection into the prompt file section of a categorized split.
    *
@@ -589,47 +607,31 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
    * @returns Assembled text block, or empty string if nothing to inject
    */
   protected buildWorkflowContextText(
-    prompt: PromptItem,
     promptIndex: number,
     allPrompts: PromptItem[],
-    allowDynamicExtension?: boolean,
     resolvedPriorContext?: PriorContext,
     finalPromptResponseTexts?: string[]
   ): string {
-    const blocks: string[] = [];
-
-    // Prior context block
-    if (resolvedPriorContext !== undefined && resolvedPriorContext !== "none") {
-      const contextItems = this.gatherPriorContextItems(
-        resolvedPriorContext,
-        allPrompts,
-        promptIndex,
-        finalPromptResponseTexts ?? []
-      );
-      if (contextItems.length > 0) {
-        const isFinalPromptContext =
-          resolvedPriorContext === "finalPromptAll" ||
-          resolvedPriorContext === "finalPromptPrevious";
-        Log.debug(
-          `🔗 Injecting ${isFinalPromptContext ? "finalPrompt" : "prior"} context for prompt ${promptIndex + 1}: ` +
-            `${contextItems.length} step(s) from indices [${contextItems.map((c) => c.index + 1).join(", ")}]`
-        );
-        blocks.push(this.buildPriorContextXml(contextItems));
-      }
+    if (resolvedPriorContext === undefined || resolvedPriorContext === "none") {
+      return "";
     }
-
-    // Dynamic queue instruction
-    const criticalInstruction = this.buildCriticalInstruction(
-      prompt,
-      promptIndex,
+    const contextItems = this.gatherPriorContextItems(
+      resolvedPriorContext,
       allPrompts,
-      allowDynamicExtension
+      promptIndex,
+      finalPromptResponseTexts ?? []
     );
-    if (criticalInstruction) {
-      blocks.push(criticalInstruction);
+    if (contextItems.length === 0) {
+      return "";
     }
-
-    return blocks.join("\n\n");
+    const isFinalPromptContext =
+      resolvedPriorContext === "finalPromptAll" ||
+      resolvedPriorContext === "finalPromptPrevious";
+    Log.debug(
+      `🔗 Injecting ${isFinalPromptContext ? "finalPrompt" : "prior"} context for prompt ${promptIndex + 1}: ` +
+        `${contextItems.length} step(s) from indices [${contextItems.map((c) => c.index + 1).join(", ")}]`
+    );
+    return this.buildPriorContextXml(contextItems);
   }
 
   /**
@@ -637,12 +639,11 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
    *
    * Section order (canonical):
    *   <skillInstructions> → <agentInstructions> → <priorContext>
-   *   → <attachment> blocks → <criticalInstruction> → user prompt
+   *   → <attachment> blocks → user prompt
    *
    * @param prompt The prompt item
    * @param promptIndex Current prompt index
    * @param allPrompts All prompts in the workflow
-   * @param allowDynamicExtension Whether to enable dynamic queue extension
    * @param resolvedAgent Resolved agent name for prompt prepending
    * @param resolvedSkills Resolved skill names for frontmatter injection
    * @param resolvedPriorContext Prior context injection setting
@@ -656,7 +657,6 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
     prompt: PromptItem,
     promptIndex: number,
     allPrompts: PromptItem[],
-    allowDynamicExtension?: boolean,
     resolvedAgent?: string,
     resolvedSkills?: string[],
     resolvedPriorContext?: PriorContext,
@@ -715,16 +715,8 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
       }
     }
 
-    // 5. Dynamic queue instruction (injected just before user prompt)
-    const criticalInstruction = this.buildCriticalInstruction(
-      prompt,
-      promptIndex,
-      allPrompts,
-      allowDynamicExtension
-    );
-
     // Assemble in canonical order:
-    //   skills → agent → priorContext → attachments → criticalInstruction → userPrompt
+    //   skills → agent → priorContext → attachments → userPrompt
     const sections: string[] = [];
     if (skillContent) {
       sections.push(skillContent);
@@ -739,9 +731,6 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
     }
     if (attachmentSection) {
       sections.push(attachmentSection);
-    }
-    if (criticalInstruction) {
-      sections.push(criticalInstruction);
     }
     sections.push(userPromptText);
 
@@ -868,10 +857,6 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
    */
   protected isSimplePrompt(finalPromptText: string): boolean {
     if (finalPromptText.length > HarnessIntegration.MAX_SIMPLE_PROMPT_LENGTH) {
-      return false;
-    }
-
-    if (finalPromptText.includes("<criticalInstruction>")) {
       return false;
     }
 

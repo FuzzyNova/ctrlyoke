@@ -365,12 +365,6 @@ export class CliIntegration extends HarnessIntegration {
 
     const promptIndex = workflowContext?.promptIndex ?? 0;
     const allPrompts = workflowContext?.allPrompts ?? [prompt];
-    const criticalInstruction = this.buildCriticalInstruction(
-      prompt,
-      promptIndex,
-      allPrompts,
-      resolvedProperties?.allowDynamicExtension
-    );
     const resolvedPriorContext = resolvedProperties?.priorContext;
     const hasPriorContext =
       resolvedPriorContext !== undefined && resolvedPriorContext !== "none";
@@ -381,8 +375,7 @@ export class CliIntegration extends HarnessIntegration {
       !!sections.skillContent ||
       sections.directFileRefs.length > 0 ||
       !!sections.excerptContent ||
-      hasPriorContext ||
-      !!criticalInstruction;
+      hasPriorContext;
     if (!hasExtras && this.isSimplePrompt(sections.userPromptText)) {
       return { promptWithInstruction: sections.userPromptText, tempFilePaths: [] };
     }
@@ -400,9 +393,7 @@ export class CliIntegration extends HarnessIntegration {
       priorContextItems.length > 0
         ? this.buildPriorContextXml(priorContextItems)
         : "";
-    const contextContent =
-      [priorContextBlock, criticalInstruction].filter(Boolean).join("\n\n") ||
-      undefined;
+    const contextContent = priorContextBlock || undefined;
 
     return this.createCategorizedPromptFiles(sections, workflowContext, contextContent);
   }
@@ -442,7 +433,7 @@ export class CliIntegration extends HarnessIntegration {
    *
    * @param sections Prompt sections from buildPromptSections()
    * @param workflowContext Optional workflow context for meaningful filenames
-   * @param contextContent Optional prior context + criticalInstruction block
+   * @param contextContent Optional prior context block
    * @returns Object with tempFilePaths (for cleanup) and promptWithInstruction
    */
   protected async createCategorizedPromptFiles(
@@ -497,8 +488,7 @@ export class CliIntegration extends HarnessIntegration {
       this.formatDirectFileRef(p)
     );
 
-    // Prior context: split on <step> boundaries so no file exceeds the token
-    // limit. <criticalInstruction> is appended to the last chunk.
+    // Prior context: split on <step> boundaries so no file exceeds the token limit.
     const contextRefs: string[] = [];
     if (contextContent) {
       const contextPaths = await tempMgr.createCategorySplitFiles(
@@ -584,41 +574,14 @@ export class CliIntegration extends HarnessIntegration {
     excerptRefs: string[],
     promptRefs: string[]
   ): string {
-    const clauses: string[] = [];
-
-    if (agentRefs.length > 0) {
-      clauses.push(`Following these agent instructions ${agentRefs.join(", ")}`);
-    }
-
-    if (skillRefs.length > 0) {
-      clauses.push(`using these available skills ${skillRefs.join(", ")}`);
-    }
-
-    if (directRefs.length > 0) {
-      clauses.push(`using these file references ${directRefs.join(", ")}`);
-    }
-
-    if (contextRefs.length > 0) {
-      clauses.push(
-        `with this prior conversation context ${contextRefs.join(", ")}`
-      );
-    }
-
-    if (excerptRefs.length > 0) {
-      const excerptPrefix = clauses.length === 0 ? "using" : "and";
-      clauses.push(
-        `${excerptPrefix} these attachment excerpts ${excerptRefs.join(", ")}`
-      );
-    }
-
-    const followClause = `follow the instructions in ${promptRefs.join(", ")}`;
-
-    if (clauses.length === 0) {
-      // Simple case: only a prompt file
-      return `Follow instructions in ${promptRefs.join(", ")} `;
-    }
-
-    return clauses.join(",\n") + `,\n${followClause} `;
+    return CliIntegration.formatCategorizedInstruction(
+      agentRefs,
+      skillRefs,
+      directRefs,
+      contextRefs,
+      excerptRefs,
+      promptRefs
+    );
   }
 
   // ============================================================

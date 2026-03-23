@@ -901,36 +901,16 @@ export class CopilotChatIntegration extends HarnessIntegration {
     excerptFileNames: string[],
     promptFileNames: string[]
   ): string {
-    const last = promptFileNames[promptFileNames.length - 1];
-    const promptTarget =
-      promptFileNames.length === 1
-        ? last
-        : `${promptFileNames.slice(0, -1).join(", ")}, and ${last}`;
-
-    const contextParts: string[] = [];
-    if (agentFileNames.length > 0) {
-      contextParts.push(
-        `following agent instructions in ${agentFileNames.join(", ")}`
-      );
-    }
-    if (skillFileNames.length > 0) {
-      contextParts.push(`using skills in ${skillFileNames.join(", ")}`);
-    }
-    if (contextFileNames.length > 0) {
-      contextParts.push(
-        `with prior conversation context in ${contextFileNames.join(", ")}`
-      );
-    }
-    if (excerptFileNames.length > 0) {
-      contextParts.push(
-        `with attachment excerpts in ${excerptFileNames.join(", ")}`
-      );
-    }
-
-    if (contextParts.length === 0) {
-      return `Follow instructions in ${promptTarget}`;
-    }
-    return `${contextParts.join(", ")}, follow the instructions in ${promptTarget}`;
+    // Direct files are attached via VS Code commands — not referenced in the text instruction
+    return CopilotChatIntegration.formatCategorizedInstruction(
+      agentFileNames,
+      skillFileNames,
+      [],
+      contextFileNames,
+      excerptFileNames,
+      promptFileNames,
+      ", "
+    );
   }
 
   /**
@@ -940,7 +920,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
    * File categories written:
    *   - .agent.prompt.md   — agent instructions (wrapped in <agentInstructions>)
    *   - .skills.prompt.md  — skill block
-   *   - .context.prompt.md — prior context (<priorContext> + <criticalInstruction>)
+   *   - .context.prompt.md — prior context (<priorContext>)
    *   - .excerpts.prompt.md — inline excerpt content (line-numbered)
    *   - .prompt.md         — user prompt text only
    *
@@ -1001,8 +981,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       await this.attachFileToChat(absPath);
     }
 
-    // 4. Prior context file(s) — split on <step> boundaries so no file exceeds
-    //    the token limit; <criticalInstruction> appended to the last chunk
+    // 4. Prior context file(s) — split on <step> boundaries so no file exceeds the token limit
     if (workflowContextText) {
       const contextPaths = await tempMgr.createCategorySplitFiles(
         splitter.splitContextContent(workflowContextText).chunks,
@@ -1027,7 +1006,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       excerptFileNames.push(...excerptPaths.map((p) => path.basename(p)));
     }
 
-    // 6. Prompt file(s) — user prompt text only (context is in its own file)
+    // 6. Prompt file(s) — user prompt text
     const { chunks: promptChunks } = splitter.split(sections.userPromptText);
     for (let i = 0; i < promptChunks.length; i++) {
       const partNumber = promptChunks.length > 1 ? i + 1 : undefined;
@@ -1147,13 +1126,10 @@ export class CopilotChatIntegration extends HarnessIntegration {
       return sections.userPromptText;
     }
 
-    // Build workflow context text (priorContext block + criticalInstruction)
     const rawContextText = workflowContext
       ? this.buildWorkflowContextText(
-          prompt,
           workflowContext.promptIndex,
           workflowContext.allPrompts,
-          workflowContext.resolvedProperties?.allowDynamicExtension,
           workflowContext.resolvedProperties?.priorContext,
           workflowContext.promptQueue?.getFinalPromptResponseTexts()
         )

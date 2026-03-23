@@ -1002,4 +1002,40 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.prompts[2].prompt, "p1");
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("mergeDiskPrompts — session ID preservation", () => {
+    test("should preserve in-memory _runtime.sessionId when MCP appends a new prompt", () => {
+      // Simulate: prompt[0] ran, session ID set in memory but not yet persisted to disk
+      queue.loadPrompts(createPromptFile([{ prompt: "prompt-0" }]));
+      (queue as any).state.prompts[0]._runtime = {
+        harness: "copilot-cli",
+        model: "claude-sonnet-4.5",
+        sessionId: "b52bceab-9c03-49b3-8324-4220292e9acb",
+        startedAt: 1000,
+        completedAt: 2000,
+      };
+
+      // Disk has both prompt-0 (without _runtime — not written yet) and a new MCP prompt
+      const diskPrompts: PromptItem[] = [
+        { prompt: "prompt-0" }, // matches memory, but no _runtime on disk copy
+        { prompt: "prompt-1-mcp" }, // new from MCP
+      ];
+
+      (queue as any).mergeDiskPrompts(diskPrompts);
+
+      const state = queue.getState();
+      assert.strictEqual(state.prompts.length, 2, "should have 2 prompts after merge");
+      assert.strictEqual(
+        state.prompts[0]._runtime?.sessionId,
+        "b52bceab-9c03-49b3-8324-4220292e9acb",
+        "session ID must be preserved from memory, not lost to disk replacement"
+      );
+      assert.strictEqual(
+        state.prompts[1]._runtime,
+        undefined,
+        "new MCP prompt should have no _runtime"
+      );
+    });
+  });
 });

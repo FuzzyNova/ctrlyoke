@@ -1,8 +1,5 @@
 import * as assert from "assert";
-import {
-  hashPromptContent,
-  shouldInjectExtensionInstructions,
-} from "../utils/PromptIdentity";
+import { hashPromptContent } from "../utils/PromptIdentity";
 import { PromptItem } from "../types/FlightPathTypes";
 
 suite("PromptIdentity Tests", () => {
@@ -83,26 +80,4 @@ suite("PromptIdentity Tests", () => {
     });
   });
 
-  suite("shouldInjectExtensionInstructions", () => {
-    test("should return true when resolved allowDynamicExtension is true", () => {
-      assert.strictEqual(
-        shouldInjectExtensionInstructions({ prompt: "First" }, true),
-        true
-      );
-    });
-
-    test("should return false when resolved allowDynamicExtension is false", () => {
-      assert.strictEqual(
-        shouldInjectExtensionInstructions({ prompt: "First" }, false),
-        false
-      );
-    });
-
-    test("should return false when resolved allowDynamicExtension is undefined", () => {
-      assert.strictEqual(
-        shouldInjectExtensionInstructions({ prompt: "Last" }),
-        false
-      );
-    });
-  });
 });

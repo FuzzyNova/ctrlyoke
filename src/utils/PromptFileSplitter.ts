@@ -382,11 +382,9 @@ export class PromptFileSplitter {
    * Groups <step>…</step> elements from the <priorContext> block greedily into
    * chunks that fit within maxTokensPerFile. A step that exceeds the limit by
    * itself is emitted as its own oversized chunk rather than being split
-   * mid-XML (XML must remain valid). The <criticalInstruction> block (if
-   * present) is appended to the last chunk.
+   * mid-XML (XML must remain valid).
    *
-   * Falls back to split() when no <priorContext> block is detected (e.g. the
-   * text is only a <criticalInstruction>).
+   * Falls back to split() when no <priorContext> block is detected.
    */
   splitContextContent(text: string): SplitResult {
     // Fast path: entire block fits in one file
@@ -418,12 +416,6 @@ export class PromptFileSplitter {
       return this.split(text);
     }
 
-    // Extract trailing <criticalInstruction> (appended to the last chunk)
-    const critMatch = text.match(
-      /\n*(<criticalInstruction>[\s\S]*<\/criticalInstruction>)\s*$/
-    );
-    const critSuffix = critMatch ? `\n\n${critMatch[1]}` : "";
-
     // Overhead of the <priorContext>…</priorContext> wrapper per chunk
     const wrapperTokens = this.countTokens("<priorContext>\n</priorContext>");
 
@@ -438,7 +430,7 @@ export class PromptFileSplitter {
         currentTokens + stepTokens > this.config.maxTokensPerFile &&
         currentSteps.length > 0
       ) {
-        // Flush current chunk (no critSuffix — only the last chunk gets it)
+        // Flush current chunk
         chunks.push(
           `<priorContext>\n${currentSteps.join("\n")}\n</priorContext>`
         );
@@ -451,10 +443,7 @@ export class PromptFileSplitter {
       }
     }
 
-    // Last chunk: append <criticalInstruction>
-    chunks.push(
-      `<priorContext>\n${currentSteps.join("\n")}\n</priorContext>${critSuffix}`
-    );
+    chunks.push(`<priorContext>\n${currentSteps.join("\n")}\n</priorContext>`);
 
     const tokenCounts = chunks.map((c) => this.countTokens(c));
     const lineCounts = chunks.map((c) => this.countLines(c));

@@ -1090,7 +1090,13 @@ export class PromptQueue {
 
     // CRITICAL: Use disk order as source of truth
     // This preserves the insertion positions chosen by MCP (e.g., "next" vs "end")
-    this.state.prompts = diskPrompts;
+    // But preserve in-memory state for existing prompts — specifically _runtime (session IDs,
+    // completedAt, etc.) that may not have been persisted to disk yet at the time of this merge.
+    this.state.prompts = diskPrompts.map((diskPrompt) => {
+      const hash = hashPromptContent(diskPrompt.prompt);
+      const memoryPrompt = memoryPromptMap.get(hash);
+      return memoryPrompt ?? diskPrompt;
+    });
 
     // Rebuild results array to match new prompt order
     // Preserve existing results where we have them, add pending for new prompts

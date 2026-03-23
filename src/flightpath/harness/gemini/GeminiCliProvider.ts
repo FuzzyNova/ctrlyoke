@@ -50,7 +50,7 @@ export class GeminiCliProvider implements ICliProvider {
   readonly logParser = new GeminiLogParser();
 
   async buildCliArgs(
-    prompt: PromptItem,
+    _prompt: PromptItem,
     isInteractive: boolean,
     extensionPath: string,
     workspaceRoot: string | undefined,
@@ -71,7 +71,6 @@ export class GeminiCliProvider implements ICliProvider {
 
     // MCP configuration (when dynamic queue extension is enabled)
     const mcpArgs = await CliProviderUtils.buildMcpConfigBlock(
-      prompt,
       workflowContext,
       workspaceRoot,
       extensionPath,
