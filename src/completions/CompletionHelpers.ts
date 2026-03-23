@@ -328,8 +328,15 @@ export async function getFileCompletions(
   const fileItems: PlainCompletionItem[] = [];
   const files = await getWorkspaceFiles();
 
+  // Strip leading quote from quoted-path filter (@"path with spaces/...) so
+  // the actual path fragment is matched against relative paths (which never
+  // contain a literal double-quote character).
+  const normalizedFilterText = filterText.startsWith('"')
+    ? filterText.slice(1)
+    : filterText;
+
   // Convert filter text to lowercase and normalize path separators
-  const filter = filterText.toLowerCase().replace(/\\/g, "/");
+  const filter = normalizedFilterText.toLowerCase().replace(/\\/g, "/");
 
   // Track unique directories we've seen
   const directories = new Set<string>();

@@ -253,19 +253,52 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // Custom completions source
   const customCompletions = useCallback(
     (context: any): Promise<CompletionResult | null> | null => {
-      // Match @ or # patterns for completions.
-      // Supports both plain paths (@src/file.ts) and quoted paths (@"path with spaces/file.ts").
-      // Quoted form: @" followed by anything except a closing quote.
-      // Plain form: @ followed by non-whitespace path characters.
-      const before = context.matchBefore(
-        /@"[^"]*|@[a-zA-Z0-9_/.-]*|#"[^"]*|#[a-zA-Z0-9_/:.-]*|~[a-zA-Z0-9:_]*/
-      );
+      // Use lastIndexOf to find the rightmost trigger character, mirroring
+      // PromptCompletionProvider's approach. Using matchBefore with @"[^"]* was
+      // buggy: when the prompt contained a literal "@" (e.g. `"@"`), the pattern
+      // would match from that @" all the way to the cursor (since [^"]* greedily
+      // consumes everything that isn't a closing quote), swallowing any real
+      // @path trigger typed later on the same line.
+      const lineObj = context.state.doc.lineAt(context.pos);
+      const textBefore = lineObj.text.slice(0, context.pos - lineObj.from);
 
-      if (!before) return null;
-      if (before.from === before.to && !context.explicit) return null;
+      const lastAtIndex = textBefore.lastIndexOf("@");
+      const lastHashIndex = textBefore.lastIndexOf("#");
+      const lastTildeIndex = textBefore.lastIndexOf("~");
 
-      const trigger = before.text[0]; // @ or #
-      const from = before.from;
+      const maxIndex = Math.max(lastAtIndex, lastHashIndex, lastTildeIndex);
+      if (maxIndex === -1) return null;
+
+      let trigger: string;
+      let afterTrigger: string;
+
+      if (maxIndex === lastAtIndex) {
+        trigger = "@";
+        afterTrigger = textBefore.slice(lastAtIndex + 1);
+      } else if (maxIndex === lastHashIndex) {
+        trigger = "#";
+        afterTrigger = textBefore.slice(lastHashIndex + 1);
+      } else {
+        trigger = "~";
+        afterTrigger = textBefore.slice(lastTildeIndex + 1);
+      }
+
+      // For @: allow spaces inside a quoted path (@"path with spaces/..."),
+      // otherwise bail out if there's a space (no partial match mid-sentence).
+      const isInsideQuotedPath =
+        trigger === "@" &&
+        afterTrigger.startsWith('"') &&
+        !afterTrigger.slice(1).includes('"');
+
+      if (afterTrigger.includes(" ") && !isInsideQuotedPath) return null;
+
+      // For # and ~: validate character class (neither supports quoted paths)
+      if (trigger === "#" && !/^[a-zA-Z0-9_/:.-]*$/.test(afterTrigger)) return null;
+      if (trigger === "~" && !/^[a-zA-Z0-9:_]*$/.test(afterTrigger)) return null;
+
+      const from = lineObj.from + maxIndex; // absolute position of trigger char
+
+      if (from === context.pos && !context.explicit) return null;
 
       // Assign a sequence number so stale responses can be discarded
       const seq = ++completionSeqRef.current;
@@ -282,7 +315,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         vscode.postMessage({
           type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
           trigger,
-          prefix: before.text,
+          prefix: trigger + afterTrigger,
           position: from,
           seq,
         });
