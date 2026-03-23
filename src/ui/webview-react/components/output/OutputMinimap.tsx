@@ -266,6 +266,8 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
 
             // Expanded: per-run color strips matching VS Code's diff minimap style.
             // Each run gets a proportional slice of the block height; context = transparent.
+            // The overlay height is DOM-measured so colored bands are proportional to
+            // changed line counts relative to total lines shown (including context).
             let background: string;
             if (block.runs.length > 0) {
               const totalRunLines = block.runs.reduce((s, r) => s + r.count, 0);

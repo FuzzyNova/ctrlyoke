@@ -4,7 +4,7 @@ import { useUiStore } from "@store/uiStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { CliOutput, StatusMessage } from "../output";
 import { PanelBar, RunSelector } from "../shared";
-import { generateMarkdownExport, formatTime } from "@utils/outputUtils";
+import { generateMarkdownExport, formatTime, generateDiffLines } from "@utils/outputUtils";
 import type {
   CliOutput as CliOutputType,
   CliEvent,
@@ -473,12 +473,33 @@ export const OutputSection: React.FC = () => {
         return { added, removed, runs };
       }
       if (data.oldContent && data.newContent) {
-        // No hunk data — rough estimate, no run sequence available
-        return {
-          added: data.newContent.split("\n").length,
-          removed: data.oldContent.split("\n").length,
-          runs: [],
+        // No structuredPatch — compute runs from the same diff algorithm used
+        // by DiffView so the minimap gradient matches the DOM rendering exactly.
+        let added = 0;
+        let removed = 0;
+        const runs: DiffRun[] = [];
+        let currentType: DiffRun["type"] | null = null;
+        let currentCount = 0;
+
+        const flushRun = () => {
+          if (currentType !== null && currentCount > 0) {
+            runs.push({ type: currentType, count: currentCount });
+          }
         };
+
+        for (const line of generateDiffLines(data.oldContent, data.newContent)) {
+          if (line.type === "added") added++;
+          else if (line.type === "removed") removed++;
+          if (line.type === currentType) {
+            currentCount++;
+          } else {
+            flushRun();
+            currentType = line.type;
+            currentCount = 1;
+          }
+        }
+        flushRun();
+        return { added, removed, runs };
       }
       return { added: 0, removed: 0, runs: [] };
     }

@@ -127,13 +127,6 @@ export class CliIntegration extends HarnessIntegration {
   /** Actual prompt text sent to CLI (may be file reference if using temp files) */
   protected actualPromptSent?: string;
 
-  /**
-   * Leading slash command extracted from the original user prompt (e.g., "/handoff").
-   * Set in sendPrompt() and consumed by execute methods to prepend the slash command
-   * to temp file reference instructions, making the harness treat it as a top-level command.
-   */
-  private currentSlashCommandPrefix: string | undefined;
-
   // NOTE: currentProcess field removed — the child process lives in processManager,
   // not on this class. See processManager.isActive() for process state.
 
@@ -334,78 +327,84 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   // ============================================================
-  // PROMPT FILE CREATION & MANAGEMENT
+  // PROMPT PREPARATION
   // ============================================================
 
   /**
-   * Create temp file(s) for the prompt and return file reference instruction.
+   * Build prompt sections and create all necessary temp files in one step.
+   * Returns the prompt argument to pass to the CLI and the paths to clean up.
    *
-   * For large prompts (>20K tokens or >1800 lines), splits into multiple files
-   * with decimal notation (e.g., prompt-1.1.md, prompt-1.2.md, prompt-1.3.md).
+   * Fast path: if the prompt is short, shell-safe, and has no attachments,
+   * agent, skills, prior context, or critical instruction, returns the raw
+   * text directly with no temp files (no disk I/O).
    *
-   * Returns both temp file paths (for cleanup) and instruction prompt that
-   * references all files.
+   * Otherwise: calls buildPromptSections() (expandContextSplit) and
+   * createCategorizedPromptFiles() to produce named per-category temp files
+   * with a structured reference instruction.
    *
-   * @param promptText The full prompt text to write
-   * @param workflowContext Optional workflow context for meaningful filename
-   * @returns Object with tempFilePaths array and promptWithInstruction
+   * @param prompt Prompt item to prepare
+   * @param workflowContext Workflow execution context
+   * @param resolvedProperties Resolved execution properties (agent, skills, etc.)
+   * @param resolvedSessionId Used to determine whether to omit agent/skills on resume
+   * @param finalPromptResponseTexts Prior finalPrompt response texts for context injection
    */
-  protected async createPromptFileWithReference(
-    promptText: string,
-    workflowContext?: WorkflowContext
+  private async buildAndPreparePrompt(
+    prompt: PromptItem,
+    workflowContext: WorkflowContext | undefined,
+    resolvedProperties: ResolvedProperties | undefined,
+    resolvedSessionId: string | undefined,
+    finalPromptResponseTexts?: string[]
   ): Promise<PromptFileResult> {
-    const { tempFilePaths, relativePaths } = await this.createTempPromptFiles(
-      promptText,
-      workflowContext?.filePath,
-      workflowContext ? workflowContext.promptIndex + 1 : undefined
+    const omitAgentsAndSkills =
+      !!resolvedSessionId && ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume();
+    const sections = await this.buildPromptSections(
+      prompt,
+      omitAgentsAndSkills ? undefined : resolvedProperties?.agent,
+      omitAgentsAndSkills ? undefined : resolvedProperties?.skills
     );
 
-    // Format references per provider convention. Default is "@path" (most CLIs); override via formatFileReference().
-    const fileReferences = relativePaths.map(
-      (rp) => this.provider.formatFileReference?.(rp) ?? `@${rp}`
+    const promptIndex = workflowContext?.promptIndex ?? 0;
+    const allPrompts = workflowContext?.allPrompts ?? [prompt];
+    const criticalInstruction = this.buildCriticalInstruction(
+      prompt,
+      promptIndex,
+      allPrompts,
+      resolvedProperties?.allowDynamicExtension
     );
+    const resolvedPriorContext = resolvedProperties?.priorContext;
+    const hasPriorContext =
+      resolvedPriorContext !== undefined && resolvedPriorContext !== "none";
 
-    return {
-      tempFilePaths,
-      promptWithInstruction: this.formatMultipleFileReferences(fileReferences),
-    };
-  }
-
-  /**
-   * Format multiple file references into instructional prompt
-   * Uses natural language formatting: "file1, file2, and file3"
-   *
-   * @param fileRefs Array of file references (already formatted with @ prefix if needed)
-   * @returns Instruction prompt with trailing space
-   */
-  private formatMultipleFileReferences(fileRefs: string[]): string {
-    if (fileRefs.length === 1) {
-      return `Follow instructions in ${fileRefs[0]} `;
+    // Fast path: no extras + short shell-safe text → skip file I/O entirely
+    const hasExtras =
+      !!sections.agentContent ||
+      !!sections.skillContent ||
+      sections.directFileRefs.length > 0 ||
+      !!sections.excerptContent ||
+      hasPriorContext ||
+      !!criticalInstruction;
+    if (!hasExtras && this.isSimplePrompt(sections.userPromptText)) {
+      return { promptWithInstruction: sections.userPromptText, tempFilePaths: [] };
     }
 
-    if (fileRefs.length === 2) {
-      return `Follow instructions in ${fileRefs[0]} and ${fileRefs[1]} `;
-    }
+    // Categorized path: write per-category temp files, return structured reference instruction
+    const priorContextItems = hasPriorContext
+      ? this.gatherPriorContextItems(
+          resolvedPriorContext!,
+          allPrompts,
+          promptIndex,
+          finalPromptResponseTexts ?? []
+        )
+      : [];
+    const priorContextBlock =
+      priorContextItems.length > 0
+        ? this.buildPriorContextXml(priorContextItems)
+        : "";
+    const contextContent =
+      [priorContextBlock, criticalInstruction].filter(Boolean).join("\n\n") ||
+      undefined;
 
-    // 3+ files: "file1, file2, and file3"
-    const allButLast = fileRefs.slice(0, -1).join(", ");
-    const last = fileRefs[fileRefs.length - 1];
-    return `Follow instructions in ${allButLast}, and ${last} `;
-  }
-
-  // ============================================================
-  // CATEGORIZED PROMPT FILE CREATION (opt-in)
-  // ============================================================
-
-  /**
-   * Whether this harness uses categorized prompt file splitting.
-   * When true, sendPrompt() routes through createCategorizedPromptFiles()
-   * instead of createPromptFileWithReference(). Override in provider-specific
-   * subclasses to enable the new behaviour per harness.
-   * Default: false (backward-compatible single-blob approach).
-   */
-  protected useCategorizedFileSplitting(): boolean {
-    return false;
+    return this.createCategorizedPromptFiles(sections, workflowContext, contextContent);
   }
 
   /**
@@ -702,19 +701,19 @@ export class CliIntegration extends HarnessIntegration {
    * No output is captured (no CliEvent[], no session ID extraction from logs).
    *
    * @param args Base CLI args (from buildCliArgs with isInteractive=true)
-   * @param promptText Prompt text (passed directly if simple, else via temp file)
-   * @param workflowContext Optional workflow context for temp file naming
+   * @param promptArgument Final prompt argument — direct text or file reference instruction
+   * @param tempFilePaths Temp files to clean up after execution (may be empty)
+   * @param workflowContext Optional workflow context
    * @param resolvedSessionId Resolved session ID (preserved across prompts)
    * @returns success flag and the original sessionId (no new ID extracted)
    */
   private async executeInteractiveCliProcess(
     args: string[],
-    promptText: string,
+    promptArgument: string,
+    tempFilePaths: string[],
     workflowContext: WorkflowContext | undefined,
     resolvedSessionId: string | undefined
   ): Promise<{ success: boolean; sessionId?: string }> {
-    let tempFilePaths: string[] = [];
-
     try {
       // Print a separator for multi-prompt workflows so users see the boundary
       if (workflowContext && workflowContext.promptIndex > 0) {
@@ -725,38 +724,18 @@ export class CliIntegration extends HarnessIntegration {
         Log.info("\n");
       }
 
-      // Use simple prompt directly when possible; fall back to temp file for
-      // complex prompts (isSimplePrompt enforces shell-safety for both paths).
-      let promptToSend: string;
-      if (this.isSimplePrompt(promptText)) {
-        promptToSend = promptText;
-        Log.debug(`📝 CLI interactive using direct prompt (fast path)`);
-      } else {
-        const { tempFilePaths: paths, promptWithInstruction } =
-          await this.createPromptFileWithReference(promptText, workflowContext);
-        tempFilePaths = paths;
-        // If the original prompt started with a slash command, prepend it so the
-        // harness executes it as a top-level command rather than a buried file instruction.
-        // e.g. "/handoff Follow instructions in @.flightpath/temp/prompt-1.md"
-        promptToSend = this.currentSlashCommandPrefix
-          ? `${this.currentSlashCommandPrefix} ${promptWithInstruction.trimStart()}`
-          : promptWithInstruction;
-        Log.debug(
-          `📁 CLI interactive using ${tempFilePaths.length} temp file(s) for prompt passing`
-        );
-      }
-      this.actualPromptSent = promptToSend;
+      this.actualPromptSent = promptArgument;
 
       // Build the interactive TUI command string
       const tuiCommand = this.provider.buildInteractiveTuiCommand(
         args,
-        promptToSend
+        promptArgument
       );
       const commandStr = String(tuiCommand).replace(/\s+/g, " ").trim();
       this.lastCliCommand = commandStr;
 
       this.promptReadyEmitter.fire({
-        fullPrompt: promptText,
+        fullPrompt: promptArgument,
         cliCommand: commandStr,
       });
 
@@ -859,7 +838,8 @@ export class CliIntegration extends HarnessIntegration {
    */
   protected async executeInTerminal(
     args: string[],
-    promptText: string,
+    promptArgument: string,
+    tempFilePaths: string[],
     workflowContext?: WorkflowContext,
     resolvedSessionId?: string
   ): Promise<{ success: boolean; sessionId?: string }> {
@@ -868,13 +848,12 @@ export class CliIntegration extends HarnessIntegration {
     if (!this.isVsCodeContext()) {
       return this.executeInteractiveCliProcess(
         args,
-        promptText,
+        promptArgument,
+        tempFilePaths,
         workflowContext,
         resolvedSessionId
       );
     }
-
-    let tempFilePaths: string[] = [];
 
     try {
       // Check if provider has log parser capability
@@ -921,13 +900,13 @@ export class CliIntegration extends HarnessIntegration {
       // hook writes {runId}-start.json, and waitForSessionStart watches only that file.
       // The ID travels to the hook via FLIGHTPATH_RUN_ID in the terminal's process env.
       const runId = crypto.randomUUID();
-      const startResult = await this.startCliProcess(
+      await this.startCliProcess(
         args,
-        promptText,
+        promptArgument,
+        tempFilePaths,
         workflowContext,
         { FLIGHTPATH_RUN_ID: runId }
       );
-      tempFilePaths = startResult.tempFilePaths; // Store for cleanup in finally
 
       // 3. Wait for SessionStart hook and discover log file
       let sessionId: string | null = resolvedSessionId || null;
@@ -940,7 +919,7 @@ export class CliIntegration extends HarnessIntegration {
         );
 
         const discovery = await this.discoverAndExtractSession(
-          promptText,
+          promptArgument,
           startTime,
           resolvedSessionId,
           "Log file not found for resumed session"
@@ -1012,7 +991,7 @@ export class CliIntegration extends HarnessIntegration {
         }
 
         const discovery = await this.discoverAndExtractSession(
-          promptText,
+          promptArgument,
           startTime,
           hookSessionId,
           hookSessionId
@@ -1041,7 +1020,7 @@ export class CliIntegration extends HarnessIntegration {
         Log.info("🔍 Discovering session log file (no SessionStart hook)...");
 
         const discovery = await this.discoverAndExtractSession(
-          promptText,
+          promptArgument,
           startTime,
           null,
           "Session log not found"
@@ -1090,51 +1069,21 @@ export class CliIntegration extends HarnessIntegration {
    */
   private async startCliProcess(
     args: string[],
-    promptText: string,
+    promptArgument: string,
+    tempFilePaths: string[],
     workflowContext?: WorkflowContext,
     env?: Record<string, string>
-  ): Promise<{
-    terminal: vscode.Terminal;
-    execution: vscode.TerminalShellExecution;
-    tempFilePaths: string[];
-  }> {
-    // Use simple prompt directly when possible; isSimplePrompt enforces shell-safety
-    // (only allows chars safe for embedding in a command string), so a true result
-    // means we can skip temp file I/O entirely. Complex or shell-unsafe prompts
-    // still go through file-based passing to eliminate injection risk.
-    let tempFilePaths: string[] = [];
-    let actualPromptText: string;
-
-    if (this.isSimplePrompt(promptText)) {
-      actualPromptText = promptText;
-      Log.debug(`📝 Interactive mode using direct prompt (fast path)`);
-    } else {
-      const result = await this.createPromptFileWithReference(
-        promptText,
-        workflowContext
-      );
-      tempFilePaths = result.tempFilePaths;
-      // If the original prompt started with a slash command, prepend it so the
-      // harness executes it as a top-level command rather than a buried file instruction.
-      // e.g. "/handoff Follow instructions in @.flightpath/temp/prompt-1.md"
-      actualPromptText = this.currentSlashCommandPrefix
-        ? `${this.currentSlashCommandPrefix} ${result.promptWithInstruction.trimStart()}`
-        : result.promptWithInstruction;
-      Log.debug(
-        `📁 Interactive mode using ${tempFilePaths.length} temp file(s) for safe prompt passing`
-      );
-    }
-
+  ): Promise<void> {
     const tuiCommand = this.provider.buildInteractiveTuiCommand(
       args,
-      actualPromptText
+      promptArgument
     );
 
     // Persist the actual TUI command (trimmed and collapsed to one line)
     this.lastCliCommand = String(tuiCommand).replace(/\s+/g, " ").trim();
 
     // Store the actual prompt sent for log discovery
-    this.actualPromptSent = actualPromptText;
+    this.actualPromptSent = promptArgument;
 
     // Update prompt number for terminal tab naming before creating the terminal
     if (workflowContext) {
@@ -1144,10 +1093,13 @@ export class CliIntegration extends HarnessIntegration {
 
     const terminal = await this.createFreshTerminal(env);
     Log.info(`🖥️ Opened terminal: "${this.buildTerminalName()}"`);
+    if (tempFilePaths.length > 0) {
+      Log.debug(`📁 Interactive mode using ${tempFilePaths.length} temp file(s)`);
+    }
     terminal.show();
 
     this.promptReadyEmitter.fire({
-      fullPrompt: promptText, // Always use original prompt for display
+      fullPrompt: promptArgument,
       cliCommand: this.lastCliCommand,
     });
 
@@ -1159,8 +1111,6 @@ export class CliIntegration extends HarnessIntegration {
     const shellIntegration = await this.waitForShellIntegration(terminal);
     const execution = shellIntegration.executeCommand(tuiCommand);
     this.currentExecution = execution;
-
-    return { terminal, execution, tempFilePaths };
   }
 
   /**
@@ -1241,51 +1191,24 @@ export class CliIntegration extends HarnessIntegration {
    */
   protected async executeHeadlessWithPromptFile(
     args: string[],
-    promptText: string,
-    workflowContext:
-      | {
-          promptIndex: number;
-          allPrompts: PromptItem[];
-          filePath?: string;
-        }
-      | undefined,
+    promptArgument: string,
+    tempFilePaths: string[],
     executeCallback: (result: {
       stdout: string;
       stderr: string;
       exitCode: number;
     }) => Promise<boolean>
   ): Promise<boolean> {
-    let tempFilePaths: string[] = [];
-
     try {
-      const useDirectPrompt = this.isSimplePrompt(promptText);
-      let headlessArgs: string[];
-      let displayCommand: string;
-      let promptArgument: string;
-
-      if (useDirectPrompt) {
-        // Simple prompt: pass directly on command line
-        promptArgument = promptText;
-        Log.info(`🚀 Starting headless mode with direct prompt (fast path)`);
-        Log.info(`📝 Prompt length: ${promptText.length} characters`);
+      if (tempFilePaths.length > 0) {
+        Log.info(`🚀 Starting headless mode with ${tempFilePaths.length} file(s)`);
       } else {
-        // Complex prompt: create temp file(s)
-        const { tempFilePaths: paths, promptWithInstruction } =
-          await this.createPromptFileWithReference(promptText, workflowContext);
-        tempFilePaths = paths;
-        // If the original prompt started with a slash command, prepend it so the
-        // harness executes it as a top-level command rather than a buried file instruction.
-        // e.g. "/handoff Follow instructions in @.flightpath/temp/prompt-1.md"
-        promptArgument = this.currentSlashCommandPrefix
-          ? `${this.currentSlashCommandPrefix} ${promptWithInstruction.trimStart()}`
-          : promptWithInstruction;
-        Log.info(`🚀 Starting headless mode with ${paths.length} file(s)`);
-        Log.info(`📝 Total prompt length: ${promptText.length} characters`);
+        Log.info(`🚀 Starting headless mode with direct prompt (fast path)`);
       }
 
-      // Build headless arguments (same method for both direct prompts and file references)
-      headlessArgs = this.provider.buildHeadlessArgs(args, promptArgument);
-      displayCommand = `${this.provider.config.name} ${headlessArgs.join(" ")}`;
+      // Build headless arguments
+      const headlessArgs = this.provider.buildHeadlessArgs(args, promptArgument);
+      const displayCommand = `${this.provider.config.name} ${headlessArgs.join(" ")}`;
 
       this.lastCliCommand = displayCommand;
 
@@ -1293,7 +1216,7 @@ export class CliIntegration extends HarnessIntegration {
       this.actualPromptSent = promptArgument;
 
       this.promptReadyEmitter.fire({
-        fullPrompt: promptText,
+        fullPrompt: promptArgument,
         cliCommand: displayCommand,
       });
 
@@ -1858,34 +1781,37 @@ export class CliIntegration extends HarnessIntegration {
       const slashCommand = this.extractLeadingSlashCommand(originalPromptText);
       const isPureSlashCommand =
         slashCommand !== null && /^\/\w+\s*$/.test(originalPromptText);
-      this.currentSlashCommandPrefix = slashCommand ?? undefined;
 
-      // Build prompt with optional dynamic queue instructions, agent, skills, and prior context
-      let finalPromptText: string;
+      // Build all temp files and the final prompt argument in one step.
+      // Pure slash commands bypass assembly entirely and are sent as-is.
+      let promptArgument: string;
+      let tempFilePaths: string[];
       if (isPureSlashCommand) {
-        // Pure slash command: send the original text directly, no instruction injection.
-        finalPromptText = originalPromptText;
+        promptArgument = originalPromptText;
+        tempFilePaths = [];
         Log.debug(
           `⚡ Slash command detected ("${slashCommand}") — skipping instruction assembly`
         );
       } else {
-        finalPromptText = await this.buildPromptWithInstructions(
+        const prepared = await this.buildAndPreparePrompt(
           prompt,
-          workflowContext?.promptIndex ?? 0,
-          workflowContext?.allPrompts ?? [prompt],
-          resolvedProperties?.allowDynamicExtension,
-          resolvedProperties?.agent,
-          resolvedProperties?.skills,
-          resolvedProperties?.priorContext,
-          workflowContext?.promptQueue?.getFinalPromptResponseTexts(),
-          !!resolvedSessionId
+          workflowContext,
+          resolvedProperties,
+          resolvedSessionId,
+          workflowContext?.promptQueue?.getFinalPromptResponseTexts()
         );
+        // Prepend slash command prefix for slash+body prompts so the harness
+        // executes it as a top-level command (e.g. "/handoff Follow instructions in @prompt.md")
+        promptArgument = slashCommand
+          ? `${slashCommand} ${prepared.promptWithInstruction.trimStart()}`
+          : prepared.promptWithInstruction;
+        tempFilePaths = prepared.tempFilePaths;
       }
 
-      this.lastFullPrompt = finalPromptText;
+      this.lastFullPrompt = promptArgument;
 
       // Log prompt
-      this.logPrompt(finalPromptText);
+      this.logPrompt(promptArgument);
 
       // Capture execution start time for session log discovery
       const executionStartTime = new Date();
@@ -1912,7 +1838,8 @@ export class CliIntegration extends HarnessIntegration {
       if (mode === CLI_EXECUTION_MODE.INTERACTIVE) {
         const result = await this.executeInTerminal(
           baseArgs,
-          finalPromptText,
+          promptArgument,
+          tempFilePaths,
           workflowContext,
           resolvedSessionId
         );
@@ -1933,7 +1860,7 @@ export class CliIntegration extends HarnessIntegration {
           this.provider.extractSessionIdFromLogs
         ) {
           const logSessionId = await this.provider.extractSessionIdFromLogs(
-            this.actualPromptSent || finalPromptText,
+            this.actualPromptSent || promptArgument,
             executionStartTime
           );
           if (logSessionId) {
@@ -1949,7 +1876,7 @@ export class CliIntegration extends HarnessIntegration {
 
         // Build the shared response callback (single source of truth)
         const responseCallback = this.buildHeadlessResponseCallback(
-          finalPromptText,
+          promptArgument,
           executionStartTime,
           resolvedSessionId,
           (id) => {
@@ -1958,15 +1885,12 @@ export class CliIntegration extends HarnessIntegration {
         );
 
         // Claude CLI error recovery wrapper (Phase 5)
-        const executeWithRecovery = async (
-          args: string[],
-          promptText: string
-        ): Promise<boolean> => {
+        const executeWithRecovery = async (args: string[]): Promise<boolean> => {
           try {
             return await this.executeHeadlessWithPromptFile(
               args,
-              promptText,
-              workflowContext,
+              promptArgument,
+              tempFilePaths,
               responseCallback
             );
           } catch (error) {
@@ -1996,7 +1920,7 @@ export class CliIntegration extends HarnessIntegration {
 
                 // Build retry callback with label
                 const retryCallback = this.buildHeadlessResponseCallback(
-                  finalPromptText,
+                  promptArgument,
                   executionStartTime,
                   undefined, // no session ID on retry
                   (id) => {
@@ -2005,11 +1929,11 @@ export class CliIntegration extends HarnessIntegration {
                   " (retry)"
                 );
 
-                // Retry with new args
+                // Retry with new args — reuse same promptArgument and tempFilePaths
                 return await this.executeHeadlessWithPromptFile(
                   argsWithoutResume,
-                  promptText,
-                  workflowContext,
+                  promptArgument,
+                  tempFilePaths,
                   retryCallback
                 );
               }
@@ -2019,7 +1943,7 @@ export class CliIntegration extends HarnessIntegration {
           }
         };
 
-        success = await executeWithRecovery(baseArgs, finalPromptText);
+        success = await executeWithRecovery(baseArgs);
       }
 
       // If we resumed an existing session and log discovery didn't run (or couldn't find the log),

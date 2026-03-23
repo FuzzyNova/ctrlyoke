@@ -16,3 +16,4 @@ package.json.backup
 .flightpath/.queue/
 .flightpath/logs/
 .flightpath/.history/
+.flightpath/capabilities.json
