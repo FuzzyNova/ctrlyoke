@@ -115,7 +115,7 @@ export class PtyProcessManager {
     const sessionId = `${options.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const ptyInstance = nodePty.spawn(options.command, options.args, {
-      name: "xterm-color",
+      name: "xterm-256color",
       cols: DEFAULT_COLS,
       rows: DEFAULT_ROWS,
       cwd: options.cwd,

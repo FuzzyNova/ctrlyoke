@@ -95,7 +95,12 @@ function readVsCodeTheme(): ITheme {
       get("--vscode-terminal-background") ?? get("--vscode-editor-background"),
     foreground:
       get("--vscode-terminal-foreground") ?? get("--vscode-editor-foreground"),
-    cursor: get("--vscode-terminalCursor-foreground"),
+    cursor:
+      get("--vscode-terminalCursor-foreground") ??
+      get("--vscode-terminal-foreground") ??
+      get("--vscode-editor-foreground"),
+    cursorAccent:
+      get("--vscode-terminal-background") ?? get("--vscode-editor-background"),
     selectionBackground: get("--vscode-terminal-selectionBackground"),
     black: get("--vscode-terminal-ansiBlack"),
     red: get("--vscode-terminal-ansiRed"),
