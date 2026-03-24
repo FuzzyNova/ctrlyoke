@@ -65,6 +65,7 @@ export interface GlobalSettings {
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
   priorContext: string;
+  workspaceRoot: string;
 }
 
 /**
@@ -185,6 +186,7 @@ const initialGlobalSettings: GlobalSettings = {
   confirmDeleteOperations: true,
   confirmResetOperations: true,
   priorContext: "none",
+  workspaceRoot: "",
 };
 
 const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {

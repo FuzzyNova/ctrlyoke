@@ -76,6 +76,9 @@ export interface RegistryEntry {
 // key: `${workflowId}:${sessionId}`
 const registry = new Map<string, RegistryEntry>();
 
+// Current terminal font size — set by App.tsx via updateFontSize(), used by create()
+let currentFontSize = 14;
+
 function makeKey(workflowId: string, sessionId: string): string {
   return `${workflowId}:${sessionId}`;
 }
@@ -88,8 +91,10 @@ function readVsCodeTheme(): ITheme {
   const style = getComputedStyle(document.documentElement);
   const get = (v: string) => style.getPropertyValue(v).trim() || undefined;
   return {
-    background: get("--vscode-terminal-background") ?? get("--vscode-editor-background"),
-    foreground: get("--vscode-terminal-foreground") ?? get("--vscode-editor-foreground"),
+    background:
+      get("--vscode-terminal-background") ?? get("--vscode-editor-background"),
+    foreground:
+      get("--vscode-terminal-foreground") ?? get("--vscode-editor-foreground"),
     cursor: get("--vscode-terminalCursor-foreground"),
     selectionBackground: get("--vscode-terminal-selectionBackground"),
     black: get("--vscode-terminal-ansiBlack"),
@@ -128,12 +133,20 @@ export const terminalRegistry = {
     ]);
 
     const theme = readVsCodeTheme();
+    // Read the resolved font family from VS Code CSS variables — xterm passes fontFamily
+    // directly to the canvas 2D context, which cannot resolve CSS var() expressions.
+    const fontFamily =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--vscode-editor-font-family")
+        .trim() || '"Cascadia Code", "Courier New", monospace';
     const term = new Terminal({
       theme,
       scrollback: 5000,
-      fontFamily: 'var(--vscode-editor-font-family, "Cascadia Code", Menlo, Monaco, "Courier New", monospace)',
-      fontSize: 13,
-      allowTransparency: true,
+      fontFamily,
+      fontSize: currentFontSize,
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      allowTransparency: false,
       cursorBlink: true,
     });
 
@@ -158,14 +171,24 @@ export const terminalRegistry = {
   /**
    * Attach an xterm Terminal to a DOM container.
    * Safe to call multiple times — opens the terminal on first call, moves DOM on subsequent calls.
+   * On first open, loads the WebGL addon for gap-free box-drawing and better TUI color fidelity.
    */
-  attach(workflowId: string, sessionId: string, container: HTMLElement): void {
+  async attach(workflowId: string, sessionId: string, container: HTMLElement): Promise<void> {
     const entry = registry.get(makeKey(workflowId, sessionId));
     if (!entry) return;
     if (!entry.term.element) {
-      // First render — open the terminal into the domEl
+      // First render — open the terminal into the domEl, then load WebGL renderer
       container.appendChild(entry.domEl);
       entry.term.open(entry.domEl);
+      try {
+        const { WebglAddon } = await import("@xterm/addon-webgl");
+        const webgl = new WebglAddon();
+        // Dispose gracefully if the WebGL context is lost (e.g. too many canvases open)
+        webgl.onContextLoss(() => webgl.dispose());
+        entry.term.loadAddon(webgl);
+      } catch {
+        // WebGL unavailable — fall back to canvas renderer silently
+      }
     } else {
       // Subsequent attach — move the existing DOM element back in
       container.appendChild(entry.domEl);
@@ -212,6 +235,22 @@ export const terminalRegistry = {
   updateTheme(theme: ITheme): void {
     for (const entry of registry.values()) {
       entry.term.options.theme = theme;
+    }
+  },
+
+  /**
+   * Update font size for all live registry entries and future creates.
+   * Called when the user adjusts the terminal font size stepper.
+   */
+  updateFontSize(size: number): void {
+    currentFontSize = size;
+    for (const entry of registry.values()) {
+      entry.term.options.fontSize = size;
+      try {
+        entry.fitAddon.fit();
+      } catch {
+        // Ignore — terminal may not be attached
+      }
     }
   },
 

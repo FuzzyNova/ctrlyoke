@@ -570,6 +570,12 @@ export class WorkflowOrchestrator {
           await this.getActiveInstance().autoLoadFromWorkingFile(
             workingFilePath
           );
+          // Tell the webview which instance UUID is now active. Without this,
+          // activeWorkflowId stays null and PTY terminal sessions spawned later
+          // (e.g. append-to-completed runs) are stored under the real UUID but
+          // TerminalView looks up sessions under null/"_shell" — no match.
+          const instance = this.getActiveInstance();
+          this.dashboardProvider?.notifyActiveWorkflowChanged(instance.id);
         }
       );
     }

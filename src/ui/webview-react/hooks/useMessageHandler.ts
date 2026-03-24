@@ -1124,6 +1124,11 @@ function createMessageHandlers(): MessageHandlerMap {
     const { workflowId, sessionId, stepName, kind } = message;
     if (!workflowId || !sessionId) return;
 
+    const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+    WebviewLog.debug(
+      `[TERMINAL_STARTED] workflowId=inst:${workflowId?.slice(0, 8)} sessionId=${sessionId?.slice(0, 8)} kind=${kind} activeWorkflowId=inst:${activeWorkflowId?.slice(0, 8) ?? "null"} match=${workflowId === activeWorkflowId}`
+    );
+
     const { addSession } = useTerminalStore.getState();
     addSession({
       id: sessionId,

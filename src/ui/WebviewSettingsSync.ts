@@ -558,6 +558,12 @@ export class WebviewSettingsSync {
         ConfigurationUtils.getAdditionalArgsForHarness(Harness.GeminiCli),
     };
 
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    const workspaceRoot =
+      workspaceFolders && workspaceFolders.length > 0
+        ? workspaceFolders[0].uri.fsPath
+        : "";
+
     return {
       harness,
       model,
@@ -573,6 +579,7 @@ export class WebviewSettingsSync {
         ConfigurationUtils.shouldConfirmDeleteOperations(),
       confirmResetOperations: ConfigurationUtils.shouldConfirmResetOperations(),
       priorContext: ConfigurationUtils.getPriorContext(),
+      workspaceRoot,
     };
   }
 

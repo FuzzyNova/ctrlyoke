@@ -1122,7 +1122,7 @@ export class CliIntegration extends HarnessIntegration {
         kind: "ai-cli",
       });
 
-      Log.info(`🖥️ PTY session spawned: "${stepName}" (${session.id.slice(0, 8)})`);
+      Log.info(`🖥️ PTY session spawned: "${stepName}" (${session.id.slice(0, 8)}) workflowId=inst:${workflowId.slice(0, 8)}`);
     } else {
       // Fallback: VS Code terminal path (when PtyProcessManager not initialized)
       const terminal = await this.createFreshTerminal(env);

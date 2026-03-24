@@ -42,8 +42,8 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       const entry = await terminalRegistry.create(workflowId, sessionId);
       if (cancelled || !containerRef.current) return;
 
-      // Attach the xterm DOM element into this container
-      terminalRegistry.attach(workflowId, sessionId, containerRef.current);
+      // Attach the xterm DOM element into this container (async: loads WebGL addon on first open)
+      await terminalRegistry.attach(workflowId, sessionId, containerRef.current);
 
       // Flush buffered output that arrived before this component mounted
       const { sessions, clearPendingOutput } = useTerminalStore.getState();

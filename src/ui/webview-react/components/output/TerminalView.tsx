@@ -69,7 +69,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       <div className="flex-1 min-w-0 h-full overflow-hidden bg-[var(--vscode-terminal-background,var(--vscode-editor-background))]">
         {sessions.length === 0 ? (
           <div className="flex items-center justify-center h-full text-description-fg text-[12px] select-none">
-            Waiting for interactive session…
+            Starting shell…
           </div>
         ) : (
           sessions.map((session) => (

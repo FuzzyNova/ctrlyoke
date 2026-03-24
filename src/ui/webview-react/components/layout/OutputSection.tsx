@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { CliOutput, StatusMessage } from "../output";
 import { PanelBar, RunSelector } from "../shared";
@@ -47,6 +48,9 @@ import type { TerminalSession } from "@store/terminalStore";
 // Stable empty fallback — avoids infinite re-render from `?? []` returning a new
 // array reference on every useSyncExternalStore snapshot call.
 const EMPTY_TERMINAL_SESSIONS: TerminalSession[] = [];
+
+// Stable workflowId used for standalone user shell sessions (no active workflow).
+const SHELL_WORKFLOW_ID = "_shell";
 import {
   buildUndoDialogInputForPrompt,
   computePromptUndoActions,
@@ -135,21 +139,24 @@ export const OutputSection: React.FC = () => {
   const collapseAllDiffs = useUiStore((s) => s.collapseAllDiffs);
   const outputFontSize = useUiStore((s) => s.outputFontSize);
   const setOutputFontSize = useUiStore((s) => s.setOutputFontSize);
+  const terminalFontSize = useUiStore((s) => s.terminalFontSize);
+  const setTerminalFontSize = useUiStore((s) => s.setTerminalFontSize);
 
   // Terminal tab state
+  const workspaceRoot = useSettingsStore((s) => s.globalSettings.workspaceRoot);
   const activeWorkflowId = useUiStore((s) => s.activeWorkflowId);
+  // Use a stable fallback key so standalone shells work even with no active workflow.
+  const terminalWorkflowId = activeWorkflowId ?? SHELL_WORKFLOW_ID;
   const activeOutputTab = useUiStore(
-    (s) => s.activeOutputTabs[activeWorkflowId ?? ""] ?? "output"
+    (s) => s.activeOutputTabs[terminalWorkflowId] ?? "output"
   );
   const setActiveOutputTab = useUiStore((s) => s.setActiveOutputTab);
   const terminalActiveWorkflows = useUiStore((s) => s.terminalActiveWorkflows);
   const terminalSessions = useTerminalStore(
-    (s) => s.sessions[activeWorkflowId ?? ""] ?? EMPTY_TERMINAL_SESSIONS
+    (s) => s.sessions[terminalWorkflowId] ?? EMPTY_TERMINAL_SESSIONS
   );
   const showTerminalTab = true;
-  const terminalSessionActive = activeWorkflowId
-    ? terminalActiveWorkflows.has(activeWorkflowId)
-    : false;
+  const terminalSessionActive = terminalActiveWorkflows.has(terminalWorkflowId);
 
   const outputRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -841,8 +848,7 @@ export const OutputSection: React.FC = () => {
                       : "text-description-fg hover:text-foreground"
                   }`}
                 onClick={() =>
-                  activeWorkflowId &&
-                  setActiveOutputTab(activeWorkflowId, "output")
+                  setActiveOutputTab(terminalWorkflowId, "output")
                 }
               >
                 Output
@@ -854,10 +860,17 @@ export const OutputSection: React.FC = () => {
                       ? "text-foreground border-b border-foreground"
                       : "text-description-fg hover:text-foreground"
                   }`}
-                onClick={() =>
-                  activeWorkflowId &&
-                  setActiveOutputTab(activeWorkflowId, "terminal")
-                }
+                onClick={() => {
+                  setActiveOutputTab(terminalWorkflowId, "terminal");
+                  if (terminalSessions.length === 0) {
+                    const vscode = getVsCodeApi();
+                    vscode?.postMessage({
+                      type: MESSAGE_TYPES.TERMINAL_SPAWN_SHELL,
+                      workflowId: terminalWorkflowId,
+                      cwd: "",
+                    });
+                  }
+                }}
               >
                 Terminal
                 {terminalSessionActive && (
@@ -871,8 +884,8 @@ export const OutputSection: React.FC = () => {
             </span>
           )}
 
-          {/* Font size stepper — Output tab only */}
-          {activeOutputTab === "output" && (
+          {/* Font size stepper — switches between output and terminal font sizes */}
+          {activeOutputTab === "output" ? (
             <div className="flex items-center ml-2">
               <button
                 className="icon-btn py-0 px-0.5"
@@ -894,7 +907,29 @@ export const OutputSection: React.FC = () => {
                 <i className="codicon codicon-sm codicon-add" />
               </button>
             </div>
-          )}
+          ) : activeOutputTab === "terminal" ? (
+            <div className="flex items-center ml-2">
+              <button
+                className="icon-btn py-0 px-0.5"
+                title="Decrease terminal font size"
+                onClick={() => setTerminalFontSize(terminalFontSize - 1)}
+                disabled={terminalFontSize <= 10}
+              >
+                <i className="codicon codicon-sm codicon-remove" />
+              </button>
+              <span className="text-[10px] text-description-fg tabular-nums w-[20px] text-center select-none">
+                {terminalFontSize}
+              </span>
+              <button
+                className="icon-btn py-0 px-0.5"
+                title="Increase terminal font size"
+                onClick={() => setTerminalFontSize(terminalFontSize + 1)}
+                disabled={terminalFontSize >= 24}
+              >
+                <i className="codicon codicon-sm codicon-add" />
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {/* Right: controls — Output tab only */}
@@ -965,8 +1000,8 @@ export const OutputSection: React.FC = () => {
       {activeOutputTab === "terminal" ? (
         <div className="flex flex-row min-h-0 flex-1">
           <TerminalView
-            workflowId={activeWorkflowId ?? ""}
-            workspaceRoot={undefined}
+            workflowId={terminalWorkflowId}
+            workspaceRoot={workspaceRoot || undefined}
           />
         </div>
       ) : (

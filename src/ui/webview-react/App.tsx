@@ -12,6 +12,7 @@ import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { WebviewLog } from "@utils/logger";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useUiStore } from "@store/uiStore";
+import { terminalRegistry } from "./terminalRegistry";
 import { MESSAGE_TYPES } from "@/types/messages";
 // uiStore uses vscode.getState()/setState() as its persist storage (see uiStore.ts),
 // so collapse states are restored synchronously before the first render.
@@ -171,6 +172,12 @@ function App() {
       `${outputFontSize}px`
     );
   }, [outputFontSize]);
+
+  // Sync terminal font size to all live xterm instances.
+  const terminalFontSize = useUiStore((s) => s.terminalFontSize);
+  useEffect(() => {
+    terminalRegistry.updateFontSize(terminalFontSize);
+  }, [terminalFontSize]);
 
   // Sync prompts/settings collapse state before paint.
   // Runs on initial desktop mount and when returning from mobile layout

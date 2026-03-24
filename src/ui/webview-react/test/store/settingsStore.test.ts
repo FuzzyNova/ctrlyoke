@@ -137,6 +137,7 @@ describe("setGlobalSettings", () => {
       confirmDeleteOperations: false,
       confirmResetOperations: false,
       priorContext: "none",
+      workspaceRoot: "",
     };
     useSettingsStore.getState().setGlobalSettings(settings);
     expect(useSettingsStore.getState().globalSettings.harness).toBe(HARNESS_IDS.CLAUDE_CLI);
