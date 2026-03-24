@@ -311,12 +311,15 @@ export class PropertyResolver {
     workflow: PromptFile
   ): string | number | undefined {
     // 1. Prompt-level override (highest priority)
-    if (prompt.sessionId !== undefined) {
+    // Empty string is treated as "not set" (consistent with agent/additionalArgs resolution)
+    if (prompt.sessionId !== undefined && prompt.sessionId !== "") {
       return prompt.sessionId;
     }
 
     // 2. Workflow-level default
-    if (workflow.sessionId !== undefined) {
+    // Empty string is treated as "not set" — the working file writes "" as the default
+    // when no sessionId is specified, and that should fall through to auto-resume logic
+    if (workflow.sessionId !== undefined && workflow.sessionId !== "") {
       return workflow.sessionId;
     }
 

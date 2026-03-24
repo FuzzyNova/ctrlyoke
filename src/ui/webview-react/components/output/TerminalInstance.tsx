@@ -55,8 +55,8 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         clearPendingOutput(workflowId, sessionId);
       }
 
-      // Register onData for input routing (skip if session is frozen)
-      if (!entry.frozen) {
+      // Register onData for input routing (skip if session is frozen or already listening)
+      if (!entry.frozen && !entry.onDataDisposable) {
         entry.onDataDisposable = entry.term.onData((input) => {
           sendMessage(MESSAGE_TYPES.TERMINAL_INPUT, { workflowId, sessionId, data: input });
           // Ad-hoc prompt capture for ai-cli sessions
@@ -90,6 +90,12 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
 
     return () => {
       cancelled = true;
+      // Dispose onData listener so it isn't duplicated when the component remounts
+      const entry = terminalRegistry.get(workflowId, sessionId);
+      if (entry && !entry.frozen) {
+        entry.onDataDisposable?.dispose();
+        entry.onDataDisposable = undefined;
+      }
       // Detach xterm DOM element from this container (xterm survives in registry)
       terminalRegistry.detach(workflowId, sessionId);
       resizeObserverRef.current?.disconnect();

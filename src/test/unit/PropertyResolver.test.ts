@@ -362,6 +362,33 @@ suite("PropertyResolver Tests", () => {
       const resolved = PropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.sessionId, undefined);
     });
+
+    test("should return undefined when workflow sessionId is empty string", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        sessionId: "",
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.sessionId, undefined);
+    });
+
+    test("should return undefined when prompt sessionId is empty string", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        sessionId: "",
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        sessionId: "workflow-session-id", // Should not be used either
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.sessionId, undefined);
+    });
   });
 
   suite("full precedence chain", () => {
