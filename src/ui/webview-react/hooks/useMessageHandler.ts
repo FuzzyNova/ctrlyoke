@@ -1121,7 +1121,7 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   handlers[MESSAGE_TYPES.TERMINAL_STARTED] = (message: any) => {
-    const { workflowId, sessionId, stepName, kind } = message;
+    const { workflowId, sessionId, stepName, kind, promptNumber } = message;
     if (!workflowId || !sessionId) return;
 
     const activeWorkflowId = useUiStore.getState().activeWorkflowId;
@@ -1135,6 +1135,7 @@ function createMessageHandlers(): MessageHandlerMap {
       workflowId,
       stepName: stepName ?? "terminal",
       kind: kind ?? "ai-cli",
+      promptNumber,
       status: "running",
       pendingOutput: [],
     });

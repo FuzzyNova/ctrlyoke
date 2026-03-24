@@ -867,7 +867,7 @@ export const OutputSection: React.FC = () => {
                     vscode?.postMessage({
                       type: MESSAGE_TYPES.TERMINAL_SPAWN_SHELL,
                       workflowId: terminalWorkflowId,
-                      cwd: "",
+                      cwd: workspaceRoot || "",
                     });
                   }
                 }}
@@ -932,8 +932,25 @@ export const OutputSection: React.FC = () => {
           ) : null}
         </div>
 
-        {/* Right: controls — Output tab only */}
+        {/* Right: controls */}
         <div className="ml-auto flex items-center gap-2">
+          {activeOutputTab === "terminal" && (
+            <button
+              className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-description-fg hover:text-foreground transition-colors"
+              title="New Terminal"
+              onClick={() => {
+                const vscode = getVsCodeApi();
+                vscode?.postMessage({
+                  type: MESSAGE_TYPES.TERMINAL_SPAWN_SHELL,
+                  workflowId: terminalWorkflowId,
+                  cwd: workspaceRoot || "",
+                });
+              }}
+            >
+              <i className="codicon codicon-add text-[12px]" />
+              <span>New Terminal</span>
+            </button>
+          )}
           {activeOutputTab === "output" && (
             <>
               {availableRuns > 0 && (
@@ -999,10 +1016,7 @@ export const OutputSection: React.FC = () => {
       {/* Output Content: toggle between Output view and Terminal view */}
       {activeOutputTab === "terminal" ? (
         <div className="flex flex-row min-h-0 flex-1">
-          <TerminalView
-            workflowId={terminalWorkflowId}
-            workspaceRoot={workspaceRoot || undefined}
-          />
+          <TerminalView workflowId={terminalWorkflowId} />
         </div>
       ) : (
         <div className="flex flex-row min-h-0 flex-1">

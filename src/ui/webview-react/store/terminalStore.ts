@@ -7,6 +7,7 @@ export interface TerminalSession {
   workflowId: string;
   stepName: string;
   kind: SessionKind;
+  promptNumber?: number;
   status: "running" | "completed" | "failed";
   /** Chunks buffered before TerminalInstance mounts — flushed on mount */
   pendingOutput: string[];

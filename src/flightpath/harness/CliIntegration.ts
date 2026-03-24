@@ -1086,6 +1086,7 @@ export class CliIntegration extends HarnessIntegration {
         workflowId,
         stepName,
         kind: "ai-cli",
+        promptNumber: workflowContext ? workflowContext.promptIndex + 1 : undefined,
         command: shell,
         args: shellArgs,
         cwd,
@@ -1120,6 +1121,7 @@ export class CliIntegration extends HarnessIntegration {
         sessionId: session.id,
         stepName,
         kind: "ai-cli",
+        promptNumber: session.promptNumber,
       });
 
       Log.info(`🖥️ PTY session spawned: "${stepName}" (${session.id.slice(0, 8)}) workflowId=inst:${workflowId.slice(0, 8)}`);

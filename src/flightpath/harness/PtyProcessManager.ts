@@ -27,6 +27,7 @@ export class PtySession {
   readonly workflowId: string;
   readonly stepName: string;
   readonly kind: SessionKind;
+  readonly promptNumber?: number;
   readonly pty: IPty;
   status: "running" | "completed" | "failed";
 
@@ -39,12 +40,14 @@ export class PtySession {
     workflowId: string,
     stepName: string,
     kind: SessionKind,
-    ptyInstance: IPty
+    ptyInstance: IPty,
+    promptNumber?: number
   ) {
     this.id = id;
     this.workflowId = workflowId;
     this.stepName = stepName;
     this.kind = kind;
+    this.promptNumber = promptNumber;
     this.pty = ptyInstance;
     this.status = "running";
   }
@@ -75,6 +78,7 @@ export interface SpawnPtyOptions {
   workflowId: string;
   stepName: string;
   kind: SessionKind;
+  promptNumber?: number;
   command: string;
   args: string[];
   cwd: string;
@@ -123,7 +127,8 @@ export class PtyProcessManager {
       options.workflowId,
       options.stepName,
       options.kind,
-      ptyInstance
+      ptyInstance,
+      options.promptNumber
     );
 
     this.sessions.set(sessionId, session);

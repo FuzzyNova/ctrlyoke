@@ -355,10 +355,12 @@ export const SettingsPanel: React.FC<{
       }
       const checked = v === "yes";
       const updates: Partial<WorkflowProperties> = { resumeSession: checked };
-      // Clear session ID when disabling or when switching away from Final Prompt Session
+      // Clear session ID when disabling or when switching away from Final Prompt Session.
+      // Use "" instead of undefined so the value survives JSON serialization and the
+      // extension receives the clear instruction (undefined is stripped by JSON.stringify).
       if (!checked || workflowProperties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT) {
         setSessionIdInput("");
-        updates.sessionId = undefined;
+        updates.sessionId = "";
       }
       postWorkflowPropertiesUpdate(updates);
     },

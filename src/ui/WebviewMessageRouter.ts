@@ -111,6 +111,7 @@ export class WebviewMessageRouter {
             sessionId: session.id,
             stepName: session.stepName,
             kind: session.kind,
+            promptNumber: session.promptNumber,
           });
           // Flush reconnect buffer
           for (const chunk of session.reconnectBuffer) {
