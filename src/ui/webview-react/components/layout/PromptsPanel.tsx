@@ -40,6 +40,7 @@ import {
 } from "@dnd-kit/sortable";
 import { BoundaryBar } from "../prompts/BoundaryBar";
 import { ResetConfirmModal } from "../shared/ResetConfirmModal";
+import { triggerPanelAnimation } from "@utils/panelAnimation";
 
 type PromptItemComponentProps = React.ComponentProps<typeof PromptItem>;
 type SortableWrapperProps = Omit<
@@ -129,7 +130,8 @@ export const PromptsPanel: React.FC<{
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === RUNNER_IDS.CLI;
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
+    RUNNER_IDS.CLI;
   const { selectionTarget, selectPrompt, selectFinalPrompt, deselect } =
     useEditorStore();
   const { workflowProperties, globalSettings } = useSettingsStore();
@@ -312,7 +314,14 @@ export const PromptsPanel: React.FC<{
         }
       }
     },
-    [prompts, selectPrompt, cliOutputs, isViewingHistory, historyOutputs, isCLIManaged]
+    [
+      prompts,
+      selectPrompt,
+      cliOutputs,
+      isViewingHistory,
+      historyOutputs,
+      isCLIManaged,
+    ]
   );
 
   const handleFinalPromptSelect = useCallback(() => {
@@ -499,14 +508,18 @@ export const PromptsPanel: React.FC<{
   // IDs are stable absolute indices ("prompt-pending-N") so dnd-kit can track
   // items by identity across re-renders.
   const [sortableIds, setSortableIds] = useState<string[]>(() =>
-    prompts.slice(currentStep).map((_, i) => `prompt-pending-${currentStep + i}`)
+    prompts
+      .slice(currentStep)
+      .map((_, i) => `prompt-pending-${currentStep + i}`)
   );
 
   // Sync local IDs when prompts/currentStep change due to external events
   // (session load, set-position confirmed, etc.).
   useEffect(() => {
     setSortableIds(
-      prompts.slice(currentStep).map((_, i) => `prompt-pending-${currentStep + i}`)
+      prompts
+        .slice(currentStep)
+        .map((_, i) => `prompt-pending-${currentStep + i}`)
     );
   }, [prompts, currentStep]);
 
@@ -543,13 +556,18 @@ export const PromptsPanel: React.FC<{
     [sortableIds]
   );
 
+  function handleToggle() {
+    triggerPanelAnimation();
+    togglePromptsCollapse();
+  }
+
   if (promptsCollapsed) {
     return (
       <PanelBar
         orientation={panelBarOrientation}
         icon="list-unordered"
         title="Prompts"
-        onClick={togglePromptsCollapse}
+        onClick={handleToggle}
       />
     );
   }
@@ -560,11 +578,11 @@ export const PromptsPanel: React.FC<{
       <div
         ref={headerRef}
         className="flex items-center h-[30px] px-2 border-b border-panel-border bg-sidebar-bg flex-shrink-0 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
-        onClick={togglePromptsCollapse}
+        onClick={handleToggle}
         role="button"
         aria-label="Collapse prompts"
         tabIndex={0}
-        onKeyDown={(e) => e.key === "Enter" && togglePromptsCollapse()}
+        onKeyDown={(e) => e.key === "Enter" && handleToggle()}
       >
         <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
         <i className="codicon codicon-list-unordered text-[14px] ml-1" />
@@ -619,7 +637,11 @@ export const PromptsPanel: React.FC<{
             {(() => {
               const doneStepCount =
                 isViewingHistory && historyOutputs
-                  ? Math.min(currentStep, prompts.length, historyOutputs.stepCount)
+                  ? Math.min(
+                      currentStep,
+                      prompts.length,
+                      historyOutputs.stepCount
+                    )
                   : currentStep;
               return prompts.slice(0, doneStepCount).map((prompt, sliceIdx) => {
                 const index = sliceIdx;

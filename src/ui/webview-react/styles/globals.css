@@ -339,7 +339,6 @@ button .codicon {
   margin: 0.5em 0;
 }
 
-
 .markdown-text hr {
   border: none;
   border-top: 1px solid var(--vscode-panel-border);
@@ -367,7 +366,6 @@ button .codicon {
   );
 }
 
-
 /* ============================================================================
    Panel Collapse/Expand Animation
    ============================================================================
@@ -378,16 +376,19 @@ button .codicon {
    (className/style props go to the inner wrapper, not where flex-grow lives,
    so Tailwind transition utilities on Panel cannot animate collapse/expand.)
 
-   Disable transition while any separator in the group is actively dragged —
-   [data-separator] is set to "active" by the library during pointer drag —
-   so resize-by-drag remains instant and cursor-accurate.
-   ============================================================================ */
-[data-panel] {
-  transition: flex-grow 200ms ease-in-out;
-}
+   INTENTIONALLY off by default — this prevents:
+     - Flash/animation during initial panel mount
+     - Lag/jitter when the VS Code container itself is resized (window resize
+       changes flex layout immediately without delay)
+     - Race conditions where a resize makes a panel briefly cross the
+       collapse threshold while animation is still in progress
 
-[data-group]:has([data-separator="active"]) [data-panel] {
-  transition: none;
+   The fp-panels-animating class is added for ~250ms only when the user
+   explicitly clicks a collapse/expand button (see utils/panelAnimation.ts).
+   Drag resize needs no animation — the mouse movement IS the animation.
+   ============================================================================ */
+.fp-panels-animating [data-panel] {
+  transition: flex-grow 200ms ease-in-out;
 }
 
 /* ============================================================================

@@ -7,12 +7,19 @@ import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
-import { MESSAGE_TYPES, EXECUTION_MODES, SESSION_ID_SENTINELS, RUNNER_IDS, type PriorContext } from "../../types/messages";
+import {
+  MESSAGE_TYPES,
+  EXECUTION_MODES,
+  SESSION_ID_SENTINELS,
+  RUNNER_IDS,
+  type PriorContext,
+} from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
   getResumeSessionOptions,
 } from "../../types/dropdownNamespaces";
+import { triggerPanelAnimation } from "@utils/panelAnimation";
 import {
   PanelBar,
   IconToggleButton,
@@ -23,7 +30,11 @@ import {
   PriorContextSelect,
 } from "../shared";
 
-const BUTTON_STATE = { IDLE: "idle", SUCCESS: "success", FADING: "fading" } as const;
+const BUTTON_STATE = {
+  IDLE: "idle",
+  SUCCESS: "success",
+  FADING: "fading",
+} as const;
 type ButtonState = (typeof BUTTON_STATE)[keyof typeof BUTTON_STATE];
 
 /**
@@ -125,7 +136,8 @@ export const SettingsPanel: React.FC<{
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === RUNNER_IDS.CLI;
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
+    RUNNER_IDS.CLI;
   const {
     availableAgents,
     availableSkills,
@@ -350,7 +362,10 @@ export const SettingsPanel: React.FC<{
     (v: string) => {
       if (v === SESSION_ID_SENTINELS.FINAL_PROMPT) {
         setSessionIdInput(SESSION_ID_SENTINELS.FINAL_PROMPT);
-        postWorkflowPropertiesUpdate({ resumeSession: true, sessionId: SESSION_ID_SENTINELS.FINAL_PROMPT });
+        postWorkflowPropertiesUpdate({
+          resumeSession: true,
+          sessionId: SESSION_ID_SENTINELS.FINAL_PROMPT,
+        });
         return;
       }
       const checked = v === "yes";
@@ -358,7 +373,10 @@ export const SettingsPanel: React.FC<{
       // Clear session ID when disabling or when switching away from Final Prompt Session.
       // Use "" instead of undefined so the value survives JSON serialization and the
       // extension receives the clear instruction (undefined is stripped by JSON.stringify).
-      if (!checked || workflowProperties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT) {
+      if (
+        !checked ||
+        workflowProperties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT
+      ) {
         setSessionIdInput("");
         updates.sessionId = "";
       }
@@ -525,13 +543,18 @@ export const SettingsPanel: React.FC<{
   // RENDER
   // ============================================================================
 
+  function handleToggle() {
+    triggerPanelAnimation();
+    toggleSettingsCollapse();
+  }
+
   if (settingsCollapsed) {
     return (
       <PanelBar
         orientation={panelBarOrientation}
         icon="settings-gear"
         title="Workflow Properties"
-        onClick={toggleSettingsCollapse}
+        onClick={handleToggle}
       />
     );
   }
@@ -543,11 +566,11 @@ export const SettingsPanel: React.FC<{
       {/* Section Header - clickable to collapse */}
       <div
         className="flex items-center justify-between h-[30px] px-2 border-b border-panel-border cursor-pointer select-none"
-        onClick={toggleSettingsCollapse}
+        onClick={handleToggle}
         role="button"
         aria-label="Collapse workflow properties"
         tabIndex={0}
-        onKeyDown={(e) => e.key === "Enter" && toggleSettingsCollapse()}
+        onKeyDown={(e) => e.key === "Enter" && handleToggle()}
       >
         <div className="flex items-center gap-1 text-description-fg hover:text-foreground transition-colors">
           <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
@@ -772,11 +795,12 @@ export const SettingsPanel: React.FC<{
               <CustomSelect
                 id="settings-resume-session"
                 value={
-                  workflowProperties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT && effectiveResumeSession
+                  workflowProperties.sessionId ===
+                    SESSION_ID_SENTINELS.FINAL_PROMPT && effectiveResumeSession
                     ? SESSION_ID_SENTINELS.FINAL_PROMPT
                     : effectiveResumeSession
-                    ? "yes"
-                    : "no"
+                      ? "yes"
+                      : "no"
                 }
                 onChange={handleResumeSessionChange}
                 options={[...getResumeSessionOptions()]}
@@ -784,7 +808,9 @@ export const SettingsPanel: React.FC<{
               {/* Session ID input — visible only when resume session is enabled and not using Final Prompt Session */}
               <div
                 className={`transition-all duration-300 ${
-                  effectiveResumeSession && workflowProperties.sessionId !== SESSION_ID_SENTINELS.FINAL_PROMPT
+                  effectiveResumeSession &&
+                  workflowProperties.sessionId !==
+                    SESSION_ID_SENTINELS.FINAL_PROMPT
                     ? "max-h-[40px] opacity-100 mt-1"
                     : "max-h-0 opacity-0 overflow-hidden"
                 }`}
@@ -1032,7 +1058,9 @@ export const SettingsPanel: React.FC<{
         <IconToggleButton
           active={globalSettings.executionMode === EXECUTION_MODES.INTERACTIVE}
           onToggle={(active) =>
-            handleExecutionModeChange(active ? EXECUTION_MODES.INTERACTIVE : EXECUTION_MODES.HEADLESS)
+            handleExecutionModeChange(
+              active ? EXECUTION_MODES.INTERACTIVE : EXECUTION_MODES.HEADLESS
+            )
           }
           activeIcon="debug-console"
           inactiveIcon="terminal"

@@ -6,6 +6,7 @@ import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { PromptEditor } from "../editor/PromptEditor";
 import { PanelBar } from "../shared";
 import { FINAL_PROMPT_PHASES, RUNNER_IDS } from "../../types/messages";
+import { triggerPanelAnimation } from "@utils/panelAnimation";
 
 /**
  * EditorSection - Collapsible section containing the prompt editor
@@ -29,7 +30,8 @@ export const EditorSection: React.FC = () => {
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === RUNNER_IDS.CLI;
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
+    RUNNER_IDS.CLI;
 
   const isEditMode = selectionTarget.kind !== "newPrompt";
   const totalPrompts = prompts.length;
@@ -46,13 +48,18 @@ export const EditorSection: React.FC = () => {
     return "New Prompt";
   };
 
+  function handleToggle() {
+    triggerPanelAnimation();
+    toggleEditorCollapse();
+  }
+
   if (editorCollapsed) {
     return (
       <PanelBar
         orientation="horizontal"
         icon="edit"
         title="Editor"
-        onClick={toggleEditorCollapse}
+        onClick={handleToggle}
       />
     );
   }
@@ -68,11 +75,11 @@ export const EditorSection: React.FC = () => {
         {/* Left: Collapse trigger (chevron + icon + label) */}
         <div
           className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors flex-shrink-0"
-          onClick={toggleEditorCollapse}
+          onClick={handleToggle}
           role="button"
           aria-label="Collapse editor"
           tabIndex={0}
-          onKeyDown={(e) => e.key === "Enter" && toggleEditorCollapse()}
+          onKeyDown={(e) => e.key === "Enter" && handleToggle()}
         >
           <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
           <i className="codicon codicon-edit text-[14px]" />

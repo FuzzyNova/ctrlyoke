@@ -57,6 +57,7 @@ import {
   type UndoDialogInput,
 } from "../../utils/promptUndo";
 import type { UndoFileInstruction } from "../../types/messages";
+import { triggerPanelAnimation } from "@utils/panelAnimation";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
 
@@ -410,9 +411,9 @@ export const OutputSection: React.FC = () => {
       resizeObserver.disconnect();
       mutationObserver.disconnect();
     };
-  // activeOutputTab is included so a re-measure fires when switching back from
-  // the terminal tab — the output div is unmounted while terminal is active, so
-  // its DOM measurements become stale and must be refreshed on re-mount.
+    // activeOutputTab is included so a re-measure fires when switching back from
+    // the terminal tab — the output div is unmounted while terminal is active, so
+    // its DOM measurements become stale and must be refreshed on re-mount.
   }, [allMessages, stepsToRender, diffsCollapsed, activeOutputTab]);
 
   // Export handler
@@ -812,7 +813,10 @@ export const OutputSection: React.FC = () => {
         orientation="horizontal"
         icon="terminal"
         title="Output"
-        onClick={toggleOutputCollapse}
+        onClick={() => {
+          triggerPanelAnimation();
+          toggleOutputCollapse();
+        }}
       />
     );
   }
@@ -830,11 +834,17 @@ export const OutputSection: React.FC = () => {
           {/* Collapse affordance — chevron + icon only (narrower click target) */}
           <div
             className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
-            onClick={toggleOutputCollapse}
+            onClick={() => {
+              triggerPanelAnimation();
+              toggleOutputCollapse();
+            }}
             role="button"
             aria-label="Collapse output"
             tabIndex={0}
-            onKeyDown={(e) => e.key === "Enter" && toggleOutputCollapse()}
+            onKeyDown={(e) =>
+              e.key === "Enter" &&
+              (triggerPanelAnimation(), toggleOutputCollapse())
+            }
           >
             <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
             <i className="codicon codicon-terminal text-[14px]" />
@@ -850,9 +860,7 @@ export const OutputSection: React.FC = () => {
                       ? "text-foreground border-b border-foreground"
                       : "text-description-fg hover:text-foreground"
                   }`}
-                onClick={() =>
-                  setActiveOutputTab(terminalWorkflowId, "output")
-                }
+                onClick={() => setActiveOutputTab(terminalWorkflowId, "output")}
               >
                 Output
               </button>
