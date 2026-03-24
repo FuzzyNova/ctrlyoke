@@ -376,18 +376,34 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(resolved.sessionId, undefined);
     });
 
-    test("should return undefined when prompt sessionId is empty string", () => {
+    test("should return undefined when prompt sessionId is empty string and prompt overrides resumeSession", () => {
       const prompt: PromptItem = {
         prompt: "test",
         sessionId: "",
+        resumeSession: true, // prompt controls the resume tier, so its empty sessionId wins
       };
       const workflow: PromptFile = {
         prompts: [],
-        sessionId: "workflow-session-id", // Should not be used either
+        sessionId: "workflow-session-id", // should not be used when prompt owns resume tier
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.sessionId, undefined);
+    });
+
+    test("should fall through to workflow sessionId when prompt sessionId is empty but resumeSession is default", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        sessionId: "", // user cleared the field but did not override resumeSession
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        sessionId: "workflow-session-id",
+        resumeSession: true,
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.sessionId, "workflow-session-id");
     });
   });
 

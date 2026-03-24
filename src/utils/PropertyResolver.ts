@@ -310,15 +310,22 @@ export class PropertyResolver {
     prompt: PromptItem,
     workflow: PromptFile
   ): string | number | undefined {
-    // 1. Prompt-level override (highest priority)
-    // Empty string is treated as "not set" (consistent with agent/additionalArgs resolution)
+    // 1. Prompt-level override (non-empty) — always takes precedence.
     if (prompt.sessionId !== undefined && prompt.sessionId !== "") {
       return prompt.sessionId;
     }
 
-    // 2. Workflow-level default
+    // 2. Empty-string at the prompt level — only blocks inheritance when the prompt is
+    // also explicitly overriding resumeSession (i.e., it owns the resume tier).
+    // If resumeSession falls through to the workflow, so should the sessionId.
+    if (prompt.sessionId === "" && prompt.resumeSession !== undefined) {
+      return undefined;
+    }
+
+    // 3. Workflow-level default (reached when prompt.sessionId is undefined, or when
+    // prompt.sessionId is "" but prompt does not override resumeSession).
     // Empty string is treated as "not set" — the working file writes "" as the default
-    // when no sessionId is specified, and that should fall through to auto-resume logic
+    // when no sessionId is specified, and that should fall through to auto-resume logic.
     if (workflow.sessionId !== undefined && workflow.sessionId !== "") {
       return workflow.sessionId;
     }
