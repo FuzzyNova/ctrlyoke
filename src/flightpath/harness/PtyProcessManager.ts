@@ -1,5 +1,17 @@
-import * as pty from "node-pty";
+import type { IPty } from "node-pty";
 import { Log } from "../../utils/Log";
+
+type NodePtyModule = typeof import("node-pty");
+
+/** Lazy-load node-pty at spawn time; returns null if native binary is unavailable. */
+function loadNodePty(): NodePtyModule | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("node-pty") as NodePtyModule;
+  } catch {
+    return null;
+  }
+}
 
 export type SessionKind = "ai-cli" | "shell";
 
@@ -15,7 +27,7 @@ export class PtySession {
   readonly workflowId: string;
   readonly stepName: string;
   readonly kind: SessionKind;
-  readonly pty: pty.IPty;
+  readonly pty: IPty;
   status: "running" | "completed" | "failed";
 
   // Ring buffer for webview reconnection: recent output replayed when webview JS context is recreated
@@ -27,7 +39,7 @@ export class PtySession {
     workflowId: string,
     stepName: string,
     kind: SessionKind,
-    ptyInstance: pty.IPty
+    ptyInstance: IPty
   ) {
     this.id = id;
     this.workflowId = workflowId;
@@ -92,9 +104,13 @@ export class PtyProcessManager {
    * corrects dimensions immediately on mount.
    */
   spawnPty(options: SpawnPtyOptions): PtySession {
+    const nodePty = loadNodePty();
+    if (!nodePty) {
+      throw new Error("node-pty native module is not available on this platform");
+    }
     const sessionId = `${options.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    const ptyInstance = pty.spawn(options.command, options.args, {
+    const ptyInstance = nodePty.spawn(options.command, options.args, {
       name: "xterm-color",
       cols: DEFAULT_COLS,
       rows: DEFAULT_ROWS,

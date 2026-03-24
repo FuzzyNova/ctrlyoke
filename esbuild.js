@@ -181,7 +181,7 @@ async function main() {
     sourcesContent: false,
     platform: "node",
     outfile: "out/extension.js",
-    external: ["vscode"],
+    external: ["vscode", "node-pty"],
     logLevel: "silent",
     define: defineConstants,
     plugins: [
