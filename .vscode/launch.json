@@ -13,6 +13,17 @@
       "preLaunchTask": "npm: compile"
     },
     {
+      "name": "Run Extension (React Debug)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "${workspaceFolder}/flightpath-test.code-workspace"
+      ],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "npm: compile:react-debug"
+    },
+    {
       "name": "Run Extension (Production)",
       "type": "extensionHost",
       "request": "launch",

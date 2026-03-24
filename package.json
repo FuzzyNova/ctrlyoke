@@ -1110,6 +1110,8 @@
     "compile": "npm run compile:extension && npm run compile:webview",
     "compile:extension": "npm run typecheck:extension && node esbuild.js",
     "compile:webview": "npm run generate-custom-icons && npm run typecheck:webview && vite build --config src/ui/webview-react/vite.config.ts --mode development",
+    "compile:webview:react-debug": "npm run generate-custom-icons && vite build --config src/ui/webview-react/vite.config.ts --mode react-debug",
+    "compile:react-debug": "npm run compile:extension && npm run compile:webview:react-debug",
     "compile-tests": "tsc -p .",
     "typecheck": "npm-run-all typecheck:extension typecheck:webview",
     "typecheck:extension": "tsc --noEmit",

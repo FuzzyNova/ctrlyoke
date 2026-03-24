@@ -40,6 +40,13 @@ export default defineConfig(({ mode }) => ({
 
   root: path.resolve(__dirname),
 
+  // `vite build` forces process.env.NODE_ENV='production' in the bundle regardless of --mode,
+  // which makes React use its minified build (no full error messages). When building with
+  // --mode react-debug, override this so React uses its development build with full errors.
+  ...(mode === "react-debug"
+    ? { define: { "process.env.NODE_ENV": '"development"' } }
+    : {}),
+
   build: {
     outDir: path.resolve(__dirname, "../../../out/ui/webview-react"),
     emptyOutDir: true,

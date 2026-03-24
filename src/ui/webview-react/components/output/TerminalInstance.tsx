@@ -1,9 +1,13 @@
 import React, { useEffect, useRef } from "react";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { useTerminalStore } from "@store/terminalStore";
+import type { TerminalSession } from "@store/terminalStore";
 import { terminalRegistry } from "../../terminalRegistry";
 import { MESSAGE_TYPES } from "../../types/messages";
 import "@xterm/xterm/css/xterm.css";
+
+// Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
+const EMPTY_SESSIONS: TerminalSession[] = [];
 
 interface TerminalInstanceProps {
   workflowId: string;
@@ -119,7 +123,7 @@ const FrozenOverlay: React.FC<{ workflowId: string; sessionId: string }> = ({
   workflowId,
   sessionId,
 }) => {
-  const sessions = useTerminalStore((s) => s.sessions[workflowId] ?? []);
+  const sessions = useTerminalStore((s) => s.sessions[workflowId] ?? EMPTY_SESSIONS);
   const session = sessions.find((s) => s.id === sessionId);
   const isFrozen = session?.kind === "ai-cli" && session.status !== "running";
 

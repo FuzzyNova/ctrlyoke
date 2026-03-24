@@ -23,6 +23,11 @@ import { OutputMinimap, type MinimapStep, type MinimapDiffBlock, type DiffRun } 
 import { UndoChangesDialog } from "../output/UndoChangesDialog";
 import { TerminalView } from "../output/TerminalView";
 import { useTerminalStore } from "@store/terminalStore";
+import type { TerminalSession } from "@store/terminalStore";
+
+// Stable empty fallback — avoids infinite re-render from `?? []` returning a new
+// array reference on every useSyncExternalStore snapshot call.
+const EMPTY_TERMINAL_SESSIONS: TerminalSession[] = [];
 import {
   buildUndoDialogInputForPrompt,
   computePromptUndoActions,
@@ -118,7 +123,7 @@ export const OutputSection: React.FC = () => {
   const setActiveOutputTab = useUiStore((s) => s.setActiveOutputTab);
   const terminalActiveWorkflows = useUiStore((s) => s.terminalActiveWorkflows);
   const terminalSessions = useTerminalStore((s) =>
-    s.sessions[activeWorkflowId ?? ""] ?? []
+    s.sessions[activeWorkflowId ?? ""] ?? EMPTY_TERMINAL_SESSIONS
   );
   const showTerminalTab = terminalSessions.length > 0;
   const terminalSessionActive = activeWorkflowId

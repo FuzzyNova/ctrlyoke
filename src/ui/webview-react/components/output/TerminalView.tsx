@@ -6,6 +6,9 @@ import { MESSAGE_TYPES } from "../../types/messages";
 import { TerminalInstance } from "./TerminalInstance";
 import type { TerminalSession } from "@store/terminalStore";
 
+// Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
+const EMPTY_SESSIONS: TerminalSession[] = [];
+
 interface TerminalViewProps {
   workflowId: string;
   /** Absolute path to workspace root (for spawning shell sessions) */
@@ -26,7 +29,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   workflowId,
   workspaceRoot,
 }) => {
-  const sessions = useTerminalStore((s) => s.sessions[workflowId] ?? []);
+  const sessions = useTerminalStore((s) => s.sessions[workflowId] ?? EMPTY_SESSIONS);
   const activeSessionId = useTerminalStore(
     (s) => s.activeSessionIds[workflowId] ?? null
   );
