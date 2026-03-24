@@ -166,6 +166,8 @@ export interface WorkflowContext {
   promptIndex: number;
   allPrompts: PromptItem[];
   filePath?: string;
+  /** Workflow instance UUID — matches activeWorkflowId in the webview for PTY session keying. */
+  instanceId?: string;
   workflowFile?: PromptFile;
   promptQueue?: { getState(): QueueState }; // Minimal interface to avoid circular dependency with PromptQueue
 }

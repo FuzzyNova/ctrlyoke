@@ -52,6 +52,9 @@ export interface WorkflowExecutionContext {
   historyFilePath: string;
   workingFilePath?: string;
   instanceTag?: string;
+  /** Workflow instance UUID — used as the PTY workflowId so terminal sessions
+   *  are keyed by the same ID the webview uses for activeWorkflowId. */
+  instanceId?: string;
   onStatusMessage?: (
     stepIndex: number,
     message: string,
@@ -452,6 +455,7 @@ export class WorkflowExecutor {
         promptIndex: sendPromptIndex,
         allPrompts: state.prompts,
         filePath: context.currentPromptFilePath,
+        instanceId: context.instanceId,
         workingFilePath: context.workingFilePath,
         resolvedProperties,
         workflowFile,
@@ -847,6 +851,7 @@ export class WorkflowExecutor {
       promptIndex: number;
       allPrompts: PromptItem[];
       filePath?: string;
+      instanceId?: string;
       workingFilePath?: string;
       resolvedProperties?: ResolvedProperties;
       workflowFile?: PromptFile;
@@ -1070,6 +1075,7 @@ export class WorkflowExecutor {
           promptIndex: currentIndex,
           allPrompts: state.prompts,
           filePath: context.currentPromptFilePath,
+          instanceId: context.instanceId,
           workingFilePath: context.workingFilePath,
           resolvedProperties: { ...resolvedProperties, resumeSession: true },
           workflowFile,

@@ -1608,6 +1608,7 @@ export class WorkflowInstance {
       historyFilePath,
       workingFilePath: workingFilePath || undefined,
       instanceTag: `[inst:${this.id.slice(0, 8)}]`,
+      instanceId: this.id,
       outputHistoryManager: this.outputHistoryManager,
       getIntegrationForPrompt: (
         prompt: PromptItem,

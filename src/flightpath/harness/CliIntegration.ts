@@ -1069,7 +1069,9 @@ export class CliIntegration extends HarnessIntegration {
     const ptyManager = getPtyProcessManager();
     if (ptyManager) {
       // PTY path: spawn via node-pty and route I/O to webview
-      const workflowId = workflowContext?.filePath ?? this.workflowName ?? "unknown";
+      // Use the instance UUID so PTY sessions are keyed by the same ID the webview
+      // uses for activeWorkflowId. Fall back to filePath for ad-hoc (non-executor) calls.
+      const workflowId = workflowContext?.instanceId ?? workflowContext?.filePath ?? this.workflowName ?? "unknown";
       const stepName = workflowContext
         ? (workflowContext.allPrompts[workflowContext.promptIndex]?.name ??
            `Step ${workflowContext.promptIndex + 1}`)
@@ -1772,6 +1774,7 @@ export class CliIntegration extends HarnessIntegration {
       promptIndex: number;
       allPrompts: PromptItem[];
       filePath?: string;
+      instanceId?: string;
       workingFilePath?: string;
       resolvedProperties?: ResolvedProperties;
       workflowFile?: PromptFile;

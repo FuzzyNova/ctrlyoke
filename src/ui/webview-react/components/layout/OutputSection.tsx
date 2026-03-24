@@ -1,10 +1,20 @@
-import React, { useEffect, useRef, useMemo, useCallback, useState } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+  useState,
+} from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { CliOutput, StatusMessage } from "../output";
 import { PanelBar, RunSelector } from "../shared";
-import { generateMarkdownExport, formatTime, generateDiffLines } from "@utils/outputUtils";
+import {
+  generateMarkdownExport,
+  formatTime,
+  generateDiffLines,
+} from "@utils/outputUtils";
 import type {
   CliOutput as CliOutputType,
   CliEvent,
@@ -17,9 +27,18 @@ import type {
   UndoRecord,
   UndoExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
-import { MESSAGE_TYPES, EXECUTION_STATES, FINAL_PROMPT_PHASES } from "../../types/messages";
+import {
+  MESSAGE_TYPES,
+  EXECUTION_STATES,
+  FINAL_PROMPT_PHASES,
+} from "../../types/messages";
 import { CLI_EVENT_TYPES } from "../../types/cliEvents";
-import { OutputMinimap, type MinimapStep, type MinimapDiffBlock, type DiffRun } from "../output/OutputMinimap";
+import {
+  OutputMinimap,
+  type MinimapStep,
+  type MinimapDiffBlock,
+  type DiffRun,
+} from "../output/OutputMinimap";
 import { UndoChangesDialog } from "../output/UndoChangesDialog";
 import { TerminalView } from "../output/TerminalView";
 import { useTerminalStore } from "@store/terminalStore";
@@ -94,7 +113,9 @@ export const OutputSection: React.FC = () => {
   // streamingChunks changes on every token — keep it isolated so the
   // auto-scroll effect doesn't require rebuilding allMessages.
   const streamingChunks = useWorkflowStore((s) => s.streamingChunks);
-  const finalPromptStreamingChunks = useWorkflowStore((s) => s.finalPromptStreamingChunks);
+  const finalPromptStreamingChunks = useWorkflowStore(
+    (s) => s.finalPromptStreamingChunks
+  );
   const historyOutputs = useWorkflowStore((s) => s.historyOutputs);
   const workspaceSnapshots = useWorkflowStore((s) => s.workspaceSnapshots);
   const finalPromptWorkspaceSnapshots = useWorkflowStore(
@@ -117,15 +138,15 @@ export const OutputSection: React.FC = () => {
 
   // Terminal tab state
   const activeWorkflowId = useUiStore((s) => s.activeWorkflowId);
-  const activeOutputTab = useUiStore((s) =>
-    s.activeOutputTabs[activeWorkflowId ?? ""] ?? "output"
+  const activeOutputTab = useUiStore(
+    (s) => s.activeOutputTabs[activeWorkflowId ?? ""] ?? "output"
   );
   const setActiveOutputTab = useUiStore((s) => s.setActiveOutputTab);
   const terminalActiveWorkflows = useUiStore((s) => s.terminalActiveWorkflows);
-  const terminalSessions = useTerminalStore((s) =>
-    s.sessions[activeWorkflowId ?? ""] ?? EMPTY_TERMINAL_SESSIONS
+  const terminalSessions = useTerminalStore(
+    (s) => s.sessions[activeWorkflowId ?? ""] ?? EMPTY_TERMINAL_SESSIONS
   );
-  const showTerminalTab = terminalSessions.length > 0;
+  const showTerminalTab = true;
   const terminalSessionActive = activeWorkflowId
     ? terminalActiveWorkflows.has(activeWorkflowId)
     : false;
@@ -139,13 +160,16 @@ export const OutputSection: React.FC = () => {
   const [minimapScrollTop, setMinimapScrollTop] = useState(0);
 
   // Real pixel fractions for each step anchor (key → offsetTop / scrollHeight)
-  const [stepScrollFractions, setStepScrollFractions] = useState<Map<string, number>>(
-    new Map()
-  );
+  const [stepScrollFractions, setStepScrollFractions] = useState<
+    Map<string, number>
+  >(new Map());
 
   // DOM measurements for diff anchor elements (anchorId → position + collapse state)
   const [diffMeasurements, setDiffMeasurements] = useState<
-    Map<string, { startFraction: number; heightFraction: number; isCollapsed: boolean }>
+    Map<
+      string,
+      { startFraction: number; heightFraction: number; isCollapsed: boolean }
+    >
   >(new Map());
 
   // Shared prompt-level undo/redo dialog (owned here, triggered from minimap)
@@ -317,14 +341,20 @@ export const OutputSection: React.FC = () => {
       // Measure step anchor positions
       const fractions = new Map<string, number>();
       for (const step of stepsToRender) {
-        const kindSlug = step.target.kind === FINAL_PROMPT_PHASES.QUEUE ? "queue" : "final";
+        const kindSlug =
+          step.target.kind === FINAL_PROMPT_PHASES.QUEUE ? "queue" : "final";
         const anchor = document.getElementById(
           `output-step-${kindSlug}-${step.target.index}`
         );
         if (anchor) {
           const pixelPos =
-            anchor.getBoundingClientRect().top - containerTop + container.scrollTop;
-          fractions.set(`${step.target.kind}:${step.target.index}`, pixelPos / scrollHeight);
+            anchor.getBoundingClientRect().top -
+            containerTop +
+            container.scrollTop;
+          fractions.set(
+            `${step.target.kind}:${step.target.index}`,
+            pixelPos / scrollHeight
+          );
         }
       }
       setStepScrollFractions(fractions);
@@ -332,8 +362,12 @@ export const OutputSection: React.FC = () => {
       // Measure diff anchor elements so the minimap can render colored overlays.
       // data-diff-anchor divs wrap file-operation events in StructuredOutput and
       // reflect the actual rendered height (collapsed or expanded).
-      const diffAnchors = container.querySelectorAll<HTMLElement>("[data-diff-anchor]");
-      const newDiffMeasurements = new Map<string, { startFraction: number; heightFraction: number; isCollapsed: boolean }>();
+      const diffAnchors =
+        container.querySelectorAll<HTMLElement>("[data-diff-anchor]");
+      const newDiffMeasurements = new Map<
+        string,
+        { startFraction: number; heightFraction: number; isCollapsed: boolean }
+      >();
       diffAnchors.forEach((el) => {
         const pixelTop =
           el.getBoundingClientRect().top - containerTop + container.scrollTop;
@@ -341,7 +375,8 @@ export const OutputSection: React.FC = () => {
         // Fall back to the global diffsCollapsed default when the attribute isn't
         // stamped yet (e.g. before DiffView's first effect flush).
         const attrVal = el.getAttribute("data-diff-collapsed");
-        const isCollapsed = attrVal !== null ? attrVal === "true" : diffsCollapsed;
+        const isCollapsed =
+          attrVal !== null ? attrVal === "true" : diffsCollapsed;
         newDiffMeasurements.set(el.id, {
           startFraction: pixelTop / scrollHeight,
           heightFraction: el.offsetHeight / scrollHeight,
@@ -458,9 +493,11 @@ export const OutputSection: React.FC = () => {
    * runs array (for expanded VS Code-style minimap strips).
    * Runs are only populated when structuredPatch hunk data is available.
    */
-  function computeDiffStats(
-    event: CliEvent
-  ): { added: number; removed: number; runs: DiffRun[] } {
+  function computeDiffStats(event: CliEvent): {
+    added: number;
+    removed: number;
+    runs: DiffRun[];
+  } {
     if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
       const data = event.data as FileEditData;
       if (data.structuredPatch && data.structuredPatch.length > 0) {
@@ -479,7 +516,11 @@ export const OutputSection: React.FC = () => {
         for (const hunk of data.structuredPatch) {
           for (const line of hunk.lines) {
             const lineType: DiffRun["type"] =
-              line[0] === "+" ? "added" : line[0] === "-" ? "removed" : "context";
+              line[0] === "+"
+                ? "added"
+                : line[0] === "-"
+                  ? "removed"
+                  : "context";
             if (lineType === "added") added++;
             else if (lineType === "removed") removed++;
             if (lineType === currentType) {
@@ -509,7 +550,10 @@ export const OutputSection: React.FC = () => {
           }
         };
 
-        for (const line of generateDiffLines(data.oldContent, data.newContent)) {
+        for (const line of generateDiffLines(
+          data.oldContent,
+          data.newContent
+        )) {
           if (line.type === "added") added++;
           else if (line.type === "removed") removed++;
           if (line.type === currentType) {
@@ -528,7 +572,11 @@ export const OutputSection: React.FC = () => {
     if (event.type === CLI_EVENT_TYPES.FILE_WRITE) {
       const data = event.data as FileWriteData;
       const lines = data.content ? data.content.split("\n").length : 1;
-      return { added: lines, removed: 0, runs: [{ type: "added", count: lines }] };
+      return {
+        added: lines,
+        removed: 0,
+        runs: [{ type: "added", count: lines }],
+      };
     }
     if (event.type === CLI_EVENT_TYPES.FILE_DELETE) {
       return { added: 0, removed: 1, runs: [{ type: "removed", count: 1 }] };
@@ -573,7 +621,8 @@ export const OutputSection: React.FC = () => {
             event.type !== CLI_EVENT_TYPES.FILE_EDIT &&
             event.type !== CLI_EVENT_TYPES.FILE_WRITE &&
             event.type !== CLI_EVENT_TYPES.FILE_DELETE
-          ) return;
+          )
+            return;
           const anchorId = `${anchorPrefix}-e${eventIndex}`;
           const measurement = diffMeasurements.get(anchorId);
           if (!measurement || measurement.heightFraction < 0.0005) return;
@@ -593,19 +642,52 @@ export const OutputSection: React.FC = () => {
       // Skip undo actions while execution is active — scrollbar and diff overlays
       // are still rendered so the rail is usable during a running prompt.
       if (!allowUndoActions) {
-        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions: noActions, diffBlocks }];
+        return [
+          {
+            key,
+            kind,
+            stepIndex,
+            firstMessageIndex: firstIdx,
+            scrollFraction,
+            label,
+            undoActions: noActions,
+            diffBlocks,
+          },
+        ];
       }
 
       // Only the last CLI attempt gets undo/redo actions
       const lastCliIdx = lastCliIndexPerStep.get(key);
       if (lastCliIdx === undefined) {
-        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions: noActions, diffBlocks }];
+        return [
+          {
+            key,
+            kind,
+            stepIndex,
+            firstMessageIndex: firstIdx,
+            scrollFraction,
+            label,
+            undoActions: noActions,
+            diffBlocks,
+          },
+        ];
       }
 
       const lastMsg = allMessages[lastCliIdx];
       const lastOutput = lastMsg?.data as CliOutputType | undefined;
       if (!lastOutput || lastOutput.isStreaming) {
-        return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions: noActions, diffBlocks }];
+        return [
+          {
+            key,
+            kind,
+            stepIndex,
+            firstMessageIndex: firstIdx,
+            scrollFraction,
+            label,
+            undoActions: noActions,
+            diffBlocks,
+          },
+        ];
       }
 
       const targetKey = isFinalPrompt
@@ -661,7 +743,8 @@ export const OutputSection: React.FC = () => {
               label: actions.undo.label,
               onTrigger: () => {
                 const alreadyUndone =
-                  effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
+                  effectiveUndoRecord != null &&
+                  effectiveUndoRecord.isRedone !== true
                     ? effectiveUndoRecord.redoInstructions
                     : undefined;
                 const input = buildUndoDialogInputForPrompt(
@@ -683,9 +766,20 @@ export const OutputSection: React.FC = () => {
           : null,
       };
 
-      return [{ key, kind, stepIndex, firstMessageIndex: firstIdx, scrollFraction, label, undoActions, diffBlocks }];
+      return [
+        {
+          key,
+          kind,
+          stepIndex,
+          firstMessageIndex: firstIdx,
+          scrollFraction,
+          label,
+          undoActions,
+          diffBlocks,
+        },
+      ];
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     allowUndoActions,
     stepsToRender,
@@ -741,22 +835,28 @@ export const OutputSection: React.FC = () => {
             <div className="flex items-center ml-1">
               <button
                 className={`text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 transition-colors
-                  ${activeOutputTab === "output"
-                    ? "text-foreground border-b border-foreground"
-                    : "text-description-fg hover:text-foreground"}`}
+                  ${
+                    activeOutputTab === "output"
+                      ? "text-foreground border-b border-foreground"
+                      : "text-description-fg hover:text-foreground"
+                  }`}
                 onClick={() =>
-                  activeWorkflowId && setActiveOutputTab(activeWorkflowId, "output")
+                  activeWorkflowId &&
+                  setActiveOutputTab(activeWorkflowId, "output")
                 }
               >
                 Output
               </button>
               <button
                 className={`text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 flex items-center gap-1 transition-colors
-                  ${activeOutputTab === "terminal"
-                    ? "text-foreground border-b border-foreground"
-                    : "text-description-fg hover:text-foreground"}`}
+                  ${
+                    activeOutputTab === "terminal"
+                      ? "text-foreground border-b border-foreground"
+                      : "text-description-fg hover:text-foreground"
+                  }`}
                 onClick={() =>
-                  activeWorkflowId && setActiveOutputTab(activeWorkflowId, "terminal")
+                  activeWorkflowId &&
+                  setActiveOutputTab(activeWorkflowId, "terminal")
                 }
               >
                 Terminal
@@ -835,8 +935,12 @@ export const OutputSection: React.FC = () => {
               {hasOutput && (
                 <button
                   className="icon-btn py-0 px-2"
-                  title={anyDiffCollapsed ? "Expand all diffs" : "Collapse all diffs"}
-                  onClick={() => anyDiffCollapsed ? expandAllDiffs() : collapseAllDiffs()}
+                  title={
+                    anyDiffCollapsed ? "Expand all diffs" : "Collapse all diffs"
+                  }
+                  onClick={() =>
+                    anyDiffCollapsed ? expandAllDiffs() : collapseAllDiffs()
+                  }
                 >
                   <i
                     className={`codicon codicon-sm ${anyDiffCollapsed ? "codicon-diff" : "codicon-diff-ignored"}`}
@@ -867,142 +971,150 @@ export const OutputSection: React.FC = () => {
         </div>
       ) : (
         <div className="flex flex-row min-h-0 flex-1">
-        {/* Scrollable output */}
-        <div
-          ref={outputRef}
-          id="output-content"
-          className="font-mono text-[length:var(--fp-output-font-size-sm)] min-h-0 p-0 flex-1 overflow-y-auto scrollbar-hide"
-          onScroll={handleScroll}
-        >
-          {/* History banner: shown when viewing a historical run */}
-          {isViewingHistory && historyOutputs && (
-            <div className="px-3 py-2 text-[length:var(--fp-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border flex items-center justify-between flex-shrink-0">
-              <span>
-                Run {historyOutputs.runMetadata.runId} &middot;{" "}
-                {new Date(historyOutputs.runMetadata.startedAt).toLocaleString()}
-                {historyOutputs.runMetadata.completedAt
-                  ? " \u2713"
-                  : " (incomplete)"}
-              </span>
-              {executionState === EXECUTION_STATES.RUNNING && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    useWorkflowStore.getState().clearHistoryOutputs();
-                    useUiStore.getState().clearHistoryView();
-                  }}
-                  className="text-link-fg hover:underline focus:outline-none"
-                >
-                  Back to Live{" "}
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-bash-status-success animate-pulse align-middle" />
-                </button>
-              )}
-            </div>
-          )}
-          {!hasOutput ? (
-            <p className="text-center text-description-fg italic p-[var(--spacing-lg)]">
-              Output will appear here during execution
-            </p>
-          ) : (
-            allMessages.map((item, index) => {
-              const isFirstForStep =
-                firstIndexByStep.get(
-                  `${item.target.kind}:${item.target.index}`
-                ) === index;
-              if (item.type === "status") {
-                const statusData = item.data as OutputStatusMessage;
-                return (
-                  <React.Fragment key={`status-${index}`}>
-                    {isFirstForStep && (
-                      <div
-                        id={`output-step-${item.target.kind === FINAL_PROMPT_PHASES.QUEUE ? "queue" : "final"}-${item.target.index}`}
+          {/* Scrollable output */}
+          <div
+            ref={outputRef}
+            id="output-content"
+            className="font-mono text-[length:var(--fp-output-font-size-sm)] min-h-0 p-0 flex-1 overflow-y-auto scrollbar-hide"
+            onScroll={handleScroll}
+          >
+            {/* History banner: shown when viewing a historical run */}
+            {isViewingHistory && historyOutputs && (
+              <div className="px-3 py-2 text-[length:var(--fp-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border flex items-center justify-between flex-shrink-0">
+                <span>
+                  Run {historyOutputs.runMetadata.runId} &middot;{" "}
+                  {new Date(
+                    historyOutputs.runMetadata.startedAt
+                  ).toLocaleString()}
+                  {historyOutputs.runMetadata.completedAt
+                    ? " \u2713"
+                    : " (incomplete)"}
+                </span>
+                {executionState === EXECUTION_STATES.RUNNING && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      useWorkflowStore.getState().clearHistoryOutputs();
+                      useUiStore.getState().clearHistoryView();
+                    }}
+                    className="text-link-fg hover:underline focus:outline-none"
+                  >
+                    Back to Live{" "}
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-bash-status-success animate-pulse align-middle" />
+                  </button>
+                )}
+              </div>
+            )}
+            {!hasOutput ? (
+              <p className="text-center text-description-fg italic p-[var(--spacing-lg)]">
+                Output will appear here during execution
+              </p>
+            ) : (
+              allMessages.map((item, index) => {
+                const isFirstForStep =
+                  firstIndexByStep.get(
+                    `${item.target.kind}:${item.target.index}`
+                  ) === index;
+                if (item.type === "status") {
+                  const statusData = item.data as OutputStatusMessage;
+                  return (
+                    <React.Fragment key={`status-${index}`}>
+                      {isFirstForStep && (
+                        <div
+                          id={`output-step-${item.target.kind === FINAL_PROMPT_PHASES.QUEUE ? "queue" : "final"}-${item.target.index}`}
+                        />
+                      )}
+                      {isFirstForStep &&
+                        item.target.kind ===
+                          FINAL_PROMPT_PHASES.FINAL_PROMPT && (
+                          <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
+                            Final Prompt Loop {item.target.index + 1}
+                          </div>
+                        )}
+                      <StatusMessage
+                        message={statusData.message}
+                        severity={statusData.severity}
+                        timestamp={statusData.timestamp}
+                        timestampMs={statusData.timestampMs}
                       />
-                    )}
-                    {isFirstForStep && item.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT && (
-                      <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
-                        Final Prompt Loop {item.target.index + 1}
-                      </div>
-                    )}
-                    <StatusMessage
-                      message={statusData.message}
-                      severity={statusData.severity}
-                      timestamp={statusData.timestamp}
-                      timestampMs={statusData.timestampMs}
-                    />
-                  </React.Fragment>
-                );
-              } else {
-                const cliData = item.data as CliOutputType;
-                // Pass the streaming chunk for the active streaming step.
-                // This prop changes on every token, but React.memo on CliOutput
-                // ensures only the row with a non-empty chunk re-renders.
-                const streamingChunk =
-                  item.target.kind === FINAL_PROMPT_PHASES.QUEUE
-                    ? streamingChunks[item.target.index] || ""
-                    : finalPromptStreamingChunks[item.target.index] || "";
-                const stepSnapshot: WorkspaceSnapshot | undefined =
-                  isViewingHistory && historyOutputs
-                    ? item.target.kind === FINAL_PROMPT_PHASES.QUEUE
-                      ? historyOutputs.steps[item.target.index]?.workspaceSnapshot
-                      : historyOutputs.finalPromptOutputs?.[item.target.index]
-                          ?.workspaceSnapshot
-                    : undefined;
-                const stepUndoRecord: UndoRecord | undefined =
-                  isViewingHistory && historyOutputs
-                    ? item.target.kind === FINAL_PROMPT_PHASES.QUEUE
-                      ? historyOutputs.steps[item.target.index]?.undoRecord
-                      : historyOutputs.finalPromptOutputs?.[item.target.index]
-                          ?.undoRecord
-                    : undefined;
-                const stepKey = `${item.target.kind}:${item.target.index}`;
-                return (
-                  <React.Fragment key={`cli-${index}`}>
-                    {isFirstForStep && (
-                      <div
-                        id={`output-step-${item.target.kind === FINAL_PROMPT_PHASES.QUEUE ? "queue" : "final"}-${item.target.index}`}
+                    </React.Fragment>
+                  );
+                } else {
+                  const cliData = item.data as CliOutputType;
+                  // Pass the streaming chunk for the active streaming step.
+                  // This prop changes on every token, but React.memo on CliOutput
+                  // ensures only the row with a non-empty chunk re-renders.
+                  const streamingChunk =
+                    item.target.kind === FINAL_PROMPT_PHASES.QUEUE
+                      ? streamingChunks[item.target.index] || ""
+                      : finalPromptStreamingChunks[item.target.index] || "";
+                  const stepSnapshot: WorkspaceSnapshot | undefined =
+                    isViewingHistory && historyOutputs
+                      ? item.target.kind === FINAL_PROMPT_PHASES.QUEUE
+                        ? historyOutputs.steps[item.target.index]
+                            ?.workspaceSnapshot
+                        : historyOutputs.finalPromptOutputs?.[item.target.index]
+                            ?.workspaceSnapshot
+                      : undefined;
+                  const stepUndoRecord: UndoRecord | undefined =
+                    isViewingHistory && historyOutputs
+                      ? item.target.kind === FINAL_PROMPT_PHASES.QUEUE
+                        ? historyOutputs.steps[item.target.index]?.undoRecord
+                        : historyOutputs.finalPromptOutputs?.[item.target.index]
+                            ?.undoRecord
+                      : undefined;
+                  const stepKey = `${item.target.kind}:${item.target.index}`;
+                  return (
+                    <React.Fragment key={`cli-${index}`}>
+                      {isFirstForStep && (
+                        <div
+                          id={`output-step-${item.target.kind === FINAL_PROMPT_PHASES.QUEUE ? "queue" : "final"}-${item.target.index}`}
+                        />
+                      )}
+                      {isFirstForStep &&
+                        item.target.kind ===
+                          FINAL_PROMPT_PHASES.FINAL_PROMPT && (
+                          <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
+                            Final Prompt Loop {item.target.index + 1}
+                          </div>
+                        )}
+                      <CliOutput
+                        output={cliData}
+                        stepIndex={item.target.index}
+                        stepLabel={
+                          item.target.kind === FINAL_PROMPT_PHASES.QUEUE
+                            ? undefined
+                            : `Final Prompt Loop ${item.target.index + 1}`
+                        }
+                        attemptIndex={item.attemptIndex || 0}
+                        streamingChunk={streamingChunk}
+                        isExecutionActive={isExecutionActive}
+                        allowUndoActions={allowUndoActions}
+                        workspaceSnapshot={stepSnapshot}
+                        undoRecord={stepUndoRecord}
+                        allStepOutputs={
+                          lastCliIndexPerStep.get(stepKey) === index &&
+                          allowUndoActions
+                            ? stepOutputsMap.get(stepKey)
+                            : undefined
+                        }
                       />
-                    )}
-                    {isFirstForStep && item.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT && (
-                      <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
-                        Final Prompt Loop {item.target.index + 1}
-                      </div>
-                    )}
-                    <CliOutput
-                      output={cliData}
-                      stepIndex={item.target.index}
-                      stepLabel={
-                        item.target.kind === FINAL_PROMPT_PHASES.QUEUE
-                          ? undefined
-                          : `Final Prompt Loop ${item.target.index + 1}`
-                      }
-                      attemptIndex={item.attemptIndex || 0}
-                      streamingChunk={streamingChunk}
-                      isExecutionActive={isExecutionActive}
-                      allowUndoActions={allowUndoActions}
-                      workspaceSnapshot={stepSnapshot}
-                      undoRecord={stepUndoRecord}
-                      allStepOutputs={
-                        lastCliIndexPerStep.get(stepKey) === index && allowUndoActions
-                          ? stepOutputsMap.get(stepKey)
-                          : undefined
-                      }
-                    />
-                  </React.Fragment>
-                );
-              }
-            })
+                    </React.Fragment>
+                  );
+                }
+              })
+            )}
+          </div>
+
+          {/* Minimap rail */}
+          {hasOutput && (
+            <OutputMinimap
+              steps={minimapSteps}
+              scrollContainerRef={outputRef}
+              scrollTop={minimapScrollTop}
+            />
           )}
         </div>
-
-        {/* Minimap rail */}
-        {hasOutput && (
-          <OutputMinimap
-            steps={minimapSteps}
-            scrollContainerRef={outputRef}
-            scrollTop={minimapScrollTop}
-          />
-        )}
-      </div>
       )}
 
       {/* Shared prompt-level undo/redo dialog — triggered from minimap */}
