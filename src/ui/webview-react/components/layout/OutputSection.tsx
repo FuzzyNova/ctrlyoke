@@ -410,7 +410,10 @@ export const OutputSection: React.FC = () => {
       resizeObserver.disconnect();
       mutationObserver.disconnect();
     };
-  }, [allMessages, stepsToRender, diffsCollapsed]);
+  // activeOutputTab is included so a re-measure fires when switching back from
+  // the terminal tab — the output div is unmounted while terminal is active, so
+  // its DOM measurements become stale and must be refreshed on re-mount.
+  }, [allMessages, stepsToRender, diffsCollapsed, activeOutputTab]);
 
   // Export handler
   const handleExport = useCallback(() => {

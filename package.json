@@ -408,48 +408,47 @@
             "position"
           ]
         }
-      }
-    },
-    {
-      "name": "flightpath_capabilities",
-      "toolReferenceName": "flightpath_capabilities",
-      "displayName": "FlightPath Capabilities",
-      "modelDescription": "Get the available FlightPath harnesses and their supported models",
-      "canBeReferencedInPrompt": true,
-      "tags": [
-        "harness",
-        "model",
-        "capabilities"
-      ],
-      "inputSchema": {
-        "type": "object",
-        "properties": {}
-      }
-    },
-    {
-      "name": "flightpath_read_output",
-      "toolReferenceName": "flightpath_read_output",
-      "displayName": "FlightPath Read Output",
-      "modelDescription": "Read AI response output from completed prompts in the FlightPath workflow queue",
-      "canBeReferencedInPrompt": true,
-      "tags": [
-        "queue",
-        "output",
-        "workflow"
-      ],
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "indices": {
-            "type": "array",
-            "items": {
-              "type": "number"
-            },
-            "description": "Array of prompt indices to read output for (0-based). Empty array returns all outputs."
+      },
+      {
+        "name": "flightpath_capabilities",
+        "toolReferenceName": "flightpath_capabilities",
+        "displayName": "FlightPath Capabilities",
+        "modelDescription": "Get the available FlightPath harnesses and their supported models",
+        "canBeReferencedInPrompt": true,
+        "tags": [
+          "harness",
+          "model",
+          "capabilities"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "flightpath_read_output",
+        "toolReferenceName": "flightpath_read_output",
+        "displayName": "FlightPath Read Output",
+        "modelDescription": "Read AI response output from completed prompts in the FlightPath workflow queue",
+        "canBeReferencedInPrompt": true,
+        "tags": [
+          "queue",
+          "output",
+          "workflow"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "indices": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "description": "Array of prompt indices to read output for (0-based). Empty array returns all outputs."
+            }
           }
         }
       }
-    }
     ],
     "configuration": {
       "title": "FlightPath",
