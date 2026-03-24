@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Panel,
   Group,
@@ -7,6 +7,7 @@ import {
 } from "react-resizable-panels";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { useTerminalStore } from "@store/terminalStore";
+import { useUiStore } from "@store/uiStore";
 import { terminalRegistry } from "../../terminalRegistry";
 import { MESSAGE_TYPES } from "../../types/messages";
 import { TerminalInstance } from "./TerminalInstance";
@@ -41,8 +42,40 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
   const setActiveSession = useTerminalStore((s) => s.setActiveSession);
   const removeSession = useTerminalStore((s) => s.removeSession);
 
-  const [railCollapsed, setRailCollapsed] = useState(false);
+  const terminalRailCollapsed = useUiStore((s) => s.terminalRailCollapsed);
+  const terminalRailSizePx = useUiStore((s) => s.terminalRailSizePx);
+  const setTerminalRailCollapsed = useUiStore(
+    (s) => s.setTerminalRailCollapsed
+  );
+  const setTerminalRailSizePx = useUiStore((s) => s.setTerminalRailSizePx);
+
+  const [railCollapsed, setRailCollapsed] = useState(terminalRailCollapsed);
   const railRef = useRef<PanelImperativeHandle>(null);
+  // Snapshot persisted values once on mount — defaultSize must not change after mount
+  // or react-resizable-panels will re-apply it, overriding user drag interactions.
+  const initialRailSizePx = useRef(terminalRailSizePx);
+  // Snapshot collapsed state for defaultSize calculation (ref so it never changes).
+  const initialRailCollapsed = useRef(terminalRailCollapsed);
+  // Gate: block ALL onResize store writes until after mount effects have settled.
+  // Follows the same pattern as App.tsx (horizontalInitializedRef).
+  const railResizeMountedRef = useRef(false);
+
+  // Restore collapsed state before paint so there is no visual flash on remount
+  // (tab switch). Using useLayoutEffect matches the App.tsx pattern.
+  useLayoutEffect(() => {
+    if (initialRailCollapsed.current) {
+      railRef.current?.collapse();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Open the onResize gate after ALL mount layout effects and effects have fired.
+  // useEffect runs after child effects (including the Panel mount onResize events
+  // and the useLayoutEffect above), so spurious mount events never reach the store.
+  useEffect(() => {
+    railResizeMountedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const aiCliSessions = sessions.filter((s) => s.kind === "ai-cli");
   const shellSessions = sessions.filter((s) => s.kind === "shell");
@@ -96,14 +129,23 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
       <Panel
         id="terminal-session-rail"
         panelRef={railRef}
-        defaultSize="140px"
+        defaultSize={
+          initialRailCollapsed.current
+            ? "30px"
+            : `${initialRailSizePx.current}px`
+        }
         minSize="80px"
         maxSize="50"
         collapsible
         collapsedSize="30px"
-        onResize={() => {
+        onResize={(panelSize) => {
+          if (!railResizeMountedRef.current) return;
           const collapsed = railRef.current?.isCollapsed() ?? false;
           setRailCollapsed(collapsed);
+          setTerminalRailCollapsed(collapsed);
+          if (!collapsed) {
+            setTerminalRailSizePx(panelSize.inPixels);
+          }
         }}
       >
         <div className="flex flex-col h-full bg-sidebar-bg overflow-y-auto">

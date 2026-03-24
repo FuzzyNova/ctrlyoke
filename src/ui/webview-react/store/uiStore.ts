@@ -179,6 +179,10 @@ interface UiState {
   // Workflows with at least one running terminal session
   terminalActiveWorkflows: Set<string>;
 
+  // Terminal session rail layout — persisted
+  terminalRailCollapsed: boolean;
+  terminalRailSizePx: number;
+
   // Notification toast state (transient, not persisted)
   toast: {
     message: string;
@@ -267,6 +271,10 @@ interface UiActions {
   setActiveOutputTab: (workflowId: string, tab: 'output' | 'terminal') => void;
   setTerminalSessionActive: (workflowId: string, active: boolean) => void;
 
+  // Terminal session rail layout
+  setTerminalRailCollapsed: (collapsed: boolean) => void;
+  setTerminalRailSizePx: (px: number) => void;
+
   // Run history view
   setHistoryView: (
     runIndex: number,
@@ -319,6 +327,8 @@ const initialState: UiState = {
   toast: null,
   activeOutputTabs: {},
   terminalActiveWorkflows: new Set<string>(),
+  terminalRailCollapsed: false,
+  terminalRailSizePx: 140,
   isViewingHistory: false,
   viewingRunIndex: 0,
   availableRuns: 0,
@@ -339,6 +349,8 @@ const persistedFields = [
   "diffsCollapsed",
   "outputFontSize",
   "terminalFontSize",
+  "terminalRailCollapsed",
+  "terminalRailSizePx",
 ] as const;
 
 export const useUiStore = create<UiState & UiActions>()(
@@ -562,6 +574,16 @@ export const useUiStore = create<UiState & UiActions>()(
           }
           return { terminalActiveWorkflows: next };
         }),
+
+      // ============================================================================
+      // TERMINAL SESSION RAIL LAYOUT
+      // ============================================================================
+
+      setTerminalRailCollapsed: (collapsed) =>
+        set({ terminalRailCollapsed: collapsed }),
+
+      setTerminalRailSizePx: (px) =>
+        set({ terminalRailSizePx: px }),
 
       // ============================================================================
       // RUN HISTORY VIEW
