@@ -41,6 +41,7 @@ import {
   type DiffRun,
 } from "../output/OutputMinimap";
 import { UndoChangesDialog } from "../output/UndoChangesDialog";
+import type { WorkflowStepEntry } from "../output/UndoChangesDialog";
 import { TerminalView } from "../output/TerminalView";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
@@ -53,7 +54,9 @@ const EMPTY_TERMINAL_SESSIONS: TerminalSession[] = [];
 const SHELL_WORKFLOW_ID = "_shell";
 import {
   buildUndoDialogInputForPrompt,
+  buildUndoCandidatesForOutputs,
   computePromptUndoActions,
+  sameFilePath,
   type UndoDialogInput,
 } from "../../utils/promptUndo";
 import type { UndoFileInstruction } from "../../types/messages";
@@ -80,6 +83,13 @@ interface MinimapDialogState {
   workspacePath: string;
   input?: UndoDialogInput;
   redoInstructions?: UndoFileInstruction[];
+  requestId: string;
+}
+
+interface WorkflowDialogState {
+  mode: "undo" | "redo";
+  workspacePath: string;
+  entries: WorkflowStepEntry[];
   requestId: string;
 }
 
@@ -183,6 +193,10 @@ export const OutputSection: React.FC = () => {
   // Shared prompt-level undo/redo dialog (owned here, triggered from minimap)
   const [minimapDialogState, setMinimapDialogState] =
     useState<MinimapDialogState | null>(null);
+
+  // Workflow-level undo/redo dialog (aggregates all prompt-level changes)
+  const [workflowDialogState, setWorkflowDialogState] =
+    useState<WorkflowDialogState | null>(null);
 
   // Keep --run-selector-max-h in sync with the output section height so the
   // RunSelector dropdown never overflows the panel boundary.
@@ -495,6 +509,91 @@ export const OutputSection: React.FC = () => {
 
   // Only show undo actions when execution is not active
   const allowUndoActions = !isExecutionActive;
+
+  // ── Workflow-level undo/redo aggregation ───────────────────────────────────
+  // Iterates all steps to collect entries for the workflow undo/redo dialog.
+  const workflowUndoRedoData = useMemo(() => {
+    if (!allowUndoActions) return { undoEntries: [], redoEntries: [], workspacePath: "" };
+
+    const undoEntries: WorkflowStepEntry[] = [];
+    const redoEntries: WorkflowStepEntry[] = [];
+    let workspacePath = "";
+
+    for (const step of stepsToRender) {
+      const key = `${step.target.kind}:${step.target.index}`;
+      const lastCliIdx = lastCliIndexPerStep.get(key);
+      if (lastCliIdx === undefined) continue;
+
+      const lastMsg = allMessages[lastCliIdx];
+      const lastOutput = lastMsg?.data as CliOutputType | undefined;
+      if (!lastOutput || lastOutput.isStreaming) continue;
+
+      if (lastOutput.workingDirectory) workspacePath = lastOutput.workingDirectory;
+
+      const isFinalPrompt = step.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT;
+      const stepIndex = step.target.index;
+
+      let effectiveSnapshot: WorkspaceSnapshot | undefined;
+      let effectiveUndoRecord: UndoRecord | undefined;
+
+      if (isViewingHistory && historyOutputs) {
+        effectiveSnapshot = isFinalPrompt
+          ? historyOutputs.finalPromptOutputs?.[stepIndex]?.workspaceSnapshot
+          : historyOutputs.steps[stepIndex]?.workspaceSnapshot;
+        effectiveUndoRecord = isFinalPrompt
+          ? historyOutputs.finalPromptOutputs?.[stepIndex]?.undoRecord
+          : historyOutputs.steps[stepIndex]?.undoRecord;
+      } else {
+        const targetKey = isFinalPrompt ? `finalPrompt-${stepIndex}` : `queue-${stepIndex}`;
+        effectiveSnapshot = isFinalPrompt
+          ? finalPromptWorkspaceSnapshots[stepIndex]
+          : workspaceSnapshots[stepIndex];
+        effectiveUndoRecord = undoRecords[targetKey];
+      }
+
+      const stepOutputs = (stepOutputsMap.get(key) ?? []) as CliOutputType[];
+      const target: UndoExecutionTarget = isFinalPrompt
+        ? { kind: "finalPrompt", loopIndex: stepIndex }
+        : { kind: "queue", stepIndex };
+      const label = isFinalPrompt
+        ? `Final Prompt Loop ${stepIndex + 1}`
+        : `Prompt ${stepIndex + 1}`;
+
+      const redoInstructions =
+        effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
+          ? (effectiveUndoRecord.redoInstructions ?? [])
+          : [];
+
+      // Redo entry: files previously undone that can be re-applied
+      if (redoInstructions.length > 0) {
+        redoEntries.push({ target, label, redoInstructions });
+      }
+
+      // Undo entry: undoable candidates excluding already-undone files
+      const allCandidates = buildUndoCandidatesForOutputs(stepOutputs, effectiveSnapshot);
+      const candidates =
+        redoInstructions.length > 0
+          ? allCandidates.filter((c) => !redoInstructions.some((ri) => sameFilePath(c.path, ri.path)))
+          : allCandidates;
+      const undoCandidates = candidates.filter((c) => c.instruction !== null);
+      if (undoCandidates.length > 0) {
+        undoEntries.push({ target, label, undoCandidates });
+      }
+    }
+
+    return { undoEntries, redoEntries, workspacePath };
+  }, [
+    allowUndoActions,
+    stepsToRender,
+    lastCliIndexPerStep,
+    allMessages,
+    stepOutputsMap,
+    isViewingHistory,
+    historyOutputs,
+    workspaceSnapshots,
+    finalPromptWorkspaceSnapshots,
+    undoRecords,
+  ]);
 
   // ── Diff line count helper ─────────────────────────────────────────────────
 
@@ -964,6 +1063,40 @@ export const OutputSection: React.FC = () => {
           )}
           {activeOutputTab === "output" && (
             <>
+              {/* Workflow-level redo button */}
+              {workflowUndoRedoData.redoEntries.length > 0 && (
+                <button
+                  className="icon-btn py-0 px-2 flex items-center gap-1"
+                  title={`Redo workflow changes (${workflowUndoRedoData.redoEntries.reduce((n, e) => n + (e.redoInstructions?.length ?? 0), 0)} file${workflowUndoRedoData.redoEntries.reduce((n, e) => n + (e.redoInstructions?.length ?? 0), 0) !== 1 ? "s" : ""})`}
+                  onClick={() =>
+                    setWorkflowDialogState({
+                      mode: "redo",
+                      workspacePath: workflowUndoRedoData.workspacePath,
+                      entries: workflowUndoRedoData.redoEntries,
+                      requestId: crypto.randomUUID(),
+                    })
+                  }
+                >
+                  <i className="codicon codicon-sm codicon-redo" />
+                </button>
+              )}
+              {/* Workflow-level undo button */}
+              {workflowUndoRedoData.undoEntries.length > 0 && (
+                <button
+                  className="icon-btn py-0 px-2 flex items-center gap-1"
+                  title={`Undo workflow changes (${workflowUndoRedoData.undoEntries.reduce((n, e) => n + (e.undoCandidates?.length ?? 0), 0)} file${workflowUndoRedoData.undoEntries.reduce((n, e) => n + (e.undoCandidates?.length ?? 0), 0) !== 1 ? "s" : ""})`}
+                  onClick={() =>
+                    setWorkflowDialogState({
+                      mode: "undo",
+                      workspacePath: workflowUndoRedoData.workspacePath,
+                      entries: workflowUndoRedoData.undoEntries,
+                      requestId: crypto.randomUUID(),
+                    })
+                  }
+                >
+                  <i className="codicon codicon-sm codicon-discard" />
+                </button>
+              )}
               {availableRuns > 0 && (
                 <RunSelector
                   availableRuns={availableRuns}
@@ -1187,6 +1320,18 @@ export const OutputSection: React.FC = () => {
           redoInstructions={minimapDialogState.redoInstructions}
           requestId={minimapDialogState.requestId}
           onClose={() => setMinimapDialogState(null)}
+        />
+      )}
+
+      {/* Workflow-level undo/redo dialog — triggered from header buttons */}
+      {workflowDialogState && (
+        <UndoChangesDialog
+          mode={workflowDialogState.mode}
+          target={workflowDialogState.entries[0].target}
+          workspacePath={workflowDialogState.workspacePath}
+          requestId={workflowDialogState.requestId}
+          workflowEntries={workflowDialogState.entries}
+          onClose={() => setWorkflowDialogState(null)}
         />
       )}
     </section>

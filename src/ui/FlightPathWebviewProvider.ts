@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fsSync from "fs";
 import {
+  DEFAULT_WORKFLOW_NAME,
   MESSAGE_TYPES,
   StatusMessageSeverity,
   STATUS_MESSAGE_SEVERITY,
@@ -873,7 +874,7 @@ window.vscodeApi = acquireVsCodeApi();
 
     this.settingsSync.sendWorkflowUnloadedToSettings();
     await this.workflowOrchestrator.clearWorkflow();
-    this.updateFileSelected("New Workflow", [], undefined);
+    this.updateFileSelected(DEFAULT_WORKFLOW_NAME, [], undefined);
     Log.info("Workflow cleared, ready for new prompts");
   }
 

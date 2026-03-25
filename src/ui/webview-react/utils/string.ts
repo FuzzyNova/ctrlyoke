@@ -1,6 +1,7 @@
 /**
  * String utility functions
  */
+import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
 
 /**
  * Escape HTML special characters to prevent XSS
@@ -39,16 +40,16 @@ export function truncate(str: string, maxLen: number): string {
  * Extracts filename and removes FlightPath-specific extensions
  *
  * @param filePath - Full file path or null/undefined
- * @returns Workflow name without extension, or "New Workflow" if no path
+ * @returns Workflow name without extension, or DEFAULT_WORKFLOW_NAME if no path
  *
  * @example
  * getWorkflowName("/path/to/my-workflow.flightpath.yaml") // "my-workflow"
  * getWorkflowName("C:\\Users\\dev\\feature.flightpath.json") // "feature"
  * getWorkflowName("/path/prompt.prompt.md") // "prompt"
- * getWorkflowName(null) // "New Workflow"
+ * getWorkflowName(null) // DEFAULT_WORKFLOW_NAME
  */
 export function getWorkflowName(filePath: string | null | undefined): string {
-  if (!filePath) return "New Workflow";
+  if (!filePath) return DEFAULT_WORKFLOW_NAME;
 
   // Get last segment (handles both / and \ separators)
   const fileName = filePath.split(/[/\\]/).pop() || "";

@@ -6,6 +6,7 @@ import {
   capitalize,
   toTitleCase,
 } from "@utils/string";
+import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
 
 describe("escapeHtml", () => {
   it("escapes < and > characters", () => {
@@ -46,16 +47,16 @@ describe("truncate", () => {
 });
 
 describe("getWorkflowName", () => {
-  it('returns "New Workflow" for null', () => {
-    expect(getWorkflowName(null)).toBe("New Workflow");
+  it('returns DEFAULT_WORKFLOW_NAME for null', () => {
+    expect(getWorkflowName(null)).toBe(DEFAULT_WORKFLOW_NAME);
   });
 
-  it('returns "New Workflow" for undefined', () => {
-    expect(getWorkflowName(undefined)).toBe("New Workflow");
+  it('returns DEFAULT_WORKFLOW_NAME for undefined', () => {
+    expect(getWorkflowName(undefined)).toBe(DEFAULT_WORKFLOW_NAME);
   });
 
-  it('returns "New Workflow" for empty string', () => {
-    expect(getWorkflowName("")).toBe("New Workflow");
+  it('returns DEFAULT_WORKFLOW_NAME for empty string', () => {
+    expect(getWorkflowName("")).toBe(DEFAULT_WORKFLOW_NAME);
   });
 
   it("strips .flightpath.yaml extension", () => {

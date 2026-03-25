@@ -14,14 +14,26 @@ import { getLanguageFromPath } from "@utils/hljsUtils";
 // Types
 // ============================================================================
 
+/** A single step's data for workflow-level undo/redo dialogs. */
+export interface WorkflowStepEntry {
+  target: OutputExecutionTarget;
+  label: string;
+  /** For undo mode: undoable candidates for this step */
+  undoCandidates?: UndoFileCandidate[];
+  /** For redo mode: instructions to re-apply for this step */
+  redoInstructions?: UndoFileInstruction[];
+}
+
 export interface UndoChangesDialogProps {
   mode: "undo" | "redo";
   target: OutputExecutionTarget;
   workspacePath: string;
-  input?: UndoDialogInput;               // required for mode="undo"
-  redoInstructions?: UndoFileInstruction[]; // required for mode="redo"
+  input?: UndoDialogInput;               // required for mode="undo" (single-step)
+  redoInstructions?: UndoFileInstruction[]; // required for mode="redo" (single-step)
   requestId: string;
   onClose: () => void;
+  /** When present, dialog operates in workflow mode (multi-step undo/redo). */
+  workflowEntries?: WorkflowStepEntry[];
 }
 
 interface FileRow {
@@ -185,7 +197,45 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   redoInstructions,
   requestId,
   onClose,
+  workflowEntries,
 }) => {
+  const isWorkflowMode = (workflowEntries?.length ?? 0) > 0;
+
+  // ── Workflow mode rows (keyed by "entryIdx::path" to handle same file across steps) ──
+  const workflowRows = useMemo(() => {
+    if (!isWorkflowMode) return [];
+    return (workflowEntries ?? []).flatMap((entry, entryIdx) => {
+      if (mode === DIALOG_MODE.REDO) {
+        return (entry.redoInstructions ?? []).map((inst) => ({
+          key: `${entryIdx}::${inst.path}`,
+          path: inst.path,
+          instruction: inst as UndoFileInstruction | null,
+          changeType: undefined as PromptChangeType | undefined,
+          tier: undefined as ("tier1" | "tier2") | undefined,
+          contentCaptureSkipped: undefined as boolean | undefined,
+          oldContent: undefined as string | undefined,
+          newContent: undefined as string | undefined,
+          structuredPatch: undefined as FileRow["structuredPatch"],
+          stepLabel: entry.label,
+          target: entry.target,
+        }));
+      }
+      return (entry.undoCandidates ?? []).map((c) => ({
+        key: `${entryIdx}::${c.path}`,
+        path: c.path,
+        instruction: c.instruction,
+        changeType: c.changeType,
+        tier: c.tier,
+        contentCaptureSkipped: c.contentCaptureSkipped,
+        oldContent: c.oldContent,
+        newContent: c.newContent,
+        structuredPatch: c.structuredPatch,
+        stepLabel: entry.label,
+        target: entry.target,
+      }));
+    });
+  }, [isWorkflowMode, workflowEntries, mode]);
+
   // ── Redo mode ──────────────────────────────────────────────────────────────
   const redoRows = useMemo(
     () => (redoInstructions ?? []).map((inst) => ({ path: inst.path, instruction: inst })),
@@ -227,6 +277,9 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   // ── Shared checked state ───────────────────────────────────────────────────
   // Pre-check all undoable tier1 files (undo mode); all redo files (redo mode)
   const initialChecked = useMemo(() => {
+    if (isWorkflowMode) {
+      return new Set(workflowRows.filter((r) => r.instruction !== null).map((r) => r.key));
+    }
     if (mode === DIALOG_MODE.REDO) {
       return new Set(redoRows.map((r) => r.path));
     }
@@ -235,7 +288,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
       if (row.instruction !== null) s.add(row.path);
     }
     return s;
-  }, [mode, tier1Rows, redoRows]);
+  }, [isWorkflowMode, workflowRows, mode, tier1Rows, redoRows]);
 
   const [checkedPaths, setCheckedPaths] = useState<Set<string>>(initialChecked);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -264,19 +317,25 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   }, [undoResult, requestId, clearUndoResult, onClose]);
 
   // ── Checkable rows count ───────────────────────────────────────────────────
-  const checkableCount = mode === DIALOG_MODE.REDO ? redoRows.length : allUndoRows.filter((r) => r.instruction !== null).length;
-  const checkedCount = mode === DIALOG_MODE.REDO
-    ? redoRows.filter((r) => checkedPaths.has(r.path)).length
-    : allUndoRows.filter((r) => r.instruction !== null && checkedPaths.has(r.path)).length;
+  const checkableCount = isWorkflowMode
+    ? workflowRows.filter((r) => r.instruction !== null).length
+    : mode === DIALOG_MODE.REDO
+      ? redoRows.length
+      : allUndoRows.filter((r) => r.instruction !== null).length;
+  const checkedCount = isWorkflowMode
+    ? workflowRows.filter((r) => r.instruction !== null && checkedPaths.has(r.key)).length
+    : mode === DIALOG_MODE.REDO
+      ? redoRows.filter((r) => checkedPaths.has(r.path)).length
+      : allUndoRows.filter((r) => r.instruction !== null && checkedPaths.has(r.path)).length;
   const allCheckableChecked = checkedCount === checkableCount && checkableCount > 0;
 
   const hasTier2 = tier2Rows.length > 0;
 
-  function handleToggle(path: string, checked: boolean) {
+  function handleToggle(key: string, checked: boolean) {
     setCheckedPaths((prev) => {
       const next = new Set(prev);
-      if (checked) next.add(path);
-      else next.delete(path);
+      if (checked) next.add(key);
+      else next.delete(key);
       return next;
     });
   }
@@ -284,6 +343,8 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   function handleSelectAll() {
     if (allCheckableChecked) {
       setCheckedPaths(new Set());
+    } else if (isWorkflowMode) {
+      setCheckedPaths(new Set(workflowRows.filter((r) => r.instruction !== null).map((r) => r.key)));
     } else if (mode === DIALOG_MODE.REDO) {
       setCheckedPaths(new Set(redoRows.map((r) => r.path)));
     } else {
@@ -293,7 +354,28 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   }
 
   function handleConfirm() {
-    if (mode === DIALOG_MODE.REDO) {
+    if (isWorkflowMode) {
+      if (mode === DIALOG_MODE.REDO) {
+        const entries = (workflowEntries ?? []).flatMap((entry, entryIdx) => {
+          const files = (entry.redoInstructions ?? [])
+            .filter((inst) => checkedPaths.has(`${entryIdx}::${inst.path}`));
+          return files.length > 0 ? [{ target: entry.target, files }] : [];
+        });
+        if (entries.length === 0) return;
+        setIsSubmitting(true);
+        sendMessage(MESSAGE_TYPES.REDO_WORKFLOW_CHANGES, { data: { requestId, workspacePath, entries } });
+      } else {
+        const entries = (workflowEntries ?? []).flatMap((entry, entryIdx) => {
+          const files = (entry.undoCandidates ?? [])
+            .filter((c) => c.instruction !== null && checkedPaths.has(`${entryIdx}::${c.path}`))
+            .map((c) => c.instruction as UndoFileInstruction);
+          return files.length > 0 ? [{ target: entry.target, files }] : [];
+        });
+        if (entries.length === 0) return;
+        setIsSubmitting(true);
+        sendMessage(MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES, { data: { requestId, workspacePath, entries } });
+      }
+    } else if (mode === DIALOG_MODE.REDO) {
       const selectedInstructions = redoRows
         .filter((r) => checkedPaths.has(r.path))
         .map((r) => r.instruction);
@@ -326,11 +408,13 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
 
   const canConfirm = checkedCount > 0 && !isSubmitting && resultState === RESULT_STATE.IDLE;
 
-  const dialogTitle = mode === DIALOG_MODE.REDO
-    ? "Redo Changes"
-    : input?.scope.mode === "singleFile"
-      ? `Undo changes — ${input.scope.path}`
-      : "Undo prompt changes";
+  const dialogTitle = isWorkflowMode
+    ? (mode === DIALOG_MODE.REDO ? "Redo workflow changes" : "Undo workflow changes")
+    : mode === DIALOG_MODE.REDO
+      ? "Redo Changes"
+      : input?.scope.mode === "singleFile"
+        ? `Undo changes — ${input.scope.path}`
+        : "Undo prompt changes";
 
   const confirmLabel = mode === DIALOG_MODE.REDO ? `Redo Selected (${checkedCount})` : `Undo Selected (${checkedCount})`;
   const submittingLabel = mode === DIALOG_MODE.REDO ? "Redoing…" : "Undoing…";
@@ -387,8 +471,79 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
         </div>
       )}
 
-      {/* File list */}
-      {mode === DIALOG_MODE.REDO ? (
+      {/* File list — workflow mode */}
+      {isWorkflowMode && (
+        workflowRows.length === 0 ? (
+          <p className="text-sm text-description-fg">No file changes found across workflow steps.</p>
+        ) : (
+          <div className="flex flex-col gap-0.5">
+            {(workflowEntries ?? []).map((entry, entryIdx) => {
+              const rows = workflowRows.filter((r) => r.stepLabel === entry.label && r.key.startsWith(`${entryIdx}::`));
+              if (rows.length === 0) return null;
+              return (
+                <React.Fragment key={entryIdx}>
+                  <p className="text-xs font-semibold text-description-fg uppercase tracking-wide mb-1 mt-2">
+                    {entry.label}
+                  </p>
+                  {mode === DIALOG_MODE.REDO
+                    ? rows.map((row) => {
+                        const inst = row.instruction as UndoFileInstruction;
+                        const hasDiff = (inst.structuredPatch?.length ?? 0) > 0;
+                        return (
+                          <div key={row.key} className="rounded">
+                            <div className="flex items-start gap-2 py-1.5 px-2 rounded text-sm hover:bg-list-hover-bg">
+                              <input
+                                type="checkbox"
+                                checked={checkedPaths.has(row.key)}
+                                onChange={(e) => handleToggle(row.key, e.target.checked)}
+                                className="mt-0.5 w-3.5 h-3.5 accent-btn-bg cursor-pointer shrink-0"
+                              />
+                              <span className="flex-1 font-mono text-xs break-all text-foreground">{row.path}</span>
+                              <span className={`shrink-0 text-xs font-medium ${redoActionBadgeColor(inst.action)}`}>
+                                {redoActionBadgeLabel(inst.action)}
+                              </span>
+                            </div>
+                            {hasDiff && (
+                              <DiffView
+                                structuredPatch={inst.structuredPatch}
+                                language={getLanguageFromPath(row.path)}
+                                globallyCollapsed={true}
+                                className="ml-5"
+                              />
+                            )}
+                          </div>
+                        );
+                      })
+                    : rows.map((row) => {
+                        const fileRow: FileRow = {
+                          path: row.path,
+                          changeType: row.changeType ?? "modified",
+                          tier: row.tier ?? "tier1",
+                          instruction: row.instruction,
+                          contentCaptureSkipped: row.contentCaptureSkipped,
+                          oldContent: row.oldContent,
+                          newContent: row.newContent,
+                          structuredPatch: row.structuredPatch,
+                        };
+                        return (
+                          <FileRowItem
+                            key={row.key}
+                            row={fileRow}
+                            checked={checkedPaths.has(row.key)}
+                            onChange={(_, checked) => handleToggle(row.key, checked)}
+                          />
+                        );
+                      })
+                  }
+                </React.Fragment>
+              );
+            })}
+          </div>
+        )
+      )}
+
+      {/* File list — single-step mode */}
+      {!isWorkflowMode && mode === DIALOG_MODE.REDO ? (
         redoRows.length === 0 ? (
           <p className="text-sm text-description-fg">No redo instructions available.</p>
         ) : (

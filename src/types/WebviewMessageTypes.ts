@@ -829,6 +829,26 @@ export interface RedoPromptChangesMessage {
   };
 }
 
+/** Webview → Extension: undo changes across multiple workflow steps */
+export interface UndoWorkflowChangesMessage {
+  type: typeof MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES;
+  data: {
+    requestId: string;
+    workspacePath: string;
+    entries: Array<{ target: UndoExecutionTarget; files: UndoFileInstruction[] }>;
+  };
+}
+
+/** Webview → Extension: redo changes across multiple workflow steps */
+export interface RedoWorkflowChangesMessage {
+  type: typeof MESSAGE_TYPES.REDO_WORKFLOW_CHANGES;
+  data: {
+    requestId: string;
+    workspacePath: string;
+    entries: Array<{ target: OutputExecutionTarget; files: UndoFileInstruction[] }>;
+  };
+}
+
 /**
  * Union type for all incoming messages from extension to webview
  */

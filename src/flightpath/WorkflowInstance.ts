@@ -20,6 +20,7 @@ import {
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import {
   ACTION_TYPES,
+  DEFAULT_WORKFLOW_NAME,
   QUEUE_POSITION,
   STEP_STATUS,
   type ActionType,
@@ -1090,7 +1091,7 @@ export class WorkflowInstance {
         Log.debug("Empty workflow, creating new workflow in IDLE state");
         const workflowType = queueState.workflowName
           ? `workflow "${queueState.workflowName}"`
-          : "new workflow";
+          : DEFAULT_WORKFLOW_NAME;
 
         await this.initializeNewWorkflow(
           parsed.prompts,
@@ -1232,7 +1233,7 @@ export class WorkflowInstance {
     const displayName =
       this.workflowName ||
       this.promptQueue.getState().workflowName ||
-      "new workflow";
+      DEFAULT_WORKFLOW_NAME;
 
     try {
       const workingFilePath = await this.promptQueue.createWorkingFile(
@@ -1523,7 +1524,11 @@ export class WorkflowInstance {
       // If the workflow was eagerly created before any prompts were added (e.g., a
       // setting was changed first), the name is a generic placeholder like "new workflow".
       // Update it from the first prompt text so the session has a meaningful name.
-      if (currentState.prompts.length === 0) {
+      // Only do this if the user hasn't explicitly set a custom name — a non-empty
+      // workflowName that differs from the default placeholder means the user named it.
+      const hasUserDefinedName =
+        this.workflowName && this.workflowName !== DEFAULT_WORKFLOW_NAME;
+      if (currentState.prompts.length === 0 && !hasUserDefinedName) {
         this.workflowName = generatedWorkflowName;
         this.promptQueue.setWorkflowName(generatedWorkflowName);
         await this.promptQueue.updateWorkingFile(true);

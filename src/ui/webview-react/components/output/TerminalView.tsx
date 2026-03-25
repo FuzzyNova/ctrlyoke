@@ -102,6 +102,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
       orientation="horizontal"
       className="w-full h-full"
       id="terminal-view-layout"
+      resizeTargetMinimumSize={{ coarse: 20, fine: 8 }}
     >
       {/* Terminal canvas */}
       <Panel id="terminal-canvas">

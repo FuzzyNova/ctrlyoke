@@ -184,6 +184,10 @@ export const MESSAGE_TYPES = {
   UNDO_RECORD_UPDATED: "undoRecordUpdated",
   // Prompt undo — Webview → Extension: request to redo previously undone changes
   REDO_PROMPT_CHANGES: "redoPromptChanges",
+  // Workflow undo — Webview → Extension: undo changes across multiple steps
+  UNDO_WORKFLOW_CHANGES: "undoWorkflowChanges",
+  // Workflow undo — Webview → Extension: redo changes across multiple steps
+  REDO_WORKFLOW_CHANGES: "redoWorkflowChanges",
 
   // Terminal I/O — bidirectional between extension/server and webview
   TERMINAL_OUTPUT:        "terminalOutput",       // extension → webview: { workflowId, sessionId, data }
@@ -491,6 +495,11 @@ export const ATTACHMENT_PREFIXES = {
   SELECTION: "selection",
   GIT: "git", // git:diff, git:staged, git:stash:N, git:commit:<hash>
 } as const;
+
+// ============================================================================
+// DEFAULT WORKFLOW NAME - Placeholder used when no workflow has been named
+// ============================================================================
+export const DEFAULT_WORKFLOW_NAME = "New Workflow";
 
 // ============================================================================
 // TYPE HELPERS - For TypeScript type safety

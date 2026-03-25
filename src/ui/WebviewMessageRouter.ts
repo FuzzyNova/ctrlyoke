@@ -26,6 +26,8 @@ import type {
   UndoPromptChangesMessage,
   UndoFileInstruction,
   RedoPromptChangesMessage,
+  UndoWorkflowChangesMessage,
+  RedoWorkflowChangesMessage,
   UndoRecord,
 } from "../types/WebviewMessageTypes";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
@@ -492,6 +494,14 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.REDO_PROMPT_CHANGES, async (message) => {
       await this.handleRedoPromptChanges(message as RedoPromptChangesMessage);
+    });
+
+    table.set(MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES, async (message) => {
+      await this.handleUndoWorkflowChanges(message as UndoWorkflowChangesMessage);
+    });
+
+    table.set(MESSAGE_TYPES.REDO_WORKFLOW_CHANGES, async (message) => {
+      await this.handleRedoWorkflowChanges(message as RedoWorkflowChangesMessage);
     });
 
     // ── Terminal I/O ─────────────────────────────────────────────────────
@@ -1045,6 +1055,136 @@ export class WebviewMessageRouter {
         },
       });
       vscode.window.showErrorMessage(`Redo failed: ${errMsg}`);
+    }
+  }
+
+  private async handleUndoWorkflowChanges(
+    message: UndoWorkflowChangesMessage
+  ): Promise<void> {
+    const { requestId, workspacePath, entries } = message.data;
+    const snapshotService = new WorkspaceSnapshotService();
+    const totalRestored: string[] = [];
+    const totalFailed: Array<{ path: string; error: string }> = [];
+
+    for (const entry of entries) {
+      if (entry.files.length === 0) continue;
+      try {
+        const result = await snapshotService.undoFiles(entry.files, workspacePath);
+        totalRestored.push(...result.restoredFiles);
+        totalFailed.push(...result.failedFiles);
+
+        if (result.restoredFiles.length > 0) {
+          const undoRecord: UndoRecord = {
+            appliedAt: Date.now(),
+            restoredFiles: result.restoredFiles,
+            redoInstructions: result.redoInstructions,
+          };
+          const historyFilePath = await this.resolveHistoryFilePath();
+          if (historyFilePath) {
+            const outputHistoryManager = this.getOrchestrator()?.getOutputHistoryManager();
+            if (outputHistoryManager) {
+              await outputHistoryManager.saveUndoRecord(historyFilePath, entry.target, undoRecord);
+              this.postMessage({
+                type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
+                target: entry.target,
+                undoRecord,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        const errMsg = getErrorMessage(error);
+        totalFailed.push(...entry.files.map((f) => ({ path: f.path, error: errMsg })));
+      }
+    }
+
+    const firstTarget = entries[0]?.target ?? { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 };
+    this.postMessage({
+      type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
+      data: {
+        requestId,
+        target: firstTarget,
+        restoredFiles: totalRestored,
+        failedFiles: totalFailed,
+      },
+    });
+
+    if (totalFailed.length === 0 && totalRestored.length > 0) {
+      vscode.window.showInformationMessage(
+        `Undo complete: restored ${totalRestored.length} file${totalRestored.length !== 1 ? "s" : ""}.`
+      );
+    } else if (totalRestored.length > 0) {
+      vscode.window.showWarningMessage(
+        `Undo partially complete: ${totalRestored.length} restored, ${totalFailed.length} failed.`
+      );
+    } else if (totalFailed.length > 0) {
+      vscode.window.showErrorMessage(
+        `Undo failed: ${totalFailed[0]?.error ?? "unknown error"}`
+      );
+    }
+  }
+
+  private async handleRedoWorkflowChanges(
+    message: RedoWorkflowChangesMessage
+  ): Promise<void> {
+    const { requestId, workspacePath, entries } = message.data;
+    const snapshotService = new WorkspaceSnapshotService();
+    const totalRestored: string[] = [];
+    const totalFailed: Array<{ path: string; error: string }> = [];
+
+    for (const entry of entries) {
+      if (entry.files.length === 0) continue;
+      try {
+        const result = await snapshotService.undoFiles(entry.files, workspacePath);
+        totalRestored.push(...result.restoredFiles);
+        totalFailed.push(...result.failedFiles);
+
+        if (result.restoredFiles.length > 0) {
+          const redoneAt = Date.now();
+          const historyFilePath = await this.resolveHistoryFilePath();
+          const outputHistoryManager = this.getOrchestrator()?.getOutputHistoryManager();
+          if (historyFilePath && outputHistoryManager) {
+            await outputHistoryManager.markUndoRecordRedone(historyFilePath, entry.target, redoneAt);
+            const history = await outputHistoryManager.loadHistory(historyFilePath);
+            const stepOutput = (
+              entry.target.kind === FINAL_PROMPT_PHASES.QUEUE
+                ? history.promptOutputs[entry.target.stepIndex]
+                : history.finalPromptOutputs?.[entry.target.loopIndex]
+            ) as { undoRecord?: UndoRecord } | undefined;
+            if (stepOutput?.undoRecord) {
+              this.postMessage({
+                type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
+                target: entry.target,
+                undoRecord: stepOutput.undoRecord,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        const errMsg = getErrorMessage(error);
+        totalFailed.push(...entry.files.map((f) => ({ path: f.path, error: errMsg })));
+      }
+    }
+
+    const firstTarget = entries[0]?.target ?? { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 };
+    this.postMessage({
+      type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
+      data: {
+        requestId,
+        target: firstTarget,
+        restoredFiles: totalRestored,
+        failedFiles: totalFailed,
+      },
+    });
+
+    if (totalRestored.length > 0) {
+      vscode.window.showInformationMessage(
+        `Redo complete: re-applied ${totalRestored.length} file change${totalRestored.length !== 1 ? "s" : ""}.`
+      );
+    } else {
+      vscode.window.showErrorMessage(
+        `Redo failed: ${totalFailed[0]?.error ?? "unknown error"}`
+      );
     }
   }
 
