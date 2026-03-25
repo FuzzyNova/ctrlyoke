@@ -253,7 +253,12 @@
             },
             "completedAt": {
               "type": "number",
-              "description": "Timestamp when this prompt completed execution"
+              "description": "Timestamp when this prompt completed execution (set for all terminal states, not just successful completion)"
+            },
+            "terminalStatus": {
+              "type": "string",
+              "enum": ["completed", "cancelled", "failed"],
+              "description": "Terminal state of this prompt. Absent or 'completed' means successful completion. Used to restore the correct visual status after a working file reload."
             },
             "retryCount": {
               "type": "number",
