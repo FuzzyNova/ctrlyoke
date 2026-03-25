@@ -1995,6 +1995,23 @@ export class CliIntegration extends HarnessIntegration {
         );
       }
 
+      // When cancelled by the user, persist startedAt and sessionId so the session can be
+      // resumed later (resumeSession:true appends to the same session instead of starting new).
+      if (!success && this.isCancelling && workflowContext?.promptQueue) {
+        if (!prompt._runtime) {
+          prompt._runtime = { startedAt: executionStartTime.getTime() };
+        } else if (!prompt._runtime.startedAt) {
+          prompt._runtime.startedAt = executionStartTime.getTime();
+        }
+        if (extractedSessionId && !prompt._runtime.sessionId) {
+          prompt._runtime.sessionId = extractedSessionId;
+        }
+        await workflowContext.promptQueue.updateWorkingFile();
+        Log.debug(
+          `💾 Saved cancelled-prompt runtime to working file (sessionId: ${extractedSessionId || "none"})`
+        );
+      }
+
       // Store runtime metadata in prompt's _runtime (always on success, session ID optional)
       if (success) {
         // IMPORTANT: Always create/update harness and model fields, even when resuming from working file

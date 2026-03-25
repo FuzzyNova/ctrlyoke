@@ -319,12 +319,15 @@ export class PromptQueue {
         }
         // Check if this is the current prompt
         else if (index === this.state.currentIndex) {
-          // If execution state is RUNNING, mark as SENT
-          // Otherwise (IDLE, PAUSED, etc.), mark as PENDING
+          // RUNNING → SENT (actively being processed)
+          // STOPPED → CANCELLED (was running when aborted; must be CANCELLED for canMarkAsComplete)
+          // Otherwise (IDLE, PAUSED, etc.) → PENDING
           status =
             this.state.status === EXECUTION_STATES.RUNNING
               ? STEP_STATUS.SENT
-              : STEP_STATUS.PENDING;
+              : this.state.status === EXECUTION_STATES.STOPPED
+                ? STEP_STATUS.CANCELLED
+                : STEP_STATUS.PENDING;
         }
         // All other prompts are pending
         else {

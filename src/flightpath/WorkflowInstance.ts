@@ -1536,6 +1536,22 @@ export class WorkflowInstance {
           `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: updated workflow name from first prompt → "${generatedWorkflowName}"`
         );
       }
+
+      // Auto-mark-as-complete: when the workflow is stopped with a cancelled step and the
+      // user presses Run (not Queue), accept the partial output and move past the cancelled
+      // step so the new prompt runs next rather than re-running the cancelled one.
+      let autoMarkedComplete = false;
+      if (shouldRun && currentState.status === EXECUTION_STATES.STOPPED) {
+        const cancelledResult = currentState.results[currentState.currentIndex];
+        if (cancelledResult?.status === STEP_STATUS.CANCELLED) {
+          await this.promptQueue.markCurrentAsComplete();
+          autoMarkedComplete = true;
+          Log.info(
+            `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: auto-marked cancelled step ${currentState.currentIndex} as complete`
+          );
+        }
+      }
+
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: appending to existing workflow ` +
           `(status=${currentState.status}, prompts=${currentState.prompts.length}, shouldRun=${shouldRun}, action=${action})`
@@ -1557,13 +1573,16 @@ export class WorkflowInstance {
       }
 
       if (shouldRun) {
-        const isStopped = currentState.status === EXECUTION_STATES.STOPPED;
+        // Re-read current status — it may have changed (e.g., STOPPED→IDLE after auto-mark)
+        const statusNow = this.promptQueue.getState().status;
+        const isStopped = statusNow === EXECUTION_STATES.STOPPED;
+        const isIdleNow = statusNow === EXECUTION_STATES.IDLE;
         Log.debug(
           `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: post-append shouldRun=true, ` +
-            `isIdle=${isIdle}, isCompleted=${isCompleted}, isStopped=${isStopped}, ` +
-            `queueStatusNow=${this.promptQueue.getState().status}`
+            `isIdle=${isIdleNow}, isCompleted=${isCompleted}, isStopped=${isStopped}, autoMarkedComplete=${autoMarkedComplete}, ` +
+            `queueStatusNow=${statusNow}`
         );
-        if (isIdle || isCompleted || isStopped) {
+        if (isIdleNow || isCompleted || isStopped || autoMarkedComplete) {
           await this.executeLoadedPromptFile();
         }
         Log.debug(
