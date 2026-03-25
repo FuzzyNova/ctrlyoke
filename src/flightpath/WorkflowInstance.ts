@@ -1473,7 +1473,6 @@ export class WorkflowInstance {
     const currentState = this.promptQueue.getState();
     const hasWorkflow =
       currentState.prompts.length > 0 || !!currentState.workingFilePath;
-    const isIdle = currentState.status === EXECUTION_STATES.IDLE;
     const isCompleted = currentState.status === EXECUTION_STATES.COMPLETED;
 
     let position: QueuePosition = QUEUE_POSITION.END;
