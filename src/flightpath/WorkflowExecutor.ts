@@ -455,6 +455,7 @@ export class WorkflowExecutor {
         promptIndex: sendPromptIndex,
         allPrompts: state.prompts,
         filePath: context.currentPromptFilePath,
+        workflowName: this.promptQueue.getState().workflowName,
         instanceId: context.instanceId,
         workingFilePath: context.workingFilePath,
         resolvedProperties,
@@ -857,6 +858,7 @@ export class WorkflowExecutor {
       workflowFile?: PromptFile;
       promptQueue?: PromptQueue;
       finalPromptSessionId?: string;
+      workflowName?: string;
     },
     onPromptSent?: () => Promise<void>
   ): Promise<{ responseText: string; duration: number } | null> {
@@ -1075,6 +1077,7 @@ export class WorkflowExecutor {
           promptIndex: currentIndex,
           allPrompts: state.prompts,
           filePath: context.currentPromptFilePath,
+          workflowName: this.promptQueue.getState().workflowName,
           instanceId: context.instanceId,
           workingFilePath: context.workingFilePath,
           resolvedProperties: { ...resolvedProperties, resumeSession: true },

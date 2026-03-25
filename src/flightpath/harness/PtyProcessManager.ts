@@ -1,7 +1,40 @@
+import { execSync } from "child_process";
 import type { IPty } from "node-pty";
 import { Log } from "../../utils/Log";
 
 type NodePtyModule = typeof import("node-pty");
+
+// ---------------------------------------------------------------------------
+// Windows shell resolution
+// ---------------------------------------------------------------------------
+
+let _windowsShell: string | undefined;
+
+/**
+ * Return the best available PowerShell on Windows.
+ * Prefers `pwsh.exe` (PowerShell 7+, full path via where.exe) and falls back
+ * to `powershell.exe` (5.1, always in System32 — resolvable by name).
+ * Result is cached — the subprocess runs at most once per extension lifetime.
+ *
+ * We use `where.exe` to get a full path because node-pty calls CreateProcess
+ * directly (no shell), so bare names like "pwsh" are not resolved unless they
+ * are in a directory that is on the process PATH — and PowerShell 7 often is
+ * not. `powershell.exe` is safe as a bare name because System32 is always on PATH.
+ */
+export function resolveWindowsShell(): string {
+  if (_windowsShell !== undefined) {
+    return _windowsShell;
+  }
+  try {
+    const result = execSync("where.exe pwsh.exe", { encoding: "utf8", timeout: 3000 });
+    const fullPath = result.trim().split(/\r?\n/)[0]?.trim();
+    _windowsShell = fullPath || "powershell.exe";
+  } catch {
+    _windowsShell = "powershell.exe";
+  }
+  Log.debug(`🐚 Windows shell resolved: ${_windowsShell}`);
+  return _windowsShell;
+}
 
 /** Lazy-load node-pty at spawn time; returns null if native binary is unavailable. */
 function loadNodePty(): NodePtyModule | null {
@@ -161,7 +194,7 @@ export class PtyProcessManager {
   }): PtySession {
     const shell =
       process.env.SHELL ??
-      (process.platform === "win32" ? "cmd.exe" : "/bin/bash");
+      (process.platform === "win32" ? resolveWindowsShell() : "/bin/bash");
 
     return this.spawnPty({
       workflowId: opts.workflowId,

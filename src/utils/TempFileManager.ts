@@ -409,6 +409,9 @@ export class TempFileManager {
         .replace(/\.flightpath\.(json|yaml|yml)$/, "")
         .replace(/\.prompt\.(json|md)$/, "")
         .toLowerCase()
+        // Strip ISO-style datetime suffix appended by generateWorkingFilePath
+        // e.g. "new-workflow-2026-03-25t03-25-06" → "new-workflow"
+        .replace(/-\d{4}-\d{2}-\d{2}t\d{2}-\d{2}-\d{2}$/, "")
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "") || "prompt"
     );

@@ -1518,6 +1518,17 @@ export class WorkflowInstance {
         );
       }
     } else {
+      // If the workflow was eagerly created before any prompts were added (e.g., a
+      // setting was changed first), the name is a generic placeholder like "new workflow".
+      // Update it from the first prompt text so the session has a meaningful name.
+      if (currentState.prompts.length === 0) {
+        this.workflowName = generatedWorkflowName;
+        this.promptQueue.setWorkflowName(generatedWorkflowName);
+        await this.promptQueue.updateWorkingFile(true);
+        Log.debug(
+          `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: updated workflow name from first prompt → "${generatedWorkflowName}"`
+        );
+      }
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: appending to existing workflow ` +
           `(status=${currentState.status}, prompts=${currentState.prompts.length}, shouldRun=${shouldRun}, action=${action})`

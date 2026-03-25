@@ -18,7 +18,7 @@ import { TempFileManager } from "../../utils/TempFileManager";
 import { PromptFileSplitter } from "../../utils/PromptFileSplitter";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
-import { getPtyProcessManager, ptyPostMessage } from "./PtyProcessManager";
+import { getPtyProcessManager, ptyPostMessage, resolveWindowsShell } from "./PtyProcessManager";
 import type { PtySession } from "./PtyProcessManager";
 import { Log } from "../../utils/Log";
 import {
@@ -455,7 +455,10 @@ export class CliIntegration extends HarnessIntegration {
     const tempMgr = new TempFileManager(workspaceRoot);
     const splitter = new PromptFileSplitter(this.getTempFileSplitConfig());
     const allTempFilePaths: string[] = [];
-    const filePath = workflowContext?.filePath;
+    // Prefer workflowName for temp file naming — it's always meaningful (derived from
+    // prompt text or the workflow file's base name) and never contains the ISO timestamp
+    // that gets embedded in working file paths for ephemeral workflows.
+    const filePath = workflowContext?.workflowName ?? workflowContext?.filePath;
     const stepNumber = workflowContext
       ? workflowContext.promptIndex + 1
       : undefined;
@@ -1077,8 +1080,15 @@ export class CliIntegration extends HarnessIntegration {
            `Step ${workflowContext.promptIndex + 1}`)
         : "interactive";
 
-      const shell = process.platform === "win32" ? "cmd.exe" : (process.env.SHELL ?? "/bin/bash");
-      const shellArgs = process.platform === "win32" ? ["/c", String(tuiCommand)] : ["-c", String(tuiCommand)];
+      // On Windows, use PowerShell instead of cmd.exe.
+      // node-pty escapes inner double-quotes as \" when wrapping the command string in outer
+      // quotes for CreateProcess. cmd.exe does not recognise \" as an escape sequence (\ is
+      // not a special character in cmd.exe), so the prompt argument gets split at the first
+      // space after the opening quote. PowerShell's -Command flag uses the Windows
+      // CommandLineToArgvW rules, which DO treat \" as a literal " (odd backslashes before a
+      // quote = escaped quote), so the full command string is preserved correctly.
+      const shell = process.platform === "win32" ? resolveWindowsShell() : (process.env.SHELL ?? "/bin/bash");
+      const shellArgs = process.platform === "win32" ? ["-NoProfile", "-Command", String(tuiCommand)] : ["-c", String(tuiCommand)];
       const cwd = this.getWorkspaceRoot() ?? process.cwd();
       const mergedEnv = env ? { ...process.env, ...env } : process.env;
 
@@ -1776,6 +1786,7 @@ export class CliIntegration extends HarnessIntegration {
       promptIndex: number;
       allPrompts: PromptItem[];
       filePath?: string;
+      workflowName?: string;
       instanceId?: string;
       workingFilePath?: string;
       resolvedProperties?: ResolvedProperties;

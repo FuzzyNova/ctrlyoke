@@ -170,6 +170,7 @@ export interface WorkflowContext {
   instanceId?: string;
   workflowFile?: PromptFile;
   promptQueue?: { getState(): QueueState }; // Minimal interface to avoid circular dependency with PromptQueue
+  workflowName?: string;
 }
 
 /**

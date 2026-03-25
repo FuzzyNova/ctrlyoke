@@ -210,6 +210,7 @@ export abstract class HarnessIntegration {
       /** Session ID from the most recent finalPrompt execution. Consumed by SessionResolver
        *  when sessionId is the "finalPrompt" sentinel on any prompt (queue or finalPrompt phase). */
       finalPromptSessionId?: string;
+      workflowName?: string;
     }
   ): Promise<boolean>;
 

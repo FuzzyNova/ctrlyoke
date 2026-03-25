@@ -136,6 +136,16 @@ export class PromptQueue {
   }
 
   /**
+   * Update the workflow name in queue state and persist to working file.
+   * Used when the name is derived after the working file is eagerly created
+   * (e.g., first prompt text used to name an ephemeral workflow).
+   */
+  setWorkflowName(name: string): void {
+    this.state.workflowName = name;
+    this.emitStateChange();
+  }
+
+  /**
    * Clear the queue completely (reset to empty state)
    * Used when user clicks "New Workflow" button
    */
