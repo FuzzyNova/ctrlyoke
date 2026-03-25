@@ -313,21 +313,25 @@ export class PromptQueue {
       this.state.results = prompts.map((prompt, index) => {
         let status: (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 
-        // Check if this prompt was completed (per-prompt completedAt is authoritative)
+        // Check if this prompt was processed (per-prompt completedAt is authoritative)
+        // Use terminalStatus to restore the correct visual state (cancelled/failed vs completed).
         if (prompt._runtime?.completedAt !== undefined) {
-          status = STEP_STATUS.COMPLETED;
+          const terminal = prompt._runtime.terminalStatus;
+          status =
+            terminal === "cancelled"
+              ? STEP_STATUS.CANCELLED
+              : terminal === "failed"
+                ? STEP_STATUS.FAILED
+                : STEP_STATUS.COMPLETED;
         }
-        // Check if this is the current prompt
+        // Check if this is the current prompt (always PENDING or SENT — never CANCELLED)
         else if (index === this.state.currentIndex) {
           // RUNNING → SENT (actively being processed)
-          // STOPPED → CANCELLED (was running when aborted; must be CANCELLED for canMarkAsComplete)
-          // Otherwise (IDLE, PAUSED, etc.) → PENDING
+          // Otherwise (IDLE, PAUSED, STOPPED, etc.) → PENDING
           status =
             this.state.status === EXECUTION_STATES.RUNNING
               ? STEP_STATUS.SENT
-              : this.state.status === EXECUTION_STATES.STOPPED
-                ? STEP_STATUS.CANCELLED
-                : STEP_STATUS.PENDING;
+              : STEP_STATUS.PENDING;
         }
         // All other prompts are pending
         else {
@@ -417,8 +421,9 @@ export class PromptQueue {
    * Note: This only updates queue state. WorkflowOrchestrator checks the state
    * and continues execution from where it was paused or stopped.
    *
-   * PAUSED: Current prompt completed, will continue to next prompt
-   * STOPPED: Current prompt cancelled, will restart current prompt
+   * PAUSED: Current prompt completed normally, continues to next prompt.
+   * STOPPED: Cancelled prompt was already advanced past in confirmedStopped(),
+   *          so currentIndex already points to the next prompt to run.
    */
   async resume(): Promise<void> {
     if (
@@ -438,18 +443,6 @@ export class PromptQueue {
       const pauseDuration = Date.now() - this.state.pausedTime;
       this.state.totalPausedDuration += pauseDuration;
       this.state.pausedTime = undefined;
-    }
-
-    // Handle STOPPED state - reset current (cancelled) prompt to PENDING
-    if (this.state.status === EXECUTION_STATES.STOPPED) {
-      if (this.hasNext()) {
-        const currentResult = this.state.results[this.state.currentIndex];
-        if (currentResult.status === STEP_STATUS.CANCELLED) {
-          currentResult.status = STEP_STATUS.PENDING;
-          currentResult.timestamp = new Date();
-          Log.debug("Reset cancelled prompt to PENDING for restart");
-        }
-      }
     }
 
     this.state.stopped = false; // Clear stopped flag when resuming
@@ -485,72 +478,44 @@ export class PromptQueue {
    * Confirm that execution has fully stopped (process exited)
    * Call this after the CLI process actually terminates
    *
-   * STOP semantics: Abort current prompt but preserve workflow state
+   * STOP semantics: Abort current prompt and advance past it
    * - Unlike PAUSE (which lets current prompt finish), STOP cancels immediately
    * - Unlike RESTART (which resets to beginning), STOP preserves all progress
-   * - Preserves currentIndex, completedIndices, and all completed results
-   * - Current prompt marked as CANCELLED (not completed)
-   * - Can resume from STOPPED state to restart the cancelled prompt
+   * - Current prompt is marked CANCELLED and currentIndex advances to the next prompt
+   * - Resume / Run continues from the next prompt (use setStartPosition to re-run the cancelled one)
    */
   async confirmedStopped(): Promise<void> {
     if (this.state.status === EXECUTION_STATES.CANCELLING) {
-      this.state.status = EXECUTION_STATES.STOPPED;
+      const index = this.state.currentIndex;
 
-      // NOTE: Do NOT reset state - preserve everything:
-      // - currentIndex stays on the cancelled prompt
-      // - completedIndices preserves all past completions
-      // - results preserve all completed/failed statuses
-      // - Current prompt already marked CANCELLED by stop()
+      // Record terminal state on the cancelled prompt before advancing
+      const prompt = this.state.prompts[index];
+      if (prompt) {
+        const now = Date.now();
+        prompt._runtime = {
+          startedAt: prompt._runtime?.startedAt ?? now,
+          ...prompt._runtime,
+          completedAt: now,
+          terminalStatus: "cancelled",
+        };
+      }
+      this.state.completedIndices.add(String(index));
+      this.state.currentIndex++;
+
+      this.state.status =
+        this.state.currentIndex >= this.state.prompts.length
+          ? EXECUTION_STATES.COMPLETED
+          : EXECUTION_STATES.STOPPED;
 
       this.emitStateChange();
       Log.info(
-        "Queue execution fully stopped (process exited) - state preserved"
+        `Queue execution fully stopped - advanced past cancelled step ${index}`
       );
 
-      // Update working file to reflect STOPPED state (preserves progress)
       await this.updateWorkingFile();
     }
   }
 
-  /**
-   * Mark the current cancelled prompt as complete and advance past it.
-   *
-   * Use case: AI did something useful even if not what was asked — the user
-   * wants to accept the result, move on to the next prompt, and preserve the
-   * partial output in history rather than re-running the cancelled step.
-   *
-   * Transitions: STOPPED/IDLE (cancelled current) → IDLE (or COMPLETED if last)
-   */
-  async markCurrentAsComplete(): Promise<void> {
-    const index = this.state.currentIndex;
-    if (index >= this.state.prompts.length) return;
-
-    const result = this.state.results[index];
-    if (result.status !== STEP_STATUS.CANCELLED) return;
-
-    result.status = STEP_STATUS.COMPLETED;
-    result.timestamp = new Date();
-
-    const now = Date.now();
-    if (!this.state.prompts[index]._runtime) {
-      this.state.prompts[index]._runtime = { startedAt: now, completedAt: now };
-    } else {
-      this.state.prompts[index]._runtime!.completedAt = now;
-    }
-
-    this.state.completedIndices.add(String(index));
-    this.state.currentIndex++;
-    this.state.stopped = false;
-
-    this.state.status =
-      this.state.currentIndex >= this.state.prompts.length
-        ? EXECUTION_STATES.COMPLETED
-        : EXECUTION_STATES.IDLE;
-
-    this.emitStateChange();
-    await this.updateWorkingFile();
-    Log.info(`Marked step ${index} as complete (was cancelled)`);
-  }
 
   /**
    * Restart queue from the beginning
@@ -699,17 +664,33 @@ export class PromptQueue {
   }
 
   /**
-   * Mark current prompt as failed
+   * Mark current prompt as failed and advance past it.
+   * The failed prompt keeps FAILED status for display; currentIndex moves to the next prompt.
    */
   markCurrentAsFailed(error: string): void {
     if (!this.hasNext()) {
       return;
     }
 
-    const currentResult = this.state.results[this.state.currentIndex];
+    const index = this.state.currentIndex;
+    const currentResult = this.state.results[index];
     currentResult.status = STEP_STATUS.FAILED;
     currentResult.error = error;
     currentResult.timestamp = new Date();
+
+    // Record terminal state and advance past the failed prompt
+    const prompt = this.state.prompts[index];
+    if (prompt) {
+      const now = Date.now();
+      prompt._runtime = {
+        startedAt: prompt._runtime?.startedAt ?? now,
+        ...prompt._runtime,
+        completedAt: now,
+        terminalStatus: "failed",
+      };
+    }
+    this.state.completedIndices.add(String(index));
+    this.state.currentIndex++;
 
     this.state.status = EXECUTION_STATES.ERROR;
     this.emitStateChange();
@@ -719,12 +700,8 @@ export class PromptQueue {
       Log.error("Failed to update working file after error:", err)
     );
 
-    Log.error(
-      `FlightPath: Prompt ${this.state.currentIndex + 1} failed: ${error}`
-    );
-    Log.error(
-      `FlightPath: Execution failed at prompt ${this.state.currentIndex + 1}: ${error}`
-    );
+    Log.error(`FlightPath: Prompt ${index + 1} failed: ${error}`);
+    Log.error(`FlightPath: Execution failed at prompt ${index + 1}: ${error}`);
   }
 
   /**
@@ -864,9 +841,37 @@ export class PromptQueue {
   }
 
   /**
-   * Mark workflow as errored (called by WorkflowOrchestrator)
+   * Mark workflow as errored (called by WorkflowExecutor).
+   * If the current prompt was actively in-progress (SENT/RUNNING), advances past it
+   * so that resume/run continues from the next prompt.
    */
   async markErrored(): Promise<void> {
+    // Advance past the current prompt if it was actively in-progress
+    if (this.hasNext()) {
+      const index = this.state.currentIndex;
+      const currentResult = this.state.results[index];
+      if (
+        currentResult?.status === STEP_STATUS.SENT ||
+        currentResult?.status === STEP_STATUS.RUNNING
+      ) {
+        currentResult.status = STEP_STATUS.FAILED;
+        currentResult.timestamp = new Date();
+
+        const prompt = this.state.prompts[index];
+        if (prompt) {
+          const now = Date.now();
+          prompt._runtime = {
+            startedAt: prompt._runtime?.startedAt ?? now,
+            ...prompt._runtime,
+            completedAt: now,
+            terminalStatus: "failed",
+          };
+        }
+        this.state.completedIndices.add(String(index));
+        this.state.currentIndex++;
+      }
+    }
+
     this.state.status = EXECUTION_STATES.ERROR;
     this.emitStateChange();
 

@@ -108,6 +108,7 @@ export class ValidationUtils {
           sessionId: { type: "string", nullable: true },
           startedAt: { type: "number" },
           completedAt: { type: "number", nullable: true },
+          terminalStatus: { type: "string", nullable: true },
           retryCount: { type: "number", nullable: true },
           responseText: { type: "string", nullable: true },
           // Runtime can also inherit ExecutionProperties

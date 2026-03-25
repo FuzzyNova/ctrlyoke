@@ -393,7 +393,6 @@ export const PromptsPanel: React.FC<{
 
   // Determine if workflow is running
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
-  const isStopped = executionState === EXECUTION_STATES.STOPPED;
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
 
@@ -737,11 +736,6 @@ export const PromptsPanel: React.FC<{
                   // matching the post-reorder backend index for this slot.
                   const setPositionTarget = currentStep + visualIdx;
                   const slotNumber = currentStep + visualIdx + 1;
-                  const canMarkAsComplete =
-                    !isCLIManaged &&
-                    isCurrentStep &&
-                    isStopped &&
-                    status === STEP_STATUS.CANCELLED;
                   return (
                     <SortablePromptItemWrapper
                       key={id}
@@ -770,16 +764,6 @@ export const PromptsPanel: React.FC<{
                       onSetStartPosition={
                         !isCurrentStep
                           ? () => handleSetPositionClick(setPositionTarget)
-                          : undefined
-                      }
-                      canMarkAsComplete={canMarkAsComplete}
-                      onMarkAsComplete={
-                        canMarkAsComplete
-                          ? () =>
-                              sendMessage(
-                                MESSAGE_TYPES.MARK_CURRENT_AS_COMPLETE,
-                                {}
-                              )
                           : undefined
                       }
                     />

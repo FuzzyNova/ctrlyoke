@@ -131,8 +131,8 @@ export const Header: React.FC = () => {
 
   // Pause button becomes resume button when paused or stopped
   // Disable during cancellation
-  // PAUSED: Resumes to next prompt (current one completed)
-  // STOPPED: Resumes to restart current prompt (cancelled)
+  // PAUSED: Resumes to next prompt (current one completed normally)
+  // STOPPED: Resumes to next prompt (cancelled prompt already advanced past)
   const canPause = isRunning && !isCancelling;
   const canResume = isPaused || isStopped;
 
@@ -292,7 +292,7 @@ export const Header: React.FC = () => {
                 : isPaused
                   ? "Resume"
                   : isStopped
-                    ? "Resume (restart current prompt)"
+                    ? "Resume"
                     : "Pause"
             }
             aria-label={isPaused || isStopped ? "Resume" : "Pause"}

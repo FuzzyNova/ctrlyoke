@@ -206,16 +206,6 @@ export class WebviewMessageRouter {
       await this.handleSetStartPosition(message.toIndex as number);
     });
 
-    table.set(MESSAGE_TYPES.MARK_CURRENT_AS_COMPLETE, async () => {
-      const orchestrator = this.getOrchestrator();
-      if (!orchestrator) return;
-      try {
-        await orchestrator.markCurrentAsComplete();
-      } catch (error) {
-        Log.error("Failed to mark current step as complete:", error);
-      }
-    });
-
     table.set(MESSAGE_TYPES.REORDER_PROMPTS, async (message) => {
       await this.getOrchestrator()?.reorderPendingPrompts(
         message.newPendingOrder as number[]

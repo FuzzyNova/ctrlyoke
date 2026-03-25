@@ -198,24 +198,25 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.status, EXECUTION_STATES.STOPPED);
     });
 
-    test("should preserve currentIndex and state after confirmedStopped", async () => {
+    test("should advance currentIndex past cancelled prompt after confirmedStopped", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await queue.start();
-      // Simulate moving forward
+      // Simulate moving forward past first prompt
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       assert.strictEqual(queue.getState().currentIndex, 1);
-      assert.ok(queue.getState().completedIndices.size > 0);
 
+      // Stop while on second prompt
+      await queue.markCurrentAsSent();
       queue.stop();
-      // confirmedStopped() preserves state (STOP = abort current, preserve progress)
       await queue.confirmedStopped();
 
       const state = queue.getState();
-      assert.strictEqual(state.currentIndex, 1); // Preserved
-      assert.ok(state.completedIndices.size > 0); // Preserved
-      // First prompt should still be completed
+      assert.strictEqual(state.currentIndex, 2); // Advanced past cancelled prompt
+      assert.ok(state.completedIndices.size >= 2); // Both prompts recorded
+      // First prompt completed, second prompt cancelled
       assert.strictEqual(state.results[0].status, STEP_STATUS.COMPLETED);
+      assert.strictEqual(state.results[1].status, STEP_STATUS.CANCELLED);
     });
 
     test("should mark SENT prompts as CANCELLED", async () => {
@@ -502,6 +503,20 @@ suite("PromptQueue State Machine Tests", () => {
       queue.markCurrentAsFailed("Test error");
       const state = queue.getState();
       assert.strictEqual(state.status, EXECUTION_STATES.ERROR);
+    });
+
+    test("should advance currentIndex past the failed prompt", () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      assert.strictEqual(queue.getState().currentIndex, 0);
+      queue.markCurrentAsFailed("Test error");
+      assert.strictEqual(queue.getState().currentIndex, 1);
+    });
+
+    test("should record terminalStatus as failed on the prompt runtime", () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      queue.markCurrentAsFailed("Test error");
+      const prompt = queue.getState().prompts[0];
+      assert.strictEqual(prompt._runtime?.terminalStatus, "failed");
     });
   });
 

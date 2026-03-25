@@ -163,8 +163,14 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
   /** Timestamp when prompt started */
   startedAt: number;
 
-  /** Timestamp when prompt completed */
+  /** Timestamp when prompt completed (set for all terminal states, not just successful completion) */
   completedAt?: number;
+
+  /**
+   * Terminal state of this prompt. Absent or 'completed' means successful completion.
+   * Used to restore the correct visual status after a working file reload.
+   */
+  terminalStatus?: "completed" | "cancelled" | "failed";
 
   /** Retry count if applicable */
   retryCount?: number;

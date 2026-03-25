@@ -62,10 +62,6 @@ interface PromptItemProps {
    * from the original absolute index. Defaults to `index + 1` when omitted.
    */
   displayNumber?: number;
-  /** When true, show a "mark as complete" button to accept a cancelled step without re-running it */
-  canMarkAsComplete?: boolean;
-  /** Callback when mark-as-complete is clicked */
-  onMarkAsComplete?: () => void;
   /** When true, suppresses the bottom border (e.g. when a BoundaryBar follows) */
   hideBorderBottom?: boolean;
   /**
@@ -121,8 +117,6 @@ export const PromptItem: React.FC<PromptItemProps> = ({
   canSetStartPosition,
   onSetStartPosition,
   startPositionDirection,
-  canMarkAsComplete,
-  onMarkAsComplete,
   displayNumber,
   hideBorderBottom = false,
   dimmed = false,
@@ -183,18 +177,6 @@ export const PromptItem: React.FC<PromptItemProps> = ({
           <span className="mt-0.5">
             <StatusIcon status={status} />
           </span>
-          {canMarkAsComplete && isHovered && (
-            <button
-              className="mt-auto w-4 flex items-center justify-center text-bash-status-success hover:text-foreground mb-0.5"
-              onClick={(e) => {
-                e.stopPropagation();
-                onMarkAsComplete?.();
-              }}
-              title="Mark as complete — accept this step's output and advance to the next prompt"
-            >
-              <i className="codicon codicon-pass-filled text-[12px]" />
-            </button>
-          )}
           {canSetStartPosition && isHovered && (
             <button
               className="mt-auto w-4 flex items-center justify-center text-description-fg hover:text-foreground mb-0.5"
