@@ -14,8 +14,7 @@ import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { AgentExpander } from "../../../utils/AgentExpander";
 import { CliOutputFormatter } from "../shared/CliOutputFormatter";
 import { UniversalCliOutput } from "../../../types/CliOutputTypes";
-import { ResolvedProperties } from "../../../utils/PropertyResolver";
-import type { PromptQueue } from "../../PromptQueue";
+import { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type { PromptSections } from "../../HarnessIntegration";
 
 /**
@@ -404,14 +403,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
   async sendPrompt(
     prompt: PromptItem,
     needsCompletionDetection?: boolean,
-    workflowContext?: {
-      promptIndex: number;
-      allPrompts: PromptItem[];
-      filePath?: string;
-      resolvedProperties?: ResolvedProperties;
-      promptQueue?: PromptQueue;
-      finalPromptSessionId?: string;
-    }
+    workflowContext?: WorkflowContext
   ): Promise<boolean> {
     try {
       // Reset cancellation flag for new prompt
@@ -1072,14 +1064,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
    */
   private async buildCopilotChatPrompt(
     prompt: PromptItem,
-    workflowContext?: {
-      promptIndex: number;
-      allPrompts: PromptItem[];
-      filePath?: string;
-      resolvedProperties?: ResolvedProperties;
-      promptQueue?: PromptQueue;
-      finalPromptSessionId?: string;
-    },
+    workflowContext?: WorkflowContext,
     isResumedSession?: boolean
   ): Promise<string> {
     if (ConfigurationUtils.shouldUseChatNativeAttachments()) {

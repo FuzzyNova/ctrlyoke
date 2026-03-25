@@ -110,4 +110,6 @@ export interface IDashboardSink {
 
   /** Called after webview undo/redo to acknowledge the sync (no-op response needed; kept for extensibility). */
   notifyUndoRedoSynced(): void;
+
+  updateWorkflowName(name: string): void;
 }

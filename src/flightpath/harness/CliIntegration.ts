@@ -8,9 +8,8 @@ import { CliResult } from "../../types/CliOutputTypes";
 import {
   PromptItem,
   Harness,
-  PromptFile,
-  WorkflowContext,
 } from "../../types/FlightPathTypes";
+import { WorkflowContext } from "../../types/WorkflowContextTypes";
 import { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import type { PromptSections } from "../HarnessIntegration";
@@ -36,7 +35,6 @@ import {
 } from "../../utils/PropertyResolver";
 import { SessionResolver } from "../../utils/SessionResolver";
 import { SessionValidator } from "../../utils/SessionValidator";
-import type { PromptQueue } from "../PromptQueue";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
 const SESSION_START_TIMEOUT_MS = 60_000;
@@ -1782,18 +1780,7 @@ export class CliIntegration extends HarnessIntegration {
   async sendPrompt(
     prompt: PromptItem,
     _needsCompletionDetection: boolean = true,
-    workflowContext?: {
-      promptIndex: number;
-      allPrompts: PromptItem[];
-      filePath?: string;
-      workflowName?: string;
-      instanceId?: string;
-      workingFilePath?: string;
-      resolvedProperties?: ResolvedProperties;
-      workflowFile?: PromptFile;
-      promptQueue?: PromptQueue;
-      finalPromptSessionId?: string;
-    }
+    workflowContext?: WorkflowContext
   ): Promise<boolean> {
     try {
       this.resetCancellationFlag();

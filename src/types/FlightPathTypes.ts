@@ -154,24 +154,6 @@ export interface PromptItem extends ExecutionProperties {
   _runtime?: PromptRuntimeMetadata; // Per-prompt runtime metadata
 }
 
-/**
- * Optional workflow context for temp file naming and session resolution.
- * Used by CliIntegration to create meaningful temp file names.
- *
- * NOTE: WorkflowExecutor defines a separate local WorkflowContext interface.
- * Keep this shared harness-facing type stable for now; rename should be handled
- * in executor-focused finalPrompt phases to avoid ambiguous naming.
- */
-export interface WorkflowContext {
-  promptIndex: number;
-  allPrompts: PromptItem[];
-  filePath?: string;
-  /** Workflow instance UUID — matches activeWorkflowId in the webview for PTY session keying. */
-  instanceId?: string;
-  workflowFile?: PromptFile;
-  promptQueue?: { getState(): QueueState }; // Minimal interface to avoid circular dependency with PromptQueue
-  workflowName?: string;
-}
 
 /**
  * Per-prompt runtime execution metadata.

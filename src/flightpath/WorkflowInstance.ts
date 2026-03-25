@@ -111,6 +111,8 @@ export class WorkflowInstance {
   private ensureWorkingFilePromise: Promise<void> | undefined;
   /** Tracks prompt count to detect MCP-triggered merges */
   private lastKnownPromptCount: number = 0;
+  /** Tracks workflow name to detect changes and push them to the dashboard */
+  private lastKnownWorkflowName: string = "";
   /** Heartbeat interval for the process lock file (cleared in finally + dispose) */
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
 
@@ -1931,6 +1933,12 @@ export class WorkflowInstance {
     this.onStatusBarUpdate();
 
     if (this.isActive && this.dashboardSink) {
+      // Detect workflow name changes and push them to the dashboard immediately.
+      const newWorkflowName = state.workflowName ?? "";
+      if (newWorkflowName && newWorkflowName !== this.lastKnownWorkflowName) {
+        this.dashboardSink.updateWorkflowName(newWorkflowName);
+      }
+
       // Active workflow: forward state changes directly to the dashboard.
       // When prompts also increase in the same state change, piggyback the
       // execution state onto the PROMPTS_EXTENDED message so both updates land
@@ -1990,6 +1998,7 @@ export class WorkflowInstance {
     }
 
     this.lastKnownPromptCount = state.prompts.length;
+    this.lastKnownWorkflowName = state.workflowName ?? "";
 
     if (state.status === EXECUTION_STATES.RUNNING && !this.activeIntegration) {
       Log.debug(

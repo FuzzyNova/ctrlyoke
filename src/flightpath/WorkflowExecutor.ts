@@ -2,12 +2,12 @@ import * as path from "path";
 import { PlatformAdapter } from "../platform/PlatformAdapter";
 import {
   PromptItem,
-  PromptFile,
   DynamicQueueConfig,
   FinalPromptRuntimeState,
   EXECUTION_STATES,
   Harness,
 } from "../types/FlightPathTypes";
+import { WorkflowContext } from "../types/WorkflowContextTypes";
 import {
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
@@ -22,10 +22,7 @@ import {
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { Log } from "../utils/Log";
-import {
-  PropertyResolver,
-  ResolvedProperties,
-} from "../utils/PropertyResolver";
+import { PropertyResolver } from "../utils/PropertyResolver";
 import {
   CliOutputFormatter,
   DashboardOutput,
@@ -848,18 +845,7 @@ export class WorkflowExecutor {
     target: ExecutionTarget,
     legacyStepIndex: number | undefined,
     attemptIndex: number,
-    sendOptions: {
-      promptIndex: number;
-      allPrompts: PromptItem[];
-      filePath?: string;
-      instanceId?: string;
-      workingFilePath?: string;
-      resolvedProperties?: ResolvedProperties;
-      workflowFile?: PromptFile;
-      promptQueue?: PromptQueue;
-      finalPromptSessionId?: string;
-      workflowName?: string;
-    },
+    sendOptions: WorkflowContext,
     onPromptSent?: () => Promise<void>
   ): Promise<{ responseText: string; duration: number } | null> {
     const startTime = Date.now();

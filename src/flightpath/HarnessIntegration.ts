@@ -1,5 +1,6 @@
 import * as path from "path";
-import { PromptItem, PromptFile, PriorContext } from "../types/FlightPathTypes";
+import { PromptItem, PriorContext } from "../types/FlightPathTypes";
+import { WorkflowContext } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import {
   CliResult,
@@ -11,10 +12,8 @@ import { SkillExpander } from "../utils/SkillExpander";
 import { ContextExpander } from "../utils/ContextExpander";
 import type { SplitContext } from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
-import { ResolvedProperties } from "../utils/PropertyResolver";
 import { TempFileManager } from "../utils/TempFileManager";
 import { SplitConfig } from "../utils/PromptFileSplitter";
-import type { PromptQueue } from "./PromptQueue";
 
 /**
  * Minimal container for VS Code-style disposable subscriptions.
@@ -199,19 +198,7 @@ export abstract class HarnessIntegration {
   abstract sendPrompt(
     prompt: PromptItem,
     needsCompletionDetection?: boolean,
-    workflowContext?: {
-      promptIndex: number;
-      allPrompts: PromptItem[];
-      filePath?: string;
-      workingFilePath?: string; // Path to .flightpath.json working file (sets FLIGHTPATH_WORKING_FILE for MCP)
-      resolvedProperties?: ResolvedProperties; // Resolved properties from PropertyResolver
-      workflowFile?: PromptFile; // For session resolution
-      promptQueue?: PromptQueue; // For runtime metadata persistence
-      /** Session ID from the most recent finalPrompt execution. Consumed by SessionResolver
-       *  when sessionId is the "finalPrompt" sentinel on any prompt (queue or finalPrompt phase). */
-      finalPromptSessionId?: string;
-      workflowName?: string;
-    }
+    workflowContext?: WorkflowContext
   ): Promise<boolean>;
 
   /**
