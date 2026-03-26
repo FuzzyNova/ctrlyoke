@@ -395,6 +395,17 @@ export const EDITOR_TARGET_KINDS = {
 } as const;
 
 // ============================================================================
+// EDITOR PLACEHOLDER TEXT - Shared placeholder strings for CodeMirrorEditor
+// ============================================================================
+export const EDITOR_PLACEHOLDER_TEXT = {
+  /** Base hint shown in all prompt editors */
+  DEFAULT: "Use @ for files/folders, # for selections/symbols, ~ for git changes",
+  /** Extended hint for the Final Prompt editor, explaining its loop-back behavior */
+  FINAL_PROMPT:
+    "Use @ for files/folders, # for selections/symbols, ~ for git changes\n\nNote: The Final Prompt runs after all other prompts complete. If it appends new prompts, it will run again once those finish.",
+} as const;
+
+// ============================================================================
 // TERMINAL SESSION STATUS - Status values for terminal sessions
 // ============================================================================
 export const TERMINAL_SESSION_STATUS = {

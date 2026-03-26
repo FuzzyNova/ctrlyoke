@@ -19,7 +19,7 @@ import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { linter, lintKeymap } from "@codemirror/lint";
 import { RangeSetBuilder } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
-import { MESSAGE_TYPES } from "../../types/messages";
+import { MESSAGE_TYPES, EDITOR_PLACEHOLDER_TEXT } from "../../types/messages";
 import { WebviewLog } from "../../utils/logger";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 
@@ -75,9 +75,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     onRun,
     onQueue,
   } = props;
-  const placeholderText =
-    props.placeholder ||
-    "Use @ for files and folders, # for selections and symbols, ~ for git changes";
+  const placeholderText = props.placeholder || EDITOR_PLACEHOLDER_TEXT.DEFAULT;
 
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);

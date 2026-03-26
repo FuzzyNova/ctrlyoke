@@ -112,6 +112,12 @@ export interface SpawnPtyOptions {
   stepName: string;
   kind: SessionKind;
   promptNumber?: number;
+  /**
+   * Pre-supply a session ID so the caller can post TERMINAL_STARTED to the
+   * webview *before* spawning — ensuring the session exists in the store
+   * before any TERMINAL_OUTPUT messages arrive.
+   */
+  sessionId?: string;
   command: string;
   args: string[];
   cwd: string;
@@ -145,7 +151,7 @@ export class PtyProcessManager {
     if (!nodePty) {
       throw new Error("node-pty native module is not available on this platform");
     }
-    const sessionId = `${options.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const sessionId = options.sessionId ?? `${options.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const ptyInstance = nodePty.spawn(options.command, options.args, {
       name: "xterm-256color",

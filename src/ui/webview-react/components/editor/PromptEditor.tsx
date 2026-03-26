@@ -15,6 +15,7 @@ import {
   FINAL_PROMPT_PHASES,
   ACTION_TYPES,
   EDITOR_TARGET_KINDS,
+  EDITOR_PLACEHOLDER_TEXT,
 } from "../../types/messages";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 
@@ -72,6 +73,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const [fileRefExists, setFileRefExists] = useState<boolean | null>(null);
 
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
+  const isFinalPrompt = selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT;
   const isFileRef = looksLikeFilePath(promptText.trim());
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const selectedPromptStatus =
@@ -534,7 +536,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         <CodeMirrorEditor
           value={promptText}
           onChange={handleTextChange}
-          placeholder="Use @ for files and folders, # for selections and symbols"
+          placeholder={isFinalPrompt ? EDITOR_PLACEHOLDER_TEXT.FINAL_PROMPT : undefined}
           affUri={affUri}
           dicUri={dicUri}
           readOnly={isCLIManaged}

@@ -1098,11 +1098,29 @@ export class CliIntegration extends HarnessIntegration {
       const cwd = this.getWorkspaceRoot() ?? process.cwd();
       const mergedEnv = env ? { ...process.env, ...env } : process.env;
 
+      // Generate the session ID up-front so we can post TERMINAL_STARTED to the
+      // webview *before* spawning the PTY. This guarantees the session exists in
+      // the webview store before any TERMINAL_OUTPUT messages arrive — without
+      // this, output produced in the first few milliseconds of process startup
+      // (banners, version headers) would be silently dropped because
+      // pushPendingOutput maps over existing sessions and finds no match.
+      const promptNumber = workflowContext ? workflowContext.promptIndex + 1 : undefined;
+      const preSessionId = `ai-cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      ptyPostMessage({
+        type: MESSAGE_TYPES.TERMINAL_STARTED,
+        workflowId,
+        sessionId: preSessionId,
+        stepName,
+        kind: "ai-cli",
+        promptNumber,
+      });
+
       const session = ptyManager.spawnPty({
         workflowId,
         stepName,
         kind: "ai-cli",
-        promptNumber: workflowContext ? workflowContext.promptIndex + 1 : undefined,
+        promptNumber,
+        sessionId: preSessionId,
         command: shell,
         args: shellArgs,
         cwd,
@@ -1130,15 +1148,6 @@ export class CliIntegration extends HarnessIntegration {
       });
 
       this.currentPtySession = session;
-
-      ptyPostMessage({
-        type: MESSAGE_TYPES.TERMINAL_STARTED,
-        workflowId,
-        sessionId: session.id,
-        stepName,
-        kind: "ai-cli",
-        promptNumber: session.promptNumber,
-      });
 
       Log.info(`🖥️ PTY session spawned: "${stepName}" (${session.id.slice(0, 8)}) workflowId=inst:${workflowId.slice(0, 8)}`);
     } else {

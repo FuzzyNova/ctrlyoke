@@ -42,10 +42,11 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       const entry = await terminalRegistry.create(workflowId, sessionId);
       if (cancelled || !containerRef.current) return;
 
-      // Attach the xterm DOM element into this container (async: loads WebGL addon on first open)
-      await terminalRegistry.attach(workflowId, sessionId, containerRef.current);
-
-      // Flush buffered output that arrived before this component mounted
+      // Flush buffered output immediately after the entry lands in the registry,
+      // before attach()'s async WebGL import. Any TERMINAL_OUTPUT messages that
+      // arrive after create() completes write directly to entry.term.write(); if
+      // we flushed pendingOutput after attach() those earlier chunks would be
+      // written out-of-order (after chunks that arrived during the WebGL import).
       const { sessions, clearPendingOutput } = useTerminalStore.getState();
       const session = (sessions[workflowId] ?? []).find((s) => s.id === sessionId);
       if (session?.pendingOutput.length) {
@@ -54,6 +55,9 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         }
         clearPendingOutput(workflowId, sessionId);
       }
+
+      // Attach the xterm DOM element into this container (async: loads WebGL addon on first open)
+      await terminalRegistry.attach(workflowId, sessionId, containerRef.current);
 
       // Register onData for input routing (skip if session is frozen or already listening)
       if (!entry.frozen && !entry.onDataDisposable) {

@@ -1263,14 +1263,17 @@ export class WorkflowExecutor {
         : `finalPrompt loop ${Math.abs(legacyStepIndex)}`;
     this.platform.error(`Failed to execute ${stepLabel}: ${failureReason}`);
 
-    await this.promptQueue.markErrored();
-
+    // Send FAILED status before markErrored() so the step icon updates
+    // before the execution state transitions to ERROR (separate postMessages
+    // arrive in the same render cycle this way).
     if (context.dashboardProvider && legacyStepIndex >= 0) {
       context.dashboardProvider.updateStepStatus(legacyStepIndex, {
         state: STEP_STATUS.FAILED,
         message: failureReason,
       });
     }
+
+    await this.promptQueue.markErrored();
 
     // Write a final (non-streaming) error CLI output so the failure is visible
     // in the dashboard and persisted to history. This replaces the initial

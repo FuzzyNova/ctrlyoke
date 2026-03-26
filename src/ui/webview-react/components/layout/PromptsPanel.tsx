@@ -432,6 +432,17 @@ export const PromptsPanel: React.FC<{
       if (index === currentStep) return STEP_STATUS.RUNNING;
       if (index < currentStep) return STEP_STATUS.COMPLETED;
     }
+    // Eagerly reflect terminal states for the current step before the
+    // per-step STEP_STATUS_CHANGED message arrives.  executionState flips
+    // synchronously, but the step-level status update is a separate postMessage
+    // that lands in a later render cycle — without this, the play icon persists
+    // until that second message arrives (or never clears if it was never sent).
+    if (executionState === EXECUTION_STATES.CANCELLING && index === currentStep) {
+      return STEP_STATUS.CANCELLED;
+    }
+    if (executionState === EXECUTION_STATES.ERROR && index === currentStep) {
+      return STEP_STATUS.FAILED;
+    }
     // Use explicit status for non-running states or future steps
     // (covers COMPLETED, ERROR, etc. set by STEP_STATUS_CHANGED)
     if (promptData.status) {

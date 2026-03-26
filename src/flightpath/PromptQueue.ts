@@ -463,9 +463,17 @@ export class PromptQueue {
     this.state.status = EXECUTION_STATES.CANCELLING; // Cancelling, not stopped yet
     this.state.stopped = true; // Set stopped flag for executor loop
 
-    // Mark sent prompts as cancelled (not just pending)
-    this.state.results.forEach((result) => {
-      if (result.status === STEP_STATUS.SENT) {
+    // Mark the active step as CANCELLED. Covers both SENT and PENDING because
+    // updateDashboardForPromptStart (which sets the UI to RUNNING) fires before
+    // markCurrentAsSent (which records SENT), so the result may still be PENDING
+    // when stop() is called.  Only the current index needs the PENDING check —
+    // future prompts that haven't started should stay PENDING.
+    const currentIndex = this.state.currentIndex;
+    this.state.results.forEach((result, index) => {
+      if (
+        result.status === STEP_STATUS.SENT ||
+        (result.status === STEP_STATUS.PENDING && index === currentIndex)
+      ) {
         result.status = STEP_STATUS.CANCELLED;
       }
     });
