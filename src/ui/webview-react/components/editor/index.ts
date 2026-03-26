@@ -2,3 +2,8 @@ export { CodeMirrorEditor } from "./CodeMirrorEditor";
 export { PromptEditor } from "./PromptEditor";
 export { PropertiesDrawer } from "./PropertiesDrawer";
 export { EditorFooter } from "./EditorFooter";
+export { FooterQuickPicker } from "./FooterQuickPicker";
+export { HarnessQuickPicker } from "./HarnessQuickPicker";
+export { ModelQuickPicker } from "./ModelQuickPicker";
+export { AgentQuickPicker } from "./AgentQuickPicker";
+export { SkillsQuickPicker } from "./SkillsQuickPicker";

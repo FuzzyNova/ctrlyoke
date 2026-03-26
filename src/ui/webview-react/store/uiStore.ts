@@ -189,6 +189,9 @@ interface UiState {
     type: "info" | "success" | "warning" | "error";
     visible: boolean;
   } | null;
+
+  // Footer quick picker state (transient, not persisted)
+  footerOpenPicker: "harness" | "model" | "agent" | "skills" | null;
 }
 
 /**
@@ -291,6 +294,9 @@ interface UiActions {
   unhideDropdownOption: (namespace: string, value: string) => void;
   clearHiddenDropdownOptions: (namespace: string) => void;
 
+  // Footer quick picker
+  setFooterOpenPicker: (picker: "harness" | "model" | "agent" | "skills" | null) => void;
+
   // Reset UI to defaults
   resetUi: () => void;
 }
@@ -334,6 +340,7 @@ const initialState: UiState = {
   availableRuns: 0,
   runTimestamps: [],
   runStates: [],
+  footerOpenPicker: null,
 };
 
 // Fields to persist via vscode.getState()/setState()
@@ -641,6 +648,12 @@ export const useUiStore = create<UiState & UiActions>()(
         })),
 
       // ============================================================================
+      // FOOTER QUICK PICKER
+      // ============================================================================
+
+      setFooterOpenPicker: (picker) => set({ footerOpenPicker: picker }),
+
+      // ============================================================================
       // RESET
       // ============================================================================
 
@@ -659,6 +672,7 @@ export const useUiStore = create<UiState & UiActions>()(
           isLoading: false,
           loadingMessage: null,
           toast: null,
+          footerOpenPicker: null,
         }),
     }),
     {

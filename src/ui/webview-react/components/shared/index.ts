@@ -26,3 +26,4 @@ export {
   type PriorPrompt,
   type KeywordMode,
 } from "./PriorContextSelect";
+export { SkillsSelect } from "./SkillsSelect";

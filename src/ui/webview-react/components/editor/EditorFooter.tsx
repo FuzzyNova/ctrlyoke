@@ -2,6 +2,10 @@ import React from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
+import { HarnessQuickPicker } from "./HarnessQuickPicker";
+import { ModelQuickPicker } from "./ModelQuickPicker";
+import { AgentQuickPicker } from "./AgentQuickPicker";
+import { SkillsQuickPicker } from "./SkillsQuickPicker";
 
 interface EditorFooterProps {
   isEditMode: boolean;
@@ -60,15 +64,17 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
 }) => {
   const { promptText } = useEditorStore();
   const tokenCount = useAttachmentTokenCount(promptText);
-  const [footerRef, isNarrow] = useElementNarrow();
+  const [footerRef, isNarrow] = useElementNarrow(380);
+  const [, isNotWide] = useElementNarrow(560);
+  const showPickerValues = !isNotWide;
 
   return (
     <div
       ref={footerRef}
       className="editor-footer flex items-center justify-between px-3 py-1.5 border-t border-panel-border bg-sidebar-bg"
     >
-      {/* Left side: Properties toggle */}
-      <div className="editor-footer-left flex items-center">
+      {/* Left side: Properties toggle + Harness + Model pickers */}
+      <div className="editor-footer-left flex items-center gap-1">
         <button
           className={`btn-properties px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors ${
             propertiesOpen
@@ -86,6 +92,16 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             />
           )}
         </button>
+        <HarnessQuickPicker
+          isNarrow={isNarrow}
+          showLabel={showPickerValues}
+          disabled={isCLIManaged}
+        />
+        <ModelQuickPicker
+          isNarrow={isNarrow}
+          showLabel={showPickerValues}
+          disabled={isCLIManaged}
+        />
       </div>
 
       {/* Center: Token count */}
@@ -98,8 +114,19 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
         </span>
       </div>
 
-      {/* Right side: Action buttons */}
-      <div className="editor-actions flex items-center gap-2">
+      {/* Right side: Agent + Skills pickers + Action buttons */}
+      <div className="editor-actions flex items-center gap-1">
+        <AgentQuickPicker
+          isNarrow={isNarrow}
+          showLabel={showPickerValues}
+          disabled={isCLIManaged}
+        />
+        <SkillsQuickPicker
+          isNarrow={isNarrow}
+          showLabel={showPickerValues}
+          disabled={isCLIManaged}
+        />
+        <div className="flex items-center gap-2">
         {isEditMode ? (
           // Edit mode buttons
           <>
@@ -200,6 +227,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             </button>
           </>
         )}
+        </div>
       </div>
     </div>
   );

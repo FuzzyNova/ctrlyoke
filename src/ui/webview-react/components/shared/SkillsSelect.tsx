@@ -1,0 +1,162 @@
+import React, { useEffect, useRef, useState } from "react";
+
+/**
+ * SkillsSelect — Hybrid dropdown for the prompt-level skills property.
+ *
+ * Top section: "Default (X)" and "None" keywords where X is the resolved inherited value.
+ * Below a divider: checkbox list of available skills.
+ * Selecting a keyword clears the array selection; toggling checkboxes
+ * switches to custom array mode (matching the PriorContextSelect pattern).
+ */
+export const SkillsSelect: React.FC<{
+  value: string[] | null | undefined;
+  onChange: (v: string[] | null | undefined) => void;
+  availableSkills: Array<{ name: string; description?: string }>;
+  defaultLabel?: string;
+  dropdownMaxHeight?: string;
+}> = ({
+  value,
+  onChange,
+  availableSkills,
+  defaultLabel,
+  dropdownMaxHeight = "60vh",
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [isOpen]);
+
+  const selectedSkills = Array.isArray(value) ? value : [];
+
+  let buttonLabel: string;
+  if (value === undefined) {
+    buttonLabel = defaultLabel ?? "Default";
+  } else if (value === null) {
+    buttonLabel = "None";
+  } else if (selectedSkills.length === 0) {
+    buttonLabel = "None selected";
+  } else if (selectedSkills.length <= 2) {
+    buttonLabel = selectedSkills.join(", ");
+  } else {
+    buttonLabel = `${selectedSkills.slice(0, 2).join(", ")} +${selectedSkills.length - 2}`;
+  }
+
+  const toggleSkill = (name: string) => {
+    const current = Array.isArray(value) ? value : [];
+    const updated = current.includes(name)
+      ? current.filter((s) => s !== name)
+      : [...current, name];
+    onChange(updated);
+  };
+
+  return (
+    <div className="relative inline-block w-full" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7"
+      >
+        <span className="truncate">{buttonLabel}</span>
+        <i
+          className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-[10px] flex-shrink-0 ml-1`}
+        />
+      </button>
+
+      <div
+        className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top flex flex-col ${
+          isOpen
+            ? "opacity-100 translate-y-0 visible"
+            : "opacity-0 -translate-y-1 invisible pointer-events-none"
+        }`}
+        style={{ maxHeight: dropdownMaxHeight }}
+      >
+        <div className="overflow-y-auto min-h-0 flex-1">
+          {/* Keyword options */}
+          {(["default", "none"] as const).map((k) => {
+            const isSelected =
+              k === "default" ? value === undefined : value === null;
+            const label =
+              k === "default" ? (defaultLabel ?? "Default") : "None";
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => {
+                  onChange(k === "default" ? undefined : null);
+                  setIsOpen(false);
+                }}
+                className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
+                  isSelected
+                    ? "bg-dropdown-selected-bg text-list-active-fg"
+                    : "hover:bg-list-hover-bg cursor-pointer"
+                }`}
+              >
+                <i
+                  className={`codicon codicon-check text-[10px] flex-shrink-0 ${
+                    isSelected ? "visible" : "invisible"
+                  }`}
+                />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+
+          {/* Skills checkbox section */}
+          {availableSkills.length > 0 && (
+            <>
+              <div className="border-t border-dropdown-border" />
+              <div className="px-2 py-1 text-[10px] text-description-fg uppercase font-semibold tracking-wide">
+                Select skills:
+              </div>
+              {availableSkills.map((skill) => {
+                const isChecked = selectedSkills.includes(skill.name);
+                return (
+                  <button
+                    key={skill.name}
+                    type="button"
+                    onClick={() => toggleSkill(skill.name)}
+                    className={`w-full px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none ${
+                      isChecked
+                        ? "bg-dropdown-selected-bg text-list-active-fg"
+                        : "hover:bg-list-hover-bg cursor-pointer"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {}}
+                      className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+                      tabIndex={-1}
+                    />
+                    <span className="flex flex-col min-w-0">
+                      <span className="font-medium truncate">{skill.name}</span>
+                      {skill.description && (
+                        <span className="text-[10px] text-description-fg truncate">
+                          {skill.description}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
