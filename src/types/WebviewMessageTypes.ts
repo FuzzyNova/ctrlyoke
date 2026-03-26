@@ -316,6 +316,8 @@ export interface SessionRestoredMessage {
  */
 export interface ExecutionStartedMessage {
   type: typeof MESSAGE_TYPES.EXECUTION_STARTED;
+  /** Workflow instance UUID — used to clear the correct workflow's ai-cli sessions */
+  workflowId: string;
   fileName: string;
   totalSteps: number;
   /**

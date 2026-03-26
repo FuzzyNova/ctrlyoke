@@ -294,4 +294,20 @@ export interface ILogParser {
    * @returns Additional completion-time events to append before final extraction
    */
   getFinalEventsOnCompletion(logPath: string): Promise<BaseCliEvent[]>;
+
+  /**
+   * Seek the internal read position to the current end of the file.
+   *
+   * Called before monitoring a **resumed** session's log file to skip all
+   * existing historical events (from prior prompts in the same session).
+   * Without this, `readNewLines()` starts at position 0 and re-reads the
+   * full history, including old `stop_reason:"end_turn"` events that would
+   * trigger immediate false completion. Events without a `timestamp` field
+   * bypass the timestamp filter entirely, making this seek essential.
+   *
+   * Safe to call even when the file does not yet exist.
+   *
+   * @param filePath Absolute path to the log file
+   */
+  seekToEnd?(filePath: string): void;
 }

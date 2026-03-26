@@ -184,6 +184,32 @@ export abstract class BaseLogParser implements ILogParser {
   }
 
   /**
+   * Seek the internal read position to the current end of the file.
+   *
+   * Called before monitoring a resumed session to skip historical events that
+   * were written by previous prompts in the same session. Without this,
+   * `readNewLines()` starts at position 0 and re-reads the full history,
+   * including old `stop_reason:"end_turn"` events that trigger immediate false
+   * completion. Events that lack a `timestamp` field bypass the timestamp
+   * filter entirely, making this seek essential for resumed sessions.
+   *
+   * @param filePath Absolute path to log file
+   */
+  seekToEnd(filePath: string): void {
+    try {
+      if (fs.existsSync(filePath)) {
+        const stats = fs.statSync(filePath);
+        this.lastReadPosition = stats.size;
+        Log.debug(
+          `[BaseLogParser] Seeked to end of file (${stats.size} bytes): ${filePath}`
+        );
+      }
+    } catch {
+      // Best-effort — falls back to reading from the beginning
+    }
+  }
+
+  /**
    * Build common statistics parts shared across all harnesses
    *
    * Extracts session ID, model, and token usage from metadata and returns

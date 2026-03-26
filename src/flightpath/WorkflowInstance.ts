@@ -890,6 +890,7 @@ export class WorkflowInstance {
             `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${currentIndex}, totalSteps=${totalPrompts}`
           );
           this.dashboardSink.updateExecutionStarted(
+            this.id,
             fileName,
             totalPrompts,
             true,
@@ -900,6 +901,7 @@ export class WorkflowInstance {
             `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true (append-to-completed), preserveStepCount=${prevCompletedCount}, totalSteps=${totalPrompts}`
           );
           this.dashboardSink.updateExecutionStarted(
+            this.id,
             fileName,
             totalPrompts,
             true,
@@ -910,7 +912,7 @@ export class WorkflowInstance {
             `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${totalPrompts}`
           );
           this.clearOutputBuffers();
-          this.dashboardSink.updateExecutionStarted(fileName, totalPrompts);
+          this.dashboardSink.updateExecutionStarted(this.id, fileName, totalPrompts);
         }
       }
 
@@ -1628,7 +1630,7 @@ export class WorkflowInstance {
         harnessOverride?: Harness
       ) => {
         const currentIntegration = this.activeIntegration ?? activeIntegration;
-        const resolvedHarness = harnessOverride || prompt.harness;
+        const resolvedHarness = harnessOverride;
         if (
           resolvedHarness &&
           resolvedHarness !== currentIntegration.getIntegrationMode()
@@ -2051,6 +2053,7 @@ export class WorkflowInstance {
       if (state.currentIndex > 0 && historyFilePath) {
         // Continuation: preserve previously completed steps in the UI output area
         this.dashboardSink.updateExecutionStarted(
+          this.id,
           fileName,
           state.prompts.length,
           true, // isContinuation
@@ -2060,6 +2063,7 @@ export class WorkflowInstance {
         // Fresh start: clear all previous output buffers
         this.clearOutputBuffers();
         this.dashboardSink.updateExecutionStarted(
+          this.id,
           fileName,
           state.prompts.length
         );

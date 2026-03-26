@@ -908,6 +908,14 @@ export class CliIntegration extends HarnessIntegration {
         logPath = discovery.logPath;
         sessionId = discovery.sessionId;
         Log.info(`✅ Found log file for resumed session: ${logPath}`);
+
+        // Seek past existing file content so the initial readNewLines() call in
+        // CliLogMonitor only sees events appended AFTER this point. Without this,
+        // old completion events from prior prompts in the same session file would
+        // trigger immediate false completion — especially for events that lack a
+        // `timestamp` field and therefore bypass the timestamp filter entirely.
+        // (The Stop hook remains the reliable completion path for fast prompts.)
+        this.provider.logParser!.seekToEnd?.(logPath);
       } else if (this.provider.notificationMonitor.supportsSessionStart) {
         // Harness supports SessionStart hook (Claude, Copilot)
         Log.info("🔍 Waiting for SessionStart hook and log file creation...");
@@ -1246,8 +1254,14 @@ export class CliIntegration extends HarnessIntegration {
         Log.info(`🚀 Starting headless mode with direct prompt (fast path)`);
       }
 
-      // Build headless arguments
-      const headlessArgs = this.provider.buildHeadlessArgs(args, promptArgument);
+      // Build headless arguments.
+      // Normalize newlines to spaces before passing as a shell argument: on Windows,
+      // cmd.exe (shell:true) treats newline characters as command separators even inside
+      // double-quoted strings, which truncates the prompt at the first newline.
+      // The multi-line formatting in promptWithInstruction (joinSeparator = ",\n") is
+      // for human readability only — replacing with spaces preserves the full instruction.
+      const shellSafePrompt = promptArgument.replace(/[\r\n]+/g, " ");
+      const headlessArgs = this.provider.buildHeadlessArgs(args, shellSafePrompt);
       const displayCommand = `${this.provider.config.name} ${headlessArgs.join(" ")}`;
 
       this.lastCliCommand = displayCommand;
@@ -1343,10 +1357,17 @@ export class CliIntegration extends HarnessIntegration {
       onStdout?: (chunk: string) => void;
     } = {}
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    // Use the same PowerShell-preferred shell as interactive mode on Windows.
+    // Node's spawn({ shell: true }) defaults to cmd.exe on Windows, which
+    // cannot handle special characters (e.g. newlines in quoted args).
+    const shell =
+      process.platform === "win32" ? resolveWindowsShell() : true;
+
     const result = await this.processManager.spawn(command, args, {
       cwd: this.getWorkspaceRoot() || "",
       timeout: options.timeout,
       onStdout: options.onStdout,
+      shell,
     });
 
     Log.info("✅ Process exited - execution complete");

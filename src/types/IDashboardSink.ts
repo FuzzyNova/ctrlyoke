@@ -41,6 +41,7 @@ export interface IDashboardSink {
   ): Promise<void>;
 
   updateExecutionStarted(
+    workflowId: string,
     fileName: string,
     totalSteps: number,
     isContinuation?: boolean,

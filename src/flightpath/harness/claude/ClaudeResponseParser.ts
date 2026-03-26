@@ -153,6 +153,18 @@ export class ClaudeResponseParser
       });
     }
 
+    // Fallback: if no events were generated but stdout has content (e.g. Claude
+    // responded with plain text instead of JSON — happens when the prompt was
+    // truncated mid-argument and Claude says "your message got cut off"),
+    // surface the raw text so the output panel shows something meaningful.
+    if (events.length === 0 && objects.length === 0 && stdout.trim()) {
+      events.push({
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: Date.now(),
+        data: { text: stdout.trim() },
+      });
+    }
+
     // Build normalized token usage with context window tracking
     let tokenUsage: TokenUsage | undefined;
     if (usage) {

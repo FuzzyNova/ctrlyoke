@@ -9,7 +9,7 @@ export interface SpawnOptions {
   cwd?: string;
   timeout?: number;
   onStdout?: (chunk: string) => void;
-  shell?: boolean;
+  shell?: boolean | string;
   env?: NodeJS.ProcessEnv;
 }
 

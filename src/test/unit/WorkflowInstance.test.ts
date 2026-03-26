@@ -421,7 +421,8 @@ suite("WorkflowInstance append-and-continue", () => {
     await (instance as any).executeLoadedPromptFile();
 
     assert.strictEqual(restartCalled, false);
-    assert.deepStrictEqual(executionStartedArgs, [
+    assert.strictEqual(typeof executionStartedArgs![0], "string"); // workflowId (UUID)
+    assert.deepStrictEqual(executionStartedArgs!.slice(1), [
       "workflow.prompt.md",
       2,
       true,

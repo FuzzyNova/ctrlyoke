@@ -510,9 +510,17 @@ export class WorkflowExecutor {
       duration
     );
 
-    if (prompt.endCondition) {
+    // Use the resolved end condition (handles workflow-level inheritance via PropertyResolver)
+    // rather than reading prompt.endCondition directly, which misses workflow-level defaults.
+    const resolvedEndCondition = resolvedProperties.endCondition;
+    const promptForEval =
+      resolvedEndCondition && resolvedEndCondition !== prompt.endCondition
+        ? { ...prompt, endCondition: resolvedEndCondition }
+        : prompt;
+
+    if (resolvedEndCondition) {
       const shouldContinue = await this.evaluateEndCondition(
-        prompt,
+        promptForEval,
         integration,
         context,
         target,

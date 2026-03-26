@@ -339,6 +339,7 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   public updateExecutionStarted(
+    workflowId: string,
     fileName: string,
     totalSteps: number,
     isContinuation?: boolean,
@@ -346,6 +347,7 @@ window.vscodeApi = acquireVsCodeApi();
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.EXECUTION_STARTED,
+      workflowId,
       fileName,
       totalSteps,
       ...(isContinuation ? { isContinuation: true, preserveStepCount } : {}),

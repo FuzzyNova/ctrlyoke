@@ -457,7 +457,7 @@ function createMessageHandlers(): MessageHandlerMap {
     editorStore.setHasActiveQueue(true);
 
     // Clear previous ai-cli terminal sessions (shell sessions survive)
-    const wfId = message.workflowId ?? useUiStore.getState().activeWorkflowId;
+    const wfId = message.workflowId;
     if (wfId) {
       const aiCliSessionIds = (useTerminalStore.getState().sessions[wfId] ?? [])
         .filter((s) => s.kind === SESSION_KINDS.AI_CLI)
