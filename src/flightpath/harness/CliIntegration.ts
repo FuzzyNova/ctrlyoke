@@ -869,14 +869,20 @@ export class CliIntegration extends HarnessIntegration {
       // Generate a per-run ID so the hook script writes a uniquely-named start file.
       // This eliminates the parallel-workflow race in waitForSessionStart: each run's
       // hook writes {runId}-start.json, and waitForSessionStart watches only that file.
-      // The ID travels to the hook via FLIGHTPATH_RUN_ID in the terminal's process env.
+      // Both IDs travel to the hook/plugin via env vars in the terminal's process env.
       const runId = crypto.randomUUID();
+      const terminalEnv: Record<string, string> = { FLIGHTPATH_RUN_ID: runId };
+      const wsRootForEnv = this.getWorkspaceRoot();
+      if (wsRootForEnv) {
+        terminalEnv.FLIGHTPATH_NOTIFY_DIR =
+          this.provider.notificationMonitor.getNotificationDirectory(wsRootForEnv);
+      }
       await this.startCliProcess(
         args,
         promptArgument,
         tempFilePaths,
         workflowContext,
-        { FLIGHTPATH_RUN_ID: runId }
+        terminalEnv
       );
 
       // 3. Wait for SessionStart hook and discover log file

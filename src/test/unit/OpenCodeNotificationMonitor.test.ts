@@ -30,21 +30,4 @@ suite("OpenCodeNotificationMonitor", () => {
     );
   });
 
-  test("should generate plugin content that writes start and stop notifications", () => {
-    const plugin = monitor.getPluginContent(
-      "C:\\repo\\.flightpath\\temp\\opencode-notifications"
-    );
-
-    assert.ok(
-      plugin.includes(
-        'const NOTIFY_DIR = "C:/repo/.flightpath/temp/opencode-notifications";'
-      )
-    );
-    assert.ok(plugin.includes('event.type === "session.created"'));
-    assert.ok(plugin.includes('event.type === "session.status"'));
-    assert.ok(plugin.includes("-start.json"));
-    assert.ok(plugin.includes("-stop.json"));
-    assert.ok(plugin.includes('status: "started"'));
-    assert.ok(plugin.includes('status: "completed"'));
-  });
 });

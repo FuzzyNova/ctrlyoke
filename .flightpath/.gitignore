@@ -3,3 +3,4 @@
 .queue/
 logs/
 temp/
+.diagnostic-logs

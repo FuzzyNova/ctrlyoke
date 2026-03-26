@@ -171,7 +171,7 @@ export class OpenCodeCliProvider implements ICliProvider {
 
     // Interactive mode: deploy the completion detection plugin
     if (isInteractive && workspaceRoot) {
-      await this.deployCompletionPlugin(workspaceRoot);
+      await this.deployCompletionPlugin(workspaceRoot, extensionPath);
     }
 
     // Extra CLI flags from additionalArgs (appended before prompt positional arg)
@@ -404,20 +404,26 @@ export class OpenCodeCliProvider implements ICliProvider {
    *
    * The plugin listens for session.created and session.status idle events,
    * writing notification files for CliIntegration's file-polling completion detection.
+   *
+   * @param workspaceRoot Workspace root directory
+   * @param extensionPath Extension installation path (used to locate the plugin template)
    */
-  private async deployCompletionPlugin(workspaceRoot: string): Promise<void> {
+  private async deployCompletionPlugin(
+    workspaceRoot: string,
+    extensionPath: string
+  ): Promise<void> {
     try {
       const pluginDir = path.join(workspaceRoot, ".opencode", "plugin");
       const pluginPath = path.join(pluginDir, "flightpath-completion-hook.js");
-
-      const notifyDir =
-        this.notificationMonitor.getNotificationDirectory(workspaceRoot);
-      const pluginContent = (
-        this.notificationMonitor as OpenCodeNotificationMonitor
-      ).getPluginContent(notifyDir);
+      const sourcePath = path.join(
+        extensionPath,
+        "out",
+        "scripts",
+        "flightpath-opencode-plugin.js"
+      );
 
       await fs.promises.mkdir(pluginDir, { recursive: true });
-      await fs.promises.writeFile(pluginPath, pluginContent, "utf-8");
+      await fs.promises.copyFile(sourcePath, pluginPath);
 
       this.pluginFilePath = pluginPath;
       Log.debug(`🔌 OpenCode completion plugin deployed to: ${pluginPath}`);

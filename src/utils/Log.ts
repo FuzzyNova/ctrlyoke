@@ -53,9 +53,12 @@ export class Log {
     this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
     if (IS_DEV_MODE) {
-      // Dev builds: show everything including trace logs
+      // Dev builds: show everything including trace logs.
+      // Also write the diagnostic flag file so hook scripts and plugins (OpenCode,
+      // Claude, Copilot, etc.) enable their own debug output without manual setup.
       this.logLevel = LogLevel.TRACE;
       this.openLogFile();
+      this.writeDiagnosticFlagFile(true);
     } else {
       // Production: respect VS Code's log level setting
       this.logLevel = Log.fromVSCodeLogLevel(vscode.env.logLevel);
@@ -65,11 +68,14 @@ export class Log {
         })
       );
 
-      // Enable/disable file logging based on diagnostic setting
-      if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
+      // Enable/disable file logging based on diagnostic setting.
+      // Always call writeDiagnosticFlagFile so a stale flag file from a previous
+      // session is removed when the setting is currently off.
+      const diagnosticLogsEnabled = ConfigurationUtils.isDiagnosticLogsEnabled();
+      if (diagnosticLogsEnabled) {
         this.openLogFile();
-        this.writeDiagnosticFlagFile(true);
       }
+      this.writeDiagnosticFlagFile(diagnosticLogsEnabled);
 
       // React to setting changes at runtime
       context.subscriptions.push(
