@@ -4,7 +4,7 @@
 
 Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessible web app. Two delivery modes are planned, both built on a shared `IDashboardProvider` interface:
 
-1. **VS Code-Hosted Server** — an HTTP/WebSocket server started *inside* the running VS Code extension process via an "Enable Server" button in the webview. The live `WorkflowOrchestrator` instance is the server backend. Browser tabs connect as additional clients alongside the existing VS Code sidebar panel. All VS Code capabilities remain available (file pickers, Copilot Chat harness, settings integration) because the server *is* the extension.
+1. **VS Code-Hosted Server** — an HTTP/WebSocket server started _inside_ the running VS Code extension process via an "Enable Server" button in the webview. The live `WorkflowOrchestrator` instance is the server backend. Browser tabs connect as additional clients alongside the existing VS Code sidebar panel. All VS Code capabilities remain available (file pickers, Copilot Chat harness, settings integration) because the server _is_ the extension.
 
 2. **Standalone Server** (`flightpath server` CLI subcommand) — a fully independent Node.js process with no VS Code dependency. Useful for headless/CI scenarios and remote access where VS Code is not running. The only exclusions are capabilities that are inherently VS Code-specific (file pickers, Copilot Chat harness).
 
@@ -12,16 +12,16 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 
 ## Mode Comparison
 
-| Feature | `flightpath run` (CLI) | VS Code-Hosted Server | `flightpath server` (standalone) | VS Code Extension |
-|---------|----------------------|-----------------------|----------------------------------|-------------------|
-| Parallel workflows | No — single run | **Yes** | **Yes** | **Yes** |
-| Full dashboard webview | No — terminal output | **Yes** | **Yes** | **Yes** |
-| Workflow switcher dropdown | No | **Yes** | **Yes** | **Yes** |
-| Run history | No | **Yes** | **Yes** | **Yes** |
-| File picker dialogs | No | No (browser limitation) | No (path input only) | Yes |
-| `copilot-chat` harness | No | **Yes** | No (VS Code UI automation) | Yes |
-| Requires VS Code open | No | **Yes** | No | Yes |
-| Headless / CI use | Yes | No | **Yes** | No |
+| Feature                    | `flightpath run` (CLI) | VS Code-Hosted Server   | `flightpath server` (standalone) | VS Code Extension |
+| -------------------------- | ---------------------- | ----------------------- | -------------------------------- | ----------------- |
+| Parallel workflows         | No — single run        | **Yes**                 | **Yes**                          | **Yes**           |
+| Full dashboard webview     | No — terminal output   | **Yes**                 | **Yes**                          | **Yes**           |
+| Workflow switcher dropdown | No                     | **Yes**                 | **Yes**                          | **Yes**           |
+| Run history                | No                     | **Yes**                 | **Yes**                          | **Yes**           |
+| File picker dialogs        | No                     | No (browser limitation) | No (path input only)             | Yes               |
+| `copilot-chat` harness     | No                     | **Yes**                 | No (VS Code UI automation)       | Yes               |
+| Requires VS Code open      | No                     | **Yes**                 | No                               | Yes               |
+| Headless / CI use          | Yes                    | No                      | **Yes**                          | No                |
 
 ## Goals
 
@@ -93,15 +93,15 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 
 ### Existing Patterns Reused
 
-| Pattern | Where It Exists | How Server Uses It |
-|---------|----------------|--------------------|
-| `IDashboardProvider` interface | `src/ui/IDashboardProvider.ts` (Phase 1) | Both `FlightPathHostedServer` and `FlightPathServer` implement it |
-| `WorkflowOrchestrator` broadcast | `src/flightpath/WorkflowOrchestrator.ts` | Holds `IDashboardProvider[]`; broadcasts to all registered providers |
-| `WebviewMessageRouter` | `src/ui/WebviewMessageRouter.ts` | VS Code-hosted server re-dispatches browser messages through it via `vscode.commands.executeCommand` — no duplication |
-| `PlatformAdapter` interface | `src/platform/PlatformAdapter.ts` | `StandaloneServerAdapter` is the third implementation (standalone only) |
-| `vscode-shim` alias | `esbuild.js` CLI bundle | Standalone server bundle uses the same `alias: { vscode: 'src/platform/vscode-shim.ts' }` |
-| Commander.js subcommands | `src/cli.ts` | `server` added as `program.command('server')` (standalone only) |
-| `setRuntimeMode` | `src/cli.ts` line 21 | Standalone server calls `setRuntimeMode(RUNNER_IDS.SERVER)` |
+| Pattern                          | Where It Exists                          | How Server Uses It                                                                                                    |
+| -------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `IDashboardProvider` interface   | `src/ui/IDashboardProvider.ts` (Phase 1) | Both `FlightPathHostedServer` and `FlightPathServer` implement it                                                     |
+| `WorkflowOrchestrator` broadcast | `src/flightpath/WorkflowOrchestrator.ts` | Holds `IDashboardProvider[]`; broadcasts to all registered providers                                                  |
+| `WebviewMessageRouter`           | `src/ui/WebviewMessageRouter.ts`         | VS Code-hosted server re-dispatches browser messages through it via `vscode.commands.executeCommand` — no duplication |
+| `PlatformAdapter` interface      | `src/platform/PlatformAdapter.ts`        | `StandaloneServerAdapter` is the third implementation (standalone only)                                               |
+| `vscode-shim` alias              | `esbuild.js` CLI bundle                  | Standalone server bundle uses the same `alias: { vscode: 'src/platform/vscode-shim.ts' }`                             |
+| Commander.js subcommands         | `src/cli.ts`                             | `server` added as `program.command('server')` (standalone only)                                                       |
+| `setRuntimeMode`                 | `src/cli.ts` line 21                     | Standalone server calls `setRuntimeMode(RUNNER_IDS.SERVER)`                                                           |
 
 ---
 
@@ -109,25 +109,25 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 
 ### Structural VS Code Dependencies (not used by server)
 
-| File | Why Irrelevant |
-|------|---------------|
-| `src/extension.ts` | Extension activation — not used by server |
-| `src/ui/StatusBarManager.ts` | VS Code status bar — no equivalent needed |
-| `src/completions/PromptCompletionProvider.ts` | VS Code IntelliSense in text editor |
-| `src/completions/PromptLinkProvider.ts` | VS Code document links — CodeMirror has its own |
-| `src/flightpath/harness/chat/` | Automates VS Code's Copilot Chat UI |
+| File                                          | Why Irrelevant                                  |
+| --------------------------------------------- | ----------------------------------------------- |
+| `src/extension.ts`                            | Extension activation — not used by server       |
+| `src/ui/StatusBarManager.ts`                  | VS Code status bar — no equivalent needed       |
+| `src/completions/PromptCompletionProvider.ts` | VS Code IntelliSense in text editor             |
+| `src/completions/PromptLinkProvider.ts`       | VS Code document links — CodeMirror has its own |
+| `src/flightpath/harness/chat/`                | Automates VS Code's Copilot Chat UI             |
 
 ### VS Code Dependencies Requiring Server Equivalents
 
-| File | VS Code API Used | Server Approach |
-|------|-----------------|----------------|
-| `src/ui/FlightPathWebviewProvider.ts` | `vscode.WebviewView`, `webview.postMessage()`, `notifyX()` methods | Replaced by `FlightPathServer` + WebSocket broadcast |
-| `src/flightpath/WorkflowOrchestrator.ts` | `vscode.ExtensionContext`, `FlightPathWebviewProvider` | Refactored to depend on `IDashboardProvider` interface (Phase 2) |
-| `src/ui/WebviewMessageRouter.ts` | `vscode.commands.executeCommand()` (9 handlers) | `WebSocketMessageRouter` calls `WorkflowOrchestrator` methods directly |
-| `src/ui/WebviewSettingsSync.ts` | `vscode.workspace.getConfiguration()` | Reads from `StandaloneServerAdapter.getConfig()` |
-| `src/utils/ConfigurationUtils.ts` | `vscode.workspace.getConfiguration()` | Already bypassed when called through `CliAdapter.getConfig()` |
-| `src/flightpath/orchestration/PromptFileWatcher.ts` | `vscode.workspace.createFileSystemWatcher()` | `chokidar` (already in dependencies) |
-| `src/completions/CompletionHelpers.ts` | `vscode.workspace.findFiles()`, Git extension | Node.js `fs` + `fast-glob` + `ignore` |
+| File                                                | VS Code API Used                                                   | Server Approach                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `src/ui/FlightPathWebviewProvider.ts`               | `vscode.WebviewView`, `webview.postMessage()`, `notifyX()` methods | Replaced by `FlightPathServer` + WebSocket broadcast                   |
+| `src/flightpath/WorkflowOrchestrator.ts`            | `vscode.ExtensionContext`, `FlightPathWebviewProvider`             | Refactored to depend on `IDashboardProvider` interface (Phase 2)       |
+| `src/ui/WebviewMessageRouter.ts`                    | `vscode.commands.executeCommand()` (9 handlers)                    | `WebSocketMessageRouter` calls `WorkflowOrchestrator` methods directly |
+| `src/ui/WebviewSettingsSync.ts`                     | `vscode.workspace.getConfiguration()`                              | Reads from `StandaloneServerAdapter.getConfig()`                       |
+| `src/utils/ConfigurationUtils.ts`                   | `vscode.workspace.getConfiguration()`                              | Already bypassed when called through `CliAdapter.getConfig()`          |
+| `src/flightpath/orchestration/PromptFileWatcher.ts` | `vscode.workspace.createFileSystemWatcher()`                       | `chokidar` (already in dependencies)                                   |
+| `src/completions/CompletionHelpers.ts`              | `vscode.workspace.findFiles()`, Git extension                      | Node.js `fs` + `fast-glob` + `ignore`                                  |
 
 ### Already Platform-Agnostic (zero changes)
 
@@ -142,47 +142,6 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 
 ## Implementation Plan
 
-### Phase 3 — WebSocket Shim (browser side, shared)
-
-**New file:** `src/server/standalone-shim.js` (plain JS — injected directly into HTML before React loads)
-
-```javascript
-(function () {
-  let _state = JSON.parse(sessionStorage.getItem('fpState') || '{}');
-  const ws = new WebSocket(`ws://${location.host}/ws`);
-  const pending = [];
-
-  ws.addEventListener('open', () => {
-    pending.forEach(m => ws.send(JSON.stringify(m)));
-    pending.length = 0;
-  });
-
-  ws.addEventListener('message', e => {
-    // useMessageHandler already listens on window.addEventListener('message', ...)
-    window.dispatchEvent(new MessageEvent('message', { data: JSON.parse(e.data) }));
-  });
-
-  // Reconnect on server restart (development convenience)
-  ws.addEventListener('close', () => setTimeout(() => location.reload(), 1500));
-
-  window.vscodeApi = {
-    postMessage(msg) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
-      else pending.push(msg);
-    },
-    getState() { return _state; },
-    setState(s) {
-      _state = s;
-      sessionStorage.setItem('fpState', JSON.stringify(s));
-    },
-  };
-})();
-```
-
-**Why `sessionStorage`?** Matches VS Code's `setState` semantics — cleared on tab close, persisted through refresh.
-
----
-
 ### Phase 1 — Extract `IDashboardProvider` Interface (Refactor)
 
 **This is the critical architectural enabler.** `WorkflowOrchestrator` currently takes `FlightPathWebviewProvider` (a VS Code class) as a constructor parameter and calls `notifyX()` methods on it to push state to the webview.
@@ -192,7 +151,7 @@ To reuse `WorkflowOrchestrator` in the server without modification, extract its 
 **New file:** `src/ui/IDashboardProvider.ts`
 
 ```typescript
-import type { WorkflowSummary } from '../types/FlightPathTypes';
+import type { WorkflowSummary } from "../types/FlightPathTypes";
 
 /**
  * Platform-agnostic interface for pushing workflow state updates to the dashboard.
@@ -208,17 +167,21 @@ export interface IDashboardProvider {
 ```
 
 **Update `WorkflowOrchestrator`:**
+
 - Change constructor parameter from `FlightPathWebviewProvider` to `IDashboardProvider`
 - No other changes — all `dashboardProvider.notifyX()` calls remain identical
 
 **Update `FlightPathWebviewProvider`:**
+
 - Add `implements IDashboardProvider` (it already has all these methods — zero implementation changes)
 
 **Update `PromptFileWatcher`:**
+
 - Replace the `getDashboard: () => FlightPathWebviewProvider | undefined` constructor parameter with `getDashboard: () => IDashboardProvider | undefined`
 - The only call site is `dashboard.updateFileSelected("No file selected", [])` on working file deletion — either add `updateFileSelected` to `IDashboardProvider`, or replace it with an equivalent `postMessage` call using an existing message type. Determine which at implementation time.
 
 **Update `WorkflowOrchestrator`:**
+
 - Change constructor parameter from `FlightPathWebviewProvider` to `IDashboardProvider[]` (a list, not a single provider)
 - All `dashboardProvider.notifyX()` calls become `for (const p of this.dashboardProviders) p.notifyX(...)`
 - This allows `FlightPathHostedServer` to be registered alongside `FlightPathWebviewProvider` so both receive every event
@@ -245,7 +208,7 @@ export class FlightPathHostedServer implements IDashboardProvider {
   constructor(
     private orchestrator: WorkflowOrchestrator,
     private context: vscode.ExtensionContext,
-    private port: number,
+    private port: number
   ) {
     this.setupRoutes();
     this.setupWebSocket();
@@ -264,7 +227,9 @@ export class FlightPathHostedServer implements IDashboardProvider {
   notifyActiveWorkflowChanged(workflowId: string) {
     this.broadcast({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
   }
-  postMessage(message: unknown) { this.broadcast(message); }
+  postMessage(message: unknown) {
+    this.broadcast(message);
+  }
 
   private broadcast(message: unknown) {
     const json = JSON.stringify(message);
@@ -277,29 +242,35 @@ export class FlightPathHostedServer implements IDashboardProvider {
   // Routes messages using the existing WebviewMessageRouter since we ARE inside
   // the extension process and can call vscode.commands.executeCommand() directly.
   private setupWebSocket() {
-    this.wss.on('connection', (ws) => {
+    this.wss.on("connection", (ws) => {
       this.connections.add(ws);
       this.sendInitialState(ws);
-      ws.on('message', (raw) => {
+      ws.on("message", (raw) => {
         const msg = JSON.parse(raw.toString());
         // Re-dispatch as a window message so WebviewMessageRouter handles it
-        vscode.commands.executeCommand('flightpath._internalRouteMessage', msg);
+        vscode.commands.executeCommand("flightpath._internalRouteMessage", msg);
       });
-      ws.on('close', () => this.connections.delete(ws));
+      ws.on("close", () => this.connections.delete(ws));
     });
   }
 
   listen() {
-    this.httpServer.listen(this.port, '127.0.0.1', () => {
+    this.httpServer.listen(this.port, "127.0.0.1", () => {
       const url = `http://localhost:${this.port}`;
-      vscode.window.showInformationMessage(
-        `FlightPath server running at ${url}`,
-        'Open in Browser',
-      ).then(action => { if (action) vscode.env.openExternal(vscode.Uri.parse(url)); });
+      vscode.window
+        .showInformationMessage(
+          `FlightPath server running at ${url}`,
+          "Open in Browser"
+        )
+        .then((action) => {
+          if (action) vscode.env.openExternal(vscode.Uri.parse(url));
+        });
     });
   }
 
-  dispose() { this.httpServer.close(); }
+  dispose() {
+    this.httpServer.close();
+  }
 }
 ```
 
@@ -308,18 +279,25 @@ export class FlightPathHostedServer implements IDashboardProvider {
 ```typescript
 // Register command: flightpath.enableServer
 context.subscriptions.push(
-  vscode.commands.registerCommand('flightpath.enableServer', async () => {
-    const port = vscode.workspace.getConfiguration('flightpath').get<number>('serverPort', 3000);
-    const hosted = new FlightPathHostedServer(manager.orchestrator, context, port);
+  vscode.commands.registerCommand("flightpath.enableServer", async () => {
+    const port = vscode.workspace
+      .getConfiguration("flightpath")
+      .get<number>("serverPort", 3000);
+    const hosted = new FlightPathHostedServer(
+      manager.orchestrator,
+      context,
+      port
+    );
     // Register as second IDashboardProvider so orchestrator broadcasts to it
     manager.orchestrator.addDashboardProvider(hosted);
     hosted.listen();
     context.subscriptions.push(hosted);
-  }),
+  })
 );
 ```
 
 **New setting** (`package.json`):
+
 ```json
 "flightpath.serverPort": {
   "type": "number",
@@ -336,38 +314,85 @@ context.subscriptions.push(
 
 ---
 
+### Phase 3 — WebSocket Shim (browser side, shared)
+
+**New file:** `src/server/standalone-shim.js` (plain JS — injected directly into HTML before React loads)
+
+```javascript
+(function () {
+  let _state = JSON.parse(sessionStorage.getItem("fpState") || "{}");
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  const pending = [];
+
+  ws.addEventListener("open", () => {
+    pending.forEach((m) => ws.send(JSON.stringify(m)));
+    pending.length = 0;
+  });
+
+  ws.addEventListener("message", (e) => {
+    // useMessageHandler already listens on window.addEventListener('message', ...)
+    window.dispatchEvent(
+      new MessageEvent("message", { data: JSON.parse(e.data) })
+    );
+  });
+
+  // Reconnect on server restart (development convenience)
+  ws.addEventListener("close", () => setTimeout(() => location.reload(), 1500));
+
+  window.vscodeApi = {
+    postMessage(msg) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+      else pending.push(msg);
+    },
+    getState() {
+      return _state;
+    },
+    setState(s) {
+      _state = s;
+      sessionStorage.setItem("fpState", JSON.stringify(s));
+    },
+  };
+})();
+```
+
+**Why `sessionStorage`?** Matches VS Code's `setState` semantics — cleared on tab close, persisted through refresh.
+
+---
+
 ### Phase 4 — CSS Theme Defaults
 
 **New files:** `src/server/themes/vscode-default-dark.css`, `src/server/themes/vscode-default-light.css`
 
 All `--vscode-*` variables referenced in `tailwind.config.js` must be defined. Complete variable list:
 
-| Group | Variables |
-|-------|-----------|
-| Editor | `--vscode-editor-background`, `--vscode-editor-foreground` |
-| Button | `--vscode-button-background`, `--vscode-button-foreground`, `--vscode-button-hoverBackground`, `--vscode-button-secondaryBackground`, `--vscode-button-secondaryForeground`, `--vscode-button-secondaryHoverBackground` |
-| Input | `--vscode-input-background`, `--vscode-input-foreground`, `--vscode-input-border`, `--vscode-input-placeholderForeground` |
-| Dropdown | `--vscode-dropdown-background`, `--vscode-dropdown-foreground`, `--vscode-dropdown-border` |
-| List | `--vscode-list-hoverBackground`, `--vscode-list-activeSelectionBackground`, `--vscode-list-activeSelectionForeground` |
-| Panel | `--vscode-panel-background`, `--vscode-panel-border`, `--vscode-sideBar-background`, `--vscode-sideBarSectionHeader-background`, `--vscode-sideBarSectionHeader-border` |
-| Scrollbar | `--vscode-scrollbarSlider-background`, `--vscode-scrollbarSlider-hoverBackground`, `--vscode-scrollbarSlider-activeBackground` |
-| Badge | `--vscode-badge-background`, `--vscode-badge-foreground` |
-| Progress | `--vscode-progressBar-background` |
-| Focus border | `--vscode-focusBorder` |
-| Diff | `--vscode-diffEditor-insertedLineBackground`, `--vscode-diffEditor-removedLineBackground`, `--vscode-diffEditor-insertedTextBackground`, `--vscode-diffEditor-removedTextBackground` |
-| Terminal ANSI | `--vscode-terminal-ansiGreen/Red/Yellow/Blue/Magenta/Cyan/White/Black` + Bright variants (16 total) |
-| Foreground tokens | `--vscode-foreground`, `--vscode-descriptionForeground`, `--vscode-disabledForeground`, `--vscode-errorForeground`, `--vscode-icon-foreground` |
-| Fonts | `--vscode-font-family`, `--vscode-font-size`, `--vscode-font-weight`, `--vscode-editor-font-family`, `--vscode-editor-font-size` |
-| Codicons | `--vscode-codicon-font-path` |
+| Group             | Variables                                                                                                                                                                                                               |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Editor            | `--vscode-editor-background`, `--vscode-editor-foreground`                                                                                                                                                              |
+| Button            | `--vscode-button-background`, `--vscode-button-foreground`, `--vscode-button-hoverBackground`, `--vscode-button-secondaryBackground`, `--vscode-button-secondaryForeground`, `--vscode-button-secondaryHoverBackground` |
+| Input             | `--vscode-input-background`, `--vscode-input-foreground`, `--vscode-input-border`, `--vscode-input-placeholderForeground`                                                                                               |
+| Dropdown          | `--vscode-dropdown-background`, `--vscode-dropdown-foreground`, `--vscode-dropdown-border`                                                                                                                              |
+| List              | `--vscode-list-hoverBackground`, `--vscode-list-activeSelectionBackground`, `--vscode-list-activeSelectionForeground`                                                                                                   |
+| Panel             | `--vscode-panel-background`, `--vscode-panel-border`, `--vscode-sideBar-background`, `--vscode-sideBarSectionHeader-background`, `--vscode-sideBarSectionHeader-border`                                                 |
+| Scrollbar         | `--vscode-scrollbarSlider-background`, `--vscode-scrollbarSlider-hoverBackground`, `--vscode-scrollbarSlider-activeBackground`                                                                                          |
+| Badge             | `--vscode-badge-background`, `--vscode-badge-foreground`                                                                                                                                                                |
+| Progress          | `--vscode-progressBar-background`                                                                                                                                                                                       |
+| Focus border      | `--vscode-focusBorder`                                                                                                                                                                                                  |
+| Diff              | `--vscode-diffEditor-insertedLineBackground`, `--vscode-diffEditor-removedLineBackground`, `--vscode-diffEditor-insertedTextBackground`, `--vscode-diffEditor-removedTextBackground`                                    |
+| Terminal ANSI     | `--vscode-terminal-ansiGreen/Red/Yellow/Blue/Magenta/Cyan/White/Black` + Bright variants (16 total)                                                                                                                     |
+| Foreground tokens | `--vscode-foreground`, `--vscode-descriptionForeground`, `--vscode-disabledForeground`, `--vscode-errorForeground`, `--vscode-icon-foreground`                                                                          |
+| Fonts             | `--vscode-font-family`, `--vscode-font-size`, `--vscode-font-weight`, `--vscode-editor-font-family`, `--vscode-editor-font-size`                                                                                        |
+| Codicons          | `--vscode-codicon-font-path`                                                                                                                                                                                            |
 
 **Codicon path:** Vite copies codicons to `out/ui/webview-react/codicons/codicon.ttf`. Set:
+
 ```css
---vscode-codicon-font-path: url('/codicons/codicon.ttf');
+--vscode-codicon-font-path: url("/codicons/codicon.ttf");
 ```
 
 Values sourced from VS Code's `src/vs/platform/theme/common/colorRegistry.ts` for Default Light+ and Default Dark+.
 
 **Theme selection priority:**
+
 1. `?theme=light|dark` query parameter
 2. `Sec-CH-Prefers-Color-Scheme` request header
 3. Default: dark
@@ -424,22 +449,22 @@ export class StandaloneServerAdapter implements PlatformAdapter {
 `FlightPathServer` implements `IDashboardProvider` — it is the server-side equivalent of `FlightPathWebviewProvider`.
 
 ```typescript
-import express from 'express';
-import { WebSocketServer, WebSocket } from 'ws';
-import { createServer } from 'http';
-import { WorkflowOrchestrator } from '../flightpath/WorkflowOrchestrator';
-import { StandaloneServerAdapter } from './StandaloneServerAdapter';
-import type { IDashboardProvider } from '../ui/IDashboardProvider';
-import type { WorkflowSummary } from '../types/FlightPathTypes';
-import { MESSAGE_TYPES } from '../types/DashboardConstants';
-import { setRuntimeMode } from '../utils/RuntimeMode';
-import { RUNNER_IDS } from '../types/DashboardConstants';
+import express from "express";
+import { WebSocketServer, WebSocket } from "ws";
+import { createServer } from "http";
+import { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
+import { StandaloneServerAdapter } from "./StandaloneServerAdapter";
+import type { IDashboardProvider } from "../ui/IDashboardProvider";
+import type { WorkflowSummary } from "../types/FlightPathTypes";
+import { MESSAGE_TYPES } from "../types/DashboardConstants";
+import { setRuntimeMode } from "../utils/RuntimeMode";
+import { RUNNER_IDS } from "../types/DashboardConstants";
 
 export class FlightPathServer implements IDashboardProvider {
   private app = express();
   private httpServer = createServer(this.app);
   private wss = new WebSocketServer({ server: this.httpServer });
-  private connections = new Set<WebSocket>();  // all active tabs
+  private connections = new Set<WebSocket>(); // all active tabs
   private adapter: StandaloneServerAdapter;
   private orchestrator: WorkflowOrchestrator;
 
@@ -484,19 +509,20 @@ export class FlightPathServer implements IDashboardProvider {
     const webviewDist = path.resolve(this.getWebviewDistDir());
 
     this.app.use(express.static(webviewDist));
-    this.app.use('/theme', express.static(path.join(__dirname, 'themes')));
-    this.app.get('/standalone-shim.js', (_req, res) =>
-      res.sendFile(path.join(__dirname, 'standalone-shim.js'))
+    this.app.use("/theme", express.static(path.join(__dirname, "themes")));
+    this.app.get("/standalone-shim.js", (_req, res) =>
+      res.sendFile(path.join(__dirname, "standalone-shim.js"))
     );
-    this.app.get('*', (req, res) => {
+    this.app.get("*", (req, res) => {
       const theme = (req.query.theme as string) ?? this.detectTheme(req);
       res.send(this.buildHtml(theme, webviewDist));
     });
   }
 
   private buildHtml(theme: string, webviewDist: string): string {
-    const index = fs.readFileSync(path.join(webviewDist, 'index.html'), 'utf8');
-    return index.replace('</head>',
+    const index = fs.readFileSync(path.join(webviewDist, "index.html"), "utf8");
+    return index.replace(
+      "</head>",
       `<link rel="stylesheet" href="/theme/${theme}.css">
        <script src="/standalone-shim.js"></script>
        </head>`
@@ -505,20 +531,23 @@ export class FlightPathServer implements IDashboardProvider {
 
   // ── WebSocket connection handling ─────────────────────────────────────────
   private setupWebSocket() {
-    this.wss.on('connection', (ws, req) => {
-      if (!this.isAllowedOrigin(req)) { ws.close(4003, 'Forbidden'); return; }
+    this.wss.on("connection", (ws, req) => {
+      if (!this.isAllowedOrigin(req)) {
+        ws.close(4003, "Forbidden");
+        return;
+      }
 
       this.connections.add(ws);
 
       // New tab: send full current state (all running workflows + active workflow data)
       this.sendInitialState(ws);
 
-      ws.on('message', (raw) => {
+      ws.on("message", (raw) => {
         const msg = JSON.parse(raw.toString());
         this.router.route(msg);
       });
 
-      ws.on('close', () => this.connections.delete(ws));
+      ws.on("close", () => this.connections.delete(ws));
     });
   }
 
@@ -527,13 +556,16 @@ export class FlightPathServer implements IDashboardProvider {
     // Mirror FlightPathWebviewProvider's READY → INIT handshake
     // Send settings, workflow summaries, active workflow state
     this.settingsSync.sendToClient(send);
-    send({ type: MESSAGE_TYPES.WORKFLOWS_LIST, workflows: this.orchestrator.getWorkflowSummaries() });
+    send({
+      type: MESSAGE_TYPES.WORKFLOWS_LIST,
+      workflows: this.orchestrator.getWorkflowSummaries(),
+    });
     const active = this.orchestrator.getActiveWorkflow();
     if (active) active.sendFullStateToDashboard(); // broadcasts via IDashboardProvider
   }
 
   listen() {
-    this.httpServer.listen(this.config.port, '127.0.0.1', () => {
+    this.httpServer.listen(this.config.port, "127.0.0.1", () => {
       console.log(`FlightPath server at http://localhost:${this.config.port}`);
       if (this.config.open) open(`http://localhost:${this.config.port}`);
     });
@@ -553,25 +585,25 @@ Handles all webview → server messages. The existing `WebviewMessageRouter.ts` 
 
 **The handler mapping:**
 
-| Message Type | VS Code Handler | Server Handler |
-|-------------|----------------|----------------|
-| `RUN` | `executeCommand("flightpath.run")` | `orchestrator.run(filePath)` |
-| `PAUSE` | `executeCommand("flightpath.pause")` | `orchestrator.pause()` |
-| `RESUME` | `executeCommand("flightpath.resume")` | `orchestrator.resume()` |
-| `STOP` | `executeCommand("flightpath.stop")` | `orchestrator.stop()` |
-| `PAUSE_WORKFLOW` | `orchestrator.pauseWorkflow(id)` | Same — direct call |
-| `RESUME_WORKFLOW` | `orchestrator.resumeWorkflow(id)` | Same — direct call |
-| `STOP_WORKFLOW` | `orchestrator.stopWorkflow(id)` | Same — direct call |
-| `SWITCH_WORKFLOW` | `orchestrator.setActiveWorkflow(id)` | Same — direct call |
-| `GET_WORKFLOWS_LIST` | `orchestrator.getWorkflowSummaries()` | Same — direct call |
-| `LOAD_WORKFLOW` | `executeCommand + file load` | `orchestrator.loadWorkflow(filePath)` |
-| `GET_RECENT_WORKFLOWS` | History service | Same — direct call |
-| `SELECT_FILE` | `executeCommand("flightpath.selectPromptFile")` | Respond with no-op or path input prompt |
-| `EDIT_FILE` | Opens VS Code editor | no-op |
-| `SHOW_OUTPUT` | Reveals Output panel | no-op |
-| `OPEN_GIT_CHANGE` | VS Code diff editor | no-op or OS file open |
-| `revealInExplorer` | VS Code explorer | `open` / `xdg-open` (OS) |
-| All other messages | Platform-agnostic | Same implementation |
+| Message Type           | VS Code Handler                                 | Server Handler                          |
+| ---------------------- | ----------------------------------------------- | --------------------------------------- |
+| `RUN`                  | `executeCommand("flightpath.run")`              | `orchestrator.run(filePath)`            |
+| `PAUSE`                | `executeCommand("flightpath.pause")`            | `orchestrator.pause()`                  |
+| `RESUME`               | `executeCommand("flightpath.resume")`           | `orchestrator.resume()`                 |
+| `STOP`                 | `executeCommand("flightpath.stop")`             | `orchestrator.stop()`                   |
+| `PAUSE_WORKFLOW`       | `orchestrator.pauseWorkflow(id)`                | Same — direct call                      |
+| `RESUME_WORKFLOW`      | `orchestrator.resumeWorkflow(id)`               | Same — direct call                      |
+| `STOP_WORKFLOW`        | `orchestrator.stopWorkflow(id)`                 | Same — direct call                      |
+| `SWITCH_WORKFLOW`      | `orchestrator.setActiveWorkflow(id)`            | Same — direct call                      |
+| `GET_WORKFLOWS_LIST`   | `orchestrator.getWorkflowSummaries()`           | Same — direct call                      |
+| `LOAD_WORKFLOW`        | `executeCommand + file load`                    | `orchestrator.loadWorkflow(filePath)`   |
+| `GET_RECENT_WORKFLOWS` | History service                                 | Same — direct call                      |
+| `SELECT_FILE`          | `executeCommand("flightpath.selectPromptFile")` | Respond with no-op or path input prompt |
+| `EDIT_FILE`            | Opens VS Code editor                            | no-op                                   |
+| `SHOW_OUTPUT`          | Reveals Output panel                            | no-op                                   |
+| `OPEN_GIT_CHANGE`      | VS Code diff editor                             | no-op or OS file open                   |
+| `revealInExplorer`     | VS Code explorer                                | `open` / `xdg-open` (OS)                |
+| All other messages     | Platform-agnostic                               | Same implementation                     |
 
 All the non-`executeCommand` handlers in `WebviewMessageRouter` (`EXECUTE_PROMPT`, `UPDATE_PROMPT`, `REORDER_PROMPTS`, `UNDO_PROMPT_CHANGES`, etc.) are called on the orchestrator/instance directly and can be ported verbatim.
 
@@ -590,31 +622,43 @@ The webview CodeMirror sends completion requests via WebSocket. The server respo
 Replace `vscode.workspace.findFiles()` + Git extension `checkIgnore()`:
 
 ```typescript
-import fg from 'fast-glob';
-import ignore from 'ignore';
+import fg from "fast-glob";
+import ignore from "ignore";
 
 export class CompletionService {
   private ig = ignore();
 
   constructor(private cwd: string) {
     // Load all .gitignore files (including nested), correct base-path per file
-    const gitignoreFiles = fg.sync('**/.gitignore', { cwd, dot: true });
+    const gitignoreFiles = fg.sync("**/.gitignore", { cwd, dot: true });
     for (const f of gitignoreFiles) {
-      const content = fs.readFileSync(path.join(cwd, f), 'utf8');
+      const content = fs.readFileSync(path.join(cwd, f), "utf8");
       const dir = path.dirname(f);
-      this.ig.add(dir === '.' ? content : content.split('\n')
-        .map(l => l ? `${dir}/${l}` : l).join('\n'));
+      this.ig.add(
+        dir === "."
+          ? content
+          : content
+              .split("\n")
+              .map((l) => (l ? `${dir}/${l}` : l))
+              .join("\n")
+      );
     }
   }
 
   async getFiles(filterText: string): Promise<PlainCompletionItem[]> {
-    const allFiles = await fg('**/*', {
-      cwd: this.cwd, dot: false, ignore: ['.git/**'], onlyFiles: false, markDirectories: true,
+    const allFiles = await fg("**/*", {
+      cwd: this.cwd,
+      dot: false,
+      ignore: [".git/**"],
+      onlyFiles: false,
+      markDirectories: true,
     });
     return allFiles
-      .filter(f => !this.ig.ignores(f))
-      .filter(f => !filterText || f.toLowerCase().includes(filterText.toLowerCase()))
-      .map(f => buildCompletionItem(f));
+      .filter((f) => !this.ig.ignores(f))
+      .filter(
+        (f) => !filterText || f.toLowerCase().includes(filterText.toLowerCase())
+      )
+      .map((f) => buildCompletionItem(f));
   }
 }
 ```
@@ -625,10 +669,10 @@ export class CompletionService {
 
 ```typescript
 const SYMBOL_PATTERNS: Record<string, RegExp> = {
-  ts:   /^(?:export\s+)?(?:(?:abstract|default)\s+)?(?:class|function\*?|const|let|var|interface|type|enum|namespace|module)\s+(\w+)/gm,
-  py:   /^(?:class|def|async\s+def)\s+(\w+)/gm,
-  go:   /^(?:func(?:\s+\([^)]+\))?\s+|type\s+|var\s+|const\s+)(\w+)/gm,
-  rs:   /^(?:pub\s+)?(?:fn|struct|enum|trait|impl|type|const|static|mod)\s+(\w+)/gm,
+  ts: /^(?:export\s+)?(?:(?:abstract|default)\s+)?(?:class|function\*?|const|let|var|interface|type|enum|namespace|module)\s+(\w+)/gm,
+  py: /^(?:class|def|async\s+def)\s+(\w+)/gm,
+  go: /^(?:func(?:\s+\([^)]+\))?\s+|type\s+|var\s+|const\s+)(\w+)/gm,
+  rs: /^(?:pub\s+)?(?:fn|struct|enum|trait|impl|type|const|static|mod)\s+(\w+)/gm,
   // ... java, kt, cs, rb, swift, php, c, cpp
 };
 ```
@@ -659,14 +703,19 @@ Not supported in standalone mode — returns empty array. The `#selection:` synt
 Replace `vscode.workspace.createFileSystemWatcher()`. `chokidar` is **already in `package.json` dependencies** (`chokidar@^5.0.0`):
 
 ```typescript
-import chokidar from 'chokidar';
+import chokidar from "chokidar";
 
 export class ServerFileWatcher {
-  watch(pattern: string, cwd: string, callbacks: { onChange: (p: string) => void }) {
-    return chokidar.watch(pattern, { cwd, ignoreInitial: true })
-      .on('change', callbacks.onChange)
-      .on('add', callbacks.onChange)
-      .on('unlink', callbacks.onChange);
+  watch(
+    pattern: string,
+    cwd: string,
+    callbacks: { onChange: (p: string) => void }
+  ) {
+    return chokidar
+      .watch(pattern, { cwd, ignoreInitial: true })
+      .on("change", callbacks.onChange)
+      .on("add", callbacks.onChange)
+      .on("unlink", callbacks.onChange);
   }
 }
 ```
@@ -690,19 +739,29 @@ Add `server` as a Commander.js subcommand in `src/cli.ts`, following the same pa
 ```typescript
 // src/cli.ts
 program
-  .command('server')
-  .description('Start the FlightPath browser dashboard')
-  .option('-p, --port <port>', 'Port to listen on', '3000')
-  .option('-d, --cwd <path>', 'Workspace root directory')
-  .option('--theme <light|dark>', 'Default theme', 'dark')
-  .option('--open', 'Open browser automatically')
-  .option('-H, --harness <harness>', 'Default harness', 'copilot-cli')
-  .option('-m, --model <model>', 'Default model')
-  .option('--allow-tool <pattern>', 'Allow tool (repeatable)', collectRepeatable, [])
-  .option('--deny-tool <pattern>', 'Deny tool (repeatable)', collectRepeatable, [])
-  .option('--allow-all-tools', 'Dangerously allow all tools')
+  .command("server")
+  .description("Start the FlightPath browser dashboard")
+  .option("-p, --port <port>", "Port to listen on", "3000")
+  .option("-d, --cwd <path>", "Workspace root directory")
+  .option("--theme <light|dark>", "Default theme", "dark")
+  .option("--open", "Open browser automatically")
+  .option("-H, --harness <harness>", "Default harness", "copilot-cli")
+  .option("-m, --model <model>", "Default model")
+  .option(
+    "--allow-tool <pattern>",
+    "Allow tool (repeatable)",
+    collectRepeatable,
+    []
+  )
+  .option(
+    "--deny-tool <pattern>",
+    "Deny tool (repeatable)",
+    collectRepeatable,
+    []
+  )
+  .option("--allow-all-tools", "Dangerously allow all tools")
   .action(async (options) => {
-    const { FlightPathServer } = await import('./server/FlightPathServer');
+    const { FlightPathServer } = await import("./server/FlightPathServer");
     const server = new FlightPathServer(resolveServerConfig(options));
     server.listen();
   });
@@ -772,6 +831,7 @@ The existing `vscode-shim` alias handles all `vscode` imports in the server code
 ```
 
 Optional:
+
 ```json
 "vscode-jsonrpc": "^8.x"   // only if LspSymbolClient is implemented
 ```
@@ -789,6 +849,7 @@ Optional:
 The protocol (`MESSAGE_TYPES`, `WebviewMessageTypes`) is unchanged. All existing message types work over WebSocket with the same payload shapes. The only transport change is `vscode.postMessage` → `ws.send` (shim handles this).
 
 Full message coverage including multi-workflow types:
+
 - `WORKFLOW_ADDED`, `WORKFLOW_DISMISSED`, `WORKFLOW_SUMMARY_UPDATED`, `ACTIVE_WORKFLOW_CHANGED`
 - `GET_WORKFLOWS_LIST`, `WORKFLOWS_LIST`, `SWITCH_WORKFLOW`
 - `PAUSE_WORKFLOW`, `RESUME_WORKFLOW`, `STOP_WORKFLOW`
@@ -818,12 +879,12 @@ Full message coverage including multi-workflow types:
 
 ## Harness Compatibility
 
-| Harness | Works in Server? | Notes |
-|---------|-----------------|-------|
-| `copilot-cli` | ✅ Yes | Spawns process, no VS Code dep |
-| `claude-cli` | ✅ Yes | Spawns process, no VS Code dep |
-| `codex-cli` | ✅ Yes | Spawns process, no VS Code dep |
-| `copilot-chat` | ❌ No | Automates VS Code's Chat UI directly |
+| Harness        | Works in Server? | Notes                                |
+| -------------- | ---------------- | ------------------------------------ |
+| `copilot-cli`  | ✅ Yes           | Spawns process, no VS Code dep       |
+| `claude-cli`   | ✅ Yes           | Spawns process, no VS Code dep       |
+| `codex-cli`    | ✅ Yes           | Spawns process, no VS Code dep       |
+| `copilot-chat` | ❌ No            | Automates VS Code's Chat UI directly |
 
 Server validates harness at startup and rejects `copilot-chat` with a clear error.
 
@@ -831,10 +892,10 @@ Server validates harness at startup and rejects `copilot-chat` with a clear erro
 
 ## State Persistence
 
-| VS Code mechanism | Standalone replacement |
-|-------------------|----------------------|
+| VS Code mechanism   | Standalone replacement                   |
+| ------------------- | ---------------------------------------- |
 | `vscode.setState()` | `sessionStorage.setItem('fpState', ...)` |
-| `vscode.getState()` | `sessionStorage.getItem('fpState')` |
+| `vscode.getState()` | `sessionStorage.getItem('fpState')`      |
 
 Handled entirely by the Phase 1 shim. No changes to any store.
 
@@ -859,7 +920,7 @@ Handled entirely by the Phase 1 shim. No changes to any store.
 7. **`FlightPathServer`** (Phase 6) — HTTP + WS, connection registry, broadcast, `sendInitialState`, implements `IDashboardProvider` (3 hours)
 8. **`WebSocketMessageRouter`** (Phase 7) — all message handlers; `vscode.commands.executeCommand()` replaced with direct orchestrator calls (4 hours)
 9. **`CompletionService`** (Phase 8) — file/dir completions with fast-glob + ignore; regex symbol heuristic (3 hours)
-9a. **`LspSymbolClient`** _(optional)_ — LSP stdio client (2 hours)
+   9a. **`LspSymbolClient`** _(optional)_ — LSP stdio client (2 hours)
 10. **`ServerFileWatcher`** + `PlatformAdapter.createFileWatcher()` seam (Phase 9) — chokidar, verify `PromptFileWatcher` usage path (1.5 hours)
 11. **`flightpath server` CLI command** (Phase 10) — `program.command('server')` + `resolveServerConfig()` + `RUNNER_IDS.SERVER` constant (1 hour)
 12. **esbuild + package.json** — add externals, deps, npm script (30 min)

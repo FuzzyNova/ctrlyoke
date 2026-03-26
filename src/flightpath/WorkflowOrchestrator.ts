@@ -25,7 +25,8 @@ import {
   type ActionType,
   type StepStatus,
 } from "../types/DashboardConstants";
-import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
+import type { IDashboardProvider } from "../ui/IDashboardProvider";
+import type { IDashboardSink } from "../types/IDashboardSink";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -85,7 +86,12 @@ export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
   // Cross-cutting concerns
   // ─────────────────────────────────────────────────────────────────────────
-  private dashboardProvider?: FlightPathWebviewProvider;
+  private readonly dashboardProviders: IDashboardProvider[] = [];
+
+  /** Convenience accessor — the first registered provider (undefined when none). */
+  private get dashboardProvider(): IDashboardProvider | undefined {
+    return this.dashboardProviders[0];
+  }
   private readonly integrationFactory: VsCodeIntegrationFactory;
   private readonly statusBarManager: StatusBarManager;
   private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
@@ -114,9 +120,11 @@ export class WorkflowOrchestrator {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    dashboardProvider?: FlightPathWebviewProvider
+    dashboardProvider?: IDashboardProvider
   ) {
-    this.dashboardProvider = dashboardProvider;
+    if (dashboardProvider) {
+      this.dashboardProviders.push(dashboardProvider);
+    }
     this.integrationFactory = new VsCodeIntegrationFactory(
       new VsCodeAdapter(context)
     );
@@ -188,6 +196,21 @@ export class WorkflowOrchestrator {
 
     this.updateStatusBar();
     Log.debug("WorkflowOrchestrator initialized");
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Dashboard provider registry
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Register an additional IDashboardProvider to receive all orchestrator events.
+   * The first registered provider (set via the constructor) is also used as the
+   * IDashboardSink for WorkflowInstance (granular per-step updates).
+   * Subsequent providers (e.g. FlightPathHostedServer) receive the same events
+   * via the broadcast loop.
+   */
+  public addDashboardProvider(provider: IDashboardProvider): void {
+    this.dashboardProviders.push(provider);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1119,7 +1142,10 @@ export class WorkflowOrchestrator {
   private buildWorkflowInstance(): WorkflowInstance {
     const instance = new WorkflowInstance(
       new VsCodeAdapter(this.context),
-      this.dashboardProvider,
+      // Phase 1: the first registered provider is always FlightPathWebviewProvider,
+      // which satisfies IDashboardSink structurally. Cast is safe until Phase 2
+      // introduces a broadcast proxy IDashboardSink.
+      this.dashboardProvider as unknown as IDashboardSink | undefined,
       this.integrationFactory,
       (harnessOverride?: Harness) =>
         this.resolveDetectorIntegration(harnessOverride),
@@ -1606,7 +1632,7 @@ export class WorkflowOrchestrator {
             workflowId,
             stepIndex,
             outputs[i] as Parameters<
-              FlightPathWebviewProvider["notifyCliWatchOutput"]
+              IDashboardProvider["notifyCliWatchOutput"]
             >[2]
           );
         }
@@ -1655,7 +1681,7 @@ export class WorkflowOrchestrator {
               workflowId,
               stepIndex,
               outputs[i] as Parameters<
-                FlightPathWebviewProvider["notifyCliWatchOutput"]
+                IDashboardProvider["notifyCliWatchOutput"]
               >[2]
             );
           }

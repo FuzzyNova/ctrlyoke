@@ -37,6 +37,7 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { WebviewSettingsSync } from "./WebviewSettingsSync";
 import { WorkflowSerializer } from "./WorkflowSerializer";
 import { WebviewMessageRouter } from "./WebviewMessageRouter";
+import type { IDashboardProvider } from "./IDashboardProvider";
 
 // Re-export CliOutput for external use
 export type { CliOutput } from "../types/WebviewMessageTypes";
@@ -52,7 +53,7 @@ export type { HarnessStatus } from "./WebviewSettingsSync";
  * Settings/config management delegated to WebviewSettingsSync.
  * Save/export/template/history delegated to WorkflowSerializer.
  */
-export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
+export class FlightPathWebviewProvider implements vscode.WebviewViewProvider, IDashboardProvider {
   private view?: vscode.WebviewView;
   private workflowOrchestrator?: WorkflowOrchestrator;
   private outputHistoryManager?: OutputHistoryManager;
@@ -901,7 +902,7 @@ window.vscodeApi = acquireVsCodeApi();
     return nonce;
   }
 
-  private postMessage(message: any): void {
+  public postMessage(message: unknown): void {
     this.view?.webview.postMessage(message);
   }
 
