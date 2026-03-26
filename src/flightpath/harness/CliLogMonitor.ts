@@ -218,8 +218,12 @@ export class CliLogMonitor {
           this.deps.onStreamingEvents(streamingEvents);
         }
 
-        // Check completion via log file (fallback for harnesses without notification monitor)
-        if (!completed && parser.isComplete(event)) {
+        // Check completion via log file — only for harnesses without a notification monitor.
+        // When a notification monitor (Stop hook) is active, the hook is authoritative.
+        // Log file end_turn events can be intermediate: e.g. Claude ending a turn to wait
+        // for a background agent before auto-continuing. The Stop hook correctly does not
+        // fire in that case; the log file cannot distinguish intermediate from final stops.
+        if (!completed && !this.deps.notificationMonitor && parser.isComplete(event)) {
           void handleCompletion(source);
         }
       };
