@@ -321,11 +321,13 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
         style={{
           top: `${viewportPct.top}%`,
           height: `${viewportPct.height}%`,
-          background:
-            "var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4))",
-          opacity: isDragging ? 0.98 : isThumbHovered ? 0.9 : 0.75,
+          background: isDragging
+            ? "var(--vscode-scrollbarSlider-activeBackground, rgba(191,191,191,0.8))"
+            : isThumbHovered
+              ? "var(--vscode-scrollbarSlider-hoverBackground, rgba(100,100,100,0.7))"
+              : "var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4))",
           cursor: isDragging ? "grabbing" : canScroll ? "grab" : "default",
-          transition: isDragging ? "none" : "opacity 0.1s",
+          transition: isDragging ? "none" : "background 0.1s",
         }}
         onMouseDown={handleThumbMouseDown}
         onMouseEnter={() => setIsThumbHovered(true)}
