@@ -13,19 +13,10 @@ import {
   EXECUTION_STATES,
   STEP_STATUS,
   FINAL_PROMPT_PHASES,
+  ACTION_TYPES,
+  EDITOR_TARGET_KINDS,
 } from "../../types/messages";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
-
-/**
- * ACTION_TYPES for prompt execution
- * Matches extension-side ACTION_TYPES
- */
-const ACTION_TYPES = {
-  RUN: "run",
-  QUEUE: "queue",
-  RUN_NEXT: "runNext",
-  RUN_BEFORE_CURRENT: "runBeforeCurrent",
-} as const;
 
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
@@ -80,7 +71,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   // null = not applicable / pending, true = file found, false = file not found
   const [fileRefExists, setFileRefExists] = useState<boolean | null>(null);
 
-  const isEditMode = selectionTarget.kind !== "newPrompt";
+  const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
   const isFileRef = looksLikeFilePath(promptText.trim());
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const selectedPromptStatus =
@@ -106,7 +97,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     if (!initializedRef.current) {
       initializedRef.current = true;
       // Only restore if in new prompt mode (not editing an existing prompt)
-      if (selectionTarget.kind === "newPrompt") {
+      if (selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT) {
         restoreFromVsCodeState(vscode);
       }
     }
@@ -128,7 +119,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   // Debounced save to VS Code state on every content change
   // Mirrors old editor-manager.js: saveEditorState() called on every onChange, input, change event
   useEffect(() => {
-    if (selectionTarget.kind !== "newPrompt") return;
+    if (selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) return;
 
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -159,7 +150,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = null;
       }
-      if (selectionTarget.kind === "newPrompt") {
+      if (selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT) {
         saveToVsCodeState(vscode);
       }
     };
@@ -433,7 +424,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
   // Delete prompt - shows confirmation modal (or deletes immediately when confirmDeleteOperations is false)
   const handleDeleteClick = useCallback(() => {
-    if (selectionTarget.kind === "newPrompt") return;
+    if (selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT) return;
     if (!globalSettings.confirmDeleteOperations) {
       // Skip modal — user opted out of delete confirmation
       if (selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE) {
@@ -460,7 +451,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
   // Confirm delete action
   const handleDeleteConfirm = useCallback(() => {
-    if (selectionTarget.kind === "newPrompt") return;
+    if (selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT) return;
 
     if (selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE) {
       vscode.postMessage({

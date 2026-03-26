@@ -388,6 +388,30 @@ export const QUEUE_POSITION = {
 } as const;
 
 // ============================================================================
+// EDITOR TARGET KINDS - Selection target kinds for the prompt editor
+// ============================================================================
+export const EDITOR_TARGET_KINDS = {
+  NEW_PROMPT: "newPrompt",
+} as const;
+
+// ============================================================================
+// TERMINAL SESSION STATUS - Status values for terminal sessions
+// ============================================================================
+export const TERMINAL_SESSION_STATUS = {
+  RUNNING: "running",
+  COMPLETED: "completed",
+  FAILED: "failed",
+} as const;
+
+// ============================================================================
+// SESSION KINDS - Kind values for terminal sessions
+// ============================================================================
+export const SESSION_KINDS = {
+  AI_CLI: "ai-cli",
+  SHELL: "shell",
+} as const;
+
+// ============================================================================
 // SESSION ID SENTINELS - Special sessionId values with reserved meanings
 // ============================================================================
 export const SESSION_ID_SENTINELS = {
@@ -524,3 +548,6 @@ export type HarnessStatusString =
 export type WebviewLogLevel = (typeof LOG_LEVELS)[keyof typeof LOG_LEVELS];
 export type RunnerId = (typeof RUNNER_IDS)[keyof typeof RUNNER_IDS];
 export type LockStatus = (typeof LOCK_STATUS)[keyof typeof LOCK_STATUS];
+export type EditorTargetKind = (typeof EDITOR_TARGET_KINDS)[keyof typeof EDITOR_TARGET_KINDS];
+export type TerminalSessionStatus = (typeof TERMINAL_SESSION_STATUS)[keyof typeof TERMINAL_SESSION_STATUS];
+export type SessionKind = (typeof SESSION_KINDS)[keyof typeof SESSION_KINDS];

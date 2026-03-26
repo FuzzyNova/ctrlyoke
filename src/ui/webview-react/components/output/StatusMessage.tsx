@@ -1,11 +1,10 @@
 import React from "react";
 import { formatTime } from "@utils/outputUtils";
-
-type StatusSeverity = "info" | "warning" | "error";
+import type { StatusMessageSeverity } from "../../types/messages";
 
 interface StatusMessageProps {
   message: string;
-  severity?: StatusSeverity;
+  severity?: StatusMessageSeverity;
   timestamp?: string;
   timestampMs?: number;
   className?: string;

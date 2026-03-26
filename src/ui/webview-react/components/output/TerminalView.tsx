@@ -9,7 +9,7 @@ import { sendMessage } from "@hooks/useMessageHandler";
 import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
 import { terminalRegistry } from "../../terminalRegistry";
-import { MESSAGE_TYPES } from "../../types/messages";
+import { MESSAGE_TYPES, TERMINAL_SESSION_STATUS } from "../../types/messages";
 import { TerminalInstance } from "./TerminalInstance";
 import type { TerminalSession } from "@store/terminalStore";
 import { SEPARATOR_VERTICAL } from "../../constants";
@@ -219,7 +219,7 @@ const RailEntry: React.FC<RailEntryProps> = ({
   isActive,
   onClick,
 }) => {
-  const isRunning = session.status === "running";
+  const isRunning = session.status === TERMINAL_SESSION_STATUS.RUNNING;
 
   return (
     <button
@@ -247,7 +247,7 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
   onRestart,
   onClose,
 }) => {
-  const isEnded = session.status !== "running";
+  const isEnded = session.status !== TERMINAL_SESSION_STATUS.RUNNING;
 
   return (
     <div
@@ -313,12 +313,12 @@ const CompactRailEntry: React.FC<CompactRailEntryProps> = ({
 const StatusDot: React.FC<{ status: TerminalSession["status"] }> = ({
   status,
 }) => {
-  if (status === "running") {
+  if (status === TERMINAL_SESSION_STATUS.RUNNING) {
     return (
       <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
     );
   }
-  if (status === "failed") {
+  if (status === TERMINAL_SESSION_STATUS.FAILED) {
     return (
       <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
     );

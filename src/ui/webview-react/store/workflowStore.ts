@@ -9,6 +9,7 @@ import {
   type ExecutionState,
   type StepStatus,
   type FinalPromptPhase,
+  type StatusMessageSeverity,
   type PromptItem,
   type CliOutput,
   type RetryState,
@@ -196,12 +197,12 @@ interface WorkflowActions {
   addStatusMessage: (
     stepIndex: number,
     message: string,
-    severity?: "info" | "warning" | "error"
+    severity?: StatusMessageSeverity
   ) => void;
   addFinalPromptStatusMessage: (
     loopIndex: number,
     message: string,
-    severity?: "info" | "warning" | "error"
+    severity?: StatusMessageSeverity
   ) => void;
   clearStatusMessages: (stepIndex: number) => void;
 
@@ -323,11 +324,7 @@ export const useWorkflowStore = create<
       // SETTERS
       // ============================================================================
 
-      setFileName: (fileName) => {
-        useWorkflowStore.temporal.getState().pause();
-        set({ fileName });
-        useWorkflowStore.temporal.getState().resume();
-      },
+      setFileName: (fileName) => withUndoPause(() => set({ fileName })),
 
       setWorkflowName: (workflowName) => set({ workflowName }),
 
@@ -346,23 +343,11 @@ export const useWorkflowStore = create<
         }));
       },
 
-      setExecutionState: (executionState) => {
-        useWorkflowStore.temporal.getState().pause();
-        set({ executionState });
-        useWorkflowStore.temporal.getState().resume();
-      },
+      setExecutionState: (executionState) => withUndoPause(() => set({ executionState })),
 
-      setCurrentStep: (currentStep) => {
-        useWorkflowStore.temporal.getState().pause();
-        set({ currentStep });
-        useWorkflowStore.temporal.getState().resume();
-      },
+      setCurrentStep: (currentStep) => withUndoPause(() => set({ currentStep })),
 
-      setTotalSteps: (totalSteps) => {
-        useWorkflowStore.temporal.getState().pause();
-        set({ totalSteps });
-        useWorkflowStore.temporal.getState().resume();
-      },
+      setTotalSteps: (totalSteps) => withUndoPause(() => set({ totalSteps })),
 
       setFinalPrompt: (finalPrompt) =>
         set((state) => ({
@@ -379,22 +364,18 @@ export const useWorkflowStore = create<
           prompts: state.prompts,
         })),
 
-      setFinalPromptStatus: (status, loopCount, phase) => {
-        useWorkflowStore.temporal.getState().pause();
-        set({
+      setFinalPromptStatus: (status, loopCount, phase) =>
+        withUndoPause(() => set({
           finalPromptStatus: status,
           finalPromptLoopCount: loopCount,
           finalPromptPhase: phase,
-        });
-        useWorkflowStore.temporal.getState().resume();
-      },
+        })),
 
       // ============================================================================
       // CLI OUTPUT MANAGEMENT
       // ============================================================================
 
-      addCliOutput: (stepIndex, output) => {
-        useWorkflowStore.temporal.getState().pause();
+      addCliOutput: (stepIndex, output) => withUndoPause(() =>
         set((state) => {
           const outputs = state.cliOutputs[stepIndex] || [];
           const attemptIndex = output.attemptIndex ?? 0;
@@ -508,12 +489,10 @@ export const useWorkflowStore = create<
               [stepIndex]: "",
             },
           };
-        });
-        useWorkflowStore.temporal.getState().resume();
-      },
+        })
+      ),
 
-      addFinalPromptOutput: (loopIndex, output) => {
-        useWorkflowStore.temporal.getState().pause();
+      addFinalPromptOutput: (loopIndex, output) => withUndoPause(() =>
         set((state) => {
           const outputs = state.finalPromptOutputs[loopIndex] || [];
           const attemptIndex = output.attemptIndex ?? 0;
@@ -536,104 +515,86 @@ export const useWorkflowStore = create<
               [loopIndex]: newOutputs,
             },
           };
-        });
-        useWorkflowStore.temporal.getState().resume();
-      },
+        })
+      ),
 
-      clearCliOutputs: (stepIndex) => {
-        useWorkflowStore.temporal.getState().pause();
+      clearCliOutputs: (stepIndex) => withUndoPause(() =>
         set((state) => {
           const { [stepIndex]: _, ...rest } = state.cliOutputs;
           return { cliOutputs: rest };
-        });
-        useWorkflowStore.temporal.getState().resume();
-      },
+        })
+      ),
 
-      appendStreamingChunk: (stepIndex, chunk) => {
-        useWorkflowStore.temporal.getState().pause();
+      appendStreamingChunk: (stepIndex, chunk) => withUndoPause(() =>
         set((state) => ({
           streamingChunks: {
             ...state.streamingChunks,
             [stepIndex]: (state.streamingChunks[stepIndex] || "") + chunk,
           },
-        }));
-        useWorkflowStore.temporal.getState().resume();
-      },
+        }))
+      ),
 
-      clearStreamingChunk: (stepIndex) => {
-        useWorkflowStore.temporal.getState().pause();
+      clearStreamingChunk: (stepIndex) => withUndoPause(() =>
         set((state) => ({
           streamingChunks: {
             ...state.streamingChunks,
             [stepIndex]: "",
           },
-        }));
-        useWorkflowStore.temporal.getState().resume();
-      },
+        }))
+      ),
 
-      appendStreamingEvents: (stepIndex, events) => {
-        useWorkflowStore.temporal.getState().pause();
+      appendStreamingEvents: (stepIndex, events) => withUndoPause(() =>
         set((state) => ({
           cliOutputs: {
             ...state.cliOutputs,
             [stepIndex]: applyStreamingEventsToOutputs(state.cliOutputs[stepIndex] || [], events),
           },
-        }));
-        useWorkflowStore.temporal.getState().resume();
-      },
+        }))
+      ),
 
-      appendFinalPromptStreamingChunk: (loopIndex, chunk) => {
-        useWorkflowStore.temporal.getState().pause();
+      appendFinalPromptStreamingChunk: (loopIndex, chunk) => withUndoPause(() =>
         set((state) => ({
           finalPromptStreamingChunks: {
             ...state.finalPromptStreamingChunks,
             [loopIndex]: (state.finalPromptStreamingChunks[loopIndex] || "") + chunk,
           },
-        }));
-        useWorkflowStore.temporal.getState().resume();
-      },
+        }))
+      ),
 
-      appendFinalPromptStreamingEvents: (loopIndex, events) => {
-        useWorkflowStore.temporal.getState().pause();
+      appendFinalPromptStreamingEvents: (loopIndex, events) => withUndoPause(() =>
         set((state) => ({
           finalPromptOutputs: {
             ...state.finalPromptOutputs,
             [loopIndex]: applyStreamingEventsToOutputs(state.finalPromptOutputs[loopIndex] || [], events),
           },
-        }));
-        useWorkflowStore.temporal.getState().resume();
-      },
+        }))
+      ),
 
       // ============================================================================
       // RETRY MANAGEMENT
       // ============================================================================
 
-      setRetryState: (stepIndex, currentRetry, maxRetries) => {
-        useWorkflowStore.temporal.getState().pause();
+      setRetryState: (stepIndex, currentRetry, maxRetries) => withUndoPause(() =>
         set((state) => ({
           retryStates: {
             ...state.retryStates,
             [stepIndex]: { currentRetry, maxRetries },
           },
-        }));
-        useWorkflowStore.temporal.getState().resume();
-      },
+        }))
+      ),
 
-      clearRetryState: (stepIndex) => {
-        useWorkflowStore.temporal.getState().pause();
+      clearRetryState: (stepIndex) => withUndoPause(() =>
         set((state) => {
           const { [stepIndex]: _, ...rest } = state.retryStates;
           return { retryStates: rest };
-        });
-        useWorkflowStore.temporal.getState().resume();
-      },
+        })
+      ),
 
       // ============================================================================
       // STATUS MESSAGE MANAGEMENT
       // ============================================================================
 
-      addStatusMessage: (stepIndex, message, severity = "info") => {
-        useWorkflowStore.temporal.getState().pause();
+      addStatusMessage: (stepIndex, message, severity: StatusMessageSeverity = "info") => withUndoPause(() =>
         set((state) => ({
           statusMessages: {
             ...state.statusMessages,
@@ -642,12 +603,10 @@ export const useWorkflowStore = create<
               { message, severity, timestamp: Date.now() },
             ],
           },
-        }));
-        useWorkflowStore.temporal.getState().resume();
-      },
+        }))
+      ),
 
-      addFinalPromptStatusMessage: (loopIndex, message, severity = "info") => {
-        useWorkflowStore.temporal.getState().pause();
+      addFinalPromptStatusMessage: (loopIndex, message, severity: StatusMessageSeverity = "info") => withUndoPause(() =>
         set((state) => ({
           finalPromptStatusMessages: {
             ...state.finalPromptStatusMessages,
@@ -656,32 +615,27 @@ export const useWorkflowStore = create<
               { message, severity, timestamp: Date.now() },
             ],
           },
-        }));
-        useWorkflowStore.temporal.getState().resume();
-      },
+        }))
+      ),
 
-      clearStatusMessages: (stepIndex) => {
-        useWorkflowStore.temporal.getState().pause();
+      clearStatusMessages: (stepIndex) => withUndoPause(() =>
         set((state) => {
           const { [stepIndex]: _, ...rest } = state.statusMessages;
           return { statusMessages: rest };
-        });
-        useWorkflowStore.temporal.getState().resume();
-      },
+        })
+      ),
 
       // ============================================================================
       // STEP STATUS MANAGEMENT
       // ============================================================================
 
-      setStepStatus: (stepIndex, status) => {
-        useWorkflowStore.temporal.getState().pause();
+      setStepStatus: (stepIndex, status) => withUndoPause(() =>
         set((state) => ({
           prompts: state.prompts.map((p, i) =>
             i === stepIndex ? { ...p, status } : p
           ),
-        }));
-        useWorkflowStore.temporal.getState().resume();
-      },
+        }))
+      ),
 
       // ============================================================================
       // BULK OPERATIONS
@@ -699,15 +653,13 @@ export const useWorkflowStore = create<
         finalPromptLoopCount = 0,
         finalPromptPhase = null,
       }) => {
-        const t = useWorkflowStore.temporal.getState();
-        t.pause();
         // Apply status from results to prompts
         const promptsWithStatus = prompts.map((prompt, index) => ({
           ...prompt,
           status: (results[index]?.status as StepStatus) || STEP_STATUS.PENDING,
         }));
 
-        set({
+        withUndoPause(() => set({
           fileName,
           workflowName: workflowName ?? null,
           prompts: promptsWithStatus,
@@ -726,18 +678,16 @@ export const useWorkflowStore = create<
           finalPromptStatusMessages: {},
           streamingChunks: {},
           finalPromptStreamingChunks: {},
-        });
-        t.resume();
-        t.clear();
+        }));
+        useWorkflowStore.temporal.getState().clear();
       },
 
       // ============================================================================
       // HISTORY MANAGEMENT
       // ============================================================================
 
-      loadHistoryRun: (history, availableRuns, runIndex) => {
-        useWorkflowStore.temporal.getState().pause();
-        set(() => {
+      loadHistoryRun: (history, availableRuns, runIndex) =>
+        withUndoPause(() => set(() => {
           // Update uiStore for history view state
           useUiStore.getState().setHistoryView(runIndex, availableRuns);
 
@@ -762,15 +712,9 @@ export const useWorkflowStore = create<
             workspaceSnapshots: {},
             finalPromptWorkspaceSnapshots: {},
           };
-        });
-        useWorkflowStore.temporal.getState().resume();
-      },
+        })),
 
-      clearHistoryOutputs: () => {
-        useWorkflowStore.temporal.getState().pause();
-        set(() => ({ historyOutputs: null }));
-        useWorkflowStore.temporal.getState().resume();
-      },
+      clearHistoryOutputs: () => withUndoPause(() => set(() => ({ historyOutputs: null }))),
 
       resetExecutionState: (prompts) => {
         // Not wrapped in pause/resume — this is a user-initiated action.
@@ -790,8 +734,7 @@ export const useWorkflowStore = create<
         }));
       },
 
-      clearRuntimeStateFromStep: (startStep) => {
-        useWorkflowStore.temporal.getState().pause();
+      clearRuntimeStateFromStep: (startStep) => withUndoPause(() =>
         set((state) => {
           const newCliOutputs = { ...state.cliOutputs };
           const newRetryStates = { ...state.retryStates };
@@ -831,9 +774,8 @@ export const useWorkflowStore = create<
             finalPromptLoopCount: 0,
             finalPromptPhase: null,
           };
-        });
-        useWorkflowStore.temporal.getState().resume();
-      },
+        })
+      ),
 
       applyStartPositionChange: (prompts, newCurrentStep) => {
         // Not wrapped in pause/resume — this is a user-initiated action.
@@ -848,8 +790,7 @@ export const useWorkflowStore = create<
         }));
       },
 
-      promoteHistoryToLive: (stepCount) => {
-        useWorkflowStore.temporal.getState().pause();
+      promoteHistoryToLive: (stepCount) => withUndoPause(() =>
         set((state) => {
           if (!state.historyOutputs) {
             WebviewLog.debug(
@@ -883,41 +824,32 @@ export const useWorkflowStore = create<
             cliOutputs: newCliOutputs,
             statusMessages: newStatusMessages,
           };
-        });
-        useWorkflowStore.temporal.getState().resume();
-      },
+        })
+      ),
 
       resetWorkflow: () => {
-        const t = useWorkflowStore.temporal.getState();
-        t.pause();
-        set(initialState);
-        t.resume();
-        t.clear();
+        withUndoPause(() => set(initialState));
+        useWorkflowStore.temporal.getState().clear();
       },
 
-      clearAllRuntimeState: () => {
-        useWorkflowStore.temporal.getState().pause();
-        set({
-          cliOutputs: {},
-          finalPromptOutputs: {},
-          retryStates: {},
-          statusMessages: {},
-          finalPromptStatusMessages: {},
-          streamingChunks: {},
-          finalPromptStreamingChunks: {},
-          finalPromptStatus: null,
-          finalPromptLoopCount: 0,
-          finalPromptPhase: null,
-          workspaceSnapshots: {},
-          finalPromptWorkspaceSnapshots: {},
-          undoResults: {},
-          undoRecords: {},
-        });
-        useWorkflowStore.temporal.getState().resume();
-      },
+      clearAllRuntimeState: () => withUndoPause(() => set({
+        cliOutputs: {},
+        finalPromptOutputs: {},
+        retryStates: {},
+        statusMessages: {},
+        finalPromptStatusMessages: {},
+        streamingChunks: {},
+        finalPromptStreamingChunks: {},
+        finalPromptStatus: null,
+        finalPromptLoopCount: 0,
+        finalPromptPhase: null,
+        workspaceSnapshots: {},
+        finalPromptWorkspaceSnapshots: {},
+        undoResults: {},
+        undoRecords: {},
+      })),
 
-      setWorkspaceSnapshot: (target, snapshot) => {
-        useWorkflowStore.temporal.getState().pause();
+      setWorkspaceSnapshot: (target, snapshot) => withUndoPause(() => {
         if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
           set((state) => ({
             workspaceSnapshots: { ...state.workspaceSnapshots, [target.stepIndex]: snapshot },
@@ -927,20 +859,16 @@ export const useWorkflowStore = create<
             finalPromptWorkspaceSnapshots: { ...state.finalPromptWorkspaceSnapshots, [target.loopIndex]: snapshot },
           }));
         }
-        useWorkflowStore.temporal.getState().resume();
-      },
+      }),
 
       setUndoRecord: (target, record) => {
         const key = target.kind === FINAL_PROMPT_PHASES.QUEUE
           ? `queue-${target.stepIndex}`
           : `finalPrompt-${target.loopIndex}`;
-        useWorkflowStore.temporal.getState().pause();
-        set((s) => ({ undoRecords: { ...s.undoRecords, [key]: record } }));
-        useWorkflowStore.temporal.getState().resume();
+        withUndoPause(() => set((s) => ({ undoRecords: { ...s.undoRecords, [key]: record } })));
       },
 
-      updateHistoryStepUndoRecord: (target, undoRecord) => {
-        useWorkflowStore.temporal.getState().pause();
+      updateHistoryStepUndoRecord: (target, undoRecord) => withUndoPause(() =>
         set((state) => {
           if (!state.historyOutputs) return {};
           if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
@@ -969,26 +897,21 @@ export const useWorkflowStore = create<
               },
             };
           }
-        });
-        useWorkflowStore.temporal.getState().resume();
-      },
+        })
+      ),
 
-      setUndoResult: (requestId, result) => {
-        useWorkflowStore.temporal.getState().pause();
+      setUndoResult: (requestId, result) => withUndoPause(() =>
         set((state) => ({
           undoResults: { ...state.undoResults, [requestId]: result },
-        }));
-        useWorkflowStore.temporal.getState().resume();
-      },
+        }))
+      ),
 
-      clearUndoResult: (requestId) => {
-        useWorkflowStore.temporal.getState().pause();
+      clearUndoResult: (requestId) => withUndoPause(() =>
         set((state) => {
           const { [requestId]: _, ...rest } = state.undoResults;
           return { undoResults: rest };
-        });
-        useWorkflowStore.temporal.getState().resume();
-      },
+        })
+      ),
 
       // ============================================================================
       // COMPUTED SELECTORS
@@ -1094,6 +1017,21 @@ export const useWorkflowStore = create<
     }
   )
 );
+
+/**
+ * Wraps a state mutation in a temporal pause/resume so it does NOT create an
+ * undo snapshot. Use for every system-driven mutation (streaming chunks,
+ * execution-state bookkeeping, etc.) that should be invisible to undo/redo.
+ *
+ * Defined as a function declaration (hoisted) so actions in the store creator
+ * can reference it even though it appears after `useWorkflowStore` in source.
+ */
+function withUndoPause<T>(fn: () => T): T {
+  useWorkflowStore.temporal.getState().pause();
+  const result = fn();
+  useWorkflowStore.temporal.getState().resume();
+  return result;
+}
 
 // Re-export types for convenience (imported from consolidated sources)
 export type {

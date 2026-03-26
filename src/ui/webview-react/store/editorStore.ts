@@ -3,7 +3,7 @@ import type { VsCodeApi } from "../types/vscode";
 import type { PromptItem } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type { PriorContext } from "../types/messages";
-import { FINAL_PROMPT_PHASES } from "../types/messages";
+import { FINAL_PROMPT_PHASES, EDITOR_TARGET_KINDS } from "../types/messages";
 
 /** Property is inherited from workflow/settings when undefined. */
 export type Inheritable<T> = T | undefined;
@@ -85,7 +85,7 @@ function selectionTargetKey(target: EditorSelectionTarget): string {
 }
 
 export type EditorSelectionTarget =
-  | { kind: "newPrompt" }
+  | { kind: typeof EDITOR_TARGET_KINDS.NEW_PROMPT }
   | { kind: typeof FINAL_PROMPT_PHASES.QUEUE; index: number }
   | { kind: typeof FINAL_PROMPT_PHASES.FINAL_PROMPT };
 
@@ -203,7 +203,7 @@ interface EditorSelectors {
 }
 
 const initialState: EditorState = {
-  selectionTarget: { kind: "newPrompt" },
+  selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
   selectedPromptIndex: null,
   originalPromptData: null,
   savedNewPromptState: null,
@@ -251,7 +251,7 @@ export const useEditorStore = create<
       } else {
         // Fallback if promptData not provided (shouldn't happen)
         set({
-          selectionTarget: { kind: "queue", index: resolvedIndex },
+          selectionTarget: { kind: FINAL_PROMPT_PHASES.QUEUE, index: resolvedIndex },
           selectedPromptIndex: resolvedIndex,
           originalPromptData: promptData,
         });
@@ -268,7 +268,7 @@ export const useEditorStore = create<
     if (savedNewPromptState) {
       // Restore saved new prompt state (from switching to edit mode)
       set({
-        selectionTarget: { kind: "newPrompt" },
+        selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
         promptText: savedNewPromptState.promptText,
@@ -286,7 +286,7 @@ export const useEditorStore = create<
       if (!restored) {
         // No persisted state, reset to defaults
         set({
-          selectionTarget: { kind: "newPrompt" },
+          selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
           promptText: "",
@@ -298,7 +298,7 @@ export const useEditorStore = create<
       } else {
         // State was restored, just clear edit mode flags
         set({
-          selectionTarget: { kind: "newPrompt" },
+          selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
           savedNewPromptState: null,
@@ -313,7 +313,7 @@ export const useEditorStore = create<
 
     // When switching away from an edit-mode prompt, save its current editor
     // state so the user can return to it without losing unsaved changes.
-    if (state.selectionTarget.kind !== "newPrompt") {
+    if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
       const key = selectionTargetKey(state.selectionTarget);
       newPendingEdits[key] = {
         promptText: state.promptText,
@@ -326,7 +326,7 @@ export const useEditorStore = create<
     // Preserve the existing savedNewPromptState when switching between edit modes
     // so the user's new-prompt draft survives multiple prompt switches.
     const savedNewPromptState: SavedNewPromptState | null =
-      state.selectionTarget.kind === "newPrompt"
+      state.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
         ? {
             promptText: state.promptText,
             promptName: state.promptName,
@@ -336,8 +336,8 @@ export const useEditorStore = create<
 
     const isFinalPromptTarget = index < 0;
     const newTarget: EditorSelectionTarget = isFinalPromptTarget
-      ? { kind: "finalPrompt" }
-      : { kind: "queue", index };
+      ? { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT }
+      : { kind: FINAL_PROMPT_PHASES.QUEUE, index };
 
     // Restore a pending (unsaved) edit if one exists for this prompt, otherwise
     // load the prompt data from the workflow.
@@ -380,14 +380,14 @@ export const useEditorStore = create<
     // pressed Update (official save) or Cancel (discard), so local memory
     // for this prompt is no longer needed.
     const newPendingEdits = { ...state.pendingEdits };
-    if (state.selectionTarget.kind !== "newPrompt") {
+    if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
       delete newPendingEdits[selectionTargetKey(state.selectionTarget)];
     }
 
     if (savedNewPromptState) {
       // Restore saved new prompt state (what was typed before switching to edit mode)
       set({
-        selectionTarget: { kind: "newPrompt" },
+        selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
         promptText: savedNewPromptState.promptText,
@@ -407,7 +407,7 @@ export const useEditorStore = create<
       if (!restored) {
         // No persisted state, reset to defaults
         set({
-          selectionTarget: { kind: "newPrompt" },
+          selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
           promptText: "",
@@ -420,7 +420,7 @@ export const useEditorStore = create<
       } else {
         // State was restored, just clear edit mode flags and validation errors
         set({
-          selectionTarget: { kind: "newPrompt" },
+          selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
           savedNewPromptState: null,
@@ -433,7 +433,7 @@ export const useEditorStore = create<
 
   deselect: () => {
     const state = get();
-    if (state.selectionTarget.kind === "newPrompt") return;
+    if (state.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT) return;
 
     // Save current edit state into pendingEdits so the user can return later.
     const newPendingEdits = { ...state.pendingEdits };
@@ -447,7 +447,7 @@ export const useEditorStore = create<
     const { savedNewPromptState } = state;
     if (savedNewPromptState) {
       set({
-        selectionTarget: { kind: "newPrompt" },
+        selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
         promptText: savedNewPromptState.promptText,
@@ -463,7 +463,7 @@ export const useEditorStore = create<
       const restored = get().restoreFromVsCodeState(vscode);
       if (!restored) {
         set({
-          selectionTarget: { kind: "newPrompt" },
+          selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
           promptText: "",
@@ -475,7 +475,7 @@ export const useEditorStore = create<
         });
       } else {
         set({
-          selectionTarget: { kind: "newPrompt" },
+          selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
           savedNewPromptState: null,
@@ -611,14 +611,14 @@ export const useEditorStore = create<
     const state = get();
 
     // Only save state for new prompt mode, not when editing existing prompts
-    if (state.selectionTarget.kind !== "newPrompt") {
+    if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
       return;
     }
 
     const editorState = {
       editorText: state.promptText,
       promptName: state.promptName,
-      selectionTarget: { kind: "newPrompt" as const },
+      selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
       selectedPromptIndex: null, // Always null for new prompt state
       properties: state.properties,
     };
@@ -646,14 +646,14 @@ export const useEditorStore = create<
     // Only restore if we were in new prompt mode
     const persistedTarget = persistedState.selectionTarget;
     if (
-      (persistedTarget && persistedTarget.kind !== "newPrompt") ||
+      (persistedTarget && persistedTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) ||
       persistedState.selectedPromptIndex !== null
     ) {
       return false;
     }
 
     set({
-      selectionTarget: { kind: "newPrompt" },
+      selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
       promptText: persistedState.editorText ?? "",
       promptName: persistedState.promptName ?? "",
       properties: {
@@ -672,7 +672,7 @@ export const useEditorStore = create<
 
   resetEditor: () =>
     set({
-      selectionTarget: { kind: "newPrompt" },
+      selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
       selectedPromptIndex: null,
       originalPromptData: null,
       savedNewPromptState: null,
@@ -698,9 +698,9 @@ export const useEditorStore = create<
   // COMPUTED SELECTORS
   // ============================================================================
 
-  isNewPromptMode: () => get().selectionTarget.kind === "newPrompt",
+  isNewPromptMode: () => get().selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT,
 
-  isEditMode: () => get().selectionTarget.kind !== "newPrompt",
+  isEditMode: () => get().selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT,
 
   isFinalPromptMode: () => get().selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT,
 

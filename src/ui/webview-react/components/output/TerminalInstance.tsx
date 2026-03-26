@@ -3,7 +3,7 @@ import { sendMessage } from "@hooks/useMessageHandler";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
 import { terminalRegistry } from "../../terminalRegistry";
-import { MESSAGE_TYPES } from "../../types/messages";
+import { MESSAGE_TYPES, TERMINAL_SESSION_STATUS, SESSION_KINDS } from "../../types/messages";
 import "@xterm/xterm/css/xterm.css";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
@@ -131,7 +131,7 @@ const FrozenOverlay: React.FC<{ workflowId: string; sessionId: string }> = ({
 }) => {
   const sessions = useTerminalStore((s) => s.sessions[workflowId] ?? EMPTY_SESSIONS);
   const session = sessions.find((s) => s.id === sessionId);
-  const isFrozen = session?.kind === "ai-cli" && session.status !== "running";
+  const isFrozen = session?.kind === SESSION_KINDS.AI_CLI && session.status !== TERMINAL_SESSION_STATUS.RUNNING;
 
   if (!isFrozen) return null;
 
@@ -141,7 +141,7 @@ const FrozenOverlay: React.FC<{ workflowId: string; sessionId: string }> = ({
       style={{ background: "rgba(0,0,0,0.4)" }}
     >
       <span className="text-[11px] text-description-fg select-none">
-        {session?.status === "failed" ? "Process exited with error" : "Process exited"}
+        {session?.status === TERMINAL_SESSION_STATUS.FAILED ? "Process exited with error" : "Process exited"}
       </span>
     </div>
   );
