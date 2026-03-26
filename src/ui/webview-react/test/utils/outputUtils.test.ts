@@ -5,8 +5,8 @@ import {
   extractKeyParameters,
   parseUnifiedDiff,
   generateDiffLines,
-  generateMarkdownExport,
 } from "@utils/outputUtils";
+import { generateMarkdownExport } from "@utils/markdownExport";
 import type { UnifiedDiffHunk } from "@/types/cliEvents";
 
 // ─────────────────────────────────────────────────────────────────────────────

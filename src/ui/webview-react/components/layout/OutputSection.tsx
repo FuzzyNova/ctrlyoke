@@ -11,11 +11,8 @@ import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { CliOutput, StatusMessage } from "../output";
 import { PanelBar, RunSelector } from "../shared";
-import {
-  generateMarkdownExport,
-  formatTime,
-  generateDiffLines,
-} from "@utils/outputUtils";
+import { formatTime, generateDiffLines } from "@utils/outputUtils";
+import { generateMarkdownExport } from "@utils/markdownExport";
 import type {
   CliOutput as CliOutputType,
   CliEvent,

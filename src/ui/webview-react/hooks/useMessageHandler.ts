@@ -19,6 +19,8 @@ import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
   STEP_STATUS,
+  EDITOR_TARGET_KINDS,
+  SESSION_KINDS,
   type ExecutionState,
   type StepStatus,
   type HarnessId,
@@ -29,13 +31,14 @@ import {
 import { WebviewLog } from "@utils/logger";
 import { useTerminalStore } from "../store/terminalStore";
 import { terminalRegistry } from "../terminalRegistry";
+import { registerTerminalHandlers } from "./terminalMessageHandlers";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-type MessageHandler = (message: any) => void;
-type MessageHandlerMap = Record<string, MessageHandler>;
+export type MessageHandler = (message: any) => void;
+export type MessageHandlerMap = Record<string, MessageHandler>;
 
 export interface UseMessageHandlerReturn {
   /** Send a message to the extension */
@@ -79,7 +82,7 @@ function applyWorkflowChange(): void {
   useUiStore.setState({ availableRuns: 0, runTimestamps: [], runStates: [] });
 
   const editorStore = useEditorStore.getState();
-  if (editorStore.selectionTarget.kind !== "newPrompt") {
+  if (editorStore.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
     // Was editing an existing prompt from the old workflow — cancel the edit so
     // the savedNewPromptState (what the user had typed before clicking edit) is
     // restored instead of being discarded.
@@ -317,7 +320,7 @@ function createMessageHandlers(): MessageHandlerMap {
 
     // Cancel any active edit — the selected prompt's status has changed
     const editorStore = useEditorStore.getState();
-    if (editorStore.selectionTarget.kind !== "newPrompt") {
+    if (editorStore.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
       editorStore.cancelEdit();
     }
   };
@@ -350,7 +353,7 @@ function createMessageHandlers(): MessageHandlerMap {
 
     // Cancel any active edit — the selected prompt's state has changed
     const editorStore = useEditorStore.getState();
-    if (editorStore.selectionTarget.kind !== "newPrompt") {
+    if (editorStore.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
       editorStore.cancelEdit();
     }
   };
@@ -457,7 +460,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const wfId = message.workflowId ?? useUiStore.getState().activeWorkflowId;
     if (wfId) {
       const aiCliSessionIds = (useTerminalStore.getState().sessions[wfId] ?? [])
-        .filter((s) => s.kind === "ai-cli")
+        .filter((s) => s.kind === SESSION_KINDS.AI_CLI)
         .map((s) => s.id);
       terminalRegistry.clearAiCliSessions(wfId, aiCliSessionIds);
       useTerminalStore.getState().clearAiCliSessions(wfId);
@@ -1106,76 +1109,7 @@ function createMessageHandlers(): MessageHandlerMap {
   // TERMINAL I/O
   // ========================================================================
 
-  handlers[MESSAGE_TYPES.TERMINAL_OUTPUT] = (message: any) => {
-    const { workflowId, sessionId, data } = message;
-    if (!workflowId || !sessionId || !data) return;
-
-    // If the registry entry exists, write directly to xterm (no Zustand, no re-renders)
-    const entry = terminalRegistry.get(workflowId, sessionId);
-    if (entry) {
-      entry.term.write(data as string);
-    } else {
-      // Terminal not yet mounted — buffer the output
-      useTerminalStore.getState().pushPendingOutput(workflowId, sessionId, data as string);
-    }
-  };
-
-  handlers[MESSAGE_TYPES.TERMINAL_STARTED] = (message: any) => {
-    const { workflowId, sessionId, stepName, kind, promptNumber } = message;
-    if (!workflowId || !sessionId) return;
-
-    const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-    WebviewLog.debug(
-      `[TERMINAL_STARTED] workflowId=inst:${workflowId?.slice(0, 8)} sessionId=${sessionId?.slice(0, 8)} kind=${kind} activeWorkflowId=inst:${activeWorkflowId?.slice(0, 8) ?? "null"} match=${workflowId === activeWorkflowId}`
-    );
-
-    const { addSession } = useTerminalStore.getState();
-    addSession({
-      id: sessionId,
-      workflowId,
-      stepName: stepName ?? "terminal",
-      kind: kind ?? "ai-cli",
-      promptNumber,
-      status: "running",
-      pendingOutput: [],
-    });
-
-    // Update terminal active status
-    useUiStore.getState().setTerminalSessionActive(workflowId, true);
-
-    // Auto-switch to Terminal tab when an ai-cli session starts
-    if (kind === "ai-cli") {
-      useUiStore.getState().setActiveOutputTab(workflowId, "terminal");
-    }
-  };
-
-  handlers[MESSAGE_TYPES.TERMINAL_ENDED] = (message: any) => {
-    const { workflowId, sessionId, kind, exitCode } = message;
-    if (!workflowId || !sessionId) return;
-
-    const termStore = useTerminalStore.getState();
-    termStore.endSession(workflowId, sessionId, exitCode ?? 0);
-
-    // Freeze ai-cli sessions in the registry (disables onData)
-    if (kind === "ai-cli") {
-      terminalRegistry.freeze(workflowId, sessionId);
-    }
-
-    // Check if all running sessions for this workflow have ended
-    const sessions = termStore.sessions[workflowId] ?? [];
-    const hasRunningSessions = sessions.some((s) => s.status === "running");
-
-    if (!hasRunningSessions) {
-      useUiStore.getState().setTerminalSessionActive(workflowId, false);
-
-      // Auto-switch back to Output tab when all ai-cli sessions are done,
-      // but only if the user has no shell sessions open
-      const hasShellSessions = sessions.some((s) => s.kind === "shell");
-      if (!hasShellSessions) {
-        useUiStore.getState().setActiveOutputTab(workflowId, "output");
-      }
-    }
-  };
+  registerTerminalHandlers(handlers);
 
   return handlers;
 }

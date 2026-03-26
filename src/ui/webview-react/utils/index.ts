@@ -80,9 +80,9 @@ export {
   extractKeyParameters,
   parseUnifiedDiff,
   generateDiffLines,
-  generateMarkdownExport,
   type DiffLine,
 } from "./outputUtils";
+export { generateMarkdownExport } from "./markdownExport";
 
 // Tokenizer utilities
 export { countTokens } from "./tokenizer";

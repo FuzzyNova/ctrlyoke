@@ -25,6 +25,9 @@ export {
   EXECUTION_MODES,
   SESSION_ID_SENTINELS,
   RUNNER_IDS,
+  EDITOR_TARGET_KINDS,
+  TERMINAL_SESSION_STATUS,
+  SESSION_KINDS,
   type MessageType,
   type WebviewLogLevel,
   type ExecutionState,
@@ -35,6 +38,10 @@ export {
   type HarnessId,
   type HarnessStatusString,
   type RunnerId,
+  type ExecutionMode,
+  type EditorTargetKind,
+  type TerminalSessionStatus,
+  type SessionKind,
 } from "@root/types/DashboardConstants";
 
 // Re-export all message and data types from WebviewMessageTypes

@@ -1,6 +1,12 @@
 import { create } from "zustand";
+import {
+  TERMINAL_SESSION_STATUS,
+  SESSION_KINDS,
+  type TerminalSessionStatus,
+  type SessionKind,
+} from "../types/messages";
 
-export type SessionKind = "ai-cli" | "shell";
+export type { SessionKind };
 
 export interface TerminalSession {
   id: string;
@@ -8,7 +14,7 @@ export interface TerminalSession {
   stepName: string;
   kind: SessionKind;
   promptNumber?: number;
-  status: "running" | "completed" | "failed";
+  status: TerminalSessionStatus;
   /** Chunks buffered before TerminalInstance mounts — flushed on mount */
   pendingOutput: string[];
 }
@@ -63,7 +69,7 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
       set((state) => {
         const sessions = (state.sessions[workflowId] ?? []).map((s) =>
           s.id === sessionId
-            ? { ...s, status: (exitCode === 0 ? "completed" : "failed") as TerminalSession["status"] }
+            ? { ...s, status: exitCode === 0 ? TERMINAL_SESSION_STATUS.COMPLETED : TERMINAL_SESSION_STATUS.FAILED }
             : s
         );
         return { sessions: { ...state.sessions, [workflowId]: sessions } };
@@ -111,12 +117,12 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
     clearAiCliSessions: (workflowId) =>
       set((state) => {
         const sessions = (state.sessions[workflowId] ?? []).filter(
-          (s) => s.kind !== "ai-cli"
+          (s) => s.kind !== SESSION_KINDS.AI_CLI
         );
         const currentActive = state.activeSessionIds[workflowId];
         const removedIds = new Set(
           (state.sessions[workflowId] ?? [])
-            .filter((s) => s.kind === "ai-cli")
+            .filter((s) => s.kind === SESSION_KINDS.AI_CLI)
             .map((s) => s.id)
         );
         const newActive =

@@ -2,9 +2,11 @@ import { create } from "zustand";
 import {
   HARNESS_IDS,
   HARNESS_STATUS_STRINGS,
+  EXECUTION_MODES,
   type HarnessId,
   type HarnessStatusString,
   type PriorContext,
+  type ExecutionMode,
 } from "../types/messages";
 import {
   CLAUDE_CLI_MODELS as CLAUDE_CLI_MODEL_LIST,
@@ -58,7 +60,7 @@ export interface GlobalSettings {
   harnessDefaultAdditionalArgs: Record<string, string>;
   agent: string;
   skills: string[];
-  executionMode: "interactive" | "headless";
+  executionMode: ExecutionMode;
   resumeSession: boolean;
   allowDynamicExtension: boolean;
   respectGitignore: boolean;
@@ -179,7 +181,7 @@ const initialGlobalSettings: GlobalSettings = {
   harnessDefaultAdditionalArgs: {},
   agent: "",
   skills: [],
-  executionMode: "interactive",
+  executionMode: EXECUTION_MODES.INTERACTIVE,
   resumeSession: false,
   allowDynamicExtension: false,
   respectGitignore: true,

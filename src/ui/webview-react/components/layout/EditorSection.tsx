@@ -5,7 +5,7 @@ import { useWorkflowStore } from "../../store/workflowStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { PromptEditor } from "../editor/PromptEditor";
 import { PanelBar } from "../shared";
-import { FINAL_PROMPT_PHASES, RUNNER_IDS } from "../../types/messages";
+import { FINAL_PROMPT_PHASES, RUNNER_IDS, EDITOR_TARGET_KINDS } from "../../types/messages";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 
 /**
@@ -33,7 +33,7 @@ export const EditorSection: React.FC = () => {
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
     RUNNER_IDS.CLI;
 
-  const isEditMode = selectionTarget.kind !== "newPrompt";
+  const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
   const totalPrompts = prompts.length;
   const [sectionRef] = useElementNarrow<HTMLElement>();
 
