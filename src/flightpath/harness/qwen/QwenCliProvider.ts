@@ -191,20 +191,16 @@ export class QwenCliProvider implements ICliProvider {
     const notifyDir =
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
 
-    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
-    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
-
-    // Inject diagnostic logs env var into hook command when the setting is on.
-    // This is how the setting reaches the hook script (which can't read VS Code settings).
-    const diagnosticLogs = ConfigurationUtils.isDiagnosticLogsEnabled();
-    const cmdPrefix = diagnosticLogs ? "FLIGHTPATH_DIAGNOSTIC_LOGS=true " : "";
-    const command = `${cmdPrefix}node "${normalizedScriptPath}" "${normalizedNotifyDir}"`;
-
-    const hooksSection = {
-      SessionStart: [{ hooks: [{ type: "command", command }] }],
-      UserPromptSubmit: [{ hooks: [{ type: "command", command }] }],
-      Stop: [{ hooks: [{ type: "command", command }] }],
-    };
+    // Build hooks section via the notification monitor (single source of truth).
+    // FLIGHTPATH_DIAGNOSTIC_LOGS is injected into the CLI process env at spawn time
+    // via CliIntegration (CliProviderUtils.buildProcessEnv default) so hook subprocesses
+    // inherit it. Using KEY=VALUE prefix in the command string does not work on Windows.
+    const hookConfig = this.notificationMonitor.buildHookConfig(
+      scriptPath,
+      notifyDir,
+      workspaceRoot
+    );
+    const hooksSection = (hookConfig as { type: string; config: { hooks: Record<string, unknown> } }).config.hooks;
 
     const qwenDir = path.join(workspaceRoot, ".qwen");
     const settingsPath = path.join(qwenDir, "settings.json");
@@ -249,12 +245,12 @@ export class QwenCliProvider implements ICliProvider {
       "utf-8"
     );
 
-    // Pre-trust hook commands in ~/.qwen/trusted_hooks.json.
+    // Pre-trust the hook command in ~/.qwen/trusted_hooks.json.
     // Key format: "${name}:${command}" where name defaults to "".
-    // Register BOTH the base command and the diagnostic-prefixed variant so that
-    // toggling flightpath.enableDiagnosticLogs between runs doesn't break trust.
-    const baseCommand = `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`;
-    const diagCommand = `FLIGHTPATH_DIAGNOSTIC_LOGS=true ${baseCommand}`;
+    // Must match the command format in buildHookConfig exactly (no quotes — see note there).
+    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
+    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
+    const baseCommand = `node ${normalizedScriptPath} ${normalizedNotifyDir}`;
 
     const globalQwenDir = path.join(os.homedir(), ".qwen");
     const trustedHooksPath = path.join(globalQwenDir, "trusted_hooks.json");
@@ -270,11 +266,9 @@ export class QwenCliProvider implements ICliProvider {
     if (!trustedHooks[workspaceRoot]) {
       trustedHooks[workspaceRoot] = [];
     }
-    for (const cmd of [baseCommand, diagCommand]) {
-      const key = `:${cmd}`;
-      if (!trustedHooks[workspaceRoot].includes(key)) {
-        trustedHooks[workspaceRoot].push(key);
-      }
+    const key = `:${baseCommand}`;
+    if (!trustedHooks[workspaceRoot].includes(key)) {
+      trustedHooks[workspaceRoot].push(key);
     }
 
     await fs.mkdir(globalQwenDir, { recursive: true });

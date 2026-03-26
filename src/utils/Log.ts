@@ -24,9 +24,6 @@ export enum LogLevel {
 /** Max age for log files before cleanup removes them (7 days). */
 const LOG_CLEANUP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** Name of the flag file written to .flightpath/ when diagnostic logging is on. */
-const DIAGNOSTIC_FLAG_FILE = ".diagnostic-logs";
-
 export class Log {
   private static outputChannel: vscode.OutputChannel;
   private static logLevel: LogLevel = LogLevel.INFO;
@@ -54,11 +51,8 @@ export class Log {
 
     if (IS_DEV_MODE) {
       // Dev builds: show everything including trace logs.
-      // Also write the diagnostic flag file so hook scripts and plugins (OpenCode,
-      // Claude, Copilot, etc.) enable their own debug output without manual setup.
       this.logLevel = LogLevel.TRACE;
       this.openLogFile();
-      this.writeDiagnosticFlagFile(true);
     } else {
       // Production: respect VS Code's log level setting
       this.logLevel = Log.fromVSCodeLogLevel(vscode.env.logLevel);
@@ -69,13 +63,10 @@ export class Log {
       );
 
       // Enable/disable file logging based on diagnostic setting.
-      // Always call writeDiagnosticFlagFile so a stale flag file from a previous
-      // session is removed when the setting is currently off.
       const diagnosticLogsEnabled = ConfigurationUtils.isDiagnosticLogsEnabled();
       if (diagnosticLogsEnabled) {
         this.openLogFile();
       }
-      this.writeDiagnosticFlagFile(diagnosticLogsEnabled);
 
       // React to setting changes at runtime
       context.subscriptions.push(
@@ -87,7 +78,6 @@ export class Log {
             } else if (!enabled) {
               this.logFilePath = undefined;
             }
-            this.writeDiagnosticFlagFile(enabled);
           }
         })
       );
@@ -138,32 +128,6 @@ export class Log {
       this.cleanupOldLogs(logDir);
     } catch {
       this.logFilePath = undefined;
-    }
-  }
-
-  /**
-   * Write or remove the `.flightpath/.diagnostic-logs` flag file.
-   * Hook scripts check this file to decide whether to write debug logs.
-   */
-  private static writeDiagnosticFlagFile(enabled: boolean): void {
-    if (!this.workspaceRoot) {
-      return;
-    }
-    const flagPath = path.join(
-      this.workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
-      DIAGNOSTIC_FLAG_FILE
-    );
-    try {
-      if (enabled) {
-        const flightpathDir = path.join(this.workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR);
-        fs.mkdirSync(flightpathDir, { recursive: true });
-        fs.writeFileSync(flagPath, "");
-      } else {
-        fs.unlinkSync(flagPath);
-      }
-    } catch {
-      // Best-effort: ignore if .flightpath/ doesn't exist or file already gone
     }
   }
 

@@ -26,7 +26,6 @@
 const fs = require("fs");
 const path = require("path");
 const {
-  isDiagnosticLogsEnabled,
   getDebugLogPath,
   createLogger,
 } = require("./flightpath-hook-utils");
@@ -38,13 +37,13 @@ let debugLog = createLogger(null); // Will be re-initialized after parsing notif
  * Main handler function
  */
 function main() {
-  // Initialize debug logging only when diagnostic logs are enabled.
-  // The workspace is available from the notification's cwd field.
+  // Initialize debug logging when FLIGHTPATH_DIAGNOSTIC_LOGS is set.
+  // The workspace directory from the notification's cwd field is used for log path.
   let notificationJson = process.argv[2];
   try {
-    if (notificationJson) {
+    if (notificationJson && process.env.FLIGHTPATH_DIAGNOSTIC_LOGS === "true") {
       const notification = JSON.parse(notificationJson);
-      if (notification.cwd && isDiagnosticLogsEnabled(notification.cwd)) {
+      if (notification.cwd) {
         const logsDir = path.join(notification.cwd, ".flightpath", "logs");
         debugLog = createLogger(getDebugLogPath(logsDir, SCRIPT_NAME));
       }

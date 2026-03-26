@@ -13,6 +13,7 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
  * - Workspace directory resolution (`getWorkspaceDirs`)
  * - MCP configuration injection (`buildMcpConfigBlock`)
  * - Session resume decision (`shouldResumeSession`)
+ * - Process environment construction (`buildProcessEnv`)
  */
 export class CliProviderUtils {
   /**
@@ -139,5 +140,21 @@ export class CliProviderUtils {
     }
 
     return [];
+  }
+
+  /**
+   * Build a process environment object for spawning CLI harness processes.
+   *
+   * Single source of truth for env construction: spreads `process.env` and
+   * conditionally injects `FLIGHTPATH_DIAGNOSTIC_LOGS` when diagnostic
+   * logging is enabled. Providers may modify the returned object before use
+   * (e.g. Claude deletes `CLAUDECODE`).
+   */
+  static buildProcessEnv(): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
+      env.FLIGHTPATH_DIAGNOSTIC_LOGS = "true";
+    }
+    return env;
   }
 }

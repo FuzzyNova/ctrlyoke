@@ -378,7 +378,7 @@ export class ClaudeCliProvider implements ICliProvider {
    * Unset CLAUDECODE so Claude CLI doesn't refuse to start inside an active session.
    */
   getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
-    const env = { ...process.env };
+    const env = CliProviderUtils.buildProcessEnv();
     delete env.CLAUDECODE;
     return env;
   }

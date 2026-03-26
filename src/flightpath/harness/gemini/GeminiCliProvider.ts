@@ -314,10 +314,6 @@ export class GeminiCliProvider implements ICliProvider {
     );
   }
 
-  getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
-    return { ...process.env };
-  }
-
   async checkAvailability(): Promise<boolean> {
     try {
       await execAsync("gemini --version");

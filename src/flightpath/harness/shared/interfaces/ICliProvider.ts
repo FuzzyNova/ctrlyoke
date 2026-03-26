@@ -217,6 +217,7 @@ export interface ICliProvider {
    * Return environment variable overrides for interactive spawning.
    * Use this to unset variables that conflict with the child process
    * (e.g., CLAUDECODE blocks nested Claude CLI sessions).
+   * If not defined, CliIntegration defaults to CliProviderUtils.buildProcessEnv().
    */
   getInteractiveSpawnEnv?(): NodeJS.ProcessEnv;
 

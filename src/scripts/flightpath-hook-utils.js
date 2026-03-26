@@ -10,28 +10,6 @@ const path = require("path");
 const os = require("os");
 
 /**
- * Check whether diagnostic file logging is enabled for a workspace.
- * The extension writes `.flightpath/.diagnostic-logs` when
- * `flightpath.enableDiagnosticLogs` is true. Hook scripts check this file
- * because they cannot read VS Code settings directly.
- *
- * @param {string|null} workspaceDir - Workspace root (parent of .flightpath/).
- *   Pass null to skip the check (returns false).
- * @returns {boolean} True if the flag file exists.
- */
-function isDiagnosticLogsEnabled(workspaceDir) {
-  if (!workspaceDir) {
-    return false;
-  }
-  try {
-    const flagPath = path.join(workspaceDir, ".flightpath", ".diagnostic-logs");
-    return fs.existsSync(flagPath);
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Get debug log file path in a specified logs directory.
  * Ensures the logs directory exists before returning the path.
  *
@@ -116,10 +94,10 @@ function getWorkspaceRootFromNotifyDir(notifyDir) {
 /**
  * Initialize the debug logger for a stdin-based hook script.
  *
- * Derives the workspace root from the notification directory (argv[2]),
- * checks whether diagnostic logging is enabled, and returns a configured
- * logger. Returns a no-op logger if diagnostics are disabled or if any
- * step fails — hook scripts must never crash due to logging setup.
+ * Checks the FLIGHTPATH_DIAGNOSTIC_LOGS environment variable (injected into
+ * the CLI process env at spawn time by FlightPath) and returns a configured
+ * logger when enabled. Returns a no-op logger otherwise — hook scripts must
+ * never crash due to logging setup.
  *
  * @param {string} scriptName - Base name for the log file (e.g., 'flightpath-claude-hook')
  * @param {string|undefined} notifyDir - Notification directory path (argv[2])
@@ -127,17 +105,9 @@ function getWorkspaceRootFromNotifyDir(notifyDir) {
  */
 function initializeLogger(scriptName, notifyDir) {
   try {
-    if (notifyDir) {
-      const workspaceRoot = getWorkspaceRootFromNotifyDir(notifyDir);
-      // Check env var first (injected into hook command when setting is on),
-      // then fall back to flag file check. Matches mcp-server.ts pattern.
-      const enabled =
-        process.env.FLIGHTPATH_DIAGNOSTIC_LOGS === "true" ||
-        isDiagnosticLogsEnabled(workspaceRoot);
-      if (enabled) {
-        const logsDir = getLogsDirFromNotifyDir(notifyDir);
-        return createLogger(getDebugLogPath(logsDir, scriptName));
-      }
+    if (notifyDir && process.env.FLIGHTPATH_DIAGNOSTIC_LOGS === "true") {
+      const logsDir = getLogsDirFromNotifyDir(notifyDir);
+      return createLogger(getDebugLogPath(logsDir, scriptName));
     }
   } catch {
     // Ignore — return no-op logger below
@@ -206,7 +176,6 @@ function readStdinJson(scriptPrefix, debugLog, callback) {
 }
 
 module.exports = {
-  isDiagnosticLogsEnabled,
   getDebugLogPath,
   getTempLogPath,
   createLogger,

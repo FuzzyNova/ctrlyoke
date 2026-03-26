@@ -15,27 +15,25 @@
 //  - Filters child sessions (multi-agent subagents) to avoid false positives
 //
 // Diagnostic logging:
-//  - Enabled when .flightpath/.diagnostic-logs flag file exists in the workspace
+//  - Enabled when FLIGHTPATH_DIAGNOSTIC_LOGS=true is set in the process environment
 //  - Logs written to .flightpath/logs/flightpath-opencode-plugin-debug.log
 
 /* global exports, require */
 
-const { writeFileSync, mkdirSync, existsSync, appendFileSync } = require("fs");
+const { writeFileSync, mkdirSync, appendFileSync } = require("fs");
 const path = require("path");
 
 const NOTIFY_DIR = process.env.FLIGHTPATH_NOTIFY_DIR;
 const RUN_ID = process.env.FLIGHTPATH_RUN_ID || null;
 const mainSessions = new Set();
 
-// Derive workspace root from notification directory path.
-// NOTIFY_DIR = <workspace>/.flightpath/temp/opencode-notifications — go up 3 levels.
-const _workspaceRoot = NOTIFY_DIR ? path.resolve(NOTIFY_DIR, "..", "..", "..") : null;
-const _flagFile = _workspaceRoot ? path.join(_workspaceRoot, ".flightpath", ".diagnostic-logs") : null;
-const _logsDir = _workspaceRoot ? path.join(_workspaceRoot, ".flightpath", "logs") : null;
+// Derive the logs directory from the notification directory path.
+// NOTIFY_DIR = <workspace>/.flightpath/temp/opencode-notifications — go up 2 levels.
+const _logsDir = NOTIFY_DIR ? path.resolve(NOTIFY_DIR, "..", "..", "logs") : null;
 
 let _logPath = null;
 try {
-  if (_flagFile && existsSync(_flagFile)) {
+  if (process.env.FLIGHTPATH_DIAGNOSTIC_LOGS === "true" && _logsDir) {
     mkdirSync(_logsDir, { recursive: true });
     _logPath = path.join(_logsDir, "flightpath-opencode-plugin-debug.log");
   }

@@ -33,6 +33,7 @@ import {
   ResolvedProperties,
   PropertyResolver,
 } from "../../utils/PropertyResolver";
+import { CliProviderUtils } from "./shared/CliProviderUtils";
 import { SessionResolver } from "../../utils/SessionResolver";
 import { SessionValidator } from "../../utils/SessionValidator";
 
@@ -715,7 +716,7 @@ export class CliIntegration extends HarnessIntegration {
 
       // Spawn with stdio:'inherit' — the user sees the AI CLI TUI directly.
       const workingDir = this.getWorkspaceRoot() || process.cwd();
-      const interactiveEnv = this.provider.getInteractiveSpawnEnv?.();
+      const interactiveEnv = this.provider.getInteractiveSpawnEnv?.() ?? CliProviderUtils.buildProcessEnv();
       let processExited = false;
       const spawnPromise = this.processManager
         .spawnInteractive(commandStr, workingDir, interactiveEnv)
@@ -872,6 +873,9 @@ export class CliIntegration extends HarnessIntegration {
       // Both IDs travel to the hook/plugin via env vars in the terminal's process env.
       const runId = crypto.randomUUID();
       const terminalEnv: Record<string, string> = { FLIGHTPATH_RUN_ID: runId };
+      if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
+        terminalEnv.FLIGHTPATH_DIAGNOSTIC_LOGS = "true";
+      }
       const wsRootForEnv = this.getWorkspaceRoot();
       if (wsRootForEnv) {
         terminalEnv.FLIGHTPATH_NOTIFY_DIR =
@@ -1378,11 +1382,14 @@ export class CliIntegration extends HarnessIntegration {
     const shell =
       process.platform === "win32" ? resolveWindowsShell() : true;
 
+    const env = CliProviderUtils.buildProcessEnv();
+
     const result = await this.processManager.spawn(command, args, {
       cwd: this.getWorkspaceRoot() || "",
       timeout: options.timeout,
       onStdout: options.onStdout,
       shell,
+      env,
     });
 
     Log.info("✅ Process exited - execution complete");
