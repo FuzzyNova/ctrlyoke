@@ -122,6 +122,12 @@
     color-scheme: dark;
   }
 
+  /* Dark-only harness icons (white fills) get inverted on light themes */
+  body.vscode-light .harness-icon-adaptive,
+  body.vscode-high-contrast-light .harness-icon-adaptive {
+    filter: invert(1);
+  }
+
   /* Focus visible outline for accessibility */
   :focus-visible {
     outline: 1px solid var(--focus-border);

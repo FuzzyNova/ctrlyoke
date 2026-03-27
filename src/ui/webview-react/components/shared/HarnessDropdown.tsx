@@ -6,6 +6,7 @@ import {
   type HarnessStatusString,
 } from "../../types/messages";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
+import { HarnessIcon } from "./HarnessIcon";
 
 // ─── Display names (official product names) ──────────────────────────────────
 
@@ -131,8 +132,9 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
         <button
           type="button"
           onClick={() => onSelect(harness)}
-          className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer"
+          className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer flex items-center gap-1.5"
         >
+          <HarnessIcon harnessId={harness} size={13} />
           {name}
         </button>
         {showStatus && status && (
@@ -158,8 +160,9 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
           isAvailable || isChecking ? onSelect(harness) : undefined
         }
         disabled={!isAvailable && !isChecking}
-        className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent disabled:cursor-not-allowed cursor-inherit"
+        className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent disabled:cursor-not-allowed cursor-inherit flex items-center gap-1.5"
       >
+        <HarnessIcon harnessId={harness} size={13} />
         {name}
       </button>
       {/* Eye-closed — hover-only, left of status dot, never on selected or non-hideable */}

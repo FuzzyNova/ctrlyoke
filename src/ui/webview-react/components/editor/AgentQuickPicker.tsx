@@ -47,7 +47,7 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
     <FooterQuickPicker
       isNarrow={isNarrow}
       showLabel={showLabel}
-      icon="codicon-person"
+      icon={<i className="codicon codicon-person" />}
       valueLabel={valueLabel}
       isOverride={properties.agent !== undefined}
       isOpen={isOpen}

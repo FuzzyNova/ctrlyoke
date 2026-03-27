@@ -6,8 +6,8 @@ interface FooterQuickPickerProps {
   isNarrow: boolean;
   /** Show value label alongside icon (wide, >= 560px) */
   showLabel: boolean;
-  /** Codicon class name for the button icon, e.g. "codicon-server" */
-  icon: string;
+  /** Icon to display — a codicon element or any React node (e.g. HarnessIcon) */
+  icon: React.ReactNode;
   /** Text shown next to icon in wide mode — the current override value or "Default" */
   valueLabel: string;
   /** Whether the value is an override (not default) — used for active styling */
@@ -110,7 +110,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
             : "hover:bg-list-hover-bg text-foreground"
         }`}
       >
-        <i className={`codicon ${icon}`} />
+        {icon}
         {!isNarrow && showLabel && (
           <span
             className={`max-w-[80px] truncate ${

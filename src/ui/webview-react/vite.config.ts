@@ -79,6 +79,7 @@ export default defineConfig(({ mode }) => ({
       // Allow importing from extension-side src/types and src/utils for shared definitions
       "@root/types": path.resolve(__dirname, "../../types"),
       "@root/utils": path.resolve(__dirname, "../../utils"),
+      "@icons": path.resolve(__dirname, "../icons"),
     },
   },
 

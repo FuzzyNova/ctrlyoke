@@ -47,7 +47,7 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
     <FooterQuickPicker
       isNarrow={isNarrow}
       showLabel={showLabel}
-      icon="codicon-hubot"
+      icon={<i className="codicon codicon-hubot" />}
       valueLabel={valueLabel}
       isOverride={properties.model !== undefined}
       isOpen={isOpen}

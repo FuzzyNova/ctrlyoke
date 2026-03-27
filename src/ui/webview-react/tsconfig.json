@@ -29,7 +29,8 @@
       "@utils/*": ["./utils/*"],
       "@types/*": ["./types/*"],
       "@root/types/*": ["../../types/*"],
-      "@root/utils/*": ["../../utils/*"]
+      "@root/utils/*": ["../../utils/*"],
+      "@icons/*": ["../icons/*"]
     }
   },
   "include": ["./**/*.ts", "./**/*.tsx"],

@@ -6,6 +6,7 @@ import { type HarnessId } from "../../types/messages";
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import {
   HarnessDropdown,
+  HarnessIcon,
   HARNESS_DISPLAY_NAMES,
 } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
@@ -41,13 +42,16 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
     setFooterOpenPicker(null);
   };
 
+  const activeHarnessId = (properties.harness ?? resolvedHarness) as HarnessId;
+  const isOverride = properties.harness !== undefined;
+
   return (
     <FooterQuickPicker
       isNarrow={isNarrow}
       showLabel={showLabel}
-      icon="codicon-circuit-board"
+      icon={<HarnessIcon harnessId={activeHarnessId} size={14} dimmed={!isOverride} />}
       valueLabel={valueLabel}
-      isOverride={properties.harness !== undefined}
+      isOverride={isOverride}
       isOpen={isOpen}
       onToggle={() => setFooterOpenPicker(isOpen ? null : "harness")}
       onClose={() => setFooterOpenPicker(null)}
