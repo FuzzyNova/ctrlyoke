@@ -120,11 +120,6 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
             {valueLabel}
           </span>
         )}
-        {!isNarrow && (
-          <i
-            className={`codicon ${isOpen ? "codicon-chevron-down" : "codicon-chevron-up"} text-[10px]`}
-          />
-        )}
       </button>
 
       {isOpen && !disabled && popupPos &&

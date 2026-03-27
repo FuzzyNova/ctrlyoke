@@ -59,7 +59,7 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
     <FooterQuickPicker
       isNarrow={isNarrow}
       showLabel={showLabel}
-      icon={<i className="codicon codicon-tools" />}
+      icon={<i className={`codicon codicon-tools transition-opacity ${skillsValue !== undefined ? "text-focus-border" : "opacity-40"}`} />}
       valueLabel={valueLabel}
       isOverride={skillsValue !== undefined}
       isOpen={isOpen}

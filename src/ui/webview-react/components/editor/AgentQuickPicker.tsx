@@ -18,9 +18,15 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
   disabled = false,
 }) => {
   const { properties, setProperty } = useEditorStore();
-  const { globalSettings, workflowProperties, availableAgents } = useSettingsStore();
-  const { footerOpenPicker, setFooterOpenPicker, hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
-    useUiStore();
+  const { globalSettings, workflowProperties, availableAgents } =
+    useSettingsStore();
+  const {
+    footerOpenPicker,
+    setFooterOpenPicker,
+    hiddenDropdownOptions,
+    hideDropdownOption,
+    unhideDropdownOption,
+  } = useUiStore();
 
   const isOpen = footerOpenPicker === "agent";
 
@@ -40,14 +46,19 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
       ? resolvedAgentName
       : properties.agent === null
         ? "None"
-        : (availableAgents.find((a) => a.path === properties.agent || a.name === properties.agent)?.name ??
-            properties.agent);
+        : (availableAgents.find(
+            (a) => a.path === properties.agent || a.name === properties.agent
+          )?.name ?? properties.agent);
 
   return (
     <FooterQuickPicker
       isNarrow={isNarrow}
       showLabel={showLabel}
-      icon={<i className="codicon codicon-person" />}
+      icon={
+        <i
+          className={`codicon codicon-agent transition-opacity ${properties.agent !== undefined ? "text-focus-border" : "opacity-40"}`}
+        />
+      }
       valueLabel={valueLabel}
       isOverride={properties.agent !== undefined}
       isOpen={isOpen}
@@ -86,7 +97,9 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
         namespace={DROPDOWN_NAMESPACES.AGENT}
         hiddenValues={hiddenDropdownOptions[DROPDOWN_NAMESPACES.AGENT] ?? []}
         onHideOption={(v) => hideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)}
-        onUnhideOption={(v) => unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)}
+        onUnhideOption={(v) =>
+          unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
+        }
         nonHideableValues={["default"]}
         dropdownMaxHeight="300px"
         inline={true}
