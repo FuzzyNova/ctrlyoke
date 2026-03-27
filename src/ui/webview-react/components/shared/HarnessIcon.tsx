@@ -2,12 +2,12 @@ import React from "react";
 import { HARNESS_IDS, type HarnessId } from "../../types/messages";
 
 // Raw SVG imports — inlined at build time, no CSP issues
-import claudeRaw from "@icons/harnesses/claude-ai.svg?raw";
+import claudeRaw from "@icons/harnesses/claude.svg?raw";
 import copilotChatRaw from "@icons/harnesses/copilot-chat.svg?raw";
-import copilotRaw from "@icons/harnesses/github-copilot-dark.svg?raw";
-import geminiRaw from "@icons/harnesses/google-gemini.svg?raw";
-import openaiRaw from "@icons/harnesses/openai-dark.svg?raw";
-import opencodeRaw from "@icons/harnesses/opencode-dark.svg?raw";
+import copilotRaw from "@icons/harnesses/copilot-cli.svg?raw";
+import geminiRaw from "@icons/harnesses/gemini.svg?raw";
+import openaiRaw from "@icons/harnesses/codex.svg?raw";
+import opencodeRaw from "@icons/harnesses/opencode.svg?raw";
 import qwenRaw from "@icons/harnesses/qwen.svg?raw";
 
 // Icons designed for dark backgrounds (white fills).
