@@ -682,7 +682,7 @@ export const SettingsPanel: React.FC<{
                 value={effectiveAgent || ""}
                 onChange={handleAgentChange}
                 options={[
-                  { value: "", label: "None (default behavior)" },
+                  { value: "", label: "None" },
                   ...availableAgents.map((agent) => ({
                     value: agent.name || agent.path,
                     label: `${agent.name || "Unknown Agent"}${agent.description ? ` - ${agent.description}` : ""}`,

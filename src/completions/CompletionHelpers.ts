@@ -6,6 +6,7 @@ import { Log } from "../utils/Log";
 import {
   getRecentCommits,
   getStashList,
+  searchCommitsBySubject,
   type CommitInfo,
   type StashInfo,
 } from "../utils/GitUtils";
@@ -609,7 +610,14 @@ interface GitCache {
   timestamp: number;
 }
 
+interface GitSearchCache {
+  query: string;
+  commits: CommitInfo[];
+  timestamp: number;
+}
+
 let gitCache: GitCache | null = null;
+let gitSearchCache: GitSearchCache | null = null;
 const GIT_CACHE_DURATION_MS = 10_000; // 10 seconds
 
 /**
@@ -621,11 +629,11 @@ export async function getGitChangeCompletions(
 ): Promise<PlainCompletionItem[]> {
   const now = Date.now();
 
-  // Refresh cache if stale
+  // Always keep stashes + recent commits in the base cache
   if (!gitCache || now - gitCache.timestamp >= GIT_CACHE_DURATION_MS) {
     try {
       const [commits, stashes] = await Promise.all([
-        getRecentCommits(workspaceRoot, 30),
+        getRecentCommits(workspaceRoot, 50),
         getStashList(workspaceRoot),
       ]);
       gitCache = { commits, stashes, timestamp: now };
@@ -634,7 +642,32 @@ export async function getGitChangeCompletions(
     }
   }
 
-  const { commits, stashes } = gitCache;
+  // When the user is actively filtering, search all history via git --grep
+  // so they can find any commit regardless of how far back it is.
+  let commits: CommitInfo[];
+  if (filterText) {
+    const searchStale =
+      !gitSearchCache ||
+      gitSearchCache.query !== filterText ||
+      now - gitSearchCache.timestamp >= GIT_CACHE_DURATION_MS;
+
+    if (searchStale) {
+      try {
+        commits = await searchCommitsBySubject(workspaceRoot, filterText, 200);
+        gitSearchCache = { query: filterText, commits, timestamp: now };
+      } catch {
+        // Fall back to local filtering of base cache
+        commits = gitCache.commits;
+        gitSearchCache = null;
+      }
+    } else {
+      commits = gitSearchCache!.commits;
+    }
+  } else {
+    commits = gitCache.commits;
+  }
+
+  const { stashes } = gitCache;
 
   const items: PlainCompletionItem[] = [];
 

@@ -2,6 +2,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
+const GIT_TIMEOUT_MS = 10_000;
 
 export interface CommitInfo {
   hash: string;         // full 40-char SHA
@@ -31,7 +32,7 @@ export async function getRecentCommits(
     "log",
     `--format=%H%x00%h%x00%s%x00%an%x00%ar`,
     `-n`, String(limit),
-  ]);
+  ], { timeout: GIT_TIMEOUT_MS });
 
   return stdout
     .trim()
@@ -57,7 +58,7 @@ export async function getCommitDiff(
     "--stat",
     "-p",
     hash,
-  ]);
+  ], { timeout: GIT_TIMEOUT_MS });
   return stdout;
 }
 
@@ -70,14 +71,14 @@ export async function getWorkingTreeDiff(workspaceRoot: string): Promise<string>
     "diff",
     "--stat",
     "-p",
-  ]);
+  ], { timeout: GIT_TIMEOUT_MS });
 
   // Append untracked file list from git status --short
   const { stdout: statusOutput } = await execFileAsync("git", [
     "-C", workspaceRoot,
     "status",
     "--short",
-  ]);
+  ], { timeout: GIT_TIMEOUT_MS });
 
   const untrackedLines = statusOutput
     .split("\n")
@@ -102,7 +103,7 @@ export async function getStagedDiff(workspaceRoot: string): Promise<string> {
     "--cached",
     "--stat",
     "-p",
-  ]);
+  ], { timeout: GIT_TIMEOUT_MS });
   return stdout;
 }
 
@@ -115,7 +116,7 @@ export async function getStashList(workspaceRoot: string): Promise<StashInfo[]> 
     "stash",
     "list",
     "--format=%s%x00%ar",
-  ]);
+  ], { timeout: GIT_TIMEOUT_MS });
 
   return stdout
     .trim()
@@ -142,8 +143,37 @@ export async function getStashDiff(
     "show",
     "-p",
     `stash@{${index}}`,
-  ]);
+  ], { timeout: GIT_TIMEOUT_MS });
   return stdout;
+}
+
+/**
+ * Search commits on the current branch by subject/message (case-insensitive).
+ * Uses --grep so it can find commits beyond the base cache limit.
+ */
+export async function searchCommitsBySubject(
+  workspaceRoot: string,
+  query: string,
+  limit: number = 200
+): Promise<CommitInfo[]> {
+  const { stdout } = await execFileAsync("git", [
+    "-C", workspaceRoot,
+    "log",
+    `--format=%H%x00%h%x00%s%x00%an%x00%ar`,
+    `--grep=${query}`,
+    "--regexp-ignore-case",
+    `-n`, String(limit),
+  ], { timeout: GIT_TIMEOUT_MS });
+
+  return stdout
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split("\0");
+      const [hash, shortHash, subject, author, relativeDate] = parts;
+      return { hash, shortHash, subject, author, relativeDate };
+    });
 }
 
 /**
