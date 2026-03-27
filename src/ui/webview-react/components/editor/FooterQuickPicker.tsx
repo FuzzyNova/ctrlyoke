@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 interface FooterQuickPickerProps {
   /** Icon-only mode (narrow, < 380px) */
@@ -30,6 +31,9 @@ interface FooterQuickPickerProps {
 /**
  * FooterQuickPicker — generic trigger button + upward popup shell.
  *
+ * The popup is rendered via a portal at document.body with position:fixed so
+ * it escapes any overflow:hidden ancestors and is never clipped.
+ *
  * Used by HarnessQuickPicker, ModelQuickPicker, AgentQuickPicker, and
  * SkillsQuickPicker to provide quick inline access to prompt properties
  * directly from the EditorFooter without opening PropertiesDrawer.
@@ -48,27 +52,54 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
   popupMinWidth = "200px",
   disabled = false,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [popupPos, setPopupPos] = useState<{ bottom: number; left: number } | null>(null);
 
+  const updatePosition = useCallback(() => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPopupPos({
+        bottom: window.innerHeight - rect.top + 4,
+        left: rect.left,
+      });
+    }
+  }, []);
+
+  // Compute/update position whenever the popup opens or the window moves
+  useEffect(() => {
+    if (isOpen) {
+      updatePosition();
+      window.addEventListener("resize", updatePosition);
+      window.addEventListener("scroll", updatePosition, true);
+      return () => {
+        window.removeEventListener("resize", updatePosition);
+        window.removeEventListener("scroll", updatePosition, true);
+      };
+    }
+  }, [isOpen, updatePosition]);
+
+  // Close on click outside (must check both button and portaled popup)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
       if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
+        !buttonRef.current?.contains(target) &&
+        !popupRef.current?.contains(target)
       ) {
         onClose();
       }
     };
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [isOpen, onClose]);
 
   return (
-    <div className="relative" ref={containerRef}>
+    <>
       <button
+        ref={buttonRef}
         type="button"
         onClick={disabled ? undefined : onToggle}
         disabled={disabled}
@@ -96,14 +127,21 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
         )}
       </button>
 
-      {isOpen && !disabled && (
-        <div
-          className="absolute bottom-full left-0 mb-1 bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[200]"
-          style={{ minWidth: popupMinWidth }}
-        >
-          {children}
-        </div>
-      )}
-    </div>
+      {isOpen && !disabled && popupPos &&
+        createPortal(
+          <div
+            ref={popupRef}
+            className="fixed bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[9999]"
+            style={{
+              bottom: popupPos.bottom,
+              left: popupPos.left,
+              minWidth: popupMinWidth,
+            }}
+          >
+            {children}
+          </div>,
+          document.body
+        )}
+    </>
   );
 };
