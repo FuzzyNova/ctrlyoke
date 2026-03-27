@@ -129,7 +129,7 @@ export const SkillsSelect: React.FC<{
                 <span className="flex flex-col min-w-0">
                   <span className="font-medium truncate">{skill.name}</span>
                   {skill.description && (
-                    <span className="text-[10px] text-description-fg truncate">
+                    <span className="text-[10px] text-description-fg whitespace-normal break-words">
                       {skill.description}
                     </span>
                   )}

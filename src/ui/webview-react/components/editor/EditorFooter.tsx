@@ -1,7 +1,5 @@
 import React from "react";
-import { useEditorStore } from "../../store/editorStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
-import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 import { HarnessQuickPicker } from "./HarnessQuickPicker";
 import { ModelQuickPicker } from "./ModelQuickPicker";
 import { AgentQuickPicker } from "./AgentQuickPicker";
@@ -62,8 +60,6 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   propertiesOpen,
   isCLIManaged = false,
 }) => {
-  const { promptText } = useEditorStore();
-  const tokenCount = useAttachmentTokenCount(promptText);
   const [footerRef, isNarrow] = useElementNarrow(768);
 
   return (
@@ -71,7 +67,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
       ref={footerRef}
       className="editor-footer flex items-center justify-between px-3 py-1.5 border-t border-panel-border bg-sidebar-bg"
     >
-      {/* Left side: Properties toggle + Harness + Model pickers */}
+      {/* Left side: Properties toggle + all four quick pickers */}
       <div className="editor-footer-left flex items-center gap-1">
         <button
           className={`btn-properties px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors ${
@@ -100,20 +96,6 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           showLabel={!isNarrow}
           disabled={isCLIManaged}
         />
-      </div>
-
-      {/* Center: Token count */}
-      <div className="editor-footer-center flex items-center justify-center flex-1">
-        <span className="editor-metadata text-xs text-description-fg">
-          <i className="codicon codicon-symbol-misc mr-1" />
-          <span className="editor-token-count">
-            {tokenCount.toLocaleString()} token{tokenCount !== 1 ? "s" : ""}
-          </span>
-        </span>
-      </div>
-
-      {/* Right side: Agent + Skills pickers + Action buttons */}
-      <div className="editor-actions flex items-center gap-1">
         <AgentQuickPicker
           isNarrow={isNarrow}
           showLabel={!isNarrow}
@@ -124,8 +106,11 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           showLabel={!isNarrow}
           disabled={isCLIManaged}
         />
-        <div className="flex items-center gap-2">
-          {isEditMode ? (
+      </div>
+
+      {/* Right side: Action buttons */}
+      <div className="editor-actions flex items-center gap-2">
+        {isEditMode ? (
             // Edit mode buttons
             <>
               <button
@@ -224,8 +209,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                 {!isNarrow && <span className="btn-text">{runButtonText}</span>}
               </button>
             </>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

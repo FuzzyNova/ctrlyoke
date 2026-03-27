@@ -3,6 +3,7 @@ import { useEditorStore } from "../../store/editorStore";
 import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
+import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 import { PromptEditor } from "../editor/PromptEditor";
 import { PanelBar } from "../shared";
 import { FINAL_PROMPT_PHASES, RUNNER_IDS, EDITOR_TARGET_KINDS } from "../../types/messages";
@@ -19,7 +20,8 @@ import { triggerPanelAnimation } from "@utils/panelAnimation";
  * - Handles section collapse state persistence
  */
 export const EditorSection: React.FC = () => {
-  const { selectionTarget, promptName, setPromptName } = useEditorStore();
+  const { selectionTarget, promptName, setPromptName, promptText } = useEditorStore();
+  const tokenCount = useAttachmentTokenCount(promptText);
   const {
     editorCollapsed,
     toggleEditorCollapse,
@@ -88,9 +90,24 @@ export const EditorSection: React.FC = () => {
           </span>
         </div>
 
-        {/* Center: Mode text */}
+        {/* Center: Mode text + token count */}
         <span className="editor-mode-indicator flex-1 text-center text-xs text-description-fg truncate">
           {isCLIManaged ? "Read-only — CLI run in progress" : getModeText()}
+          {" — "}
+          <span
+            className={`font-bold tabular-nums ${
+              tokenCount >= 100_000
+                ? "text-error-fg"
+                : tokenCount >= 50_000
+                  ? "text-warning-fg"
+                  : ""
+            }`}
+          >
+            {tokenCount >= 1_000
+              ? `${(tokenCount / 1_000).toFixed(1)}K`
+              : tokenCount.toString()}{" "}
+            tokens
+          </span>
         </span>
 
         {/* Right: Prompt name input (shown in both new and edit modes; disabled in CLI watch mode) */}
