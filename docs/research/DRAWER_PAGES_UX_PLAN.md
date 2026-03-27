@@ -4,7 +4,7 @@
 
 Both `SettingsDrawer` (workflow-level sidebar panel) and `PropertiesDrawer` (per-prompt slide-up overlay) currently render all properties in a single scrollable list. As the feature set grows — especially with the upcoming tool permissions work — this creates a dense, hard-to-scan layout.
 
-This plan introduces **paged navigation** inside both drawers, grouping related properties into logical tabs. The two drawers share the same four-page structure so users can develop a consistent mental model regardless of which drawer they're editing.
+This plan introduces **paged navigation** inside both drawers, grouping related properties into logical tabs. The two drawers share the same five-page structure so users can develop a consistent mental model regardless of which drawer they're editing.
 
 ---
 
@@ -85,38 +85,59 @@ The entire page is greyed out (`pointer-events-none opacity-60`) in CLI-managed 
 
 ---
 
+### Page 5 — "Hooks" *(future — placeholder page)*
+*User-defined scripts wired to CLI hook events.*
+
+Per `HOOKS_EXPOSURE_PLAN.md`, this page lets users attach their own commands to logical hook events (`stop`, `sessionStart`, `preToolUse`, `postToolUse`). FlightPath's own completion-detection hooks are always registered automatically and are not shown here — this page is exclusively for user additions.
+
+| Field | SettingsDrawer | PropertiesDrawer |
+|---|---|---|
+| Hook list | workflow-level default hooks (array of `{ event, command }`) | per-prompt additions (merged with, not replacing, workflow-level) |
+
+**UI pattern:** A simple list where each entry shows the event name (as a dropdown or badge) and the command string. An "Add Hook" button appends a new entry. Each entry has a remove button.
+
+The page is greyed out in CLI-managed (watch) mode, consistent with other pages.
+
+**SettingsDrawer:** `SetAsDefaultButton` per entry (or for the entire list — TBD based on how `hooks` array diff works). Since the `hooks` property is an array, comparison uses JSON stringify analogous to `skills`.
+
+**PropertiesDrawer:** Prompt-level hooks are **additive** — they append to workflow-level hooks rather than replacing them. The page should make this clear (e.g., "These hooks run in addition to workflow-level hooks."). No `Default (X)` label needed since it's an additive list.
+
+**Icon:** `codicon-zap` or `codicon-plug`
+
+---
+
 ## Navigation Design
 
 ### Tab Bar (bottom of body, above the footer strip)
 
-A persistent tab bar sits **below the scrollable content area** but **above the footer**. Four tabs, always visible regardless of which page is active.
+A persistent tab bar sits **below the scrollable content area** but **above the footer**. Five tabs, always visible regardless of which page is active.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  Prompt Properties                              [×]  │  ← header
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  [page content — scrollable]                        │
-│                                                     │
-├─────────────────────────────────────────────────────┤
-│  [⚙ Harness] [↺ Context] [✓ Validation] [🔒 Perms] │  ← tab bar
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Prompt Properties                                      [×]  │  ← header
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  [page content — scrollable]                                 │
+│                                                              │
+├──────────────────────────────────────────────────────────────┤
+│  [⚙ Harness] [↺ Context] [✓ Validation] [🔒 Perms] [⚡ Hooks] │  ← tab bar
+└──────────────────────────────────────────────────────────────┘
 ```
 
 For SettingsDrawer, the existing footer (interactive/headless toggle, gitignore toggle, Settings... link) remains **below** the tab bar — it houses global toggles that apply regardless of which page is active.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│ ▾ ⚙ Workflow Properties                             │  ← collapsible header
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  [page content — scrollable]                        │
-│                                                     │
-├─────────────────────────────────────────────────────┤
-│  [⚙ Harness] [↺ Context] [✓ Validation] [🔒 Perms] │  ← tab bar
-├─────────────────────────────────────────────────────┤
-│  [● Interactive] [◉ Gitignore] ... [Settings...]    │  ← global footer
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ ▾ ⚙ Workflow Properties                                      │  ← collapsible header
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  [page content — scrollable]                                 │
+│                                                              │
+├──────────────────────────────────────────────────────────────┤
+│  [⚙ Harness] [↺ Context] [✓ Validation] [🔒 Perms] [⚡ Hooks] │  ← tab bar
+├──────────────────────────────────────────────────────────────┤
+│  [● Interactive] [◉ Gitignore] ... [Settings...]             │  ← global footer
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### Tab Appearance
@@ -124,7 +145,7 @@ For SettingsDrawer, the existing footer (interactive/headless toggle, gitignore 
 - Each tab: icon + short label, equal width
 - Active tab: `text-foreground border-b-2 border-focus-border bg-transparent`
 - Inactive tab: `text-description-fg hover:text-foreground`
-- Permissions tab grayed out (but still visible/navigable) until the feature is implemented — shows a "Coming Soon" empty state on the page body
+- Permissions and Hooks tabs grayed out (but still visible/navigable) until their features are implemented — each shows a "Coming Soon" empty state on the page body
 - Tab bar height: ~28px (matching existing header bars in the UI)
 
 ### State Persistence
@@ -171,7 +192,7 @@ interface DrawerTabBarProps {
 }
 ```
 
-Both drawers import this component. The tab definitions for the four pages can be a shared constant.
+Both drawers import this component. The tab definitions for the five pages can be a shared constant.
 
 ### Page IDs
 
@@ -183,6 +204,7 @@ export const DRAWER_PAGES = {
   CONTEXT: "context",
   VALIDATION: "validation",
   PERMISSIONS: "permissions",
+  HOOKS: "hooks",
 } as const;
 export type DrawerPage = (typeof DRAWER_PAGES)[keyof typeof DRAWER_PAGES];
 ```
