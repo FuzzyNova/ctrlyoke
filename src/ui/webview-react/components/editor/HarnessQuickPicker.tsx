@@ -33,7 +33,7 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
 
   const valueLabel = properties.harness
     ? (HARNESS_DISPLAY_NAMES[properties.harness as HarnessId] ?? properties.harness)
-    : "Default";
+    : (HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness);
 
   const handleHarnessChange = (newHarness: string) => {
     setProperty("harness", newHarness === "default" ? undefined : newHarness);
@@ -66,6 +66,7 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
         onHideOption={(v) => hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)}
         onUnhideOption={(v) => unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)}
         dropdownMaxHeight="300px"
+        inline={true}
       />
     </FooterQuickPicker>
   );

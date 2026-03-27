@@ -37,7 +37,7 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
 
   const valueLabel =
     properties.agent === undefined
-      ? "Default"
+      ? resolvedAgentName
       : properties.agent === null
         ? "None"
         : (availableAgents.find((a) => a.path === properties.agent || a.name === properties.agent)?.name ??
@@ -89,6 +89,7 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
         onUnhideOption={(v) => unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)}
         nonHideableValues={["default"]}
         dropdownMaxHeight="300px"
+        inline={true}
       />
     </FooterQuickPicker>
   );

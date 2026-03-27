@@ -205,6 +205,8 @@ export interface HarnessDropdownProps {
   onUnhideOption?: (value: string) => void;
   /** Max height of the open dropdown panel. Defaults to "60vh". */
   dropdownMaxHeight?: string;
+  /** When true, renders the list inline without a trigger button. Used in FooterQuickPicker. */
+  inline?: boolean;
 }
 
 export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
@@ -219,6 +221,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   onHideOption,
   onUnhideOption,
   dropdownMaxHeight = "60vh",
+  inline = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -233,7 +236,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     [narrowRef]
   );
 
-  // Close on outside click
+  // Close on outside click (only in trigger mode)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -244,29 +247,18 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         setShowHidden(false);
       }
     };
-    if (isOpen) {
+    if (!inline && isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
       return () =>
         document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [isOpen]);
+  }, [isOpen, inline]);
 
   const handleSelect = (harnessId: string) => {
     onChange(harnessId);
     setIsOpen(false);
     setShowHidden(false);
   };
-
-  // ── Derived display label for the trigger button ──────────────────────────
-  const triggerLabel =
-    value === "default"
-      ? (defaultLabel ?? "Default")
-      : (HARNESS_DISPLAY_NAMES[value as HarnessId] ?? value);
-
-  const triggerStatus =
-    showStatus && value !== "default" && harnessStatus
-      ? harnessStatus[value as HarnessId]
-      : undefined;
 
   // ── Hide helpers ──────────────────────────────────────────────────────────
   const isHiddenValue = (h: HarnessId) => hiddenValues.includes(h);
@@ -307,6 +299,86 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
       );
     });
 
+  // ── Shared parts ─────────────────────────────────────────────────────────
+  const scrollableList = (
+    <div className="overflow-y-auto min-h-0 flex-1">
+      {/* "Default" sentinel (PropertiesDrawer / FooterQuickPicker) */}
+      {showDefault && (
+        <div
+          className={`flex items-center ${
+            value === "default"
+              ? "bg-dropdown-selected-bg text-list-active-fg"
+              : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => handleSelect("default")}
+            className="flex-1 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit"
+          >
+            {defaultLabel ?? "Default"}
+          </button>
+        </div>
+      )}
+
+      {/* ── CLI group ── */}
+      {showCliGroup && (
+        <>
+          <GroupHeader label="CLI" />
+          {renderGroup(CLI_HARNESSES)}
+        </>
+      )}
+
+      {/* ── VS Code Chat group ── */}
+      {showChatGroup && (
+        <>
+          <GroupHeader label="VS Code Chat" />
+          {renderGroup(CHAT_HARNESSES)}
+        </>
+      )}
+    </div>
+  );
+
+  const toggleBar = (atTop: boolean) => (
+    <div
+      className={`${atTop ? "border-b" : "border-t"} border-dropdown-border bg-editor-bg flex-shrink-0`}
+    >
+      <button
+        type="button"
+        disabled={totalHidden === 0}
+        onClick={() => setShowHidden((s) => !s)}
+        className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
+      >
+        {showHidden
+          ? "Hide hidden"
+          : totalHidden > 0
+            ? `Show hidden (${totalHidden})`
+            : "Show hidden"}
+      </button>
+    </div>
+  );
+
+  // ── Inline mode (FooterQuickPicker — drop-up, toggle bar at top) ──────────
+  if (inline) {
+    return (
+      <div ref={mergedRef} className="flex flex-col" style={{ maxHeight: dropdownMaxHeight }}>
+        {toggleBar(true)}
+        {scrollableList}
+      </div>
+    );
+  }
+
+  // ── Trigger + dropdown mode ───────────────────────────────────────────────
+  const triggerLabel =
+    value === "default"
+      ? (defaultLabel ?? "Default")
+      : (HARNESS_DISPLAY_NAMES[value as HarnessId] ?? value);
+
+  const triggerStatus =
+    showStatus && value !== "default" && harnessStatus
+      ? harnessStatus[value as HarnessId]
+      : undefined;
+
   return (
     <div className="relative inline-block w-full" ref={mergedRef}>
       {/* Trigger button */}
@@ -337,59 +409,8 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top flex flex-col ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}
         style={{ maxHeight: dropdownMaxHeight }}
       >
-        {/* Scrollable options area */}
-        <div className="overflow-y-auto min-h-0 flex-1">
-          {/* "Default" sentinel (PropertiesDrawer only) */}
-          {showDefault && (
-            <div
-              className={`flex items-center ${
-                value === "default"
-                  ? "bg-dropdown-selected-bg text-list-active-fg"
-                  : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => handleSelect("default")}
-                className="flex-1 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit"
-              >
-                {defaultLabel ?? "Default"}
-              </button>
-            </div>
-          )}
-
-          {/* ── CLI group ── */}
-          {showCliGroup && (
-            <>
-              <GroupHeader label="CLI" />
-              {renderGroup(CLI_HARNESSES)}
-            </>
-          )}
-
-          {/* ── VS Code Chat group ── */}
-          {showChatGroup && (
-            <>
-              <GroupHeader label="VS Code Chat" />
-              {renderGroup(CHAT_HARNESSES)}
-            </>
-          )}
-        </div>
-
-        {/* ── Footer — pinned at bottom, outside scroll area ── */}
-        <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
-          <button
-            type="button"
-            disabled={totalHidden === 0}
-            onClick={() => setShowHidden((s) => !s)}
-            className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
-          >
-            {showHidden
-              ? "Hide hidden"
-              : totalHidden > 0
-                ? `Show hidden (${totalHidden})`
-                : "Show hidden"}
-          </button>
-        </div>
+        {scrollableList}
+        {toggleBar(false)}
       </div>
     </div>
   );

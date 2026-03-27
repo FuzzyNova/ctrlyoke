@@ -41,7 +41,7 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
 
   const valueLabel = properties.model
     ? (models.find((m) => m.value === properties.model)?.label ?? properties.model)
-    : "Default";
+    : (resolvedModelLabel || "None");
 
   return (
     <FooterQuickPicker
@@ -75,6 +75,7 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
         onUnhideOption={(v) => unhideDropdownOption(modelNamespace, v)}
         nonHideableValues={["default", ""]}
         dropdownMaxHeight="300px"
+        inline={true}
       />
     </FooterQuickPicker>
   );

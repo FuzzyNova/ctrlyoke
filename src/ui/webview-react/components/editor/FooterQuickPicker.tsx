@@ -81,7 +81,13 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
       >
         <i className={`codicon ${icon}`} />
         {!isNarrow && showLabel && (
-          <span className="max-w-[80px] truncate">{valueLabel}</span>
+          <span
+            className={`max-w-[80px] truncate ${
+              isOverride ? "text-focus-border font-medium" : "text-description-fg"
+            }`}
+          >
+            {valueLabel}
+          </span>
         )}
         {!isNarrow && (
           <i

@@ -14,12 +14,15 @@ export const SkillsSelect: React.FC<{
   availableSkills: Array<{ name: string; description?: string }>;
   defaultLabel?: string;
   dropdownMaxHeight?: string;
+  /** When true, renders the list inline without a trigger button. Used in FooterQuickPicker. */
+  inline?: boolean;
 }> = ({
   value,
   onChange,
   availableSkills,
   defaultLabel,
   dropdownMaxHeight = "60vh",
+  inline = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -33,12 +36,12 @@ export const SkillsSelect: React.FC<{
         setIsOpen(false);
       }
     };
-    if (isOpen) {
+    if (!inline && isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
       return () =>
         document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [isOpen]);
+  }, [isOpen, inline]);
 
   const selectedSkills = Array.isArray(value) ? value : [];
 
@@ -63,6 +66,96 @@ export const SkillsSelect: React.FC<{
     onChange(updated);
   };
 
+  // ── Shared list content ───────────────────────────────────────────────────
+  const listContent = (
+    <div className="overflow-y-auto min-h-0 flex-1">
+      {/* Keyword options */}
+      {(["default", "none"] as const).map((k) => {
+        const isSelected =
+          k === "default" ? value === undefined : value === null;
+        const label =
+          k === "default" ? (defaultLabel ?? "Default") : "None";
+        return (
+          <button
+            key={k}
+            type="button"
+            onClick={() => {
+              onChange(k === "default" ? undefined : null);
+              setIsOpen(false);
+            }}
+            className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
+              isSelected
+                ? "bg-dropdown-selected-bg text-list-active-fg"
+                : "hover:bg-list-hover-bg cursor-pointer"
+            }`}
+          >
+            <i
+              className={`codicon codicon-check text-[10px] flex-shrink-0 ${
+                isSelected ? "visible" : "invisible"
+              }`}
+            />
+            <span>{label}</span>
+          </button>
+        );
+      })}
+
+      {/* Skills checkbox section */}
+      {availableSkills.length > 0 && (
+        <>
+          <div className="border-t border-dropdown-border" />
+          <div className="px-2 py-1 text-[10px] text-description-fg uppercase font-semibold tracking-wide">
+            Select skills:
+          </div>
+          {availableSkills.map((skill) => {
+            const isChecked = selectedSkills.includes(skill.name);
+            return (
+              <button
+                key={skill.name}
+                type="button"
+                onClick={() => toggleSkill(skill.name)}
+                className={`w-full px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none ${
+                  isChecked
+                    ? "bg-dropdown-selected-bg text-list-active-fg"
+                    : "hover:bg-list-hover-bg cursor-pointer"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={() => {}}
+                  className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+                  tabIndex={-1}
+                />
+                <span className="flex flex-col min-w-0">
+                  <span className="font-medium truncate">{skill.name}</span>
+                  {skill.description && (
+                    <span className="text-[10px] text-description-fg truncate">
+                      {skill.description}
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+
+  // ── Inline mode (FooterQuickPicker) ───────────────────────────────────────
+  if (inline) {
+    return (
+      <div
+        ref={containerRef}
+        className="flex flex-col w-full"
+        style={{ maxHeight: dropdownMaxHeight }}
+      >
+        {listContent}
+      </div>
+    );
+  }
+
+  // ── Trigger + dropdown mode ───────────────────────────────────────────────
   return (
     <div className="relative inline-block w-full" ref={containerRef}>
       <button
@@ -84,78 +177,7 @@ export const SkillsSelect: React.FC<{
         }`}
         style={{ maxHeight: dropdownMaxHeight }}
       >
-        <div className="overflow-y-auto min-h-0 flex-1">
-          {/* Keyword options */}
-          {(["default", "none"] as const).map((k) => {
-            const isSelected =
-              k === "default" ? value === undefined : value === null;
-            const label =
-              k === "default" ? (defaultLabel ?? "Default") : "None";
-            return (
-              <button
-                key={k}
-                type="button"
-                onClick={() => {
-                  onChange(k === "default" ? undefined : null);
-                  setIsOpen(false);
-                }}
-                className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
-                  isSelected
-                    ? "bg-dropdown-selected-bg text-list-active-fg"
-                    : "hover:bg-list-hover-bg cursor-pointer"
-                }`}
-              >
-                <i
-                  className={`codicon codicon-check text-[10px] flex-shrink-0 ${
-                    isSelected ? "visible" : "invisible"
-                  }`}
-                />
-                <span>{label}</span>
-              </button>
-            );
-          })}
-
-          {/* Skills checkbox section */}
-          {availableSkills.length > 0 && (
-            <>
-              <div className="border-t border-dropdown-border" />
-              <div className="px-2 py-1 text-[10px] text-description-fg uppercase font-semibold tracking-wide">
-                Select skills:
-              </div>
-              {availableSkills.map((skill) => {
-                const isChecked = selectedSkills.includes(skill.name);
-                return (
-                  <button
-                    key={skill.name}
-                    type="button"
-                    onClick={() => toggleSkill(skill.name)}
-                    className={`w-full px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none ${
-                      isChecked
-                        ? "bg-dropdown-selected-bg text-list-active-fg"
-                        : "hover:bg-list-hover-bg cursor-pointer"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => {}}
-                      className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
-                      tabIndex={-1}
-                    />
-                    <span className="flex flex-col min-w-0">
-                      <span className="font-medium truncate">{skill.name}</span>
-                      {skill.description && (
-                        <span className="text-[10px] text-description-fg truncate">
-                          {skill.description}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
-            </>
-          )}
-        </div>
+        {listContent}
       </div>
     </div>
   );

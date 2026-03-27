@@ -35,9 +35,16 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
 
   const skillsValue = properties.skills as string[] | null | undefined;
 
+  const resolvedSkillsLabel =
+    resolvedSkills.length === 0
+      ? "None"
+      : resolvedSkills.length <= 2
+        ? resolvedSkills.join(", ")
+        : `${resolvedSkills.slice(0, 2).join(", ")} +${resolvedSkills.length - 2}`;
+
   let valueLabel: string;
   if (skillsValue === undefined) {
-    valueLabel = "Default";
+    valueLabel = resolvedSkillsLabel;
   } else if (skillsValue === null) {
     valueLabel = "None";
   } else if (skillsValue.length === 0) {
@@ -71,6 +78,7 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
         }))}
         defaultLabel={defaultSkillsLabel}
         dropdownMaxHeight="300px"
+        inline={true}
       />
     </FooterQuickPicker>
   );
