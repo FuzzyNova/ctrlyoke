@@ -203,7 +203,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   return (
     <div
       ref={drawerRef}
-      className={`properties-drawer absolute bottom-0 left-0 right-0 bg-sidebar-bg border-t-2 border-panel-border shadow-lg transition-transform duration-300 z-[100] max-h-full flex flex-col overflow-hidden ${
+      className={`properties-drawer absolute bottom-0 left-0 right-0 bg-sidebar-bg border-t-2 border-panel-border shadow-lg transition-transform duration-300 z-[100] h-full flex flex-col overflow-hidden ${
         isOpen ? "translate-y-0" : "translate-y-full"
       }`}
     >
@@ -370,67 +370,98 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             </DrawerRow>
 
             {/* Additional Args */}
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="prop-additional-args-mode"
-                className="text-[11px] font-semibold uppercase text-description-fg"
-                title="Extra CLI flags appended to FlightPath's standard argument set. Only applies to CLI harnesses."
-              >
-                Additional Args
-              </label>
-              <CustomSelect
-                id="prop-additional-args-mode"
-                value={
-                  properties.additionalArgs === undefined
-                    ? "default"
-                    : properties.additionalArgs === null
-                      ? "none"
-                      : "custom"
-                }
-                onChange={(v) => {
-                  if (v === "default") {
-                    setProperty("additionalArgs", undefined);
-                  } else if (v === "none") {
-                    setProperty("additionalArgs", null);
-                  } else {
-                    setProperty(
-                      "additionalArgs",
+            <DrawerRow narrow={isNarrow}>
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="prop-additional-args-mode"
+                  className="text-[11px] font-semibold uppercase text-description-fg"
+                  title="Extra CLI flags appended to FlightPath's standard argument set. Only applies to CLI harnesses."
+                >
+                  Additional Args
+                </label>
+                <CustomSelect
+                  id="prop-additional-args-mode"
+                  value={
+                    properties.additionalArgs === undefined
+                      ? "default"
+                      : properties.additionalArgs === null
+                        ? "none"
+                        : "custom"
+                  }
+                  onChange={(v) => {
+                    if (v === "default") {
+                      setProperty("additionalArgs", undefined);
+                    } else if (v === "none") {
+                      setProperty("additionalArgs", null);
+                    } else {
+                      setProperty(
+                        "additionalArgs",
+                        typeof properties.additionalArgs === "string"
+                          ? properties.additionalArgs
+                          : ""
+                      );
+                    }
+                  }}
+                  options={[
+                    { value: "default", label: defaultAdditionalArgsLabel },
+                    { value: "none", label: "None (override to empty)" },
+                    { value: "custom", label: "Custom" },
+                  ]}
+                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+                />
+                {/* Narrow mode: input below the dropdown */}
+                {isNarrow && (
+                  <div
+                    className={`transition-all duration-300 ${
+                      typeof properties.additionalArgs === "string"
+                        ? "max-h-[60px] opacity-100"
+                        : "max-h-0 opacity-0 overflow-hidden"
+                    }`}
+                  >
+                    <input
+                      type="text"
+                      id="prop-additional-args"
+                      value={
+                        typeof properties.additionalArgs === "string"
+                          ? properties.additionalArgs
+                          : ""
+                      }
+                      onChange={(e) =>
+                        setProperty("additionalArgs", e.target.value)
+                      }
+                      placeholder="e.g. --effort high"
+                      className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Wide mode: input in the right column, aligned to bottom */}
+              {!isNarrow && (
+                <div
+                  className={`flex flex-col justify-end transition-all duration-300 ${
+                    typeof properties.additionalArgs === "string"
+                      ? "opacity-100"
+                      : "opacity-0 pointer-events-none"
+                  }`}
+                >
+                  <input
+                    type="text"
+                    id="prop-additional-args-wide"
+                    value={
                       typeof properties.additionalArgs === "string"
                         ? properties.additionalArgs
                         : ""
-                    );
-                  }
-                }}
-                options={[
-                  { value: "default", label: defaultAdditionalArgsLabel },
-                  { value: "none", label: "None (override to empty)" },
-                  { value: "custom", label: "Custom" },
-                ]}
-                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
-              />
-              <div
-                className={`transition-all duration-300 ${
-                  typeof properties.additionalArgs === "string"
-                    ? "max-h-[60px] opacity-100"
-                    : "max-h-0 opacity-0 overflow-hidden"
-                }`}
-              >
-                <input
-                  type="text"
-                  id="prop-additional-args"
-                  value={
-                    typeof properties.additionalArgs === "string"
-                      ? properties.additionalArgs
-                      : ""
-                  }
-                  onChange={(e) =>
-                    setProperty("additionalArgs", e.target.value)
-                  }
-                  placeholder="e.g. --effort high"
-                  className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
-                />
-              </div>
-            </div>
+                    }
+                    onChange={(e) =>
+                      setProperty("additionalArgs", e.target.value)
+                    }
+                    placeholder="e.g. --effort high"
+                    className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                  />
+                </div>
+              )}
+            </DrawerRow>
           </div>
         )}
 

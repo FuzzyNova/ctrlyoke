@@ -260,7 +260,8 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     }
   }, [dropdownMaxHeight]);
 
-  // Compute/update position whenever the popup opens or the window moves
+  // Compute/update position whenever the popup opens or the window moves.
+  // Reset to null on close so stale coordinates never flash on next open.
   useEffect(() => {
     if (isOpen) {
       updatePosition();
@@ -270,6 +271,8 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         window.removeEventListener("resize", updatePosition);
         window.removeEventListener("scroll", updatePosition, true);
       };
+    } else {
+      setPopupPos(null);
     }
   }, [isOpen, updatePosition]);
 
