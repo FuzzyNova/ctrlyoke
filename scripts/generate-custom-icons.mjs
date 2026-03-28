@@ -167,8 +167,10 @@ function generateCustomIcons() {
   let shouldUpdate = true;
   if (fs.existsSync(OUTPUT_FILE)) {
     const existingContent = fs.readFileSync(OUTPUT_FILE, "utf-8");
+    // Normalize line endings (git on Windows checks out CRLF, but template literals use LF)
+    const normalizedExisting = existingContent.replace(/\r\n/g, "\n");
     // Remove the timestamp lines: " * \n * Generated: <timestamp>\n"
-    const existingWithoutTimestamp = existingContent
+    const existingWithoutTimestamp = normalizedExisting
       .replace(/ \*\s*\n \* Generated: [^\n]+\n/, "")
       .trim();
     const newWithoutTimestamp = css.trim();
