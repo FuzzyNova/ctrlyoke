@@ -36,6 +36,16 @@ export function resolveWindowsShell(): string {
   return _windowsShell;
 }
 
+/**
+ * Extract a human-readable shell name from a full executable path.
+ * e.g. "C:\Program Files\PowerShell\7\pwsh.exe" → "pwsh"
+ *      "/bin/bash" → "bash"
+ */
+function shellDisplayName(shellPath: string): string {
+  const base = shellPath.split(/[/\\]/).pop() ?? shellPath;
+  return base.replace(/\.exe$/i, "");
+}
+
 /** Lazy-load node-pty at spawn time; returns null if native binary is unavailable. */
 function loadNodePty(): NodePtyModule | null {
   try {
@@ -204,7 +214,7 @@ export class PtyProcessManager {
 
     return this.spawnPty({
       workflowId: opts.workflowId,
-      stepName: shell,
+      stepName: shellDisplayName(shell),
       kind: "shell",
       command: shell,
       args: [],
