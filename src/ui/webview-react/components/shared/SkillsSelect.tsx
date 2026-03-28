@@ -1,6 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 
+/** Convert a CSS max-height prop string ("60vh", "150px") to pixels. */
+function parsePropMaxHeight(h: string): number {
+  if (h.endsWith("vh")) return (parseFloat(h) / 100) * window.innerHeight;
+  return parseFloat(h);
+}
+
 /**
  * SkillsSelect — Hybrid dropdown for the prompt-level skills property.
  *
@@ -36,19 +42,22 @@ export const SkillsSelect: React.FC<{
     bottom?: number;
     left: number;
     width: number;
+    maxHeight: number;
   } | null>(null);
 
   const updatePosition = useCallback(() => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom - 4;
+      const propMaxH = parsePropMaxHeight(dropdownMaxHeight);
       if (spaceBelow >= 80) {
-        setPopupPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+        setPopupPos({ top: rect.bottom + 4, left: rect.left, width: rect.width, maxHeight: Math.min(propMaxH, spaceBelow) });
       } else {
-        setPopupPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width });
+        const spaceAbove = rect.top - 4;
+        setPopupPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width, maxHeight: Math.min(propMaxH, spaceAbove) });
       }
     }
-  }, []);
+  }, [dropdownMaxHeight]);
 
   // Compute/update position whenever the popup opens or the window moves
   useEffect(() => {
@@ -183,10 +192,7 @@ export const SkillsSelect: React.FC<{
   // ── Inline mode (FooterQuickPicker) ───────────────────────────────────────
   if (inline) {
     return (
-      <div
-        className="flex flex-col w-full"
-        style={{ maxHeight: dropdownMaxHeight }}
-      >
+      <div className="flex flex-col flex-1 min-h-0 w-full">
         {listContent}
       </div>
     );
@@ -217,7 +223,7 @@ export const SkillsSelect: React.FC<{
               bottom: popupPos.bottom,
               left: popupPos.left,
               width: popupPos.width,
-              maxHeight: dropdownMaxHeight,
+              maxHeight: popupPos.maxHeight,
             }}
           >
             {listContent}

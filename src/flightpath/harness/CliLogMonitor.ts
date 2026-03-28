@@ -1,5 +1,5 @@
 import type * as fs from "fs";
-import type { CliEvent, CliResult, UniversalCliOutput } from "../../types/CliOutputTypes";
+import type { CliEvent, CliResult, FileEditData, UniversalCliOutput } from "../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
@@ -196,7 +196,7 @@ export class CliLogMonitor {
         if (cancellationInterval) {
           clearInterval(cancellationInterval);
         }
-        this.deps.onResponseComplete("Response complete");
+        this.deps.onResponseComplete(cliResult.response);
 
         resolve({
           success: true,
@@ -420,7 +420,19 @@ export class CliLogMonitor {
       } else if (event.type === CLI_EVENT_TYPES.FILE_WRITE && "path" in event.data) {
         textParts.push(`\n[Created: ${(event.data as { path: string }).path}]`);
       } else if (event.type === CLI_EVENT_TYPES.FILE_EDIT && "path" in event.data) {
-        textParts.push(`\n[Edited: ${(event.data as { path: string }).path}]`);
+        const editData = event.data as FileEditData;
+        if (editData.structuredPatch && editData.structuredPatch.length > 0) {
+          let added = 0, removed = 0;
+          for (const hunk of editData.structuredPatch) {
+            for (const line of hunk.lines) {
+              if (line.startsWith("+")) { added++; }
+              else if (line.startsWith("-")) { removed++; }
+            }
+          }
+          textParts.push(`\n[Edited: ${editData.path} (+${added}, -${removed})]`);
+        } else {
+          textParts.push(`\n[Edited: ${editData.path}]`);
+        }
       } else if (event.type === CLI_EVENT_TYPES.FILE_DELETE && "path" in event.data) {
         textParts.push(`\n[Deleted: ${(event.data as { path: string }).path}]`);
       }

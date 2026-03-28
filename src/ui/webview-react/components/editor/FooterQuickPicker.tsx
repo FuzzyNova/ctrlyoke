@@ -54,7 +54,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
 }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const [popupPos, setPopupPos] = useState<{ bottom: number; left: number } | null>(null);
+  const [popupPos, setPopupPos] = useState<{ bottom: number; left: number; maxHeight: number } | null>(null);
 
   const updatePosition = useCallback(() => {
     if (buttonRef.current) {
@@ -62,6 +62,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
       setPopupPos({
         bottom: window.innerHeight - rect.top + 4,
         left: rect.left,
+        maxHeight: rect.top - 4,
       });
     }
   }, []);
@@ -126,11 +127,12 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
         createPortal(
           <div
             ref={popupRef}
-            className="fixed bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[9999]"
+            className="fixed bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[9999] flex flex-col overflow-hidden"
             style={{
               bottom: popupPos.bottom,
               left: popupPos.left,
               minWidth: popupMinWidth,
+              maxHeight: popupPos.maxHeight,
             }}
           >
             {children}

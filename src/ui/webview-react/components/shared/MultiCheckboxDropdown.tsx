@@ -4,6 +4,12 @@ import type { HideableProps } from "./CustomSelect";
 
 const DEFAULT_NON_HIDEABLE = ["default", ""];
 
+/** Convert a CSS max-height prop string ("60vh", "150px") to pixels. */
+function parsePropMaxHeight(h: string): number {
+  if (h.endsWith("vh")) return (parseFloat(h) / 100) * window.innerHeight;
+  return parseFloat(h);
+}
+
 export interface MultiCheckboxDropdownProps extends HideableProps {
   id: string;
   selectedValues: string[];
@@ -46,6 +52,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
     bottom?: number;
     left: number;
     width: number;
+    maxHeight: number;
   } | null>(null);
 
   const hideEnabled = namespace !== undefined;
@@ -55,13 +62,15 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom - 4;
+      const propMaxH = parsePropMaxHeight(dropdownMaxHeight);
       if (spaceBelow >= 80) {
-        setPopupPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+        setPopupPos({ top: rect.bottom + 4, left: rect.left, width: rect.width, maxHeight: Math.min(propMaxH, spaceBelow) });
       } else {
-        setPopupPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width });
+        const spaceAbove = rect.top - 4;
+        setPopupPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width, maxHeight: Math.min(propMaxH, spaceAbove) });
       }
     }
-  }, []);
+  }, [dropdownMaxHeight]);
 
   // Compute/update position whenever the popup opens or the window moves
   useEffect(() => {
@@ -180,9 +189,27 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
               bottom: popupPos.bottom,
               left: popupPos.left,
               width: popupPos.width,
-              maxHeight: dropdownMaxHeight,
+              maxHeight: popupPos.maxHeight,
             }}
           >
+            {/* Show hidden toggle — at top when expanding upward (end-cap is the visual end) */}
+            {popupPos.bottom !== undefined && hideEnabled && (
+              <div className="border-b border-dropdown-border bg-editor-bg flex-shrink-0">
+                <button
+                  type="button"
+                  disabled={hiddenOptions.length === 0}
+                  onClick={() => setShowHidden((s) => !s)}
+                  className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
+                >
+                  {showHidden
+                    ? "Hide hidden"
+                    : hiddenOptions.length > 0
+                      ? `Show hidden (${hiddenOptions.length})`
+                      : "Show hidden"}
+                </button>
+              </div>
+            )}
+
             {/* Scrollable options area */}
             <div className="overflow-y-auto min-h-0 flex-1">
               {visibleOptions.length === 0 && !hideEnabled ? (
@@ -297,8 +324,8 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
               )}
             </div>
 
-            {/* Footer toggle — pinned at bottom, outside scroll area */}
-            {hideEnabled && (
+            {/* Show hidden toggle — at bottom when expanding downward */}
+            {popupPos?.top !== undefined && hideEnabled && (
               <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
                 <button
                   type="button"

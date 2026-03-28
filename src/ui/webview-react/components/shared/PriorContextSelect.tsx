@@ -41,6 +41,12 @@ export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
   finalPromptPrevious: "Previous finalPrompt output",
 };
 
+/** Convert a CSS max-height prop string ("60vh", "150px") to pixels. */
+function parsePropMaxHeight(h: string): number {
+  if (h.endsWith("vh")) return (parseFloat(h) / 100) * window.innerHeight;
+  return parseFloat(h);
+}
+
 function getMode(value: PriorContext | undefined): KeywordMode | "custom" {
   if (value === undefined) return "default";
   if (Array.isArray(value)) return "custom";
@@ -81,6 +87,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
     bottom?: number;
     left: number;
     width: number;
+    maxHeight: number;
   } | null>(null);
 
   const mode = getMode(value);
@@ -91,13 +98,15 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom - 4;
+      const propMaxH = parsePropMaxHeight(dropdownMaxHeight);
       if (spaceBelow >= 80) {
-        setPopupPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+        setPopupPos({ top: rect.bottom + 4, left: rect.left, width: rect.width, maxHeight: Math.min(propMaxH, spaceBelow) });
       } else {
-        setPopupPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width });
+        const spaceAbove = rect.top - 4;
+        setPopupPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width, maxHeight: Math.min(propMaxH, spaceAbove) });
       }
     }
-  }, []);
+  }, [dropdownMaxHeight]);
 
   // Compute/update position whenever the popup opens or the window moves
   useEffect(() => {
@@ -192,7 +201,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
               bottom: popupPos.bottom,
               left: popupPos.left,
               width: popupPos.width,
-              maxHeight: dropdownMaxHeight,
+              maxHeight: popupPos.maxHeight,
             }}
           >
             <div className="overflow-y-auto min-h-0 flex-1">

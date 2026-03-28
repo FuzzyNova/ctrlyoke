@@ -42,6 +42,12 @@ interface CustomSelectProps extends HideableProps {
 
 const DEFAULT_NON_HIDEABLE = ["default", ""];
 
+/** Convert a CSS max-height prop string ("60vh", "150px") to pixels. */
+function parsePropMaxHeight(h: string): number {
+  if (h.endsWith("vh")) return (parseFloat(h) / 100) * window.innerHeight;
+  return parseFloat(h);
+}
+
 /**
  * Custom styled select dropdown that matches the VS Code theme.
  * Replaces native <select> elements whose browser-rendered popup cannot be
@@ -78,6 +84,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     bottom?: number;
     left: number;
     width: number;
+    maxHeight: number;
   } | null>(null);
 
   const hideEnabled = namespace !== undefined;
@@ -120,13 +127,15 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom - 4;
+      const propMaxH = parsePropMaxHeight(dropdownMaxHeight);
       if (spaceBelow >= 80) {
-        setPopupPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+        setPopupPos({ top: rect.bottom + 4, left: rect.left, width: rect.width, maxHeight: Math.min(propMaxH, spaceBelow) });
       } else {
-        setPopupPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width });
+        const spaceAbove = rect.top - 4;
+        setPopupPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width, maxHeight: Math.min(propMaxH, spaceAbove) });
       }
     }
-  }, []);
+  }, [dropdownMaxHeight]);
 
   // Compute/update position whenever the popup opens or the window moves
   useEffect(() => {
@@ -269,10 +278,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   // ── Inline mode (FooterQuickPicker — drop-up, toggle bar at top) ──────────
   if (inline) {
     return (
-      <div
-        className={`flex flex-col w-full ${className}`}
-        style={{ maxHeight: dropdownMaxHeight }}
-      >
+      <div className={`flex flex-col flex-1 min-h-0 w-full ${className}`}>
         {toggleBar(true)}
         {scrollableList}
       </div>
@@ -306,11 +312,12 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               bottom: popupPos.bottom,
               left: popupPos.left,
               width: popupPos.width,
-              maxHeight: dropdownMaxHeight,
+              maxHeight: popupPos.maxHeight,
             }}
           >
+            {popupPos.bottom !== undefined && toggleBar(true)}
             {scrollableList}
-            {toggleBar(false)}
+            {popupPos.top !== undefined && toggleBar(false)}
           </div>,
           document.body
         )}
