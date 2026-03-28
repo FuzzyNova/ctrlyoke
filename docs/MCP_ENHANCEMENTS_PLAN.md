@@ -334,3 +334,20 @@ Sourced from `queueData.harness` / `queueData.model` (top-level `WorkingFile` fi
 3. **`resumeSession`** — smallest functional change, highest ROI
 4. **`harness`/`model` on append + validation + queue_status metadata** — depends on capabilities.json being written
 5. **`flightpath_read_output`** — new tool, most surface area, implement last
+
+---
+
+## Status
+
+**Complete.** All five enhancements are implemented.
+
+---
+
+## Follow-Up: Replace `allowDynamicExtension` with `mcpServers`
+
+Now that MCP is the mechanism for dynamic queue extension, `allowDynamicExtension` is replaced by a richer `mcpServers` property that lets users inject any MCP server (not just FlightPath) into individual prompts. Simultaneously:
+
+- The `finalPrompt` loop gate (`if (!allowDynamicExtension) wrap up`) is removed entirely — the loop becomes purely behavioral (`queueSizeAfter > queueSizeBefore`)
+- The `enableDynamicQueue` VS Code setting is renamed to `mcpServers` (array instead of boolean)
+
+See `docs/research/MCP_SERVERS_PROPERTY_PLAN.md` for the full plan.
