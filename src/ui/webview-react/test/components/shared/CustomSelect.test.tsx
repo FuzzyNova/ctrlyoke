@@ -47,13 +47,11 @@ describe("CustomSelect — basic behavior", () => {
     expect(onChange).toHaveBeenCalledWith("b");
   });
 
-  it("dropdown container has invisible class when closed", () => {
-    const { container } = render(
-      <CustomSelect value="a" onChange={vi.fn()} options={OPTIONS} />
-    );
-    // The dropdown panel should have 'invisible' when not open
-    const dropdown = container.querySelector(".invisible");
-    expect(dropdown).not.toBeNull();
+  it("dropdown options are not rendered when closed", () => {
+    render(<CustomSelect value="a" onChange={vi.fn()} options={OPTIONS} />);
+    // The dropdown is portal-based and not in the DOM when closed
+    expect(screen.queryByText("Option B")).toBeNull();
+    expect(screen.queryByText("Option C")).toBeNull();
   });
 
   it("dropdown removes invisible class when opened", async () => {
@@ -91,18 +89,18 @@ describe("CustomSelect — basic behavior", () => {
 
   it("closes dropdown when clicking outside", async () => {
     const user = userEvent.setup();
-    const { container } = render(
+    render(
       <div>
         <CustomSelect value="a" onChange={vi.fn()} options={OPTIONS} />
         <div data-testid="outside">outside</div>
       </div>
     );
     await user.click(getTrigger());
-    // Verify it opened
-    expect(container.querySelectorAll(".invisible").length).toBe(0);
+    // Verify it opened — Option B should be discoverable via portal
+    expect(screen.queryByText("Option B")).not.toBeNull();
     await user.click(screen.getByTestId("outside"));
-    // Should close again
-    expect(container.querySelector(".invisible")).not.toBeNull();
+    // Should close again — portal unmounted, options gone from DOM
+    expect(screen.queryByText("Option B")).toBeNull();
   });
 
   it("applies custom className to container", () => {
