@@ -185,10 +185,20 @@ export class GeminiCliProvider implements ICliProvider {
       );
     }
 
-    // Merge FlightPath hooks section into the settings (overwrite hooks key only)
+    // Deep-merge FlightPath hooks into existing hooks — append user's existing handlers
+    // after FlightPath's so all three layers coexist: (1) FlightPath completion detection,
+    // (2) future workflow hooks, (3) user's pre-existing settings hooks.
+    const flightpathHooksSection = (hookConfig.config as Record<string, unknown>)["hooks"] as Record<string, unknown[]>;
+    const existingHooks = (existingSettings.hooks as Record<string, unknown[]> | undefined) ?? {};
+    const mergedHooks: Record<string, unknown[]> = { ...existingHooks };
+    for (const [event, handlers] of Object.entries(flightpathHooksSection)) {
+      const userHandlers = (existingHooks[event] as unknown[] | undefined) ?? [];
+      mergedHooks[event] = [...handlers, ...userHandlers];
+    }
+
     const mergedSettings = {
       ...existingSettings,
-      hooks: (hookConfig.config as Record<string, unknown>)["hooks"],
+      hooks: mergedHooks,
     };
     await fs.mkdir(geminiDir, { recursive: true });
     await fs.writeFile(

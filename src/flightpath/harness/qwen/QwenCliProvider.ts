@@ -233,10 +233,20 @@ export class QwenCliProvider implements ICliProvider {
       );
     }
 
-    // Merge FlightPath hooks section into the settings (overwrite hooks key only)
+    // Deep-merge FlightPath hooks into existing hooks — append user's existing handlers
+    // after FlightPath's so all three layers coexist: (1) FlightPath completion detection,
+    // (2) future workflow hooks, (3) user's pre-existing settings hooks.
+    const existingHooks = (existingSettings.hooks as Record<string, unknown[]> | undefined) ?? {};
+    const flightpathHooks = hooksSection as Record<string, unknown[]>;
+    const mergedHooks: Record<string, unknown[]> = { ...existingHooks };
+    for (const [event, handlers] of Object.entries(flightpathHooks)) {
+      const userHandlers = (existingHooks[event] as unknown[] | undefined) ?? [];
+      mergedHooks[event] = [...handlers, ...userHandlers];
+    }
+
     const mergedSettings = {
       ...existingSettings,
-      hooks: hooksSection,
+      hooks: mergedHooks,
     };
     await fs.mkdir(qwenDir, { recursive: true });
     await fs.writeFile(
