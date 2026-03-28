@@ -1,7 +1,7 @@
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
-import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { ICliProvider, HarnessConfig, CLI_VERSION_CHECK_TIMEOUT_MS } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -347,7 +347,7 @@ export class CodexCliProvider implements ICliProvider {
    */
   async checkAvailability(): Promise<boolean> {
     try {
-      await execAsync("codex --version");
+      await execAsync("codex --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
       return true;
     } catch {
       return false;
@@ -361,7 +361,7 @@ export class CodexCliProvider implements ICliProvider {
    */
   async getVersion(): Promise<string | undefined> {
     try {
-      const { stdout } = await execAsync("codex --version");
+      const { stdout } = await execAsync("codex --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
       // Extract version from output like "codex version 0.1.2"
       const match = stdout.match(/codex version ([\d.]+)/i);
       return match ? match[1] : stdout.trim();

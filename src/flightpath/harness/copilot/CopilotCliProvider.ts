@@ -2,7 +2,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs/promises";
-import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { ICliProvider, HarnessConfig, CLI_VERSION_CHECK_TIMEOUT_MS } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -436,7 +436,7 @@ export class CopilotCliProvider implements ICliProvider {
     const result = await retryWithBackoff(
       async () => {
         try {
-          await execAsync("copilot --version");
+          await execAsync("copilot --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
           return true;
         } catch (error) {
           // Retry Windows file-lock errors; treat other errors as permanent
@@ -460,7 +460,7 @@ export class CopilotCliProvider implements ICliProvider {
     const result = await retryWithBackoff(
       async () => {
         try {
-          const { stdout } = await execAsync("copilot --version");
+          const { stdout } = await execAsync("copilot --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
           return stdout.trim() || null;
         } catch (error) {
           if (String(error).includes("being used by another process")) {

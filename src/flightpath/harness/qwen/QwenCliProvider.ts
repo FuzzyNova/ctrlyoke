@@ -3,7 +3,7 @@ import { promisify } from "util";
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs/promises";
-import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { ICliProvider, HarnessConfig, CLI_VERSION_CHECK_TIMEOUT_MS } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -410,7 +410,7 @@ export class QwenCliProvider implements ICliProvider {
    */
   async checkAvailability(): Promise<boolean> {
     try {
-      await execAsync("qwen --version");
+      await execAsync("qwen --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
       return true;
     } catch {
       return false;
@@ -424,7 +424,7 @@ export class QwenCliProvider implements ICliProvider {
    */
   async getVersion(): Promise<string | undefined> {
     try {
-      const { stdout } = await execAsync("qwen --version");
+      const { stdout } = await execAsync("qwen --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
       return stdout.trim();
     } catch {
       return undefined;

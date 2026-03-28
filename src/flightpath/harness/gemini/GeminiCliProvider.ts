@@ -3,7 +3,7 @@ import { promisify } from "util";
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs/promises";
-import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { ICliProvider, HarnessConfig, CLI_VERSION_CHECK_TIMEOUT_MS } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -316,7 +316,7 @@ export class GeminiCliProvider implements ICliProvider {
 
   async checkAvailability(): Promise<boolean> {
     try {
-      await execAsync("gemini --version");
+      await execAsync("gemini --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
       return true;
     } catch {
       return false;
@@ -325,7 +325,7 @@ export class GeminiCliProvider implements ICliProvider {
 
   async getVersion(): Promise<string | undefined> {
     try {
-      const { stdout } = await execAsync("gemini --version");
+      const { stdout } = await execAsync("gemini --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
       return stdout.trim();
     } catch {
       return undefined;

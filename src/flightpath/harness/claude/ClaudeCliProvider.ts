@@ -1,7 +1,7 @@
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
-import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { ICliProvider, HarnessConfig, CLI_VERSION_CHECK_TIMEOUT_MS } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -390,7 +390,7 @@ export class ClaudeCliProvider implements ICliProvider {
    */
   async checkAvailability(): Promise<boolean> {
     try {
-      await execAsync("claude --version");
+      await execAsync("claude --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
       return true;
     } catch {
       return false;
@@ -404,7 +404,7 @@ export class ClaudeCliProvider implements ICliProvider {
    */
   async getVersion(): Promise<string | undefined> {
     try {
-      const { stdout } = await execAsync("claude --version");
+      const { stdout } = await execAsync("claude --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
       return stdout.trim();
     } catch {
       return undefined;
