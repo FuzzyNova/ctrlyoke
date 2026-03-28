@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import type { HideableProps } from "./CustomSelect";
 
 const DEFAULT_NON_HIDEABLE = ["default", ""];
@@ -17,7 +18,8 @@ export interface MultiCheckboxDropdownProps extends HideableProps {
  * MultiCheckboxDropdown - Multi-select dropdown with checkbox items.
  *
  * Used by SettingsDrawer (workflow-level skills) and PropertiesDrawer (prompt-level skills).
- * Closes on outside click. Uses the same Tailwind tokens as HarnessDropdown.
+ * The popup is rendered via a portal at document.body with position:fixed so
+ * it escapes any overflow:hidden ancestors and is never clipped.
  *
  * When `namespace` is supplied, each row gains a hover-only eye-closed button.
  * Hiding a currently-checked value auto-unchecks it (no hidden-checked state).
@@ -37,17 +39,50 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [popupPos, setPopupPos] = useState<{
+    top?: number;
+    bottom?: number;
+    left: number;
+    width: number;
+  } | null>(null);
 
   const hideEnabled = namespace !== undefined;
   const nonHideable = nonHideableValues ?? DEFAULT_NON_HIDEABLE;
 
-  // Close on outside click
+  const updatePosition = useCallback(() => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom - 4;
+      if (spaceBelow >= 80) {
+        setPopupPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      } else {
+        setPopupPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width });
+      }
+    }
+  }, []);
+
+  // Compute/update position whenever the popup opens or the window moves
+  useEffect(() => {
+    if (isOpen) {
+      updatePosition();
+      window.addEventListener("resize", updatePosition);
+      window.addEventListener("scroll", updatePosition, true);
+      return () => {
+        window.removeEventListener("resize", updatePosition);
+        window.removeEventListener("scroll", updatePosition, true);
+      };
+    }
+  }, [isOpen, updatePosition]);
+
+  // Close on click outside (must check both button and portaled popup)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
       if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
+        !buttonRef.current?.contains(target) &&
+        !popupRef.current?.contains(target)
       ) {
         setIsOpen(false);
         setShowHidden(false);
@@ -110,8 +145,9 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
           : `${visibleSelected.slice(0, 2).join(", ")} +${visibleSelected.length - 2}`;
 
   return (
-    <div className="relative inline-block w-full" ref={containerRef}>
+    <div className="relative inline-block w-full">
       <button
+        ref={buttonRef}
         id={id}
         type="button"
         onClick={() =>
@@ -134,142 +170,153 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
         />
       </button>
 
-      <div
-        className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top flex flex-col ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}
-        style={{ maxHeight: dropdownMaxHeight }}
-      >
-        {/* Scrollable options area */}
-        <div className="overflow-y-auto min-h-0 flex-1">
-          {visibleOptions.length === 0 && !hideEnabled ? (
-            <div className="px-3 py-2 text-xs text-description-fg">
-              No skills available
-            </div>
-          ) : (
-            visibleOptions.map((option) => {
-              const isSelected = selectedValues.includes(option.value);
-              return (
-                <div
-                  key={option.value}
-                  className={`group w-full flex items-start focus:outline-none border-none cursor-pointer ${
-                    isSelected
-                      ? "bg-dropdown-selected-bg text-list-active-fg"
-                      : "hover:bg-list-hover-bg hover:text-list-highlight-fg"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleValue(option.value)}
-                    className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => {}}
-                      className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
-                      tabIndex={-1}
-                    />
-                    <span className="flex flex-col min-w-0">
-                      <span className="font-medium truncate">
-                        {option.label}
-                      </span>
-                      {option.description && (
-                        <span className="text-[10px] text-description-fg truncate">
-                          {option.description}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                  {/* Eye-closed hide button — hover-only */}
-                  {canHide(option.value) && (
-                    <button
-                      type="button"
-                      title="Hide this option"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleHide(option.value);
-                      }}
-                      className="flex-shrink-0 self-center px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
-                    >
-                      <i className="codicon codicon-eye-closed text-[11px]" />
-                    </button>
-                  )}
+      {isOpen && popupPos &&
+        createPortal(
+          <div
+            ref={popupRef}
+            className="fixed bg-dropdown-bg border border-dropdown-border z-[9999] shadow-lg flex flex-col"
+            style={{
+              top: popupPos.top,
+              bottom: popupPos.bottom,
+              left: popupPos.left,
+              width: popupPos.width,
+              maxHeight: dropdownMaxHeight,
+            }}
+          >
+            {/* Scrollable options area */}
+            <div className="overflow-y-auto min-h-0 flex-1">
+              {visibleOptions.length === 0 && !hideEnabled ? (
+                <div className="px-3 py-2 text-xs text-description-fg">
+                  No skills available
                 </div>
-              );
-            })
-          )}
-
-          {/* Hidden section (inside scroll area) */}
-          {hideEnabled && showHidden && hiddenOptions.length > 0 && (
-            <>
-              <div className="border-t border-dropdown-border my-0" />
-              {hiddenOptions.map((option) => {
-                const isSelected = selectedValues.includes(option.value);
-                return (
-                  <div
-                    key={option.value}
-                    className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg cursor-pointer"
-                  >
-                    {/* Eye icon at far left — unhide action */}
-                    <button
-                      type="button"
-                      title="Unhide this option"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onUnhideOption?.(option.value);
-                      }}
-                      className="flex-shrink-0 self-center px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
+              ) : (
+                visibleOptions.map((option) => {
+                  const isSelected = selectedValues.includes(option.value);
+                  return (
+                    <div
+                      key={option.value}
+                      className={`group w-full flex items-start focus:outline-none border-none cursor-pointer ${
+                        isSelected
+                          ? "bg-dropdown-selected-bg text-list-active-fg"
+                          : "hover:bg-list-hover-bg hover:text-list-highlight-fg"
+                      }`}
                     >
-                      <i className="codicon codicon-eye text-[11px]" />
-                    </button>
-                    {/* Clicking checkbox or label: unhide + check */}
-                    <button
-                      type="button"
-                      onClick={() => handleUnhideAndCheck(option.value)}
-                      className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => {}}
-                        className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
-                        tabIndex={-1}
-                      />
-                      <span className="flex flex-col min-w-0">
-                        <span className="font-medium truncate text-description-fg">
-                          {option.label}
-                        </span>
-                        {option.description && (
-                          <span className="text-[10px] text-description-fg truncate">
-                            {option.description}
+                      <button
+                        type="button"
+                        onClick={() => toggleValue(option.value)}
+                        className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}}
+                          className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+                          tabIndex={-1}
+                        />
+                        <span className="flex flex-col min-w-0">
+                          <span className="font-medium truncate">
+                            {option.label}
                           </span>
-                        )}
-                      </span>
-                    </button>
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </div>
+                          {option.description && (
+                            <span className="text-[10px] text-description-fg truncate">
+                              {option.description}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                      {/* Eye-closed hide button — hover-only */}
+                      {canHide(option.value) && (
+                        <button
+                          type="button"
+                          title="Hide this option"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleHide(option.value);
+                          }}
+                          className="flex-shrink-0 self-center px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
+                        >
+                          <i className="codicon codicon-eye-closed text-[11px]" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
 
-        {/* Footer toggle — pinned at bottom, outside scroll area */}
-        {hideEnabled && (
-          <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
-            <button
-              type="button"
-              disabled={hiddenOptions.length === 0}
-              onClick={() => setShowHidden((s) => !s)}
-              className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
-            >
-              {showHidden
-                ? "Hide hidden"
-                : hiddenOptions.length > 0
-                  ? `Show hidden (${hiddenOptions.length})`
-                  : "Show hidden"}
-            </button>
-          </div>
+              {/* Hidden section (inside scroll area) */}
+              {hideEnabled && showHidden && hiddenOptions.length > 0 && (
+                <>
+                  <div className="border-t border-dropdown-border my-0" />
+                  {hiddenOptions.map((option) => {
+                    const isSelected = selectedValues.includes(option.value);
+                    return (
+                      <div
+                        key={option.value}
+                        className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg cursor-pointer"
+                      >
+                        {/* Eye icon at far left — unhide action */}
+                        <button
+                          type="button"
+                          title="Unhide this option"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUnhideOption?.(option.value);
+                          }}
+                          className="flex-shrink-0 self-center px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
+                        >
+                          <i className="codicon codicon-eye text-[11px]" />
+                        </button>
+                        {/* Clicking checkbox or label: unhide + check */}
+                        <button
+                          type="button"
+                          onClick={() => handleUnhideAndCheck(option.value)}
+                          className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+                            tabIndex={-1}
+                          />
+                          <span className="flex flex-col min-w-0">
+                            <span className="font-medium truncate text-description-fg">
+                              {option.label}
+                            </span>
+                            {option.description && (
+                              <span className="text-[10px] text-description-fg truncate">
+                                {option.description}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+
+            {/* Footer toggle — pinned at bottom, outside scroll area */}
+            {hideEnabled && (
+              <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
+                <button
+                  type="button"
+                  disabled={hiddenOptions.length === 0}
+                  onClick={() => setShowHidden((s) => !s)}
+                  className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
+                >
+                  {showHidden
+                    ? "Hide hidden"
+                    : hiddenOptions.length > 0
+                      ? `Show hidden (${hiddenOptions.length})`
+                      : "Show hidden"}
+                </button>
+              </div>
+            )}
+          </div>,
+          document.body
         )}
-      </div>
     </div>
   );
 };

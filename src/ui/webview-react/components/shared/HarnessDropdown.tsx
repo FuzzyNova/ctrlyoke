@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   HARNESS_IDS,
   HARNESS_STATUS_STRINGS,
@@ -229,22 +230,47 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(160);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [popupPos, setPopupPos] = useState<{
+    top?: number;
+    bottom?: number;
+    left: number;
+    width: number;
+  } | null>(null);
 
-  const mergedRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      containerRef.current = node;
-      narrowRef(node);
-    },
-    [narrowRef]
-  );
+  const updatePosition = useCallback(() => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom - 4;
+      if (spaceBelow >= 80) {
+        setPopupPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      } else {
+        setPopupPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width });
+      }
+    }
+  }, []);
 
-  // Close on outside click (only in trigger mode)
+  // Compute/update position whenever the popup opens or the window moves
+  useEffect(() => {
+    if (isOpen) {
+      updatePosition();
+      window.addEventListener("resize", updatePosition);
+      window.addEventListener("scroll", updatePosition, true);
+      return () => {
+        window.removeEventListener("resize", updatePosition);
+        window.removeEventListener("scroll", updatePosition, true);
+      };
+    }
+  }, [isOpen, updatePosition]);
+
+  // Close on click outside (must check both button and portaled popup)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
       if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
+        !buttonRef.current?.contains(target) &&
+        !popupRef.current?.contains(target)
       ) {
         setIsOpen(false);
         setShowHidden(false);
@@ -364,7 +390,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   // ── Inline mode (FooterQuickPicker — drop-up, toggle bar at top) ──────────
   if (inline) {
     return (
-      <div ref={mergedRef} className="flex flex-col" style={{ maxHeight: dropdownMaxHeight }}>
+      <div ref={narrowRef} className="flex flex-col" style={{ maxHeight: dropdownMaxHeight }}>
         {toggleBar(true)}
         {scrollableList}
       </div>
@@ -383,9 +409,10 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
       : undefined;
 
   return (
-    <div className="relative inline-block w-full" ref={mergedRef}>
+    <div className="relative inline-block w-full" ref={narrowRef}>
       {/* Trigger button */}
       <button
+        ref={buttonRef}
         id={id}
         type="button"
         onClick={() =>
@@ -407,14 +434,24 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         </div>
       </button>
 
-      {/* Dropdown panel */}
-      <div
-        className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top flex flex-col ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}
-        style={{ maxHeight: dropdownMaxHeight }}
-      >
-        {scrollableList}
-        {toggleBar(false)}
-      </div>
+      {isOpen && popupPos &&
+        createPortal(
+          <div
+            ref={popupRef}
+            className="fixed bg-dropdown-bg border border-dropdown-border z-[9999] shadow-lg flex flex-col"
+            style={{
+              top: popupPos.top,
+              bottom: popupPos.bottom,
+              left: popupPos.left,
+              width: popupPos.width,
+              maxHeight: dropdownMaxHeight,
+            }}
+          >
+            {scrollableList}
+            {toggleBar(false)}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
