@@ -2,7 +2,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs";
-import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
+import { ICliProvider, HarnessConfig, CLI_VERSION_CHECK_TIMEOUT_MS } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -343,7 +343,7 @@ export class OpenCodeCliProvider implements ICliProvider {
    */
   async checkAvailability(): Promise<boolean> {
     try {
-      await execAsync("opencode --version", { timeout: 5000 });
+      await execAsync("opencode --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
       return true;
     } catch {
       return false;

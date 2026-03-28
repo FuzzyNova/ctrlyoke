@@ -6,7 +6,7 @@ import type { PromptItem } from "../../../../types/FlightPathTypes";
 import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 
 /** Timeout for CLI version-check subprocesses (checkAvailability + getVersion) */
-export const CLI_VERSION_CHECK_TIMEOUT_MS = 10_000;
+export const CLI_VERSION_CHECK_TIMEOUT_MS = 30_000;
 
 /**
  * Harness configuration (static metadata)
