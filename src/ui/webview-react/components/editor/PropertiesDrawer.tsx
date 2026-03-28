@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useElementNarrow } from "../../hooks/useElementNarrow";
 import {
   useEditorStore,
   END_CONDITION_DEFAULTS,
@@ -15,6 +16,7 @@ import {
 import { SESSION_ID_SENTINELS } from "../../types/messages";
 import {
   CustomSelect,
+  DrawerTabBar,
   HarnessDropdown,
   HARNESS_DISPLAY_NAMES,
   harnessCategory,
@@ -22,6 +24,7 @@ import {
   PRIOR_CONTEXT_KEYWORD_LABELS,
   SkillsSelect,
 } from "../shared";
+import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 
 /** Max height for dropdowns inside the PropertiesDrawer (px, not vh — the drawer has a fixed height). */
 const DRAWER_DROPDOWN_MAX_HEIGHT = "150px";
@@ -30,7 +33,6 @@ interface PropertiesDrawerProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
 
 /**
  * PropertiesDrawer - Slide-up panel for prompt properties
@@ -64,6 +66,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const { hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
     useUiStore();
   const prompts = useWorkflowStore((s) => s.prompts);
+  const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(576);
 
   // Build prior prompt list for priorContext custom selection.
   const priorPrompts = (() => {
@@ -127,7 +130,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     workflowProperties.resumeSession ?? globalSettings.resumeSession;
   const resolvedSessionId = workflowProperties.sessionId;
   const defaultResumeSessionLabel =
-    resolvedResumeSession && resolvedSessionId === SESSION_ID_SENTINELS.FINAL_PROMPT
+    resolvedResumeSession &&
+    resolvedSessionId === SESSION_ID_SENTINELS.FINAL_PROMPT
       ? "Default (Final Prompt Session)"
       : `Default (${resolvedResumeSession ? "Yes" : "No"})`;
 
@@ -150,6 +154,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     return `Default (${label ?? resolvedPriorContext})`;
   })();
 
+  // Active page in the drawer tab navigation
+  const [activePage, setActivePage] = useState<DrawerPage>(
+    DRAWER_PAGES.HARNESS
+  );
+
   // End condition expanded state
   const [endConditionExpanded, setEndConditionExpanded] = useState(
     !!properties.endCondition
@@ -159,6 +168,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   useEffect(() => {
     setEndConditionExpanded(!!properties.endCondition);
   }, [properties.endCondition]);
+
+  // Reset to first page when drawer opens for a new prompt
+  useEffect(() => {
+    if (isOpen) {
+      setActivePage(DRAWER_PAGES.HARNESS);
+    }
+  }, [isOpen, selectedPromptIndex]);
 
   // Get models for current harness
   const currentHarness = (properties.harness ??
@@ -185,6 +201,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 
   return (
     <div
+      ref={drawerRef}
       className={`properties-drawer absolute bottom-0 left-0 right-0 bg-sidebar-bg border-t-2 border-panel-border shadow-lg transition-transform duration-300 z-[100] max-h-full flex flex-col overflow-hidden ${
         isOpen ? "translate-y-0" : "translate-y-full"
       }`}
@@ -203,153 +220,155 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         </button>
       </div>
 
-      {/* Body */}
+      {/* Body - Scrollable */}
       <div className="drawer-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-2">
-        <div className="space-y-2">
-          {/* Row 1: Harness + Model */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Harness */}
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="prop-harness"
-                className="text-[11px] font-semibold uppercase text-description-fg"
-              >
-                {`Harness${harnessCategory(properties.harness ?? "") === "cli" ? " (CLI)" : harnessCategory(properties.harness ?? "") === "chat" ? " (Chat)" : ""}`}
-              </label>
-              <HarnessDropdown
-                id="prop-harness"
-                value={properties.harness ?? "default"}
-                onChange={handleHarnessChange}
-                showDefault={true}
-                defaultLabel={defaultHarnessLabel}
-                showStatus={false}
-                hiddenValues={
-                  hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? []
-                }
-                onHideOption={(v) =>
-                  hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
-                }
-                onUnhideOption={(v) =>
-                  unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
-                }
-                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
-              />
-            </div>
-
-            {/* Model */}
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="prop-model"
-                className="text-[11px] font-semibold uppercase text-description-fg"
-              >
-                Model
-              </label>
-              <CustomSelect
-                id="prop-model"
-                value={properties.model ?? "default"}
-                onChange={(v) =>
-                  setProperty("model", v === "default" ? undefined : v)
-                }
-                options={[
-                  { value: "default", label: defaultModelLabel },
-                  ...(models.length === 0
-                    ? [
-                        {
-                          value: "",
-                          label: "Loading models...",
-                          disabled: true,
-                        },
-                      ]
-                    : models.map((m) => ({
-                        value: m.value,
-                        label: m.label,
-                      }))),
-                ]}
-                namespace={modelNamespace}
-                hiddenValues={hiddenDropdownOptions[modelNamespace] ?? []}
-                onHideOption={(v) => hideDropdownOption(modelNamespace, v)}
-                onUnhideOption={(v) => unhideDropdownOption(modelNamespace, v)}
-                nonHideableValues={["default", ""]}
-                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
-              />
-            </div>
-          </div>
-
-          {/* Row 2: Agent + Skills */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Agent — single flat dropdown: Default / None / each agent */}
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="prop-agent"
-                className="text-[11px] font-semibold uppercase text-description-fg"
-              >
-                Agent
-              </label>
-              <CustomSelect
-                id="prop-agent"
-                value={
-                  properties.agent === undefined
-                    ? "default"
-                    : properties.agent === null
-                      ? "none"
-                      : properties.agent
-                }
-                onChange={(v) => {
-                  if (v === "default") {
-                    setProperty("agent", undefined);
-                  } else if (v === "none") {
-                    setProperty("agent", null);
-                  } else {
-                    setProperty("agent", v);
+        {/* Page: Harness */}
+        {activePage === DRAWER_PAGES.HARNESS && (
+          <div className="space-y-2">
+            {/* Harness + Model */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Harness */}
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="prop-harness"
+                  className="text-[11px] font-semibold uppercase text-description-fg"
+                >
+                  {`Harness${harnessCategory(properties.harness ?? "") === "cli" ? " (CLI)" : harnessCategory(properties.harness ?? "") === "chat" ? " (Chat)" : ""}`}
+                </label>
+                <HarnessDropdown
+                  id="prop-harness"
+                  value={properties.harness ?? "default"}
+                  onChange={handleHarnessChange}
+                  showDefault={true}
+                  defaultLabel={defaultHarnessLabel}
+                  showStatus={false}
+                  hiddenValues={
+                    hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? []
                   }
-                }}
-                options={[
-                  { value: "default", label: defaultAgentLabel },
-                  { value: "none", label: "None" },
-                  ...availableAgents.map((agent) => ({
-                    value: agent.path,
-                    label: agent.name,
-                  })),
-                ]}
-                namespace={DROPDOWN_NAMESPACES.AGENT}
-                hiddenValues={
-                  hiddenDropdownOptions[DROPDOWN_NAMESPACES.AGENT] ?? []
-                }
-                onHideOption={(v) =>
-                  hideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
-                }
-                onUnhideOption={(v) =>
-                  unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
-                }
-                nonHideableValues={["default"]}
-                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
-              />
+                  onHideOption={(v) =>
+                    hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
+                  }
+                  onUnhideOption={(v) =>
+                    unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
+                  }
+                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+                />
+              </div>
+
+              {/* Model */}
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="prop-model"
+                  className="text-[11px] font-semibold uppercase text-description-fg"
+                >
+                  Model
+                </label>
+                <CustomSelect
+                  id="prop-model"
+                  value={properties.model ?? "default"}
+                  onChange={(v) =>
+                    setProperty("model", v === "default" ? undefined : v)
+                  }
+                  options={[
+                    { value: "default", label: defaultModelLabel },
+                    ...(models.length === 0
+                      ? [
+                          {
+                            value: "",
+                            label: "Loading models...",
+                            disabled: true,
+                          },
+                        ]
+                      : models.map((m) => ({
+                          value: m.value,
+                          label: m.label,
+                        }))),
+                  ]}
+                  namespace={modelNamespace}
+                  hiddenValues={hiddenDropdownOptions[modelNamespace] ?? []}
+                  onHideOption={(v) => hideDropdownOption(modelNamespace, v)}
+                  onUnhideOption={(v) =>
+                    unhideDropdownOption(modelNamespace, v)
+                  }
+                  nonHideableValues={["default", ""]}
+                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+                />
+              </div>
             </div>
 
-            {/* Skills — hybrid dropdown with Default/None keywords + checkbox list */}
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="prop-skills"
-                className="text-[11px] font-semibold uppercase text-description-fg"
-              >
-                Skills
-              </label>
-              <SkillsSelect
-                value={properties.skills as string[] | null | undefined}
-                onChange={(v) => setProperty("skills", v)}
-                availableSkills={availableSkills.map((s) => ({
-                  name: s.name,
-                  description: s.description || undefined,
-                }))}
-                defaultLabel={defaultSkillsLabel}
-                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
-              />
-            </div>
-          </div>
+            {/* Row 2: Agent + Skills */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Agent — single flat dropdown: Default / None / each agent */}
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="prop-agent"
+                  className="text-[11px] font-semibold uppercase text-description-fg"
+                >
+                  Agent
+                </label>
+                <CustomSelect
+                  id="prop-agent"
+                  value={
+                    properties.agent === undefined
+                      ? "default"
+                      : properties.agent === null
+                        ? "none"
+                        : properties.agent
+                  }
+                  onChange={(v) => {
+                    if (v === "default") {
+                      setProperty("agent", undefined);
+                    } else if (v === "none") {
+                      setProperty("agent", null);
+                    } else {
+                      setProperty("agent", v);
+                    }
+                  }}
+                  options={[
+                    { value: "default", label: defaultAgentLabel },
+                    { value: "none", label: "None" },
+                    ...availableAgents.map((agent) => ({
+                      value: agent.path,
+                      label: agent.name,
+                    })),
+                  ]}
+                  namespace={DROPDOWN_NAMESPACES.AGENT}
+                  hiddenValues={
+                    hiddenDropdownOptions[DROPDOWN_NAMESPACES.AGENT] ?? []
+                  }
+                  onHideOption={(v) =>
+                    hideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
+                  }
+                  onUnhideOption={(v) =>
+                    unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
+                  }
+                  nonHideableValues={["default"]}
+                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+                />
+              </div>
 
-          {/* Row 3: Additional Args + Resume Session (with paired Session ID) */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Additional Args — mode select + paired text input */}
+              {/* Skills — hybrid dropdown with Default/None keywords + checkbox list */}
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="prop-skills"
+                  className="text-[11px] font-semibold uppercase text-description-fg"
+                >
+                  Skills
+                </label>
+                <SkillsSelect
+                  value={properties.skills as string[] | null | undefined}
+                  onChange={(v) => setProperty("skills", v)}
+                  availableSkills={availableSkills.map((s) => ({
+                    name: s.name,
+                    description: s.description || undefined,
+                  }))}
+                  defaultLabel={defaultSkillsLabel}
+                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+                />
+              </div>
+            </div>
+
+            {/* Additional Args */}
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="prop-additional-args-mode"
@@ -411,90 +430,297 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 />
               </div>
             </div>
+          </div>
+        )}
 
-            {/* Resume Session — paired control with Session ID below */}
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="prop-resume-session"
-                className="text-[11px] font-semibold uppercase text-description-fg"
-              >
-                Resume Session
-              </label>
-              <CustomSelect
-                id="prop-resume-session"
-                value={
-                  properties.resumeSession === undefined
-                    ? "default"
-                    : properties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT && properties.resumeSession
-                      ? SESSION_ID_SENTINELS.FINAL_PROMPT
-                      : properties.resumeSession
-                        ? "yes"
-                        : "no"
-                }
-                onChange={(v) => {
-                  if (v === SESSION_ID_SENTINELS.FINAL_PROMPT) {
-                    setProperty("resumeSession", true);
-                    setProperty("sessionId", SESSION_ID_SENTINELS.FINAL_PROMPT);
-                  } else if (v === "default") {
-                    setProperty("resumeSession", undefined);
-                    if (properties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT) {
-                      setProperty("sessionId", "");
-                    }
-                  } else {
-                    if (properties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT) {
-                      setProperty("sessionId", "");
-                    }
-                    setProperty("resumeSession", v === "yes");
+        {/* Page: Context */}
+        {activePage === DRAWER_PAGES.CONTEXT && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-4">
+              {/* Resume Session — paired control with Session ID below */}
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="prop-resume-session"
+                  className="text-[11px] font-semibold uppercase text-description-fg"
+                >
+                  Resume Session
+                </label>
+                <CustomSelect
+                  id="prop-resume-session"
+                  value={
+                    properties.resumeSession === undefined
+                      ? "default"
+                      : properties.sessionId ===
+                            SESSION_ID_SENTINELS.FINAL_PROMPT &&
+                          properties.resumeSession
+                        ? SESSION_ID_SENTINELS.FINAL_PROMPT
+                        : properties.resumeSession
+                          ? "yes"
+                          : "no"
                   }
-                }}
-                options={[
-                  ...getResumeSessionOptions(defaultResumeSessionLabel),
-                ]}
-                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
-              />
-              {/* Session ID — expands directly below, no label */}
-              <div
-                className={`transition-all duration-300 ${
-                  properties.resumeSession === true && properties.sessionId !== SESSION_ID_SENTINELS.FINAL_PROMPT
-                    ? "max-h-[60px] opacity-100"
-                    : "max-h-0 opacity-0 overflow-hidden"
-                }`}
-              >
-                <input
-                  type="text"
-                  id="prop-session-id"
-                  value={properties.sessionId}
-                  onChange={(e) => setProperty("sessionId", e.target.value)}
-                  placeholder="Session ID or prompt number (e.g., 1)"
-                  className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                  onChange={(v) => {
+                    if (v === SESSION_ID_SENTINELS.FINAL_PROMPT) {
+                      setProperty("resumeSession", true);
+                      setProperty(
+                        "sessionId",
+                        SESSION_ID_SENTINELS.FINAL_PROMPT
+                      );
+                    } else if (v === "default") {
+                      setProperty("resumeSession", undefined);
+                      if (
+                        properties.sessionId ===
+                        SESSION_ID_SENTINELS.FINAL_PROMPT
+                      ) {
+                        setProperty("sessionId", "");
+                      }
+                    } else {
+                      if (
+                        properties.sessionId ===
+                        SESSION_ID_SENTINELS.FINAL_PROMPT
+                      ) {
+                        setProperty("sessionId", "");
+                      }
+                      setProperty("resumeSession", v === "yes");
+                    }
+                  }}
+                  options={[
+                    ...getResumeSessionOptions(defaultResumeSessionLabel),
+                  ]}
+                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+                />
+                {/* Session ID — expands directly below, no label */}
+                <div
+                  className={`transition-all duration-300 ${
+                    properties.resumeSession === true &&
+                    properties.sessionId !== SESSION_ID_SENTINELS.FINAL_PROMPT
+                      ? "max-h-[60px] opacity-100"
+                      : "max-h-0 opacity-0 overflow-hidden"
+                  }`}
+                >
+                  <input
+                    type="text"
+                    id="prop-session-id"
+                    value={properties.sessionId}
+                    onChange={(e) => setProperty("sessionId", e.target.value)}
+                    placeholder="Session ID or prompt number (e.g., 1)"
+                    className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                  />
+                </div>
+              </div>
+
+              {/* Prior Context */}
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="prop-prior-context"
+                  className="text-[11px] font-semibold uppercase text-description-fg"
+                  title="Inject prior prompt outputs into this prompt's text before sending to the AI"
+                >
+                  Prior Context
+                </label>
+                <PriorContextSelect
+                  id="prop-prior-context"
+                  value={properties.priorContext}
+                  onChange={(v) => setProperty("priorContext", v)}
+                  showDefault
+                  defaultLabel={defaultPriorContextLabel}
+                  priorPrompts={priorPrompts}
+                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
               </div>
             </div>
           </div>
+        )}
 
-          {/* Row 4: Prior Context + Allow Dynamic Extension */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Prior Context */}
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="prop-prior-context"
-                className="text-[11px] font-semibold uppercase text-description-fg"
-                title="Inject prior prompt outputs into this prompt's text before sending to the AI"
+        {/* Page: Validation */}
+        {activePage === DRAWER_PAGES.VALIDATION && (
+          <div className="space-y-2">
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="checkbox"
+                  id="prop-end-enabled"
+                  checked={!!properties.endCondition}
+                  onChange={handleEndConditionToggle}
+                  className="w-4 h-4 rounded border border-input-border"
+                />
+                <label
+                  htmlFor="prop-end-enabled"
+                  className="text-xs font-medium text-foreground cursor-pointer"
+                >
+                  Enable End Condition
+                </label>
+              </div>
+
+              {/* End condition details (collapsible) */}
+              <div
+                className={`overflow-hidden transition-all duration-200 ${
+                  endConditionExpanded && properties.endCondition
+                    ? "max-h-[500px] opacity-100"
+                    : "max-h-0 opacity-0"
+                }`}
               >
-                Prior Context
-              </label>
-              <PriorContextSelect
-                id="prop-prior-context"
-                value={properties.priorContext}
-                onChange={(v) => setProperty("priorContext", v)}
-                showDefault
-                defaultLabel={defaultPriorContextLabel}
-                priorPrompts={priorPrompts}
-                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
-              />
-            </div>
+                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
+                  {/* Script + Returns */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Script */}
+                    <div className="flex flex-col gap-1">
+                      <label
+                        htmlFor="prop-end-script"
+                        className="text-xs font-medium text-foreground"
+                      >
+                        Script
+                      </label>
+                      <input
+                        type="text"
+                        id="prop-end-script"
+                        value={properties.endCondition?.script || ""}
+                        onChange={(e) =>
+                          updateEndConditionField("script", e.target.value)
+                        }
+                        disabled={!properties.endCondition}
+                        placeholder="npm test"
+                        className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+                      />
+                    </div>
 
-            {/* Allow Dynamic Extension */}
+                    {/* Returns */}
+                    <div className="flex flex-col gap-1">
+                      <label
+                        htmlFor="prop-end-returns"
+                        className="text-xs font-medium text-foreground"
+                      >
+                        Expected Return
+                      </label>
+                      <input
+                        type="text"
+                        id="prop-end-returns"
+                        value={properties.endCondition?.returns || ""}
+                        onChange={(e) =>
+                          updateEndConditionField("returns", e.target.value)
+                        }
+                        disabled={!properties.endCondition}
+                        placeholder="true"
+                        className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Timeout + Max Retries */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Timeout */}
+                    <div className="flex flex-col gap-1">
+                      <label
+                        htmlFor="prop-end-timeout"
+                        className="text-xs font-medium text-foreground"
+                      >
+                        Timeout (ms)
+                      </label>
+                      <input
+                        type="number"
+                        id="prop-end-timeout"
+                        value={properties.endCondition?.timeout ?? 30000}
+                        onChange={(e) =>
+                          updateEndConditionField(
+                            "timeout",
+                            parseInt(e.target.value) || 30000
+                          )
+                        }
+                        disabled={!properties.endCondition}
+                        min={1000}
+                        max={300000}
+                        className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+                      />
+                    </div>
+
+                    {/* Max Retries */}
+                    <div className="flex flex-col gap-1">
+                      <label
+                        htmlFor="prop-end-retries"
+                        className="text-xs font-medium text-foreground"
+                      >
+                        Max Retries
+                      </label>
+                      <input
+                        type="number"
+                        id="prop-end-retries"
+                        value={properties.endCondition?.maxRetries ?? 0}
+                        onChange={(e) =>
+                          updateEndConditionField(
+                            "maxRetries",
+                            parseInt(e.target.value) || 0
+                          )
+                        }
+                        disabled={!properties.endCondition}
+                        min={-1}
+                        max={100}
+                        className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+                      />
+                      <span className="text-[10px] text-description-fg">
+                        Use -1 for unlimited retries
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Retry Prompt (Full Width) */}
+                  <div className="flex flex-col gap-1">
+                    <label
+                      htmlFor="prop-end-retry-prompt"
+                      className="text-xs font-medium text-foreground"
+                    >
+                      Retry Prompt
+                    </label>
+                    <textarea
+                      id="prop-end-retry-prompt"
+                      value={properties.endCondition?.retryPrompt || ""}
+                      onChange={(e) =>
+                        updateEndConditionField("retryPrompt", e.target.value)
+                      }
+                      disabled={!properties.endCondition}
+                      placeholder={
+                        "Validation failed: {error}\n\nPlease fix the issues."
+                      }
+                      rows={3}
+                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50 resize-y"
+                    />
+                    <span className="text-[10px] text-description-fg">
+                      Use {"{error}"} placeholder for validation error message
+                    </span>
+                  </div>
+
+                  {/* Resume Session on Retry */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="prop-end-resume-session-on-retry"
+                      checked={
+                        properties.endCondition?.resumeSessionOnRetry ?? true
+                      }
+                      onChange={(e) =>
+                        updateEndConditionField(
+                          "resumeSessionOnRetry",
+                          e.target.checked
+                        )
+                      }
+                      disabled={!properties.endCondition}
+                      className="w-4 h-4 accent-focus-border cursor-pointer disabled:opacity-50"
+                    />
+                    <label
+                      htmlFor="prop-end-resume-session-on-retry"
+                      className="text-xs font-medium text-foreground cursor-pointer"
+                      title="When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
+                    >
+                      Resume Session on Retry
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Page: MCP */}
+        {activePage === DRAWER_PAGES.MCP && (
+          <div className="space-y-2">
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="prop-allow-dynamic"
@@ -526,191 +752,24 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               />
             </div>
           </div>
+        )}
 
-          {/* End Condition Section (Full Width) */}
-          <div className="border-t border-panel-border pt-4 mt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <input
-                type="checkbox"
-                id="prop-end-enabled"
-                checked={!!properties.endCondition}
-                onChange={handleEndConditionToggle}
-                className="w-4 h-4 rounded border border-input-border"
-              />
-              <label
-                htmlFor="prop-end-enabled"
-                className="text-xs font-medium text-foreground cursor-pointer"
-              >
-                Enable End Condition
-              </label>
-            </div>
-
-            {/* End condition details (collapsible) */}
-            <div
-              className={`overflow-hidden transition-all duration-200 ${
-                endConditionExpanded && properties.endCondition
-                  ? "max-h-[500px] opacity-100"
-                  : "max-h-0 opacity-0"
-              }`}
-            >
-              <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
-                {/* Row 1: Script + Returns */}
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Script */}
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="prop-end-script"
-                      className="text-xs font-medium text-foreground"
-                    >
-                      Script
-                    </label>
-                    <input
-                      type="text"
-                      id="prop-end-script"
-                      value={properties.endCondition?.script || ""}
-                      onChange={(e) =>
-                        updateEndConditionField("script", e.target.value)
-                      }
-                      disabled={!properties.endCondition}
-                      placeholder="npm test"
-                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-                    />
-                  </div>
-
-                  {/* Returns */}
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="prop-end-returns"
-                      className="text-xs font-medium text-foreground"
-                    >
-                      Expected Return
-                    </label>
-                    <input
-                      type="text"
-                      id="prop-end-returns"
-                      value={properties.endCondition?.returns || ""}
-                      onChange={(e) =>
-                        updateEndConditionField("returns", e.target.value)
-                      }
-                      disabled={!properties.endCondition}
-                      placeholder="true"
-                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-                    />
-                  </div>
-                </div>
-
-                {/* Row 2: Timeout + Max Retries */}
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Timeout */}
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="prop-end-timeout"
-                      className="text-xs font-medium text-foreground"
-                    >
-                      Timeout (ms)
-                    </label>
-                    <input
-                      type="number"
-                      id="prop-end-timeout"
-                      value={properties.endCondition?.timeout ?? 30000}
-                      onChange={(e) =>
-                        updateEndConditionField(
-                          "timeout",
-                          parseInt(e.target.value) || 30000
-                        )
-                      }
-                      disabled={!properties.endCondition}
-                      min={1000}
-                      max={300000}
-                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-                    />
-                  </div>
-
-                  {/* Max Retries */}
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="prop-end-retries"
-                      className="text-xs font-medium text-foreground"
-                    >
-                      Max Retries
-                    </label>
-                    <input
-                      type="number"
-                      id="prop-end-retries"
-                      value={properties.endCondition?.maxRetries ?? 0}
-                      onChange={(e) =>
-                        updateEndConditionField(
-                          "maxRetries",
-                          parseInt(e.target.value) || 0
-                        )
-                      }
-                      disabled={!properties.endCondition}
-                      min={-1}
-                      max={100}
-                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-                    />
-                    <span className="text-[10px] text-description-fg">
-                      Use -1 for unlimited retries
-                    </span>
-                  </div>
-                </div>
-
-                {/* Row 3: Retry Prompt (Full Width) */}
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="prop-end-retry-prompt"
-                    className="text-xs font-medium text-foreground"
-                  >
-                    Retry Prompt
-                  </label>
-                  <textarea
-                    id="prop-end-retry-prompt"
-                    value={properties.endCondition?.retryPrompt || ""}
-                    onChange={(e) =>
-                      updateEndConditionField("retryPrompt", e.target.value)
-                    }
-                    disabled={!properties.endCondition}
-                    placeholder={
-                      "Validation failed: {error}\n\nPlease fix the issues."
-                    }
-                    rows={3}
-                    className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50 resize-y"
-                  />
-                  <span className="text-[10px] text-description-fg">
-                    Use {"{error}"} placeholder for validation error message
-                  </span>
-                </div>
-
-                {/* Row 4: Resume Session on Retry */}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="prop-end-resume-session-on-retry"
-                    checked={
-                      properties.endCondition?.resumeSessionOnRetry ?? true
-                    }
-                    onChange={(e) =>
-                      updateEndConditionField(
-                        "resumeSessionOnRetry",
-                        e.target.checked
-                      )
-                    }
-                    disabled={!properties.endCondition}
-                    className="w-4 h-4 accent-focus-border cursor-pointer disabled:opacity-50"
-                  />
-                  <label
-                    htmlFor="prop-end-resume-session-on-retry"
-                    className="text-xs font-medium text-foreground cursor-pointer"
-                    title="When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
-                  >
-                    Resume Session on Retry
-                  </label>
-                </div>
-              </div>
-            </div>
+        {/* Page: Hooks / Permissions (placeholder) */}
+        {(activePage === DRAWER_PAGES.HOOKS ||
+          activePage === DRAWER_PAGES.PERMISSIONS) && (
+          <div className="flex items-center justify-center h-32 text-description-fg text-xs">
+            Coming Soon
           </div>
-        </div>
+        )}
       </div>
+
+      {/* Tab Bar */}
+      <DrawerTabBar
+        activeTab={activePage}
+        onTabChange={setActivePage}
+        harnessId={currentHarness}
+        isNarrow={isNarrow}
+      />
     </div>
   );
 };

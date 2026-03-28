@@ -21,6 +21,7 @@ export {
   type HarnessDropdownProps,
 } from "./HarnessDropdown";
 export { HarnessIcon } from "./HarnessIcon";
+export { DrawerTabBar } from "./DrawerTabBar";
 export {
   PriorContextSelect,
   PRIOR_CONTEXT_KEYWORD_LABELS,
