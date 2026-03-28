@@ -22,6 +22,7 @@ export {
 } from "./HarnessDropdown";
 export { HarnessIcon } from "./HarnessIcon";
 export { DrawerTabBar } from "./DrawerTabBar";
+export { DrawerRow } from "./DrawerRow";
 export {
   PriorContextSelect,
   PRIOR_CONTEXT_KEYWORD_LABELS,

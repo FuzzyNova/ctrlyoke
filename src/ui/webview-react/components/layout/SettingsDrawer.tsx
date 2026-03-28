@@ -29,6 +29,7 @@ import {
   harnessCategory,
   PriorContextSelect,
   DrawerTabBar,
+  DrawerRow,
 } from "../shared";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
@@ -104,20 +105,6 @@ const FormField: React.FC<{
 );
 
 /**
- * Layout row: 2-column grid in wide mode, transparent fragment in narrow mode
- * so the parent's space-y-4 controls spacing uniformly.
- */
-const Row: React.FC<{ narrow: boolean; children: React.ReactNode }> = ({
-  narrow,
-  children,
-}) =>
-  narrow ? (
-    <>{children}</>
-  ) : (
-    <div className="grid grid-cols-2 gap-4">{children}</div>
-  );
-
-/**
  * SettingsPanel Component
  *
  * Collapsible panel for configuring:
@@ -190,7 +177,9 @@ export const SettingsPanel: React.FC<{
   }, [workflowProperties.endCondition]);
 
   // Single breakpoint for all three layout zones (body rows, tab labels, footer toggles)
-  const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(SETTINGS_DRAWER_BREAKPOINT);
+  const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(
+    SETTINGS_DRAWER_BREAKPOINT
+  );
 
   // Get current effective values
   const effectiveHarness = getEffectiveHarness();
@@ -597,7 +586,7 @@ export const SettingsPanel: React.FC<{
           {activePage === DRAWER_PAGES.HARNESS && (
             <>
               {/* Row 1: Harness + Model */}
-              <Row narrow={isNarrow}>
+              <DrawerRow narrow={isNarrow}>
                 <FormField
                   label={`Harness${harnessCategory(effectiveHarness) === "cli" ? " (CLI)" : harnessCategory(effectiveHarness) === "chat" ? " (Chat)" : ""}`}
                   htmlFor="settings-harness"
@@ -673,10 +662,10 @@ export const SettingsPanel: React.FC<{
                     nonHideableValues={["default", ""]}
                   />
                 </FormField>
-              </Row>
+              </DrawerRow>
 
               {/* Row 2: Agent + Skills */}
-              <Row narrow={isNarrow}>
+              <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Agent"
                   htmlFor="settings-agent"
@@ -757,10 +746,10 @@ export const SettingsPanel: React.FC<{
                     </p>
                   )}
                 </FormField>
-              </Row>
+              </DrawerRow>
 
               {/* Row 3: Additional Args */}
-              <Row narrow={isNarrow}>
+              <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Additional Args"
                   htmlFor="settings-append-args"
@@ -789,14 +778,14 @@ export const SettingsPanel: React.FC<{
                   />
                 </FormField>
                 <div />
-              </Row>
+              </DrawerRow>
             </>
           )}
 
           {activePage === DRAWER_PAGES.CONTEXT && (
             <>
               {/* Row 1: Resume Session (with paired Session ID) + Prior Context */}
-              <Row narrow={isNarrow}>
+              <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Resume Session"
                   htmlFor="settings-resume-session"
@@ -877,7 +866,7 @@ export const SettingsPanel: React.FC<{
                     }))}
                   />
                 </FormField>
-              </Row>
+              </DrawerRow>
             </>
           )}
 
@@ -910,7 +899,7 @@ export const SettingsPanel: React.FC<{
                 }`}
               >
                 {/* Row 1: Script + Returns */}
-                <Row narrow={isNarrow}>
+                <DrawerRow narrow={isNarrow}>
                   <div className="flex flex-col gap-1">
                     <label
                       htmlFor="settings-end-script"
@@ -948,10 +937,10 @@ export const SettingsPanel: React.FC<{
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                     />
                   </div>
-                </Row>
+                </DrawerRow>
 
                 {/* Row 2: Timeout + Max Retries */}
-                <Row narrow={isNarrow}>
+                <DrawerRow narrow={isNarrow}>
                   <div className="flex flex-col gap-1">
                     <label
                       htmlFor="settings-end-timeout"
@@ -995,7 +984,7 @@ export const SettingsPanel: React.FC<{
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                     />
                   </div>
-                </Row>
+                </DrawerRow>
 
                 {/* Retry Prompt (full width) */}
                 <div className="flex flex-col gap-1">

@@ -17,6 +17,7 @@ import { SESSION_ID_SENTINELS } from "../../types/messages";
 import {
   CustomSelect,
   DrawerTabBar,
+  DrawerRow,
   HarnessDropdown,
   HARNESS_DISPLAY_NAMES,
   harnessCategory,
@@ -226,7 +227,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {activePage === DRAWER_PAGES.HARNESS && (
           <div className="space-y-2">
             {/* Harness + Model */}
-            <div className="grid grid-cols-2 gap-4">
+            <DrawerRow narrow={isNarrow}>
               {/* Harness */}
               <div className="flex flex-col gap-1">
                 <label
@@ -294,10 +295,10 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
               </div>
-            </div>
+            </DrawerRow>
 
             {/* Row 2: Agent + Skills */}
-            <div className="grid grid-cols-2 gap-4">
+            <DrawerRow narrow={isNarrow}>
               {/* Agent — single flat dropdown: Default / None / each agent */}
               <div className="flex flex-col gap-1">
                 <label
@@ -366,7 +367,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
               </div>
-            </div>
+            </DrawerRow>
 
             {/* Additional Args */}
             <div className="flex flex-col gap-1">
@@ -436,7 +437,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {/* Page: Context */}
         {activePage === DRAWER_PAGES.CONTEXT && (
           <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-4">
+            <DrawerRow narrow={isNarrow}>
               {/* Resume Session — paired control with Session ID below */}
               <div className="flex flex-col gap-1">
                 <label
@@ -527,7 +528,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
               </div>
-            </div>
+            </DrawerRow>
           </div>
         )}
 
