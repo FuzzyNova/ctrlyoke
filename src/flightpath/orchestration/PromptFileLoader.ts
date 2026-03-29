@@ -340,11 +340,29 @@ export class PromptFileLoader {
         >[0]
       );
     }
-    if (explicitValues.toolPermissions === undefined) {
+    // toolPermissions requires sub-field merging: if mode is set but
+    // allowedTools/deniedTools are missing, fill in defaults for the missing
+    // sub-fields. null means passthrough — don't seed.
+    const explicitTP = explicitValues.toolPermissions as
+      | Record<string, unknown>
+      | null
+      | undefined;
+    if (explicitTP !== null) {
+      const base =
+        typeof explicitTP === "object" && explicitTP ? explicitTP : {};
       defaults.toolPermissions = {
-        mode: ConfigurationUtils.getCliToolPermissions(),
-        allowedTools: ConfigurationUtils.getCliAllowedTools(),
-        deniedTools: ConfigurationUtils.getCliDeniedTools(),
+        mode:
+          base.mode !== undefined
+            ? base.mode
+            : ConfigurationUtils.getCliToolPermissions(),
+        allowedTools:
+          base.allowedTools !== undefined
+            ? base.allowedTools
+            : ConfigurationUtils.getCliAllowedTools(),
+        deniedTools:
+          base.deniedTools !== undefined
+            ? base.deniedTools
+            : ConfigurationUtils.getCliDeniedTools(),
       };
     }
 

@@ -845,103 +845,119 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 />
               </div>
 
-              {/* Custom mode: Allowed / Denied Tools textareas */}
-              <div
-                className={`transition-all duration-300 ${
-                  properties.toolPermissions !== undefined &&
-                  properties.toolPermissions !== null &&
-                  properties.toolPermissions.mode === "custom"
-                    ? "max-h-[500px] opacity-100"
-                    : "max-h-0 opacity-0 overflow-hidden"
-                }`}
-              >
-                <div
-                  className={`space-y-2${
-                    permHarnessSupport === "mode-only"
-                      ? " opacity-50 pointer-events-none"
-                      : ""
-                  }`}
-                >
-                  {/* Mode-only harness warning */}
-                  {permHarnessSupport === "mode-only" && (
-                    <p className="text-[10px] text-description-fg">
-                      {effectivePermHarness === HARNESS_IDS.CODEX_CLI
-                        ? "ℹ️ Codex CLI uses sandbox/approval modes rather than individual tool patterns. Allowed Tools and Denied Tools lists are ignored."
-                        : effectivePermHarness === HARNESS_IDS.OPENCODE_CLI
-                          ? "ℹ️ OpenCode CLI manages permissions via config file. Tool pattern lists are ignored."
-                          : "ℹ️ Gemini CLI uses approval modes only. Tool pattern lists are ignored."}
-                    </p>
-                  )}
+              {/* Allowed / Denied Tools textareas — always visible, disabled by mode */}
+              {(() => {
+                // Determine the effective permission mode for this prompt
+                const effectivePermMode: string =
+                  properties.toolPermissions === undefined
+                    ? workflowProperties.toolPermissions === null
+                      ? "passthrough"
+                      : (workflowProperties.toolPermissions?.mode ?? "allowAll")
+                    : properties.toolPermissions === null
+                      ? "passthrough"
+                      : (properties.toolPermissions.mode ?? "allowAll");
+                const isInheriting = properties.toolPermissions === undefined;
+                const allowedDisabled =
+                  isInheriting ||
+                  permHarnessSupport === "mode-only" ||
+                  effectivePermMode !== "custom";
+                const deniedDisabled =
+                  isInheriting ||
+                  permHarnessSupport === "mode-only" ||
+                  effectivePermMode === "dangerouslyAllowAll" ||
+                  effectivePermMode === "passthrough";
 
-                  {/* Allowed Tools */}
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="prop-allowed-tools"
-                      className="text-[11px] font-semibold uppercase text-description-fg"
-                      title="Tool patterns to allow (one per line). Uses Copilot CLI format — auto-converted for Claude/Qwen."
-                    >
-                      Allowed Tools
-                    </label>
-                    <textarea
-                      id="prop-allowed-tools"
-                      value={(
-                        (
-                          properties.toolPermissions as
-                            | ToolPermissionsOverride
-                            | undefined
-                        )?.allowedTools ?? []
-                      ).join("\n")}
-                      onChange={(e) => {
-                        const current =
-                          (properties.toolPermissions as
-                            | ToolPermissionsOverride
-                            | undefined) || {};
-                        setProperty("toolPermissions", {
-                          ...current,
-                          allowedTools: e.target.value.split("\n"),
-                        });
-                      }}
-                      rows={4}
-                      placeholder={"read\nglob\ngrep"}
-                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono"
-                    />
-                  </div>
+                return (
+                  <div className="space-y-2">
+                    {/* Mode-only harness warning */}
+                    {permHarnessSupport === "mode-only" && (
+                      <p className="text-[10px] text-description-fg">
+                        {effectivePermHarness === HARNESS_IDS.CODEX_CLI
+                          ? "ℹ️ Codex CLI uses sandbox/approval modes rather than individual tool patterns. Allowed Tools and Denied Tools lists are ignored."
+                          : effectivePermHarness === HARNESS_IDS.OPENCODE_CLI
+                            ? "ℹ️ OpenCode CLI manages permissions via config file. Tool pattern lists are ignored."
+                            : "ℹ️ Gemini CLI uses approval modes only. Tool pattern lists are ignored."}
+                      </p>
+                    )}
 
-                  {/* Denied Tools */}
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="prop-denied-tools"
-                      className="text-[11px] font-semibold uppercase text-description-fg"
-                      title="Tool patterns to deny (one per line, takes precedence over allow list)."
-                    >
-                      Denied Tools
-                    </label>
-                    <textarea
-                      id="prop-denied-tools"
-                      value={(
-                        (
-                          properties.toolPermissions as
-                            | ToolPermissionsOverride
-                            | undefined
-                        )?.deniedTools ?? []
-                      ).join("\n")}
-                      onChange={(e) => {
-                        const current =
-                          (properties.toolPermissions as
-                            | ToolPermissionsOverride
-                            | undefined) || {};
-                        setProperty("toolPermissions", {
-                          ...current,
-                          deniedTools: e.target.value.split("\n"),
-                        });
-                      }}
-                      rows={4}
-                      placeholder={"shell(rm:*)\nwrite"}
-                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono"
-                    />
+                    {/* Allowed Tools */}
+                    <div className="flex flex-col gap-1">
+                      <label
+                        htmlFor="prop-allowed-tools"
+                        className="text-[11px] font-semibold uppercase text-description-fg"
+                        title="Tool patterns to allow (one per line). Uses Copilot CLI format — auto-converted for Claude/Qwen."
+                      >
+                        Allowed Tools
+                      </label>
+                      <textarea
+                        id="prop-allowed-tools"
+                        value={(
+                          (
+                            properties.toolPermissions as
+                              | ToolPermissionsOverride
+                              | undefined
+                          )?.allowedTools ?? []
+                        ).join("\n")}
+                        onChange={(e) => {
+                          const current =
+                            (properties.toolPermissions as
+                              | ToolPermissionsOverride
+                              | undefined) || {};
+                          setProperty("toolPermissions", {
+                            ...current,
+                            allowedTools: e.target.value.split("\n"),
+                          });
+                        }}
+                        disabled={allowedDisabled}
+                        rows={4}
+                        placeholder={"read\nglob\ngrep"}
+                        className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
+                          allowedDisabled
+                            ? " opacity-50 cursor-not-allowed"
+                            : ""
+                        }`}
+                      />
+                    </div>
+
+                    {/* Denied Tools */}
+                    <div className="flex flex-col gap-1">
+                      <label
+                        htmlFor="prop-denied-tools"
+                        className="text-[11px] font-semibold uppercase text-description-fg"
+                        title="Tool patterns to deny (one per line, takes precedence over allow list)."
+                      >
+                        Denied Tools
+                      </label>
+                      <textarea
+                        id="prop-denied-tools"
+                        value={(
+                          (
+                            properties.toolPermissions as
+                              | ToolPermissionsOverride
+                              | undefined
+                          )?.deniedTools ?? []
+                        ).join("\n")}
+                        onChange={(e) => {
+                          const current =
+                            (properties.toolPermissions as
+                              | ToolPermissionsOverride
+                              | undefined) || {};
+                          setProperty("toolPermissions", {
+                            ...current,
+                            deniedTools: e.target.value.split("\n"),
+                          });
+                        }}
+                        disabled={deniedDisabled}
+                        rows={4}
+                        placeholder={"shell(rm:*)\nwrite"}
+                        className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
+                          deniedDisabled ? " opacity-50 cursor-not-allowed" : ""
+                        }`}
+                      />
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
           </>
         )}

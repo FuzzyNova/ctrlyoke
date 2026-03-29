@@ -917,7 +917,11 @@ export class WorkflowInstance {
             `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${totalPrompts}`
           );
           this.clearOutputBuffers();
-          this.dashboardSink.updateExecutionStarted(this.id, fileName, totalPrompts);
+          this.dashboardSink.updateExecutionStarted(
+            this.id,
+            fileName,
+            totalPrompts
+          );
         }
       }
 
@@ -1268,6 +1272,12 @@ export class WorkflowInstance {
       const defaults =
         PromptFileLoader.populateSettingsDefaults(explicitValues);
       const allInitialValues = { ...defaults, ...explicitValues };
+      // defaults.toolPermissions is always the complete merged object
+      // (explicit sub-fields on top of VS Code defaults). Use it over
+      // the potentially partial explicitValues.toolPermissions.
+      if (defaults.toolPermissions !== undefined) {
+        allInitialValues.toolPermissions = defaults.toolPermissions;
+      }
       if (Object.keys(allInitialValues).length > 0) {
         await this.promptQueue.updateWorkingFileProperties(allInitialValues, {
           onlyIfUndefined: true,

@@ -621,6 +621,11 @@ export const SettingsPanel: React.FC<{
   const toolPerms = workflowProperties.toolPermissions;
   const permMode =
     toolPerms === null ? "passthrough" : (toolPerms?.mode ?? "allowAll");
+  // Fall back to global settings when workflow doesn't have lists yet
+  const effectiveAllowedTools =
+    toolPerms?.allowedTools ?? globalSettings.toolPermissions.allowedTools;
+  const effectiveDeniedTools =
+    toolPerms?.deniedTools ?? globalSettings.toolPermissions.deniedTools;
   const harnessSupport = getPermissionHarnessSupport(
     effectiveHarness as HarnessId
   );
@@ -1164,82 +1169,88 @@ export const SettingsPanel: React.FC<{
                     id="settings-permission-mode"
                     value={permMode}
                     onChange={(mode) => {
-                      const current = workflowProperties.toolPermissions || {};
                       handleToolPermissionsChange({
-                        ...current,
                         mode: mode as ToolPermissionMode,
+                        allowedTools: effectiveAllowedTools,
+                        deniedTools: effectiveDeniedTools,
                       });
                     }}
                     options={PERMISSION_MODE_OPTIONS}
                   />
                 </FormField>
 
-                {/* Custom mode: Allowed / Denied Tools textareas */}
-                <div
-                  className={`transition-all duration-300 ${
-                    permMode === "custom"
-                      ? "max-h-[500px] opacity-100 mt-2"
-                      : "max-h-0 opacity-0 overflow-hidden"
-                  }`}
-                >
-                  <div
-                    className={`space-y-2${
-                      harnessSupport === "mode-only"
-                        ? " opacity-50 pointer-events-none"
-                        : ""
-                    }`}
+                {/* Allowed / Denied Tools textareas — always visible, disabled by mode */}
+                <div className="space-y-2 mt-2">
+                  {/* Mode-only harness warning */}
+                  {harnessSupport === "mode-only" && (
+                    <p className="text-[10px] text-description-fg">
+                      {effectiveHarness === HARNESS_IDS.CODEX_CLI
+                        ? "ℹ️ Codex CLI uses sandbox/approval modes rather than individual tool patterns. Allowed Tools and Denied Tools lists are ignored."
+                        : effectiveHarness === HARNESS_IDS.OPENCODE_CLI
+                          ? "ℹ️ OpenCode CLI manages permissions via config file. Tool pattern lists are ignored."
+                          : "ℹ️ Gemini CLI uses approval modes only. Tool pattern lists are ignored."}
+                    </p>
+                  )}
+
+                  <FormField
+                    label="Allowed Tools"
+                    htmlFor="settings-allowed-tools"
+                    description="Tool patterns to allow (one per line). Uses Copilot CLI format — auto-converted for Claude/Qwen."
                   >
-                    {/* Mode-only harness warning */}
-                    {harnessSupport === "mode-only" && (
-                      <p className="text-[10px] text-description-fg">
-                        {effectiveHarness === HARNESS_IDS.CODEX_CLI
-                          ? "ℹ️ Codex CLI uses sandbox/approval modes rather than individual tool patterns. Allowed Tools and Denied Tools lists are ignored."
-                          : effectiveHarness === HARNESS_IDS.OPENCODE_CLI
-                            ? "ℹ️ OpenCode CLI manages permissions via config file. Tool pattern lists are ignored."
-                            : "ℹ️ Gemini CLI uses approval modes only. Tool pattern lists are ignored."}
-                      </p>
-                    )}
+                    <textarea
+                      id="settings-allowed-tools"
+                      value={effectiveAllowedTools.join("\n")}
+                      onChange={(e) => {
+                        handleToolPermissionsChange({
+                          ...(toolPerms || {}),
+                          allowedTools: e.target.value.split("\n"),
+                          deniedTools: effectiveDeniedTools,
+                        });
+                      }}
+                      disabled={
+                        harnessSupport === "mode-only" || permMode !== "custom"
+                      }
+                      rows={4}
+                      placeholder={"read\nglob\ngrep"}
+                      className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
+                        harnessSupport === "mode-only" || permMode !== "custom"
+                          ? " opacity-50 cursor-not-allowed"
+                          : ""
+                      }`}
+                    />
+                  </FormField>
 
-                    <FormField
-                      label="Allowed Tools"
-                      htmlFor="settings-allowed-tools"
-                      description="Tool patterns to allow (one per line). Uses Copilot CLI format — auto-converted for Claude/Qwen."
-                    >
-                      <textarea
-                        id="settings-allowed-tools"
-                        value={(toolPerms?.allowedTools ?? []).join("\n")}
-                        onChange={(e) => {
-                          handleToolPermissionsChange({
-                            ...(toolPerms || {}),
-                            allowedTools: e.target.value.split("\n"),
-                          });
-                        }}
-                        rows={4}
-                        placeholder={"read\nglob\ngrep"}
-                        className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono"
-                      />
-                    </FormField>
-
-                    <FormField
-                      label="Denied Tools"
-                      htmlFor="settings-denied-tools"
-                      description="Tool patterns to deny (one per line, takes precedence over allow list)."
-                    >
-                      <textarea
-                        id="settings-denied-tools"
-                        value={(toolPerms?.deniedTools ?? []).join("\n")}
-                        onChange={(e) => {
-                          handleToolPermissionsChange({
-                            ...(toolPerms || {}),
-                            deniedTools: e.target.value.split("\n"),
-                          });
-                        }}
-                        rows={4}
-                        placeholder={"shell(rm:*)\nwrite"}
-                        className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono"
-                      />
-                    </FormField>
-                  </div>
+                  <FormField
+                    label="Denied Tools"
+                    htmlFor="settings-denied-tools"
+                    description="Tool patterns to deny (one per line, takes precedence over allow list)."
+                  >
+                    <textarea
+                      id="settings-denied-tools"
+                      value={effectiveDeniedTools.join("\n")}
+                      onChange={(e) => {
+                        handleToolPermissionsChange({
+                          ...(toolPerms || {}),
+                          allowedTools: effectiveAllowedTools,
+                          deniedTools: e.target.value.split("\n"),
+                        });
+                      }}
+                      disabled={
+                        harnessSupport === "mode-only" ||
+                        permMode === "dangerouslyAllowAll" ||
+                        permMode === "passthrough"
+                      }
+                      rows={4}
+                      placeholder={"shell(rm:*)\nwrite"}
+                      className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
+                        harnessSupport === "mode-only" ||
+                        permMode === "dangerouslyAllowAll" ||
+                        permMode === "passthrough"
+                          ? " opacity-50 cursor-not-allowed"
+                          : ""
+                      }`}
+                    />
+                  </FormField>
                 </div>
               </div>
             </>
