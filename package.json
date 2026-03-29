@@ -1059,12 +1059,12 @@
           "description": "Resume existing chat session for each prompt in multi-prompt workflows",
           "markdownDescription": "When enabled, each prompt in a multi-prompt workflow continues in the existing chat session for context continuity. When disabled (default), each prompt starts a fresh chat session. Individual prompts can override this with `\"resumeSession\": true` in the JSON schema. Retries always use the same session regardless of this setting."
         },
-        "flightpath.enableDynamicQueue": {
+        "flightpath.mcpServers": {
           "order": 600,
-          "type": "boolean",
-          "default": false,
-          "description": "[Dynamic Queue] Allow AI to extend workflow by adding prompts during execution",
-          "markdownDescription": "Allow the AI to extend the workflow by adding prompts to the `.flightpath.json` file during execution. This enables adaptive autonomous workflows where the AI can break down complex tasks dynamically."
+          "type": "array",
+          "default": [],
+          "description": "[MCP] Default MCP servers to attach to harness invocations",
+          "markdownDescription": "Default MCP servers to attach to harness invocations. Include `\"flightpath\"` to enable dynamic queue extension via FlightPath's MCP server. Each item can be a string (well-known server ID) or an object with `id`, `command`, `args`, `env`, and `autoApprove` fields."
         },
         "flightpath.maxQueueSize": {
           "order": 602,

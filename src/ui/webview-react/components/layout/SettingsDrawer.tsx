@@ -143,7 +143,7 @@ export const SettingsPanel: React.FC<{
     getEffectiveAgent,
     getEffectiveSkills,
     getEffectiveResumeSession,
-    getEffectiveAllowDynamicExtension,
+    getEffectiveMcpServers,
     getEffectivePriorContext,
   } = useSettingsStore();
   const prompts = useWorkflowStore((s) => s.prompts);
@@ -187,7 +187,8 @@ export const SettingsPanel: React.FC<{
   const effectiveAgent = getEffectiveAgent();
   const effectiveSkills = getEffectiveSkills();
   const effectiveResumeSession = getEffectiveResumeSession();
-  const effectiveAllowDynamicExtension = getEffectiveAllowDynamicExtension();
+  const effectiveMcpServers = getEffectiveMcpServers();
+  const effectiveFlightpathEnabled = Array.isArray(effectiveMcpServers) && effectiveMcpServers.includes("flightpath");
   const effectivePriorContext = getEffectivePriorContext();
 
   // Derive the active model namespace from the current harness
@@ -403,16 +404,17 @@ export const SettingsPanel: React.FC<{
     [vscode]
   );
 
-  const handleDynamicExtensionChange = useCallback(
-    (checked: boolean) => {
+  const handleMcpServersChange = useCallback(
+    (enabled: boolean) => {
+      const newServers = enabled ? ["flightpath"] : null;
       // Optimistic update
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("allowDynamicExtension", checked);
+      settingsStore.updateWorkflowProperty("mcpServers", newServers);
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "allowDynamicExtension",
-        value: checked,
+        property: "mcpServers",
+        value: newServers,
       });
     },
     [vscode]
@@ -1040,17 +1042,17 @@ export const SettingsPanel: React.FC<{
           {activePage === DRAWER_PAGES.MCP && (
             <>
               <FormField
-                label="Allow Dynamic Extension"
+                label="Dynamic Queue Extension"
                 htmlFor="settings-dynamic-ext"
                 description="Allow harness to extend the workflow queue. This will add FlightPath's MCP configuration to the harness, which exposes functions for extending and querying the workflow queue."
                 setAsDefaultButton={
                   <SetAsDefaultButton
-                    property="allowDynamicExtension"
-                    show={isDifferentFromGlobal("allowDynamicExtension")}
+                    property="mcpServers"
+                    show={isDifferentFromGlobal("mcpServers")}
                     onSetDefault={() =>
                       handleSetAsDefault(
-                        "allowDynamicExtension",
-                        workflowProperties.allowDynamicExtension
+                        "mcpServers",
+                        workflowProperties.mcpServers
                       )
                     }
                   />
@@ -1058,8 +1060,8 @@ export const SettingsPanel: React.FC<{
               >
                 <CustomSelect
                   id="settings-dynamic-ext"
-                  value={effectiveAllowDynamicExtension ? "yes" : "no"}
-                  onChange={(v) => handleDynamicExtensionChange(v === "yes")}
+                  value={effectiveFlightpathEnabled ? "yes" : "no"}
+                  onChange={(v) => handleMcpServersChange(v === "yes")}
                   options={[
                     { value: "no", label: "No - Disable" },
                     { value: "yes", label: "Yes - Allow AI to extend" },

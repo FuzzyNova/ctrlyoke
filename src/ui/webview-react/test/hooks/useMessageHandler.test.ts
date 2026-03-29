@@ -145,7 +145,7 @@ describe("INIT", () => {
             skills: [],
             executionMode: "headless",
             resumeSession: false,
-            allowDynamicExtension: false,
+            mcpServers: [],
             respectGitignore: true,
             confirmDeleteOperations: true,
             confirmResetOperations: true,

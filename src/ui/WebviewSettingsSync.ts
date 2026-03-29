@@ -25,7 +25,7 @@ import {
   QWEN_CLI_MODEL_LABELS,
   GEMINI_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
-import { Harness } from "../types/FlightPathTypes";
+import { Harness, McpServerConfig } from "../types/FlightPathTypes";
 import { readJsonFile } from "../utils/FileSystemUtils";
 import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import { AgentDiscovery } from "../utils/AgentDiscovery";
@@ -282,7 +282,7 @@ export class WebviewSettingsSync {
         skills: workingFile.skills,
         resumeSession: workingFile.resumeSession,
         sessionId: workingFile.sessionId,
-        allowDynamicExtension: workingFile.allowDynamicExtension,
+        mcpServers: workingFile.mcpServers,
         endCondition: workingFile.endCondition,
         priorContext: workingFile.priorContext,
         additionalArgs: workingFile.additionalArgs,
@@ -365,8 +365,8 @@ export class WebviewSettingsSync {
     await ConfigurationUtils.setResumeExistingSession(enabled);
   }
 
-  async handleDynamicQueueChange(enabled: boolean): Promise<void> {
-    await ConfigurationUtils.setEnableDynamicQueue(enabled);
+  async handleMcpServersChange(servers: (string | McpServerConfig)[]): Promise<void> {
+    await ConfigurationUtils.setDefaultMcpServers(servers);
   }
 
   handleOpenSettings(): void {
@@ -524,8 +524,7 @@ export class WebviewSettingsSync {
     const executionMode = ConfigurationUtils.getCliExecutionMode();
     const resumeExistingSession =
       ConfigurationUtils.shouldResumeExistingSession();
-    const dynamicQueueEnabled =
-      ConfigurationUtils.getDynamicQueueConfig().enabled;
+    const defaultMcpServers = ConfigurationUtils.getDefaultMcpServers();
     const respectGitignore =
       ConfigurationUtils.shouldRespectGitignoreForCompletions();
 
@@ -573,7 +572,7 @@ export class WebviewSettingsSync {
       skills,
       executionMode,
       resumeSession: resumeExistingSession,
-      allowDynamicExtension: dynamicQueueEnabled,
+      mcpServers: defaultMcpServers,
       respectGitignore,
       confirmDeleteOperations:
         ConfigurationUtils.shouldConfirmDeleteOperations(),

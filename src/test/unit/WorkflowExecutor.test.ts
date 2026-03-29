@@ -110,7 +110,6 @@ function makeContext(
     shouldShowCliCommand: false,
     showCliOutput: false,
     dynamicQueueConfig: {
-      enabled: true,
       maxQueueSize: 100,
       maxWorkflowExecutionTime: 3600,
       unlimitedMode: false,
@@ -197,7 +196,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
 
     queue.loadPrompts({
       prompts: [{ prompt: "queue-1" }],
-      finalPrompt: { prompt: "final-loop", allowDynamicExtension: true },
+      finalPrompt: { prompt: "final-loop", mcpServers: ["flightpath"] },
     });
 
     await executor.execute(integration, makeContext(integration));
@@ -221,7 +220,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
 
     queue.loadPrompts({
       prompts: [{ prompt: "queue-1" }],
-      finalPrompt: { prompt: "final-once", allowDynamicExtension: true },
+      finalPrompt: { prompt: "final-once" },
     });
 
     await executor.execute(integration, makeContext(integration));

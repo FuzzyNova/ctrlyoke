@@ -216,10 +216,11 @@ export const PromptsPanel: React.FC<{
       });
     }
 
-    // allowDynamicExtension — show whenever explicitly set
-    if (prompt.allowDynamicExtension !== undefined) {
+    // mcpServers — show whenever explicitly set
+    if (prompt.mcpServers !== undefined) {
+      const hasFlightpath = Array.isArray(prompt.mcpServers) && prompt.mcpServers.includes("flightpath");
       result.push({
-        label: prompt.allowDynamicExtension ? "dynamic ext" : "no dynamic ext",
+        label: hasFlightpath ? "dynamic ext" : "no dynamic ext",
       });
     }
 

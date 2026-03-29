@@ -20,9 +20,9 @@ oneOf:
           finalPrompt:
             $ref: '#/definitions/promptItem'
             description: >-
-              A prompt that always runs after all queued prompts complete. If allowDynamicExtension
-              is true and finalPrompt appends prompts, those prompts run before finalPrompt executes
-              again.
+              A prompt that always runs after all queued prompts complete. If mcpServers includes
+              "flightpath" and the finalPrompt appends prompts, those prompts run before finalPrompt
+              executes again.
           originalFile:
             type: string
             description: Path to original prompt file (working files only)
@@ -115,15 +115,23 @@ definitions:
           flightpath.resumeExistingSession setting (default: false). Set to true to continue in the
           existing session for context continuity. Retries continue in the same session by default;
           set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.
-      allowDynamicExtension:
-        type: boolean
+      mcpServers:
+        oneOf:
+          - type: array
+            items:
+              oneOf:
+                - type: string
+                  description: >-
+                    A well-known MCP server ID (e.g., "flightpath" to enable dynamic queue
+                    extension).
+                - $ref: '#/definitions/mcpServerConfig'
+            description: MCP servers to attach. Include "flightpath" to enable dynamic queue extension.
+          - type: 'null'
+            description: Explicitly disable inherited MCP servers.
         description: >-
-          Enable dynamic queue extension for this prompt. When true: CLI modes (copilot-cli,
-          claude-cli, codex-cli) pass MCP server configuration to enable flightpath_append_queue and
-          flightpath_queue_status tools. Chat mode injects instructions to use these tools via
-          Language Model Tools API. When false, no MCP config or instructions are provided. When
-          omitted, defaults to true for last prompt only (when no other prompts have explicit
-          flags).
+          MCP servers to attach to the harness for this prompt/workflow. Include "flightpath" to
+          enable dynamic queue extension via FlightPath's MCP server. Use null to explicitly disable
+          inherited servers.
       sessionId:
         type:
           - string
@@ -360,4 +368,37 @@ definitions:
     required:
       - currentIndex
       - executionState
+    additionalProperties: false
+  mcpServerConfig:
+    type: object
+    description: >-
+      User-defined MCP server configuration for attaching external MCP servers to harness
+      invocations.
+    properties:
+      id:
+        type: string
+        description: Unique server identifier
+      command:
+        type: string
+        description: Command to run the MCP server (e.g., "node", "python")
+      args:
+        type: array
+        items:
+          type: string
+        description: Arguments to pass to the command
+      env:
+        type: object
+        additionalProperties:
+          type: string
+        description: Environment variables for the server process
+      autoApprove:
+        oneOf:
+          - type: boolean
+          - type: array
+            items:
+              type: string
+        description: 'Tools to auto-approve: true = all tools, string[] = specific tools'
+    required:
+      - id
+      - command
     additionalProperties: false

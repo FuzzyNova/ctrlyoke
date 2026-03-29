@@ -155,7 +155,8 @@ export interface ICliProvider {
     mcpServerPath: string,
     workspaceRoot: string,
     workingFilePath?: string,
-    additionalEnv?: Record<string, string>
+    additionalEnv?: Record<string, string>,
+    userServers?: import("../../../../types/FlightPathTypes").McpServerConfig[]
   ): Promise<string[] | null>;
 
   /**

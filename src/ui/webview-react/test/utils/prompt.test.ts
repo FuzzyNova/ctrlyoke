@@ -44,7 +44,7 @@ describe("createPromptItem", () => {
       agent: "myagent.md",
       resumeSession: true,
       sessionId: "abc-123",
-      allowDynamicExtension: false,
+      mcpServers: ["flightpath"],
     };
     const item = createPromptItem(raw, 1);
     expect(item.text).toBe("Fix bugs");
@@ -53,7 +53,7 @@ describe("createPromptItem", () => {
     expect(item.agent).toBe("myagent.md");
     expect(item.resumeSession).toBe(true);
     expect(item.sessionId).toBe("abc-123");
-    expect(item.allowDynamicExtension).toBe(false);
+    expect(item.mcpServers).toEqual(["flightpath"]);
   });
 
   it("passes through endCondition from raw prompt", () => {

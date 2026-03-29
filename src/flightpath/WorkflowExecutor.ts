@@ -114,8 +114,8 @@ type StepExecutionKey = `queue:${number}` | `final:${number}`;
  * The outer loop has two phases:
  *   1. **Queue phase** — drains normal prompts via `promptQueue.hasNext()`.
  *   2. **finalPrompt phase** — runs the orchestrator gate once the queue is empty.
- *      If `finalPrompt.allowDynamicExtension` is true and the gate appends new
- *      prompts, the outer loop repeats (queue → finalPrompt → queue → …).
+ *      If the gate appends new prompts, the outer loop repeats
+ *      (queue → finalPrompt → queue → …).
  *
  * Pause/resume is implemented by holding the response promise until
  * `resumePendingResponse()` is called by `WorkflowOrchestrator`.
@@ -170,7 +170,6 @@ export class WorkflowExecutor {
       }
     }
 
-    const workflowFile = this.promptQueue.getWorkflowFile();
     const getFinalPrompt = () => this.promptQueue.getWorkflowFile().finalPrompt;
 
     const initialFinalPrompt = getFinalPrompt();
@@ -338,21 +337,6 @@ export class WorkflowExecutor {
 
       const queueSizeAfter = this.promptQueue.getState().prompts.length;
       if (queueSizeAfter > queueSizeBefore) {
-        const finalPromptAllowsDynamic = PropertyResolver.resolve(
-          currentFinalPrompt,
-          workflowFile
-        ).allowDynamicExtension;
-        if (!finalPromptAllowsDynamic) {
-          await this.setFinalPromptRuntime(context, {
-            phase: FINAL_PROMPT_PHASES.FINAL_PROMPT,
-            loopCount: loopIndex,
-            status: STEP_STATUS.COMPLETED,
-            startedAt: this.promptQueue.getFinalPromptRuntime()?.startedAt,
-            completedAt: Date.now(),
-          });
-          break;
-        }
-
         const hitQueueSizeLimit = await this.checkQueueSizeLimit(
           context.dynamicQueueConfig,
           queueSizeAfter

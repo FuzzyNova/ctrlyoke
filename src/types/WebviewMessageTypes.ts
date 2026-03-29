@@ -24,7 +24,7 @@ import {
   STATUS_MESSAGE_SEVERITY,
   EXECUTION_MODES,
 } from "./DashboardConstants";
-import type { WorkflowSummary } from "./FlightPathTypes";
+import type { WorkflowSummary, McpServerConfig } from "./FlightPathTypes";
 import type {
   CliEvent as CliOutputEvent,
   UniversalCliOutput,
@@ -210,7 +210,7 @@ export interface PromptItem {
   skills?: string[] | null;
   resumeSession?: boolean;
   sessionId?: string | number;
-  allowDynamicExtension?: boolean;
+  mcpServers?: (string | McpServerConfig)[] | null;
   endCondition?: EndConditionConfig | null;
   priorContext?: import("./FlightPathTypes").PriorContext;
   additionalArgs?: string | null;
@@ -269,7 +269,7 @@ export interface InitMessageData {
     agent: string;
     executionMode: ExecutionMode;
     resumeSession: boolean;
-    allowDynamicExtension: boolean;
+    mcpServers: (string | McpServerConfig)[];
   };
   workflowProperties: Record<string, any>;
   modelOptions: Record<HarnessId, Array<{ value: string; label: string }>>;
@@ -634,7 +634,7 @@ export interface GlobalSettingsUpdatedMessage {
     skills?: string[];
     executionMode: ExecutionMode;
     resumeSession: boolean;
-    allowDynamicExtension: boolean;
+    mcpServers: (string | McpServerConfig)[];
     respectGitignore?: boolean;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;

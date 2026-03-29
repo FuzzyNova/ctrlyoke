@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { DynamicQueueConfig, Harness } from "../types/FlightPathTypes";
+import { DynamicQueueConfig, Harness, McpServerConfig } from "../types/FlightPathTypes";
 import { HARNESS_IDS, EXECUTION_MODES } from "../types/DashboardConstants";
 
 /**
@@ -180,7 +180,6 @@ export const ConfigurationUtils = {
     const config = getConfig();
 
     return {
-      enabled: config.get<boolean>("enableDynamicQueue", false),
       maxQueueSize: config.get<number>("maxQueueSize", 100),
       maxWorkflowExecutionTime: config.get<number>(
         "maxWorkflowExecutionTime",
@@ -650,10 +649,18 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Set whether dynamic queue is enabled
+   * Get the default MCP servers from settings
    */
-  async setEnableDynamicQueue(enabled: boolean): Promise<void> {
-    await this.updateSetting("enableDynamicQueue", enabled);
+  getDefaultMcpServers(): (string | McpServerConfig)[] {
+    const config = getConfig();
+    return config.get<(string | McpServerConfig)[]>("mcpServers", []);
+  },
+
+  /**
+   * Set the default MCP servers in settings
+   */
+  async setDefaultMcpServers(servers: (string | McpServerConfig)[]): Promise<void> {
+    await this.updateSetting("mcpServers", servers);
   },
 
   /**

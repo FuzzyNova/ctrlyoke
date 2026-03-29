@@ -76,10 +76,9 @@ export class ValidationUtils {
         type: "boolean",
         nullable: true,
       },
-      allowDynamicExtension: {
-        type: "boolean",
-        nullable: true,
-      },
+      mcpServers: {
+        // Complex union type (string | McpServerConfig)[] | null - use 'as any' since AJV JSONSchemaType cannot express this union natively
+      } as any,
       endCondition: {
         type: "object",
         properties: {
@@ -126,7 +125,7 @@ export class ValidationUtils {
           agent: { type: "string", nullable: true },
           skills: { type: "array", items: { type: "string" }, nullable: true },
           resumeSession: { type: "boolean", nullable: true },
-          allowDynamicExtension: { type: "boolean", nullable: true },
+          mcpServers: {} as any,
           endCondition: {
             type: "object",
             properties: {

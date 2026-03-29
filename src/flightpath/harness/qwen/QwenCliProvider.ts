@@ -407,7 +407,8 @@ export class QwenCliProvider implements ICliProvider {
     _mcpServerPath: string,
     _workspaceRoot: string,
     _workingFilePath?: string,
-    _additionalEnv?: Record<string, string>
+    _additionalEnv?: Record<string, string>,
+    _userServers?: import("../../../types/FlightPathTypes").McpServerConfig[]
   ): Promise<string[] | null> {
     // MCP not supported by Qwen CLI yet
     return null;

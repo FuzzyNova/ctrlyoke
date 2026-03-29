@@ -12,6 +12,7 @@ import {
   Harness,
   EndCondition,
   PriorContext,
+  McpServerConfig,
   EXECUTION_STATES,
   WorkingFile,
   WorkflowSummary,
@@ -2240,8 +2241,8 @@ export class WorkflowInstance {
       ...(props?.sessionId !== undefined && {
         sessionId: coerce<string | number>(props.sessionId),
       }),
-      ...(props?.allowDynamicExtension !== undefined && {
-        allowDynamicExtension: coerce<boolean>(props.allowDynamicExtension),
+      ...(props?.mcpServers !== undefined && {
+        mcpServers: props.mcpServers as (string | McpServerConfig)[] | null,
       }),
       ...(props?.endCondition !== undefined && {
         endCondition: coerce<EndCondition>(props.endCondition),

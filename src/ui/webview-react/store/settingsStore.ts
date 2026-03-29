@@ -62,7 +62,7 @@ export interface GlobalSettings {
   skills: string[];
   executionMode: ExecutionMode;
   resumeSession: boolean;
-  allowDynamicExtension: boolean;
+  mcpServers: (string | object)[];
   respectGitignore: boolean;
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
@@ -80,7 +80,7 @@ export interface WorkflowProperties {
   skills?: string[] | null;
   resumeSession?: boolean;
   sessionId?: string | number; // UUID string or prompt number reference
-  allowDynamicExtension?: boolean;
+  mcpServers?: (string | object)[] | null;
   endCondition?: {
     script?: string; // Made optional - fields can be set incrementally
     returns?: string;
@@ -161,7 +161,7 @@ interface SettingsActions {
   getEffectiveModel: () => string;
   getEffectiveAgent: () => string;
   getEffectiveResumeSession: () => boolean;
-  getEffectiveAllowDynamicExtension: () => boolean;
+  getEffectiveMcpServers: () => (string | object)[] | null;
   getEffectivePriorContext: () => PriorContext;
 
   // Reset
@@ -183,7 +183,7 @@ const initialGlobalSettings: GlobalSettings = {
   skills: [],
   executionMode: EXECUTION_MODES.INTERACTIVE,
   resumeSession: false,
-  allowDynamicExtension: false,
+  mcpServers: [],
   respectGitignore: true,
   confirmDeleteOperations: true,
   confirmResetOperations: true,
@@ -364,12 +364,11 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       return workflowProperties.resumeSession ?? globalSettings.resumeSession;
     },
 
-    getEffectiveAllowDynamicExtension: () => {
+    getEffectiveMcpServers: () => {
       const { workflowProperties, globalSettings } = get();
-      return (
-        workflowProperties.allowDynamicExtension ??
-        globalSettings.allowDynamicExtension
-      );
+      return workflowProperties.mcpServers !== undefined
+        ? workflowProperties.mcpServers
+        : globalSettings.mcpServers;
     },
 
     getEffectivePriorContext: () => {

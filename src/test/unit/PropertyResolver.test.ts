@@ -175,35 +175,35 @@ suite("PropertyResolver Tests", () => {
     });
   });
 
-  suite("resolveAllowDynamicExtension", () => {
-    test("should use prompt-level allowDynamicExtension when specified", () => {
+  suite("resolveMcpServers", () => {
+    test("should use prompt-level mcpServers when specified", () => {
       const prompt: PromptItem = {
         prompt: "test",
-        allowDynamicExtension: true,
+        mcpServers: ["flightpath"],
       };
       const workflow: PromptFile = {
         prompts: [],
-        allowDynamicExtension: false, // Should be ignored
+        mcpServers: null, // Should be ignored
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      assert.strictEqual(resolved.allowDynamicExtension, true);
+      assert.deepStrictEqual(resolved.mcpServers, ["flightpath"]);
     });
 
-    test("should use workflow-level allowDynamicExtension when prompt-level not specified", () => {
+    test("should use workflow-level mcpServers when prompt-level not specified", () => {
       const prompt: PromptItem = {
         prompt: "test",
       };
       const workflow: PromptFile = {
         prompts: [],
-        allowDynamicExtension: true,
+        mcpServers: ["flightpath"],
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      assert.strictEqual(resolved.allowDynamicExtension, true);
+      assert.deepStrictEqual(resolved.mcpServers, ["flightpath"]);
     });
 
-    test("should default to false when neither prompt nor workflow specify allowDynamicExtension", () => {
+    test("should default to empty array when neither prompt nor workflow specify mcpServers", () => {
       const prompt: PromptItem = {
         prompt: "test",
       };
@@ -212,7 +212,21 @@ suite("PropertyResolver Tests", () => {
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      assert.strictEqual(resolved.allowDynamicExtension, false);
+      assert.deepStrictEqual(resolved.mcpServers, []);
+    });
+
+    test("should return null when prompt explicitly disables mcpServers", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        mcpServers: null,
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        mcpServers: ["flightpath"],
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.mcpServers, null);
     });
   });
 
@@ -415,7 +429,7 @@ suite("PropertyResolver Tests", () => {
         // model: not specified - should use workflow
         agent: "code-reviewer", // Override
         // resumeSession: not specified - should use workflow
-        allowDynamicExtension: true, // Override
+        mcpServers: ["flightpath"], // Override
         // endCondition: not specified - should use workflow
       };
 
@@ -425,7 +439,7 @@ suite("PropertyResolver Tests", () => {
         model: "opus", // Should be used
         // agent: not specified - prompt overrides anyway
         resumeSession: true, // Should be used
-        // allowDynamicExtension: not specified - prompt overrides anyway
+        // mcpServers: not specified - prompt overrides anyway
         endCondition: {
           script: "test.js",
           returns: "true",
@@ -438,7 +452,7 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(resolved.model, "opus"); // From workflow
       assert.strictEqual(resolved.agent, "code-reviewer"); // From prompt
       assert.strictEqual(resolved.resumeSession, true); // From workflow
-      assert.strictEqual(resolved.allowDynamicExtension, true); // From prompt
+      assert.deepStrictEqual(resolved.mcpServers, ["flightpath"]); // From prompt
       assert.deepStrictEqual(resolved.endCondition, {
         script: "test.js",
         returns: "true",

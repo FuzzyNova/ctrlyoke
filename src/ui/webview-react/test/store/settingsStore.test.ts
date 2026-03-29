@@ -132,7 +132,7 @@ describe("setGlobalSettings", () => {
       skills: ["skill-a"],
       executionMode: "headless",
       resumeSession: true,
-      allowDynamicExtension: true,
+      mcpServers: ["flightpath"],
       respectGitignore: false,
       confirmDeleteOperations: false,
       confirmResetOperations: false,

@@ -35,7 +35,7 @@ export interface PropertyValues {
   skills: Disableable<string[]>; // undefined = inherit, null = none, string[] = specific (empty array allowed transiently in custom mode)
   resumeSession: Inheritable<boolean>; // undefined = inherit, true = yes, false = no
   sessionId: string; // "" or session ID or prompt number reference
-  allowDynamicExtension: Inheritable<boolean>; // undefined = inherit, true = yes, false = no
+  mcpServers: (string | object)[] | null | undefined; // undefined = inherit, null = none, array = custom
   endCondition?: EndConditionConfig | null;
   priorContext?: PriorContext; // undefined = inherit/default
   additionalArgs: Disableable<string>; // undefined = inherit, null = none, string = custom args
@@ -52,7 +52,7 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
   skills: undefined,
   resumeSession: undefined,
   sessionId: "",
-  allowDynamicExtension: undefined,
+  mcpServers: undefined,
   endCondition: undefined, // undefined = inherit from workflow
   additionalArgs: undefined,
 };
@@ -350,7 +350,7 @@ export const useEditorStore = create<
       resumeSession: promptData.resumeSession,
       sessionId:
         promptData.sessionId !== undefined ? String(promptData.sessionId) : "",
-      allowDynamicExtension: promptData.allowDynamicExtension,
+      mcpServers: promptData.mcpServers,
       endCondition: promptData.endCondition ?? null,
       priorContext: promptData.priorContext,
       additionalArgs: promptData.additionalArgs,
@@ -741,9 +741,10 @@ export const useEditorStore = create<
       result.resumeSession = properties.resumeSession;
     }
 
-    // Add allowDynamicExtension if overridden
-    if (properties.allowDynamicExtension !== undefined) {
-      result.allowDynamicExtension = properties.allowDynamicExtension;
+    // Add mcpServers if overridden
+    if (properties.mcpServers !== undefined) {
+      // PropertyValues uses (string | object)[] which is structurally compatible with McpServerConfig
+      result.mcpServers = properties.mcpServers as any;
     }
 
     // Add end condition if configured

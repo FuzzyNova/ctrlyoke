@@ -37,7 +37,8 @@ prompts:
 finalPrompt:
   name: orchestrate
   agent: spec-orchestrator
-  allowDynamicExtension: true
+  mcpServers:
+    - flightpath
   priorContext: all
   prompt: |
     Compare all work completed so far against the original specification:

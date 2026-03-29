@@ -151,7 +151,7 @@ export class WorkflowSerializer {
         "model",
         "agent",
         "resumeSession",
-        "allowDynamicExtension",
+        "mcpServers",
         "sessionId",
         "endCondition",
       ] as const;
@@ -163,7 +163,7 @@ export class WorkflowSerializer {
         "model",
         "agent",
         "resumeSession",
-        "allowDynamicExtension",
+        "mcpServers",
         "sessionId",
         "skills",
         "endCondition",

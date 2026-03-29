@@ -1,4 +1,5 @@
 import * as path from "path";
+import type { McpServerConfig } from "../../../types/FlightPathTypes";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { Log } from "../../../utils/Log";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
@@ -101,23 +102,29 @@ export class CliProviderUtils {
       mcpServerPath: string,
       workspaceRoot: string,
       workingFilePath?: string,
-      additionalEnv?: Record<string, string>
+      additionalEnv?: Record<string, string>,
+      userServers?: McpServerConfig[]
     ) => Promise<string[] | null>
   ): Promise<string[]> {
     if (!workflowContext || !workspaceRoot) {
       return [];
     }
 
-    const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
-    const allowDynamicExtension =
-      workflowContext.resolvedProperties?.allowDynamicExtension ??
-      dynamicQueueConfig.enabled;
+    const mcpServers = workflowContext.resolvedProperties?.mcpServers;
+    const hasFlightpathServer = mcpServers != null && mcpServers.includes("flightpath");
 
-    if (!allowDynamicExtension) {
+    if (!hasFlightpathServer) {
       return [];
     }
 
     const mcpServerPath = path.join(extensionPath, "out/mcp-server.js");
+
+    // Extract user-defined server configs (objects, not strings)
+    const userServers = (mcpServers ?? []).filter(
+      (s): s is McpServerConfig => typeof s === "object"
+    );
+
+    const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
 
     // Pass queue limits and diagnostic logging flag to MCP server via env vars
     const additionalEnv: Record<string, string> = {
@@ -131,7 +138,8 @@ export class CliProviderUtils {
       mcpServerPath,
       workspaceRoot,
       workflowContext.workingFilePath,
-      additionalEnv
+      additionalEnv,
+      userServers.length > 0 ? userServers : undefined
     );
 
     if (mcpArgs) {

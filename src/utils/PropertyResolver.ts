@@ -4,6 +4,7 @@ import {
   Harness,
   EndCondition,
   PriorContext,
+  McpServerConfig,
 } from "../types/FlightPathTypes";
 import { ConfigurationUtils } from "./ConfigurationUtils";
 
@@ -27,8 +28,11 @@ export interface ResolvedProperties {
   /** Resume existing chat session (always resolved, defaults to setting) */
   resumeSession: boolean;
 
-  /** Allow dynamic queue extension (always resolved, defaults to false) */
-  allowDynamicExtension: boolean;
+  /**
+   * MCP servers to attach (resolved from prompt > workflow > settings).
+   * null = explicitly disabled, undefined should not occur after resolution.
+   */
+  mcpServers: (string | McpServerConfig)[] | null;
 
   /** Session ID for resuming - undefined if not specified */
   sessionId?: string | number;
@@ -84,10 +88,7 @@ export class PropertyResolver {
       agent: this.resolveAgent(prompt, workflow),
       skills: this.resolveSkills(prompt, workflow),
       resumeSession: this.resolveResumeSession(prompt, workflow),
-      allowDynamicExtension: this.resolveAllowDynamicExtension(
-        prompt,
-        workflow
-      ),
+      mcpServers: this.resolveMcpServers(prompt, workflow),
       sessionId: this.resolveSessionId(prompt, workflow),
       endCondition: this.resolveEndCondition(prompt, workflow),
       priorContext: this.resolvePriorContext(prompt, workflow),
@@ -262,33 +263,39 @@ export class PropertyResolver {
   }
 
   /**
-   * Resolve allowDynamicExtension with three-tier precedence.
+   * Resolve mcpServers with three-tier precedence.
    *
    * Precedence order:
-   * 1. Prompt-level override (prompt.allowDynamicExtension)
-   * 2. Workflow-level default (workflow.allowDynamicExtension)
-   * 3. VS Code setting (flightpath.enableDynamicQueue)
+   * 1. Prompt-level override (prompt.mcpServers)
+   *    - Array: use these servers
+   *    - null: explicitly disabled — no servers
+   *    - undefined: fall through to next tier
+   * 2. Workflow-level default (workflow.mcpServers)
+   *    - Array: use these servers
+   *    - null: explicitly disabled — no servers
+   *    - undefined: fall through to next tier
+   * 3. VS Code setting (flightpath.mcpServers)
    *
-   * @param prompt The prompt to resolve allowDynamicExtension for
+   * @param prompt The prompt to resolve mcpServers for
    * @param workflow The parent workflow file
-   * @returns Resolved allowDynamicExtension flag (defaults to VS Code setting)
+   * @returns Resolved mcpServers array or null
    */
-  private static resolveAllowDynamicExtension(
+  private static resolveMcpServers(
     prompt: PromptItem,
     workflow: PromptFile
-  ): boolean {
+  ): (string | McpServerConfig)[] | null {
     // 1. Prompt-level override (highest priority)
-    if (prompt.allowDynamicExtension !== undefined) {
-      return prompt.allowDynamicExtension;
+    if (prompt.mcpServers !== undefined) {
+      return prompt.mcpServers;
     }
 
     // 2. Workflow-level default
-    if (workflow.allowDynamicExtension !== undefined) {
-      return workflow.allowDynamicExtension;
+    if (workflow.mcpServers !== undefined) {
+      return workflow.mcpServers;
     }
 
     // 3. VS Code setting fallback (lowest priority)
-    return ConfigurationUtils.getDynamicQueueConfig().enabled;
+    return ConfigurationUtils.getDefaultMcpServers();
   }
 
   /**

@@ -136,10 +136,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       ? "Default (Final Prompt Session)"
       : `Default (${resolvedResumeSession ? "Yes" : "No"})`;
 
-  const resolvedAllowDynamic =
-    workflowProperties.allowDynamicExtension ??
-    globalSettings.allowDynamicExtension;
-  const defaultAllowDynamicLabel = `Default (${resolvedAllowDynamic ? "Yes" : "No"})`;
+  const resolvedMcpServers =
+    workflowProperties.mcpServers !== undefined
+      ? workflowProperties.mcpServers
+      : globalSettings.mcpServers;
+  const hasFlightpathInDefault =
+    Array.isArray(resolvedMcpServers) && resolvedMcpServers.includes("flightpath");
+  const defaultMcpServersLabel = `Default (${hasFlightpathInDefault ? "Yes" : "No"})`;
 
   const resolvedPriorContext =
     workflowProperties.priorContext ??
@@ -755,28 +758,30 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
           <div className="space-y-2">
             <div className="flex flex-col gap-1">
               <label
-                htmlFor="prop-allow-dynamic"
+                htmlFor="prop-mcp-servers"
                 className="text-[11px] font-semibold uppercase text-description-fg"
               >
-                Allow Dynamic Ext.
+                MCP Servers
               </label>
               <CustomSelect
-                id="prop-allow-dynamic"
+                id="prop-mcp-servers"
                 value={
-                  properties.allowDynamicExtension === undefined
+                  properties.mcpServers === undefined
                     ? "default"
-                    : properties.allowDynamicExtension
-                      ? "yes"
-                      : "no"
+                    : properties.mcpServers === null
+                      ? "no"
+                      : Array.isArray(properties.mcpServers) && properties.mcpServers.includes("flightpath")
+                        ? "yes"
+                        : "no"
                 }
                 onChange={(v) =>
                   setProperty(
-                    "allowDynamicExtension",
-                    v === "default" ? undefined : v === "yes"
+                    "mcpServers",
+                    v === "default" ? undefined : v === "yes" ? ["flightpath"] : null
                   )
                 }
                 options={[
-                  { value: "default", label: defaultAllowDynamicLabel },
+                  { value: "default", label: defaultMcpServersLabel },
                   { value: "yes", label: "Yes - Allow AI to extend" },
                   { value: "no", label: "No - Disable" },
                 ]}

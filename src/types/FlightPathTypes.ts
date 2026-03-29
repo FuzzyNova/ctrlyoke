@@ -41,6 +41,22 @@ export enum Harness {
 }
 
 /**
+ * User-defined MCP server configuration for attaching external MCP servers to harness invocations.
+ */
+export interface McpServerConfig {
+  /** Unique server identifier */
+  id: string;
+  /** Command to run the MCP server (e.g., "node", "python") */
+  command: string;
+  /** Arguments to pass to the command */
+  args?: string[];
+  /** Environment variables for the server process */
+  env?: Record<string, string>;
+  /** Tools to auto-approve: true = all tools, string[] = specific tools */
+  autoApprove?: boolean | string[];
+}
+
+/**
  * Shared execution properties for prompts, workflows, and runtime metadata.
  * Using this interface ensures consistency across all levels of the execution hierarchy.
  *
@@ -75,8 +91,15 @@ export interface ExecutionProperties {
   /** Resume existing chat session (default: false, start new session) */
   resumeSession?: boolean;
 
-  /** Allow dynamic queue extension */
-  allowDynamicExtension?: boolean;
+  /**
+   * MCP servers to attach for this prompt/workflow.
+   * - string[]: server IDs (e.g., "flightpath") or McpServerConfig objects
+   * - null: explicitly disable inherited MCP servers
+   * - undefined: inherit from workflow/settings
+   *
+   * Include "flightpath" to enable dynamic queue extension via FlightPath's MCP server.
+   */
+  mcpServers?: (string | McpServerConfig)[] | null;
 
   /** Session ID for resuming CLI conversations */
   sessionId?: string | number;
@@ -211,7 +234,6 @@ export interface QueueState {
  * Dynamic queue configuration
  */
 export interface DynamicQueueConfig {
-  enabled: boolean;
   maxQueueSize: number; // 1-1000 (default: 100)
   maxWorkflowExecutionTime: number; // In seconds (-1 or 3600-604800, default: 86400)
   unlimitedMode: boolean; // If true, ignore maxQueueSize AND maxWorkflowExecutionTime

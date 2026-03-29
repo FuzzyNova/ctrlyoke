@@ -1,4 +1,5 @@
 import * as path from "path";
+import type { McpServerConfig } from "../../../types/FlightPathTypes";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 
 /**
@@ -7,9 +8,9 @@ import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 export type McpConfigFormat = "json-file" | "toml-inline";
 
 /**
- * MCP server configuration options
+ * Internal MCP harness server configuration options (harness-specific format)
  */
-export interface McpServerConfig {
+export interface McpHarnessServerConfig {
   /** Server type (e.g., "stdio", "local") */
   type?: string;
   /** Tools pattern (e.g., ["*"] to allow all tools) */
@@ -25,7 +26,7 @@ export interface McpConfigOptions {
   /** Workspace root directory */
   workspaceRoot: string;
   /** Additional server configuration fields */
-  serverConfig?: McpServerConfig;
+  serverConfig?: McpHarnessServerConfig;
   /** Config format */
   format: McpConfigFormat;
 }
@@ -87,7 +88,7 @@ export class CliMcpConfigGenerator {
   static generateJsonConfig(
     serverPath: string,
     workspaceRoot: string,
-    serverConfig?: McpServerConfig,
+    serverConfig?: McpHarnessServerConfig,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>
   ): string {
@@ -125,6 +126,52 @@ export class CliMcpConfigGenerator {
 
     const config = { mcpServers };
     return JSON.stringify(config, null, 2);
+  }
+
+  /**
+   * Generate JSON MCP configuration including user-defined MCP servers.
+   *
+   * Merges the FlightPath built-in server with any user-defined McpServerConfig objects.
+   *
+   * @param serverPath Path to MCP server script
+   * @param workspaceRoot Workspace root directory
+   * @param userServers User-defined MCP server configs to merge in
+   * @param serverConfig Optional harness server configuration fields (type, tools, etc.)
+   * @param workingFilePath Active working file path
+   * @param additionalEnv Additional environment variables for FlightPath server
+   * @returns JSON config string
+   */
+  static generateJsonConfigWithUserServers(
+    serverPath: string,
+    workspaceRoot: string,
+    userServers: McpServerConfig[],
+    serverConfig?: McpHarnessServerConfig,
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>
+  ): string {
+    // Parse the base config with the flightpath server
+    const baseConfig = JSON.parse(
+      this.generateJsonConfig(serverPath, workspaceRoot, serverConfig, workingFilePath, additionalEnv)
+    );
+
+    // Merge user-defined servers
+    for (const server of userServers) {
+      const entry: any = {
+        command: server.command,
+      };
+      if (server.args) {
+        entry.args = server.args;
+      }
+      if (server.env) {
+        entry.env = server.env;
+      }
+      if (server.autoApprove !== undefined) {
+        entry.autoApprove = server.autoApprove;
+      }
+      baseConfig.mcpServers[server.id] = entry;
+    }
+
+    return JSON.stringify(baseConfig, null, 2);
   }
 
   /**

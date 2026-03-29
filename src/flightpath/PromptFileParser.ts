@@ -295,8 +295,8 @@ export class PromptFileParser {
     if (source.resumeSession !== undefined)
       promptItem.resumeSession = source.resumeSession;
     if (source.sessionId !== undefined) promptItem.sessionId = source.sessionId;
-    if (source.allowDynamicExtension !== undefined)
-      promptItem.allowDynamicExtension = source.allowDynamicExtension;
+    if (source.mcpServers !== undefined)
+      promptItem.mcpServers = source.mcpServers;
     if (source.endCondition !== undefined)
       promptItem.endCondition = source.endCondition;
     if (source.priorContext !== undefined)
@@ -389,8 +389,8 @@ export class PromptFileParser {
     if (parsed.resumeSession !== undefined)
       promptFile.resumeSession = parsed.resumeSession;
     if (parsed.sessionId !== undefined) promptFile.sessionId = parsed.sessionId;
-    if (parsed.allowDynamicExtension !== undefined)
-      promptFile.allowDynamicExtension = parsed.allowDynamicExtension;
+    if (parsed.mcpServers !== undefined)
+      promptFile.mcpServers = parsed.mcpServers;
     if (parsed.endCondition !== undefined)
       promptFile.endCondition = parsed.endCondition;
     if (parsed.priorContext !== undefined)

@@ -127,8 +127,8 @@ export class CopilotCliProvider implements ICliProvider {
       workflowContext,
       workspaceRoot,
       extensionPath,
-      (serverPath, wsRoot, workingFile, additionalEnv) =>
-        this.getMcpConfigArgs(serverPath, wsRoot, workingFile, additionalEnv)
+      (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
+        this.getMcpConfigArgs(serverPath, wsRoot, workingFile, additionalEnv, userServers)
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
@@ -383,18 +383,28 @@ export class CopilotCliProvider implements ICliProvider {
     mcpServerPath: string,
     workspaceRoot: string,
     workingFilePath?: string,
-    additionalEnv?: Record<string, string>
+    additionalEnv?: Record<string, string>,
+    userServers?: import("../../../types/FlightPathTypes").McpServerConfig[]
   ): Promise<string[] | null> {
     try {
       // Generate MCP config JSON using shared utility
       // Copilot CLI requires "type": "local" and "tools" field
-      const configJson = CliMcpConfigGenerator.generateJsonConfig(
-        mcpServerPath,
-        workspaceRoot,
-        { type: "local", tools: ["*"] },
-        workingFilePath,
-        additionalEnv
-      );
+      const configJson = userServers && userServers.length > 0
+        ? CliMcpConfigGenerator.generateJsonConfigWithUserServers(
+            mcpServerPath,
+            workspaceRoot,
+            userServers,
+            { type: "local", tools: ["*"] },
+            workingFilePath,
+            additionalEnv
+          )
+        : CliMcpConfigGenerator.generateJsonConfig(
+            mcpServerPath,
+            workspaceRoot,
+            { type: "local", tools: ["*"] },
+            workingFilePath,
+            additionalEnv
+          );
 
       // Write to temp directory — use unique name per execution to avoid parallel workflow collisions
       const configPath = this.getMcpConfigFilePath(

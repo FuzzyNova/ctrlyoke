@@ -46,7 +46,7 @@ export interface RawPrompt {
   skills?: string[] | null;
   resumeSession?: boolean;
   sessionId?: string | number;
-  allowDynamicExtension?: boolean;
+  mcpServers?: (string | object)[] | null;
   endCondition?: EndCondition | null;
   _runtime?: PromptRuntime;
 }
@@ -88,8 +88,8 @@ export interface PromptItem {
   resumeSession?: boolean;
   /** Specific session ID to use */
   sessionId?: string | number;
-  /** Whether prompt can extend the queue */
-  allowDynamicExtension?: boolean;
+  /** MCP servers to attach for this prompt */
+  mcpServers?: (string | object)[] | null;
   /** End condition configuration */
   endCondition?: EndCondition | null;
   /** Runtime metadata from execution */
@@ -134,7 +134,7 @@ export function createPromptItem(
       agent: undefined,
       resumeSession: undefined,
       sessionId: undefined,
-      allowDynamicExtension: undefined,
+      mcpServers: undefined,
       endCondition: undefined,
     };
   }
@@ -151,7 +151,7 @@ export function createPromptItem(
     skills: prompt.skills,
     resumeSession: prompt.resumeSession,
     sessionId: prompt.sessionId,
-    allowDynamicExtension: prompt.allowDynamicExtension,
+    mcpServers: prompt.mcpServers,
     endCondition: prompt.endCondition,
     _runtime: prompt._runtime,
   };
@@ -176,8 +176,7 @@ export function promptItemToRaw(item: PromptItem): RawPrompt {
   if (item.skills !== undefined) raw.skills = item.skills;
   if (item.resumeSession !== undefined) raw.resumeSession = item.resumeSession;
   if (item.sessionId !== undefined) raw.sessionId = item.sessionId;
-  if (item.allowDynamicExtension !== undefined)
-    raw.allowDynamicExtension = item.allowDynamicExtension;
+  if (item.mcpServers !== undefined) raw.mcpServers = item.mcpServers;
   if (item.endCondition !== undefined) raw.endCondition = item.endCondition;
   if (item._runtime !== undefined) raw._runtime = item._runtime;
 

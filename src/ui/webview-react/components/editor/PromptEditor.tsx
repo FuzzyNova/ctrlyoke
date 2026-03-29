@@ -273,11 +273,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         clearProperties.push("sessionId");
       }
 
-      // Allow Dynamic Extension
-      if (properties.allowDynamicExtension !== undefined) {
-        result.allowDynamicExtension = properties.allowDynamicExtension;
+      // MCP Servers
+      if (properties.mcpServers !== undefined) {
+        result.mcpServers = properties.mcpServers;
       } else if (includeNullsForDefaults) {
-        clearProperties.push("allowDynamicExtension");
+        clearProperties.push("mcpServers");
       }
 
       // Skills

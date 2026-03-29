@@ -260,7 +260,7 @@ prompts:
 - **`harness`**: Per-prompt harness override
 - **`model`**: Per-prompt model override
 - **`agent`**: Path to `.agent.md` custom agent file
-- **`allowDynamicExtension`**: Allow AI to extend the workflow queue
+- **`mcpServers`**: MCP servers to attach (e.g., `["flightpath"]` to enable dynamic queue extension)
 - **`endCondition`**: `{ script, returns, timeout?, maxRetries?, retryPrompt? }`
 
 > **Final-form storage**: Context references (`@workspace`, `#selection:path:N-N`) are included directly in prompt text — no runtime injection.

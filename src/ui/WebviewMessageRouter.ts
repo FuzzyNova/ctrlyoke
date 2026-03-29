@@ -342,8 +342,8 @@ export class WebviewMessageRouter {
       this.settingsSync.handleResumeSessionChange(message.enabled);
     });
 
-    table.set(MESSAGE_TYPES.CHANGE_DYNAMIC_QUEUE, (message) => {
-      this.settingsSync.handleDynamicQueueChange(message.enabled);
+    table.set(MESSAGE_TYPES.CHANGE_MCP_SERVERS, (message) => {
+      this.settingsSync.handleMcpServersChange(message.servers);
     });
 
     table.set(MESSAGE_TYPES.OPEN_SETTINGS, () => {

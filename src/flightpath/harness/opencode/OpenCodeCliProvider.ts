@@ -126,8 +126,8 @@ export class OpenCodeCliProvider implements ICliProvider {
       workflowContext,
       workspaceRoot,
       extensionPath,
-      (serverPath, wsRoot, workingFile, additionalEnv) =>
-        this.getMcpConfigArgs(serverPath, wsRoot, workingFile, additionalEnv)
+      (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
+        this.getMcpConfigArgs(serverPath, wsRoot, workingFile, additionalEnv, userServers)
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
@@ -246,7 +246,8 @@ export class OpenCodeCliProvider implements ICliProvider {
     mcpServerPath: string,
     workspaceRoot: string,
     workingFilePath?: string,
-    additionalEnv?: Record<string, string>
+    additionalEnv?: Record<string, string>,
+    _userServers?: import("../../../types/FlightPathTypes").McpServerConfig[]
   ): Promise<string[] | null> {
     try {
       const normalizedServerPath = mcpServerPath.replace(/\\/g, "/");

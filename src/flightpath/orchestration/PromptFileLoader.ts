@@ -285,8 +285,8 @@ export class PromptFileLoader {
     if (promptFile.resumeSession !== undefined) {
       updates.resumeSession = promptFile.resumeSession;
     }
-    if (promptFile.allowDynamicExtension !== undefined) {
-      updates.allowDynamicExtension = promptFile.allowDynamicExtension;
+    if (promptFile.mcpServers !== undefined) {
+      updates.mcpServers = promptFile.mcpServers;
     }
     if (promptFile.endCondition !== undefined) {
       updates.endCondition = promptFile.endCondition;
@@ -330,9 +330,8 @@ export class PromptFileLoader {
     if (explicitValues.resumeSession === undefined) {
       defaults.resumeSession = ConfigurationUtils.shouldResumeExistingSession();
     }
-    if (explicitValues.allowDynamicExtension === undefined) {
-      defaults.allowDynamicExtension =
-        ConfigurationUtils.getDynamicQueueConfig().enabled;
+    if (explicitValues.mcpServers === undefined) {
+      defaults.mcpServers = ConfigurationUtils.getDefaultMcpServers();
     }
     if (explicitValues.priorContext === undefined) {
       defaults.priorContext = ConfigurationUtils.getPriorContext();
