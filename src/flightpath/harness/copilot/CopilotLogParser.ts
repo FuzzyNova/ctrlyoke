@@ -222,6 +222,11 @@ export class CopilotLogParser extends BaseLogParser {
           });
         }
 
+        // Extract output token count (available in newer Copilot log format)
+        if (typeof event.data.outputTokens === "number") {
+          outputTokens += event.data.outputTokens;
+        }
+
         // Note: tool calls are extracted from tool.execution_start (not toolRequests)
         // because tool.execution_start provides more accurate timestamps and allows
         // us to add structuredPatch from tool.execution_complete
@@ -983,10 +988,13 @@ export class CopilotLogParser extends BaseLogParser {
       for (const file of files) {
         const filePath = path.join(logsDir, file);
         try {
-          // Read only the first line to check session ID (fast path)
+          // Read the first ~1024 bytes to find the session ID.
+          // "Workspace initialized: {UUID}" appears on line 4 of the file,
+          // at approximately byte 310 — so 256 bytes is not enough. Using
+          // 1024 provides headroom if Copilot adds more preamble lines later.
           const fd = fs.openSync(filePath, "r");
-          const buf = Buffer.alloc(256);
-          const bytesRead = fs.readSync(fd, buf, 0, 256, 0);
+          const buf = Buffer.alloc(1024);
+          const bytesRead = fs.readSync(fd, buf, 0, 1024, 0);
           fs.closeSync(fd);
           const firstChunk = buf.toString("utf8", 0, bytesRead);
           if (firstChunk.includes(`Workspace initialized: ${sessionId}`)) {

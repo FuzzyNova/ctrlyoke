@@ -154,14 +154,17 @@ export class CliLogMonitor {
             effectiveSessionId
           );
           if (processCtx) {
+            const existingOutputTokens = response.metadata.usage?.outputTokens ?? 0;
             if (response.metadata.usage) {
+              response.metadata.usage.inputTokens = processCtx.used;
+              response.metadata.usage.totalTokens = processCtx.used + existingOutputTokens;
               response.metadata.usage.contextWindowUsedTokens = processCtx.used;
               response.metadata.usage.contextWindowSize = processCtx.size;
             } else {
               response.metadata.usage = {
-                inputTokens: 0,
+                inputTokens: processCtx.used,
                 outputTokens: 0,
-                totalTokens: 0,
+                totalTokens: processCtx.used,
                 contextWindowUsedTokens: processCtx.used,
                 contextWindowSize: processCtx.size,
               };
