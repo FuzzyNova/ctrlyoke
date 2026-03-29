@@ -6,6 +6,7 @@ import { CopilotChatIntegration } from "./harness/chat/CopilotChatIntegration";
 import { CliIntegration } from "./harness/CliIntegration";
 import { VsCodeIntegrationFactory } from "./VsCodeIntegrationFactory";
 import { WorkflowInstance } from "./WorkflowInstance";
+import type { FlightPathMcpServerProvider } from "../ui/FlightPathMcpServerProvider";
 import { PromptQueue } from "./PromptQueue";
 import {
   Harness,
@@ -118,6 +119,9 @@ export class WorkflowOrchestrator {
   private orchestratorInitialized: boolean = false;
   private startupAutoLoadTriggered: boolean = false;
 
+  /** MCP server provider for injecting user-defined MCP servers into VS Code (chat harness only) */
+  private mcpServerProvider?: FlightPathMcpServerProvider;
+
   constructor(
     private readonly context: vscode.ExtensionContext,
     dashboardProvider?: IDashboardProvider
@@ -211,6 +215,11 @@ export class WorkflowOrchestrator {
    */
   public addDashboardProvider(provider: IDashboardProvider): void {
     this.dashboardProviders.push(provider);
+  }
+
+  /** Set the MCP server provider for injecting user-defined MCP servers (chat harness) */
+  public setMcpServerProvider(provider: FlightPathMcpServerProvider): void {
+    this.mcpServerProvider = provider;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1156,6 +1165,11 @@ export class WorkflowOrchestrator {
     );
 
     Log.debug(`buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);
+
+    // Pass MCP server provider so chat harness prompts can inject user-defined MCP servers
+    if (this.mcpServerProvider) {
+      instance.mcpServerProvider = this.mcpServerProvider;
+    }
 
     // Broadcast summary updates whenever this instance's execution state changes.
     // This covers both active and inactive workflows so the multi-workflow list

@@ -44,6 +44,7 @@ import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import type { UndoExecutionTarget } from "../types/OutputHistoryTypes";
+import type { FlightPathMcpServerProvider } from "../ui/FlightPathMcpServerProvider";
 import {
   OutputCaptureBuffer,
   type OutputCaptureCallbacks,
@@ -117,6 +118,9 @@ export class WorkflowInstance {
   private lastKnownWorkflowName: string = "";
   /** Heartbeat interval for the process lock file (cleared in finally + dispose) */
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
+
+  /** MCP server provider for injecting user-defined MCP servers (chat harness only) */
+  mcpServerProvider?: FlightPathMcpServerProvider;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Background buffering for inactive workflows
@@ -1626,6 +1630,7 @@ export class WorkflowInstance {
       instanceTag: `[inst:${this.id.slice(0, 8)}]`,
       instanceId: this.id,
       outputHistoryManager: this.outputHistoryManager,
+      mcpServerProvider: this.mcpServerProvider,
       getIntegrationForPrompt: (
         prompt: PromptItem,
         harnessOverride?: Harness

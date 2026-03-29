@@ -26,6 +26,7 @@ import { getErrorMessage } from "./utils/ErrorUtils";
 import { WorkspaceInitializer } from "./flightpath/orchestration/WorkspaceInitializer";
 import { PATH_CONSTANTS } from "./utils/ConfigurationUtils";
 import { initPtyProcessManager } from "./flightpath/harness/PtyProcessManager";
+import { FlightPathMcpServerProvider } from "./ui/FlightPathMcpServerProvider";
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: FlightPathWebviewProvider;
@@ -335,6 +336,23 @@ export async function activate(context: vscode.ExtensionContext) {
     webviewProvider.setOutputHistoryManager(
       workflowOrchestrator.getOutputHistoryManager()
     );
+
+    // Register MCP server definition provider for injecting user-defined MCP
+    // servers into VS Code's MCP subsystem during Copilot Chat workflow prompts.
+    // The "flightpath" built-in server is NOT managed here — LM tools are
+    // registered unconditionally via registerLanguageModelTools() above.
+    if (typeof vscode.lm.registerMcpServerDefinitionProvider === "function") {
+      const mcpProvider = new FlightPathMcpServerProvider();
+      context.subscriptions.push(
+        vscode.lm.registerMcpServerDefinitionProvider(
+          "flightpath.workflowMcpProvider",
+          mcpProvider
+        )
+      );
+      context.subscriptions.push(mcpProvider);
+      workflowOrchestrator.setMcpServerProvider(mcpProvider);
+      Log.debug("FlightPath: MCP server definition provider registered");
+    }
 
     // Fire-and-forget: don't block activate() on initialization.
     // This lets VS Code call resolveWebviewView() immediately so the

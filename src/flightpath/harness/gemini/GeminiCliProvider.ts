@@ -79,6 +79,8 @@ export class GeminiCliProvider implements ICliProvider {
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
+      // Note: Gemini CLI auto-approval flags are TBD — user-defined MCP server
+      // tools will require manual approval at runtime until Gemini adds support.
     }
 
     // Model selection

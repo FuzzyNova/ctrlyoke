@@ -2,11 +2,13 @@ import * as path from "path";
 import { PlatformAdapter } from "../platform/PlatformAdapter";
 import {
   PromptItem,
+  McpServerConfig,
   DynamicQueueConfig,
   FinalPromptRuntimeState,
   EXECUTION_STATES,
   Harness,
 } from "../types/FlightPathTypes";
+import type { FlightPathMcpServerProvider } from "../ui/FlightPathMcpServerProvider";
 import { WorkflowContext } from "../types/WorkflowContextTypes";
 import {
   STEP_STATUS,
@@ -100,6 +102,8 @@ export interface WorkflowExecutionContext {
   snapshotService?: WorkspaceSnapshotService;
   /** Callback to emit live snapshot data to the webview after a prompt completes */
   onSnapshotCaptured?: (target: ExecutionTarget, snapshot: WorkspaceSnapshot) => void;
+  /** MCP server provider for injecting user-defined MCP servers into VS Code's MCP subsystem (chat harness only) */
+  mcpServerProvider?: FlightPathMcpServerProvider;
 }
 
 type ExecutionTarget =
@@ -413,6 +417,23 @@ export class WorkflowExecutor {
       resolvedProperties.harness
     );
 
+    // Inject user-defined MCP servers for Copilot Chat prompts.
+    // CLI harnesses handle this via --mcp-config flags in CliProviderUtils.
+    const isChatHarness = resolvedProperties.harness === Harness.CopilotChat ||
+      (!resolvedProperties.harness && integration.getIntegrationMode() === Harness.CopilotChat);
+    let didSetMcpServers = false;
+    if (isChatHarness && context.mcpServerProvider) {
+      const mcpServers = resolvedProperties.mcpServers ?? [];
+      const userServers = mcpServers.filter(
+        (s): s is McpServerConfig => typeof s === "object"
+      );
+      if (userServers.length > 0) {
+        context.mcpServerProvider.setActiveServers(userServers);
+        didSetMcpServers = true;
+        Log.debug(`🔧 Injected ${userServers.length} user MCP server(s) for chat prompt`);
+      }
+    }
+
     if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
       this.updateDashboardForPromptStart(context, prompt, target.stepIndex);
       integration.setWorkflowProgress(target.stepIndex + 1, progress.total);
@@ -453,6 +474,11 @@ export class WorkflowExecutor {
         this.isWaitingForResponse = true;
       }
     );
+
+    // Clear injected MCP servers after the chat prompt completes (or fails)
+    if (didSetMcpServers && context.mcpServerProvider) {
+      context.mcpServerProvider.setActiveServers([]);
+    }
 
     if (!result) {
       return this.handlePromptSendFailure(

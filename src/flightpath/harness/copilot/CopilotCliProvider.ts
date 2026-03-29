@@ -135,6 +135,24 @@ export class CopilotCliProvider implements ICliProvider {
       // Auto-approve FlightPath MCP tools (FlightPath is the orchestrator)
       args.push("--allow-tool", "flightpath");
       Log.debug("🔧 FlightPath MCP tools auto-approved");
+
+      // Auto-approve user-defined MCP server tools based on autoApprove config
+      const mcpServers = workflowContext?.resolvedProperties?.mcpServers ?? [];
+      for (const server of mcpServers) {
+        if (typeof server === "object" && server.autoApprove) {
+          if (server.autoApprove === true) {
+            // Approve all tools from this server
+            args.push("--allow-tool", server.id);
+            Log.debug(`🔧 Auto-approved all tools from MCP server: ${server.id}`);
+          } else if (Array.isArray(server.autoApprove)) {
+            // Approve specific tool patterns
+            for (const pattern of server.autoApprove) {
+              args.push("--allow-tool", pattern);
+            }
+            Log.debug(`🔧 Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`);
+          }
+        }
+      }
     }
 
     // Extra CLI flags from additionalArgs (injected before tool permission args)

@@ -34,6 +34,12 @@
     "flightpath": "./out/cli.js"
   },
   "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "flightpath.workflowMcpProvider",
+        "label": "FlightPath Workflow MCPs"
+      }
+    ],
     "commands": [
       {
         "command": "flightpath.openPanel",
