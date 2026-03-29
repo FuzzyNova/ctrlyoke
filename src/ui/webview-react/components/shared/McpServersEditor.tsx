@@ -37,17 +37,89 @@ function buildArray(
   return result;
 }
 
+/** Read-only rendering of an McpServersValue for the grayed-out Default view. */
+const McpServersReadOnly: React.FC<{ value: McpServersValue }> = ({
+  value,
+}) => {
+  const arr = Array.isArray(value) ? value : [];
+  const fpEnabled = hasFlightpath(arr);
+  const servers = getUserServers(arr);
+  const isEmpty = arr.length === 0;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {/* FlightPath built-in */}
+      <div className="flex flex-col gap-1">
+        <div className="text-[10px] font-semibold uppercase text-description-fg tracking-wide">
+          Built-in
+        </div>
+        <div
+          className={`flex items-start gap-2 px-2 py-1.5 rounded border text-left ${
+            fpEnabled
+              ? "border-focus-border bg-editor-bg"
+              : "border-panel-border"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={fpEnabled}
+            readOnly
+            className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border pointer-events-none"
+            tabIndex={-1}
+          />
+          <span className="flex flex-col min-w-0">
+            <span className="text-xs font-medium text-foreground">
+              FlightPath
+            </span>
+            <span className="text-[10px] text-description-fg">
+              Dynamic queue extension (flightpath_append_queue,
+              flightpath_queue_status)
+            </span>
+          </span>
+        </div>
+      </div>
+
+      {/* Custom servers */}
+      <div className="flex flex-col gap-1">
+        <div className="text-[10px] font-semibold uppercase text-description-fg tracking-wide">
+          Custom Servers
+        </div>
+        {isEmpty || servers.length === 0 ? (
+          <div className="text-[11px] text-description-fg italic px-1">
+            None added
+          </div>
+        ) : (
+          servers.map((server) => (
+            <div
+              key={server.id}
+              className="rounded border border-panel-border bg-editor-bg px-2 py-1.5"
+            >
+              <span className="text-xs font-medium text-foreground truncate">
+                {server.id}
+              </span>
+              <span className="text-[10px] text-description-fg font-mono truncate ml-1">
+                {server.command}
+                {server.args ? " " + server.args.join(" ") : ""}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
 /**
  * McpServersEditor — Inline editor for the mcpServers property.
  *
  * When `showDefault` is true (prompt level, default):
- * - Three modes: Default (undefined) | Custom (array) | None (null)
- * - "Default" inherits from the workflow/global tier above
+ * - Two modes: Default (undefined) | Custom (array or empty)
+ * - Default mode shows the inherited config grayed out (read-only)
+ * - Empty Custom is equivalent to "none" — no servers will be attached
  *
  * When `showDefault` is false (workflow level):
- * - Two modes: Custom (array) | None (null)
- * - `undefined` is rendered as empty Custom (no "Default" button shown,
- *   since there is no higher tier to inherit from at the workflow level)
+ * - No mode buttons — always shows the editable config
+ * - null/undefined both treated as empty array for display
  *
  * The "flightpath" string entry is always shown as a named checkbox in the
  * built-in section. Custom McpServerConfig objects are listed below with
@@ -62,36 +134,42 @@ export const McpServersEditor: React.FC<{
   /** Text shown in the Default mode button (e.g. "Default (FlightPath)"). Only relevant when showDefault is true. */
   defaultLabel?: string;
   /**
-   * When true (default), shows Default/Custom/None buttons.
-   * When false (workflow level), shows only Custom/None — undefined is treated as empty Custom.
+   * When true (default): shows Default/Custom mode selector buttons.
+   *   - Default mode: shows grayed-out read-only config from inheritedValue
+   *   - Custom mode: shows editable config
+   * When false (workflow level): no mode buttons, always editable.
    */
   showDefault?: boolean;
-}> = ({ value, onChange, defaultLabel = "Default", showDefault = true }) => {
+  /**
+   * The resolved/inherited value to display (read-only) when Default mode is active.
+   * Only used when showDefault is true.
+   */
+  inheritedValue?: McpServersValue;
+}> = ({
+  value,
+  onChange,
+  defaultLabel = "Default",
+  showDefault = true,
+  inheritedValue,
+}) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [form, setForm] = useState<AddServerForm>(EMPTY_FORM);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // When showDefault=false, undefined collapses into "custom" (no Default button)
-  const mode: "default" | "custom" | "disabled" =
-    value === undefined
-      ? showDefault
-        ? "default"
-        : "custom"
-      : value === null
-        ? "disabled"
-        : "custom";
+  // mode: "default" only when showDefault=true and value is undefined
+  const mode: "default" | "custom" =
+    showDefault && value === undefined ? "default" : "custom";
 
+  // The editable array — null/undefined both treated as empty
   const currentArray = Array.isArray(value) ? value : [];
   const flightpathEnabled = hasFlightpath(currentArray);
   const userServers = getUserServers(currentArray);
 
-  const handleModeChange = (newMode: "default" | "custom" | "disabled") => {
+  const handleModeChange = (newMode: "default" | "custom") => {
     if (newMode === "default") {
       onChange(undefined);
-    } else if (newMode === "disabled") {
-      onChange(null);
     } else {
-      // Start custom with flightpath enabled — the most common use case
+      // Start with flightpath enabled — the most common use case
       onChange(["flightpath"]);
     }
   };
@@ -125,11 +203,10 @@ export const McpServersEditor: React.FC<{
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Mode selector */}
-      <div className="flex gap-1">
-        {(["default", "custom", "disabled"] as const)
-          .filter((m) => showDefault || m !== "default")
-          .map((m) => (
+      {/* Mode selector (prompt level only) */}
+      {showDefault && (
+        <div className="flex gap-1">
+          {(["default", "custom"] as const).map((m) => (
             <button
               key={m}
               type="button"
@@ -140,16 +217,23 @@ export const McpServersEditor: React.FC<{
                   : "bg-transparent text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
               }`}
             >
-              {m === "default"
-                ? defaultLabel
-                : m === "custom"
-                  ? "Custom"
-                  : "None"}
+              {m === "default" ? defaultLabel : "Custom"}
             </button>
           ))}
-      </div>
+        </div>
+      )}
 
-      {/* Custom editor */}
+      {/* Default mode — grayed-out inherited config */}
+      {mode === "default" && (
+        <div
+          className="opacity-50 pointer-events-none select-none"
+          title="Inherited from workflow / global settings. Switch to Custom to override."
+        >
+          <McpServersReadOnly value={inheritedValue} />
+        </div>
+      )}
+
+      {/* Custom / always-editable mode */}
       {mode === "custom" && (
         <div className="flex flex-col gap-2">
           {/* FlightPath built-in */}
@@ -348,14 +432,6 @@ export const McpServersEditor: React.FC<{
               </button>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Disabled state description */}
-      {mode === "disabled" && (
-        <div className="text-[11px] text-description-fg px-1">
-          MCP injection explicitly disabled. No MCP servers will be attached to
-          this prompt.
         </div>
       )}
     </div>

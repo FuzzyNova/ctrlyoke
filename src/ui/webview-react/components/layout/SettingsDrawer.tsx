@@ -95,8 +95,16 @@ const FormField: React.FC<{
   htmlFor?: string;
   children: React.ReactNode;
   setAsDefaultButton?: React.ReactNode;
-}> = ({ label, description, htmlFor, children, setAsDefaultButton }) => (
-  <div className="flex flex-col gap-1">
+  className?: string;
+}> = ({
+  label,
+  description,
+  htmlFor,
+  children,
+  setAsDefaultButton,
+  className,
+}) => (
+  <div className={`flex flex-col gap-1${className ? ` ${className}` : ""}`}>
     <div className="flex items-center justify-between min-h-[18px]">
       <label
         htmlFor={htmlFor}
@@ -654,7 +662,9 @@ export const SettingsPanel: React.FC<{
       <div
         className={`flex-1 overflow-y-auto${isCLIManaged ? " pointer-events-none opacity-60 select-none" : ""}`}
       >
-        <div className="px-4 py-2 space-y-2">
+        <div
+          className={`px-4 py-2 space-y-2${activePage === DRAWER_PAGES.PERMISSIONS ? " min-h-full flex flex-col" : ""}`}
+        >
           {activePage === DRAWER_PAGES.HARNESS && (
             <>
               {/* Row 1: Harness + Model */}
@@ -889,15 +899,23 @@ export const SettingsPanel: React.FC<{
                     onChange={handleResumeSessionChange}
                     options={[...getResumeSessionOptions()]}
                   />
-                  {/* Session ID input — visible only when resume session is enabled and not using Final Prompt Session */}
+                  {/* Session ID input — always visible, grayed out when not applicable */}
                   <div
-                    className={`transition-all duration-300 ${
+                    className={`mt-1 ${
                       effectiveResumeSession &&
                       workflowProperties.sessionId !==
                         SESSION_ID_SENTINELS.FINAL_PROMPT
-                        ? "max-h-[40px] opacity-100 mt-1"
-                        : "max-h-0 opacity-0 overflow-hidden"
+                        ? ""
+                        : "opacity-50 pointer-events-none"
                     }`}
+                    title={
+                      !effectiveResumeSession
+                        ? "Enable Resume Session to specify a Session ID"
+                        : workflowProperties.sessionId ===
+                            SESSION_ID_SENTINELS.FINAL_PROMPT
+                          ? "Using Final Prompt Session — no explicit Session ID needed"
+                          : undefined
+                    }
                   >
                     <input
                       type="text"
@@ -958,17 +976,20 @@ export const SettingsPanel: React.FC<{
                   className="text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
                   title="Validation runs after each prompt completes. Individual prompts can override or disable this."
                 >
-                  Global End Condition
+                  Enable End Condition
                 </label>
               </div>
 
-              {/* End condition fields */}
+              {/* End condition fields — always visible, grayed out when disabled */}
               <div
-                className={`space-y-3 transition-all duration-300 ${
-                  endConditionEnabled
-                    ? "max-h-[500px] opacity-100"
-                    : "max-h-0 opacity-0 overflow-hidden"
+                className={`space-y-3 ${
+                  endConditionEnabled ? "" : "opacity-50 pointer-events-none"
                 }`}
+                title={
+                  endConditionEnabled
+                    ? undefined
+                    : "Enable End Condition to configure validation"
+                }
               >
                 {/* Row 1: Script + Returns */}
                 <DrawerRow narrow={isNarrow}>
@@ -1137,7 +1158,7 @@ export const SettingsPanel: React.FC<{
           )}
 
           {activePage === DRAWER_PAGES.PERMISSIONS && (
-            <>
+            <div className="flex-1 flex flex-col min-h-0">
               {/* Copilot Chat: not applicable */}
               {harnessSupport === "n/a" && (
                 <p className="text-[10px] text-description-fg mb-2">
@@ -1146,7 +1167,9 @@ export const SettingsPanel: React.FC<{
                 </p>
               )}
 
-              <div className={harnessSupport === "n/a" ? "opacity-60" : ""}>
+              <div
+                className={`flex-1 flex flex-col min-h-0${harnessSupport === "n/a" ? " opacity-60" : ""}`}
+              >
                 {/* Permission Mode */}
                 <FormField
                   label="Permission Mode"
@@ -1180,7 +1203,7 @@ export const SettingsPanel: React.FC<{
                 </FormField>
 
                 {/* Allowed / Denied Tools textareas — always visible, disabled by mode */}
-                <div className="space-y-2 mt-2">
+                <div className="flex-1 flex flex-col gap-2 min-h-0 mt-2">
                   {/* Mode-only harness warning */}
                   {harnessSupport === "mode-only" && (
                     <p className="text-[10px] text-description-fg">
@@ -1196,6 +1219,7 @@ export const SettingsPanel: React.FC<{
                     label="Allowed Tools"
                     htmlFor="settings-allowed-tools"
                     description="Tool patterns to allow (one per line). Uses Copilot CLI format — auto-converted for Claude/Qwen."
+                    className="flex-1 min-h-0"
                   >
                     <textarea
                       id="settings-allowed-tools"
@@ -1210,9 +1234,8 @@ export const SettingsPanel: React.FC<{
                       disabled={
                         harnessSupport === "mode-only" || permMode !== "custom"
                       }
-                      rows={4}
                       placeholder={"read\nglob\ngrep"}
-                      className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
+                      className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
                         harnessSupport === "mode-only" || permMode !== "custom"
                           ? " opacity-50 cursor-not-allowed"
                           : ""
@@ -1224,6 +1247,7 @@ export const SettingsPanel: React.FC<{
                     label="Denied Tools"
                     htmlFor="settings-denied-tools"
                     description="Tool patterns to deny (one per line, takes precedence over allow list)."
+                    className="flex-1 min-h-0"
                   >
                     <textarea
                       id="settings-denied-tools"
@@ -1240,9 +1264,8 @@ export const SettingsPanel: React.FC<{
                         permMode === "dangerouslyAllowAll" ||
                         permMode === "passthrough"
                       }
-                      rows={4}
                       placeholder={"shell(rm:*)\nwrite"}
-                      className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
+                      className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
                         harnessSupport === "mode-only" ||
                         permMode === "dangerouslyAllowAll" ||
                         permMode === "passthrough"
@@ -1253,7 +1276,7 @@ export const SettingsPanel: React.FC<{
                   </FormField>
                 </div>
               </div>
-            </>
+            </div>
           )}
 
           {activePage === DRAWER_PAGES.HOOKS && (

@@ -148,6 +148,48 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       ? "Default (Final Prompt Session)"
       : `Default (${resolvedResumeSession ? "Yes" : "No"})`;
 
+  // Session ID display in prompt-level drawer
+  const isSessionIdDefault = properties.resumeSession === undefined;
+  const isSessionIdActive =
+    properties.resumeSession === true &&
+    properties.sessionId !== SESSION_ID_SENTINELS.FINAL_PROMPT;
+  const sessionIdDisplayValue = isSessionIdActive
+    ? (properties.sessionId ?? "")
+    : isSessionIdDefault &&
+        resolvedResumeSession &&
+        resolvedSessionId !== SESSION_ID_SENTINELS.FINAL_PROMPT
+      ? (resolvedSessionId ?? "")
+      : "";
+  const sessionIdTooltip = isSessionIdActive
+    ? undefined
+    : isSessionIdDefault
+      ? "Using workflow-level Resume Session setting. Select Yes to override."
+      : properties.resumeSession === true &&
+          properties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT
+        ? "Using Final Prompt Session — no explicit Session ID needed"
+        : "Set Resume Session to Yes to specify a Session ID";
+
+  // Additional Args display mode
+  const additionalArgsMode =
+    properties.additionalArgs === undefined
+      ? "default"
+      : properties.additionalArgs === null
+        ? "none"
+        : "custom";
+  const isAdditionalArgsActive = additionalArgsMode === "custom";
+  const additionalArgsDisplayValue = isAdditionalArgsActive
+    ? (typeof properties.additionalArgs === "string"
+        ? properties.additionalArgs
+        : "")
+    : additionalArgsMode === "default"
+      ? (resolvedAdditionalArgs ?? "")
+      : "";
+  const additionalArgsTooltip = isAdditionalArgsActive
+    ? undefined
+    : additionalArgsMode === "default"
+      ? "Inheriting from workflow settings. Select Custom to override."
+      : "Set to None — no additional args will be passed";
+
   const resolvedMcpServers =
     workflowProperties.mcpServers !== undefined
       ? workflowProperties.mcpServers
@@ -184,16 +226,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     DRAWER_PAGES.HARNESS
   );
 
-  // End condition expanded state
-  const [endConditionExpanded, setEndConditionExpanded] = useState(
-    !!properties.endCondition
-  );
-
-  // Sync expanded state when endCondition changes
-  useEffect(() => {
-    setEndConditionExpanded(!!properties.endCondition);
-  }, [properties.endCondition]);
-
   // Reset to first page when drawer opens for a new prompt
   useEffect(() => {
     if (isOpen) {
@@ -203,6 +235,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 
   // Get models for current harness
   const currentHarness = (properties.harness ??
+    workflowProperties.harness ??
     globalSettings.harness) as HarnessId;
   const models = getModelsForHarness(currentHarness);
   const modelNamespace = modelNamespaceForHarness(currentHarness);
@@ -217,10 +250,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const handleEndConditionToggle = () => {
     if (properties.endCondition) {
       clearEndCondition();
-      setEndConditionExpanded(false);
     } else {
       setEndCondition({ ...END_CONDITION_DEFAULTS });
-      setEndConditionExpanded(true);
     }
   };
 
@@ -246,7 +277,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       </div>
 
       {/* Body - Scrollable */}
-      <div className="drawer-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-2">
+      <div
+        className={`drawer-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-2${activePage === DRAWER_PAGES.PERMISSIONS ? " flex flex-col" : ""}`}
+      >
         {/* Page: Harness */}
         {activePage === DRAWER_PAGES.HARNESS && (
           <div className="space-y-2">
@@ -405,13 +438,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-additional-args-mode"
-                  value={
-                    properties.additionalArgs === undefined
-                      ? "default"
-                      : properties.additionalArgs === null
-                        ? "none"
-                        : "custom"
-                  }
+                  value={additionalArgsMode}
                   onChange={(v) => {
                     if (v === "default") {
                       setProperty("additionalArgs", undefined);
@@ -433,23 +460,20 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   ]}
                   dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
-                {/* Narrow mode: input below the dropdown */}
+                {/* Narrow mode: input always below the dropdown */}
                 {isNarrow && (
                   <div
-                    className={`transition-all duration-300 ${
-                      typeof properties.additionalArgs === "string"
-                        ? "max-h-[60px] opacity-100"
-                        : "max-h-0 opacity-0 overflow-hidden"
-                    }`}
+                    className={
+                      isAdditionalArgsActive
+                        ? ""
+                        : "opacity-50 pointer-events-none"
+                    }
+                    title={additionalArgsTooltip}
                   >
                     <input
                       type="text"
                       id="prop-additional-args"
-                      value={
-                        typeof properties.additionalArgs === "string"
-                          ? properties.additionalArgs
-                          : ""
-                      }
+                      value={additionalArgsDisplayValue}
                       onChange={(e) =>
                         setProperty("additionalArgs", e.target.value)
                       }
@@ -463,20 +487,15 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               {/* Wide mode: input in the right column, aligned to bottom */}
               {!isNarrow && (
                 <div
-                  className={`flex flex-col justify-end transition-all duration-300 ${
-                    typeof properties.additionalArgs === "string"
-                      ? "opacity-100"
-                      : "opacity-0 pointer-events-none"
+                  className={`flex flex-col justify-end ${
+                    isAdditionalArgsActive ? "" : "opacity-50 pointer-events-none"
                   }`}
+                  title={additionalArgsTooltip}
                 >
                   <input
                     type="text"
                     id="prop-additional-args-wide"
-                    value={
-                      typeof properties.additionalArgs === "string"
-                        ? properties.additionalArgs
-                        : ""
-                    }
+                    value={additionalArgsDisplayValue}
                     onChange={(e) =>
                       setProperty("additionalArgs", e.target.value)
                     }
@@ -544,21 +563,23 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   ]}
                   dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
-                {/* Session ID — expands directly below, no label */}
+                {/* Session ID — always visible, grayed out when not applicable */}
                 <div
-                  className={`transition-all duration-300 ${
-                    properties.resumeSession === true &&
-                    properties.sessionId !== SESSION_ID_SENTINELS.FINAL_PROMPT
-                      ? "max-h-[60px] opacity-100"
-                      : "max-h-0 opacity-0 overflow-hidden"
-                  }`}
+                  className={
+                    isSessionIdActive ? "" : "opacity-50 pointer-events-none"
+                  }
+                  title={sessionIdTooltip}
                 >
                   <input
                     type="text"
                     id="prop-session-id"
-                    value={properties.sessionId}
+                    value={sessionIdDisplayValue}
                     onChange={(e) => setProperty("sessionId", e.target.value)}
-                    placeholder="Session ID or prompt number (e.g., 1)"
+                    placeholder={
+                      isSessionIdDefault
+                        ? "Inherited from workflow"
+                        : "Session ID or prompt number (e.g., 1)"
+                    }
                     className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                   />
                 </div>
@@ -607,167 +628,162 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
               </div>
 
-              {/* End condition details (collapsible) */}
+              {/* End condition fields — always visible, grayed out when disabled */}
               <div
-                className={`overflow-hidden transition-all duration-200 ${
-                  endConditionExpanded && properties.endCondition
-                    ? "max-h-[500px] opacity-100"
-                    : "max-h-0 opacity-0"
+                className={`space-y-3 p-3 bg-editor-bg border border-panel-border rounded ${
+                  properties.endCondition ? "" : "opacity-50 pointer-events-none"
                 }`}
+                title={
+                  properties.endCondition
+                    ? undefined
+                    : "Enable End Condition to configure validation"
+                }
               >
-                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
-                  {/* Script + Returns */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* Script */}
-                    <div className="flex flex-col gap-1">
-                      <label
-                        htmlFor="prop-end-script"
-                        className="text-xs font-medium text-foreground"
-                      >
-                        Script
-                      </label>
-                      <input
-                        type="text"
-                        id="prop-end-script"
-                        value={properties.endCondition?.script || ""}
-                        onChange={(e) =>
-                          updateEndConditionField("script", e.target.value)
-                        }
-                        disabled={!properties.endCondition}
-                        placeholder="npm test"
-                        className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-                      />
-                    </div>
-
-                    {/* Returns */}
-                    <div className="flex flex-col gap-1">
-                      <label
-                        htmlFor="prop-end-returns"
-                        className="text-xs font-medium text-foreground"
-                      >
-                        Expected Return
-                      </label>
-                      <input
-                        type="text"
-                        id="prop-end-returns"
-                        value={properties.endCondition?.returns || ""}
-                        onChange={(e) =>
-                          updateEndConditionField("returns", e.target.value)
-                        }
-                        disabled={!properties.endCondition}
-                        placeholder="true"
-                        className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Timeout + Max Retries */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* Timeout */}
-                    <div className="flex flex-col gap-1">
-                      <label
-                        htmlFor="prop-end-timeout"
-                        className="text-xs font-medium text-foreground"
-                      >
-                        Timeout (ms)
-                      </label>
-                      <input
-                        type="number"
-                        id="prop-end-timeout"
-                        value={properties.endCondition?.timeout ?? 30000}
-                        onChange={(e) =>
-                          updateEndConditionField(
-                            "timeout",
-                            parseInt(e.target.value) || 30000
-                          )
-                        }
-                        disabled={!properties.endCondition}
-                        min={1000}
-                        max={300000}
-                        className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-                      />
-                    </div>
-
-                    {/* Max Retries */}
-                    <div className="flex flex-col gap-1">
-                      <label
-                        htmlFor="prop-end-retries"
-                        className="text-xs font-medium text-foreground"
-                      >
-                        Max Retries
-                      </label>
-                      <input
-                        type="number"
-                        id="prop-end-retries"
-                        value={properties.endCondition?.maxRetries ?? 0}
-                        onChange={(e) =>
-                          updateEndConditionField(
-                            "maxRetries",
-                            parseInt(e.target.value) || 0
-                          )
-                        }
-                        disabled={!properties.endCondition}
-                        min={-1}
-                        max={100}
-                        className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-                      />
-                      <span className="text-[10px] text-description-fg">
-                        Use -1 for unlimited retries
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Retry Prompt (Full Width) */}
+                {/* Script + Returns */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Script */}
                   <div className="flex flex-col gap-1">
                     <label
-                      htmlFor="prop-end-retry-prompt"
+                      htmlFor="prop-end-script"
                       className="text-xs font-medium text-foreground"
                     >
-                      Retry Prompt
+                      Script
                     </label>
-                    <textarea
-                      id="prop-end-retry-prompt"
-                      value={properties.endCondition?.retryPrompt || ""}
+                    <input
+                      type="text"
+                      id="prop-end-script"
+                      value={properties.endCondition?.script || ""}
                       onChange={(e) =>
-                        updateEndConditionField("retryPrompt", e.target.value)
+                        updateEndConditionField("script", e.target.value)
                       }
-                      disabled={!properties.endCondition}
-                      placeholder={
-                        "Validation failed: {error}\n\nPlease fix the issues."
-                      }
-                      rows={3}
-                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50 resize-y"
+                      placeholder="npm test"
+                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                     />
-                    <span className="text-[10px] text-description-fg">
-                      Use {"{error}"} placeholder for validation error message
-                    </span>
                   </div>
 
-                  {/* Resume Session on Retry */}
-                  <div className="flex items-center gap-2">
+                  {/* Returns */}
+                  <div className="flex flex-col gap-1">
+                    <label
+                      htmlFor="prop-end-returns"
+                      className="text-xs font-medium text-foreground"
+                    >
+                      Expected Return
+                    </label>
                     <input
-                      type="checkbox"
-                      id="prop-end-resume-session-on-retry"
-                      checked={
-                        properties.endCondition?.resumeSessionOnRetry ?? true
+                      type="text"
+                      id="prop-end-returns"
+                      value={properties.endCondition?.returns || ""}
+                      onChange={(e) =>
+                        updateEndConditionField("returns", e.target.value)
                       }
+                      placeholder="true"
+                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                    />
+                  </div>
+                </div>
+
+                {/* Timeout + Max Retries */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Timeout */}
+                  <div className="flex flex-col gap-1">
+                    <label
+                      htmlFor="prop-end-timeout"
+                      className="text-xs font-medium text-foreground"
+                    >
+                      Timeout (ms)
+                    </label>
+                    <input
+                      type="number"
+                      id="prop-end-timeout"
+                      value={properties.endCondition?.timeout ?? 30000}
                       onChange={(e) =>
                         updateEndConditionField(
-                          "resumeSessionOnRetry",
-                          e.target.checked
+                          "timeout",
+                          parseInt(e.target.value) || 30000
                         )
                       }
-                      disabled={!properties.endCondition}
-                      className="w-4 h-4 accent-focus-border cursor-pointer disabled:opacity-50"
+                      min={1000}
+                      max={300000}
+                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                     />
-                    <label
-                      htmlFor="prop-end-resume-session-on-retry"
-                      className="text-xs font-medium text-foreground cursor-pointer"
-                      title="When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
-                    >
-                      Resume Session on Retry
-                    </label>
                   </div>
+
+                  {/* Max Retries */}
+                  <div className="flex flex-col gap-1">
+                    <label
+                      htmlFor="prop-end-retries"
+                      className="text-xs font-medium text-foreground"
+                    >
+                      Max Retries
+                    </label>
+                    <input
+                      type="number"
+                      id="prop-end-retries"
+                      value={properties.endCondition?.maxRetries ?? 0}
+                      onChange={(e) =>
+                        updateEndConditionField(
+                          "maxRetries",
+                          parseInt(e.target.value) || 0
+                        )
+                      }
+                      min={-1}
+                      max={100}
+                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                    />
+                    <span className="text-[10px] text-description-fg">
+                      Use -1 for unlimited retries
+                    </span>
+                  </div>
+                </div>
+
+                {/* Retry Prompt (Full Width) */}
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor="prop-end-retry-prompt"
+                    className="text-xs font-medium text-foreground"
+                  >
+                    Retry Prompt
+                  </label>
+                  <textarea
+                    id="prop-end-retry-prompt"
+                    value={properties.endCondition?.retryPrompt || ""}
+                    onChange={(e) =>
+                      updateEndConditionField("retryPrompt", e.target.value)
+                    }
+                    placeholder={
+                      "Validation failed: {error}\n\nPlease fix the issues."
+                    }
+                    rows={3}
+                    className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-y"
+                  />
+                  <span className="text-[10px] text-description-fg">
+                    Use {"{error}"} placeholder for validation error message
+                  </span>
+                </div>
+
+                {/* Resume Session on Retry */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="prop-end-resume-session-on-retry"
+                    checked={
+                      properties.endCondition?.resumeSessionOnRetry ?? true
+                    }
+                    onChange={(e) =>
+                      updateEndConditionField(
+                        "resumeSessionOnRetry",
+                        e.target.checked
+                      )
+                    }
+                    className="w-4 h-4 accent-focus-border cursor-pointer"
+                  />
+                  <label
+                    htmlFor="prop-end-resume-session-on-retry"
+                    className="text-xs font-medium text-foreground cursor-pointer"
+                    title="When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
+                  >
+                    Resume Session on Retry
+                  </label>
                 </div>
               </div>
             </div>
@@ -784,13 +800,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               value={properties.mcpServers as McpServersValue}
               onChange={(v) => setProperty("mcpServers", v)}
               defaultLabel={defaultMcpServersLabel}
+              inheritedValue={resolvedMcpServers as McpServersValue}
             />
           </div>
         )}
 
         {/* Page: Permissions */}
         {activePage === DRAWER_PAGES.PERMISSIONS && (
-          <>
+          <div className="flex-1 flex flex-col min-h-0">
             {/* Copilot Chat: not applicable */}
             {permHarnessSupport === "n/a" && (
               <p className="text-[10px] text-description-fg mb-2">
@@ -800,7 +817,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             )}
 
             <div
-              className={`space-y-2${permHarnessSupport === "n/a" ? " opacity-60" : ""}`}
+              className={`flex-1 flex flex-col min-h-0${permHarnessSupport === "n/a" ? " opacity-60" : ""}`}
             >
               {/* Permission Mode */}
               <div className="flex flex-col gap-1">
@@ -868,7 +885,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   effectivePermMode === "passthrough";
 
                 return (
-                  <div className="space-y-2">
+                  <div
+                    className={`flex-1 flex min-h-0 gap-2 mt-2 ${isNarrow ? "flex-col" : "flex-row"}`}
+                  >
                     {/* Mode-only harness warning */}
                     {permHarnessSupport === "mode-only" && (
                       <p className="text-[10px] text-description-fg">
@@ -881,7 +900,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     )}
 
                     {/* Allowed Tools */}
-                    <div className="flex flex-col gap-1">
+                    <div className="flex-1 flex flex-col gap-1 min-h-0">
                       <label
                         htmlFor="prop-allowed-tools"
                         className="text-[11px] font-semibold uppercase text-description-fg"
@@ -909,9 +928,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                           });
                         }}
                         disabled={allowedDisabled}
-                        rows={4}
                         placeholder={"read\nglob\ngrep"}
-                        className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
+                        className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
                           allowedDisabled
                             ? " opacity-50 cursor-not-allowed"
                             : ""
@@ -920,7 +938,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     </div>
 
                     {/* Denied Tools */}
-                    <div className="flex flex-col gap-1">
+                    <div className="flex-1 flex flex-col gap-1 min-h-0">
                       <label
                         htmlFor="prop-denied-tools"
                         className="text-[11px] font-semibold uppercase text-description-fg"
@@ -948,9 +966,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                           });
                         }}
                         disabled={deniedDisabled}
-                        rows={4}
                         placeholder={"shell(rm:*)\nwrite"}
-                        className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
+                        className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
                           deniedDisabled ? " opacity-50 cursor-not-allowed" : ""
                         }`}
                       />
@@ -959,7 +976,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 );
               })()}
             </div>
-          </>
+          </div>
         )}
 
         {/* Page: Hooks (placeholder) */}
