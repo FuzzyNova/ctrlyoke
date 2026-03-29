@@ -3,6 +3,7 @@ import type { VsCodeApi } from "../types/vscode";
 import type { PromptItem } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type { PriorContext, ToolPermissionsOverride } from "../types/messages";
+import type { EndConditionCompareSource } from "../utils/prompt";
 import { FINAL_PROMPT_PHASES, EDITOR_TARGET_KINDS } from "../types/messages";
 
 /** Property is inherited from workflow/settings when undefined. */
@@ -18,6 +19,7 @@ export type Disableable<T> = T | null | undefined;
 export interface EndConditionConfig {
   script: string;
   returns?: string;
+  compareSource?: EndConditionCompareSource;
   timeout?: number;
   maxRetries?: number;
   retryPrompt?: string;

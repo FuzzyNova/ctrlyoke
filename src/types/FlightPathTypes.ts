@@ -227,9 +227,22 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
   responseText?: string;
 }
 
+/**
+ * Controls which output source is compared against `returns`.
+ *
+ * - `"auto"` (default): `"true"`/`"false"` use exit code; all other values compare stdout.
+ * - `"stdout"`: Always compare stdout. Requires a clean exit (exitCode === 0).
+ * - `"stderr"`: Compare stderr content. Exit code is not checked.
+ * - `"exitCode"`: Compare the numeric exit code. Use `"0"` for success, or any integer string.
+ *   `"true"`/`"false"` are also accepted and map to exit 0 / non-zero.
+ */
+export type EndConditionCompareSource = "auto" | "stdout" | "stderr" | "exitCode";
+
 export interface EndCondition {
   script: string;
   returns: string;
+  /** Controls which output source is compared against `returns`. Default: `"auto"`. */
+  compareSource?: EndConditionCompareSource;
   timeout?: number;
   maxRetries?: number; // Maximum number of retry attempts (default: 0)
   retryPrompt?: string; // Template with placeholders for retry messages

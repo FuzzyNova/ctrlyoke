@@ -34,6 +34,8 @@ export interface LogMonitorDependencies {
   getWorkspaceRoot: () => string | undefined;
   /** Returns true when the user has requested cancellation */
   isCancelling: () => boolean;
+  /** Returns exit code if the PTY/terminal process terminated unexpectedly, null otherwise */
+  isPtyTerminated?: () => { exitCode: number } | null;
   /** Callback for streaming structured CliEvents to the output panel */
   onStreamingEvents: (events: CliEvent[]) => void;
   /** Callback fired when the full response is complete */
@@ -331,7 +333,7 @@ export class CliLogMonitor {
                   },
                   monitoringSessionId,
                   startTime,
-                  () => this.deps.isCancelling() || completed
+                  () => this.deps.isCancelling() || !!this.deps.isPtyTerminated?.() || completed
                 );
 
               if (result.completed && !completed) {
@@ -391,6 +393,20 @@ export class CliLogMonitor {
           }
           watcher.close();
           resolve({ success: false });
+          return;
+        }
+        const ptyExit = this.deps.isPtyTerminated?.();
+        if (ptyExit) {
+          if (cancellationInterval) {
+            clearInterval(cancellationInterval);
+          }
+          if (timeoutHandle) {
+            clearTimeout(timeoutHandle);
+          }
+          watcher.close();
+          const msg = `Terminal process exited unexpectedly (exit code ${ptyExit.exitCode})`;
+          Log.warn(`⚠️ ${msg} — aborting workflow step`);
+          reject(new Error(msg));
         }
       }, CliLogMonitor.CANCELLATION_CHECK_INTERVAL_MS);
     });

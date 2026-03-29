@@ -284,11 +284,23 @@ definitions:
       returns:
         type: string
         description: >-
-          Expected result from script. For 'true'/'false': uses exit code (exit 0 = 'true', non-zero
-          = 'false') — use this for any command where success/failure matters (e.g., 'npm test',
-          'npm run compile'). For other values: compares against stdout using (1) exact match
-          (case-insensitive), (2) numeric >= (e.g., '90' matches if output is 90 or higher), (3)
-          substring match.
+          Expected result to compare against. Interpretation depends on compareSource (default
+          auto): for 'true'/'false' auto uses exit code (exit 0 = true, non-zero = false); for other
+          values auto checks stdout via exact match, numeric >=, or substring. For compareSource:
+          exitCode, provide the expected exit code as a number string (e.g., '0', '1') or
+          'true'/'false'.
+      compareSource:
+        type: string
+        enum:
+          - auto
+          - stdout
+          - stderr
+          - exitCode
+        description: >-
+          Which output to compare against `returns`. 'auto' (default): 'true'/'false' use exit code,
+          other values compare stdout. 'stdout': always compare stdout (also requires clean exit).
+          'stderr': compare stderr content (exit code ignored). 'exitCode': compare the numeric exit
+          code directly.
       timeout:
         type: number
         description: Timeout in milliseconds

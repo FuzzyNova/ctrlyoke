@@ -37,9 +37,18 @@ import {
   buildPermissionsDefaultLabel,
 } from "../shared";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
+import {
+  COMPARE_SOURCE_LABELS,
+  type EndConditionCompareSource,
+} from "../../utils/endCondition";
+import type { SelectOption } from "../shared";
 
 /** Max height for dropdowns inside the PropertiesDrawer (px, not vh — the drawer has a fixed height). */
 const DRAWER_DROPDOWN_MAX_HEIGHT = "150px";
+
+const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
+  ["auto", "stdout", "stderr", "exitCode"] as EndConditionCompareSource[]
+).map((v) => ({ value: v, label: COMPARE_SOURCE_LABELS[v] }));
 
 interface PropertiesDrawerProps {
   isOpen: boolean;
@@ -648,7 +657,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     />
                   </div>
 
-                  {/* Returns */}
+                  {/* Returns + Compare Source */}
                   <div className="flex flex-col gap-1">
                     <label
                       htmlFor="prop-end-returns"
@@ -666,6 +675,34 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       placeholder="true"
                       className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                     />
+                    <label
+                      htmlFor="prop-end-compare-source"
+                      className="text-xs font-medium text-foreground mt-1"
+                      title="Auto: 'true'/'false' check exit code; other values check stdout. Stdout: always compare stdout (requires clean exit). Stderr: compare stderr output. Exit Code: compare the numeric exit code directly."
+                    >
+                      Compare Source
+                    </label>
+                    <CustomSelect
+                      id="prop-end-compare-source"
+                      value={properties.endCondition?.compareSource ?? "auto"}
+                      onChange={(v) =>
+                        updateEndConditionField(
+                          "compareSource",
+                          v as EndConditionCompareSource
+                        )
+                      }
+                      options={COMPARE_SOURCE_OPTIONS}
+                      dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+                    />
+                    <span className="text-[10px] text-description-fg">
+                      {(properties.endCondition?.compareSource ?? "auto") === "auto"
+                        ? "'true'/'false' use exit code; other values check stdout"
+                        : (properties.endCondition?.compareSource ?? "auto") === "stdout"
+                          ? "Compares stdout output (requires clean exit)"
+                          : (properties.endCondition?.compareSource ?? "auto") === "stderr"
+                            ? "Compares stderr output (exit code not checked)"
+                            : "Compares numeric exit code — use '0', '1', or 'true'/'false'"}
+                    </span>
                   </div>
                 </div>
 

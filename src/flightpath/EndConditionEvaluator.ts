@@ -3,7 +3,10 @@ import * as fs from "fs";
 import { spawn } from "child_process";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import { EndCondition } from "../types/FlightPathTypes";
+import {
+  EndCondition,
+  type EndConditionCompareSource,
+} from "../types/FlightPathTypes";
 import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { CliProcessManager } from "../utils/CliProcessManager";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
@@ -107,15 +110,7 @@ export class EndConditionEvaluator {
         timeout
       );
 
-      // Check if result matches expected value
-      const checkSuccess = this.checkResult(result.result, condition.returns, result.exitCode);
-
-      // For boolean "true"/"false" returns, exit code IS the success criterion
-      // (checkResult already evaluated it). For other returns, also require a
-      // clean exit (exitCode === 0) so unexpected crashes still fail the check.
-      const expectedLower = condition.returns.trim().toLowerCase();
-      const isBooleanReturn = expectedLower === "true" || expectedLower === "false";
-      const success = isBooleanReturn ? checkSuccess : checkSuccess && result.success;
+      const success = this.evaluateSuccess(result, condition.returns, condition.compareSource);
 
       return {
         success,
@@ -349,14 +344,64 @@ export class EndConditionEvaluator {
   }
 
   /**
-   * Check if script result matches expected value.
+   * Determines whether an end condition passes, routing to the correct comparison
+   * axis based on `compareSource`.
    *
-   * For boolean "true"/"false" expected values, exit code takes precedence when
-   * available — exit 0 = "true", non-zero exit = "false". This means commands like
-   * `npm run compile` with `returns: "true"` pass on a clean exit without needing
-   * to emit a literal "true" to stdout.
+   * - `"auto"` (default): `"true"`/`"false"` use exit code; other values compare stdout.
+   *   Stdout comparisons also require a clean exit (exitCode === 0).
+   * - `"stdout"`: Compares stdout. Also requires a clean exit.
+   * - `"stderr"`: Compares stderr content. Exit code is not checked.
+   * - `"exitCode"`: Compares the numeric exit code directly. `"true"` = exit 0, `"false"` = non-zero.
+   */
+  private evaluateSuccess(
+    result: {
+      result: string;
+      stdout?: string;
+      stderr?: string;
+      exitCode?: number;
+      success: boolean;
+    },
+    returns: string,
+    compareSource: EndConditionCompareSource = "auto"
+  ): boolean {
+    const expectedLower = returns.trim().toLowerCase();
+
+    switch (compareSource) {
+      case "exitCode": {
+        // Directly compare exit code — boolean keywords or exact integer string
+        if (expectedLower === "true") return result.exitCode === 0;
+        if (expectedLower === "false")
+          return result.exitCode !== undefined && result.exitCode !== 0;
+        const expectedCode = parseInt(returns.trim(), 10);
+        return !isNaN(expectedCode) && result.exitCode === expectedCode;
+      }
+
+      case "stderr":
+        // Compare stderr, no exit code requirement
+        return this.checkResult(result.stderr ?? "", returns);
+
+      case "stdout":
+        // Compare stdout, require clean exit
+        return this.checkResult(result.result, returns) && result.success;
+
+      case "auto":
+      default: {
+        // "true"/"false" use exit code; everything else compares stdout + requires clean exit
+        const checkSuccess = this.checkResult(result.result, returns, result.exitCode);
+        const isBooleanReturn = expectedLower === "true" || expectedLower === "false";
+        return isBooleanReturn ? checkSuccess : checkSuccess && result.success;
+      }
+    }
+  }
+
+  /**
+   * Compares an actual output string against an expected value using four strategies
+   * (in order): exact match, boolean synonyms (with optional exit code precedence),
+   * numeric >=, substring.
    *
-   * For all other expected values, stdout is compared (exact, numeric >=, substring).
+   * Pass `exitCode` only for `"auto"` mode — it makes `"true"`/`"false"` use exit
+   * code instead of stdout content. For explicit `compareSource` values, call
+   * `evaluateSuccess` directly; don't pass `exitCode` here.
    */
   private checkResult(actualResult: string, expectedResult: string, exitCode?: number): boolean {
     const actual = actualResult.trim().toLowerCase();

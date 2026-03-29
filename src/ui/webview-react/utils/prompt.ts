@@ -10,12 +10,15 @@ import {
 
 export { PROMPT_PROPERTIES };
 
+export type EndConditionCompareSource = "auto" | "stdout" | "stderr" | "exitCode";
+
 /**
  * End condition configuration
  */
 export interface EndCondition {
   script: string;
   returns: string;
+  compareSource?: EndConditionCompareSource;
   timeout?: number;
   maxRetries?: number;
   retryPrompt?: string;

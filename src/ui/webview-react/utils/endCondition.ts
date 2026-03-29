@@ -7,17 +7,27 @@
  * - object: Custom end condition (checkbox checked, fields filled)
  */
 
-import type { EndCondition } from "./prompt";
+import type { EndCondition, EndConditionCompareSource } from "./prompt";
+export type { EndConditionCompareSource };
 
 /** Property keys for end condition objects */
 export const END_CONDITION_PROPERTIES = {
   SCRIPT: "script",
   RETURNS: "returns",
+  COMPARE_SOURCE: "compareSource",
   TIMEOUT: "timeout",
   MAX_RETRIES: "maxRetries",
   RETRY_PROMPT: "retryPrompt",
   RESUME_SESSION_ON_RETRY: "resumeSessionOnRetry",
 } as const;
+
+/** Display labels for compareSource options */
+export const COMPARE_SOURCE_LABELS: Record<EndConditionCompareSource, string> = {
+  auto: "Auto",
+  stdout: "Stdout",
+  stderr: "Stderr",
+  exitCode: "Exit Code",
+};
 
 /** Default values for end condition properties */
 export interface EndConditionDefaults {

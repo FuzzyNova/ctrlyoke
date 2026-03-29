@@ -143,6 +143,9 @@ export class CliIntegration extends HarnessIntegration {
   /** Active PTY session for interactive mode (node-pty path) */
   private currentPtySession?: PtySession;
 
+  /** Set when the AI CLI PTY exits unexpectedly (non-zero exit code); cleared before each prompt */
+  private ptyExitedWithError: number | null = null;
+
   /** Workflow display name used for VS Code terminal tab naming */
   private workflowName?: string;
 
@@ -1190,6 +1193,15 @@ export class CliIntegration extends HarnessIntegration {
           if (this.currentPtySession === s) {
             this.currentPtySession = undefined;
           }
+          // Signal log monitor to abort if the AI CLI process died unexpectedly.
+          // Exit code 0 means the shell exited normally (Stop hook already fired).
+          // Non-zero means the process crashed or was killed before completing.
+          if (s.kind === "ai-cli" && exitCode !== 0) {
+            this.ptyExitedWithError = exitCode;
+            Log.warn(
+              `⚠️ AI CLI PTY session ${s.id} exited with code ${exitCode} — workflow step will be aborted`
+            );
+          }
         },
       });
 
@@ -1241,6 +1253,8 @@ export class CliIntegration extends HarnessIntegration {
       notificationMonitor: this.provider.notificationMonitor,
       getWorkspaceRoot: () => this.getWorkspaceRoot(),
       isCancelling: () => this.isCancelling,
+      isPtyTerminated: () =>
+        this.ptyExitedWithError !== null ? { exitCode: this.ptyExitedWithError } : null,
       onStreamingEvents: (events) => this.streamingEventsEmitter.fire(events),
       onResponseComplete: (msg) => this.responseCompleteEmitter.fire(msg),
       logResponse: (response, statistics) =>
@@ -1878,6 +1892,7 @@ export class CliIntegration extends HarnessIntegration {
   ): Promise<boolean> {
     try {
       this.resetCancellationFlag();
+      this.ptyExitedWithError = null;
 
       // Resolve session ID for current prompt using SessionResolver
       let resolvedSessionId = SessionResolver.resolve(

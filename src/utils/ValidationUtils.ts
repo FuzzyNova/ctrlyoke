@@ -77,10 +77,13 @@ export class ValidationUtils {
         // Complex union type (string | McpServerConfig)[] | null - use 'as any' since AJV JSONSchemaType cannot express this union natively
       } as any,
       endCondition: {
+        // EndCondition has compareSource?: EndConditionCompareSource (string union) which
+        // AJV JSONSchemaType cannot represent natively — use 'as any' to bypass strict checks.
         type: "object",
         properties: {
           script: { type: "string" },
           returns: { type: "string" },
+          compareSource: { type: "string", nullable: true },
           timeout: { type: "number", nullable: true },
           maxRetries: { type: "number", nullable: true },
           retryPrompt: { type: "string", nullable: true },
@@ -88,7 +91,7 @@ export class ValidationUtils {
         },
         required: ["script", "returns"],
         nullable: true,
-      },
+      } as any,
       sessionId: {
         type: ["string", "number"] as any, // Allow both string and number for session IDs
         nullable: true,
@@ -131,6 +134,7 @@ export class ValidationUtils {
             properties: {
               script: { type: "string" },
               returns: { type: "string" },
+              compareSource: { type: "string", nullable: true },
               timeout: { type: "number", nullable: true },
               maxRetries: { type: "number", nullable: true },
               retryPrompt: { type: "string", nullable: true },
@@ -138,7 +142,7 @@ export class ValidationUtils {
             },
             required: ["script", "returns"],
             nullable: true,
-          },
+          } as any,
           priorContext: {
             // PriorContext = "all" | "previous" | "none" | number[]
           } as any,
