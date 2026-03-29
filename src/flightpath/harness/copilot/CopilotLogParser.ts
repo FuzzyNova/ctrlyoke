@@ -985,6 +985,13 @@ export class CopilotLogParser extends BaseLogParser {
         .readdirSync(logsDir)
         .filter((f) => f.startsWith("process-") && f.endsWith(".log"));
 
+      // Collect all matching files with their mtimes so we can return the most
+      // recently modified one. Resumed sessions spawn a new process per prompt —
+      // each writes its own process-*.log with the same session ID in the header.
+      // Without sorting by mtime, we'd always return the first (oldest) match,
+      // which never reflects context growth across resumed prompts.
+      const matches: { filePath: string; mtime: number }[] = [];
+
       for (const file of files) {
         const filePath = path.join(logsDir, file);
         try {
@@ -998,13 +1005,22 @@ export class CopilotLogParser extends BaseLogParser {
           fs.closeSync(fd);
           const firstChunk = buf.toString("utf8", 0, bytesRead);
           if (firstChunk.includes(`Workspace initialized: ${sessionId}`)) {
-            return filePath;
+            const mtime = fs.statSync(filePath).mtimeMs;
+            matches.push({ filePath, mtime });
           }
         } catch {
           continue;
         }
       }
-      return null;
+
+      if (matches.length === 0) {
+        return null;
+      }
+
+      // Return the most recently modified match — it contains the latest
+      // CompactionProcessor lines for the current resumed prompt turn.
+      matches.sort((a, b) => b.mtime - a.mtime);
+      return matches[0].filePath;
     } catch {
       return null;
     }
