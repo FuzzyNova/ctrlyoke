@@ -70,7 +70,7 @@ AJV validation, normalizes single/multi formats, loads schema from `out/schemas/
 **Never edit schemas in `out/`** — source is `/schemas/`, auto-copied during build
 **Supported formats:** .flightpath.yaml/.yml, .flightpath.json, .prompt.md
 **Prompt path resolution:** If a prompt value looks like a file path, resolves relative to: prompt file dir → workspace root → `.flightpath/` dir
-**Workflow-level properties** (`harness`, `model`, `agent`, `skills`, `resumeSession`, `sessionId`, `allowDynamicExtension`, `endCondition`, `priorContext`, `additionalArgs`) are copied to `PromptFile` and also applied per-`PromptItem`
+**Workflow-level properties** (`harness`, `model`, `agent`, `skills`, `resumeSession`, `sessionId`, `mcpServers`, `endCondition`, `priorContext`, `additionalArgs`) are copied to `PromptFile` and also applied per-`PromptItem`
 **`PlatformAdapter` dependency:** Optional; used for user-facing error messages
 </promptFileParser>
 
@@ -87,7 +87,7 @@ Sequential prompt execution with pause/resume support.
 **`WorkflowExecutionContext`** bundle pattern (replaces old `WorkflowContext`) — carries `dashboardProvider`, `getIntegrationForPrompt`, capture callbacks, `snapshotService`, etc.
 **Two-phase outer loop:**
   1. **Queue phase** — drains normal prompts via `promptQueue.hasNext()`
-  2. **`finalPrompt` phase** — runs the orchestrator gate once the queue is empty; if `allowDynamicExtension` is true and it appends new prompts, the outer loop repeats
+  2. **`finalPrompt` phase** — runs the orchestrator gate once the queue is empty; if new prompts were appended (via MCP queue extension), the outer loop repeats
 **Harness resolution:** Uses `PropertyResolver` to determine harness per prompt (prompt > workflow > global settings)
 **Delegation:** Defers to `EndConditionHandler` for retry logic
 </workflowExecutor>

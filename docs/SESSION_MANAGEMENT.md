@@ -947,7 +947,7 @@ prompts:
     provider: string
     model: string
     agent: string
-    allowDynamicExtension: boolean
+    mcpServers: string[] | null
     endCondition: object
 
     # Runtime metadata (auto-populated)
@@ -969,7 +969,7 @@ provider: string
 model: string
 agent: string
 resumeSession: boolean
-allowDynamicExtension: boolean
+mcpServers: string[] | null
 endCondition: object
 
 prompts:

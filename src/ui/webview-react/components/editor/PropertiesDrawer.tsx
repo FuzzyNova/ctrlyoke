@@ -24,6 +24,9 @@ import {
   PriorContextSelect,
   PRIOR_CONTEXT_KEYWORD_LABELS,
   SkillsSelect,
+  McpServersEditor,
+  buildMcpDefaultLabel,
+  type McpServersValue,
 } from "../shared";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 
@@ -140,9 +143,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     workflowProperties.mcpServers !== undefined
       ? workflowProperties.mcpServers
       : globalSettings.mcpServers;
-  const hasFlightpathInDefault =
-    Array.isArray(resolvedMcpServers) && resolvedMcpServers.includes("flightpath");
-  const defaultMcpServersLabel = `Default (${hasFlightpathInDefault ? "Yes" : "No"})`;
+  const defaultMcpServersLabel = buildMcpDefaultLabel(resolvedMcpServers as McpServersValue);
 
   const resolvedPriorContext =
     workflowProperties.priorContext ??
@@ -756,38 +757,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {/* Page: MCP */}
         {activePage === DRAWER_PAGES.MCP && (
           <div className="space-y-2">
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="prop-mcp-servers"
-                className="text-[11px] font-semibold uppercase text-description-fg"
-              >
-                MCP Servers
-              </label>
-              <CustomSelect
-                id="prop-mcp-servers"
-                value={
-                  properties.mcpServers === undefined
-                    ? "default"
-                    : properties.mcpServers === null
-                      ? "no"
-                      : Array.isArray(properties.mcpServers) && properties.mcpServers.includes("flightpath")
-                        ? "yes"
-                        : "no"
-                }
-                onChange={(v) =>
-                  setProperty(
-                    "mcpServers",
-                    v === "default" ? undefined : v === "yes" ? ["flightpath"] : null
-                  )
-                }
-                options={[
-                  { value: "default", label: defaultMcpServersLabel },
-                  { value: "yes", label: "Yes - Allow AI to extend" },
-                  { value: "no", label: "No - Disable" },
-                ]}
-                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
-              />
-            </div>
+            <label className="text-[11px] font-semibold uppercase text-description-fg">
+              MCP Servers
+            </label>
+            <McpServersEditor
+              value={properties.mcpServers as McpServersValue}
+              onChange={(v) => setProperty("mcpServers", v)}
+              defaultLabel={defaultMcpServersLabel}
+            />
           </div>
         )}
 

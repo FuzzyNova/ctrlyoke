@@ -5,7 +5,6 @@
 harness: copilot-cli
 model: claude-sonnet-4.5
 resumeSession: true
-allowDynamicExtension: false
 
 prompts:
   - name: step1-inherit-all
@@ -15,7 +14,7 @@ prompts:
       # - harness: copilot-cli (workflow)
       # - model: claude-sonnet-4.5 (workflow)
       # - resumeSession: true (workflow)
-      # - allowDynamicExtension: false (workflow)
+      # - mcpServers: (not set)
 
   - name: step2-override-model
     prompt: |
@@ -25,7 +24,7 @@ prompts:
     # - harness: copilot-cli (workflow)
     # - model: claude-haiku-4.5 (prompt override)
     # - resumeSession: true (workflow)
-    # - allowDynamicExtension: false (workflow)
+    # - mcpServers: (not set)
 
   - name: step3-override-session
     prompt: |
@@ -35,19 +34,19 @@ prompts:
     # - harness: copilot-cli (workflow)
     # - model: claude-sonnet-4.5 (workflow)
     # - resumeSession: false (prompt override)
-    # - allowDynamicExtension: false (workflow)
+    # - mcpServers: (not set)
 
   - name: step4-multiple-overrides
     prompt: |
       Echo "Step 4: I override multiple properties"
     model: gpt-5
     resumeSession: false
-    allowDynamicExtension: true
+    mcpServers: ["flightpath"]
     # Expected resolved properties:
     # - harness: copilot-cli (workflow)
     # - model: gpt-5 (prompt override)
     # - resumeSession: false (prompt override)
-    # - allowDynamicExtension: true (prompt override)
+    # - mcpServers: ["flightpath"] (prompt override)
 
 # Instructions for testing:
 # 1. Open FlightPath dashboard

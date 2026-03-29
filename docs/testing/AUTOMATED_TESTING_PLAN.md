@@ -75,9 +75,9 @@ suite("PromptIdentity Tests", () => {
     test("should handle empty completed set");
   });
 
-  suite("shouldInjectExtensionInstructions", () => {
-    test("should return true when allowDynamicExtension is explicitly true");
-    test("should return false when allowDynamicExtension is explicitly false");
+  suite("shouldInjectMcpServers", () => {
+    test("should return true when mcpServers includes flightpath");
+    test("should return false when mcpServers is null or empty");
     test("should return true for last prompt when no explicit flags exist");
     test("should return false for non-last prompts when no explicit flags");
     test("should respect dynamicExtensionOnLastPrompt=false setting");

@@ -30,6 +30,8 @@ import {
   PriorContextSelect,
   DrawerTabBar,
   DrawerRow,
+  McpServersEditor,
+  type McpServersValue,
 } from "../shared";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
@@ -143,7 +145,6 @@ export const SettingsPanel: React.FC<{
     getEffectiveAgent,
     getEffectiveSkills,
     getEffectiveResumeSession,
-    getEffectiveMcpServers,
     getEffectivePriorContext,
   } = useSettingsStore();
   const prompts = useWorkflowStore((s) => s.prompts);
@@ -187,8 +188,6 @@ export const SettingsPanel: React.FC<{
   const effectiveAgent = getEffectiveAgent();
   const effectiveSkills = getEffectiveSkills();
   const effectiveResumeSession = getEffectiveResumeSession();
-  const effectiveMcpServers = getEffectiveMcpServers();
-  const effectiveFlightpathEnabled = Array.isArray(effectiveMcpServers) && effectiveMcpServers.includes("flightpath");
   const effectivePriorContext = getEffectivePriorContext();
 
   // Derive the active model namespace from the current harness
@@ -229,6 +228,16 @@ export const SettingsPanel: React.FC<{
         return (
           JSON.stringify(workflowValue) !==
           JSON.stringify(globalSettings.priorContext)
+        );
+      }
+      // Deep comparison for mcpServers — null and [] are both "no servers" and
+      // must not trigger the "Set as Default" button when the global is also empty.
+      if (property === "mcpServers") {
+        const normalize = (v: unknown) =>
+          Array.isArray(v) ? v : [];
+        return (
+          JSON.stringify(normalize(workflowValue)) !==
+          JSON.stringify(normalize(globalSettings.mcpServers))
         );
       }
       const globalValue =
@@ -405,16 +414,14 @@ export const SettingsPanel: React.FC<{
   );
 
   const handleMcpServersChange = useCallback(
-    (enabled: boolean) => {
-      const newServers = enabled ? ["flightpath"] : null;
-      // Optimistic update
+    (newValue: McpServersValue) => {
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("mcpServers", newServers);
+      settingsStore.updateWorkflowProperty("mcpServers", newValue as WorkflowProperties["mcpServers"]);
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "mcpServers",
-        value: newServers,
+        value: newValue,
       });
     },
     [vscode]
@@ -1042,9 +1049,8 @@ export const SettingsPanel: React.FC<{
           {activePage === DRAWER_PAGES.MCP && (
             <>
               <FormField
-                label="Dynamic Queue Extension"
-                htmlFor="settings-dynamic-ext"
-                description="Allow harness to extend the workflow queue. This will add FlightPath's MCP configuration to the harness, which exposes functions for extending and querying the workflow queue."
+                label="MCP Servers"
+                description="MCP servers to attach to the harness for this workflow. Include FlightPath to enable dynamic queue extension. Add custom McpServerConfig entries for additional MCP servers. Set to None to explicitly disable MCP injection."
                 setAsDefaultButton={
                   <SetAsDefaultButton
                     property="mcpServers"
@@ -1058,14 +1064,10 @@ export const SettingsPanel: React.FC<{
                   />
                 }
               >
-                <CustomSelect
-                  id="settings-dynamic-ext"
-                  value={effectiveFlightpathEnabled ? "yes" : "no"}
-                  onChange={(v) => handleMcpServersChange(v === "yes")}
-                  options={[
-                    { value: "no", label: "No - Disable" },
-                    { value: "yes", label: "Yes - Allow AI to extend" },
-                  ]}
+                <McpServersEditor
+                  value={workflowProperties.mcpServers as McpServersValue}
+                  onChange={handleMcpServersChange}
+                  showDefault={false}
                 />
               </FormField>
             </>

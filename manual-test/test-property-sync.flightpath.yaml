@@ -8,13 +8,13 @@ prompts:
       - Model: claude-sonnet-4.5
       - Agent: test-agent
       - Resume Session: Yes
-      - Allow Dynamic Extension: Yes
+      - MCP Servers: FlightPath
       - End Condition: Script, Returns, Timeout, Max Retries, Retry Prompt all filled in
     harness: copilot-cli
     model: claude-sonnet-4.5
     agent: test-agent
     resumeSession: true
-    allowDynamicExtension: true
+    mcpServers: ["flightpath"]
     endCondition:
       script: .flightpath/scripts/always_true.py
       returns: "true"
@@ -38,9 +38,8 @@ prompts:
       - Model: sonnet
       - Agent: (empty)
       - Resume Session: No
-      - Allow Dynamic Extension: No
+      - MCP Servers: None
       - End Condition: All fields should be empty/default
     harness: claude-cli
     model: sonnet
     resumeSession: false
-    allowDynamicExtension: false

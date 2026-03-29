@@ -435,6 +435,9 @@ export class WebviewSettingsSync {
       await ConfigurationUtils.setDefaultSkills(value || []);
     } else if (property === "resumeSession") {
       await ConfigurationUtils.updateSetting("resumeExistingSession", value);
+    } else if (property === "mcpServers") {
+      // null (None mode) → [] so we never write null to an array-typed setting
+      await ConfigurationUtils.setDefaultMcpServers(value ?? []);
     } else {
       await ConfigurationUtils.updateSetting(property, value);
     }

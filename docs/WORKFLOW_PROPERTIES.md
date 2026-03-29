@@ -86,7 +86,6 @@ harness: copilot-cli
 model: claude-sonnet-4.5
 agent: code-reviewer
 resumeSession: false
-allowDynamicExtension: false
 
 # Optional: Workflow-wide end condition
 endCondition:
@@ -124,7 +123,6 @@ prompts:
   "model": "claude-sonnet-4.5",
   "agent": "code-reviewer",
   "resumeSession": false,
-  "allowDynamicExtension": false,
   "endCondition": {
     "script": "npm test",
     "returns": "true",
@@ -217,18 +215,29 @@ agent: code-reviewer
 resumeSession: true
 ```
 
-### allowDynamicExtension
+### mcpServers
 
-**Type:** `boolean`
+**Type:** `(string | McpServerConfig)[] | null`
 
-**Description:** Whether to allow prompts to dynamically extend the workflow by modifying the workflow file during execution
+**Description:** MCP servers to attach to the harness for each prompt. Include `"flightpath"` to enable dynamic queue extension (exposes `flightpath_append_queue` and `flightpath_queue_status` tools). Add `McpServerConfig` objects to attach any additional MCP server. `null` explicitly disables all MCP injection.
 
-**Default:** `false` (no fallback setting)
+**Default:** inherits from the `flightpath.mcpServers` VS Code setting
 
 **Example:**
 
 ```yaml
-allowDynamicExtension: true
+# Enable FlightPath dynamic queue extension
+mcpServers: ["flightpath"]
+
+# Attach a custom MCP server
+mcpServers:
+  - id: my-db
+    command: node
+    args: [/path/to/db-server.js]
+    autoApprove: true
+
+# Override to disable MCP for this prompt even if workflow enables it
+mcpServers: null
 ```
 
 ### endCondition
@@ -281,7 +290,7 @@ FlightPath uses a **working file** system to track workflow execution state. Whe
 1. **Load workflow** - FlightPath creates a working copy in `.flightpath/.queue/`
 2. **Properties stored** - Harness and model always included; other properties included when explicitly set
 3. **Runtime state** - Execution progress, completed prompts, session IDs tracked in working file
-4. **Modifications** - AI can modify working file during execution (if `allowDynamicExtension: true`)
+4. **Modifications** - AI can extend the workflow queue during execution (if `mcpServers` includes `"flightpath"`)
 5. **Resume** - Working file enables resuming interrupted workflows
 
 ### What Gets Saved
@@ -295,7 +304,7 @@ FlightPath uses a **working file** system to track workflow execution state. Whe
 
 - `agent` - Only if configured
 - `resumeSession` - Only if different from default
-- `allowDynamicExtension` - Only if enabled
+- `mcpServers` - Only if explicitly set
 - `endCondition` - Only if configured
 
 **Example Working File:**
@@ -814,7 +823,7 @@ harness: "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli" | "opencode
 model: string
 agent: string  # Agent name only (e.g., "code-reviewer")
 resumeSession: boolean
-allowDynamicExtension: boolean
+mcpServers: ["flightpath"] | [{ id, command, args?, env?, autoApprove? }, ...] | null
 endCondition:
   script: string
   returns: string
@@ -832,7 +841,7 @@ prompts:
     model: string
     agent: string
     resumeSession: boolean
-    allowDynamicExtension: boolean
+    mcpServers: ["flightpath"] | [{...}] | null
     endCondition:
       script: string
       returns: string
@@ -849,7 +858,7 @@ prompts:
   "model": "string",
   "agent": "string",
   "resumeSession": true,
-  "allowDynamicExtension": false,
+  "mcpServers": ["flightpath"],
   "endCondition": {
     "script": "string",
     "returns": "string",
@@ -865,7 +874,7 @@ prompts:
       "model": "string",
       "agent": "string",
       "resumeSession": true,
-      "allowDynamicExtension": false,
+      "mcpServers": null,
       "endCondition": {}
     }
   ]

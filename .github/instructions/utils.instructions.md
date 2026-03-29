@@ -29,7 +29,7 @@ Shared utilities for file system operations, logging, validation, CLI process ma
 
 **ModelConstants:** Single source of truth for model lists (COPILOT_MODELS, COPILOT_CLI_MODEL_IDS, CLAUDE_CLI_MODELS, CODEX_CLI_MODELS), display names, CLI support flags. Run `npm run sync-models` to sync with package.json AND prompt-schema.json.
 
-**PropertyResolver:** Three-tier property resolution: Prompt-level → Workflow-level → VS Code settings. Ensures all execution properties (harness, model, agent, resumeSession, allowDynamicExtension, sessionId, endCondition) are resolved with proper defaults.
+**PropertyResolver:** Three-tier property resolution: Prompt-level → Workflow-level → VS Code settings. Ensures all execution properties (harness, model, agent, resumeSession, mcpServers, sessionId, endCondition) are resolved with proper defaults.
 
 **SessionResolver:** Per-prompt session tracking with three resolution strategies: prompt number reference (`sessionId: 1`), exact session ID (UUID), auto-resume (no sessionId). Validates cross-harness compatibility and respects workflow-level properties.
 

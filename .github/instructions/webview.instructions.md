@@ -232,7 +232,7 @@ updateSessionRestored(state); // Session restoration (CLI resume)
 ```javascript
 state = {
   fileName: string | null,
-  prompts: Array<{index, text, status, details, harness, model, agent, newChatSession, allowDynamicExtension, endCondition}>,
+  prompts: Array<{index, text, status, details, harness, model, agent, newChatSession, mcpServers, endCondition}>,
   executionState: 'idle' | 'running' | 'paused' | 'stopped' | 'cancelling' | 'completed' | 'error',
   currentStep: number,
   totalSteps: number,

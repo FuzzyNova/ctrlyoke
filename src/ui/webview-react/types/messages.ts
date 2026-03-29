@@ -112,6 +112,10 @@ export {
   type RedoPromptChangesMessage,
 } from "@root/types/WebviewMessageTypes";
 
-// Re-export WorkflowSummary, PriorContext, and helpers from FlightPathTypes
-export type { WorkflowSummary, PriorContext } from "@root/types/FlightPathTypes";
+// Re-export WorkflowSummary, PriorContext, McpServerConfig, and helpers from FlightPathTypes
+export type {
+  WorkflowSummary,
+  PriorContext,
+  McpServerConfig,
+} from "@root/types/FlightPathTypes";
 export { workflowDisplayStep } from "@root/types/FlightPathTypes";

@@ -133,7 +133,6 @@ harness: copilot-cli
 model: claude-sonnet-4.5
 agent: .github/agents/my-agent.agent.md
 newChatSession: true
-allowDynamicExtension: false
 
 # Optional: Workflow-wide validation
 endCondition:

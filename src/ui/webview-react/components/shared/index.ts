@@ -30,3 +30,8 @@ export {
   type KeywordMode,
 } from "./PriorContextSelect";
 export { SkillsSelect } from "./SkillsSelect";
+export {
+  McpServersEditor,
+  buildMcpDefaultLabel,
+  type McpServersValue,
+} from "./McpServersEditor";

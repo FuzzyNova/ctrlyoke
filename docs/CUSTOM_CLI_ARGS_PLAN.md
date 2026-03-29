@@ -181,7 +181,7 @@ Inject `additionalArgs` before the prompt. OpenCode's yargs parser accepts flags
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Completion detection hooks | Copilot: sessionEnd hook file; Claude: `--settings <file>`; Codex: `--config <toml>`; OpenCode: plugin file write | Without these, the workflow stalls indefinitely                                                          |
 | Headless output format     | Claude: `-p --output-format stream-json --verbose`; Codex: `exec --json`; OpenCode: `run --format json`           | FlightPath's response parsers require specific formats                                                   |
-| MCP orchestration          | `--mcp-config` (or equivalent) + tool approval                                                                    | Only when `allowDynamicExtension` resolves to `true`; suppress by setting `allowDynamicExtension: false` |
+| MCP orchestration          | `--mcp-config` (or equivalent) + tool approval                                                                    | Only when `mcpServers` is non-empty; suppress by setting `mcpServers: null`                              |
 
 ### What Gets Skipped When `customArgs` Is Set
 
@@ -258,7 +258,7 @@ These continue to work normally alongside `customArgs`:
 
 - `harness` — still respected (affects harness selection, not arg building)
 - `agent` / `skills` — injected into prompt text by `HarnessIntegration.buildPromptText()`, not as CLI args
-- `allowDynamicExtension` — controls whether MCP config is injected (the one always-injected block)
+- `mcpServers` — controls which MCP servers are injected (the one always-injected block)
 - `endCondition` / `prompt` / `name` / `id` — unaffected
 - `additionalArgs` — if both `customArgs` and `additionalArgs` are set, `additionalArgs` is applied after `customArgs` (appended to the user-controlled portion)
 
@@ -382,7 +382,7 @@ When `additionalArgs` is non-empty:
 - Show inline note on the prompt card: "Extra args: `<value>`"
 - No graying out (all settings still active)
 
-`agent`, `skills`, `endCondition`, `allowDynamicExtension` controls remain fully active in both cases.
+`agent`, `skills`, `endCondition`, `mcpServers` controls remain fully active in both cases.
 
 ---
 

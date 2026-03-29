@@ -21,7 +21,7 @@ Core data structures and constants for FlightPath extension. TypeScript strict m
 
 **`ExecutionProperties` interface** — shared by `PromptFile`, `PromptItem`, `PromptRuntimeMetadata`. Three-tier precedence: prompt-level > workflow-level > global settings.
 
-Fields: `harness?`, `model?`, `agent?: string | null` (null = explicitly disable), `skills?: string[] | null`, `resumeSession?`, `allowDynamicExtension?`, `sessionId?: string | number`, `endCondition?: EndCondition | null` (null = explicitly disable), `priorContext?: PriorContext`, `additionalArgs?: string | null`
+Fields: `harness?`, `model?`, `agent?: string | null` (null = explicitly disable), `skills?: string[] | null`, `resumeSession?`, `mcpServers?: (string | McpServerConfig)[] | null` (null = explicitly disable), `sessionId?: string | number`, `endCondition?: EndCondition | null` (null = explicitly disable), `priorContext?: PriorContext`, `additionalArgs?: string | null`
 
 **Core interfaces:**
 
