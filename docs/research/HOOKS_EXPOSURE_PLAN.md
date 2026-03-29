@@ -5,6 +5,8 @@
 **Problem:** FlightPath silently clobbers user-defined hooks in `.qwen/settings.json` and `.gemini/settings.json` during interactive runs, and offers no way for users to add their own scripts alongside FlightPath's completion detection hooks.
 
 > **Note on the deep-merge fix (Section 3):** This is a permanent, necessary part of the implementation — not an interim workaround. Even after the full `hooks` property ships, three independent layers of hooks must coexist: (1) FlightPath's completion-detection handlers, (2) commands declared in the workflow `hooks` YAML property, and (3) commands already present in the user's settings file before FlightPath runs. The full feature implementation handles layer 2; the deep-merge fix handles layer 3. Both are required.
+>
+> **Status: Section 3 is already implemented.** The deep-merge fix has been applied to both `QwenCliProvider.buildInteractiveHookSettings()` and `GeminiCliProvider` as of the current codebase. The code comments in both providers even note "future workflow hooks" as a placeholder for layer 2. The problem statement table below reflects what was true before the fix; the fix itself is complete.
 
 ---
 
@@ -124,43 +126,34 @@ Uses a plugin system (not hooks). Separate plugin file deployed to `.opencode/pl
 
 ---
 
-## 3. Deep-Merge Fix (Qwen & Gemini) — Permanent, Required
+## 3. Deep-Merge Fix (Qwen & Gemini) — Already Implemented
 
-Fix the merge strategy for Qwen and Gemini so all three layers of user hooks are preserved and execute during FlightPath runs. This fix is a prerequisite for the full `hooks` property: you cannot append user workflow hooks to the event arrays without first replacing the wholesale-replace approach with deep-merge.
+> **This section is complete.** The fix described here has already been applied to both `QwenCliProvider.buildInteractiveHookSettings()` and `GeminiCliProvider`. Preserved for architectural context — understanding the three-layer merge is required before working on Section 5.
 
-### Fix: Deep-merge hook event arrays instead of replacing the hooks key
+The merge strategy for Qwen and Gemini preserves all three layers of hooks during FlightPath runs. This was a prerequisite for the full `hooks` property: workflow user hooks (layer 2) are inserted between FlightPath's completion-detection handlers (layer 1) and the pre-existing settings file hooks (layer 3).
+
+### Implemented Fix: Deep-merge hook event arrays instead of replacing the hooks key
 
 ```typescript
 // In QwenCliProvider.buildInteractiveHookSettings() and GeminiCliProvider equivalent:
 
-// Current (broken):
-const mergedSettings = {
-  ...existingSettings,
-  hooks: hooksSection,  // ❌ Replaces all user hooks
-};
+// Old (broken) approach — no longer in codebase:
+const mergedSettings = { ...existingSettings, hooks: hooksSection }; // ❌ Replaced all user hooks
 
-// Fixed:
+// Current implementation:
 const existingHooks = (existingSettings.hooks as Record<string, unknown[]> | undefined) ?? {};
 const flightpathHooks = hooksSection as Record<string, unknown[]>;
-
-// Merge: append user's existing handlers AFTER FlightPath's handlers for each event
 const mergedHooks: Record<string, unknown[]> = { ...existingHooks };
 for (const [event, handlers] of Object.entries(flightpathHooks)) {
   const userHandlers = (existingHooks[event] as unknown[] | undefined) ?? [];
-  // FlightPath handlers first (completion detection must fire reliably)
+  // FlightPath handlers first, then existing settings-file handlers
+  // TODO (Section 5): workflow user handlers will be inserted between these two layers
   mergedHooks[event] = [...handlers, ...userHandlers];
 }
-
-const mergedSettings = {
-  ...existingSettings,
-  hooks: mergedHooks,  // ✅ Preserves all user hooks, adds FlightPath's
-};
+const mergedSettings = { ...existingSettings, hooks: mergedHooks };
 ```
 
-This fix:
-- Preserves all user hook entries for all events
-- Appends user's handlers after FlightPath's (FlightPath fires first for reliability)
-- Zero user-visible behavior change for existing users (existing hooks now fire instead of being silently dropped)
+The TODO comment in the code marks where Section 5's `workflowUserHandlers` layer will be added.
 
 ---
 
@@ -193,15 +186,23 @@ hooks:
   - event: stop
     command: node ./scripts/send-notification.js
 
-# Workflow-level default, overridden at prompt level
+# Workflow-level default, per-event override at prompt level
+# The prompt's stop hook replaces the workflow's stop hook.
+# Events NOT listed in the prompt's hooks array still inherit from the workflow.
 hooks:
   - event: stop
     command: node ./scripts/default-check.js
+  - event: sessionStart
+    command: node ./scripts/notify-start.js
 prompts:
   - name: risky-step
     hooks:
       - event: stop
-        command: node ./scripts/extra-validation.js  # Only on this prompt
+        command: node ./scripts/extra-validation.js  # Replaces workflow's stop hook
+    # sessionStart not listed → still inherits notify-start.js from workflow level
+
+  - name: silent-step
+    hooks: null  # No hooks at all — suppresses even the workflow's sessionStart hook
 ```
 
 ### TypeScript Types
@@ -255,9 +256,14 @@ export interface UserHookConfig {
 /**
  * User-defined hooks to run alongside FlightPath's completion-detection hooks.
  * Supported events vary by harness; unsupported events are silently ignored.
- * Merged with workflow-level hooks (prompt-level overrides workflow-level).
+ *
+ * Precedence semantics (per event type):
+ * - Omitted → inherit all events from the tier below (workflow → global setting)
+ * - null or [] → explicitly no hooks for this prompt (override every event to empty)
+ * - [...] → per-event override: events present in the array replace the tier below
+ *            for that event only; events not mentioned inherit from the tier below
  */
-hooks?: UserHookConfig[];
+hooks?: UserHookConfig[] | null;
 ```
 
 ### JSON Schema Addition
@@ -293,9 +299,18 @@ The `hooks` property on both `PromptFile` and `PromptItem`:
 
 ```json
 "hooks": {
-  "type": "array",
-  "items": { "$ref": "#/$defs/UserHookConfig" },
-  "description": "User-defined hooks run alongside FlightPath's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped."
+  "oneOf": [
+    {
+      "type": "array",
+      "items": { "$ref": "#/$defs/UserHookConfig" },
+      "description": "User-defined hooks. Per-event override: events present in this array replace the tier below for that event; events absent inherit from the tier below. An empty array explicitly disables all hooks."
+    },
+    {
+      "type": "null",
+      "description": "Explicitly disables all hooks for this prompt/workflow."
+    }
+  ],
+  "description": "User-defined hooks run alongside FlightPath's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped. null or [] disables all hooks. Omit to inherit from the tier below (workflow → global setting)."
 }
 ```
 
@@ -349,18 +364,30 @@ buildHookConfig(scriptPath, notifyDir, workspaceRoot, userHooks?: UserHookConfig
 }
 ```
 
-### Qwen CLI & Gemini CLI (after bug fix)
+### Qwen CLI & Gemini CLI
 
-Same deep-merge strategy from Section 3, but now ALSO include user hooks from the `hooks` workflow property, placed after FlightPath's handlers:
+**Injection point: `buildInteractiveHookSettings()`, not `buildHookConfig()`.**
+
+For Claude and Copilot, `buildHookConfig()` produces the complete hook configuration that is passed as a CLI flag — so `userHooks` belongs there. For Qwen and Gemini, `buildHookConfig()` only produces FlightPath's completion-detection hooks (the `hooksSection`). The actual merge happens in `buildInteractiveHookSettings()`, which reads and writes the settings file. `userHooks` must reach `buildInteractiveHookSettings()` directly (via `workflowContext.resolvedProperties.hooks`), not through `buildHookConfig()`.
+
+Extend the existing merge loop to insert workflow user handlers as the middle layer:
 
 ```typescript
-// Precedence: FlightPath handlers → workflow hooks → existing settings hooks
-mergedHooks[event] = [
-  ...flightpathHandlers,    // FlightPath's completion detection (highest priority)
-  ...workflowUserHandlers,  // From UserHookConfig in workflow YAML
-  ...existingUserHandlers,  // From pre-existing settings file
-];
+// In QwenCliProvider.buildInteractiveHookSettings() and GeminiCliProvider equivalent:
+// workflowUserHooks = resolvedProperties.hooks filtered to CLI-supported events + converted to native format
+
+for (const [event, flightpathHandlers] of Object.entries(flightpathHooks)) {
+  const workflowUserHandlers = (workflowUserHooks[event] as unknown[] | undefined) ?? [];
+  const existingUserHandlers = (existingHooks[event] as unknown[] | undefined) ?? [];
+  mergedHooks[event] = [
+    ...flightpathHandlers,      // FlightPath's completion detection (highest priority)
+    ...workflowUserHandlers,    // From UserHookConfig in workflow YAML
+    ...existingUserHandlers,    // From pre-existing settings file
+  ];
+}
 ```
+
+**Qwen trusted hooks for user-defined commands.** `buildInteractiveHookSettings()` currently pre-trusts FlightPath's specific hook commands in `~/.qwen/trusted_hooks.json`. User-defined commands must also be written there — Qwen will show a trust dialog on the first run for any command not already trusted. For each `UserHookConfig` being injected, write `"": ["<command>"]` into `trusted_hooks.json` using the same format as the existing FlightPath trust entries. Without this, the feature appears broken: the user sees an interactive trust prompt mid-workflow.
 
 ### Copilot CLI
 
@@ -478,17 +505,143 @@ Default implementation in `NotificationMonitorBase.buildHookConfig()` ignores `u
 
 ## 7. `PropertyResolver` Changes
 
-Add `resolveHooks()` analogous to `resolveMcpServers()`:
+Add `resolveHooks()` with **per-event override semantics**:
 
 ```typescript
-// Three-tier: prompt-level → workflow-level → empty array (no global default needed)
+// Three-tier: prompt-level → workflow-level → VS Code setting (flightpath.defaultHooks)
 resolveHooks(
   promptItem: PromptItem,
   workflowFile: PromptFile
 ): UserHookConfig[]
 ```
 
-Hooks from prompt-level and workflow-level are **merged** (both fire), not overridden. This differs from most properties where prompt-level overrides workflow-level. Rationale: a workflow-level "always run tests on stop" hook should still fire even if a specific prompt adds its own stop hook.
+### Precedence Semantics — Per Event Type
+
+This is the key behavioral difference from `mcpServers` and most other properties. Rather than one tier wholesale replacing another, resolution happens **independently per logical event name**:
+
+| `hooks` value at a tier | Effect on that event at that tier |
+|-------------------------|----------------------------------|
+| Omitted (`undefined`) | No override — events inherit from the tier below |
+| `null` or `[]` | All events explicitly cleared — return `[]` immediately, no further fallback |
+| `[{ event: "stop", ... }]` | `stop` is overridden; all other events not mentioned still inherit from the tier below |
+
+**Example — most common case:**
+```yaml
+# Workflow level
+hooks:
+  - event: stop
+    command: npm test
+  - event: sessionStart
+    command: node ./scripts/notify-start.js
+
+prompts:
+  - name: risky-step
+    hooks:
+      - event: stop
+        command: node ./scripts/extra-validation.js  # Replaces workflow's stop hook
+    # sessionStart not mentioned → still inherits from workflow level
+```
+Result for `risky-step`: `stop` runs `extra-validation.js` only; `sessionStart` still runs `notify-start.js`.
+
+**Example — explicit clear:**
+```yaml
+  - name: cleanup-step
+    hooks: null   # (or hooks: []) — no hooks at all for this prompt
+```
+Result: no user hooks fire for `cleanup-step` regardless of workflow or global defaults.
+
+**Algorithm in `resolveHooks()`:**
+
+```typescript
+resolveHooks(promptItem: PromptItem, workflowFile: PromptFile): UserHookConfig[] {
+  // Explicit null/empty at prompt level → no hooks, no fallback
+  if (promptItem.hooks !== undefined) {
+    if (promptItem.hooks === null || promptItem.hooks.length === 0) return [];
+  }
+
+  // Explicit null/empty at workflow level → no hooks, no fallback
+  if (workflowFile.hooks !== undefined && promptItem.hooks === undefined) {
+    if (workflowFile.hooks === null || workflowFile.hooks.length === 0) return [];
+  }
+
+  const promptHooks   = promptItem.hooks   ?? [];
+  const workflowHooks = workflowFile.hooks  ?? [];
+  const globalHooks   = ConfigurationUtils.getDefaultHooks();  // new method (Section 7a)
+
+  // Build per-event map from lowest priority to highest
+  const eventMap = new Map<HookEvent, UserHookConfig[]>();
+
+  // Tier 3: global defaults (lowest priority)
+  for (const hook of globalHooks) {
+    if (!eventMap.has(hook.event)) eventMap.set(hook.event, []);
+    eventMap.get(hook.event)!.push(hook);
+  }
+
+  // Tier 2: workflow overrides per event
+  if (workflowFile.hooks !== undefined && workflowFile.hooks !== null) {
+    const workflowEvents = new Set(workflowHooks.map(h => h.event));
+    for (const event of workflowEvents) {
+      eventMap.set(event, workflowHooks.filter(h => h.event === event));
+    }
+  }
+
+  // Tier 1: prompt overrides per event (highest priority)
+  if (promptItem.hooks !== undefined && promptItem.hooks !== null) {
+    const promptEvents = new Set(promptHooks.map(h => h.event));
+    for (const event of promptEvents) {
+      eventMap.set(event, promptHooks.filter(h => h.event === event));
+    }
+  }
+
+  return [...eventMap.values()].flat();
+}
+```
+
+**Why per-event override, not simple merge:**
+A workflow-level "always run tests on stop" hook should remain the default — but a specific prompt that defines its own stop hooks likely has a reason to run *different* validation, not additional validation on top. Simple merge would silently double-fire workflow hooks even when the prompt author intended to replace them. Per-event override is more predictable: if you define a hook for an event, you own that event at your tier.
+
+---
+
+## 7a. VS Code Setting — `flightpath.defaultHooks`
+
+Analogous to `flightpath.mcpServers` — a global default array used to pre-populate new workflow files and as the ultimate fallback in `resolveHooks()`.
+
+**`package.json` setting:**
+
+```json
+"flightpath.defaultHooks": {
+  "type": "array",
+  "default": [],
+  "items": { "$ref": "#/$defs/UserHookConfig" },
+  "description": "Default hooks injected for workflow prompts when no per-prompt or per-workflow hooks are specified. Used to pre-populate new workflow files. An empty array disables default injection."
+}
+```
+
+**`ConfigurationUtils` addition:**
+
+```typescript
+getDefaultHooks(): UserHookConfig[] {
+  return getConfig().get<UserHookConfig[]>("defaultHooks", []);
+}
+
+async setDefaultHooks(hooks: UserHookConfig[]): Promise<void> {
+  await this.updateSetting("defaultHooks", hooks);
+}
+```
+
+### "Set as Default" Action
+
+The dashboard should expose a "Set as Default" action (matching the pattern used for Skills) that copies the current workflow's `hooks` array into `flightpath.defaultHooks`. This allows users to define hooks once in a workflow, validate them, then promote them to their global default for all future workflows.
+
+### Single Array vs Per-Event Settings
+
+A single `flightpath.defaultHooks` array is the right choice — not separate settings per event (e.g., `flightpath.defaultHooks.stop`, `flightpath.defaultHooks.sessionStart`). Reasons:
+- Consistent with `flightpath.mcpServers` pattern
+- Per-event settings would require users to understand all supported event names upfront when browsing VS Code's settings UI
+- The settings UI can render the array; users who need fine-grained event control are already editing YAML
+- Adding events later doesn't require new settings — the array extends naturally
+
+The VS Code setting is intentionally **not** a place for sophisticated configuration. It holds a simple list of "always run these commands on these events." Complex per-prompt and per-workflow override logic lives in the YAML workflow files.
 
 ---
 
@@ -496,16 +649,17 @@ Hooks from prompt-level and workflow-level are **merged** (both fire), not overr
 
 | File | Change |
 |------|--------|
-| `src/types/FlightPathTypes.ts` | Add `HookEvent` type, `UserHookConfig` interface, `hooks?: UserHookConfig[]` to `ExecutionProperties` |
-| `schemas/prompt-schema.json` | Add `UserHookConfig` def and `hooks` array property |
-| `src/flightpath/PropertyResolver.ts` | Add `resolveHooks()` merging prompt+workflow arrays |
-| `src/flightpath/PromptFileParser.ts` | Copy `hooks` array from source |
-| `src/flightpath/WorkflowInstance.ts` | Add `hooks` array handling |
+| `src/types/FlightPathTypes.ts` | Add `HookEvent` type, `UserHookConfig` interface, `hooks?: UserHookConfig[] \| null` to `ExecutionProperties` |
+| `schemas/prompt-schema.json` | Add `UserHookConfig` def and `hooks` `oneOf` array/null property |
+| `src/flightpath/PropertyResolver.ts` | Add `resolveHooks()` with per-event override semantics (Section 7) |
+| `src/flightpath/PromptFileParser.ts` | Copy `hooks` array/null from source |
+| `src/flightpath/WorkflowInstance.ts` | Add `hooks` array/null handling |
+| `src/flightpath/orchestration/PromptFileLoader.ts` | Copy `hooks` from `promptFile` in `extractWorkflowLevelUpdates()` (like `mcpServers`). **Do NOT add `hooks` to `populateSettingsDefaults()`** — unlike `mcpServers`, the VS Code default fallback lives exclusively in `resolveHooks()`. Baking it into the loaded workflow object would collapse `undefined` (not set) and `[]` (explicitly empty) into the same value, breaking per-event inheritance. |
 | `src/flightpath/harness/shared/interfaces/INotificationMonitor.ts` | Add optional `userHooks` param to `buildHookConfig()` in interface and base |
-| `src/flightpath/harness/qwen/QwenCliProvider.ts` | **Bug fix:** deep-merge hook event arrays; pass `userHooks` to `buildHookConfig` |
-| `src/flightpath/harness/qwen/QwenNotificationMonitor.ts` | Accept `userHooks` in `buildHookConfig`, append to Stop/SessionStart arrays |
-| `src/flightpath/harness/gemini/GeminiCliProvider.ts` | **Bug fix:** deep-merge hook event arrays; pass `userHooks` to `buildHookConfig` |
-| `src/flightpath/harness/gemini/GeminiNotificationMonitor.ts` | Accept `userHooks` in `buildHookConfig`, append to AfterAgent/SessionStart arrays |
+| `src/flightpath/harness/qwen/QwenCliProvider.ts` | Read `userHooks` from `workflowContext.resolvedProperties.hooks`; pass to `buildInteractiveHookSettings()`; add user commands to `trusted_hooks.json` pre-trust step (Section 5) |
+| `src/flightpath/harness/qwen/QwenNotificationMonitor.ts` | No change to `buildHookConfig()` — user hooks are not injected here (see Section 5) |
+| `src/flightpath/harness/gemini/GeminiCliProvider.ts` | Read `userHooks` from `workflowContext.resolvedProperties.hooks`; pass to `buildInteractiveHookSettings()` (Section 5) |
+| `src/flightpath/harness/gemini/GeminiNotificationMonitor.ts` | No change to `buildHookConfig()` — user hooks are not injected here (see Section 5) |
 | `src/flightpath/harness/claude/ClaudeCliProvider.ts` | Pass `userHooks` to `buildHookConfig` |
 | `src/flightpath/harness/claude/ClaudeNotificationMonitor.ts` | Accept `userHooks` in `buildHookConfig`, append to Stop/SessionStart arrays |
 | `src/flightpath/harness/copilot/CopilotCliProvider.ts` | Pass `userHooks` to `buildHookConfig` |
@@ -515,34 +669,40 @@ Hooks from prompt-level and workflow-level are **merged** (both fire), not overr
 | `src/flightpath/harness/opencode/OpenCodeCliProvider.ts` | Replace static file copy with `OpenCodePluginGenerator.generate(userHooks)` call |
 | `src/flightpath/harness/opencode/OpenCodePluginGenerator.ts` | **New file:** generates the plugin JS string with user hook commands embedded |
 | `src/scripts/flightpath-opencode-plugin.js` | No change — remains static source/reference; generator uses it as a template base |
-| `src/ui/WebviewSettingsSync.ts` | Add `hooks` property handling |
+| `package.json` | Add `flightpath.defaultHooks` array setting (Section 7a) |
+| `src/utils/ConfigurationUtils.ts` | Add `getDefaultHooks()` and `setDefaultHooks()` (Section 7a) |
+| `src/ui/WebviewSettingsSync.ts` | Add `hooks` property handling; add `defaultHooks` to global settings sent to webview |
 | `src/ui/WorkflowSerializer.ts` | Add `"hooks"` to property lists |
 | `src/types/DashboardConstants.ts` | Add `HOOKS` constant |
-| `src/types/WebviewMessageTypes.ts` | Add `hooks?: UserHookConfig[]` to relevant interfaces |
-| `src/test/unit/PropertyResolver.test.ts` | Add `resolveHooks()` tests |
+| `src/types/WebviewMessageTypes.ts` | Add `hooks?: UserHookConfig[] \| null` to relevant interfaces; add `defaultHooks` to global settings interface |
+| `src/utils/ValidationUtils.ts` | Add `UserHookConfig` shape + `hooks` array/null definition to AJV runtime schema |
+| `src/test/unit/PropertyResolver.test.ts` | Add `resolveHooks()` tests covering per-event override, null/empty, and inheritance |
 | `docs/` + templates | Document `hooks` property in workflow YAML examples |
 
 ---
 
 ## 9. Implementation Order
 
-1. **Bug fix first** — Fix Qwen and Gemini to deep-merge hook arrays (Section 3). This is a standalone, low-risk fix that resolves the existing user impact immediately. No schema or type changes required.
+1. **Types + schema** — `HookEvent`, `UserHookConfig`, `ExecutionProperties.hooks?: UserHookConfig[] | null`, JSON schema with `oneOf` null support. Run `npm run generate-schema` after. Unblocks everything.
 
-2. **Types + schema** — `HookEvent`, `UserHookConfig`, `ExecutionProperties.hooks`, JSON schema. Unblocks everything.
+2. **VS Code setting + `ConfigurationUtils`** — Add `flightpath.defaultHooks` array setting in `package.json`; add `getDefaultHooks()` / `setDefaultHooks()` to `ConfigurationUtils` (Section 7a).
 
-3. **`PropertyResolver.resolveHooks()`** — merge arrays from both levels.
+3. **`PropertyResolver.resolveHooks()`** — per-event override semantics with three-tier fallback: prompt → workflow → `getDefaultHooks()` (Section 7).
 
-4. **`PromptFileParser` + `WorkflowInstance`** — propagate `hooks` array through parsing.
+4. **`PromptFileParser` + `WorkflowInstance` + `PromptFileLoader`** — propagate `hooks` array/null through parsing. `PromptFileLoader`: copy `hooks` in `extractWorkflowLevelUpdates()` only — do not add to `populateSettingsDefaults()` (Section 8 note).
 
-5. **`INotificationMonitor` interface + base** — add optional `userHooks` parameter (backward compatible).
+5. **`INotificationMonitor` interface + base** — add `userHooks?: UserHookConfig[]` to `buildHookConfig()` signature (backward compatible; Qwen/Gemini monitors do not use this parameter — see Step 6).
 
-6. **Harness implementations** — Claude, Copilot, Qwen, Gemini. Each appends user hook entries to their respective event arrays. OpenCode next (cleanest: generate plugin dynamically via `OpenCodePluginGenerator`). Codex last (chain script is more involved).
+6. **Harness implementations:**
+   - **Claude, Copilot** — `userHooks` flows into `buildHookConfig()`; each monitor appends entries to the relevant event arrays.
+   - **Qwen, Gemini** — `userHooks` flows into `buildInteractiveHookSettings()` as the middle layer of the three-layer merge (Section 5). For Qwen, also write user commands to `trusted_hooks.json`.
+   - **OpenCode** — generate plugin dynamically via `OpenCodePluginGenerator` (Section 5).
 
-7. **Codex chain script** — generate per-run chain script when user stop hooks are present.
+7. **Codex chain script** — generate per-run chain script when user stop hooks are present (Section 5).
 
-8. **Webview layer** — `WebviewSettingsSync`, `WorkflowSerializer`, `DashboardConstants`, `WebviewMessageTypes`. UI editing of hooks is low priority for V1.
+8. **Webview layer** — `DashboardConstants`, `WebviewMessageTypes`, `WebviewSettingsSync`, `WorkflowSerializer`, `ValidationUtils`. "Set as Default" action in the dashboard. UI editing of hooks is low priority for V1.
 
-9. **Tests** — `PropertyResolver.test.ts` and hook injection unit tests.
+9. **Tests** — `PropertyResolver.test.ts` covering per-event override, null/empty, inheritance, and three-tier fallback.
 
 10. **Templates + docs** — update workflow templates and documentation.
 
@@ -550,7 +710,6 @@ Hooks from prompt-level and workflow-level are **merged** (both fire), not overr
 
 ## 10. Out of Scope for This Plan
 
-- **Global VS Code setting for default hooks** — always-on hooks independent of workflow YAML (future: `flightpath.defaultHooks` setting)
 - **Hook output capture** — surfacing user hook stdout/stderr in FlightPath output panel
 - **Conditional hooks** — running a hook only when end condition fails (future: `onRetry` hook)
 - **HTTP hooks** — webhook-style notification (POST to URL on stop). Only command hooks in V1.
