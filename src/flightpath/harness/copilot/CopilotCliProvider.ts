@@ -177,7 +177,7 @@ export class CopilotCliProvider implements ICliProvider {
     } else {
       // Interactive mode: Configure sessionEnd hook for completion detection
       if (workspaceRoot) {
-        const hookArgs = this.buildSessionEndHookArgs(
+        const hookArgs = await this.buildSessionEndHookArgs(
           extensionPath,
           workspaceRoot
         );
@@ -274,10 +274,10 @@ export class CopilotCliProvider implements ICliProvider {
    * @param workspaceRoot Workspace root directory
    * @returns CLI arguments array
    */
-  private buildSessionEndHookArgs(
+  private async buildSessionEndHookArgs(
     extensionPath: string,
     workspaceRoot: string
-  ): string[] {
+  ): Promise<string[]> {
     // Get notification directory from notification monitor
     const notifyDir =
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
@@ -300,7 +300,7 @@ export class CopilotCliProvider implements ICliProvider {
     // For now, we'll create the hook file and let Copilot discover it automatically
 
     // Create the hook file
-    this.createHookFile(hookConfig, workspaceRoot);
+    await this.createHookFile(hookConfig, workspaceRoot);
 
     // No additional CLI args needed - Copilot auto-discovers hooks in .github/hooks/
     return [];
@@ -314,7 +314,14 @@ export class CopilotCliProvider implements ICliProvider {
    * after the workflow finishes (consistent with OpenCode plugin cleanup).
    */
   getAdditionalCleanupFilePaths(workspaceRoot: string): string[] {
-    return [path.join(workspaceRoot, ".github", "hooks", "flightpath.json")];
+    return [
+      path.join(workspaceRoot, ".github", "hooks", "flightpath.json"),
+      // Copilot CLI writes OpenTelemetry telemetry to COPILOT_OTEL_FILE_EXPORTER_PATH,
+      // which is internally set to the relative path "NUL". When the CWD is the workspace
+      // root this resolves to a real file rather than the Windows null device.
+      // Clean it up after each run so it doesn't linger.
+      path.join(workspaceRoot, "NUL"),
+    ];
   }
 
   /**

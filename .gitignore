@@ -17,3 +17,7 @@ package.json.backup
 .flightpath/logs/
 .flightpath/.history/
 .flightpath/capabilities.json
+
+# Copilot CLI OTEL telemetry file (created when CWD is workspace root because
+# COPILOT_OTEL_FILE_EXPORTER_PATH is set to the relative path "NUL")
+/NUL
