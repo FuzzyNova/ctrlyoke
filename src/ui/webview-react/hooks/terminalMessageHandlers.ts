@@ -45,6 +45,21 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       `[TERMINAL_STARTED] workflowId=inst:${workflowId?.slice(0, 8)} sessionId=${sessionId?.slice(0, 8)} kind=${kind} activeWorkflowId=inst:${activeWorkflowId?.slice(0, 8) ?? "null"} match=${workflowId === activeWorkflowId}`
     );
 
+    // For ai-cli sessions, only one should exist at a time per workflow.
+    // Replace any previous ai-cli session so prompts within a run don't accumulate
+    // separate xterm views. (clearAiCliSessions at WORKFLOW_STARTED handles run-to-run
+    // clearing; this handles prompt-to-prompt replacement within a single run.)
+    if (kind === SESSION_KINDS.AI_CLI) {
+      const termStore = useTerminalStore.getState();
+      const prevAiCliIds = (termStore.sessions[workflowId] ?? [])
+        .filter((s) => s.kind === SESSION_KINDS.AI_CLI)
+        .map((s) => s.id);
+      if (prevAiCliIds.length > 0) {
+        terminalRegistry.clearAiCliSessions(workflowId, prevAiCliIds);
+        termStore.clearAiCliSessions(workflowId);
+      }
+    }
+
     useTerminalStore.getState().addSession({
       id: sessionId,
       workflowId,
