@@ -6,6 +6,8 @@ import {
   StepStatus,
   type RunnerId,
 } from "./DashboardConstants";
+import { ToolPermissionMode } from "../flightpath/harness/shared/interfaces/IToolPermissionMapper";
+export type { ToolPermissionMode };
 
 /**
  * Controls which prior prompt outputs are injected into the current prompt as context.
@@ -54,6 +56,20 @@ export interface McpServerConfig {
   env?: Record<string, string>;
   /** Tools to auto-approve: true = all tools, string[] = specific tools */
   autoApprove?: boolean | string[];
+}
+
+/**
+ * Per-workflow/prompt tool permission overrides.
+ * Follows three-tier precedence: prompt > workflow > global VS Code settings.
+ * Only applies to CLI harnesses.
+ */
+export interface ToolPermissionsOverride {
+  /** Permission mode override. Falls back to global if omitted. */
+  mode?: ToolPermissionMode;
+  /** Tool patterns to allow (used in custom mode). Uses Copilot CLI format — auto-converted for Claude/Qwen. */
+  allowedTools?: string[];
+  /** Tool patterns to deny (takes precedence over allow list). */
+  deniedTools?: string[];
 }
 
 /**
@@ -125,6 +141,14 @@ export interface ExecutionProperties {
    * - undefined: Inherit from workflow, then settings
    */
   additionalArgs?: string | null;
+
+  /**
+   * Tool permission overrides for this prompt/workflow.
+   * - object: Override tool permissions (mode, allowedTools, deniedTools)
+   * - null: Explicitly disable inherited overrides (passthrough to harness local config)
+   * - undefined: Inherit from workflow/settings
+   */
+  toolPermissions?: ToolPermissionsOverride | null;
 }
 
 export interface PromptFile extends ExecutionProperties {
@@ -176,7 +200,6 @@ export interface PromptItem extends ExecutionProperties {
   sessionId?: string | number; // Session ID for resuming conversations (string for CLI, number for legacy chat)
   _runtime?: PromptRuntimeMetadata; // Per-prompt runtime metadata
 }
-
 
 /**
  * Per-prompt runtime execution metadata.

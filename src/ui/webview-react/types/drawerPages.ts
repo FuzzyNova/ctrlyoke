@@ -28,6 +28,5 @@ export const DRAWER_TABS: DrawerTab[] = [
     id: "permissions",
     label: "Permissions",
     codicon: "workspace-trusted",
-    placeholder: true,
   },
 ];

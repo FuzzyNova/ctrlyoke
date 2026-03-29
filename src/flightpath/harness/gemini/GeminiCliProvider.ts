@@ -3,7 +3,11 @@ import { promisify } from "util";
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs/promises";
-import { ICliProvider, HarnessConfig, CLI_VERSION_CHECK_TIMEOUT_MS } from "../shared/interfaces/ICliProvider";
+import {
+  ICliProvider,
+  HarnessConfig,
+  CLI_VERSION_CHECK_TIMEOUT_MS,
+} from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -12,7 +16,10 @@ import { GeminiNotificationMonitor } from "./GeminiNotificationMonitor";
 import { GeminiToolPermissionMapper } from "./GeminiToolPermissionMapper";
 import { GeminiLogParser } from "./GeminiLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
-import { ConfigurationUtils, PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../../../utils/ConfigurationUtils";
 import { getGeminiModelName, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
@@ -75,7 +82,13 @@ export class GeminiCliProvider implements ICliProvider {
       workspaceRoot,
       extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
-        this.getMcpConfigArgs(serverPath, wsRoot, workingFile, additionalEnv, userServers)
+        this.getMcpConfigArgs(
+          serverPath,
+          wsRoot,
+          workingFile,
+          additionalEnv,
+          userServers
+        )
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
@@ -107,19 +120,33 @@ export class GeminiCliProvider implements ICliProvider {
 
     // Tool permissions (headless only) / interactive hook setup
     if (!isInteractive) {
-      const permissionConfig = {
-        mode: ConfigurationUtils.getCliToolPermissions(),
-        allowedTools: ConfigurationUtils.getCliAllowedTools(),
-        deniedTools: ConfigurationUtils.getCliDeniedTools(),
-      };
-      const toolPermissionArgs =
-        this.toolPermissionMapper.buildArgs(permissionConfig);
-      args.push(...toolPermissionArgs);
+      // Use resolved permissions from workflow context; fall back to global settings
+      const toolPermissions =
+        workflowContext?.resolvedProperties?.toolPermissions;
+      if (toolPermissions === undefined) {
+        // No workflow context — fall back to global ConfigurationUtils settings
+        const permissionConfig = {
+          mode: ConfigurationUtils.getCliToolPermissions(),
+          allowedTools: ConfigurationUtils.getCliAllowedTools(),
+          deniedTools: ConfigurationUtils.getCliDeniedTools(),
+        };
+        const toolPermissionArgs =
+          this.toolPermissionMapper.buildArgs(permissionConfig);
+        args.push(...toolPermissionArgs);
+      } else if (toolPermissions !== null) {
+        // Resolved non-passthrough permissions from workflow
+        const toolPermissionArgs =
+          this.toolPermissionMapper.buildArgs(toolPermissions);
+        args.push(...toolPermissionArgs);
+      }
+      // else: toolPermissions === null → passthrough, skip permission flags entirely
     } else {
       // Interactive mode: write AfterAgent hook to .gemini/settings.json
       if (workspaceRoot) {
         await this.buildInteractiveHookSettings(extensionPath, workspaceRoot);
-        Log.debug(`🔔 Configured AfterAgent hook for Gemini completion detection`);
+        Log.debug(
+          `🔔 Configured AfterAgent hook for Gemini completion detection`
+        );
       }
     }
 
@@ -190,11 +217,15 @@ export class GeminiCliProvider implements ICliProvider {
     // Deep-merge FlightPath hooks into existing hooks — append user's existing handlers
     // after FlightPath's so all three layers coexist: (1) FlightPath completion detection,
     // (2) future workflow hooks, (3) user's pre-existing settings hooks.
-    const flightpathHooksSection = (hookConfig.config as Record<string, unknown>)["hooks"] as Record<string, unknown[]>;
-    const existingHooks = (existingSettings.hooks as Record<string, unknown[]> | undefined) ?? {};
+    const flightpathHooksSection = (
+      hookConfig.config as Record<string, unknown>
+    )["hooks"] as Record<string, unknown[]>;
+    const existingHooks =
+      (existingSettings.hooks as Record<string, unknown[]> | undefined) ?? {};
     const mergedHooks: Record<string, unknown[]> = { ...existingHooks };
     for (const [event, handlers] of Object.entries(flightpathHooksSection)) {
-      const userHandlers = (existingHooks[event] as unknown[] | undefined) ?? [];
+      const userHandlers =
+        (existingHooks[event] as unknown[] | undefined) ?? [];
       mergedHooks[event] = [...handlers, ...userHandlers];
     }
 
@@ -282,8 +313,10 @@ export class GeminiCliProvider implements ICliProvider {
     // Note: Quotes are needed because spawn with shell:true doesn't auto-quote spaces/special chars
     const quotedPrompt = `"${prompt.replace(/"/g, '\\"')}"`;
     return [
-      "--prompt", quotedPrompt,
-      "--output-format", "stream-json",
+      "--prompt",
+      quotedPrompt,
+      "--output-format",
+      "stream-json",
       ...baseArgs,
     ];
   }
@@ -300,24 +333,28 @@ export class GeminiCliProvider implements ICliProvider {
     userServers?: import("../../../types/FlightPathTypes").McpServerConfig[]
   ): Promise<string[] | null> {
     // Gemini CLI uses standard MCP config format
-    const configJson = userServers && userServers.length > 0
-      ? CliMcpConfigGenerator.generateJsonConfigWithUserServers(
-          mcpServerPath,
-          workspaceRoot,
-          userServers,
-          { type: "stdio" },
-          workingFilePath,
-          additionalEnv
-        )
-      : CliMcpConfigGenerator.generateJsonConfig(
-          mcpServerPath,
-          workspaceRoot,
-          { type: "stdio" },
-          workingFilePath,
-          additionalEnv
-        );
+    const configJson =
+      userServers && userServers.length > 0
+        ? CliMcpConfigGenerator.generateJsonConfigWithUserServers(
+            mcpServerPath,
+            workspaceRoot,
+            userServers,
+            { type: "stdio" },
+            workingFilePath,
+            additionalEnv
+          )
+        : CliMcpConfigGenerator.generateJsonConfig(
+            mcpServerPath,
+            workspaceRoot,
+            { type: "stdio" },
+            workingFilePath,
+            additionalEnv
+          );
 
-    const configPath = this.getMcpConfigFilePath(workingFilePath, workspaceRoot);
+    const configPath = this.getMcpConfigFilePath(
+      workingFilePath,
+      workspaceRoot
+    );
     const fs = require("fs/promises");
     await fs.mkdir(require("path").dirname(configPath), { recursive: true });
     await fs.writeFile(configPath, configJson, "utf-8");
@@ -338,7 +375,9 @@ export class GeminiCliProvider implements ICliProvider {
 
   async checkAvailability(): Promise<boolean> {
     try {
-      await execAsync("gemini --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
+      await execAsync("gemini --version", {
+        timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
+      });
       return true;
     } catch {
       return false;
@@ -347,7 +386,9 @@ export class GeminiCliProvider implements ICliProvider {
 
   async getVersion(): Promise<string | undefined> {
     try {
-      const { stdout } = await execAsync("gemini --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
+      const { stdout } = await execAsync("gemini --version", {
+        timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
+      });
       return stdout.trim();
     } catch {
       return undefined;

@@ -1,7 +1,11 @@
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
-import { ICliProvider, HarnessConfig, CLI_VERSION_CHECK_TIMEOUT_MS } from "../shared/interfaces/ICliProvider";
+import {
+  ICliProvider,
+  HarnessConfig,
+  CLI_VERSION_CHECK_TIMEOUT_MS,
+} from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -117,7 +121,13 @@ export class CodexCliProvider implements ICliProvider {
       workspaceRoot,
       extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
-        this.getMcpConfigArgs(serverPath, wsRoot, workingFile, additionalEnv, userServers)
+        this.getMcpConfigArgs(
+          serverPath,
+          wsRoot,
+          workingFile,
+          additionalEnv,
+          userServers
+        )
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
@@ -155,27 +165,50 @@ export class CodexCliProvider implements ICliProvider {
 
     // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
     if (!isInteractive) {
-      const permissionConfig = {
-        mode: ConfigurationUtils.getCliToolPermissions(),
-        allowedTools: ConfigurationUtils.getCliAllowedTools(),
-        deniedTools: ConfigurationUtils.getCliDeniedTools(),
-      };
+      // Use resolved permissions from workflow context; fall back to global settings
+      const toolPermissions =
+        workflowContext?.resolvedProperties?.toolPermissions;
+      if (toolPermissions === undefined) {
+        // No workflow context — fall back to global ConfigurationUtils settings
+        const permissionConfig = {
+          mode: ConfigurationUtils.getCliToolPermissions(),
+          allowedTools: ConfigurationUtils.getCliAllowedTools(),
+          deniedTools: ConfigurationUtils.getCliDeniedTools(),
+        };
 
-      // Use Codex-specific permission mapper with sandbox/approval settings
-      const sandboxMode = ConfigurationUtils.getCodexSandboxMode();
-      const approvalPolicy = ConfigurationUtils.getCodexApprovalPolicy();
-      const toolPermissionArgs = (
-        this.toolPermissionMapper as CodexToolPermissionMapper
-      ).buildCodexSpecificArgs(permissionConfig, sandboxMode, approvalPolicy);
-      args.push(...toolPermissionArgs);
+        // Use Codex-specific permission mapper with sandbox/approval settings
+        const sandboxMode = ConfigurationUtils.getCodexSandboxMode();
+        const approvalPolicy = ConfigurationUtils.getCodexApprovalPolicy();
+        const toolPermissionArgs = (
+          this.toolPermissionMapper as CodexToolPermissionMapper
+        ).buildCodexSpecificArgs(permissionConfig, sandboxMode, approvalPolicy);
+        args.push(...toolPermissionArgs);
 
-      // Add additional allowed directories (only in headless mode when not dangerous mode)
-      if (permissionConfig.mode !== "dangerouslyAllowAll") {
-        const additionalDirs = ConfigurationUtils.getCodexAllowedDirs();
-        additionalDirs.forEach((dir: string) => {
-          args.push("--add-dir", dir);
-        });
+        // Add additional allowed directories (only in headless mode when not dangerous mode)
+        if (permissionConfig.mode !== "dangerouslyAllowAll") {
+          const additionalDirs = ConfigurationUtils.getCodexAllowedDirs();
+          additionalDirs.forEach((dir: string) => {
+            args.push("--add-dir", dir);
+          });
+        }
+      } else if (toolPermissions !== null) {
+        // Resolved non-passthrough permissions from workflow
+        const sandboxMode = ConfigurationUtils.getCodexSandboxMode();
+        const approvalPolicy = ConfigurationUtils.getCodexApprovalPolicy();
+        const toolPermissionArgs = (
+          this.toolPermissionMapper as CodexToolPermissionMapper
+        ).buildCodexSpecificArgs(toolPermissions, sandboxMode, approvalPolicy);
+        args.push(...toolPermissionArgs);
+
+        // Add additional allowed directories (only when not dangerous mode)
+        if (toolPermissions.mode !== "dangerouslyAllowAll") {
+          const additionalDirs = ConfigurationUtils.getCodexAllowedDirs();
+          additionalDirs.forEach((dir: string) => {
+            args.push("--add-dir", dir);
+          });
+        }
       }
+      // else: toolPermissions === null → passthrough, skip permission flags entirely
     } else {
       // Interactive mode: Configure notify hook for completion detection
       if (workspaceRoot) {
@@ -348,7 +381,9 @@ export class CodexCliProvider implements ICliProvider {
    */
   async checkAvailability(): Promise<boolean> {
     try {
-      await execAsync("codex --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
+      await execAsync("codex --version", {
+        timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
+      });
       return true;
     } catch {
       return false;
@@ -362,7 +397,9 @@ export class CodexCliProvider implements ICliProvider {
    */
   async getVersion(): Promise<string | undefined> {
     try {
-      const { stdout } = await execAsync("codex --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
+      const { stdout } = await execAsync("codex --version", {
+        timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
+      });
       // Extract version from output like "codex version 0.1.2"
       const match = stdout.match(/codex version ([\d.]+)/i);
       return match ? match[1] : stdout.trim();

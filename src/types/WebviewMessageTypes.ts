@@ -214,6 +214,7 @@ export interface PromptItem {
   endCondition?: EndConditionConfig | null;
   priorContext?: import("./FlightPathTypes").PriorContext;
   additionalArgs?: string | null;
+  toolPermissions?: import("./FlightPathTypes").ToolPermissionsOverride | null;
   _runtime?: {
     harness?: string;
     model?: string;
@@ -714,10 +715,7 @@ export type {
   UndoRecord,
 } from "./OutputHistoryTypes";
 
-export type UndoFileAction =
-  | "delete"
-  | "restore-content"
-  | "reverse-patch";
+export type UndoFileAction = "delete" | "restore-content" | "reverse-patch";
 
 export interface UndoFileInstruction {
   /** Workspace-relative POSIX path */
@@ -737,7 +735,7 @@ export interface UndoFileInstruction {
    * When 'crlf', the reverse-patch result is converted from LF back to CRLF
    * to restore the file's original line endings.
    */
-  lineEnding?: 'crlf';
+  lineEnding?: "crlf";
 }
 
 export interface UndoResult {
@@ -837,7 +835,10 @@ export interface UndoWorkflowChangesMessage {
   data: {
     requestId: string;
     workspacePath: string;
-    entries: Array<{ target: UndoExecutionTarget; files: UndoFileInstruction[] }>;
+    entries: Array<{
+      target: UndoExecutionTarget;
+      files: UndoFileInstruction[];
+    }>;
   };
 }
 
@@ -847,7 +848,10 @@ export interface RedoWorkflowChangesMessage {
   data: {
     requestId: string;
     workspacePath: string;
-    entries: Array<{ target: OutputExecutionTarget; files: UndoFileInstruction[] }>;
+    entries: Array<{
+      target: OutputExecutionTarget;
+      files: UndoFileInstruction[];
+    }>;
   };
 }
 

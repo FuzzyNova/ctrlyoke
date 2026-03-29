@@ -205,6 +205,48 @@ definitions:
           claude-cli, codex-cli, opencode-cli). Ignored for copilot-chat. Use null at prompt level
           to explicitly disable additional args even if the workflow or settings define some.
           Example: "--effort high --max-turns 10"
+      toolPermissions:
+        oneOf:
+          - type: object
+            description: >-
+              Per-workflow/prompt tool permission overrides. Follows three-tier precedence: prompt >
+              workflow > global VS Code settings. Only applies to CLI harnesses.
+            properties:
+              mode:
+                type: string
+                enum:
+                  - dangerouslyAllowAll
+                  - allowAll
+                  - custom
+                  - passthrough
+                description: >-
+                  Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll'
+                  auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools
+                  only. 'passthrough' omits all FlightPath permission flags — the harness uses
+                  whatever permissions the user has configured in its own local settings (e.g.
+                  ~/.claude/settings.json, Copilot CLI config).
+              allowedTools:
+                type: array
+                items:
+                  type: string
+                description: >-
+                  Tool patterns to allow (used in custom mode). Uses Copilot CLI format —
+                  auto-converted for Claude/Qwen. Ignored by Codex, OpenCode, and Gemini (mode-only
+                  harnesses).
+              deniedTools:
+                type: array
+                items:
+                  type: string
+                description: >-
+                  Tool patterns to deny (takes precedence over allow list). Ignored by Codex,
+                  OpenCode, and Gemini (mode-only harnesses).
+            additionalProperties: false
+          - type: 'null'
+        description: >-
+          Tool permission overrides for this prompt/workflow. Use null to explicitly disable
+          inherited overrides and fall back to global VS Code settings. Set mode to 'passthrough' to
+          omit all FlightPath permission flags and rely entirely on the harness's own local
+          configuration.
   promptItem:
     type: object
     allOf:

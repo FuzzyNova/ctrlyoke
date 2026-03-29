@@ -4,10 +4,7 @@ import { PromptFileParser } from "../PromptFileParser";
 import { PromptQueue } from "../PromptQueue";
 import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import {
-  PromptFile,
-  EXECUTION_STATES,
-} from "../../types/FlightPathTypes";
+import { PromptFile, EXECUTION_STATES } from "../../types/FlightPathTypes";
 import { FlightPathWebviewProvider } from "../../ui/FlightPathWebviewProvider";
 
 /**
@@ -342,6 +339,13 @@ export class PromptFileLoader {
           typeof ConfigurationUtils.getAdditionalArgsForHarness
         >[0]
       );
+    }
+    if (explicitValues.toolPermissions === undefined) {
+      defaults.toolPermissions = {
+        mode: ConfigurationUtils.getCliToolPermissions(),
+        allowedTools: ConfigurationUtils.getCliAllowedTools(),
+        deniedTools: ConfigurationUtils.getCliDeniedTools(),
+      };
     }
 
     return defaults;

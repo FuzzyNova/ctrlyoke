@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { VsCodeApi } from "../types/vscode";
 import type { PromptItem } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
-import type { PriorContext } from "../types/messages";
+import type { PriorContext, ToolPermissionsOverride } from "../types/messages";
 import { FINAL_PROMPT_PHASES, EDITOR_TARGET_KINDS } from "../types/messages";
 
 /** Property is inherited from workflow/settings when undefined. */
@@ -39,6 +39,7 @@ export interface PropertyValues {
   endCondition?: EndConditionConfig | null;
   priorContext?: PriorContext; // undefined = inherit/default
   additionalArgs: Disableable<string>; // undefined = inherit, null = none, string = custom args
+  toolPermissions?: ToolPermissionsOverride | null; // undefined = inherit workflow, null = passthrough, object = override
 }
 
 /**
@@ -55,6 +56,7 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
   mcpServers: undefined,
   endCondition: undefined, // undefined = inherit from workflow
   additionalArgs: undefined,
+  toolPermissions: undefined,
 };
 
 export const END_CONDITION_DEFAULTS: EndConditionConfig = {
@@ -226,7 +228,10 @@ export const useEditorStore = create<
   // ============================================================================
 
   selectPrompt: (target, promptData = null) => {
-    if (typeof target === "object" && target?.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+    if (
+      typeof target === "object" &&
+      target?.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
+    ) {
       if (promptData) {
         get().enterEditMode(-1, promptData);
       }
@@ -236,7 +241,8 @@ export const useEditorStore = create<
     const resolvedIndex =
       typeof target === "number"
         ? target
-        : typeof target === "object" && target?.kind === FINAL_PROMPT_PHASES.QUEUE
+        : typeof target === "object" &&
+            target?.kind === FINAL_PROMPT_PHASES.QUEUE
           ? target.index
           : null;
 
@@ -251,7 +257,10 @@ export const useEditorStore = create<
       } else {
         // Fallback if promptData not provided (shouldn't happen)
         set({
-          selectionTarget: { kind: FINAL_PROMPT_PHASES.QUEUE, index: resolvedIndex },
+          selectionTarget: {
+            kind: FINAL_PROMPT_PHASES.QUEUE,
+            index: resolvedIndex,
+          },
           selectedPromptIndex: resolvedIndex,
           originalPromptData: promptData,
         });
@@ -354,6 +363,7 @@ export const useEditorStore = create<
       endCondition: promptData.endCondition ?? null,
       priorContext: promptData.priorContext,
       additionalArgs: promptData.additionalArgs,
+      toolPermissions: promptData.toolPermissions,
     };
 
     set({
@@ -646,7 +656,8 @@ export const useEditorStore = create<
     // Only restore if we were in new prompt mode
     const persistedTarget = persistedState.selectionTarget;
     if (
-      (persistedTarget && persistedTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) ||
+      (persistedTarget &&
+        persistedTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) ||
       persistedState.selectedPromptIndex !== null
     ) {
       return false;
@@ -698,11 +709,14 @@ export const useEditorStore = create<
   // COMPUTED SELECTORS
   // ============================================================================
 
-  isNewPromptMode: () => get().selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT,
+  isNewPromptMode: () =>
+    get().selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT,
 
-  isEditMode: () => get().selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT,
+  isEditMode: () =>
+    get().selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT,
 
-  isFinalPromptMode: () => get().selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT,
+  isFinalPromptMode: () =>
+    get().selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT,
 
   getPromptProperties: () => {
     const { promptText, promptName, properties } = get();
@@ -762,6 +776,11 @@ export const useEditorStore = create<
       result.additionalArgs = null;
     } else if (properties.additionalArgs) {
       result.additionalArgs = properties.additionalArgs;
+    }
+
+    // Add toolPermissions if overridden (undefined = inherit, null = passthrough, object = override)
+    if (properties.toolPermissions !== undefined) {
+      result.toolPermissions = properties.toolPermissions;
     }
 
     return result;

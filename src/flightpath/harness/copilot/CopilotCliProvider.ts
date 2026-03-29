@@ -2,7 +2,11 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs/promises";
-import { ICliProvider, HarnessConfig, CLI_VERSION_CHECK_TIMEOUT_MS } from "../shared/interfaces/ICliProvider";
+import {
+  ICliProvider,
+  HarnessConfig,
+  CLI_VERSION_CHECK_TIMEOUT_MS,
+} from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -128,7 +132,13 @@ export class CopilotCliProvider implements ICliProvider {
       workspaceRoot,
       extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
-        this.getMcpConfigArgs(serverPath, wsRoot, workingFile, additionalEnv, userServers)
+        this.getMcpConfigArgs(
+          serverPath,
+          wsRoot,
+          workingFile,
+          additionalEnv,
+          userServers
+        )
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
@@ -143,13 +153,17 @@ export class CopilotCliProvider implements ICliProvider {
           if (server.autoApprove === true) {
             // Approve all tools from this server
             args.push("--allow-tool", server.id);
-            Log.debug(`🔧 Auto-approved all tools from MCP server: ${server.id}`);
+            Log.debug(
+              `🔧 Auto-approved all tools from MCP server: ${server.id}`
+            );
           } else if (Array.isArray(server.autoApprove)) {
             // Approve specific tool patterns
             for (const pattern of server.autoApprove) {
               args.push("--allow-tool", pattern);
             }
-            Log.debug(`🔧 Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`);
+            Log.debug(
+              `🔧 Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`
+            );
           }
         }
       }
@@ -166,14 +180,26 @@ export class CopilotCliProvider implements ICliProvider {
 
     // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
     if (!isInteractive) {
-      const permissionConfig = {
-        mode: ConfigurationUtils.getCliToolPermissions(),
-        allowedTools: ConfigurationUtils.getCliAllowedTools(),
-        deniedTools: ConfigurationUtils.getCliDeniedTools(),
-      };
-      const toolPermissionArgs =
-        this.toolPermissionMapper.buildArgs(permissionConfig);
-      args.push(...toolPermissionArgs);
+      // Use resolved permissions from workflow context; fall back to global settings
+      const toolPermissions =
+        workflowContext?.resolvedProperties?.toolPermissions;
+      if (toolPermissions === undefined) {
+        // No workflow context — fall back to global ConfigurationUtils settings
+        const permissionConfig = {
+          mode: ConfigurationUtils.getCliToolPermissions(),
+          allowedTools: ConfigurationUtils.getCliAllowedTools(),
+          deniedTools: ConfigurationUtils.getCliDeniedTools(),
+        };
+        const toolPermissionArgs =
+          this.toolPermissionMapper.buildArgs(permissionConfig);
+        args.push(...toolPermissionArgs);
+      } else if (toolPermissions !== null) {
+        // Resolved non-passthrough permissions from workflow
+        const toolPermissionArgs =
+          this.toolPermissionMapper.buildArgs(toolPermissions);
+        args.push(...toolPermissionArgs);
+      }
+      // else: toolPermissions === null → passthrough, skip permission flags entirely
     } else {
       // Interactive mode: Configure sessionEnd hook for completion detection
       if (workspaceRoot) {
@@ -414,22 +440,23 @@ export class CopilotCliProvider implements ICliProvider {
     try {
       // Generate MCP config JSON using shared utility
       // Copilot CLI requires "type": "local" and "tools" field
-      const configJson = userServers && userServers.length > 0
-        ? CliMcpConfigGenerator.generateJsonConfigWithUserServers(
-            mcpServerPath,
-            workspaceRoot,
-            userServers,
-            { type: "local", tools: ["*"] },
-            workingFilePath,
-            additionalEnv
-          )
-        : CliMcpConfigGenerator.generateJsonConfig(
-            mcpServerPath,
-            workspaceRoot,
-            { type: "local", tools: ["*"] },
-            workingFilePath,
-            additionalEnv
-          );
+      const configJson =
+        userServers && userServers.length > 0
+          ? CliMcpConfigGenerator.generateJsonConfigWithUserServers(
+              mcpServerPath,
+              workspaceRoot,
+              userServers,
+              { type: "local", tools: ["*"] },
+              workingFilePath,
+              additionalEnv
+            )
+          : CliMcpConfigGenerator.generateJsonConfig(
+              mcpServerPath,
+              workspaceRoot,
+              { type: "local", tools: ["*"] },
+              workingFilePath,
+              additionalEnv
+            );
 
       // Write to temp directory — use unique name per execution to avoid parallel workflow collisions
       const configPath = this.getMcpConfigFilePath(
@@ -471,7 +498,9 @@ export class CopilotCliProvider implements ICliProvider {
     const result = await retryWithBackoff(
       async () => {
         try {
-          await execAsync("copilot --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
+          await execAsync("copilot --version", {
+            timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
+          });
           return true;
         } catch (error) {
           // Retry Windows file-lock errors; treat other errors as permanent
@@ -495,7 +524,9 @@ export class CopilotCliProvider implements ICliProvider {
     const result = await retryWithBackoff(
       async () => {
         try {
-          const { stdout } = await execAsync("copilot --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
+          const { stdout } = await execAsync("copilot --version", {
+            timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
+          });
           return stdout.trim() || null;
         } catch (error) {
           if (String(error).includes("being used by another process")) {

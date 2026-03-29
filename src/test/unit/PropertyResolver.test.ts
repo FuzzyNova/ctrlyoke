@@ -421,6 +421,173 @@ suite("PropertyResolver Tests", () => {
     });
   });
 
+  suite("resolveToolPermissions", () => {
+    test("should return null (passthrough) when prompt toolPermissions is null", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        toolPermissions: null,
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        toolPermissions: {
+          mode: "allowAll",
+          allowedTools: [],
+          deniedTools: [],
+        },
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.toolPermissions, null);
+    });
+
+    test("should return null (passthrough) when workflow toolPermissions is null and prompt is undefined", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        toolPermissions: null,
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.toolPermissions, null);
+    });
+
+    test("should return null (passthrough) when both levels are undefined", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.toolPermissions, null);
+    });
+
+    test("should return null (passthrough) when mode is 'passthrough'", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        toolPermissions: { mode: "passthrough" },
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        toolPermissions: { mode: "allowAll" },
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.toolPermissions, null);
+    });
+
+    test("should return null (passthrough) when workflow mode is 'passthrough' and prompt is undefined", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        toolPermissions: { mode: "passthrough" },
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.toolPermissions, null);
+    });
+
+    test("should use prompt-level config when it overrides workflow-level", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        toolPermissions: {
+          mode: "custom",
+          allowedTools: ["write"],
+          deniedTools: [],
+        },
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        toolPermissions: { mode: "allowAll" },
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.deepStrictEqual(resolved.toolPermissions, {
+        mode: "custom",
+        allowedTools: ["write"],
+        deniedTools: [],
+      });
+    });
+
+    test("should use workflow-level config when prompt is undefined", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        toolPermissions: {
+          mode: "dangerouslyAllowAll",
+          allowedTools: [],
+          deniedTools: [],
+        },
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.deepStrictEqual(resolved.toolPermissions, {
+        mode: "dangerouslyAllowAll",
+        allowedTools: [],
+        deniedTools: [],
+      });
+    });
+
+    test("should default mode to 'allowAll' when mode is omitted in override object", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        toolPermissions: { allowedTools: ["write"] },
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.ok(resolved.toolPermissions);
+      assert.strictEqual(resolved.toolPermissions.mode, "allowAll");
+      assert.deepStrictEqual(resolved.toolPermissions.allowedTools, ["write"]);
+    });
+
+    test("should default allowedTools and deniedTools to [] when omitted", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        toolPermissions: { mode: "custom" },
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.ok(resolved.toolPermissions);
+      assert.strictEqual(resolved.toolPermissions.mode, "custom");
+      assert.deepStrictEqual(resolved.toolPermissions.allowedTools, []);
+      assert.deepStrictEqual(resolved.toolPermissions.deniedTools, []);
+    });
+
+    test("should preserve full config when all fields are specified", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        toolPermissions: {
+          mode: "custom",
+          allowedTools: ["write", "shell(git:*)"],
+          deniedTools: ["shell(rm:*)"],
+        },
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.deepStrictEqual(resolved.toolPermissions, {
+        mode: "custom",
+        allowedTools: ["write", "shell(git:*)"],
+        deniedTools: ["shell(rm:*)"],
+      });
+    });
+  });
+
   suite("full precedence chain", () => {
     test("should correctly apply three-tier precedence for all properties", () => {
       const prompt: PromptItem = {

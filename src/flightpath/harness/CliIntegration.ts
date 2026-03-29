@@ -5,10 +5,7 @@ import * as path from "path";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import type { VsCodeAdapter } from "../../platform/VsCodeAdapter";
 import { CliResult } from "../../types/CliOutputTypes";
-import {
-  PromptItem,
-  Harness,
-} from "../../types/FlightPathTypes";
+import { PromptItem, Harness } from "../../types/FlightPathTypes";
 import { WorkflowContext } from "../../types/WorkflowContextTypes";
 import { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
@@ -17,7 +14,11 @@ import { TempFileManager } from "../../utils/TempFileManager";
 import { PromptFileSplitter } from "../../utils/PromptFileSplitter";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
-import { getPtyProcessManager, ptyPostMessage, resolveWindowsShell } from "./PtyProcessManager";
+import {
+  getPtyProcessManager,
+  ptyPostMessage,
+  resolveWindowsShell,
+} from "./PtyProcessManager";
 import type { PtySession } from "./PtyProcessManager";
 import { Log } from "../../utils/Log";
 import {
@@ -27,6 +28,7 @@ import {
 } from "../../types/DashboardConstants";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { ICliProvider } from "./shared/interfaces/ICliProvider";
+import type { ToolPermissionConfig } from "./shared/interfaces/IToolPermissionMapper";
 import { CliOutputFormatter } from "./shared/CliOutputFormatter";
 import { CliLogMonitor } from "./CliLogMonitor";
 import {
@@ -310,10 +312,20 @@ export class CliIntegration extends HarnessIntegration {
 
   /**
    * Check if full permissions are granted (no interactive prompts will occur)
-   * Used to warn users when running headless without full permissions
+   * Used to warn users when running headless without full permissions.
+   *
+   * @param toolPermissions Resolved permissions from workflow context.
+   *   - undefined: no workflow context — falls back to ConfigurationUtils global settings
+   *   - null: passthrough mode — returns false (FlightPath can't know what the harness allows)
+   *   - ToolPermissionConfig: use the resolved config directly
    */
-  protected hasFullPermissions(): boolean {
-    const config = {
+  protected hasFullPermissions(
+    toolPermissions?: ToolPermissionConfig | null
+  ): boolean {
+    if (toolPermissions === null) {
+      return false;
+    }
+    const config = toolPermissions ?? {
       mode: ConfigurationUtils.getCliToolPermissions(),
       allowedTools: ConfigurationUtils.getCliAllowedTools(),
       deniedTools: ConfigurationUtils.getCliDeniedTools(),
@@ -361,7 +373,8 @@ export class CliIntegration extends HarnessIntegration {
     finalPromptResponseTexts?: string[]
   ): Promise<PromptFileResult> {
     const omitAgentsAndSkills =
-      !!resolvedSessionId && ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume();
+      !!resolvedSessionId &&
+      ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume();
     const sections = await this.buildPromptSections(
       prompt,
       omitAgentsAndSkills ? undefined : resolvedProperties?.agent,
@@ -382,7 +395,10 @@ export class CliIntegration extends HarnessIntegration {
       !!sections.excerptContent ||
       hasPriorContext;
     if (!hasExtras && this.isSimplePrompt(sections.userPromptText)) {
-      return { promptWithInstruction: sections.userPromptText, tempFilePaths: [] };
+      return {
+        promptWithInstruction: sections.userPromptText,
+        tempFilePaths: [],
+      };
     }
 
     // Categorized path: write per-category temp files, return structured reference instruction
@@ -400,7 +416,11 @@ export class CliIntegration extends HarnessIntegration {
         : "";
     const contextContent = priorContextBlock || undefined;
 
-    return this.createCategorizedPromptFiles(sections, workflowContext, contextContent);
+    return this.createCategorizedPromptFiles(
+      sections,
+      workflowContext,
+      contextContent
+    );
   }
 
   /**
@@ -426,7 +446,9 @@ export class CliIntegration extends HarnessIntegration {
     absolutePath: string
   ): string {
     const relativePath = tempMgr.getRelativePath(absolutePath);
-    return this.provider.formatFileReference?.(relativePath) ?? `@${relativePath}`;
+    return (
+      this.provider.formatFileReference?.(relativePath) ?? `@${relativePath}`
+    );
   }
 
   /**
@@ -716,7 +738,9 @@ export class CliIntegration extends HarnessIntegration {
 
       // Spawn with stdio:'inherit' — the user sees the AI CLI TUI directly.
       const workingDir = this.getWorkspaceRoot() || process.cwd();
-      const interactiveEnv = this.provider.getInteractiveSpawnEnv?.() ?? CliProviderUtils.buildProcessEnv();
+      const interactiveEnv =
+        this.provider.getInteractiveSpawnEnv?.() ??
+        CliProviderUtils.buildProcessEnv();
       let processExited = false;
       const spawnPromise = this.processManager
         .spawnInteractive(commandStr, workingDir, interactiveEnv)
@@ -776,8 +800,7 @@ export class CliIntegration extends HarnessIntegration {
       return { success: true, sessionId: hookSessionId ?? resolvedSessionId };
     } catch (error) {
       Log.error("❌ CLI interactive execution error", error);
-      this.lastFailureReason =
-        getErrorMessage(error);
+      this.lastFailureReason = getErrorMessage(error);
       return { success: false };
     } finally {
       await this.cleanupTempFiles(tempFilePaths);
@@ -879,7 +902,9 @@ export class CliIntegration extends HarnessIntegration {
       const wsRootForEnv = this.getWorkspaceRoot();
       if (wsRootForEnv) {
         terminalEnv.FLIGHTPATH_NOTIFY_DIR =
-          this.provider.notificationMonitor.getNotificationDirectory(wsRootForEnv);
+          this.provider.notificationMonitor.getNotificationDirectory(
+            wsRootForEnv
+          );
       }
       await this.startCliProcess(
         args,
@@ -942,17 +967,17 @@ export class CliIntegration extends HarnessIntegration {
           );
 
         // Wait for SessionStart notification
-        const startResultNotify =
-          await this.provider.notificationMonitor.waitForSessionStart!(
-            {
-              directory: notifyDir,
-              timeoutMs: SESSION_START_TIMEOUT_MS,
-              pollMs: SESSION_START_POLL_MS,
-            },
-            startTime,
-            runId,
-            () => this.isCancelling
-          );
+        const startResultNotify = await this.provider.notificationMonitor
+          .waitForSessionStart!(
+          {
+            directory: notifyDir,
+            timeoutMs: SESSION_START_TIMEOUT_MS,
+            pollMs: SESSION_START_POLL_MS,
+          },
+          startTime,
+          runId,
+          () => this.isCancelling
+        );
 
         if (!startResultNotify.completed) {
           Log.error(
@@ -1033,8 +1058,7 @@ export class CliIntegration extends HarnessIntegration {
       return result;
     } catch (error) {
       Log.error(`❌ Interactive execution error`, error);
-      this.lastFailureReason =
-        getErrorMessage(error);
+      this.lastFailureReason = getErrorMessage(error);
       throw error;
     } finally {
       // Always clean up temp files, regardless of success or failure
@@ -1090,10 +1114,14 @@ export class CliIntegration extends HarnessIntegration {
       // PTY path: spawn via node-pty and route I/O to webview
       // Use the instance UUID so PTY sessions are keyed by the same ID the webview
       // uses for activeWorkflowId. Fall back to filePath for ad-hoc (non-executor) calls.
-      const workflowId = workflowContext?.instanceId ?? workflowContext?.filePath ?? this.workflowName ?? "unknown";
+      const workflowId =
+        workflowContext?.instanceId ??
+        workflowContext?.filePath ??
+        this.workflowName ??
+        "unknown";
       const stepName = workflowContext
         ? (workflowContext.allPrompts[workflowContext.promptIndex]?.name ??
-           `Step ${workflowContext.promptIndex + 1}`)
+          `Step ${workflowContext.promptIndex + 1}`)
         : "interactive";
 
       // On Windows, use PowerShell instead of cmd.exe.
@@ -1103,8 +1131,14 @@ export class CliIntegration extends HarnessIntegration {
       // space after the opening quote. PowerShell's -Command flag uses the Windows
       // CommandLineToArgvW rules, which DO treat \" as a literal " (odd backslashes before a
       // quote = escaped quote), so the full command string is preserved correctly.
-      const shell = process.platform === "win32" ? resolveWindowsShell() : (process.env.SHELL ?? "/bin/bash");
-      const shellArgs = process.platform === "win32" ? ["-NoProfile", "-Command", String(tuiCommand)] : ["-c", String(tuiCommand)];
+      const shell =
+        process.platform === "win32"
+          ? resolveWindowsShell()
+          : (process.env.SHELL ?? "/bin/bash");
+      const shellArgs =
+        process.platform === "win32"
+          ? ["-NoProfile", "-Command", String(tuiCommand)]
+          : ["-c", String(tuiCommand)];
       const cwd = this.getWorkspaceRoot() ?? process.cwd();
       const mergedEnv = env ? { ...process.env, ...env } : process.env;
 
@@ -1114,7 +1148,9 @@ export class CliIntegration extends HarnessIntegration {
       // this, output produced in the first few milliseconds of process startup
       // (banners, version headers) would be silently dropped because
       // pushPendingOutput maps over existing sessions and finds no match.
-      const promptNumber = workflowContext ? workflowContext.promptIndex + 1 : undefined;
+      const promptNumber = workflowContext
+        ? workflowContext.promptIndex + 1
+        : undefined;
       const preSessionId = `ai-cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       ptyPostMessage({
         type: MESSAGE_TYPES.TERMINAL_STARTED,
@@ -1159,13 +1195,17 @@ export class CliIntegration extends HarnessIntegration {
 
       this.currentPtySession = session;
 
-      Log.info(`🖥️ PTY session spawned: "${stepName}" (${session.id.slice(0, 8)}) workflowId=inst:${workflowId.slice(0, 8)}`);
+      Log.info(
+        `🖥️ PTY session spawned: "${stepName}" (${session.id.slice(0, 8)}) workflowId=inst:${workflowId.slice(0, 8)}`
+      );
     } else {
       // Fallback: VS Code terminal path (when PtyProcessManager not initialized)
       const terminal = await this.createFreshTerminal(env);
       Log.info(`🖥️ Opened terminal: "${this.buildTerminalName()}"`);
       if (tempFilePaths.length > 0) {
-        Log.debug(`📁 Interactive mode using ${tempFilePaths.length} temp file(s)`);
+        Log.debug(
+          `📁 Interactive mode using ${tempFilePaths.length} temp file(s)`
+        );
       }
       terminal.show();
 
@@ -1268,7 +1308,9 @@ export class CliIntegration extends HarnessIntegration {
   ): Promise<boolean> {
     try {
       if (tempFilePaths.length > 0) {
-        Log.info(`🚀 Starting headless mode with ${tempFilePaths.length} file(s)`);
+        Log.info(
+          `🚀 Starting headless mode with ${tempFilePaths.length} file(s)`
+        );
       } else {
         Log.info(`🚀 Starting headless mode with direct prompt (fast path)`);
       }
@@ -1280,7 +1322,10 @@ export class CliIntegration extends HarnessIntegration {
       // The multi-line formatting in promptWithInstruction (joinSeparator = ",\n") is
       // for human readability only — replacing with spaces preserves the full instruction.
       const shellSafePrompt = promptArgument.replace(/[\r\n]+/g, " ");
-      const headlessArgs = this.provider.buildHeadlessArgs(args, shellSafePrompt);
+      const headlessArgs = this.provider.buildHeadlessArgs(
+        args,
+        shellSafePrompt
+      );
       const displayCommand = `${this.provider.config.name} ${headlessArgs.join(" ")}`;
 
       this.lastCliCommand = displayCommand;
@@ -1379,8 +1424,7 @@ export class CliIntegration extends HarnessIntegration {
     // Use the same PowerShell-preferred shell as interactive mode on Windows.
     // Node's spawn({ shell: true }) defaults to cmd.exe on Windows, which
     // cannot handle special characters (e.g. newlines in quoted args).
-    const shell =
-      process.platform === "win32" ? resolveWindowsShell() : true;
+    const shell = process.platform === "win32" ? resolveWindowsShell() : true;
 
     const env = CliProviderUtils.buildProcessEnv();
 
@@ -1547,10 +1591,17 @@ export class CliIntegration extends HarnessIntegration {
 
   /**
    * Show warning when running in headless mode without full permissions
+   *
+   * @param toolPermissions Resolved permissions from workflow context (passed through to hasFullPermissions)
    */
-  protected warnIfHeadlessWithoutPermissions(): void {
+  protected warnIfHeadlessWithoutPermissions(
+    toolPermissions?: ToolPermissionConfig | null
+  ): void {
     const mode = this.getExecutionMode();
-    if (mode === CLI_EXECUTION_MODE.HEADLESS && !this.hasFullPermissions()) {
+    if (
+      mode === CLI_EXECUTION_MODE.HEADLESS &&
+      !this.hasFullPermissions(toolPermissions)
+    ) {
       this.platform.warn(CLI_WARNING_MESSAGES.HEADLESS_WITHOUT_PERMISSIONS);
     }
   }
@@ -1955,7 +2006,9 @@ export class CliIntegration extends HarnessIntegration {
         }
       } else {
         // Headless mode
-        this.warnIfHeadlessWithoutPermissions();
+        this.warnIfHeadlessWithoutPermissions(
+          resolvedProperties?.toolPermissions
+        );
 
         // Build the shared response callback (single source of truth)
         const responseCallback = this.buildHeadlessResponseCallback(
@@ -1968,7 +2021,9 @@ export class CliIntegration extends HarnessIntegration {
         );
 
         // Claude CLI error recovery wrapper (Phase 5)
-        const executeWithRecovery = async (args: string[]): Promise<boolean> => {
+        const executeWithRecovery = async (
+          args: string[]
+        ): Promise<boolean> => {
           try {
             return await this.executeHeadlessWithPromptFile(
               args,

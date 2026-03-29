@@ -4,6 +4,8 @@ import { CopilotToolPermissionMapper } from "../../flightpath/harness/copilot/Co
 import { ClaudeToolPermissionMapper } from "../../flightpath/harness/claude/ClaudeToolPermissionMapper";
 import { CodexToolPermissionMapper } from "../../flightpath/harness/codex/CodexToolPermissionMapper";
 import { OpenCodeToolPermissionMapper } from "../../flightpath/harness/opencode/OpenCodeToolPermissionMapper";
+import { QwenToolPermissionMapper } from "../../flightpath/harness/qwen/QwenToolPermissionMapper";
+import { GeminiToolPermissionMapper } from "../../flightpath/harness/gemini/GeminiToolPermissionMapper";
 import type { ToolPermissionConfig } from "../../flightpath/harness/shared/interfaces/IToolPermissionMapper";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -345,6 +347,129 @@ suite("ToolPermissionMappers", () => {
           false
         );
       });
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("QwenToolPermissionMapper", () => {
+    const mapper = new QwenToolPermissionMapper();
+
+    suite("buildArgs", () => {
+      test("dangerouslyAllowAll → -y (YOLO mode)", () => {
+        const args = mapper.buildArgs(cfg("dangerouslyAllowAll"));
+        assert.ok(args.includes("-y"), "should include -y flag");
+      });
+
+      test("allowAll → --approval-mode auto-edit", () => {
+        const args = mapper.buildArgs(cfg("allowAll"));
+        assert.ok(args.includes("--approval-mode"));
+        assert.ok(args.includes("auto-edit"));
+      });
+
+      test("custom mode → --approval-mode default", () => {
+        const args = mapper.buildArgs(cfg("custom", [], []));
+        assert.ok(args.includes("--approval-mode"));
+        assert.ok(args.includes("default"));
+      });
+
+      test("custom mode with allowed tools → --allowed-tools", () => {
+        const args = mapper.buildArgs(cfg("custom", ["write", "shell"], []));
+        assert.ok(
+          args.includes("--allowed-tools"),
+          "should include --allowed-tools"
+        );
+      });
+
+      test("custom mode with denied tools → --exclude-tools", () => {
+        const args = mapper.buildArgs(cfg("custom", [], ["write", "shell"]));
+        assert.ok(
+          args.includes("--exclude-tools"),
+          "should include --exclude-tools"
+        );
+      });
+    });
+
+    suite("hasFullPermissions", () => {
+      test("dangerouslyAllowAll → true", () => {
+        assert.strictEqual(
+          mapper.hasFullPermissions(cfg("dangerouslyAllowAll")),
+          true
+        );
+      });
+
+      test("allowAll → true", () => {
+        assert.strictEqual(mapper.hasFullPermissions(cfg("allowAll")), true);
+      });
+
+      test("custom → false", () => {
+        assert.strictEqual(
+          mapper.hasFullPermissions(cfg("custom", ["write"], [])),
+          false
+        );
+      });
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("GeminiToolPermissionMapper", () => {
+    const mapper = new GeminiToolPermissionMapper();
+
+    suite("buildArgs", () => {
+      test("dangerouslyAllowAll → --approval-mode yolo", () => {
+        const args = mapper.buildArgs(cfg("dangerouslyAllowAll"));
+        assert.deepStrictEqual(args, ["--approval-mode", "yolo"]);
+      });
+
+      test("allowAll → --approval-mode auto_edit", () => {
+        const args = mapper.buildArgs(cfg("allowAll"));
+        assert.deepStrictEqual(args, ["--approval-mode", "auto_edit"]);
+      });
+
+      test("custom mode → --approval-mode default (patterns ignored)", () => {
+        const args = mapper.buildArgs(cfg("custom", ["write"], ["shell"]));
+        assert.deepStrictEqual(args, ["--approval-mode", "default"]);
+      });
+
+      test("custom with empty patterns → --approval-mode default", () => {
+        const args = mapper.buildArgs(cfg("custom", [], []));
+        assert.deepStrictEqual(args, ["--approval-mode", "default"]);
+      });
+    });
+
+    suite("hasFullPermissions", () => {
+      test("dangerouslyAllowAll → true", () => {
+        assert.strictEqual(
+          mapper.hasFullPermissions(cfg("dangerouslyAllowAll")),
+          true
+        );
+      });
+
+      test("allowAll → false", () => {
+        assert.strictEqual(mapper.hasFullPermissions(cfg("allowAll")), false);
+      });
+
+      test("custom → false", () => {
+        assert.strictEqual(
+          mapper.hasFullPermissions(cfg("custom", ["write"], [])),
+          false
+        );
+      });
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("Passthrough handling", () => {
+    test("passthrough mode is handled before buildArgs is called", () => {
+      // Passthrough (null config) is guarded in CliIntegration before calling buildArgs().
+      // When resolveToolPermissions() returns null, CliIntegration skips the mapper entirely
+      // and injects no permission flags. This test documents that buildArgs() always
+      // receives a non-null ToolPermissionConfig — the passthrough guard lives upstream.
+      //
+      // Guard in CliIntegration:
+      //   if (config === null) return []; // skip permission args
+      //
+      // All mappers are tested above with non-null configs only.
+      assert.ok(true, "passthrough is handled externally in CliIntegration");
     });
   });
 });

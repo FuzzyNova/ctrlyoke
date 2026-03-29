@@ -5,7 +5,9 @@ import {
   EndCondition,
   PriorContext,
   McpServerConfig,
+  ToolPermissionsOverride,
 } from "../types/FlightPathTypes";
+import { ToolPermissionConfig } from "../flightpath/harness/shared/interfaces/IToolPermissionMapper";
 import { ConfigurationUtils } from "./ConfigurationUtils";
 
 /**
@@ -45,6 +47,9 @@ export interface ResolvedProperties {
 
   /** Extra CLI flags appended to FlightPath's standard argument set - undefined if not specified */
   additionalArgs?: string;
+
+  /** Tool permission config - null means passthrough (no permission flags injected) */
+  toolPermissions: ToolPermissionConfig | null;
 }
 
 /**
@@ -93,6 +98,7 @@ export class PropertyResolver {
       endCondition: this.resolveEndCondition(prompt, workflow),
       priorContext: this.resolvePriorContext(prompt, workflow),
       additionalArgs: this.resolveAdditionalArgs(prompt, workflow, harness),
+      toolPermissions: this.resolveToolPermissions(prompt, workflow),
     };
   }
 
@@ -466,6 +472,50 @@ export class PropertyResolver {
     const globalAdditionalArgs =
       ConfigurationUtils.getAdditionalArgsForHarness(harness);
     return globalAdditionalArgs || undefined;
+  }
+
+  /**
+   * Resolve tool permissions with two-tier precedence.
+   *
+   * Precedence order:
+   * 1. Prompt-level override (prompt.toolPermissions)
+   *    - Object: Use these permissions
+   *    - null: Passthrough — no permission flags injected
+   *    - undefined: Fall through to workflow
+   * 2. Workflow-level default (workflow.toolPermissions)
+   * 3. No fallback — returns null (passthrough)
+   *
+   * Note: This is a two-tier resolver. VS Code settings are NOT consulted at runtime.
+   * They are seeded into working files on creation via populateSettingsDefaults().
+   *
+   * @param prompt The prompt to resolve permissions for
+   * @param workflow The parent workflow file
+   * @returns Resolved ToolPermissionConfig, or null for passthrough
+   */
+  private static resolveToolPermissions(
+    prompt: PromptItem,
+    workflow: PromptFile
+  ): ToolPermissionConfig | null {
+    // Prompt takes precedence; use explicit undefined check — null is meaningful ("passthrough")
+    const effective: ToolPermissionsOverride | null | undefined =
+      prompt.toolPermissions !== undefined
+        ? prompt.toolPermissions
+        : workflow.toolPermissions;
+
+    // null, undefined, or { mode: "passthrough" } → inject no flags
+    if (
+      effective === null ||
+      effective === undefined ||
+      effective.mode === "passthrough"
+    ) {
+      return null;
+    }
+
+    return {
+      mode: effective.mode ?? "allowAll",
+      allowedTools: effective.allowedTools ?? [],
+      deniedTools: effective.deniedTools ?? [],
+    };
   }
 
   /**

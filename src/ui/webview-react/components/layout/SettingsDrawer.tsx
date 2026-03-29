@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from "react";
 import {
   useSettingsStore,
   type WorkflowProperties,
+  type GlobalSettings,
 } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
@@ -12,7 +13,10 @@ import {
   EXECUTION_MODES,
   SESSION_ID_SENTINELS,
   RUNNER_IDS,
+  HARNESS_IDS,
   type PriorContext,
+  type HarnessId,
+  type ToolPermissionMode,
 } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
@@ -32,9 +36,10 @@ import {
   DrawerRow,
   McpServersEditor,
   type McpServersValue,
+  PERMISSION_MODE_OPTIONS,
+  getPermissionHarnessSupport,
 } from "../shared";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
-import type { HarnessId } from "../../types/messages";
 
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const SETTINGS_DRAWER_BREAKPOINT = 400;
@@ -233,11 +238,39 @@ export const SettingsPanel: React.FC<{
       // Deep comparison for mcpServers — null and [] are both "no servers" and
       // must not trigger the "Set as Default" button when the global is also empty.
       if (property === "mcpServers") {
-        const normalize = (v: unknown) =>
-          Array.isArray(v) ? v : [];
+        const normalize = (v: unknown) => (Array.isArray(v) ? v : []);
         return (
           JSON.stringify(normalize(workflowValue)) !==
           JSON.stringify(normalize(globalSettings.mcpServers))
+        );
+      }
+      // Deep comparison for toolPermissions — normalize null/undefined/passthrough
+      // to a canonical form so the button hides when values match the global defaults.
+      if (property === "toolPermissions") {
+        const wv = workflowValue as WorkflowProperties["toolPermissions"];
+        const gv = globalSettings.toolPermissions;
+        // null/undefined/passthrough all mean "no override" — compare as empty
+        const normalizePerms = (
+          v:
+            | WorkflowProperties["toolPermissions"]
+            | GlobalSettings["toolPermissions"]
+        ) => {
+          if (v === null || v === undefined || v.mode === "passthrough") {
+            return {
+              mode: "passthrough",
+              allowedTools: [] as string[],
+              deniedTools: [] as string[],
+            };
+          }
+          return {
+            mode: v.mode ?? "allowAll",
+            allowedTools: v.allowedTools ?? [],
+            deniedTools: v.deniedTools ?? [],
+          };
+        };
+        return (
+          JSON.stringify(normalizePerms(wv)) !==
+          JSON.stringify(normalizePerms(gv))
         );
       }
       const globalValue =
@@ -416,12 +449,29 @@ export const SettingsPanel: React.FC<{
   const handleMcpServersChange = useCallback(
     (newValue: McpServersValue) => {
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("mcpServers", newValue as WorkflowProperties["mcpServers"]);
+      settingsStore.updateWorkflowProperty(
+        "mcpServers",
+        newValue as WorkflowProperties["mcpServers"]
+      );
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "mcpServers",
         value: newValue,
+      });
+    },
+    [vscode]
+  );
+
+  const handleToolPermissionsChange = useCallback(
+    (value: WorkflowProperties["toolPermissions"]) => {
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty("toolPermissions", value);
+
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+        property: "toolPermissions",
+        value: value,
       });
     },
     [vscode]
@@ -566,6 +616,14 @@ export const SettingsPanel: React.FC<{
   }
 
   const endCondition = workflowProperties.endCondition || {};
+
+  // Permissions page derived values
+  const toolPerms = workflowProperties.toolPermissions;
+  const permMode =
+    toolPerms === null ? "passthrough" : (toolPerms?.mode ?? "allowAll");
+  const harnessSupport = getPermissionHarnessSupport(
+    effectiveHarness as HarnessId
+  );
 
   return (
     <div ref={drawerRef} className="flex flex-col h-full bg-sidebar-bg">
@@ -1073,8 +1131,121 @@ export const SettingsPanel: React.FC<{
             </>
           )}
 
-          {(activePage === DRAWER_PAGES.HOOKS ||
-            activePage === DRAWER_PAGES.PERMISSIONS) && (
+          {activePage === DRAWER_PAGES.PERMISSIONS && (
+            <>
+              {/* Copilot Chat: not applicable */}
+              {harnessSupport === "n/a" && (
+                <p className="text-[10px] text-description-fg mb-2">
+                  ℹ️ Tool permissions apply to CLI harnesses only and are
+                  ignored for Copilot Chat.
+                </p>
+              )}
+
+              <div className={harnessSupport === "n/a" ? "opacity-60" : ""}>
+                {/* Permission Mode */}
+                <FormField
+                  label="Permission Mode"
+                  htmlFor="settings-permission-mode"
+                  description="Tool permission mode for CLI harnesses"
+                  setAsDefaultButton={
+                    <SetAsDefaultButton
+                      property="toolPermissions"
+                      show={isDifferentFromGlobal("toolPermissions")}
+                      onSetDefault={() =>
+                        handleSetAsDefault(
+                          "toolPermissions",
+                          workflowProperties.toolPermissions
+                        )
+                      }
+                    />
+                  }
+                >
+                  <CustomSelect
+                    id="settings-permission-mode"
+                    value={permMode}
+                    onChange={(mode) => {
+                      const current = workflowProperties.toolPermissions || {};
+                      handleToolPermissionsChange({
+                        ...current,
+                        mode: mode as ToolPermissionMode,
+                      });
+                    }}
+                    options={PERMISSION_MODE_OPTIONS}
+                  />
+                </FormField>
+
+                {/* Custom mode: Allowed / Denied Tools textareas */}
+                <div
+                  className={`transition-all duration-300 ${
+                    permMode === "custom"
+                      ? "max-h-[500px] opacity-100 mt-2"
+                      : "max-h-0 opacity-0 overflow-hidden"
+                  }`}
+                >
+                  <div
+                    className={`space-y-2${
+                      harnessSupport === "mode-only"
+                        ? " opacity-50 pointer-events-none"
+                        : ""
+                    }`}
+                  >
+                    {/* Mode-only harness warning */}
+                    {harnessSupport === "mode-only" && (
+                      <p className="text-[10px] text-description-fg">
+                        {effectiveHarness === HARNESS_IDS.CODEX_CLI
+                          ? "ℹ️ Codex CLI uses sandbox/approval modes rather than individual tool patterns. Allowed Tools and Denied Tools lists are ignored."
+                          : effectiveHarness === HARNESS_IDS.OPENCODE_CLI
+                            ? "ℹ️ OpenCode CLI manages permissions via config file. Tool pattern lists are ignored."
+                            : "ℹ️ Gemini CLI uses approval modes only. Tool pattern lists are ignored."}
+                      </p>
+                    )}
+
+                    <FormField
+                      label="Allowed Tools"
+                      htmlFor="settings-allowed-tools"
+                      description="Tool patterns to allow (one per line). Uses Copilot CLI format — auto-converted for Claude/Qwen."
+                    >
+                      <textarea
+                        id="settings-allowed-tools"
+                        value={(toolPerms?.allowedTools ?? []).join("\n")}
+                        onChange={(e) => {
+                          handleToolPermissionsChange({
+                            ...(toolPerms || {}),
+                            allowedTools: e.target.value.split("\n"),
+                          });
+                        }}
+                        rows={4}
+                        placeholder={"read\nglob\ngrep"}
+                        className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono"
+                      />
+                    </FormField>
+
+                    <FormField
+                      label="Denied Tools"
+                      htmlFor="settings-denied-tools"
+                      description="Tool patterns to deny (one per line, takes precedence over allow list)."
+                    >
+                      <textarea
+                        id="settings-denied-tools"
+                        value={(toolPerms?.deniedTools ?? []).join("\n")}
+                        onChange={(e) => {
+                          handleToolPermissionsChange({
+                            ...(toolPerms || {}),
+                            deniedTools: e.target.value.split("\n"),
+                          });
+                        }}
+                        rows={4}
+                        placeholder={"shell(rm:*)\nwrite"}
+                        className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono"
+                      />
+                    </FormField>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {activePage === DRAWER_PAGES.HOOKS && (
             <div className="flex items-center justify-center h-32 text-description-fg text-xs">
               Coming Soon
             </div>

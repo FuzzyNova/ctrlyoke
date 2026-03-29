@@ -7,7 +7,13 @@ import {
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
-import { type HarnessId, type PriorContext } from "../../types/messages";
+import {
+  HARNESS_IDS,
+  type HarnessId,
+  type PriorContext,
+  type ToolPermissionsOverride,
+  type ToolPermissionMode,
+} from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
@@ -27,6 +33,9 @@ import {
   McpServersEditor,
   buildMcpDefaultLabel,
   type McpServersValue,
+  PERMISSION_MODE_OPTIONS,
+  getPermissionHarnessSupport,
+  buildPermissionsDefaultLabel,
 } from "../shared";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 
@@ -143,7 +152,18 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     workflowProperties.mcpServers !== undefined
       ? workflowProperties.mcpServers
       : globalSettings.mcpServers;
-  const defaultMcpServersLabel = buildMcpDefaultLabel(resolvedMcpServers as McpServersValue);
+  const defaultMcpServersLabel = buildMcpDefaultLabel(
+    resolvedMcpServers as McpServersValue
+  );
+
+  // ── Permissions page derived values ──────────────────────────────────────
+  const defaultPermissionsLabel = buildPermissionsDefaultLabel(
+    workflowProperties.toolPermissions
+  );
+  const effectivePermHarness = (properties.harness ??
+    workflowProperties.harness ??
+    globalSettings.harness) as HarnessId;
+  const permHarnessSupport = getPermissionHarnessSupport(effectivePermHarness);
 
   const resolvedPriorContext =
     workflowProperties.priorContext ??
@@ -768,9 +788,166 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
           </div>
         )}
 
-        {/* Page: Hooks / Permissions (placeholder) */}
-        {(activePage === DRAWER_PAGES.HOOKS ||
-          activePage === DRAWER_PAGES.PERMISSIONS) && (
+        {/* Page: Permissions */}
+        {activePage === DRAWER_PAGES.PERMISSIONS && (
+          <>
+            {/* Copilot Chat: not applicable */}
+            {permHarnessSupport === "n/a" && (
+              <p className="text-[10px] text-description-fg mb-2">
+                ℹ️ Tool permissions apply to CLI harnesses only and are ignored
+                for Copilot Chat.
+              </p>
+            )}
+
+            <div
+              className={`space-y-2${permHarnessSupport === "n/a" ? " opacity-60" : ""}`}
+            >
+              {/* Permission Mode */}
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="prop-permission-mode"
+                  className="text-[11px] font-semibold uppercase text-description-fg"
+                  title="Tool permission mode override for this prompt"
+                >
+                  Permission Mode
+                </label>
+                <CustomSelect
+                  id="prop-permission-mode"
+                  value={
+                    properties.toolPermissions === undefined
+                      ? "default"
+                      : properties.toolPermissions === null
+                        ? "none"
+                        : (properties.toolPermissions.mode ?? "allowAll")
+                  }
+                  onChange={(v) => {
+                    if (v === "default") {
+                      setProperty("toolPermissions", undefined);
+                    } else if (v === "none") {
+                      setProperty("toolPermissions", null);
+                    } else {
+                      const current =
+                        (properties.toolPermissions as
+                          | ToolPermissionsOverride
+                          | undefined) || {};
+                      setProperty("toolPermissions", {
+                        ...current,
+                        mode: v as ToolPermissionMode,
+                      });
+                    }
+                  }}
+                  options={[
+                    { value: "default", label: defaultPermissionsLabel },
+                    ...PERMISSION_MODE_OPTIONS,
+                    { value: "none", label: "None (passthrough)" },
+                  ]}
+                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+                />
+              </div>
+
+              {/* Custom mode: Allowed / Denied Tools textareas */}
+              <div
+                className={`transition-all duration-300 ${
+                  properties.toolPermissions !== undefined &&
+                  properties.toolPermissions !== null &&
+                  properties.toolPermissions.mode === "custom"
+                    ? "max-h-[500px] opacity-100"
+                    : "max-h-0 opacity-0 overflow-hidden"
+                }`}
+              >
+                <div
+                  className={`space-y-2${
+                    permHarnessSupport === "mode-only"
+                      ? " opacity-50 pointer-events-none"
+                      : ""
+                  }`}
+                >
+                  {/* Mode-only harness warning */}
+                  {permHarnessSupport === "mode-only" && (
+                    <p className="text-[10px] text-description-fg">
+                      {effectivePermHarness === HARNESS_IDS.CODEX_CLI
+                        ? "ℹ️ Codex CLI uses sandbox/approval modes rather than individual tool patterns. Allowed Tools and Denied Tools lists are ignored."
+                        : effectivePermHarness === HARNESS_IDS.OPENCODE_CLI
+                          ? "ℹ️ OpenCode CLI manages permissions via config file. Tool pattern lists are ignored."
+                          : "ℹ️ Gemini CLI uses approval modes only. Tool pattern lists are ignored."}
+                    </p>
+                  )}
+
+                  {/* Allowed Tools */}
+                  <div className="flex flex-col gap-1">
+                    <label
+                      htmlFor="prop-allowed-tools"
+                      className="text-[11px] font-semibold uppercase text-description-fg"
+                      title="Tool patterns to allow (one per line). Uses Copilot CLI format — auto-converted for Claude/Qwen."
+                    >
+                      Allowed Tools
+                    </label>
+                    <textarea
+                      id="prop-allowed-tools"
+                      value={(
+                        (
+                          properties.toolPermissions as
+                            | ToolPermissionsOverride
+                            | undefined
+                        )?.allowedTools ?? []
+                      ).join("\n")}
+                      onChange={(e) => {
+                        const current =
+                          (properties.toolPermissions as
+                            | ToolPermissionsOverride
+                            | undefined) || {};
+                        setProperty("toolPermissions", {
+                          ...current,
+                          allowedTools: e.target.value.split("\n"),
+                        });
+                      }}
+                      rows={4}
+                      placeholder={"read\nglob\ngrep"}
+                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono"
+                    />
+                  </div>
+
+                  {/* Denied Tools */}
+                  <div className="flex flex-col gap-1">
+                    <label
+                      htmlFor="prop-denied-tools"
+                      className="text-[11px] font-semibold uppercase text-description-fg"
+                      title="Tool patterns to deny (one per line, takes precedence over allow list)."
+                    >
+                      Denied Tools
+                    </label>
+                    <textarea
+                      id="prop-denied-tools"
+                      value={(
+                        (
+                          properties.toolPermissions as
+                            | ToolPermissionsOverride
+                            | undefined
+                        )?.deniedTools ?? []
+                      ).join("\n")}
+                      onChange={(e) => {
+                        const current =
+                          (properties.toolPermissions as
+                            | ToolPermissionsOverride
+                            | undefined) || {};
+                        setProperty("toolPermissions", {
+                          ...current,
+                          deniedTools: e.target.value.split("\n"),
+                        });
+                      }}
+                      rows={4}
+                      placeholder={"shell(rm:*)\nwrite"}
+                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Page: Hooks (placeholder) */}
+        {activePage === DRAWER_PAGES.HOOKS && (
           <div className="flex items-center justify-center h-32 text-description-fg text-xs">
             Coming Soon
           </div>

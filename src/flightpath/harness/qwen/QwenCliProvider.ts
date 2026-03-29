@@ -3,7 +3,11 @@ import { promisify } from "util";
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs/promises";
-import { ICliProvider, HarnessConfig, CLI_VERSION_CHECK_TIMEOUT_MS } from "../shared/interfaces/ICliProvider";
+import {
+  ICliProvider,
+  HarnessConfig,
+  CLI_VERSION_CHECK_TIMEOUT_MS,
+} from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -11,7 +15,10 @@ import { QwenResponseParser } from "./QwenResponseParser";
 import { QwenNotificationMonitor } from "./QwenNotificationMonitor";
 import { QwenToolPermissionMapper } from "./QwenToolPermissionMapper";
 import { QwenLogParser } from "./QwenLogParser";
-import { ConfigurationUtils, PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../../../utils/ConfigurationUtils";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -148,14 +155,26 @@ export class QwenCliProvider implements ICliProvider {
 
     // Tool permissions (headless only) / interactive hook setup
     if (!isInteractive) {
-      const permissionConfig = {
-        mode: ConfigurationUtils.getCliToolPermissions(),
-        allowedTools: ConfigurationUtils.getCliAllowedTools(),
-        deniedTools: ConfigurationUtils.getCliDeniedTools(),
-      };
-      const toolPermissionArgs =
-        this.toolPermissionMapper.buildArgs(permissionConfig);
-      args.push(...toolPermissionArgs);
+      // Use resolved permissions from workflow context; fall back to global settings
+      const toolPermissions =
+        workflowContext?.resolvedProperties?.toolPermissions;
+      if (toolPermissions === undefined) {
+        // No workflow context — fall back to global ConfigurationUtils settings
+        const permissionConfig = {
+          mode: ConfigurationUtils.getCliToolPermissions(),
+          allowedTools: ConfigurationUtils.getCliAllowedTools(),
+          deniedTools: ConfigurationUtils.getCliDeniedTools(),
+        };
+        const toolPermissionArgs =
+          this.toolPermissionMapper.buildArgs(permissionConfig);
+        args.push(...toolPermissionArgs);
+      } else if (toolPermissions !== null) {
+        // Resolved non-passthrough permissions from workflow
+        const toolPermissionArgs =
+          this.toolPermissionMapper.buildArgs(toolPermissions);
+        args.push(...toolPermissionArgs);
+      }
+      // else: toolPermissions === null → passthrough, skip permission flags entirely
     } else {
       // Interactive mode: enable experimental hooks and write Stop hook to .qwen/settings.json
       args.push("--experimental-hooks");
@@ -200,7 +219,9 @@ export class QwenCliProvider implements ICliProvider {
       notifyDir,
       workspaceRoot
     );
-    const hooksSection = (hookConfig as { type: string; config: { hooks: Record<string, unknown> } }).config.hooks;
+    const hooksSection = (
+      hookConfig as { type: string; config: { hooks: Record<string, unknown> } }
+    ).config.hooks;
 
     const qwenDir = path.join(workspaceRoot, ".qwen");
     const settingsPath = path.join(qwenDir, "settings.json");
@@ -236,11 +257,13 @@ export class QwenCliProvider implements ICliProvider {
     // Deep-merge FlightPath hooks into existing hooks — append user's existing handlers
     // after FlightPath's so all three layers coexist: (1) FlightPath completion detection,
     // (2) future workflow hooks, (3) user's pre-existing settings hooks.
-    const existingHooks = (existingSettings.hooks as Record<string, unknown[]> | undefined) ?? {};
+    const existingHooks =
+      (existingSettings.hooks as Record<string, unknown[]> | undefined) ?? {};
     const flightpathHooks = hooksSection as Record<string, unknown[]>;
     const mergedHooks: Record<string, unknown[]> = { ...existingHooks };
     for (const [event, handlers] of Object.entries(flightpathHooks)) {
-      const userHandlers = (existingHooks[event] as unknown[] | undefined) ?? [];
+      const userHandlers =
+        (existingHooks[event] as unknown[] | undefined) ?? [];
       mergedHooks[event] = [...handlers, ...userHandlers];
     }
 
@@ -358,12 +381,7 @@ export class QwenCliProvider implements ICliProvider {
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
     // Note: Quotes are needed because spawn with shell:true doesn't auto-quote special characters
     // --output-format stream-json enables structured JSON output for reliable parsing
-    return [
-      `"${prompt}"`,
-      "--output-format",
-      "stream-json",
-      ...baseArgs,
-    ];
+    return [`"${prompt}"`, "--output-format", "stream-json", ...baseArgs];
   }
 
   /**
@@ -421,7 +439,9 @@ export class QwenCliProvider implements ICliProvider {
    */
   async checkAvailability(): Promise<boolean> {
     try {
-      await execAsync("qwen --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
+      await execAsync("qwen --version", {
+        timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
+      });
       return true;
     } catch {
       return false;
@@ -435,7 +455,9 @@ export class QwenCliProvider implements ICliProvider {
    */
   async getVersion(): Promise<string | undefined> {
     try {
-      const { stdout } = await execAsync("qwen --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
+      const { stdout } = await execAsync("qwen --version", {
+        timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
+      });
       return stdout.trim();
     } catch {
       return undefined;

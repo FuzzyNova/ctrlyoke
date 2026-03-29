@@ -35,3 +35,9 @@ export {
   buildMcpDefaultLabel,
   type McpServersValue,
 } from "./McpServersEditor";
+export {
+  PERMISSION_MODE_OPTIONS,
+  getPermissionHarnessSupport,
+  buildPermissionsDefaultLabel,
+  type PermissionHarnessSupport,
+} from "./permissionUtils";

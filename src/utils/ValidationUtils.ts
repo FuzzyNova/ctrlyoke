@@ -1,8 +1,5 @@
 import Ajv, { JSONSchemaType } from "ajv";
-import {
-  PromptItem,
-  Harness,
-} from "../types/FlightPathTypes";
+import { PromptItem, Harness } from "../types/FlightPathTypes";
 import { Log } from "./Log";
 import {
   COPILOT_CLI_MODEL_IDS,
@@ -101,6 +98,9 @@ export class ValidationUtils {
         // AJV JSONSchemaType cannot express this union natively, so use 'as any'
       } as any,
       additionalArgs: { type: "string", nullable: true },
+      toolPermissions: {
+        // ToolPermissionsOverride | null — complex union type, use 'as any'
+      } as any,
       _runtime: {
         type: "object",
         properties: {
@@ -143,6 +143,9 @@ export class ValidationUtils {
             // PriorContext = "all" | "previous" | "none" | number[]
           } as any,
           additionalArgs: { type: "string", nullable: true },
+          toolPermissions: {
+            // ToolPermissionsOverride | null
+          } as any,
         },
         required: ["startedAt"],
         nullable: true,

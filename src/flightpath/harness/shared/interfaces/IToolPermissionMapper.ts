@@ -1,7 +1,11 @@
 /**
  * Tool permission mode
  */
-export type ToolPermissionMode = "dangerouslyAllowAll" | "allowAll" | "custom";
+export type ToolPermissionMode =
+  | "dangerouslyAllowAll"
+  | "allowAll"
+  | "custom"
+  | "passthrough";
 
 /**
  * Tool permission configuration

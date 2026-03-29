@@ -7,6 +7,7 @@ import {
   type HarnessStatusString,
   type PriorContext,
   type ExecutionMode,
+  type ToolPermissionMode,
 } from "../types/messages";
 import {
   CLAUDE_CLI_MODELS as CLAUDE_CLI_MODEL_LIST,
@@ -63,6 +64,11 @@ export interface GlobalSettings {
   executionMode: ExecutionMode;
   resumeSession: boolean;
   mcpServers: (string | object)[];
+  toolPermissions: {
+    mode: string;
+    allowedTools: string[];
+    deniedTools: string[];
+  };
   respectGitignore: boolean;
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
@@ -90,6 +96,11 @@ export interface WorkflowProperties {
   } | null;
   priorContext?: PriorContext;
   additionalArgs?: string | null;
+  toolPermissions?: {
+    mode?: ToolPermissionMode;
+    allowedTools?: string[];
+    deniedTools?: string[];
+  } | null;
 }
 
 /**
@@ -163,6 +174,7 @@ interface SettingsActions {
   getEffectiveResumeSession: () => boolean;
   getEffectiveMcpServers: () => (string | object)[] | null;
   getEffectivePriorContext: () => PriorContext;
+  getEffectiveToolPermissions: () => WorkflowProperties["toolPermissions"];
 
   // Reset
   resetSettings: () => void;
@@ -184,6 +196,11 @@ const initialGlobalSettings: GlobalSettings = {
   executionMode: EXECUTION_MODES.INTERACTIVE,
   resumeSession: false,
   mcpServers: [],
+  toolPermissions: {
+    mode: "allowAll",
+    allowedTools: [],
+    deniedTools: [],
+  },
   respectGitignore: true,
   confirmDeleteOperations: true,
   confirmResetOperations: true,
@@ -377,6 +394,11 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
         (workflowProperties.priorContext as PriorContext) ??
         (globalSettings.priorContext as PriorContext)
       );
+    },
+
+    getEffectiveToolPermissions: () => {
+      const { workflowProperties } = get();
+      return workflowProperties.toolPermissions;
     },
 
     // ============================================================================

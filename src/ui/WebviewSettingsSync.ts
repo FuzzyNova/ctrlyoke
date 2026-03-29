@@ -11,7 +11,10 @@ import {
   DEFAULT_MODELS,
   type HarnessStatusString,
 } from "../types/DashboardConstants";
-import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import {
   getAvailableModelsSync,
@@ -25,7 +28,11 @@ import {
   QWEN_CLI_MODEL_LABELS,
   GEMINI_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
-import { Harness, McpServerConfig } from "../types/FlightPathTypes";
+import {
+  Harness,
+  McpServerConfig,
+  ToolPermissionsOverride,
+} from "../types/FlightPathTypes";
 import { readJsonFile } from "../utils/FileSystemUtils";
 import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import { AgentDiscovery } from "../utils/AgentDiscovery";
@@ -286,6 +293,7 @@ export class WebviewSettingsSync {
         endCondition: workingFile.endCondition,
         priorContext: workingFile.priorContext,
         additionalArgs: workingFile.additionalArgs,
+        toolPermissions: workingFile.toolPermissions,
       };
 
       this.postMessage({
@@ -365,7 +373,9 @@ export class WebviewSettingsSync {
     await ConfigurationUtils.setResumeExistingSession(enabled);
   }
 
-  async handleMcpServersChange(servers: (string | McpServerConfig)[]): Promise<void> {
+  async handleMcpServersChange(
+    servers: (string | McpServerConfig)[]
+  ): Promise<void> {
     await ConfigurationUtils.setDefaultMcpServers(servers);
   }
 
@@ -438,6 +448,22 @@ export class WebviewSettingsSync {
     } else if (property === "mcpServers") {
       // null (None mode) → [] so we never write null to an array-typed setting
       await ConfigurationUtils.setDefaultMcpServers(value ?? []);
+    } else if (property === "toolPermissions") {
+      const override = value as ToolPermissionsOverride | null;
+      await ConfigurationUtils.updateSetting(
+        "cliToolPermissions",
+        override?.mode && override.mode !== "passthrough"
+          ? override.mode
+          : "allowAll"
+      );
+      await ConfigurationUtils.updateSetting(
+        "cliAllowedTools",
+        override?.allowedTools ?? []
+      );
+      await ConfigurationUtils.updateSetting(
+        "cliDeniedTools",
+        override?.deniedTools ?? []
+      );
     } else {
       await ConfigurationUtils.updateSetting(property, value);
     }
@@ -502,7 +528,8 @@ export class WebviewSettingsSync {
         .map((m) => ({ value: m.value, label: m.label }));
       return {
         id,
-        displayName: (HARNESS_INFO as Record<string, { name: string }>)[id]?.name ?? id,
+        displayName:
+          (HARNESS_INFO as Record<string, { name: string }>)[id]?.name ?? id,
         available: status?.available ?? false,
         models,
       };
@@ -513,7 +540,11 @@ export class WebviewSettingsSync {
       harnesses: harnessEntries,
     };
 
-    await fs.writeFile(capabilitiesPath, JSON.stringify(capabilities, null, 2), "utf8");
+    await fs.writeFile(
+      capabilitiesPath,
+      JSON.stringify(capabilities, null, 2),
+      "utf8"
+    );
   }
 
   /**
@@ -554,10 +585,12 @@ export class WebviewSettingsSync {
       ),
       [HARNESS_IDS.OPENCODE_CLI]:
         ConfigurationUtils.getAdditionalArgsForHarness(Harness.OpenCodeCli),
-      [HARNESS_IDS.QWEN_CLI]:
-        ConfigurationUtils.getAdditionalArgsForHarness(Harness.QwenCli),
-      [HARNESS_IDS.GEMINI_CLI]:
-        ConfigurationUtils.getAdditionalArgsForHarness(Harness.GeminiCli),
+      [HARNESS_IDS.QWEN_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
+        Harness.QwenCli
+      ),
+      [HARNESS_IDS.GEMINI_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
+        Harness.GeminiCli
+      ),
     };
 
     const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -576,6 +609,11 @@ export class WebviewSettingsSync {
       executionMode,
       resumeSession: resumeExistingSession,
       mcpServers: defaultMcpServers,
+      toolPermissions: {
+        mode: ConfigurationUtils.getCliToolPermissions(),
+        allowedTools: ConfigurationUtils.getCliAllowedTools(),
+        deniedTools: ConfigurationUtils.getCliDeniedTools(),
+      },
       respectGitignore,
       confirmDeleteOperations:
         ConfigurationUtils.shouldConfirmDeleteOperations(),

@@ -1,7 +1,11 @@
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
-import { ICliProvider, HarnessConfig, CLI_VERSION_CHECK_TIMEOUT_MS } from "../shared/interfaces/ICliProvider";
+import {
+  ICliProvider,
+  HarnessConfig,
+  CLI_VERSION_CHECK_TIMEOUT_MS,
+} from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -10,7 +14,10 @@ import { ClaudeNotificationMonitor } from "./ClaudeNotificationMonitor";
 import { ClaudeToolPermissionMapper } from "./ClaudeToolPermissionMapper";
 import { ClaudeLogParser } from "./ClaudeLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
-import { ConfigurationUtils, PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../../../utils/ConfigurationUtils";
 import { getClaudeModelName, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
@@ -108,7 +115,13 @@ export class ClaudeCliProvider implements ICliProvider {
       workspaceRoot,
       extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
-        this.getMcpConfigArgs(serverPath, wsRoot, workingFile, additionalEnv, userServers)
+        this.getMcpConfigArgs(
+          serverPath,
+          wsRoot,
+          workingFile,
+          additionalEnv,
+          userServers
+        )
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
@@ -124,13 +137,17 @@ export class ClaudeCliProvider implements ICliProvider {
           if (server.autoApprove === true) {
             // Approve all tools from this server
             args.push("--allowed-tools", `mcp__${server.id}`);
-            Log.debug(`🔧 Auto-approved all tools from MCP server: ${server.id}`);
+            Log.debug(
+              `🔧 Auto-approved all tools from MCP server: ${server.id}`
+            );
           } else if (Array.isArray(server.autoApprove)) {
             // Approve specific tool patterns
             for (const pattern of server.autoApprove) {
               args.push("--allowed-tools", `mcp__${server.id}__${pattern}`);
             }
-            Log.debug(`🔧 Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`);
+            Log.debug(
+              `🔧 Auto-approved ${server.autoApprove.length} tool pattern(s) from MCP server: ${server.id}`
+            );
           }
         }
       }
@@ -195,14 +212,26 @@ export class ClaudeCliProvider implements ICliProvider {
     // IMPORTANT: This MUST come after session management because --disallowedTools is variadic
     // and will consume any flags after it (including -r <sessionId>)
     if (!isInteractive) {
-      const permissionConfig = {
-        mode: ConfigurationUtils.getCliToolPermissions(),
-        allowedTools: ConfigurationUtils.getCliAllowedTools(),
-        deniedTools: ConfigurationUtils.getCliDeniedTools(),
-      };
-      const toolPermissionArgs =
-        this.toolPermissionMapper.buildArgs(permissionConfig);
-      args.push(...toolPermissionArgs);
+      // Use resolved permissions from workflow context; fall back to global settings
+      const toolPermissions =
+        workflowContext?.resolvedProperties?.toolPermissions;
+      if (toolPermissions === undefined) {
+        // No workflow context — fall back to global ConfigurationUtils settings
+        const permissionConfig = {
+          mode: ConfigurationUtils.getCliToolPermissions(),
+          allowedTools: ConfigurationUtils.getCliAllowedTools(),
+          deniedTools: ConfigurationUtils.getCliDeniedTools(),
+        };
+        const toolPermissionArgs =
+          this.toolPermissionMapper.buildArgs(permissionConfig);
+        args.push(...toolPermissionArgs);
+      } else if (toolPermissions !== null) {
+        // Resolved non-passthrough permissions from workflow
+        const toolPermissionArgs =
+          this.toolPermissionMapper.buildArgs(toolPermissions);
+        args.push(...toolPermissionArgs);
+      }
+      // else: toolPermissions === null → passthrough, skip permission flags entirely
     } else {
       // Interactive mode: Configure stop hook for completion detection
       if (workspaceRoot) {
@@ -284,7 +313,11 @@ export class ClaudeCliProvider implements ICliProvider {
       throw new Error("Unexpected hook config type for Claude CLI");
     }
 
-    const tempDir = path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.TEMP_DIR);
+    const tempDir = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.TEMP_DIR
+    );
     await fs.mkdir(tempDir, { recursive: true });
     const settingsPath = path.join(tempDir, "claude-hook-settings.json");
     await fs.writeFile(settingsPath, hookConfig.config, "utf-8");
@@ -354,22 +387,23 @@ export class ClaudeCliProvider implements ICliProvider {
 
       // Generate MCP config JSON using shared utility
       // Claude CLI requires "type": "stdio"
-      const configJson = userServers && userServers.length > 0
-        ? CliMcpConfigGenerator.generateJsonConfigWithUserServers(
-            mcpServerPath,
-            workspaceRoot,
-            userServers,
-            { type: "stdio" },
-            workingFilePath,
-            additionalEnv
-          )
-        : CliMcpConfigGenerator.generateJsonConfig(
-            mcpServerPath,
-            workspaceRoot,
-            { type: "stdio" },
-            workingFilePath,
-            additionalEnv
-          );
+      const configJson =
+        userServers && userServers.length > 0
+          ? CliMcpConfigGenerator.generateJsonConfigWithUserServers(
+              mcpServerPath,
+              workspaceRoot,
+              userServers,
+              { type: "stdio" },
+              workingFilePath,
+              additionalEnv
+            )
+          : CliMcpConfigGenerator.generateJsonConfig(
+              mcpServerPath,
+              workspaceRoot,
+              { type: "stdio" },
+              workingFilePath,
+              additionalEnv
+            );
 
       // Write to temp directory — use unique name per execution to avoid parallel workflow collisions
       const configPath = this.getMcpConfigFilePath(
@@ -418,7 +452,9 @@ export class ClaudeCliProvider implements ICliProvider {
    */
   async checkAvailability(): Promise<boolean> {
     try {
-      await execAsync("claude --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
+      await execAsync("claude --version", {
+        timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
+      });
       return true;
     } catch {
       return false;
@@ -432,7 +468,9 @@ export class ClaudeCliProvider implements ICliProvider {
    */
   async getVersion(): Promise<string | undefined> {
     try {
-      const { stdout } = await execAsync("claude --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
+      const { stdout } = await execAsync("claude --version", {
+        timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
+      });
       return stdout.trim();
     } catch {
       return undefined;
