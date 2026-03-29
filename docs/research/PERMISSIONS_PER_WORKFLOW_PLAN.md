@@ -40,12 +40,12 @@ Add `toolPermissions` to the `executionProperties` definition:
         "allowedTools": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Tool patterns to allow (used in custom mode). Uses Copilot CLI format — auto-converted for Claude/Codex."
+          "description": "Tool patterns to allow (used in custom mode). Uses Copilot CLI format — auto-converted for Claude/Qwen. Ignored by Codex, OpenCode, and Gemini (mode-only harnesses)."
         },
         "deniedTools": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Tool patterns to deny (takes precedence over allow list)."
+          "description": "Tool patterns to deny (takes precedence over allow list). Ignored by Codex, OpenCode, and Gemini (mode-only harnesses)."
         }
       },
       "additionalProperties": false
@@ -122,11 +122,19 @@ function resolveToolPermissions(
   promptLevel: ToolPermissionsOverride | null | undefined,
   workflowLevel: ToolPermissionsOverride | null | undefined
 ): ToolPermissionConfig {
-  // null = explicit "use global" (override cleared)
-  const override = promptLevel ?? workflowLevel;  // null short-circuits to global
+  // Determine effective override following priority: prompt > workflow > global.
+  // Important: use explicit undefined checks — not `??` — because null carries meaning
+  // ("explicitly use global, skip all overrides") and must NOT fall through to the next tier.
+  // `null ?? workflowLevel` would incorrectly return workflowLevel.
+  let override: ToolPermissionsOverride | null | undefined;
+  if (promptLevel !== undefined) {
+    override = promptLevel; // prompt-level wins (including null)
+  } else {
+    override = workflowLevel; // fall back to workflow-level (including null)
+  }
 
-  if (!override || override === null) {
-    // Fall back to global VS Code settings
+  // null = explicit "use global settings"; undefined = nothing configured
+  if (override === null || override === undefined) {
     return {
       mode: ConfigurationUtils.getCliToolPermissions(),
       allowedTools: ConfigurationUtils.getCliAllowedTools(),
@@ -134,15 +142,17 @@ function resolveToolPermissions(
     };
   }
 
+  // Merge override fields with global fallbacks for any omitted fields
   return {
     mode: override.mode ?? ConfigurationUtils.getCliToolPermissions(),
-    allowedTools: override.allowedTools ?? ConfigurationUtils.getCliAllowedTools(),
+    allowedTools:
+      override.allowedTools ?? ConfigurationUtils.getCliAllowedTools(),
     deniedTools: override.deniedTools ?? ConfigurationUtils.getCliDeniedTools(),
   };
 }
 ```
 
-This function lives in a shared utility (e.g., `src/utils/ToolPermissionResolver.ts`) to keep harness providers DRY.
+This function lives in `src/utils/PropertyResolver.ts` as a `private static resolveToolPermissions()` method, consistent with all other property resolvers in that class. The `ResolvedProperties` interface must also gain a `toolPermissions: ToolPermissionConfig` field, and `PropertyResolver.resolve()` must call it alongside the other resolvers.
 
 ---
 
@@ -169,7 +179,10 @@ const permissionConfig = {
 // WorkflowExecutor assembles:
 const options: CliExecutionOptions = {
   ...existingOptions,
-  toolPermissions: resolveToolPermissions(prompt.toolPermissions, workflow.toolPermissions),
+  toolPermissions: resolveToolPermissions(
+    prompt.toolPermissions,
+    workflow.toolPermissions
+  ),
 };
 ```
 
@@ -190,93 +203,368 @@ Less clean — avoids param threading but couples harness state to individual pr
 
 ---
 
-## UX: SettingsDrawer Changes
+## Per-Harness Capability Matrix
 
-### New Section: Tool Permissions
+Not all harnesses support `allowedTools`/`deniedTools` patterns. This affects both runtime behavior and what the UI should show.
 
-Add a collapsible section below the existing rows in `SettingsDrawer.tsx`, following the same `FormField` + `SetAsDefaultButton` pattern.
+| Harness          | Mode support           | `allowedTools` patterns | `deniedTools` patterns | Notes                                                                                                                                                                                |
+| ---------------- | ---------------------- | ----------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Copilot CLI**  | ✅ All 3               | ✅ Yes                  | ✅ Yes                 | Most reliable; `--allow-tool` / `--deny-tool`                                                                                                                                        |
+| **Claude CLI**   | ✅ All 3               | ✅ Yes                  | ✅ Yes                 | `--allowedTools` / `--disallowedTools`; reliable across models                                                                                                                       |
+| **Codex CLI**    | ✅ All 3               | ❌ Ignored              | ❌ Ignored             | Mode-only; `dangerouslyAllowAll`→bypass, `allowAll`→`--full-auto`, `custom`→sandbox+approval flags. Has its own `codexSandboxMode`/`codexApprovalPolicy`/`codexAllowedDirs` settings |
+| **OpenCode CLI** | ✅ All 3 (mode mapped) | ❌ Ignored              | ❌ Ignored             | Permission model is config-file driven (`.opencode/opencode.json`), not CLI flags. `buildArgs()` returns `[]`                                                                        |
+| **Qwen CLI**     | ✅ All 3               | ✅ Yes                  | ✅ Yes                 | `--allowed-tools` / `--exclude-tools` (comma-separated); `shell`→`Bash`, `write`→`Write`, etc.                                                                                       |
+| **Gemini CLI**   | ✅ All 3               | ❌ Ignored              | ❌ Ignored             | Approval-mode flags only (`--approval-mode yolo/auto_edit/default`); no granular tool control                                                                                        |
+| **Copilot Chat** | ❌ N/A                 | ❌ N/A                  | ❌ N/A                 | Chat harness; `toolPermissions` stored but has no effect at runtime                                                                                                                  |
+
+### Harness groupings for UX purposes
+
+**Full support** (mode + patterns both work): Copilot CLI, Claude CLI, Qwen CLI
+
+**Mode-only** (mode maps cleanly; patterns silently ignored): Codex CLI, OpenCode CLI, Gemini CLI
+
+**Not applicable**: Copilot Chat
+
+### Codex-specific settings are NOT part of `toolPermissions`
+
+`codexSandboxMode`, `codexApprovalPolicy`, and `codexAllowedDirs` remain global-only VS Code settings — they are not included in the `toolPermissions` override object. This keeps the schema simple: in `custom` mode on Codex, the sandbox/approval configuration always comes from VS Code settings. This is acceptable because:
+
+1. These settings are Codex-specific and have no equivalent on other harnesses.
+2. Per-workflow Codex sandbox overrides are an advanced use case that can be revisited later (YAGNI).
+
+---
+
+## UX: Permissions Page (Page 6)
+
+The DRAWER_PAGES_UX_PLAN.md is complete. Both drawers use paged tab navigation with 6 pages. The Permissions page is **Page 6** (`DRAWER_PAGES.PERMISSIONS`). Both drawers currently show a "Coming Soon" placeholder — this section replaces it.
+
+The entire page is greyed out (`pointer-events-none opacity-60`) in CLI-managed (watch) mode, consistent with all other pages.
+
+---
+
+### SettingsDrawer — Permissions Page
+
+Follows the same `FormField` + `SetAsDefaultButton` + `DrawerRow` pattern used on the Harness, Context, Validation, and MCP pages.
 
 #### Layout
 
 ```
-[ Tool Permissions ] (collapsible header, disabled in CLI managed mode)
-
-Row:
-  [Permission Mode ▼]              [Set as Default]
-  dangerouslyAllowAll / allowAll / custom
+[Permission Mode ▼]                 [Set as Default]
+dangerouslyAllowAll / allowAll / custom
 
 -- shown only when mode = "custom" --
 
-  [Allowed Tools]                  [Set as Default]
+  [Allowed Tools]
   <textarea: one pattern per line>
 
-  [Denied Tools]                   [Set as Default]
+  [Denied Tools]
   <textarea: one pattern per line>
+                                     [Set as Default]   ← single button for the whole object
 ```
 
 #### Behavior
 
-- **Permission Mode** — `CustomSelect` with the three options. Tooltip explains each.
-- **Allowed/Denied Tools textareas** — only visible when `mode === "custom"` (animated `max-h` transition matching the existing session ID pattern).
-- Each textarea stores newline-separated patterns, parsed to/from `string[]` on change.
-- **Set as Default** buttons follow the existing `isDifferentFromGlobal` pattern — appear when the workflow value differs from the global VS Code setting.
-- The entire section is greyed out (`pointer-events-none opacity-60`) in CLI-managed (watch) mode, matching existing behavior.
+- **Permission Mode** — `CustomSelect` with three options. Tooltip explains each mode.
+  - `dangerouslyAllowAll` — bypass all restrictions (YOLO/dangerous)
+  - `allowAll` — auto-approve all tools (respects deny list)
+  - `custom` — use `allowedTools` + `deniedTools` lists
+- **Allowed/Denied Tools textareas** — appear only when `mode === "custom"` (animated `max-h` transition matching the session ID pattern). Full width, stacked vertically (not two-column).
+- Each textarea stores newline-separated patterns, parsed to/from `string[]` on change and blur.
+- **Set as Default** — a single `SetAsDefaultButton` for the entire `toolPermissions` object (same approach as `mcpServers`). Appears when `isDifferentFromGlobal("toolPermissions")` is true. Clicking it calls `handleSetAsDefault("toolPermissions", workflowProperties.toolPermissions)`.
+- When `toolPermissions` is `undefined` on the workflow, the controls show the effective global values (read from `globalSettings.toolPermissions`) and no "Set as Default" button appears.
+- There is no dedicated "Reset to global" control — clearing the workflow value back to `undefined` is done by setting mode to the same value as the global and clearing the tool lists, at which point `isDifferentFromGlobal` becomes false.
 
-#### Narrow/Wide layout
+#### Harness-aware inline warnings
 
-Follows the existing `Row narrow={isBodyNarrow}` pattern:
-- Wide: Mode selector in left column, a short "Docs" link or summary in right column
-- Narrow: stacked vertically
+The textareas and mode selector render for all harnesses (the values are stored and travel with the workflow file). However, the UI must surface per-harness caveats inline on the Permissions page. Use a muted notice `<p>` element styled like the `"Use {error} placeholder..."` hint text on the Validation page.
 
-#### Empty state
+**Copilot Chat — not applicable:**
 
-When `toolPermissions` is `undefined` on the workflow, the controls display the effective global value (same as harness/model do), and no "Set as Default" button appears.
+```
+ℹ️ Tool permissions apply to CLI harnesses only and are ignored for Copilot Chat.
+```
+
+The entire page body is dimmed (`opacity-60`) when effective harness is `copilot-chat`.
+
+**Codex CLI — mode only:**
+
+```
+ℹ️ Codex CLI uses sandbox/approval modes rather than individual tool patterns.
+  Allowed Tools and Denied Tools lists are ignored. Configure sandbox mode in
+  VS Code settings (codexSandboxMode, codexApprovalPolicy).
+```
+
+Show when effective harness is `codex-cli` and `mode === "custom"`. The textareas are still rendered but dimmed (`opacity-50 pointer-events-none`).
+
+**OpenCode CLI — mode only:**
+
+```
+ℹ️ OpenCode CLI manages permissions via config file. Tool pattern lists are ignored.
+```
+
+Same rendering treatment as Codex.
+
+**Gemini CLI — mode only:**
+
+```
+ℹ️ Gemini CLI uses approval modes only. Tool pattern lists are ignored.
+```
+
+Same rendering treatment.
+
+**Helper for determining the effective harness on the Permissions page:**
+
+Both drawers already track effective harness:
+
+- `SettingsDrawer`: use `effectiveHarness` (already derived via `getEffectiveHarness()`)
+- `PropertiesDrawer`: use `currentHarness` (already derived as `properties.harness ?? globalSettings.harness`)
+
+Create a small helper for classifying warning type:
+
+```typescript
+type PermissionHarnessSupport =
+  | "full"       // Copilot CLI, Claude CLI, Qwen CLI — mode + patterns both work
+  | "mode-only"  // Codex CLI, OpenCode CLI, Gemini CLI — patterns ignored
+  | "n/a";       // Copilot Chat
+
+function getPermissionHarnessSupport(
+  harnessId: HarnessId
+): PermissionHarnessSupport {
+  switch (harnessId) {
+    case HARNESS_IDS.COPILOT_CLI:
+    case HARNESS_IDS.CLAUDE_CLI:
+    case HARNESS_IDS.QWEN_CLI:
+      return "full";
+    case HARNESS_IDS.CODEX_CLI:
+    case HARNESS_IDS.OPENCODE_CLI:
+    case HARNESS_IDS.GEMINI_CLI:
+      return "mode-only";
+    case HARNESS_IDS.COPILOT_CHAT:
+    default:
+      return "n/a";
+  }
+}
+```
+
+This helper lives inline in the drawer (or extracted to a shared util if it grows). The switch drives both the warning text and the `opacity-50 pointer-events-none` dimming on the textareas.
 
 ---
 
-## Store Changes (`settingsStore.ts` / `WebviewMessageTypes.ts`)
+### PropertiesDrawer — Permissions Page
 
-`WorkflowProperties` in the store gains:
+The PropertiesDrawer shows per-prompt override controls with `Default (X)` labels resolving through the three-tier chain.
+
+#### Layout
+
+```
+[Permission Mode ▼]
+Default (allowAll) / dangerouslyAllowAll / allowAll / custom / None (use global)
+
+-- shown only when mode is explicitly "custom" (not Default, not None) --
+
+  [Allowed Tools]
+  <textarea: one pattern per line>
+
+  [Denied Tools]
+  <textarea: one pattern per line>
+
+-- harness-aware inline warning (same rules as SettingsDrawer above) --
+```
+
+#### Default label resolution
+
+Add a `buildPermissionsDefaultLabel(resolved: ToolPermissionsOverride | null | undefined): string` helper (in `src/ui/webview-react/components/shared/` alongside `buildMcpDefaultLabel`), following the same pattern:
 
 ```typescript
+function buildPermissionsDefaultLabel(
+  resolved: ToolPermissionsOverride | null | undefined
+): string {
+  if (!resolved || resolved.mode === undefined)
+    return "Default (global settings)";
+  if (resolved.mode === "dangerouslyAllowAll")
+    return "Default (dangerouslyAllowAll)";
+  if (resolved.mode === "allowAll") return "Default (allowAll)";
+  const count =
+    (resolved.allowedTools?.length ?? 0) + (resolved.deniedTools?.length ?? 0);
+  return `Default (custom, ${count} rule${count !== 1 ? "s" : ""})`;
+}
+```
+
+The resolved value for the label is: `workflowProperties.toolPermissions ?? globalSettings.toolPermissions`.
+
+#### `null` vs `undefined` semantics for PropertiesDrawer
+
+- `undefined` — inherit from workflow → global (the "Default (X)" option)
+- object — per-prompt override
+- `null` — explicitly bypass workflow override and fall back directly to global settings
+
+The dropdown includes a **"None (use global settings)"** option that sets `toolPermissions = null`. This lets a prompt skip a workflow-level override without re-specifying the global values.
+
+#### Harness-aware inline warnings
+
+Same logic as SettingsDrawer using `getPermissionHarnessSupport(currentHarness)`. The resolved harness for the PropertiesDrawer is `properties.harness ?? workflowProperties.harness ?? globalSettings.harness` (already tracked as `currentHarness` in the drawer).
+
+---
+
+### Narrow/Wide layout (both drawers)
+
+- Wide (`isNarrow === false`): Mode selector full width with label. Tool list textareas below, full width.
+- Narrow: same — this page is naturally single-column since textareas span full width anyway.
+
+The `DrawerRow` component is used only for the mode row if a two-column layout is desired; the textareas always go full width.
+
+---
+
+## Store Changes (`settingsStore.ts` / `WebviewSettingsSync.ts`)
+
+### `WorkflowProperties` (`settingsStore.ts`)
+
+Add `toolPermissions` to both `WorkflowProperties` (workflow-level) and `GlobalSettings`:
+
+```typescript
+// WorkflowProperties — per-workflow override
 toolPermissions?: {
   mode?: ToolPermissionMode;
   allowedTools?: string[];
   deniedTools?: string[];
 } | null;
+
+// GlobalSettings — mirrors VS Code settings for "Set as Default" comparison
+toolPermissions: {
+  mode: ToolPermissionMode;   // from ConfigurationUtils.getCliToolPermissions()
+  allowedTools: string[];     // from ConfigurationUtils.getCliAllowedTools()
+  deniedTools: string[];      // from ConfigurationUtils.getCliDeniedTools()
+};
 ```
 
-The `isDifferentFromGlobal("toolPermissions")` comparison uses JSON stringify (same as `skills` and `priorContext`).
+### `isDifferentFromGlobal` special case
 
-Message: reuses the existing `UPDATE_WORKFLOW_PROPERTY` message with `property: "toolPermissions"`.
+Add a case in `SettingsDrawer`'s `isDifferentFromGlobal` callback:
+
+```typescript
+if (property === "toolPermissions") {
+  if (!workflowValue) return false; // undefined/null = no override
+  const globalPerms = globalSettings.toolPermissions;
+  // Compare each sub-field; undefined sub-fields in the workflow value
+  // fall back to global, so they are never "different"
+  const modesDiffer =
+    workflowValue.mode !== undefined && workflowValue.mode !== globalPerms.mode;
+  const allowedDiffer =
+    workflowValue.allowedTools !== undefined &&
+    JSON.stringify(workflowValue.allowedTools) !==
+      JSON.stringify(globalPerms.allowedTools);
+  const deniedDiffer =
+    workflowValue.deniedTools !== undefined &&
+    JSON.stringify(workflowValue.deniedTools) !==
+      JSON.stringify(globalPerms.deniedTools);
+  return modesDiffer || allowedDiffer || deniedDiffer;
+}
+```
+
+### `getEffectiveToolPermissions` (`settingsStore.ts`)
+
+Add a resolver getter following the pattern of `getEffectiveResumeSession`:
+
+```typescript
+getEffectiveToolPermissions: () => {
+  const { workflowProperties, globalSettings } = get();
+  return workflowProperties.toolPermissions ?? globalSettings.toolPermissions;
+};
+```
+
+### `PropertyValues` (`editorStore.ts`)
+
+Add `toolPermissions` to the `PropertyValues` interface and `PROPERTY_DEFAULTS`:
+
+```typescript
+// PropertyValues
+toolPermissions: Disableable<ToolPermissionsOverride>; // undefined = inherit, null = reset to global, object = override
+
+// PROPERTY_DEFAULTS
+toolPermissions: undefined,
+```
+
+Also add the serialization case in `buildPromptItem()`:
+
+```typescript
+if (properties.toolPermissions !== undefined) {
+  result.toolPermissions = properties.toolPermissions;
+}
+```
+
+### `WebviewSettingsSync.buildGlobalSettings()` (`WebviewSettingsSync.ts`)
+
+Add tool permission values to the `buildGlobalSettings()` return:
+
+```typescript
+toolPermissions: {
+  mode: ConfigurationUtils.getCliToolPermissions(),
+  allowedTools: ConfigurationUtils.getCliAllowedTools(),
+  deniedTools: ConfigurationUtils.getCliDeniedTools(),
+},
+```
+
+### `initialGlobalSettings` (`settingsStore.ts`)
+
+Add to the initial value:
+
+```typescript
+toolPermissions: {
+  mode: "allowAll",   // matches VS Code setting default
+  allowedTools: [],
+  deniedTools: [],
+},
+```
+
+### Message
+
+Reuses the existing `UPDATE_WORKFLOW_PROPERTY` message with `property: "toolPermissions"`. No new message type needed.
 
 ---
 
-## Extension-Side Handling (`FlightPathWebviewProvider.ts`)
+## Extension-Side Handling (`WebviewSettingsSync.ts` + `FlightPathWebviewProvider.ts`)
 
 The `UPDATE_WORKFLOW_PROPERTY` handler already routes arbitrary properties through to the working file. No new message type needed. The extension writes the value to the `.flightpath.yaml` working file, which the `PromptFileParser` then picks up on next run.
+
+The `SET_AS_DEFAULT` handler in `WebviewSettingsSync.handleSetAsDefault()` requires a new branch for the compound `toolPermissions` property — it cannot use the generic `ConfigurationUtils.updateSetting(property, value)` fallback because `toolPermissions` maps to **three separate** VS Code settings:
+
+```typescript
+// In WebviewSettingsSync.handleSetAsDefault() — add alongside the mcpServers branch:
+} else if (property === "toolPermissions") {
+  // value is ToolPermissionsOverride — split into 3 individual settings
+  await ConfigurationUtils.updateSetting("cliToolPermissions", value?.mode ?? "allowAll");
+  await ConfigurationUtils.updateSetting("cliAllowedTools", value?.allowedTools ?? []);
+  await ConfigurationUtils.updateSetting("cliDeniedTools", value?.deniedTools ?? []);
+}
+```
 
 ---
 
 ## Implementation Steps
 
-1. **Schema** — Add `toolPermissions` to `executionProperties` in `schemas/prompt-schema.json`. Run `npm run generate-schema`.
+1. **Schema** — Add `toolPermissions` to `executionProperties` in `schemas/prompt-schema.json`. Run `npm run compile` (which includes schema generation).
 
-2. **Types** — Add `ToolPermissionsOverride` to `FlightPathTypes.ts`. Add `toolPermissions` to `PromptItem` and workflow-level type.
+2. **Types (`FlightPathTypes.ts`)** — Add `ToolPermissionsOverride` interface. Import `ToolPermissionMode` from `IToolPermissionMapper.ts` (already defined there). Add `toolPermissions?: ToolPermissionsOverride | null` to `ExecutionProperties` — this automatically makes it available on `PromptItem` (which extends `ExecutionProperties`).
 
-3. **Resolver** — Create `src/utils/ToolPermissionResolver.ts` with `resolveToolPermissions(prompt, workflow)` returning a `ToolPermissionConfig`.
+3. **Resolver (`PropertyResolver.ts`)** — Add `private static resolveToolPermissions(prompt, workflow)` to `PropertyResolver.ts` alongside the other resolver methods. Add `toolPermissions: ToolPermissionConfig` to the `ResolvedProperties` interface and call `this.resolveToolPermissions(prompt, workflow)` inside `PropertyResolver.resolve()`. Use explicit `!== undefined` checks (not `??`) to handle the `null` = "use global" semantic correctly. A standalone `ToolPermissionResolver.ts` is NOT needed — follow the existing pattern.
 
-4. **Execution context** — Add `toolPermissions?: ToolPermissionConfig` to `CliExecutionOptions` (or equivalent type passed to `runPrompt()`).
+4. **WorkflowExecutor** — No direct `resolveToolPermissions` call needed. The resolved `toolPermissions` is now available on `resolvedProperties` from `PropertyResolver.resolve()`. Pass it as part of the execution options/context into the harness (Option A below).
 
-5. **WorkflowExecutor** — Call `resolveToolPermissions()` per prompt and pass into harness options.
+5. **Harness providers** — Update `CopilotCliProvider`, `ClaudeCliProvider`, `CodexCliProvider`, `OpenCodeCliProvider`, `QwenCliProvider`, `GeminiCliProvider` to accept a resolved `ToolPermissionConfig` from the execution context (Option A: extend the options/context passed into each provider's `buildArgs()`). Keep `ConfigurationUtils` direct call as the fallback for code paths that don't go through `WorkflowExecutor` (e.g., `hasFullPermissions()` pre-flight check in `CliIntegration`).
 
-6. **Harness providers** — Update `CopilotCliProvider`, `ClaudeCliProvider`, `CodexCliProvider`, `OpenCodeCliProvider` to use `options.toolPermissions` instead of calling `ConfigurationUtils` directly. Keep `ConfigurationUtils` fallback for callers that don't pass options (e.g., `hasFullPermissions()` in `CliIntegration`).
+6. **`GlobalSettings` + `settingsStore`** — Add `toolPermissions` to `GlobalSettings` interface, `initialGlobalSettings`, and `WorkflowProperties`. Add `getEffectiveToolPermissions()` action.
 
-7. **SettingsDrawer** — Add Permission Mode + Allowed/Denied tool rows as described above.
+7. **`WebviewSettingsSync.handleSetAsDefault()`** — Add a `toolPermissions` branch that splits the compound object into three `ConfigurationUtils.updateSetting()` calls (`cliToolPermissions`, `cliAllowedTools`, `cliDeniedTools`). See the Extension-Side Handling section above.
 
-8. **settingsStore** — Add `toolPermissions` to `WorkflowProperties`.
+8. **`WebviewSettingsSync.buildGlobalSettings()`** — Add `toolPermissions` field populated from `ConfigurationUtils`.
 
-9. **Tests** — Update `ToolPermissionMappers.test.ts` and add resolver tests.
+9. **`PropertyValues` + `editorStore`** — Add `toolPermissions` to `PropertyValues` interface, `PROPERTY_DEFAULTS`, and the `buildPromptItem()` serialization path.
+
+10. **`SettingsDrawer`** — Replace the "Coming Soon" block for `DRAWER_PAGES.PERMISSIONS` with the permission mode selector, conditional textareas, and `SetAsDefaultButton`. Add `toolPermissions` case to `isDifferentFromGlobal`. Add `handleToolPermissionsChange` handler.
+
+11. **`PropertiesDrawer`** — Replace the "Coming Soon" block for `DRAWER_PAGES.PERMISSIONS` with the permission mode dropdown (including "Default (X)" and "Reset to global" options) and conditional textareas. Add `buildPermissionsDefaultLabel` helper.
+
+12. **Tests** — Update `ToolPermissionMappers.test.ts` for any mapper changes. Add `PropertyResolver` tests for `resolveToolPermissions` covering: `null` at prompt level bypasses workflow level, `null` at workflow level uses global, undefined at both uses global, per-field merging with global fallbacks. Add settingsStore tests for `getEffectiveToolPermissions` and `isDifferentFromGlobal("toolPermissions")`.
 
 ---
 
@@ -284,5 +572,8 @@ The `UPDATE_WORKFLOW_PROPERTY` handler already routes arbitrary properties throu
 
 - Global VS Code settings (`cliToolPermissions`, `cliAllowedTools`, `cliDeniedTools`) remain the default and fallback — no migration needed.
 - `ConfigurationUtils` API is unchanged; the resolver calls it for fallback values.
-- Chat harness (`copilot-chat`) is unaffected — `toolPermissions` in schema applies to CLI harnesses only (same as `additionalArgs`).
+- **Codex-specific settings** (`codexSandboxMode`, `codexApprovalPolicy`, `codexAllowedDirs`) remain global-only VS Code settings and are **not** part of the `toolPermissions` override object. Per-workflow Codex sandbox configuration is deferred (YAGNI).
+- **OpenCode permissions** remain config-file driven. `toolPermissions` mode maps to the same no-op behavior as today; patterns are silently ignored.
+- Chat harness (`copilot-chat`) ignores `toolPermissions` at execution time. The UI shows a caveat and dims the page, but values are still stored and travel with the workflow file.
 - The existing `hasFullPermissions()` / headless-without-permissions warning continues to read from `ConfigurationUtils` as before, since it's a pre-flight check (not per-prompt).
+- `QwenCliProvider` and `GeminiCliProvider` are included in the harness provider changes (they also call `ConfigurationUtils` directly today and need the same update). For Gemini and other mode-only harnesses, the mapper continues to ignore `allowedTools`/`deniedTools` — the resolver simply passes them through and the mapper discards them.
