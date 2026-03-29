@@ -26,7 +26,6 @@ export { DrawerRow } from "./DrawerRow";
 export {
   PriorContextSelect,
   PRIOR_CONTEXT_KEYWORD_LABELS,
-  type PriorPrompt,
   type KeywordMode,
 } from "./PriorContextSelect";
 export { SkillsSelect } from "./SkillsSelect";

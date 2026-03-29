@@ -6,7 +6,6 @@ import {
 } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
-import { useWorkflowStore } from "../../store/workflowStore";
 import {
   HARNESS_IDS,
   type HarnessId,
@@ -78,18 +77,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   } = useSettingsStore();
   const { hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
     useUiStore();
-  const prompts = useWorkflowStore((s) => s.prompts);
   const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(576);
-
-  // Build prior prompt list for priorContext custom selection.
-  const priorPrompts = (() => {
-    const limit =
-      selectedPromptIndex === null ? prompts.length : selectedPromptIndex;
-    return prompts.slice(0, limit).map((p, i) => ({
-      number: i + 1,
-      name: p.name,
-    }));
-  })();
 
   // ── Resolved "Default (X)" labels ────────────────────────────────────────
   // Each label shows what value the prompt will actually use when set to Default,
@@ -600,7 +588,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   onChange={(v) => setProperty("priorContext", v)}
                   showDefault
                   defaultLabel={defaultPriorContextLabel}
-                  priorPrompts={priorPrompts}
                   dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
               </div>

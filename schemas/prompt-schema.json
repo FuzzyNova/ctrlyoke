@@ -268,7 +268,7 @@
         },
         "returns": {
           "type": "string",
-          "description": "Expected output from script (stdout). Matching rules: (1) Exact match (case-insensitive), (2) Boolean: 'true' matches true/1/yes/pass/passed, 'false' matches false/0/no/fail/failed, (3) Numeric: compared as >= (e.g., '90' matches if script outputs 90 or higher), (4) Substring: matches if output contains this string"
+          "description": "Expected result from script. For 'true'/'false': uses exit code (exit 0 = 'true', non-zero = 'false') — use this for any command where success/failure matters (e.g., 'npm test', 'npm run compile'). For other values: compares against stdout using (1) exact match (case-insensitive), (2) numeric >= (e.g., '90' matches if output is 90 or higher), (3) substring match."
         },
         "timeout": {
           "type": "number",

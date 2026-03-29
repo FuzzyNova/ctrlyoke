@@ -108,10 +108,17 @@ export class EndConditionEvaluator {
       );
 
       // Check if result matches expected value
-      const success = this.checkResult(result.result, condition.returns);
+      const checkSuccess = this.checkResult(result.result, condition.returns, result.exitCode);
+
+      // For boolean "true"/"false" returns, exit code IS the success criterion
+      // (checkResult already evaluated it). For other returns, also require a
+      // clean exit (exitCode === 0) so unexpected crashes still fail the check.
+      const expectedLower = condition.returns.trim().toLowerCase();
+      const isBooleanReturn = expectedLower === "true" || expectedLower === "false";
+      const success = isBooleanReturn ? checkSuccess : checkSuccess && result.success;
 
       return {
-        success: success && result.success,
+        success,
         stdout: result.stdout || "",
         stderr: result.stderr || "",
         result: result.result,
@@ -342,19 +349,29 @@ export class EndConditionEvaluator {
   }
 
   /**
-   * Check if script result matches expected value
+   * Check if script result matches expected value.
+   *
+   * For boolean "true"/"false" expected values, exit code takes precedence when
+   * available — exit 0 = "true", non-zero exit = "false". This means commands like
+   * `npm run compile` with `returns: "true"` pass on a clean exit without needing
+   * to emit a literal "true" to stdout.
+   *
+   * For all other expected values, stdout is compared (exact, numeric >=, substring).
    */
-  private checkResult(actualResult: string, expectedResult: string): boolean {
+  private checkResult(actualResult: string, expectedResult: string, exitCode?: number): boolean {
     const actual = actualResult.trim().toLowerCase();
     const expected = expectedResult.trim().toLowerCase();
 
-    // Exact match
+    // Exact match (handles explicit "true"/"false" stdout output)
     if (actual === expected) {
       return true;
     }
 
-    // Boolean interpretation
+    // Boolean interpretation — exit code takes precedence over stdout
     if (expected === "true") {
+      if (exitCode !== undefined) {
+        return exitCode === 0;
+      }
       return (
         actual === "true" ||
         actual === "1" ||
@@ -365,6 +382,9 @@ export class EndConditionEvaluator {
     }
 
     if (expected === "false") {
+      if (exitCode !== undefined) {
+        return exitCode !== 0;
+      }
       return (
         actual === "false" ||
         actual === "0" ||

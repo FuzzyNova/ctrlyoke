@@ -5,7 +5,6 @@ import {
   type GlobalSettings,
 } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
-import { useWorkflowStore } from "../../store/workflowStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import {
@@ -160,7 +159,6 @@ export const SettingsPanel: React.FC<{
     getEffectiveResumeSession,
     getEffectivePriorContext,
   } = useSettingsStore();
-  const prompts = useWorkflowStore((s) => s.prompts);
 
   // Active drawer page
   const [activePage, setActivePage] = useState<DrawerPage>(
@@ -950,10 +948,6 @@ export const SettingsPanel: React.FC<{
                     id="settings-prior-context"
                     value={effectivePriorContext}
                     onChange={handlePriorContextChange}
-                    priorPrompts={prompts.map((p, i) => ({
-                      number: i + 1,
-                      name: p.name,
-                    }))}
                   />
                 </FormField>
               </DrawerRow>
