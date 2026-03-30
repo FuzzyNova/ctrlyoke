@@ -17,6 +17,7 @@ import {
   WorkingFile,
   WorkflowSummary,
   WorkflowRunnerLock,
+  UserHookConfig,
 } from "../types/FlightPathTypes";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import {
@@ -2258,6 +2259,9 @@ export class WorkflowInstance {
       }),
       ...(props?.mcpServers !== undefined && {
         mcpServers: props.mcpServers as (string | McpServerConfig)[] | null,
+      }),
+      ...(props?.hooks !== undefined && {
+        hooks: props.hooks as UserHookConfig[] | null,
       }),
       ...(props?.endCondition !== undefined && {
         endCondition: coerce<EndCondition>(props.endCondition),

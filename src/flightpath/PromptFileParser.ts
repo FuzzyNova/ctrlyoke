@@ -297,6 +297,7 @@ export class PromptFileParser {
     if (source.sessionId !== undefined) promptItem.sessionId = source.sessionId;
     if (source.mcpServers !== undefined)
       promptItem.mcpServers = source.mcpServers;
+    if (source.hooks !== undefined) promptItem.hooks = source.hooks;
     if (source.endCondition !== undefined)
       promptItem.endCondition = source.endCondition;
     if (source.priorContext !== undefined)
@@ -391,6 +392,7 @@ export class PromptFileParser {
     if (parsed.sessionId !== undefined) promptFile.sessionId = parsed.sessionId;
     if (parsed.mcpServers !== undefined)
       promptFile.mcpServers = parsed.mcpServers;
+    if (parsed.hooks !== undefined) promptFile.hooks = parsed.hooks;
     if (parsed.endCondition !== undefined)
       promptFile.endCondition = parsed.endCondition;
     if (parsed.priorContext !== undefined)

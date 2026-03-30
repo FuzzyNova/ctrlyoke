@@ -76,6 +76,9 @@ export class ValidationUtils {
       mcpServers: {
         // Complex union type (string | McpServerConfig)[] | null - use 'as any' since AJV JSONSchemaType cannot express this union natively
       } as any,
+      hooks: {
+        // UserHookConfig[] | null - complex union type, use 'as any'
+      } as any,
       endCondition: {
         // EndCondition has compareSource?: EndConditionCompareSource (string union) which
         // AJV JSONSchemaType cannot represent natively — use 'as any' to bypass strict checks.
@@ -129,6 +132,7 @@ export class ValidationUtils {
           skills: { type: "array", items: { type: "string" }, nullable: true },
           resumeSession: { type: "boolean", nullable: true },
           mcpServers: {} as any,
+          hooks: {} as any,
           endCondition: {
             type: "object",
             properties: {

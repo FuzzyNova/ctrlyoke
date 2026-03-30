@@ -463,6 +463,7 @@ export const PROMPT_PROPERTIES = {
   RESUME_SESSION: "resumeSession",
   SESSION_ID: "sessionId",
   MCP_SERVERS: "mcpServers",
+  HOOKS: "hooks",
 
   // End condition root
   END_CONDITION: "endCondition",

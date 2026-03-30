@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { DynamicQueueConfig, Harness, McpServerConfig } from "../types/FlightPathTypes";
+import { DynamicQueueConfig, Harness, McpServerConfig, UserHookConfig } from "../types/FlightPathTypes";
 import { HARNESS_IDS, EXECUTION_MODES } from "../types/DashboardConstants";
 
 /**
@@ -667,6 +667,21 @@ export const ConfigurationUtils = {
    */
   async setDefaultMcpServers(servers: (string | McpServerConfig)[]): Promise<void> {
     await this.updateSetting("mcpServers", servers);
+  },
+
+  /**
+   * Get the default hooks from settings
+   */
+  getDefaultHooks(): UserHookConfig[] {
+    const config = getConfig();
+    return config.get<UserHookConfig[]>("hooks", []);
+  },
+
+  /**
+   * Set the default hooks in settings
+   */
+  async setDefaultHooks(hooks: UserHookConfig[]): Promise<void> {
+    await this.updateSetting("hooks", hooks);
   },
 
   /**

@@ -1072,6 +1072,24 @@
           "description": "[MCP] Default MCP servers to attach to harness invocations",
           "markdownDescription": "Default MCP servers to attach to harness invocations. Include `\"flightpath\"` to enable dynamic queue extension via FlightPath's MCP server. Each item can be a string (well-known server ID) or an object with `id`, `command`, `args`, `env`, and `autoApprove` fields."
         },
+        "flightpath.hooks": {
+          "order": 610,
+          "type": "array",
+          "default": [],
+          "description": "[Hooks] Default user hooks to run alongside FlightPath's completion-detection hooks. Used to pre-populate new workflow files.",
+          "items": {
+            "type": "object",
+            "required": ["event", "command"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["stop", "sessionStart", "preToolUse", "postToolUse", "userPromptSubmit"]
+              },
+              "command": { "type": "string" },
+              "timeoutSec": { "type": "number" }
+            }
+          }
+        },
         "flightpath.maxQueueSize": {
           "order": 602,
           "type": "number",

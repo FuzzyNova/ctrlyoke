@@ -285,6 +285,9 @@ export class PromptFileLoader {
     if (promptFile.mcpServers !== undefined) {
       updates.mcpServers = promptFile.mcpServers;
     }
+    if (promptFile.hooks !== undefined) {
+      updates.hooks = promptFile.hooks;
+    }
     if (promptFile.endCondition !== undefined) {
       updates.endCondition = promptFile.endCondition;
     }
@@ -329,6 +332,9 @@ export class PromptFileLoader {
     }
     if (explicitValues.mcpServers === undefined) {
       defaults.mcpServers = ConfigurationUtils.getDefaultMcpServers();
+    }
+    if (explicitValues.hooks === undefined) {
+      defaults.hooks = ConfigurationUtils.getDefaultHooks();
     }
     if (explicitValues.priorContext === undefined) {
       defaults.priorContext = ConfigurationUtils.getPriorContext();

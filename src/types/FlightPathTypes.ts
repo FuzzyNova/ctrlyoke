@@ -59,6 +59,36 @@ export interface McpServerConfig {
 }
 
 /**
+ * Logical hook event names — mapped to CLI-specific event names at inject time.
+ *
+ * | Logical name      | Claude/Qwen      | Copilot CLI  | Gemini CLI   | Codex  | OpenCode                |
+ * |-------------------|------------------|--------------|--------------|--------|-------------------------|
+ * | "stop"            | Stop             | sessionEnd   | AfterAgent   | notify | session.status idle     |
+ * | "sessionStart"    | SessionStart     | sessionStart | SessionStart | (none) | session.created         |
+ * | "preToolUse"      | PreToolUse       | (none)       | (none)       | (none) | (unknown)               |
+ * | "postToolUse"     | PostToolUse      | (none)       | (none)       | (none) | (unknown)               |
+ * | "userPromptSubmit"| UserPromptSubmit | (none)       | (none)       | (none) | (none)                  |
+ */
+export type HookEvent =
+  | "stop"
+  | "sessionStart"
+  | "preToolUse"
+  | "postToolUse"
+  | "userPromptSubmit";
+
+/**
+ * A user-defined hook to run alongside FlightPath's built-in hooks.
+ */
+export interface UserHookConfig {
+  /** Logical hook event name. Unsupported events for the active harness are silently skipped. */
+  event: HookEvent;
+  /** Command to run. Resolved relative to workspace root if not absolute. */
+  command: string;
+  /** Optional timeout in seconds (only respected by CLIs that support per-hook timeouts). */
+  timeoutSec?: number;
+}
+
+/**
  * Per-workflow/prompt tool permission overrides.
  * Follows three-tier precedence: prompt > workflow > global VS Code settings.
  * Only applies to CLI harnesses.
@@ -149,6 +179,15 @@ export interface ExecutionProperties {
    * - undefined: Inherit from workflow/settings
    */
   toolPermissions?: ToolPermissionsOverride | null;
+
+  /**
+   * User-defined hooks to run alongside FlightPath's completion-detection hooks.
+   * Supported events vary by harness; unsupported events are silently ignored.
+   * - undefined: inherit from workflow/settings
+   * - null or []: explicitly no hooks
+   * - [...]: per-event override from the tier below
+   */
+  hooks?: UserHookConfig[] | null;
 }
 
 export interface PromptFile extends ExecutionProperties {

@@ -6,6 +6,8 @@ import {
   PriorContext,
   McpServerConfig,
   ToolPermissionsOverride,
+  UserHookConfig,
+  HookEvent,
 } from "../types/FlightPathTypes";
 import { ToolPermissionConfig } from "../flightpath/harness/shared/interfaces/IToolPermissionMapper";
 import { ConfigurationUtils } from "./ConfigurationUtils";
@@ -35,6 +37,12 @@ export interface ResolvedProperties {
    * null = explicitly disabled, undefined should not occur after resolution.
    */
   mcpServers: (string | McpServerConfig)[] | null;
+
+  /**
+   * User-defined hooks (resolved with per-event override semantics).
+   * null = explicitly disabled, undefined should not occur after resolution.
+   */
+  hooks: UserHookConfig[] | null;
 
   /** Session ID for resuming - undefined if not specified */
   sessionId?: string | number;
@@ -94,6 +102,7 @@ export class PropertyResolver {
       skills: this.resolveSkills(prompt, workflow),
       resumeSession: this.resolveResumeSession(prompt, workflow),
       mcpServers: this.resolveMcpServers(prompt, workflow),
+      hooks: this.resolveHooks(prompt, workflow),
       sessionId: this.resolveSessionId(prompt, workflow),
       endCondition: this.resolveEndCondition(prompt, workflow),
       priorContext: this.resolvePriorContext(prompt, workflow),
@@ -266,6 +275,51 @@ export class PropertyResolver {
 
     // 3. VS Code setting fallback
     return ConfigurationUtils.shouldResumeExistingSession();
+  }
+
+  /**
+   * Resolve hooks with per-event override semantics.
+   * Prompt-level hooks override workflow hooks per-event (not wholesale).
+   * Events not mentioned at prompt level inherit from workflow level.
+   */
+  private static resolveHooks(
+    promptItem: PromptItem,
+    workflowFile: PromptFile
+  ): UserHookConfig[] | null {
+    // Explicit null at prompt level → no hooks for this prompt
+    if (promptItem.hooks === null) return null;
+
+    // Explicit null at workflow level (no prompt override) → no hooks
+    if (promptItem.hooks === undefined && workflowFile.hooks === null)
+      return null;
+
+    // workflowFile.hooks is never undefined here (seeded by populateSettingsDefaults)
+    const workflowHooks = workflowFile.hooks ?? [];
+
+    // No prompt-level override → return workflow hooks
+    if (promptItem.hooks === undefined || promptItem.hooks.length === 0) {
+      return workflowHooks;
+    }
+
+    // Prompt has hooks → per-event override against workflow level
+    const eventMap = new Map<HookEvent, UserHookConfig[]>();
+
+    // Base: workflow-level hooks
+    for (const hook of workflowHooks) {
+      if (!eventMap.has(hook.event)) eventMap.set(hook.event, []);
+      eventMap.get(hook.event)!.push(hook);
+    }
+
+    // Override: prompt-level hooks replace workflow hooks per event
+    const promptEvents = new Set(promptItem.hooks.map((h) => h.event));
+    for (const event of promptEvents) {
+      eventMap.set(
+        event,
+        promptItem.hooks.filter((h) => h.event === event)
+      );
+    }
+
+    return [...eventMap.values()].flat();
   }
 
   /**
