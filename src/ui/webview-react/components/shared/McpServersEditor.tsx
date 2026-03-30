@@ -1,5 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import type { McpServerConfig } from "@root/types/FlightPathTypes";
+import type {
+  LocalMcpServerEntry,
+  RegistryMcpEntry,
+} from "@root/types/WebviewMessageTypes";
 
 export type McpServersValue = (string | McpServerConfig)[] | null | undefined;
 
@@ -128,6 +132,8 @@ const McpServersReadOnly: React.FC<{ value: McpServersValue }> = ({
  * Note: env variables are not editable here — set them in the YAML file
  * directly under the server's env: key.
  */
+type DiscoveryPanel = "local" | "registry" | null;
+
 export const McpServersEditor: React.FC<{
   value: McpServersValue;
   onChange: (value: McpServersValue) => void;
@@ -145,16 +151,58 @@ export const McpServersEditor: React.FC<{
    * Only used when showDefault is true.
    */
   inheritedValue?: McpServersValue;
+  // ── Discovery props (optional) ─────────────────────────────────────────────
+  /** Called when user requests a local config file scan */
+  onRequestLocalServers?: () => void;
+  /** Called when user submits a registry search */
+  onSearchRegistry?: (query: string) => void;
+  /** Results from the most recent local scan */
+  localServers?: LocalMcpServerEntry[];
+  /** Whether a local scan is in progress */
+  isLoadingLocal?: boolean;
+  /** Error from the most recent local scan */
+  localServersError?: string;
+  /** Results from the most recent registry search */
+  registryServers?: RegistryMcpEntry[];
+  /** Whether a registry fetch is in progress */
+  isLoadingRegistry?: boolean;
+  /** Error from the most recent registry fetch */
+  registryError?: string;
 }> = ({
   value,
   onChange,
   defaultLabel = "Default",
   showDefault = true,
   inheritedValue,
+  onRequestLocalServers,
+  onSearchRegistry,
+  localServers,
+  isLoadingLocal,
+  localServersError,
+  registryServers,
+  isLoadingRegistry,
+  registryError,
 }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [form, setForm] = useState<AddServerForm>(EMPTY_FORM);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [discoveryPanel, setDiscoveryPanel] = useState<DiscoveryPanel>(null);
+  const [registryQuery, setRegistryQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Client-side filter: Anthropic registry has no server-side search
+  const filteredRegistryServers = registryServers
+    ? registryQuery.trim()
+      ? registryServers.filter((s) => {
+          const q = registryQuery.toLowerCase();
+          return (
+            s.name.toLowerCase().includes(q) ||
+            s.description.toLowerCase().includes(q) ||
+            (s.packageName ?? "").toLowerCase().includes(q)
+          );
+        })
+      : registryServers
+    : undefined;
 
   // mode: "default" only when showDefault=true and value is undefined
   const mode: "default" | "custom" =
@@ -174,6 +222,8 @@ export const McpServersEditor: React.FC<{
     }
   };
 
+  const showDiscovery = !!(onRequestLocalServers || onSearchRegistry);
+
   const handleFlightpathToggle = () => {
     onChange(buildArray(!flightpathEnabled, userServers));
   };
@@ -181,6 +231,42 @@ export const McpServersEditor: React.FC<{
   const handleRemoveServer = (id: string) => {
     onChange(buildArray(flightpathEnabled, userServers.filter((s) => s.id !== id)));
     if (expandedId === id) setExpandedId(null);
+  };
+
+  /** Import a local entry — skip if already present */
+  const handleImportLocal = (entry: LocalMcpServerEntry) => {
+    if (userServers.some((s) => s.id === entry.id)) return;
+    const server: McpServerConfig = { id: entry.id, command: entry.command };
+    if (entry.args && entry.args.length > 0) server.args = entry.args;
+    if (entry.env && Object.keys(entry.env).length > 0) server.env = entry.env;
+    onChange(buildArray(flightpathEnabled, [...userServers, server]));
+  };
+
+  /** Import a registry entry */
+  const handleImportRegistry = (entry: RegistryMcpEntry) => {
+    const id = entry.id.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || entry.id;
+    if (userServers.some((s) => s.id === id)) return;
+    let server: McpServerConfig;
+    if (entry.packageName) {
+      server = { id, command: "npx", args: ["-y", entry.packageName] };
+    } else {
+      server = { id, command: entry.installCommand ?? "npx" };
+    }
+    onChange(buildArray(flightpathEnabled, [...userServers, server]));
+  };
+
+  const handleDiscoveryPanelToggle = (panel: DiscoveryPanel) => {
+    if (discoveryPanel === panel) {
+      setDiscoveryPanel(null);
+    } else {
+      setDiscoveryPanel(panel);
+      if (panel === "local") {
+        onRequestLocalServers?.();
+      } else if (panel === "registry" && !registryServers && !isLoadingRegistry) {
+        // Load registry on first open; subsequent opens use cached results
+        onSearchRegistry?.("");
+      }
+    }
   };
 
   const handleAddServer = () => {
@@ -430,6 +516,173 @@ export const McpServersEditor: React.FC<{
                 <i className="codicon codicon-add text-[10px]" />
                 Add Server
               </button>
+            )}
+
+            {/* Discovery shortcuts */}
+            {showDiscovery && (
+              <div className="flex flex-col gap-1 mt-1">
+                <div className="flex gap-1">
+                  {onRequestLocalServers && (
+                    <button
+                      type="button"
+                      onClick={() => handleDiscoveryPanelToggle("local")}
+                      className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded border transition-colors ${
+                        discoveryPanel === "local"
+                          ? "bg-btn-bg text-btn-fg border-btn-bg"
+                          : "text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
+                      }`}
+                    >
+                      <i className="codicon codicon-folder-opened text-[10px]" />
+                      Local configs
+                    </button>
+                  )}
+                  {onSearchRegistry && (
+                    <button
+                      type="button"
+                      onClick={() => handleDiscoveryPanelToggle("registry")}
+                      className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded border transition-colors ${
+                        discoveryPanel === "registry"
+                          ? "bg-btn-bg text-btn-fg border-btn-bg"
+                          : "text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
+                      }`}
+                    >
+                      <i className="codicon codicon-globe text-[10px]" />
+                      Browse registry
+                    </button>
+                  )}
+                </div>
+
+                {/* Local configs panel */}
+                {discoveryPanel === "local" && (
+                  <div className="flex flex-col gap-1 p-2 rounded border border-panel-border bg-editor-bg">
+                    {isLoadingLocal ? (
+                      <div className="flex items-center gap-1.5 text-[11px] text-description-fg">
+                        <i className="codicon codicon-loading codicon-modifier-spin text-[10px]" />
+                        Scanning local configs…
+                      </div>
+                    ) : localServersError ? (
+                      <div className="text-[11px] text-error-fg">{localServersError}</div>
+                    ) : !localServers || localServers.length === 0 ? (
+                      <div className="text-[11px] text-description-fg italic">
+                        No servers found in local config files
+                        <span className="block text-[10px] mt-0.5">
+                          (.vscode/mcp.json, .mcp.json, VS Code user config)
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-[10px] text-description-fg mb-0.5">
+                          Found {localServers.length} server{localServers.length !== 1 ? "s" : ""}
+                        </div>
+                        {localServers.map((entry) => {
+                          const alreadyAdded = userServers.some((s) => s.id === entry.id);
+                          return (
+                            <div
+                              key={`${entry.source}:${entry.id}`}
+                              className="flex items-center justify-between gap-2 px-2 py-1 rounded border border-panel-border"
+                            >
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs font-medium text-foreground truncate">{entry.id}</span>
+                                <span className="text-[10px] text-description-fg font-mono truncate">
+                                  {entry.command}{entry.args ? " " + entry.args.join(" ") : ""}
+                                </span>
+                                <span className="text-[10px] text-description-fg capitalize">{entry.source.replace(/-/g, " ")}</span>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={alreadyAdded}
+                                onClick={() => handleImportLocal(entry)}
+                                className="flex-shrink-0 px-2 py-0.5 text-[11px] rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                title={alreadyAdded ? "Already added" : `Import ${entry.id}`}
+                              >
+                                {alreadyAdded ? "Added" : "Import"}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Registry panel */}
+                {discoveryPanel === "registry" && (
+                  <div className="flex flex-col gap-1.5 p-2 rounded border border-panel-border bg-editor-bg">
+                    {/* Filter input — client-side search (Anthropic registry has no server-side search) */}
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      placeholder="Filter servers…"
+                      value={registryQuery}
+                      onChange={(e) => setRegistryQuery(e.target.value)}
+                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                      // eslint-disable-next-line jsx-a11y/no-autofocus
+                      autoFocus
+                    />
+
+                    {isLoadingRegistry ? (
+                      <div className="flex items-center gap-1.5 text-[11px] text-description-fg">
+                        <i className="codicon codicon-loading codicon-modifier-spin text-[10px]" />
+                        Fetching from Anthropic registry…
+                      </div>
+                    ) : registryError ? (
+                      <div className="text-[11px] text-error-fg">{registryError}</div>
+                    ) : filteredRegistryServers && filteredRegistryServers.length > 0 ? (
+                      <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                        {filteredRegistryServers.map((entry) => {
+                          const id = entry.id
+                            .toLowerCase()
+                            .replace(/[^a-z0-9-]/g, "-")
+                            .replace(/-+/g, "-")
+                            .replace(/^-|-$/g, "") || entry.id;
+                          const alreadyAdded = userServers.some((s) => s.id === id);
+                          return (
+                            <div
+                              key={entry.id}
+                              className="flex items-start justify-between gap-2 px-2 py-1.5 rounded border border-panel-border"
+                            >
+                              <div className="flex flex-col min-w-0 flex-1">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs font-medium text-foreground truncate">{entry.name}</span>
+                                  {entry.verified && (
+                                    <i className="codicon codicon-verified-filled text-[10px] text-blue-400 flex-shrink-0" title="Anthropic verified" />
+                                  )}
+                                </div>
+                                {entry.description && (
+                                  <span className="text-[10px] text-description-fg line-clamp-2">{entry.description}</span>
+                                )}
+                                {entry.installCommand && (
+                                  <span className="text-[10px] text-description-fg font-mono mt-0.5 truncate">{entry.installCommand}</span>
+                                )}
+                                {entry.envVars && entry.envVars.length > 0 && (
+                                  <span className="text-[10px] text-description-fg mt-0.5">
+                                    Requires: {entry.envVars.map((e) => e.name).join(", ")}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                disabled={alreadyAdded}
+                                onClick={() => handleImportRegistry(entry)}
+                                className="flex-shrink-0 px-2 py-0.5 text-[11px] rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors mt-0.5"
+                                title={alreadyAdded ? "Already added" : `Add ${entry.name}`}
+                              >
+                                {alreadyAdded ? "Added" : "Add"}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : filteredRegistryServers !== undefined ? (
+                      <div className="text-[11px] text-description-fg italic">No matches</div>
+                    ) : (
+                      <div className="text-[10px] text-description-fg italic">
+                        Loading Anthropic MCP registry…
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

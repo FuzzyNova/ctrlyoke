@@ -158,6 +158,12 @@ export const MESSAGE_TYPES = {
   // Recent workflow management — Webview → Extension
   REMOVE_WORKFLOW_HISTORY: "removeWorkflowHistory", // Remove single history entry: { filePath }
 
+  // MCP Discovery — Webview ↔ Extension
+  REQUEST_MCP_LOCAL_SERVERS: "requestMcpLocalServers", // Webview -> Extension: Scan local MCP config files
+  MCP_LOCAL_SERVERS_RESULT: "mcpLocalServersResult", // Extension -> Webview: { servers: LocalMcpServerEntry[], error? }
+  REQUEST_MCP_REGISTRY: "requestMcpRegistry", // Webview -> Extension: Search Anthropic MCP registry
+  MCP_REGISTRY_RESULT: "mcpRegistryResult", // Extension -> Webview: { servers: RegistryMcpEntry[], error?, query? }
+
   // Settings — Webview → Extension
   UPDATE_CONFIRM_DELETE: "updateConfirmDelete", // Update confirmDeleteOperations setting: { value: boolean }
 

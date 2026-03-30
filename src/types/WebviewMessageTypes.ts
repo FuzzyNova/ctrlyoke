@@ -855,6 +855,71 @@ export interface RedoWorkflowChangesMessage {
   };
 }
 
+// ============================================================================
+// MCP Discovery Types
+// ============================================================================
+
+/**
+ * A single MCP server entry discovered from a local config file.
+ */
+export interface LocalMcpServerEntry {
+  id: string;
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  /** Where this entry was discovered from */
+  source:
+    | "vscode-workspace"
+    | "vscode-user"
+    | "claude-workspace"
+    | "claude-user";
+}
+
+/**
+ * A single MCP server entry from the Anthropic MCP registry.
+ */
+export interface RegistryMcpEntry {
+  /** Registry-assigned server identifier (e.g. slug or UUID) */
+  id: string;
+  name: string;
+  description: string;
+  /** npm package name (if available), used to build an install command */
+  packageName?: string;
+  /** Ready-to-paste install command (e.g. "npx -y @package/name") */
+  installCommand?: string;
+  /** Environment variables required by this server */
+  envVars?: Array<{ name: string; description?: string }>;
+  /** Whether this server is officially verified in the registry */
+  verified?: boolean;
+  /**
+   * The exact `claude mcp add ...` command from the Anthropic registry.
+   * Shown in the UI as a reference; not used for import.
+   */
+  claudeCodeCopyText?: string;
+}
+
+export interface RequestMcpLocalServersMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_MCP_LOCAL_SERVERS;
+}
+
+export interface McpLocalServersResultMessage {
+  type: typeof MESSAGE_TYPES.MCP_LOCAL_SERVERS_RESULT;
+  servers: LocalMcpServerEntry[];
+  error?: string;
+}
+
+export interface RequestMcpRegistryMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_MCP_REGISTRY;
+  query?: string;
+}
+
+export interface McpRegistryResultMessage {
+  type: typeof MESSAGE_TYPES.MCP_REGISTRY_RESULT;
+  servers: RegistryMcpEntry[];
+  error?: string;
+  query?: string;
+}
+
 /**
  * Union type for all incoming messages from extension to webview
  */
@@ -917,4 +982,6 @@ export type IncomingMessage =
   | SetStartPositionConfirmedMessage
   | StepUndoDataUpdatedMessage
   | UndoPromptResultMessage
-  | UndoRecordUpdatedMessage;
+  | UndoRecordUpdatedMessage
+  | McpLocalServersResultMessage
+  | McpRegistryResultMessage;

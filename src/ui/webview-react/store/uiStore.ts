@@ -6,6 +6,10 @@ import {
 } from "zustand/middleware";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type { WorkflowSummary } from "../types/messages";
+import type {
+  LocalMcpServerEntry,
+  RegistryMcpEntry,
+} from "@root/types/WebviewMessageTypes";
 import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
 
 // ============================================================================
@@ -192,6 +196,15 @@ interface UiState {
 
   // Footer quick picker state (transient, not persisted)
   footerOpenPicker: "harness" | "model" | "agent" | "skills" | null;
+
+  // MCP Discovery state (transient, not persisted)
+  mcpLocalServers: LocalMcpServerEntry[];
+  mcpLocalServersLoading: boolean;
+  mcpLocalServersError: string | undefined;
+  mcpRegistryServers: RegistryMcpEntry[];
+  mcpRegistryLoading: boolean;
+  mcpRegistryError: string | undefined;
+  mcpRegistryQuery: string;
 }
 
 /**
@@ -297,6 +310,12 @@ interface UiActions {
   // Footer quick picker
   setFooterOpenPicker: (picker: "harness" | "model" | "agent" | "skills" | null) => void;
 
+  // MCP discovery
+  setMcpLocalServersLoading: (loading: boolean) => void;
+  setMcpLocalServersResult: (servers: LocalMcpServerEntry[], error?: string) => void;
+  setMcpRegistryLoading: (loading: boolean) => void;
+  setMcpRegistryResult: (servers: RegistryMcpEntry[], query?: string, error?: string) => void;
+
   // Reset UI to defaults
   resetUi: () => void;
 }
@@ -341,6 +360,13 @@ const initialState: UiState = {
   runTimestamps: [],
   runStates: [],
   footerOpenPicker: null,
+  mcpLocalServers: [],
+  mcpLocalServersLoading: false,
+  mcpLocalServersError: undefined,
+  mcpRegistryServers: [],
+  mcpRegistryLoading: false,
+  mcpRegistryError: undefined,
+  mcpRegistryQuery: "",
 };
 
 // Fields to persist via vscode.getState()/setState()
@@ -652,6 +678,31 @@ export const useUiStore = create<UiState & UiActions>()(
       // ============================================================================
 
       setFooterOpenPicker: (picker) => set({ footerOpenPicker: picker }),
+
+      // ============================================================================
+      // MCP DISCOVERY
+      // ============================================================================
+
+      setMcpLocalServersLoading: (loading) =>
+        set({ mcpLocalServersLoading: loading }),
+
+      setMcpLocalServersResult: (servers, error) =>
+        set({
+          mcpLocalServers: servers,
+          mcpLocalServersLoading: false,
+          mcpLocalServersError: error,
+        }),
+
+      setMcpRegistryLoading: (loading) =>
+        set({ mcpRegistryLoading: loading }),
+
+      setMcpRegistryResult: (servers, query, error) =>
+        set({
+          mcpRegistryServers: servers,
+          mcpRegistryLoading: false,
+          mcpRegistryError: error,
+          mcpRegistryQuery: query ?? "",
+        }),
 
       // ============================================================================
       // RESET

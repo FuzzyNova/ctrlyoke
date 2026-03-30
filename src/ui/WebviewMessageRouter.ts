@@ -32,6 +32,10 @@ import type {
 } from "../types/WebviewMessageTypes";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import { getPtyProcessManager } from "../flightpath/harness/PtyProcessManager";
+import {
+  safeDiscoverLocalMcpServers,
+  safeFetchAnthropicRegistry,
+} from "../utils/McpDiscoveryUtils";
 
 /**
  * WebviewMessageRouter
@@ -255,6 +259,34 @@ export class WebviewMessageRouter {
         await this.handleAttachmentTokenCountRequest(message.references);
       }
     );
+
+    // ── MCP Discovery ────────────────────────────────────────────────────
+    table.set(MESSAGE_TYPES.REQUEST_MCP_LOCAL_SERVERS, async () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      const workspaceRoot =
+        workspaceFolders && workspaceFolders.length > 0
+          ? workspaceFolders[0].uri.fsPath
+          : "";
+      const result = await safeDiscoverLocalMcpServers(workspaceRoot);
+      this.postMessage({
+        type: MESSAGE_TYPES.MCP_LOCAL_SERVERS_RESULT,
+        servers: result.servers,
+        ...(result.error ? { error: result.error } : {}),
+      });
+    });
+
+    table.set(MESSAGE_TYPES.REQUEST_MCP_REGISTRY, async (message) => {
+      // The Anthropic registry does not support server-side search.
+      // We fetch all curated servers and echo the query back so the
+      // webview can filter results client-side.
+      const result = await safeFetchAnthropicRegistry();
+      this.postMessage({
+        type: MESSAGE_TYPES.MCP_REGISTRY_RESULT,
+        servers: result.servers,
+        query: message.query,
+        ...(result.error ? { error: result.error } : {}),
+      });
+    });
 
     // ── Output History ───────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.LOAD_RUN_HISTORY, async (message) => {

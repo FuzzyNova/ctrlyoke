@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import {
   useEditorStore,
@@ -6,6 +6,8 @@ import {
 } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
+import { useVsCodeApi } from "../../hooks/useVsCodeApi";
+import { MESSAGE_TYPES } from "../../types/messages";
 import {
   HARNESS_IDS,
   type HarnessId,
@@ -84,8 +86,34 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     workflowProperties,
     getModelsForHarness,
   } = useSettingsStore();
-  const { hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
-    useUiStore();
+  const {
+    hiddenDropdownOptions,
+    hideDropdownOption,
+    unhideDropdownOption,
+    mcpLocalServers,
+    mcpLocalServersLoading,
+    mcpLocalServersError,
+    mcpRegistryServers,
+    mcpRegistryLoading,
+    mcpRegistryError,
+    setMcpLocalServersLoading,
+    setMcpRegistryLoading,
+  } = useUiStore();
+
+  const vscode = useVsCodeApi();
+
+  const handleRequestLocalServers = useCallback(() => {
+    setMcpLocalServersLoading(true);
+    vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_MCP_LOCAL_SERVERS });
+  }, [vscode, setMcpLocalServersLoading]);
+
+  const handleSearchRegistry = useCallback(
+    (query: string) => {
+      setMcpRegistryLoading(true);
+      vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_MCP_REGISTRY, query });
+    },
+    [vscode, setMcpRegistryLoading]
+  );
   const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(576);
 
   // ── Resolved "Default (X)" labels ────────────────────────────────────────
@@ -825,6 +853,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               onChange={(v) => setProperty("mcpServers", v)}
               defaultLabel={defaultMcpServersLabel}
               inheritedValue={resolvedMcpServers as McpServersValue}
+              onRequestLocalServers={handleRequestLocalServers}
+              onSearchRegistry={handleSearchRegistry}
+              localServers={mcpLocalServers}
+              isLoadingLocal={mcpLocalServersLoading}
+              localServersError={mcpLocalServersError}
+              registryServers={mcpRegistryServers}
+              isLoadingRegistry={mcpRegistryLoading}
+              registryError={mcpRegistryError}
             />
           </div>
         )}

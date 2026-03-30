@@ -110,6 +110,10 @@ export {
   type UndoRecord,
   type UndoRecordUpdatedMessage,
   type RedoPromptChangesMessage,
+  type LocalMcpServerEntry,
+  type RegistryMcpEntry,
+  type McpLocalServersResultMessage,
+  type McpRegistryResultMessage,
 } from "@root/types/WebviewMessageTypes";
 
 // Re-export WorkflowSummary, PriorContext, McpServerConfig, ToolPermissionsOverride, and helpers from FlightPathTypes

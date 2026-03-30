@@ -139,6 +139,14 @@ export const SettingsPanel: React.FC<{
     unhideDropdownOption,
     loadedWorkflows,
     activeWorkflowId,
+    mcpLocalServers,
+    mcpLocalServersLoading,
+    mcpLocalServersError,
+    mcpRegistryServers,
+    mcpRegistryLoading,
+    mcpRegistryError,
+    setMcpLocalServersLoading,
+    setMcpRegistryLoading,
   } = useUiStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
@@ -467,6 +475,19 @@ export const SettingsPanel: React.FC<{
       });
     },
     [vscode]
+  );
+
+  const handleRequestLocalServers = useCallback(() => {
+    setMcpLocalServersLoading(true);
+    vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_MCP_LOCAL_SERVERS });
+  }, [vscode, setMcpLocalServersLoading]);
+
+  const handleSearchRegistry = useCallback(
+    (query: string) => {
+      setMcpRegistryLoading(true);
+      vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_MCP_REGISTRY, query });
+    },
+    [vscode, setMcpRegistryLoading]
   );
 
   const handleToolPermissionsChange = useCallback(
@@ -1146,6 +1167,14 @@ export const SettingsPanel: React.FC<{
                   value={workflowProperties.mcpServers as McpServersValue}
                   onChange={handleMcpServersChange}
                   showDefault={false}
+                  onRequestLocalServers={handleRequestLocalServers}
+                  onSearchRegistry={handleSearchRegistry}
+                  localServers={mcpLocalServers}
+                  isLoadingLocal={mcpLocalServersLoading}
+                  localServersError={mcpLocalServersError}
+                  registryServers={mcpRegistryServers}
+                  isLoadingRegistry={mcpRegistryLoading}
+                  registryError={mcpRegistryError}
                 />
               </FormField>
             </>

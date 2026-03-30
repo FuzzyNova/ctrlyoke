@@ -760,6 +760,28 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // MCP_LOCAL_SERVERS_RESULT - Local MCP config file scan results
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.MCP_LOCAL_SERVERS_RESULT] = (message) => {
+    useUiStore
+      .getState()
+      .setMcpLocalServersResult(message.servers ?? [], message.error);
+  };
+
+  // --------------------------------------------------------------------------
+  // MCP_REGISTRY_RESULT - Anthropic MCP registry search results
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.MCP_REGISTRY_RESULT] = (message) => {
+    useUiStore
+      .getState()
+      .setMcpRegistryResult(
+        message.servers ?? [],
+        message.query,
+        message.error
+      );
+  };
+
+  // --------------------------------------------------------------------------
   // WORKFLOW_PROPERTIES_UPDATE - Update workflow-level properties
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE] = (message) => {
