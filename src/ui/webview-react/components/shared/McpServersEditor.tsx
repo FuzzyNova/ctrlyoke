@@ -192,6 +192,19 @@ const McpServersReadOnly: React.FC<{ value: McpServersValue }> = ({
  * directly under the server's env: key.
  */
 type DiscoveryPanel = "local" | "registry" | null;
+type RegistrySort = "default" | "a-z" | "z-a";
+
+/** Derive a human-readable kebab-case id from a registry entry's display name. */
+function registryEntryToSlug(entry: RegistryMcpEntry): string {
+  const source = entry.name || entry.id;
+  return (
+    source
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "") || entry.id
+  );
+}
 
 export const McpServersEditor: React.FC<{
   value: McpServersValue;
@@ -262,11 +275,13 @@ export const McpServersEditor: React.FC<{
   const [editForm, setEditForm] = useState<AddServerForm>(EMPTY_FORM);
   const [discoveryPanel, setDiscoveryPanel] = useState<DiscoveryPanel>(null);
   const [registryQuery, setRegistryQuery] = useState("");
+  const [registrySort, setRegistrySort] = useState<RegistrySort>("default");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Client-side filter: Anthropic registry has no server-side search
-  const filteredRegistryServers = registryServers
-    ? registryQuery.trim()
+  // Client-side filter + sort: Anthropic registry has no server-side search
+  const filteredRegistryServers = useMemo(() => {
+    if (!registryServers) return undefined;
+    const filtered = registryQuery.trim()
       ? registryServers.filter((s) => {
           const q = registryQuery.toLowerCase();
           return (
@@ -275,8 +290,11 @@ export const McpServersEditor: React.FC<{
             (s.packageName ?? "").toLowerCase().includes(q)
           );
         })
-      : registryServers
-    : undefined;
+      : registryServers;
+    if (registrySort === "default") return filtered;
+    const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+    return registrySort === "z-a" ? sorted.reverse() : sorted;
+  }, [registryServers, registryQuery, registrySort]);
 
   // mode: "default" only when showDefault=true and value is undefined
   const mode: "default" | "custom" =
@@ -405,17 +423,17 @@ export const McpServersEditor: React.FC<{
 
   /** Import a registry entry */
   const handleImportRegistry = (entry: RegistryMcpEntry) => {
-    const id =
-      entry.id
-        .toLowerCase()
-        .replace(/[^a-z0-9-]/g, "-")
-        .replace(/-+/g, "-")
-        .replace(/^-|-$/g, "") || entry.id;
+    const id = registryEntryToSlug(entry);
     let server: McpServerConfig;
     if (entry.packageName) {
       server = { id, command: "npx", args: ["-y", entry.packageName] };
+    } else if (entry.installCommand) {
+      const parts = entry.installCommand.trim().split(/\s+/);
+      server = { id, command: parts[0] ?? "npx" };
+      const argsArr = parts.slice(1).filter(Boolean);
+      if (argsArr.length > 0) server.args = argsArr;
     } else {
-      server = { id, command: entry.installCommand ?? "npx" };
+      server = { id, command: "npx" };
     }
     addServerToWorkspaceAndValue(server);
   };
@@ -427,7 +445,7 @@ export const McpServersEditor: React.FC<{
       setDiscoveryPanel(panel);
       if (panel === "local") {
         onRequestLocalServers?.();
-      } else if (panel === "registry" && !registryServers && !isLoadingRegistry) {
+      } else if (panel === "registry" && registryServers === undefined && !isLoadingRegistry) {
         // Load registry on first open; subsequent opens use cached results
         onSearchRegistry?.("");
       }
@@ -933,13 +951,28 @@ export const McpServersEditor: React.FC<{
                     ) : registryError ? (
                       <div className="text-[11px] text-error-fg">{registryError}</div>
                     ) : filteredRegistryServers && filteredRegistryServers.length > 0 ? (
+                      <>
+                        {/* Sort controls */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-description-fg">Sort:</span>
+                          {(["default", "a-z", "z-a"] as RegistrySort[]).map((s) => (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => setRegistrySort(s)}
+                              className={`px-1.5 py-0 text-[10px] rounded border transition-colors ${
+                                registrySort === s
+                                  ? "bg-btn-bg text-btn-fg border-btn-bg"
+                                  : "text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
+                              }`}
+                            >
+                              {s === "default" ? "Default" : s === "a-z" ? "A–Z" : "Z–A"}
+                            </button>
+                          ))}
+                        </div>
                       <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
                         {filteredRegistryServers.map((entry) => {
-                          const id = entry.id
-                            .toLowerCase()
-                            .replace(/[^a-z0-9-]/g, "-")
-                            .replace(/-+/g, "-")
-                            .replace(/^-|-$/g, "") || entry.id;
+                          const id = registryEntryToSlug(entry);
                           const alreadyAdded = isInWorkspace(id);
                           return (
                             <div
@@ -978,6 +1011,7 @@ export const McpServersEditor: React.FC<{
                           );
                         })}
                       </div>
+                      </>
                     ) : filteredRegistryServers !== undefined ? (
                       <div className="text-[11px] text-description-fg italic">No matches</div>
                     ) : (

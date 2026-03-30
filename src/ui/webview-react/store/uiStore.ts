@@ -202,7 +202,7 @@ interface UiState {
   mcpLocalServers: LocalMcpServerEntry[];
   mcpLocalServersLoading: boolean;
   mcpLocalServersError: string | undefined;
-  mcpRegistryServers: RegistryMcpEntry[];
+  mcpRegistryServers: RegistryMcpEntry[] | undefined;
   mcpRegistryLoading: boolean;
   mcpRegistryError: string | undefined;
   mcpRegistryQuery: string;
@@ -370,7 +370,7 @@ const initialState: UiState = {
   mcpLocalServers: [],
   mcpLocalServersLoading: false,
   mcpLocalServersError: undefined,
-  mcpRegistryServers: [],
+  mcpRegistryServers: undefined,
   mcpRegistryLoading: false,
   mcpRegistryError: undefined,
   mcpRegistryQuery: "",
