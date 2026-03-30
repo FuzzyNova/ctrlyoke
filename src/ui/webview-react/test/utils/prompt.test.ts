@@ -45,6 +45,7 @@ describe("createPromptItem", () => {
       resumeSession: true,
       sessionId: "abc-123",
       mcpServers: ["flightpath"],
+      hooks: [{ event: "stop", command: "npm test" }],
     };
     const item = createPromptItem(raw, 1);
     expect(item.text).toBe("Fix bugs");
@@ -54,6 +55,7 @@ describe("createPromptItem", () => {
     expect(item.resumeSession).toBe(true);
     expect(item.sessionId).toBe("abc-123");
     expect(item.mcpServers).toEqual(["flightpath"]);
+    expect(item.hooks).toEqual([{ event: "stop", command: "npm test" }]);
   });
 
   it("passes through endCondition from raw prompt", () => {
@@ -99,12 +101,14 @@ describe("promptItemToRaw", () => {
       prompt: "Do a thing",
       harness: "copilot-cli",
       skills: ["skill-a"],
+      hooks: [{ event: "stop", command: "npm test" }],
     };
     const item = createPromptItem(raw, 0);
     const back = promptItemToRaw(item);
     expect(back.prompt).toBe(raw.prompt);
     expect(back.harness).toBe(raw.harness);
     expect(back.skills).toEqual(raw.skills);
+    expect(back.hooks).toEqual([{ event: "stop", command: "npm test" }]);
   });
 });
 

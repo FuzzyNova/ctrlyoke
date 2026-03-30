@@ -588,6 +588,104 @@ suite("PropertyResolver Tests", () => {
     });
   });
 
+  suite("resolveHooks", () => {
+    test("should use prompt-level hooks when specified", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        hooks: [{ event: "stop", command: "npm test" }],
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        hooks: [{ event: "stop", command: "echo default" }],
+      };
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      // Prompt-level stop hooks replace workflow-level stop hooks
+      assert.deepStrictEqual(resolved.hooks, [
+        { event: "stop", command: "npm test" },
+      ]);
+    });
+
+    test("should use workflow-level hooks when prompt-level not specified", () => {
+      const prompt: PromptItem = { prompt: "test" };
+      const workflow: PromptFile = {
+        prompts: [],
+        hooks: [{ event: "stop", command: "npm test" }],
+      };
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.deepStrictEqual(resolved.hooks, [
+        { event: "stop", command: "npm test" },
+      ]);
+    });
+
+    test("should default to empty array when neither prompt nor workflow specify hooks", () => {
+      const prompt: PromptItem = { prompt: "test" };
+      const workflow: PromptFile = { prompts: [] };
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.deepStrictEqual(resolved.hooks, []);
+    });
+
+    test("should return null when prompt explicitly disables hooks", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        hooks: null,
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        hooks: [{ event: "stop", command: "npm test" }],
+      };
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.hooks, null);
+    });
+
+    test("should return null when workflow explicitly disables hooks and prompt has no override", () => {
+      const prompt: PromptItem = { prompt: "test" };
+      const workflow: PromptFile = {
+        prompts: [],
+        hooks: null,
+      };
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.hooks, null);
+    });
+
+    test("should perform per-event override — prompt stop replaces workflow stop but keeps workflow sessionStart", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        hooks: [{ event: "stop", command: "node extra-validation.js" }],
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        hooks: [
+          { event: "stop", command: "npm test" },
+          { event: "sessionStart", command: "node notify.js" },
+        ],
+      };
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      // stop is overridden, sessionStart is inherited
+      assert.ok(Array.isArray(resolved.hooks));
+      const hooks = resolved.hooks!;
+      const stopHooks = hooks.filter((h) => h.event === "stop");
+      const startHooks = hooks.filter((h) => h.event === "sessionStart");
+      assert.strictEqual(stopHooks.length, 1);
+      assert.strictEqual(stopHooks[0].command, "node extra-validation.js");
+      assert.strictEqual(startHooks.length, 1);
+      assert.strictEqual(startHooks[0].command, "node notify.js");
+    });
+
+    test("should support multiple hooks on the same event", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        hooks: [
+          { event: "stop", command: "npm test" },
+          { event: "stop", command: "node notify.js" },
+        ],
+      };
+      const workflow: PromptFile = { prompts: [] };
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.ok(Array.isArray(resolved.hooks));
+      assert.strictEqual(resolved.hooks!.length, 2);
+    });
+  });
+
   suite("full precedence chain", () => {
     test("should correctly apply three-tier precedence for all properties", () => {
       const prompt: PromptItem = {

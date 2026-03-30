@@ -146,6 +146,7 @@ describe("INIT", () => {
             executionMode: "headless",
             resumeSession: false,
             mcpServers: [],
+            hooks: [],
             respectGitignore: true,
             confirmDeleteOperations: true,
             confirmResetOperations: true,
