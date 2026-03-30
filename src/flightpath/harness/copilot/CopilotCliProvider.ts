@@ -142,9 +142,12 @@ export class CopilotCliProvider implements ICliProvider {
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
-      // Auto-approve FlightPath MCP tools (FlightPath is the orchestrator)
-      args.push("--allow-tool", "flightpath");
-      Log.debug("🔧 FlightPath MCP tools auto-approved");
+      // Auto-approve FlightPath MCP tools only when the FlightPath server is included
+      const mcpServersResolved = workflowContext?.resolvedProperties?.mcpServers ?? [];
+      if (mcpServersResolved.includes("flightpath")) {
+        args.push("--allow-tool", "flightpath");
+        Log.debug("🔧 FlightPath MCP tools auto-approved");
+      }
 
       // Auto-approve user-defined MCP server tools based on autoApprove config
       const mcpServers = workflowContext?.resolvedProperties?.mcpServers ?? [];
@@ -431,7 +434,7 @@ export class CopilotCliProvider implements ICliProvider {
    * @returns CLI arguments array with --additional-mcp-config, or null if MCP not supported
    */
   async getMcpConfigArgs(
-    mcpServerPath: string,
+    mcpServerPath: string | undefined,
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
@@ -440,23 +443,29 @@ export class CopilotCliProvider implements ICliProvider {
     try {
       // Generate MCP config JSON using shared utility
       // Copilot CLI requires "type": "local" and "tools" field
-      const configJson =
-        userServers && userServers.length > 0
-          ? CliMcpConfigGenerator.generateJsonConfigWithUserServers(
-              mcpServerPath,
-              workspaceRoot,
-              userServers,
-              { type: "local", tools: ["*"] },
-              workingFilePath,
-              additionalEnv
-            )
-          : CliMcpConfigGenerator.generateJsonConfig(
-              mcpServerPath,
-              workspaceRoot,
-              { type: "local", tools: ["*"] },
-              workingFilePath,
-              additionalEnv
-            );
+      let configJson: string;
+      if (mcpServerPath && userServers && userServers.length > 0) {
+        configJson = CliMcpConfigGenerator.generateJsonConfigWithUserServers(
+          mcpServerPath,
+          workspaceRoot,
+          userServers,
+          { type: "local", tools: ["*"] },
+          workingFilePath,
+          additionalEnv
+        );
+      } else if (mcpServerPath) {
+        configJson = CliMcpConfigGenerator.generateJsonConfig(
+          mcpServerPath,
+          workspaceRoot,
+          { type: "local", tools: ["*"] },
+          workingFilePath,
+          additionalEnv
+        );
+      } else if (userServers && userServers.length > 0) {
+        configJson = CliMcpConfigGenerator.generateUserServersOnlyConfig(userServers);
+      } else {
+        return null;
+      }
 
       // Write to temp directory — use unique name per execution to avoid parallel workflow collisions
       const configPath = this.getMcpConfigFilePath(

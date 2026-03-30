@@ -158,11 +158,15 @@ suite("PromptQueue State Machine Tests", () => {
       queue.pause();
 
       // Wait a small amount to measure pause duration
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Use 100ms sleep with >= 50ms assertion to tolerate timer inaccuracy
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       await queue.resume();
       const state = queue.getState();
-      assert.ok(state.totalPausedDuration >= 50);
+      assert.ok(
+        state.totalPausedDuration >= 50,
+        `Expected totalPausedDuration >= 50ms but got ${state.totalPausedDuration}ms`
+      );
     });
 
     test("should clear pausedTime after resume", async () => {
@@ -1040,7 +1044,11 @@ suite("PromptQueue State Machine Tests", () => {
       (queue as any).mergeDiskPrompts(diskPrompts);
 
       const state = queue.getState();
-      assert.strictEqual(state.prompts.length, 2, "should have 2 prompts after merge");
+      assert.strictEqual(
+        state.prompts.length,
+        2,
+        "should have 2 prompts after merge"
+      );
       assert.strictEqual(
         state.prompts[0]._runtime?.sessionId,
         "b52bceab-9c03-49b3-8324-4220292e9acb",

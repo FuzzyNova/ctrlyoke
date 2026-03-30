@@ -175,6 +175,33 @@ export class CliMcpConfigGenerator {
   }
 
   /**
+   * Generate JSON MCP configuration with ONLY user-defined servers (no FlightPath server).
+   *
+   * Used when the workflow specifies user-defined MCP servers but does NOT include "flightpath"
+   * in the mcpServers list. Generates a config with just the user's servers.
+   *
+   * @param userServers User-defined MCP server configs
+   * @returns JSON config string
+   */
+  static generateUserServersOnlyConfig(userServers: McpServerConfig[]): string {
+    const mcpServers: any = {};
+    for (const server of userServers) {
+      const entry: any = { command: server.command };
+      if (server.args) {
+        entry.args = server.args;
+      }
+      if (server.env) {
+        entry.env = server.env;
+      }
+      if (server.autoApprove !== undefined) {
+        entry.autoApprove = server.autoApprove;
+      }
+      mcpServers[server.id] = entry;
+    }
+    return JSON.stringify({ mcpServers }, null, 2);
+  }
+
+  /**
    * Generate inline TOML configuration
    *
    * Used by harnesses that support inline TOML config (e.g., Codex).

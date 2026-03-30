@@ -2,7 +2,11 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs";
-import { ICliProvider, HarnessConfig, CLI_VERSION_CHECK_TIMEOUT_MS } from "../shared/interfaces/ICliProvider";
+import {
+  ICliProvider,
+  HarnessConfig,
+  CLI_VERSION_CHECK_TIMEOUT_MS,
+} from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -127,7 +131,13 @@ export class OpenCodeCliProvider implements ICliProvider {
       workspaceRoot,
       extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
-        this.getMcpConfigArgs(serverPath, wsRoot, workingFile, additionalEnv, userServers)
+        this.getMcpConfigArgs(
+          serverPath,
+          wsRoot,
+          workingFile,
+          additionalEnv,
+          userServers
+        )
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
@@ -222,6 +232,7 @@ export class OpenCodeCliProvider implements ICliProvider {
    * There is no --mcp-config CLI flag. The file is auto-detected at startup.
    *
    * Written to {workspaceRoot}/.opencode/opencode.json (merged with existing config).
+   * Supports FlightPath server, user-defined MCP servers, or both.
    * Config format (opencode uses "mcp" key with "type": "local"):
    * {
    *   "$schema": "https://opencode.ai/config.json",
@@ -229,39 +240,36 @@ export class OpenCodeCliProvider implements ICliProvider {
    *     "flightpath": {
    *       "type": "local",
    *       "command": ["node", "/path/to/mcp-server.js"],
-   *       "environment": {
-   *         "FLIGHTPATH_WORKSPACE": "/workspace",
-   *         "FLIGHTPATH_WORKING_FILE": "/path/to/working.json"
-   *       }
+   *       "environment": { ... }
+   *     },
+   *     "my-server": {
+   *       "type": "local",
+   *       "command": ["node", "/path/to/server.js"],
+   *       "environment": { ... }
    *     }
    *   }
    * }
    *
-   * @param mcpServerPath Absolute path to MCP server executable
+   * @param mcpServerPath Absolute path to MCP server executable (undefined when FlightPath server not requested)
    * @param workspaceRoot Workspace root directory
    * @param workingFilePath Active working file for this workflow
+   * @param additionalEnv Extra environment variables for the FlightPath MCP server
+   * @param userServers User-defined MCP server configurations
    * @returns Empty array (config file is auto-detected by filename, no CLI args needed)
    */
   async getMcpConfigArgs(
-    mcpServerPath: string,
+    mcpServerPath: string | undefined,
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    _userServers?: import("../../../types/FlightPathTypes").McpServerConfig[]
+    userServers?: import("../../../types/FlightPathTypes").McpServerConfig[]
   ): Promise<string[] | null> {
+    const hasUserServers = userServers && userServers.length > 0;
+    if (!mcpServerPath && !hasUserServers) {
+      return null;
+    }
     try {
-      const normalizedServerPath = mcpServerPath.replace(/\\/g, "/");
       const normalizedWorkspaceRoot = workspaceRoot.replace(/\\/g, "/");
-
-      const env: Record<string, string> = {
-        FLIGHTPATH_WORKSPACE: normalizedWorkspaceRoot,
-      };
-      if (workingFilePath) {
-        env["FLIGHTPATH_WORKING_FILE"] = workingFilePath.replace(/\\/g, "/");
-      }
-      if (additionalEnv) {
-        Object.assign(env, additionalEnv);
-      }
 
       const configPath = this.getMcpConfigFilePath(
         workingFilePath,
@@ -278,17 +286,48 @@ export class OpenCodeCliProvider implements ICliProvider {
         // No existing config — start fresh
       }
 
+      // Build the MCP servers object, merging FlightPath + user-defined servers
+      const mcpEntries: Record<string, unknown> = {
+        ...(existingConfig.mcp as Record<string, unknown> | undefined),
+      };
+
+      // FlightPath server (when included in mcpServers list)
+      if (mcpServerPath) {
+        const normalizedServerPath = mcpServerPath.replace(/\\/g, "/");
+        const env: Record<string, string> = {
+          FLIGHTPATH_WORKSPACE: normalizedWorkspaceRoot,
+        };
+        if (workingFilePath) {
+          env["FLIGHTPATH_WORKING_FILE"] = workingFilePath.replace(/\\/g, "/");
+        }
+        if (additionalEnv) {
+          Object.assign(env, additionalEnv);
+        }
+        mcpEntries["flightpath"] = {
+          type: "local",
+          command: ["node", normalizedServerPath],
+          environment: env,
+        };
+      }
+
+      // User-defined MCP servers
+      if (hasUserServers) {
+        for (const server of userServers) {
+          const entry: Record<string, unknown> = {
+            type: "local",
+            command: [server.command, ...(server.args ?? [])],
+          };
+          if (server.env) {
+            entry["environment"] = server.env;
+          }
+          mcpEntries[server.id] = entry;
+        }
+      }
+
       const config = {
         ...existingConfig,
         $schema: "https://opencode.ai/config.json",
-        mcp: {
-          ...(existingConfig.mcp as Record<string, unknown> | undefined),
-          flightpath: {
-            type: "local",
-            command: ["node", normalizedServerPath],
-            environment: env,
-          },
-        },
+        mcp: mcpEntries,
       };
 
       await fs.promises.writeFile(
@@ -344,7 +383,9 @@ export class OpenCodeCliProvider implements ICliProvider {
    */
   async checkAvailability(): Promise<boolean> {
     try {
-      await execAsync("opencode --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
+      await execAsync("opencode --version", {
+        timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
+      });
       return true;
     } catch {
       return false;

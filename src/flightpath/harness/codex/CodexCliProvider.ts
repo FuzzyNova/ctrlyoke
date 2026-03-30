@@ -353,12 +353,16 @@ export class CodexCliProvider implements ICliProvider {
    * @returns CLI arguments array with -c flag, or null if MCP not supported
    */
   async getMcpConfigArgs(
-    mcpServerPath: string,
+    mcpServerPath: string | undefined,
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     _userServers?: import("../../../types/FlightPathTypes").McpServerConfig[]
   ): Promise<string[] | null> {
+    // Codex uses inline TOML format which only supports the FlightPath server
+    if (!mcpServerPath) {
+      return null;
+    }
     try {
       const tomlConfig = CliMcpConfigGenerator.generateInlineTomlConfig(
         "flightpath",

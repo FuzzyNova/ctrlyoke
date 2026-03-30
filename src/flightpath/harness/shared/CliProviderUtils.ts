@@ -99,7 +99,7 @@ export class CliProviderUtils {
     workspaceRoot: string | undefined,
     extensionPath: string,
     getMcpConfigArgs: (
-      mcpServerPath: string,
+      mcpServerPath: string | undefined,
       workspaceRoot: string,
       workingFilePath?: string,
       additionalEnv?: Record<string, string>,
@@ -113,26 +113,33 @@ export class CliProviderUtils {
     const mcpServers = workflowContext.resolvedProperties?.mcpServers;
     const hasFlightpathServer = mcpServers != null && mcpServers.includes("flightpath");
 
-    if (!hasFlightpathServer) {
-      return [];
-    }
-
-    const mcpServerPath = path.join(extensionPath, "out/mcp-server.js");
-
     // Extract user-defined server configs (objects, not strings)
     const userServers = (mcpServers ?? []).filter(
       (s): s is McpServerConfig => typeof s === "object"
     );
 
-    const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
+    // Trigger MCP config if "flightpath" is listed OR user-defined servers are present
+    if (!hasFlightpathServer && userServers.length === 0) {
+      return [];
+    }
 
-    // Pass queue limits and diagnostic logging flag to MCP server via env vars
-    const additionalEnv: Record<string, string> = {
-      FLIGHTPATH_MAX_QUEUE_SIZE: dynamicQueueConfig.maxQueueSize.toString(),
-      FLIGHTPATH_UNLIMITED_MODE: dynamicQueueConfig.unlimitedMode.toString(),
-      FLIGHTPATH_DIAGNOSTIC_LOGS:
-        ConfigurationUtils.isDiagnosticLogsEnabled().toString(),
-    };
+    // Only include the FlightPath server path when "flightpath" is in the list
+    const mcpServerPath = hasFlightpathServer
+      ? path.join(extensionPath, "out/mcp-server.js")
+      : undefined;
+
+    // FlightPath-specific env vars — only relevant when the FlightPath server is included
+    const additionalEnv: Record<string, string> | undefined = hasFlightpathServer
+      ? (() => {
+          const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
+          return {
+            FLIGHTPATH_MAX_QUEUE_SIZE: dynamicQueueConfig.maxQueueSize.toString(),
+            FLIGHTPATH_UNLIMITED_MODE: dynamicQueueConfig.unlimitedMode.toString(),
+            FLIGHTPATH_DIAGNOSTIC_LOGS:
+              ConfigurationUtils.isDiagnosticLogsEnabled().toString(),
+          };
+        })()
+      : undefined;
 
     const mcpArgs = await getMcpConfigArgs(
       mcpServerPath,

@@ -152,7 +152,7 @@ export interface ICliProvider {
    * @returns CLI arguments array, or null if MCP not supported
    */
   getMcpConfigArgs?(
-    mcpServerPath: string,
+    mcpServerPath: string | undefined,
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,

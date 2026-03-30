@@ -125,10 +125,13 @@ export class ClaudeCliProvider implements ICliProvider {
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
-      // Auto-approve FlightPath MCP tools (FlightPath is the orchestrator)
+      // Auto-approve FlightPath MCP tools only when the FlightPath server is included
       // Claude uses mcp__servername pattern to match all tools from a server
-      args.push("--allowed-tools", "mcp__flightpath");
-      Log.debug("🔧 FlightPath MCP tools auto-approved");
+      const mcpServersResolved = workflowContext?.resolvedProperties?.mcpServers ?? [];
+      if (mcpServersResolved.includes("flightpath")) {
+        args.push("--allowed-tools", "mcp__flightpath");
+        Log.debug("🔧 FlightPath MCP tools auto-approved");
+      }
 
       // Auto-approve user-defined MCP server tools based on autoApprove config
       const mcpServers = workflowContext?.resolvedProperties?.mcpServers ?? [];
@@ -376,7 +379,7 @@ export class ClaudeCliProvider implements ICliProvider {
    * @returns CLI arguments array with --mcp-config, or null if MCP not supported
    */
   async getMcpConfigArgs(
-    mcpServerPath: string,
+    mcpServerPath: string | undefined,
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
@@ -387,23 +390,32 @@ export class ClaudeCliProvider implements ICliProvider {
 
       // Generate MCP config JSON using shared utility
       // Claude CLI requires "type": "stdio"
-      const configJson =
-        userServers && userServers.length > 0
-          ? CliMcpConfigGenerator.generateJsonConfigWithUserServers(
-              mcpServerPath,
-              workspaceRoot,
-              userServers,
-              { type: "stdio" },
-              workingFilePath,
-              additionalEnv
-            )
-          : CliMcpConfigGenerator.generateJsonConfig(
-              mcpServerPath,
-              workspaceRoot,
-              { type: "stdio" },
-              workingFilePath,
-              additionalEnv
-            );
+      let configJson: string;
+      if (mcpServerPath && userServers && userServers.length > 0) {
+        // FlightPath server + user-defined servers
+        configJson = CliMcpConfigGenerator.generateJsonConfigWithUserServers(
+          mcpServerPath,
+          workspaceRoot,
+          userServers,
+          { type: "stdio" },
+          workingFilePath,
+          additionalEnv
+        );
+      } else if (mcpServerPath) {
+        // FlightPath server only
+        configJson = CliMcpConfigGenerator.generateJsonConfig(
+          mcpServerPath,
+          workspaceRoot,
+          { type: "stdio" },
+          workingFilePath,
+          additionalEnv
+        );
+      } else if (userServers && userServers.length > 0) {
+        // User-defined servers only (no FlightPath server)
+        configJson = CliMcpConfigGenerator.generateUserServersOnlyConfig(userServers);
+      } else {
+        return null;
+      }
 
       // Write to temp directory — use unique name per execution to avoid parallel workflow collisions
       const configPath = this.getMcpConfigFilePath(

@@ -422,7 +422,7 @@ export class QwenCliProvider implements ICliProvider {
    * @returns null (MCP not supported)
    */
   async getMcpConfigArgs(
-    _mcpServerPath: string,
+    _mcpServerPath: string | undefined,
     _workspaceRoot: string,
     _workingFilePath?: string,
     _additionalEnv?: Record<string, string>,

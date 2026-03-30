@@ -326,30 +326,36 @@ export class GeminiCliProvider implements ICliProvider {
   }
 
   async getMcpConfigArgs(
-    mcpServerPath: string,
+    mcpServerPath: string | undefined,
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: import("../../../types/FlightPathTypes").McpServerConfig[]
   ): Promise<string[] | null> {
     // Gemini CLI uses standard MCP config format
-    const configJson =
-      userServers && userServers.length > 0
-        ? CliMcpConfigGenerator.generateJsonConfigWithUserServers(
-            mcpServerPath,
-            workspaceRoot,
-            userServers,
-            { type: "stdio" },
-            workingFilePath,
-            additionalEnv
-          )
-        : CliMcpConfigGenerator.generateJsonConfig(
-            mcpServerPath,
-            workspaceRoot,
-            { type: "stdio" },
-            workingFilePath,
-            additionalEnv
-          );
+    let configJson: string;
+    if (mcpServerPath && userServers && userServers.length > 0) {
+      configJson = CliMcpConfigGenerator.generateJsonConfigWithUserServers(
+        mcpServerPath,
+        workspaceRoot,
+        userServers,
+        { type: "stdio" },
+        workingFilePath,
+        additionalEnv
+      );
+    } else if (mcpServerPath) {
+      configJson = CliMcpConfigGenerator.generateJsonConfig(
+        mcpServerPath,
+        workspaceRoot,
+        { type: "stdio" },
+        workingFilePath,
+        additionalEnv
+      );
+    } else if (userServers && userServers.length > 0) {
+      configJson = CliMcpConfigGenerator.generateUserServersOnlyConfig(userServers);
+    } else {
+      return null;
+    }
 
     const configPath = this.getMcpConfigFilePath(
       workingFilePath,
