@@ -35,7 +35,10 @@ import {
   WorkspaceSnapshotService,
   RawWorkspaceState,
 } from "../utils/WorkspaceSnapshotService";
-import { WorkspaceSnapshot, OutputExecutionTarget } from "../types/OutputHistoryTypes";
+import {
+  WorkspaceSnapshot,
+  OutputExecutionTarget,
+} from "../types/OutputHistoryTypes";
 
 export interface WorkflowExecutionContext {
   workspaceFolderPath: string | undefined;
@@ -101,7 +104,10 @@ export interface WorkflowExecutionContext {
   /** WorkspaceSnapshotService instance — shared across the workflow run */
   snapshotService?: WorkspaceSnapshotService;
   /** Callback to emit live snapshot data to the webview after a prompt completes */
-  onSnapshotCaptured?: (target: ExecutionTarget, snapshot: WorkspaceSnapshot) => void;
+  onSnapshotCaptured?: (
+    target: ExecutionTarget,
+    snapshot: WorkspaceSnapshot
+  ) => void;
   /** MCP server provider for injecting user-defined MCP servers into VS Code's MCP subsystem (chat harness only) */
   mcpServerProvider?: FlightPathMcpServerProvider;
 }
@@ -216,11 +222,10 @@ export class WorkflowExecutor {
             snapshotStrategy
           ) {
             try {
-              beforeState =
-                await context.snapshotService.captureWorkspaceState(
-                  context.workspaceFolderPath,
-                  snapshotStrategy
-                );
+              beforeState = await context.snapshotService.captureWorkspaceState(
+                context.workspaceFolderPath,
+                snapshotStrategy
+              );
             } catch {
               // ignore
             }
@@ -294,10 +299,11 @@ export class WorkflowExecutor {
         snapshotStrategy
       ) {
         try {
-          finalBeforeState = await context.snapshotService.captureWorkspaceState(
-            context.workspaceFolderPath,
-            snapshotStrategy
-          );
+          finalBeforeState =
+            await context.snapshotService.captureWorkspaceState(
+              context.workspaceFolderPath,
+              snapshotStrategy
+            );
         } catch {
           // ignore
         }
@@ -399,7 +405,9 @@ export class WorkflowExecutor {
 
     const progress = this.promptQueue.getProgress();
     const guardIndex =
-      target.kind === FINAL_PROMPT_PHASES.QUEUE ? target.stepIndex : state.currentIndex;
+      target.kind === FINAL_PROMPT_PHASES.QUEUE
+        ? target.stepIndex
+        : state.currentIndex;
     const shouldStopForTime = await this.checkExecutionTimeLimit(
       context.dynamicQueueConfig,
       guardIndex,
@@ -419,8 +427,10 @@ export class WorkflowExecutor {
 
     // Inject user-defined MCP servers for Copilot Chat prompts.
     // CLI harnesses handle this via --mcp-config flags in CliProviderUtils.
-    const isChatHarness = resolvedProperties.harness === Harness.CopilotChat ||
-      (!resolvedProperties.harness && integration.getIntegrationMode() === Harness.CopilotChat);
+    const isChatHarness =
+      resolvedProperties.harness === Harness.CopilotChat ||
+      (!resolvedProperties.harness &&
+        integration.getIntegrationMode() === Harness.CopilotChat);
     let didSetMcpServers = false;
     if (isChatHarness && context.mcpServerProvider) {
       const mcpServers = resolvedProperties.mcpServers ?? [];
@@ -430,7 +440,9 @@ export class WorkflowExecutor {
       if (userServers.length > 0) {
         context.mcpServerProvider.setActiveServers(userServers);
         didSetMcpServers = true;
-        Log.debug(`🔧 Injected ${userServers.length} user MCP server(s) for chat prompt`);
+        Log.debug(
+          `🔧 Injected ${userServers.length} user MCP server(s) for chat prompt`
+        );
       }
     }
 
@@ -444,7 +456,9 @@ export class WorkflowExecutor {
 
     const legacyStepIndex = this.getLegacyStepIndex(target);
     const sendPromptIndex =
-      target.kind === FINAL_PROMPT_PHASES.QUEUE ? target.stepIndex : state.prompts.length;
+      target.kind === FINAL_PROMPT_PHASES.QUEUE
+        ? target.stepIndex
+        : state.prompts.length;
 
     const result = await this.executeWithStreaming(
       prompt,
@@ -544,14 +558,20 @@ export class WorkflowExecutor {
         return false;
       }
 
-      if (target.kind === FINAL_PROMPT_PHASES.QUEUE && context.dashboardProvider) {
+      if (
+        target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+        context.dashboardProvider
+      ) {
         context.dashboardProvider.updateStepStatus(legacyStepIndex, {
           state: STEP_STATUS.COMPLETED,
           duration,
         });
         context.dashboardProvider.updateRetryAttempt(legacyStepIndex, 0, 0);
       }
-    } else if (target.kind === FINAL_PROMPT_PHASES.QUEUE && context.dashboardProvider) {
+    } else if (
+      target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+      context.dashboardProvider
+    ) {
       context.dashboardProvider.updateStepStatus(legacyStepIndex, {
         state: STEP_STATUS.COMPLETED,
         duration,
@@ -630,7 +650,9 @@ export class WorkflowExecutor {
    * collide with queue indices and callers can detect them with `< 0`.
    */
   private getLegacyStepIndex(target: ExecutionTarget): number {
-    return target.kind === FINAL_PROMPT_PHASES.QUEUE ? target.stepIndex : -(target.loopIndex + 1);
+    return target.kind === FINAL_PROMPT_PHASES.QUEUE
+      ? target.stepIndex
+      : -(target.loopIndex + 1);
   }
 
   private describeExecutionTarget(target: ExecutionTarget): string {
@@ -991,7 +1013,10 @@ export class WorkflowExecutor {
     });
 
     streamingDisposable = integration.onStreamingChunk((chunk) => {
-      if (target.kind === FINAL_PROMPT_PHASES.QUEUE && legacyStepIndex !== undefined) {
+      if (
+        target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+        legacyStepIndex !== undefined
+      ) {
         context.captureChunk?.(legacyStepIndex, chunk);
         context.dashboardProvider?.updateCliStreamingChunk(
           legacyStepIndex,
@@ -1007,7 +1032,10 @@ export class WorkflowExecutor {
     });
 
     structuredStreamingDisposable = integration.onStreamingEvents((events) => {
-      if (target.kind === FINAL_PROMPT_PHASES.QUEUE && legacyStepIndex !== undefined) {
+      if (
+        target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+        legacyStepIndex !== undefined
+      ) {
         context.captureEvents?.(legacyStepIndex, events);
         context.dashboardProvider?.updateCliStreamingEvents(
           legacyStepIndex,
@@ -1087,9 +1115,8 @@ export class WorkflowExecutor {
           resolvedProperties: { ...resolvedProperties, resumeSession: true },
           workflowFile,
           promptQueue: this.promptQueue,
-          finalPromptSessionId: workflowFile.finalPrompt?._runtime?.sessionId as
-            | string
-            | undefined,
+          finalPromptSessionId: workflowFile.finalPrompt?._runtime
+            ?.sessionId as string | undefined,
         }
       );
 
@@ -1266,6 +1293,29 @@ export class WorkflowExecutor {
       return false;
     }
 
+    // CLI process exited before completion (Ctrl+C, crash, SIGKILL).
+    // All CLI harnesses are TUIs that stay open between prompts — any process
+    // exit before a Stop hook or log-based completion is abnormal.
+    // Treat like a stop: show warning, stop queue, don't mark as errored.
+    if (integration.wasLastFailureProcessExit()) {
+      const failureReason = integration.getLastFailureReason();
+      Log.warn(
+        `⚠️ CLI process exited before completion — stopping workflow: ${failureReason}`
+      );
+
+      // Show warning in the output section via status message
+      if (context.dashboardProvider && legacyStepIndex >= 0) {
+        context.dashboardProvider.updateStatusMessage(
+          legacyStepIndex,
+          `Process exited unexpectedly — workflow stopped. ${failureReason}`,
+          STATUS_MESSAGE_SEVERITY.WARNING
+        );
+      }
+
+      this.promptQueue.stop();
+      return false;
+    }
+
     const failureReason = integration.getLastFailureReason();
     const stepLabel =
       legacyStepIndex >= 0
@@ -1305,8 +1355,14 @@ export class WorkflowExecutor {
     };
 
     if (context.dashboardProvider && legacyStepIndex >= 0) {
-      context.dashboardProvider.updateCliOutput(legacyStepIndex, errorCliOutput);
-    } else if (context.dashboardProvider && target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+      context.dashboardProvider.updateCliOutput(
+        legacyStepIndex,
+        errorCliOutput
+      );
+    } else if (
+      context.dashboardProvider &&
+      target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
+    ) {
       context.dashboardProvider.updateFinalPromptOutput(
         target.loopIndex,
         errorCliOutput
@@ -1406,7 +1462,10 @@ export class WorkflowExecutor {
 
     if (context.dashboardProvider && legacyStepIndex !== undefined) {
       context.dashboardProvider.updateCliOutput(legacyStepIndex, cliOutputObj);
-    } else if (context.dashboardProvider && target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+    } else if (
+      context.dashboardProvider &&
+      target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
+    ) {
       context.dashboardProvider.updateFinalPromptOutput(
         target.loopIndex,
         cliOutputObj

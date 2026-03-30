@@ -1,5 +1,10 @@
 import type * as fs from "fs";
-import type { CliEvent, CliResult, FileEditData, UniversalCliOutput } from "../../types/CliOutputTypes";
+import type {
+  CliEvent,
+  CliResult,
+  FileEditData,
+  UniversalCliOutput,
+} from "../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
@@ -19,6 +24,10 @@ export interface LogMonitorResult {
   parsedOutput?: UniversalCliOutput;
   /** Legacy CLI result (response text, statistics, exit code) */
   cliResult?: CliResult;
+  /** Set when monitoring ended because the CLI process exited before completion was detected.
+   *  All CLI harnesses are TUIs that stay open between prompts, so any process exit
+   *  before a Stop hook or log-based completion event is abnormal (Ctrl+C, crash, SIGKILL). */
+  processExited?: { exitCode: number };
 }
 
 /**
@@ -34,7 +43,9 @@ export interface LogMonitorDependencies {
   getWorkspaceRoot: () => string | undefined;
   /** Returns true when the user has requested cancellation */
   isCancelling: () => boolean;
-  /** Returns exit code if the PTY/terminal process terminated unexpectedly, null otherwise */
+  /** Returns exit code when the PTY/terminal process has terminated, null if still running.
+   *  All CLI harnesses are TUIs that stay open between prompts — any process exit before
+   *  completion detection is abnormal. The log monitor drains remaining events and stops. */
   isPtyTerminated?: () => { exitCode: number } | null;
   /** Callback for streaming structured CliEvents to the output panel */
   onStreamingEvents: (events: CliEvent[]) => void;
@@ -133,7 +144,8 @@ export class CliLogMonitor {
             continue;
           }
           events.push(event);
-          const streamingEvents = parser.extractStructuredEventsFromEvent(event);
+          const streamingEvents =
+            parser.extractStructuredEventsFromEvent(event);
           if (streamingEvents.length > 0) {
             this.deps.onStreamingEvents(streamingEvents);
           }
@@ -156,10 +168,12 @@ export class CliLogMonitor {
             effectiveSessionId
           );
           if (processCtx) {
-            const existingOutputTokens = response.metadata.usage?.outputTokens ?? 0;
+            const existingOutputTokens =
+              response.metadata.usage?.outputTokens ?? 0;
             if (response.metadata.usage) {
               response.metadata.usage.inputTokens = processCtx.used;
-              response.metadata.usage.totalTokens = processCtx.used + existingOutputTokens;
+              response.metadata.usage.totalTokens =
+                processCtx.used + existingOutputTokens;
               response.metadata.usage.contextWindowUsedTokens = processCtx.used;
               response.metadata.usage.contextWindowSize = processCtx.size;
             } else {
@@ -228,7 +242,11 @@ export class CliLogMonitor {
         // Log file end_turn events can be intermediate: e.g. Claude ending a turn to wait
         // for a background agent before auto-continuing. The Stop hook correctly does not
         // fire in that case; the log file cannot distinguish intermediate from final stops.
-        if (!completed && !this.deps.notificationMonitor && parser.isComplete(event)) {
+        if (
+          !completed &&
+          !this.deps.notificationMonitor &&
+          parser.isComplete(event)
+        ) {
           void handleCompletion(source);
         }
       };
@@ -333,7 +351,10 @@ export class CliLogMonitor {
                   },
                   monitoringSessionId,
                   startTime,
-                  () => this.deps.isCancelling() || !!this.deps.isPtyTerminated?.() || completed
+                  () =>
+                    this.deps.isCancelling() ||
+                    !!this.deps.isPtyTerminated?.() ||
+                    completed
                 );
 
               if (result.completed && !completed) {
@@ -404,9 +425,20 @@ export class CliLogMonitor {
             clearTimeout(timeoutHandle);
           }
           watcher.close();
-          const msg = `Terminal process exited unexpectedly (exit code ${ptyExit.exitCode})`;
-          Log.warn(`⚠️ ${msg} — aborting workflow step`);
-          reject(new Error(msg));
+
+          // All CLI harnesses are TUIs that stay open between prompts.
+          // Any process exit before completion detection is abnormal —
+          // the user killed it (Ctrl+C), SIGKILL, or the process crashed.
+          // Drain remaining log events to preserve partial output, then stop.
+          Log.warn(
+            `⚠️ CLI process exited (code ${ptyExit.exitCode}) before completion — stopping workflow`
+          );
+          void drainLogEvents().then(() => {
+            resolve({
+              success: false,
+              processExited: { exitCode: ptyExit.exitCode },
+            });
+          });
         }
       }, CliLogMonitor.CANCELLATION_CHECK_INTERVAL_MS);
     });
@@ -434,25 +466,45 @@ export class CliLogMonitor {
       }
       if (event.type === CLI_EVENT_TYPES.TEXT && "text" in event.data) {
         textParts.push(event.data.text as string);
-      } else if (event.type === CLI_EVENT_TYPES.THINKING && "text" in event.data) {
-        textParts.push(`\n[Thinking]\n${(event.data as { text: string }).text}\n[/Thinking]`);
-      } else if (event.type === CLI_EVENT_TYPES.FILE_WRITE && "path" in event.data) {
+      } else if (
+        event.type === CLI_EVENT_TYPES.THINKING &&
+        "text" in event.data
+      ) {
+        textParts.push(
+          `\n[Thinking]\n${(event.data as { text: string }).text}\n[/Thinking]`
+        );
+      } else if (
+        event.type === CLI_EVENT_TYPES.FILE_WRITE &&
+        "path" in event.data
+      ) {
         textParts.push(`\n[Created: ${(event.data as { path: string }).path}]`);
-      } else if (event.type === CLI_EVENT_TYPES.FILE_EDIT && "path" in event.data) {
+      } else if (
+        event.type === CLI_EVENT_TYPES.FILE_EDIT &&
+        "path" in event.data
+      ) {
         const editData = event.data as FileEditData;
         if (editData.structuredPatch && editData.structuredPatch.length > 0) {
-          let added = 0, removed = 0;
+          let added = 0,
+            removed = 0;
           for (const hunk of editData.structuredPatch) {
             for (const line of hunk.lines) {
-              if (line.startsWith("+")) { added++; }
-              else if (line.startsWith("-")) { removed++; }
+              if (line.startsWith("+")) {
+                added++;
+              } else if (line.startsWith("-")) {
+                removed++;
+              }
             }
           }
-          textParts.push(`\n[Edited: ${editData.path} (+${added}, -${removed})]`);
+          textParts.push(
+            `\n[Edited: ${editData.path} (+${added}, -${removed})]`
+          );
         } else {
           textParts.push(`\n[Edited: ${editData.path}]`);
         }
-      } else if (event.type === CLI_EVENT_TYPES.FILE_DELETE && "path" in event.data) {
+      } else if (
+        event.type === CLI_EVENT_TYPES.FILE_DELETE &&
+        "path" in event.data
+      ) {
         textParts.push(`\n[Deleted: ${(event.data as { path: string }).path}]`);
       }
     }

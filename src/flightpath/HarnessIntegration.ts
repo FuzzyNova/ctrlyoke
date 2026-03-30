@@ -306,7 +306,9 @@ export abstract class HarnessIntegration {
     const clauses: string[] = [];
 
     if (agentRefs.length > 0) {
-      clauses.push(`Following these agent instructions ${agentRefs.join(", ")}`);
+      clauses.push(
+        `Following these agent instructions ${agentRefs.join(", ")}`
+      );
     }
     if (skillRefs.length > 0) {
       clauses.push(`using these available skills ${skillRefs.join(", ")}`);
@@ -496,7 +498,6 @@ export abstract class HarnessIntegration {
 
     return `<priorContext>\n${steps}\n</priorContext>`;
   }
-
 
   /**
    * Build the additional workflow-context text (prior context + critical instruction)
@@ -790,6 +791,17 @@ export abstract class HarnessIntegration {
    * Returns false by default (only Chat tracks this)
    */
   wasLastFailureUserCancellation(): boolean {
+    return false;
+  }
+
+  /**
+   * Check if the last sendPrompt failure was due to the CLI process exiting
+   * before completion was detected. All CLI harnesses are TUIs that stay open
+   * between prompts, so any process exit before a Stop hook or log-based
+   * completion event is abnormal (Ctrl+C, crash, SIGKILL).
+   * Returns false by default. CliIntegration overrides this.
+   */
+  wasLastFailureProcessExit(): boolean {
     return false;
   }
 
