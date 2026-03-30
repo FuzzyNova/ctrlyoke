@@ -273,7 +273,16 @@ export async function fetchAnthropicRegistry(
     if (pkg?.identifier) {
       entry.packageName = pkg.identifier;
       const runtimeHint = pkg.runtimeHint ?? "npx";
-      entry.installCommand = `${runtimeHint} ${pkg.runtimeHint === "uvx" ? "" : "-y "}${pkg.identifier}`.trim();
+      // Use registry-provided runtimeArguments when present; otherwise add -y for npm/npx.
+      const runtimeArgs =
+        pkg.runtimeArguments && pkg.runtimeArguments.length > 0
+          ? pkg.runtimeArguments
+          : runtimeHint !== "uvx"
+            ? ["-y"]
+            : [];
+      entry.installCommand = [runtimeHint, ...runtimeArgs, pkg.identifier]
+        .filter(Boolean)
+        .join(" ");
     }
 
     const envVars = pkg?.environmentVariables;

@@ -425,16 +425,25 @@ export const McpServersEditor: React.FC<{
   const handleImportRegistry = (entry: RegistryMcpEntry) => {
     const id = registryEntryToSlug(entry);
     let server: McpServerConfig;
-    if (entry.packageName) {
-      server = { id, command: "npx", args: ["-y", entry.packageName] };
-    } else if (entry.installCommand) {
+
+    if (entry.installCommand) {
+      // installCommand already encodes the correct runtime (npx vs uvx) and flags
       const parts = entry.installCommand.trim().split(/\s+/);
       server = { id, command: parts[0] ?? "npx" };
       const argsArr = parts.slice(1).filter(Boolean);
       if (argsArr.length > 0) server.args = argsArr;
+    } else if (entry.packageName) {
+      server = { id, command: "npx", args: ["-y", entry.packageName] };
     } else {
       server = { id, command: "npx" };
     }
+
+    // Add empty-string placeholders for every required env var so the user
+    // knows which keys need to be filled in before the server will work.
+    if (entry.envVars && entry.envVars.length > 0) {
+      server.env = Object.fromEntries(entry.envVars.map((v) => [v.name, ""]));
+    }
+
     addServerToWorkspaceAndValue(server);
   };
 
