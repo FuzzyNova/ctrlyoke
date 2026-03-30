@@ -112,9 +112,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   }, [vscode, setMcpLocalServersLoading]);
 
   const handleSearchRegistry = useCallback(
-    (query: string) => {
+    (query: string, cursor?: string) => {
       setMcpRegistryLoading(true);
-      vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_MCP_REGISTRY, query });
+      vscode.postMessage({
+        type: MESSAGE_TYPES.REQUEST_MCP_REGISTRY,
+        query,
+        cursor,
+      });
     },
     [vscode, setMcpRegistryLoading]
   );
@@ -127,7 +131,10 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const handleWorkspaceServersChange = useCallback(
     (servers: import("@root/types/FlightPathTypes").McpServerConfig[]) => {
       setMcpWorkspaceServers(servers);
-      vscode.postMessage({ type: MESSAGE_TYPES.SAVE_MCP_WORKSPACE_SERVERS, servers });
+      vscode.postMessage({
+        type: MESSAGE_TYPES.SAVE_MCP_WORKSPACE_SERVERS,
+        servers,
+      });
     },
     [vscode, setMcpWorkspaceServers]
   );
@@ -220,9 +227,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         : "custom";
   const isAdditionalArgsActive = additionalArgsMode === "custom";
   const additionalArgsDisplayValue = isAdditionalArgsActive
-    ? (typeof properties.additionalArgs === "string"
-        ? properties.additionalArgs
-        : "")
+    ? typeof properties.additionalArgs === "string"
+      ? properties.additionalArgs
+      : ""
     : additionalArgsMode === "default"
       ? (resolvedAdditionalArgs ?? "")
       : "";
@@ -530,7 +537,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               {!isNarrow && (
                 <div
                   className={`flex flex-col justify-end ${
-                    isAdditionalArgsActive ? "" : "opacity-50 pointer-events-none"
+                    isAdditionalArgsActive
+                      ? ""
+                      : "opacity-50 pointer-events-none"
                   }`}
                   title={additionalArgsTooltip}
                 >
@@ -672,7 +681,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               {/* End condition fields — always visible, grayed out when disabled */}
               <div
                 className={`space-y-3 p-3 bg-editor-bg border border-panel-border rounded ${
-                  properties.endCondition ? "" : "opacity-50 pointer-events-none"
+                  properties.endCondition
+                    ? ""
+                    : "opacity-50 pointer-events-none"
                 }`}
                 title={
                   properties.endCondition
@@ -740,11 +751,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                     />
                     <span className="text-[10px] text-description-fg">
-                      {(properties.endCondition?.compareSource ?? "auto") === "auto"
+                      {(properties.endCondition?.compareSource ?? "auto") ===
+                      "auto"
                         ? "'true'/'false' use exit code; other values check stdout"
-                        : (properties.endCondition?.compareSource ?? "auto") === "stdout"
+                        : (properties.endCondition?.compareSource ?? "auto") ===
+                            "stdout"
                           ? "Compares stdout output (requires clean exit)"
-                          : (properties.endCondition?.compareSource ?? "auto") === "stderr"
+                          : (properties.endCondition?.compareSource ??
+                                "auto") === "stderr"
                             ? "Compares stderr output (exit code not checked)"
                             : "Compares numeric exit code — use '0', '1', or 'true'/'false'"}
                     </span>

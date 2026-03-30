@@ -97,7 +97,6 @@ export function useDesktopLayout({
     else settingsRef.current?.expand();
     if (promptsCollapsed) promptsRef.current?.collapse();
     else promptsRef.current?.expand();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobile, uiLayoutReady]);
 
   // Open the horizontal onResize gate after mount events have settled.

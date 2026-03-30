@@ -180,7 +180,7 @@ interface UiState {
   terminalFontSize: number;
 
   // Terminal tab state (per workflow, defaults to 'output')
-  activeOutputTabs: Record<string, 'output' | 'terminal'>;
+  activeOutputTabs: Record<string, "output" | "terminal">;
   // Workflows with at least one running terminal session
   terminalActiveWorkflows: Set<string>;
 
@@ -198,7 +198,8 @@ interface UiState {
   // Footer quick picker state (transient, not persisted)
   footerOpenPicker: "harness" | "model" | "agent" | "skills" | null;
 
-  // MCP Discovery state (transient, not persisted)
+  // MCP Discovery state
+  mcpDiscoveryTab: "local" | "registry";
   mcpLocalServers: LocalMcpServerEntry[];
   mcpLocalServersLoading: boolean;
   mcpLocalServersError: string | undefined;
@@ -206,6 +207,14 @@ interface UiState {
   mcpRegistryLoading: boolean;
   mcpRegistryError: string | undefined;
   mcpRegistryQuery: string;
+  /** Cursor for the next page of registry results (undefined = no more pages) */
+  mcpRegistryNextCursor: string | undefined;
+  /**
+   * History of cursors for each visited page.
+   * Index 0 = page 1 (cursor undefined), index 1 = page 2 (nextCursor from page 1), etc.
+   * Current page = last element. Length = current page number.
+   */
+  mcpRegistryPageCursors: (string | undefined)[];
   // MCP Workspace registry (undefined = not yet loaded)
   mcpWorkspaceServers: McpServerConfig[] | undefined;
   mcpWorkspaceServersLoading: boolean;
@@ -258,7 +267,9 @@ interface UiActions {
   closeNewWorkflowModal: () => void;
   setCurrentTemplate: (template: TemplateInfo | null) => void;
   setDefaultTemplateId: (id: string) => void;
-  setTemplateFileSelection: (selection: { variable: string; path: string } | null) => void;
+  setTemplateFileSelection: (
+    selection: { variable: string; path: string } | null
+  ) => void;
 
   // Recent workflows
   setRecentWorkflows: (workflows: RecentWorkflow[]) => void;
@@ -288,7 +299,7 @@ interface UiActions {
   hideToast: () => void;
 
   // Terminal tab switching
-  setActiveOutputTab: (workflowId: string, tab: 'output' | 'terminal') => void;
+  setActiveOutputTab: (workflowId: string, tab: "output" | "terminal") => void;
   setTerminalSessionActive: (workflowId: string, active: boolean) => void;
 
   // Terminal session rail layout
@@ -312,15 +323,35 @@ interface UiActions {
   clearHiddenDropdownOptions: (namespace: string) => void;
 
   // Footer quick picker
-  setFooterOpenPicker: (picker: "harness" | "model" | "agent" | "skills" | null) => void;
+  setFooterOpenPicker: (
+    picker: "harness" | "model" | "agent" | "skills" | null
+  ) => void;
 
   // MCP discovery
+  setMcpDiscoveryTab: (tab: "local" | "registry") => void;
   setMcpLocalServersLoading: (loading: boolean) => void;
-  setMcpLocalServersResult: (servers: LocalMcpServerEntry[], error?: string) => void;
+  setMcpLocalServersResult: (
+    servers: LocalMcpServerEntry[],
+    error?: string
+  ) => void;
   setMcpRegistryLoading: (loading: boolean) => void;
-  setMcpRegistryResult: (servers: RegistryMcpEntry[], query?: string, error?: string) => void;
+  setMcpRegistryResult: (
+    servers: RegistryMcpEntry[],
+    query?: string,
+    error?: string,
+    nextCursor?: string
+  ) => void;
+  /** Navigate to the next registry page (appends nextCursor to page history) */
+  mcpRegistryGoNextPage: () => string | undefined;
+  /** Navigate to the previous registry page (trims page history, returns cursor to fetch) */
+  mcpRegistryGoPrevPage: () => string | undefined;
+  /** Reset pagination (e.g. on first load) */
+  resetMcpRegistryPages: () => void;
   setMcpWorkspaceServersLoading: (loading: boolean) => void;
-  setMcpWorkspaceServersResult: (servers: McpServerConfig[], error?: string) => void;
+  setMcpWorkspaceServersResult: (
+    servers: McpServerConfig[],
+    error?: string
+  ) => void;
   setMcpWorkspaceServers: (servers: McpServerConfig[]) => void;
 
   // Reset UI to defaults
@@ -367,6 +398,7 @@ const initialState: UiState = {
   runTimestamps: [],
   runStates: [],
   footerOpenPicker: null,
+  mcpDiscoveryTab: "registry",
   mcpLocalServers: [],
   mcpLocalServersLoading: false,
   mcpLocalServersError: undefined,
@@ -374,6 +406,8 @@ const initialState: UiState = {
   mcpRegistryLoading: false,
   mcpRegistryError: undefined,
   mcpRegistryQuery: "",
+  mcpRegistryNextCursor: undefined,
+  mcpRegistryPageCursors: [undefined],
   mcpWorkspaceServers: undefined,
   mcpWorkspaceServersLoading: false,
 };
@@ -393,11 +427,12 @@ const persistedFields = [
   "terminalFontSize",
   "terminalRailCollapsed",
   "terminalRailSizePx",
+  "mcpDiscoveryTab",
 ] as const;
 
 export const useUiStore = create<UiState & UiActions>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...initialState,
 
       // ============================================================================
@@ -520,7 +555,8 @@ export const useUiStore = create<UiState & UiActions>()(
 
       setDefaultTemplateId: (id) => set({ defaultTemplateId: id }),
 
-      setTemplateFileSelection: (selection) => set({ templateFileSelection: selection }),
+      setTemplateFileSelection: (selection) =>
+        set({ templateFileSelection: selection }),
 
       // ============================================================================
       // RECENT WORKFLOWS
@@ -601,7 +637,7 @@ export const useUiStore = create<UiState & UiActions>()(
       // TERMINAL TAB STATE
       // ============================================================================
 
-      setActiveOutputTab: (workflowId: string, tab: 'output' | 'terminal') =>
+      setActiveOutputTab: (workflowId: string, tab: "output" | "terminal") =>
         set((state) => ({
           activeOutputTabs: { ...state.activeOutputTabs, [workflowId]: tab },
         })),
@@ -624,8 +660,7 @@ export const useUiStore = create<UiState & UiActions>()(
       setTerminalRailCollapsed: (collapsed) =>
         set({ terminalRailCollapsed: collapsed }),
 
-      setTerminalRailSizePx: (px) =>
-        set({ terminalRailSizePx: px }),
+      setTerminalRailSizePx: (px) => set({ terminalRailSizePx: px }),
 
       // ============================================================================
       // RUN HISTORY VIEW
@@ -692,6 +727,8 @@ export const useUiStore = create<UiState & UiActions>()(
       // MCP DISCOVERY
       // ============================================================================
 
+      setMcpDiscoveryTab: (tab) => set({ mcpDiscoveryTab: tab }),
+
       setMcpLocalServersLoading: (loading) =>
         set({ mcpLocalServersLoading: loading }),
 
@@ -702,15 +739,41 @@ export const useUiStore = create<UiState & UiActions>()(
           mcpLocalServersError: error,
         }),
 
-      setMcpRegistryLoading: (loading) =>
-        set({ mcpRegistryLoading: loading }),
+      setMcpRegistryLoading: (loading) => set({ mcpRegistryLoading: loading }),
 
-      setMcpRegistryResult: (servers, query, error) =>
+      setMcpRegistryResult: (servers, query, error, nextCursor) =>
         set({
           mcpRegistryServers: servers,
           mcpRegistryLoading: false,
           mcpRegistryError: error,
           mcpRegistryQuery: query ?? "",
+          mcpRegistryNextCursor: nextCursor,
+        }),
+
+      mcpRegistryGoNextPage: () => {
+        const state = get();
+        const cursor = state.mcpRegistryNextCursor;
+        if (!cursor) return undefined;
+        set({
+          mcpRegistryPageCursors: [...state.mcpRegistryPageCursors, cursor],
+        });
+        return cursor;
+      },
+
+      mcpRegistryGoPrevPage: () => {
+        const state = get();
+        const pages = state.mcpRegistryPageCursors;
+        if (pages.length <= 1) return undefined;
+        const newPages = pages.slice(0, -1);
+        const prevCursor = newPages[newPages.length - 1];
+        set({ mcpRegistryPageCursors: newPages });
+        return prevCursor;
+      },
+
+      resetMcpRegistryPages: () =>
+        set({
+          mcpRegistryPageCursors: [undefined],
+          mcpRegistryNextCursor: undefined,
         }),
 
       setMcpWorkspaceServersLoading: (loading) =>

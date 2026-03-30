@@ -85,7 +85,6 @@ export const DiffView: React.FC<DiffViewProps> = ({
   // collapsed one diff and then clicks "Expand all" again.
   useEffect(() => {
     setIsExpanded(!globallyCollapsed);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [globallyCollapsed, diffResetVersion]);
 
   const handleToggle = () => {

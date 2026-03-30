@@ -623,10 +623,17 @@ export const PromptsPanel: React.FC<{
       {/* Prompt list */}
       <div
         className="flex-1 overflow-y-auto min-h-0"
+        role="listbox"
+        tabIndex={0}
         onClick={(e) => {
           // Deselect the current prompt when clicking blank space in the list.
           // Only fire when the click target is this container itself (not a child).
           if (e.target === e.currentTarget) {
+            deselect();
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
             deselect();
           }
         }}

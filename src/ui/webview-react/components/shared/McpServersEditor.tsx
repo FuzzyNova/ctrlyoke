@@ -4,6 +4,7 @@ import type {
   LocalMcpServerEntry,
   RegistryMcpEntry,
 } from "@root/types/WebviewMessageTypes";
+import { useUiStore } from "../../store/uiStore";
 
 export type McpServersValue = (string | McpServerConfig)[] | null | undefined;
 
@@ -31,9 +32,7 @@ function envObjectToString(env: Record<string, string> | undefined): string {
     .join("\n");
 }
 
-function envStringToObject(
-  raw: string
-): Record<string, string> | undefined {
+function envStringToObject(raw: string): Record<string, string> | undefined {
   const lines = raw
     .split("\n")
     .map((l) => l.trim())
@@ -74,7 +73,8 @@ function serverToForm(server: McpServerConfig): AddServerForm {
     command: server.command,
     args: server.args ? server.args.join(" ") : "",
     env: envObjectToString(server.env),
-    autoApprove: typeof server.autoApprove === "boolean" ? server.autoApprove : false,
+    autoApprove:
+      typeof server.autoApprove === "boolean" ? server.autoApprove : false,
   };
 }
 
@@ -191,8 +191,7 @@ const McpServersReadOnly: React.FC<{ value: McpServersValue }> = ({
  * Note: env variables are not editable here — set them in the YAML file
  * directly under the server's env: key.
  */
-type DiscoveryPanel = "local" | "registry" | null;
-type RegistrySort = "default" | "a-z" | "z-a";
+type RegistrySort = "default" | "a-z" | "z-a" | "popularity" | "trending";
 
 /** Derive a human-readable kebab-case id from a registry entry's display name. */
 function registryEntryToSlug(entry: RegistryMcpEntry): string {
@@ -227,7 +226,7 @@ export const McpServersEditor: React.FC<{
   /** Called when user requests a local config file scan */
   onRequestLocalServers?: () => void;
   /** Called when user submits a registry search */
-  onSearchRegistry?: (query: string) => void;
+  onSearchRegistry?: (query: string, cursor?: string) => void;
   /** Results from the most recent local scan */
   localServers?: LocalMcpServerEntry[];
   /** Whether a local scan is in progress */
@@ -273,7 +272,13 @@ export const McpServersEditor: React.FC<{
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<AddServerForm>(EMPTY_FORM);
-  const [discoveryPanel, setDiscoveryPanel] = useState<DiscoveryPanel>(null);
+  const discoveryTab = useUiStore((s) => s.mcpDiscoveryTab);
+  const setDiscoveryTab = useUiStore((s) => s.setMcpDiscoveryTab);
+  const mcpRegistryNextCursor = useUiStore((s) => s.mcpRegistryNextCursor);
+  const mcpRegistryPageCursors = useUiStore((s) => s.mcpRegistryPageCursors);
+  const mcpRegistryGoNextPage = useUiStore((s) => s.mcpRegistryGoNextPage);
+  const mcpRegistryGoPrevPage = useUiStore((s) => s.mcpRegistryGoPrevPage);
+  const resetMcpRegistryPages = useUiStore((s) => s.resetMcpRegistryPages);
   const [registryQuery, setRegistryQuery] = useState("");
   const [registrySort, setRegistrySort] = useState<RegistrySort>("default");
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -292,6 +297,16 @@ export const McpServersEditor: React.FC<{
         })
       : registryServers;
     if (registrySort === "default") return filtered;
+    if (registrySort === "popularity") {
+      return [...filtered].sort(
+        (a, b) => (b.popularityScore ?? 0) - (a.popularityScore ?? 0)
+      );
+    }
+    if (registrySort === "trending") {
+      return [...filtered].sort(
+        (a, b) => (b.trendingScore ?? 0) - (a.trendingScore ?? 0)
+      );
+    }
     const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
     return registrySort === "z-a" ? sorted.reverse() : sorted;
   }, [registryServers, registryQuery, registrySort]);
@@ -307,10 +322,19 @@ export const McpServersEditor: React.FC<{
 
   // Request workspace servers when entering custom mode for the first time
   useEffect(() => {
-    if (mode === "custom" && workspaceServers === undefined && !isLoadingWorkspaceServers) {
+    if (
+      mode === "custom" &&
+      workspaceServers === undefined &&
+      !isLoadingWorkspaceServers
+    ) {
       onRequestWorkspaceServers?.();
     }
-  }, [mode, workspaceServers, isLoadingWorkspaceServers, onRequestWorkspaceServers]);
+  }, [
+    mode,
+    workspaceServers,
+    isLoadingWorkspaceServers,
+    onRequestWorkspaceServers,
+  ]);
 
   // Effective server list: workspace servers + any value-only servers not in workspace
   const effectiveServers = useMemo((): McpServerConfig[] => {
@@ -337,16 +361,36 @@ export const McpServersEditor: React.FC<{
 
   const showDiscovery = !!(onRequestLocalServers || onSearchRegistry);
 
+  // Load data for the active discovery tab when custom mode becomes visible
+  useEffect(() => {
+    if (mode !== "custom" || !showDiscovery) return;
+    if (discoveryTab === "local") {
+      onRequestLocalServers?.();
+    } else if (
+      discoveryTab === "registry" &&
+      registryServers === undefined &&
+      !isLoadingRegistry
+    ) {
+      onSearchRegistry?.("");
+    }
+  }, [mode, showDiscovery, discoveryTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleFlightpathToggle = () => {
     onChange(buildArray(!flightpathEnabled, userServers));
   };
 
   const handleToggleServer = (server: McpServerConfig) => {
     if (isServerEnabled(server)) {
-      onChange(buildArray(flightpathEnabled, userServers.filter((s) => s.id !== server.id)));
+      onChange(
+        buildArray(
+          flightpathEnabled,
+          userServers.filter((s) => s.id !== server.id)
+        )
+      );
     } else {
       // Use the workspace copy (may have updated config vs orphan)
-      const fullServer = effectiveServers.find((s) => s.id === server.id) ?? server;
+      const fullServer =
+        effectiveServers.find((s) => s.id === server.id) ?? server;
       onChange(buildArray(flightpathEnabled, [...userServers, fullServer]));
     }
   };
@@ -357,7 +401,12 @@ export const McpServersEditor: React.FC<{
       onWorkspaceServersChange(workspaceServers.filter((s) => s.id !== id));
     }
     // Remove from value
-    onChange(buildArray(flightpathEnabled, userServers.filter((s) => s.id !== id)));
+    onChange(
+      buildArray(
+        flightpathEnabled,
+        userServers.filter((s) => s.id !== id)
+      )
+    );
     if (expandedId === id) setExpandedId(null);
     if (editingId === id) setEditingId(null);
   };
@@ -402,9 +451,10 @@ export const McpServersEditor: React.FC<{
 
   /** Save a server to workspace registry + enable it in value */
   const addServerToWorkspaceAndValue = (server: McpServerConfig) => {
-    const newWorkspace = workspaceServers !== undefined
-      ? [...workspaceServers.filter((s) => s.id !== server.id), server]
-      : undefined;
+    const newWorkspace =
+      workspaceServers !== undefined
+        ? [...workspaceServers.filter((s) => s.id !== server.id), server]
+        : undefined;
     if (newWorkspace !== undefined) {
       onWorkspaceServersChange?.(newWorkspace);
     }
@@ -447,18 +497,34 @@ export const McpServersEditor: React.FC<{
     addServerToWorkspaceAndValue(server);
   };
 
-  const handleDiscoveryPanelToggle = (panel: DiscoveryPanel) => {
-    if (discoveryPanel === panel) {
-      setDiscoveryPanel(null);
-    } else {
-      setDiscoveryPanel(panel);
-      if (panel === "local") {
-        onRequestLocalServers?.();
-      } else if (panel === "registry" && registryServers === undefined && !isLoadingRegistry) {
-        // Load registry on first open; subsequent opens use cached results
-        onSearchRegistry?.("");
-      }
+  const handleDiscoveryTabChange = (tab: "local" | "registry") => {
+    setDiscoveryTab(tab);
+    if (tab === "local") {
+      onRequestLocalServers?.();
+    } else if (
+      tab === "registry" &&
+      registryServers === undefined &&
+      !isLoadingRegistry
+    ) {
+      resetMcpRegistryPages();
+      onSearchRegistry?.("");
     }
+  };
+
+  const registryPageNumber = mcpRegistryPageCursors.length;
+  const hasNextPage = !!mcpRegistryNextCursor;
+  const hasPrevPage = mcpRegistryPageCursors.length > 1;
+
+  const handleRegistryNextPage = () => {
+    if (!hasNextPage || isLoadingRegistry) return;
+    const cursor = mcpRegistryGoNextPage();
+    if (cursor) onSearchRegistry?.("", cursor);
+  };
+
+  const handleRegistryPrevPage = () => {
+    if (!hasPrevPage || isLoadingRegistry) return;
+    const cursor = mcpRegistryGoPrevPage();
+    onSearchRegistry?.("", cursor);
   };
 
   const handleAddServer = () => {
@@ -559,11 +625,13 @@ export const McpServersEditor: React.FC<{
               </div>
             )}
 
-            {!isLoadingWorkspaceServers && effectiveServers.length === 0 && !showAddForm && (
-              <div className="text-[11px] text-description-fg italic px-1">
-                None added
-              </div>
-            )}
+            {!isLoadingWorkspaceServers &&
+              effectiveServers.length === 0 &&
+              !showAddForm && (
+                <div className="text-[11px] text-description-fg italic px-1">
+                  None added
+                </div>
+              )}
 
             {effectiveServers.map((server) => {
               const enabled = isServerEnabled(server);
@@ -583,7 +651,6 @@ export const McpServersEditor: React.FC<{
                         setEditForm((f) => ({ ...f, id: e.target.value }))
                       }
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
-                      // eslint-disable-next-line jsx-a11y/no-autofocus
                       autoFocus
                     />
                     <input
@@ -605,7 +672,9 @@ export const McpServersEditor: React.FC<{
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                     />
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] text-description-fg">env (KEY=VALUE, one per line)</span>
+                      <span className="text-[10px] text-description-fg">
+                        env (KEY=VALUE, one per line)
+                      </span>
                       <textarea
                         placeholder={"MY_KEY=value\nANOTHER_KEY=value"}
                         value={editForm.env}
@@ -636,7 +705,9 @@ export const McpServersEditor: React.FC<{
                       <button
                         type="button"
                         onClick={handleSaveEdit}
-                        disabled={!editForm.id.trim() || !editForm.command.trim()}
+                        disabled={
+                          !editForm.id.trim() || !editForm.command.trim()
+                        }
                         className="px-2 py-0.5 text-[11px] bg-btn-bg text-btn-fg rounded hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Save
@@ -666,7 +737,9 @@ export const McpServersEditor: React.FC<{
                       type="button"
                       onClick={() => handleToggleServer(server)}
                       className="flex-shrink-0 flex items-center"
-                      title={enabled ? `Disable ${server.id}` : `Enable ${server.id}`}
+                      title={
+                        enabled ? `Disable ${server.id}` : `Enable ${server.id}`
+                      }
                     >
                       <input
                         type="checkbox"
@@ -733,13 +806,17 @@ export const McpServersEditor: React.FC<{
                       </div>
                       {server.args && (
                         <div className="text-[11px] text-description-fg">
-                          <span className="font-mono text-foreground">args:</span>{" "}
+                          <span className="font-mono text-foreground">
+                            args:
+                          </span>{" "}
                           {server.args.join(" ")}
                         </div>
                       )}
                       {server.env && Object.keys(server.env).length > 0 && (
                         <div className="text-[11px] text-description-fg">
-                          <span className="font-mono text-foreground">env:</span>{" "}
+                          <span className="font-mono text-foreground">
+                            env:
+                          </span>{" "}
                           {Object.keys(server.env).join(", ")}
                         </div>
                       )}
@@ -769,7 +846,6 @@ export const McpServersEditor: React.FC<{
                     setForm((f) => ({ ...f, id: e.target.value }))
                   }
                   className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
-                  // eslint-disable-next-line jsx-a11y/no-autofocus
                   autoFocus
                 />
                 <input
@@ -791,7 +867,9 @@ export const McpServersEditor: React.FC<{
                   className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                 />
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-[10px] text-description-fg">env (KEY=VALUE, one per line)</span>
+                  <span className="text-[10px] text-description-fg">
+                    env (KEY=VALUE, one per line)
+                  </span>
                   <textarea
                     placeholder={"MY_KEY=value\nANOTHER_KEY=value"}
                     value={form.env}
@@ -842,7 +920,10 @@ export const McpServersEditor: React.FC<{
             ) : (
               <button
                 type="button"
-                onClick={() => { setShowAddForm(true); setEditingId(null); }}
+                onClick={() => {
+                  setShowAddForm(true);
+                  setEditingId(null);
+                }}
                 className="flex items-center gap-1 px-2 py-1 text-[11px] text-description-fg hover:text-foreground border border-dashed border-panel-border rounded hover:border-focus-border transition-colors"
               >
                 <i className="codicon codicon-add text-[10px]" />
@@ -857,9 +938,9 @@ export const McpServersEditor: React.FC<{
                   {onRequestLocalServers && (
                     <button
                       type="button"
-                      onClick={() => handleDiscoveryPanelToggle("local")}
+                      onClick={() => handleDiscoveryTabChange("local")}
                       className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded border transition-colors ${
-                        discoveryPanel === "local"
+                        discoveryTab === "local"
                           ? "bg-btn-bg text-btn-fg border-btn-bg"
                           : "text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
                       }`}
@@ -871,9 +952,9 @@ export const McpServersEditor: React.FC<{
                   {onSearchRegistry && (
                     <button
                       type="button"
-                      onClick={() => handleDiscoveryPanelToggle("registry")}
+                      onClick={() => handleDiscoveryTabChange("registry")}
                       className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded border transition-colors ${
-                        discoveryPanel === "registry"
+                        discoveryTab === "registry"
                           ? "bg-btn-bg text-btn-fg border-btn-bg"
                           : "text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
                       }`}
@@ -885,7 +966,7 @@ export const McpServersEditor: React.FC<{
                 </div>
 
                 {/* Local configs panel */}
-                {discoveryPanel === "local" && (
+                {discoveryTab === "local" && (
                   <div className="flex flex-col gap-1 p-2 rounded border border-panel-border bg-editor-bg">
                     {isLoadingLocal ? (
                       <div className="flex items-center gap-1.5 text-[11px] text-description-fg">
@@ -893,7 +974,9 @@ export const McpServersEditor: React.FC<{
                         Scanning local configs…
                       </div>
                     ) : localServersError ? (
-                      <div className="text-[11px] text-error-fg">{localServersError}</div>
+                      <div className="text-[11px] text-error-fg">
+                        {localServersError}
+                      </div>
                     ) : !localServers || localServers.length === 0 ? (
                       <div className="text-[11px] text-description-fg italic">
                         No servers found in local config files
@@ -904,7 +987,8 @@ export const McpServersEditor: React.FC<{
                     ) : (
                       <>
                         <div className="text-[10px] text-description-fg mb-0.5">
-                          Found {localServers.length} server{localServers.length !== 1 ? "s" : ""}
+                          Found {localServers.length} server
+                          {localServers.length !== 1 ? "s" : ""}
                         </div>
                         {localServers.map((entry) => {
                           const alreadyAdded = isInWorkspace(entry.id);
@@ -914,18 +998,27 @@ export const McpServersEditor: React.FC<{
                               className="flex items-center justify-between gap-2 px-2 py-1 rounded border border-panel-border"
                             >
                               <div className="flex flex-col min-w-0">
-                                <span className="text-xs font-medium text-foreground truncate">{entry.id}</span>
-                                <span className="text-[10px] text-description-fg font-mono truncate">
-                                  {entry.command}{entry.args ? " " + entry.args.join(" ") : ""}
+                                <span className="text-xs font-medium text-foreground truncate">
+                                  {entry.id}
                                 </span>
-                                <span className="text-[10px] text-description-fg capitalize">{entry.source.replace(/-/g, " ")}</span>
+                                <span className="text-[10px] text-description-fg font-mono truncate">
+                                  {entry.command}
+                                  {entry.args ? " " + entry.args.join(" ") : ""}
+                                </span>
+                                <span className="text-[10px] text-description-fg capitalize">
+                                  {entry.source.replace(/-/g, " ")}
+                                </span>
                               </div>
                               <button
                                 type="button"
                                 disabled={alreadyAdded}
                                 onClick={() => handleImportLocal(entry)}
                                 className="flex-shrink-0 px-2 py-0.5 text-[11px] rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                title={alreadyAdded ? "Already in workspace registry" : `Import ${entry.id}`}
+                                title={
+                                  alreadyAdded
+                                    ? "Already in workspace registry"
+                                    : `Import ${entry.id}`
+                                }
                               >
                                 {alreadyAdded ? "Added" : "Import"}
                               </button>
@@ -938,7 +1031,7 @@ export const McpServersEditor: React.FC<{
                 )}
 
                 {/* Registry panel */}
-                {discoveryPanel === "registry" && (
+                {discoveryTab === "registry" && (
                   <div className="flex flex-col gap-1.5 p-2 rounded border border-panel-border bg-editor-bg">
                     {/* Filter input — client-side search (Anthropic registry has no server-side search) */}
                     <input
@@ -948,7 +1041,6 @@ export const McpServersEditor: React.FC<{
                       value={registryQuery}
                       onChange={(e) => setRegistryQuery(e.target.value)}
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-                      // eslint-disable-next-line jsx-a11y/no-autofocus
                       autoFocus
                     />
 
@@ -958,13 +1050,26 @@ export const McpServersEditor: React.FC<{
                         Fetching from Anthropic registry…
                       </div>
                     ) : registryError ? (
-                      <div className="text-[11px] text-error-fg">{registryError}</div>
-                    ) : filteredRegistryServers && filteredRegistryServers.length > 0 ? (
+                      <div className="text-[11px] text-error-fg">
+                        {registryError}
+                      </div>
+                    ) : filteredRegistryServers &&
+                      filteredRegistryServers.length > 0 ? (
                       <>
                         {/* Sort controls */}
                         <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-description-fg">Sort:</span>
-                          {(["default", "a-z", "z-a"] as RegistrySort[]).map((s) => (
+                          <span className="text-[10px] text-description-fg">
+                            Sort:
+                          </span>
+                          {(
+                            [
+                              "default",
+                              "popularity",
+                              "trending",
+                              "a-z",
+                              "z-a",
+                            ] as RegistrySort[]
+                          ).map((s) => (
                             <button
                               key={s}
                               type="button"
@@ -975,54 +1080,107 @@ export const McpServersEditor: React.FC<{
                                   : "text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
                               }`}
                             >
-                              {s === "default" ? "Default" : s === "a-z" ? "A–Z" : "Z–A"}
+                              {s === "default"
+                                ? "Default"
+                                : s === "popularity"
+                                  ? "Popular"
+                                  : s === "trending"
+                                    ? "Trending"
+                                    : s === "a-z"
+                                      ? "A–Z"
+                                      : "Z–A"}
                             </button>
                           ))}
                         </div>
-                      <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
-                        {filteredRegistryServers.map((entry) => {
-                          const id = registryEntryToSlug(entry);
-                          const alreadyAdded = isInWorkspace(id);
-                          return (
-                            <div
-                              key={entry.id}
-                              className="flex items-start justify-between gap-2 px-2 py-1.5 rounded border border-panel-border"
-                            >
-                              <div className="flex flex-col min-w-0 flex-1">
-                                <div className="flex items-center gap-1">
-                                  <span className="text-xs font-medium text-foreground truncate">{entry.name}</span>
-                                  {entry.verified && (
-                                    <i className="codicon codicon-verified-filled text-[10px] text-blue-400 flex-shrink-0" title="Anthropic verified" />
-                                  )}
-                                </div>
-                                {entry.description && (
-                                  <span className="text-[10px] text-description-fg line-clamp-2">{entry.description}</span>
-                                )}
-                                {entry.installCommand && (
-                                  <span className="text-[10px] text-description-fg font-mono mt-0.5 truncate">{entry.installCommand}</span>
-                                )}
-                                {entry.envVars && entry.envVars.length > 0 && (
-                                  <span className="text-[10px] text-description-fg mt-0.5">
-                                    Requires: {entry.envVars.map((e) => e.name).join(", ")}
-                                  </span>
-                                )}
-                              </div>
-                              <button
-                                type="button"
-                                disabled={alreadyAdded}
-                                onClick={() => handleImportRegistry(entry)}
-                                className="flex-shrink-0 px-2 py-0.5 text-[11px] rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors mt-0.5"
-                                title={alreadyAdded ? "Already in workspace registry" : `Add ${entry.name}`}
+                        <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                          {filteredRegistryServers.map((entry) => {
+                            const id = registryEntryToSlug(entry);
+                            const alreadyAdded = isInWorkspace(id);
+                            return (
+                              <div
+                                key={entry.id}
+                                className="flex items-start justify-between gap-2 px-2 py-1.5 rounded border border-panel-border"
                               >
-                                {alreadyAdded ? "Added" : "Add"}
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
+                                <div className="flex flex-col min-w-0 flex-1">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-xs font-medium text-foreground truncate">
+                                      {entry.name}
+                                    </span>
+                                    {entry.verified && (
+                                      <i
+                                        className="codicon codicon-verified-filled text-[10px] text-blue-400 flex-shrink-0"
+                                        title="Anthropic verified"
+                                      />
+                                    )}
+                                  </div>
+                                  {entry.description && (
+                                    <span className="text-[10px] text-description-fg line-clamp-2">
+                                      {entry.description}
+                                    </span>
+                                  )}
+                                  {entry.installCommand && (
+                                    <span className="text-[10px] text-description-fg font-mono mt-0.5 truncate">
+                                      {entry.installCommand}
+                                    </span>
+                                  )}
+                                  {entry.envVars &&
+                                    entry.envVars.length > 0 && (
+                                      <span className="text-[10px] text-description-fg mt-0.5">
+                                        Requires:{" "}
+                                        {entry.envVars
+                                          .map((e) => e.name)
+                                          .join(", ")}
+                                      </span>
+                                    )}
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={alreadyAdded}
+                                  onClick={() => handleImportRegistry(entry)}
+                                  className="flex-shrink-0 px-2 py-0.5 text-[11px] rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors mt-0.5"
+                                  title={
+                                    alreadyAdded
+                                      ? "Already in workspace registry"
+                                      : `Add ${entry.name}`
+                                  }
+                                >
+                                  {alreadyAdded ? "Added" : "Add"}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {/* Pagination controls */}
+                        {(hasPrevPage || hasNextPage) && (
+                          <div className="flex items-center justify-between mt-1">
+                            <button
+                              type="button"
+                              disabled={!hasPrevPage || isLoadingRegistry}
+                              onClick={handleRegistryPrevPage}
+                              className="flex items-center gap-1 px-2 py-0.5 text-[11px] rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <i className="codicon codicon-chevron-left text-[10px]" />
+                              Prev
+                            </button>
+                            <span className="text-[10px] text-description-fg">
+                              Page {registryPageNumber}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={!hasNextPage || isLoadingRegistry}
+                              onClick={handleRegistryNextPage}
+                              className="flex items-center gap-1 px-2 py-0.5 text-[11px] rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            >
+                              Next
+                              <i className="codicon codicon-chevron-right text-[10px]" />
+                            </button>
+                          </div>
+                        )}
                       </>
                     ) : filteredRegistryServers !== undefined ? (
-                      <div className="text-[11px] text-description-fg italic">No matches</div>
+                      <div className="text-[11px] text-description-fg italic">
+                        No matches
+                      </div>
                     ) : (
                       <div className="text-[10px] text-description-fg italic">
                         Loading Anthropic MCP registry…

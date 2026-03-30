@@ -127,7 +127,7 @@ export const SaveWorkflowDialog: React.FC = () => {
         </div>
       }
     >
-      <div className="space-y-4" onKeyDown={handleKeyDown}>
+      <div role="form" className="space-y-4" onKeyDown={handleKeyDown}>
         {/* Format selector */}
         <div className="form-group">
           <label className="block text-sm font-medium mb-2 text-foreground">

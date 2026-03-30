@@ -48,16 +48,28 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-black bg-opacity-50"
-      onClick={onClose}
-    >
+    <>
+      {/* Backdrop */}
+      <button
+        type="button"
+        className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 border-0 p-0 bg-transparent cursor-default"
+        onClick={onClose}
+        aria-label="Close modal"
+      />
+      {/* Modal content wrapper */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- wrapper only, click handled by button backdrop */}
       <div
-        ref={modalRef}
-        className={`relative w-full ${sizeClasses[size]} mx-4 bg-editor-bg rounded-lg shadow-xl border border-panel-border`}
-        onClick={(e) => e.stopPropagation()}
-        tabIndex={-1}
+        className="fixed inset-0 z-[201] flex items-center justify-center overflow-y-auto pointer-events-none"
       >
+        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- stopPropagation only, no action triggered */}
+        <div
+          ref={modalRef}
+          className={`relative w-full ${sizeClasses[size]} mx-4 bg-editor-bg rounded-lg shadow-xl border border-panel-border pointer-events-auto`}
+          onClick={(e) => e.stopPropagation()}
+          tabIndex={-1}
+          role="dialog"
+          aria-modal="true"
+        >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-panel-border">
           <h2 className="text-xl font-semibold text-foreground">{title}</h2>
@@ -93,8 +105,9 @@ export const Modal: React.FC<ModalProps> = ({
             {footer}
           </div>
         )}
+        </div>
       </div>
-    </div>,
+    </>,
     document.body
   );
 };

@@ -9,7 +9,6 @@ import { Log } from "./Log";
  * @param filePath Absolute path to JSON file
  * @returns Parsed JSON data
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function readJsonFile(filePath: string): Promise<any> {
   const content = await fs.readFile(filePath, "utf-8");
   return JSON.parse(content);

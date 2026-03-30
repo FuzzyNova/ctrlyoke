@@ -277,7 +277,8 @@ function createMessageHandlers(): MessageHandlerMap {
     // Also suppress undo recording for the initial auto-load (0 → N prompts).
     // Loading from an empty state is a system-driven restore, not a user edit.
     const isInitialAutoLoad = currentPrompts.length === 0;
-    const shouldRecord = !isInitialAutoLoad && (promptCountChanged || promptContentChanged);
+    const shouldRecord =
+      !isInitialAutoLoad && (promptCountChanged || promptContentChanged);
     WebviewLog.debug(
       `[PROMPTS_EXTENDED] shouldRecord=${shouldRecord} (countChanged=${promptCountChanged} contentChanged=${promptContentChanged} isInitialAutoLoad=${isInitialAutoLoad}) pastStatesBefore=${useWorkflowStore.temporal.getState().pastStates.length}`
     );
@@ -573,7 +574,10 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS] = (message) => {
     useWorkflowStore
       .getState()
-      .appendFinalPromptStreamingEvents(message.loopIndex, message.events || []);
+      .appendFinalPromptStreamingEvents(
+        message.loopIndex,
+        message.events || []
+      );
   };
 
   // --------------------------------------------------------------------------
@@ -777,7 +781,8 @@ function createMessageHandlers(): MessageHandlerMap {
       .setMcpRegistryResult(
         message.servers ?? [],
         message.query,
-        message.error
+        message.error,
+        message.nextCursor
       );
   };
 
@@ -1109,7 +1114,9 @@ function createMessageHandlers(): MessageHandlerMap {
     const target = message.target;
     if (!target) return;
     if (workspaceSnapshot) {
-      useWorkflowStore.getState().setWorkspaceSnapshot(target, workspaceSnapshot);
+      useWorkflowStore
+        .getState()
+        .setWorkspaceSnapshot(target, workspaceSnapshot);
     }
   };
 
@@ -1133,7 +1140,9 @@ function createMessageHandlers(): MessageHandlerMap {
     const m = message as UndoRecordUpdatedMessage;
     if (!m.target || !m.undoRecord) return;
     useWorkflowStore.getState().setUndoRecord(m.target, m.undoRecord);
-    useWorkflowStore.getState().updateHistoryStepUndoRecord(m.target, m.undoRecord);
+    useWorkflowStore
+      .getState()
+      .updateHistoryStepUndoRecord(m.target, m.undoRecord);
   };
 
   // ========================================================================

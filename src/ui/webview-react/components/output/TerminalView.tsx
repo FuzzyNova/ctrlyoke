@@ -66,7 +66,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
     if (initialRailCollapsed.current) {
       railRef.current?.collapse();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Open the onResize gate after ALL mount layout effects and effects have fired.
@@ -74,7 +73,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
   // and the useLayoutEffect above), so spurious mount events never reach the store.
   useEffect(() => {
     railResizeMountedRef.current = true;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const aiCliSessions = sessions.filter((s) => s.kind === "ai-cli");
@@ -251,10 +249,18 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
 
   return (
     <div
+      role="tab"
+      tabIndex={0}
       className={`flex items-center gap-1 px-2 py-1.5 text-[11px] flex-shrink-0 cursor-pointer transition-colors
         ${isActive ? "bg-list-active-bg text-foreground" : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"}
         ${isEnded ? "opacity-60" : ""}`}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       title={session.stepName}
     >
       <StatusDot status={session.status} />

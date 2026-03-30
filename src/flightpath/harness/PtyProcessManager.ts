@@ -49,7 +49,6 @@ function shellDisplayName(shellPath: string): string {
 /** Lazy-load node-pty at spawn time; returns null if native binary is unavailable. */
 function loadNodePty(): NodePtyModule | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("node-pty") as NodePtyModule;
   } catch {
     return null;

@@ -210,6 +210,8 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
   return (
     <div
       ref={containerRef}
+      role="group"
+      aria-label={typeof mainLabel === "string" ? mainLabel : undefined}
       className={`relative inline-flex rounded border border-btn-border ${className}`}
       onKeyDown={handleKeyDown}
     >
@@ -261,39 +263,39 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         role="listbox"
         className={`absolute top-full left-0 mt-1 min-w-[200px] bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-50 overflow-hidden transition-all duration-150 origin-top ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}
       >
-          {options.map((option, index) =>
-            option.divider ? (
-              <div
-                key={`divider-${index}`}
-                className="border-t border-dropdown-border my-1"
-              />
-            ) : (
-              <button
-                key={option.value}
-                type="button"
-                role="option"
-                aria-selected={focusedIndex === index}
-                onClick={() => handleOptionClick(option)}
-                disabled={option.disabled}
-                className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2 ${
-                  option.disabled
-                    ? "opacity-50 cursor-not-allowed text-disabled-fg"
-                    : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
-                } ${focusedIndex === index ? "bg-dropdown-selected-bg text-list-active-fg" : ""}`}
-              >
-                {option.icon && (
-                  <span className="flex-shrink-0">{option.icon}</span>
-                )}
-                <span className="flex-1">{option.label}</span>
-                {option.shortcut && (
-                  <kbd className="text-xs text-description-fg bg-keybinding-bg px-1.5 py-0.5 rounded font-mono">
-                    {option.shortcut}
-                  </kbd>
-                )}
-              </button>
-            )
-          )}
-        </div>
+        {options.map((option, index) =>
+          option.divider ? (
+            <div
+              key={`divider-${index}`}
+              className="border-t border-dropdown-border my-1"
+            />
+          ) : (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={focusedIndex === index}
+              onClick={() => handleOptionClick(option)}
+              disabled={option.disabled}
+              className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2 ${
+                option.disabled
+                  ? "opacity-50 cursor-not-allowed text-disabled-fg"
+                  : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
+              } ${focusedIndex === index ? "bg-dropdown-selected-bg text-list-active-fg" : ""}`}
+            >
+              {option.icon && (
+                <span className="flex-shrink-0">{option.icon}</span>
+              )}
+              <span className="flex-1">{option.label}</span>
+              {option.shortcut && (
+                <kbd className="text-xs text-description-fg bg-keybinding-bg px-1.5 py-0.5 rounded font-mono">
+                  {option.shortcut}
+                </kbd>
+              )}
+            </button>
+          )
+        )}
+      </div>
     </div>
   );
 };

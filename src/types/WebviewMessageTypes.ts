@@ -896,6 +896,10 @@ export interface RegistryMcpEntry {
    * Shown in the UI as a reference; not used for import.
    */
   claudeCodeCopyText?: string;
+  /** Registry-assigned popularity score (higher = more popular) */
+  popularityScore?: number;
+  /** Registry-assigned trending score (higher = more trending) */
+  trendingScore?: number;
 }
 
 export interface RequestMcpLocalServersMessage {
@@ -911,6 +915,7 @@ export interface McpLocalServersResultMessage {
 export interface RequestMcpRegistryMessage {
   type: typeof MESSAGE_TYPES.REQUEST_MCP_REGISTRY;
   query?: string;
+  cursor?: string;
 }
 
 export interface McpRegistryResultMessage {
@@ -918,6 +923,7 @@ export interface McpRegistryResultMessage {
   servers: RegistryMcpEntry[];
   error?: string;
   query?: string;
+  nextCursor?: string;
 }
 
 export interface RequestMcpWorkspaceServersMessage {

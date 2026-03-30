@@ -246,16 +246,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">
             {selectedTemplateId && selectedTemplateId !== "__create_new__" && selectedTemplateId !== defaultTemplateId ? (
-              <a
+              <button
+                type="button"
                 onClick={handleSetDefault}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => e.key === "Enter" && handleSetDefault()}
-                className="text-sm font-medium text-link-fg hover:underline cursor-pointer transition-colors"
+                className="text-sm font-medium text-link-fg hover:underline cursor-pointer transition-colors bg-transparent border-0 p-0 font-inherit"
                 title="Set this as the default template"
               >
                 Set as Default
-              </a>
+              </button>
             ) : selectedTemplateId === defaultTemplateId && selectedTemplateId !== "__create_new__" ? (
               <span className="text-sm text-description-fg">Default template</span>
             ) : null}
@@ -287,7 +285,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         </div>
       }
     >
-      <div className="space-y-4" onKeyDown={handleKeyDown}>
+      <div role="form" className="space-y-4" onKeyDown={handleKeyDown}>
         {/* Template Selection */}
         <div className="form-group">
           <label
@@ -322,16 +320,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
               </optgroup>
             )}
           </select>
-          <a
+          <button
+            type="button"
             onClick={handleCreateNewTemplate}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => e.key === "Enter" && handleCreateNewTemplate()}
-            className="mt-1.5 group flex items-center gap-1 text-sm text-link-fg cursor-pointer w-fit"
+            className="mt-1.5 group flex items-center gap-1 text-sm text-link-fg cursor-pointer w-fit bg-transparent border-0 p-0 font-inherit"
           >
             <i className="codicon codicon-add" />
             <span className="group-hover:underline">New template...</span>
-          </a>
+          </button>
         </div>
 
         {/* Template Description */}

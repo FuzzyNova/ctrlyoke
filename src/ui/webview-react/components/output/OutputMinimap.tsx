@@ -317,6 +317,10 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
 
       {/* Draggable viewport thumb (replaces native scrollbar) */}
       <div
+        role="slider"
+        tabIndex={0}
+        aria-label="Scroll viewport"
+        aria-valuenow={Math.round(viewportPct.top * 100)}
         className="absolute left-0 right-0 rounded-sm"
         style={{
           top: `${viewportPct.top}%`,
@@ -332,6 +336,20 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
         onMouseDown={handleThumbMouseDown}
         onMouseEnter={() => setIsThumbHovered(true)}
         onMouseLeave={() => setIsThumbHovered(false)}
+        onKeyDown={(e) => {
+          // Allow keyboard scrolling: ArrowUp/ArrowDown move the viewport
+          if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            e.preventDefault();
+            const el = scrollContainerRef.current;
+            if (!el) return;
+            const maxScroll = el.scrollHeight - el.clientHeight;
+            const delta = e.key === "ArrowUp" ? -0.05 : 0.05;
+            el.scrollTop = Math.max(
+              0,
+              Math.min(maxScroll, el.scrollTop + delta * el.scrollHeight)
+            );
+          }
+        }}
       />
 
       {/* Step markers */}
@@ -362,6 +380,8 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
           // continuously — moving from dot to popup never leaves the container.
           <div
             key={step.key}
+            role="button"
+            tabIndex={0}
             className="absolute right-0 flex flex-row items-center z-20"
             style={{
               top: `clamp(3px, ${topPct}%, calc(100% - 3px))`,
@@ -369,6 +389,16 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
             }}
             onMouseEnter={() => setHoveredKey(step.key)}
             onMouseLeave={() => setHoveredKey(null)}
+            onClick={() => setHoveredKey(step.key)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setHoveredKey(step.key);
+              } else if (e.key === "Escape") {
+                setHoveredKey(null);
+              }
+            }}
+            aria-label={`Step ${step.label}: ${hasUndo ? "undo available. " : ""}${hasRedo ? "redo available." : ""}`}
           >
             {/* Speech-bubble popup — visible on hover */}
             {isHovered && (

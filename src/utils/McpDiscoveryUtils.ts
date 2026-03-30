@@ -10,7 +10,10 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
-import type { LocalMcpServerEntry, RegistryMcpEntry } from "../types/WebviewMessageTypes";
+import type {
+  LocalMcpServerEntry,
+  RegistryMcpEntry,
+} from "../types/WebviewMessageTypes";
 import { Log } from "./Log";
 
 // ============================================================================
@@ -25,10 +28,18 @@ import { Log } from "./Log";
 function getVscodeUserMcpConfigPath(): string {
   const home = os.homedir();
   if (process.platform === "win32") {
-    const appData = process.env.APPDATA ?? path.join(home, "AppData", "Roaming");
+    const appData =
+      process.env.APPDATA ?? path.join(home, "AppData", "Roaming");
     return path.join(appData, "Code", "User", "mcp.json");
   } else if (process.platform === "darwin") {
-    return path.join(home, "Library", "Application Support", "Code", "User", "mcp.json");
+    return path.join(
+      home,
+      "Library",
+      "Application Support",
+      "Code",
+      "User",
+      "mcp.json"
+    );
   } else {
     return path.join(home, ".config", "Code", "User", "mcp.json");
   }
@@ -120,8 +131,17 @@ export async function discoverLocalMcpServers(
   const vscodeWs = await readJsonFile(vscodeMcpPath);
   if (vscodeWs && typeof vscodeWs === "object") {
     const data = vscodeWs as Record<string, unknown>;
-    if (data.servers && typeof data.servers === "object" && !Array.isArray(data.servers)) {
-      addEntries(normalizeServerMap(data.servers as Record<string, unknown>, "vscode-workspace"));
+    if (
+      data.servers &&
+      typeof data.servers === "object" &&
+      !Array.isArray(data.servers)
+    ) {
+      addEntries(
+        normalizeServerMap(
+          data.servers as Record<string, unknown>,
+          "vscode-workspace"
+        )
+      );
     }
   }
 
@@ -130,8 +150,17 @@ export async function discoverLocalMcpServers(
   const claudeWs = await readJsonFile(claudeMcpPath);
   if (claudeWs && typeof claudeWs === "object") {
     const data = claudeWs as Record<string, unknown>;
-    if (data.mcpServers && typeof data.mcpServers === "object" && !Array.isArray(data.mcpServers)) {
-      addEntries(normalizeServerMap(data.mcpServers as Record<string, unknown>, "claude-workspace"));
+    if (
+      data.mcpServers &&
+      typeof data.mcpServers === "object" &&
+      !Array.isArray(data.mcpServers)
+    ) {
+      addEntries(
+        normalizeServerMap(
+          data.mcpServers as Record<string, unknown>,
+          "claude-workspace"
+        )
+      );
     }
   }
 
@@ -140,8 +169,17 @@ export async function discoverLocalMcpServers(
   const vscodeUser = await readJsonFile(vscodeUserPath);
   if (vscodeUser && typeof vscodeUser === "object") {
     const data = vscodeUser as Record<string, unknown>;
-    if (data.servers && typeof data.servers === "object" && !Array.isArray(data.servers)) {
-      addEntries(normalizeServerMap(data.servers as Record<string, unknown>, "vscode-user"));
+    if (
+      data.servers &&
+      typeof data.servers === "object" &&
+      !Array.isArray(data.servers)
+    ) {
+      addEntries(
+        normalizeServerMap(
+          data.servers as Record<string, unknown>,
+          "vscode-user"
+        )
+      );
     }
   }
 
@@ -150,8 +188,17 @@ export async function discoverLocalMcpServers(
   const claudeUser = await readJsonFile(claudeUserPath);
   if (claudeUser && typeof claudeUser === "object") {
     const data = claudeUser as Record<string, unknown>;
-    if (data.mcpServers && typeof data.mcpServers === "object" && !Array.isArray(data.mcpServers)) {
-      addEntries(normalizeServerMap(data.mcpServers as Record<string, unknown>, "claude-user"));
+    if (
+      data.mcpServers &&
+      typeof data.mcpServers === "object" &&
+      !Array.isArray(data.mcpServers)
+    ) {
+      addEntries(
+        normalizeServerMap(
+          data.mcpServers as Record<string, unknown>,
+          "claude-user"
+        )
+      );
     }
   }
 
@@ -180,18 +227,18 @@ interface AnthropicRegistryResponse {
  */
 interface AnthropicRegistryItem {
   server?: {
-    name?: string;    // qualified name e.g. "com.canva.mcp/canva"
-    title?: string;   // display name e.g. "Canva"
+    name?: string; // qualified name e.g. "com.canva.mcp/canva"
+    title?: string; // display name e.g. "Canva"
     description?: string;
     packages?: Array<{
-      registryType?: string;   // "npm", "pip", "docker"
-      identifier?: string;     // npm package name
-      runtimeHint?: string;    // "npx", "uvx", etc.
+      registryType?: string; // "npm", "pip", "docker"
+      identifier?: string; // npm package name
+      runtimeHint?: string; // "npx", "uvx", etc.
       runtimeArguments?: string[];
       environmentVariables?: Array<{ name?: string; description?: string }>;
     }>;
     remotes?: Array<{
-      type?: string;  // "streamable-http", "sse"
+      type?: string; // "streamable-http", "sse"
       url?: string;
     }>;
   };
@@ -205,6 +252,8 @@ interface AnthropicRegistryItem {
       toolNames?: string[];
       worksWith?: string[];
       isAuthless?: boolean;
+      popularityScore?: number;
+      trendingScore?: number;
     };
   };
 }
@@ -216,21 +265,31 @@ const ANTHROPIC_REGISTRY_URL =
  * Fetches MCP servers from the Anthropic public registry.
  * No authentication required.
  *
- * IMPORTANT: The Anthropic registry does not support server-side search (q= and
- * search= both return empty results as of 2026-03-29). We fetch the full first
- * page of curated commercial servers. The caller is responsible for client-side
- * filtering when a query is provided.
+ * The registry returns results ordered by popularity (descending rank).
+ * Server-side sorting is not supported — the `sort` param has no effect.
  *
- * @param limit Maximum number of servers to return from the first page (default 100)
+ * Server-side search is supported via the `search` query parameter.
+ * Client-side filtering is still used in the webview for the filter-as-you-type
+ * UX, but server-side search could be leveraged for targeted queries.
+ *
+ * Pagination is cursor-based: pass the `nextCursor` from a previous response
+ * to fetch the next page.
+ *
+ * @param options.limit Maximum results per page (default 100, API max 100)
+ * @param options.cursor Cursor from a previous response's `nextCursor`
+ * @param options.search Server-side search query (optional)
  */
 export async function fetchAnthropicRegistry(
-  limit = 100
-): Promise<RegistryMcpEntry[]> {
+  options: { limit?: number; cursor?: string; search?: string } = {}
+): Promise<{ servers: RegistryMcpEntry[]; nextCursor?: string }> {
+  const { limit = 100, cursor, search } = options;
   const params = new URLSearchParams({
     version: "latest",
     visibility: "commercial",
     limit: String(limit),
   });
+  if (cursor) params.set("cursor", cursor);
+  if (search) params.set("search", search);
 
   const url = `${ANTHROPIC_REGISTRY_URL}?${params}`;
 
@@ -241,13 +300,15 @@ export async function fetchAnthropicRegistry(
   });
 
   if (!response.ok) {
-    throw new Error(`Anthropic registry returned ${response.status}: ${response.statusText}`);
+    throw new Error(
+      `Anthropic registry returned ${response.status}: ${response.statusText}`
+    );
   }
 
   const data = (await response.json()) as AnthropicRegistryResponse;
   const items = data.servers ?? [];
 
-  return items.flatMap((item): RegistryMcpEntry[] => {
+  const entries = items.flatMap((item): RegistryMcpEntry[] => {
     const s = item.server;
     const meta = item._meta?.["com.anthropic.api/mcp-registry"];
     if (!s) return [];
@@ -297,8 +358,17 @@ export async function fetchAnthropicRegistry(
       entry.claudeCodeCopyText = meta.claudeCodeCopyText;
     }
 
+    if (typeof meta?.popularityScore === "number") {
+      entry.popularityScore = meta.popularityScore;
+    }
+    if (typeof meta?.trendingScore === "number") {
+      entry.trendingScore = meta.trendingScore;
+    }
+
     return [entry];
   });
+
+  return { servers: entries, nextCursor: data.metadata?.nextCursor };
 }
 
 /**
@@ -321,16 +391,18 @@ export async function safeDiscoverLocalMcpServers(
 /**
  * Safely fetches the Anthropic registry and returns an empty result on error.
  *
- * Note: client-side filtering (if any) is the caller's responsibility. The registry
- * does not support server-side search.
+ * Supports cursor-based pagination and server-side search.
  */
-export async function safeFetchAnthropicRegistry(): Promise<{
+export async function safeFetchAnthropicRegistry(
+  options: { cursor?: string; search?: string } = {}
+): Promise<{
   servers: RegistryMcpEntry[];
+  nextCursor?: string;
   error?: string;
 }> {
   try {
-    const servers = await fetchAnthropicRegistry();
-    return { servers };
+    const result = await fetchAnthropicRegistry(options);
+    return result;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     Log.warn("McpDiscovery: registry fetch failed:", msg);

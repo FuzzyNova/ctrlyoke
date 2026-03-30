@@ -238,8 +238,7 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.OPEN_GIT_CHANGE, async (message) => {
-      const workspaceRoot =
-        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!workspaceRoot) {
         return;
       }
@@ -276,14 +275,14 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.REQUEST_MCP_REGISTRY, async (message) => {
-      // The Anthropic registry does not support server-side search.
-      // We fetch all curated servers and echo the query back so the
-      // webview can filter results client-side.
-      const result = await safeFetchAnthropicRegistry();
+      const result = await safeFetchAnthropicRegistry({
+        cursor: message.cursor,
+      });
       this.postMessage({
         type: MESSAGE_TYPES.MCP_REGISTRY_RESULT,
         servers: result.servers,
         query: message.query,
+        nextCursor: result.nextCursor,
         ...(result.error ? { error: result.error } : {}),
       });
     });
@@ -531,11 +530,15 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES, async (message) => {
-      await this.handleUndoWorkflowChanges(message as UndoWorkflowChangesMessage);
+      await this.handleUndoWorkflowChanges(
+        message as UndoWorkflowChangesMessage
+      );
     });
 
     table.set(MESSAGE_TYPES.REDO_WORKFLOW_CHANGES, async (message) => {
-      await this.handleRedoWorkflowChanges(message as RedoWorkflowChangesMessage);
+      await this.handleRedoWorkflowChanges(
+        message as RedoWorkflowChangesMessage
+      );
     });
 
     // ── Terminal I/O ─────────────────────────────────────────────────────
@@ -549,7 +552,11 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.TERMINAL_RESIZE, async (msg) => {
       const ptyManager = getPtyProcessManager();
       if (ptyManager && msg.sessionId && msg.cols && msg.rows) {
-        ptyManager.resizeSession(msg.sessionId as string, msg.cols as number, msg.rows as number);
+        ptyManager.resizeSession(
+          msg.sessionId as string,
+          msg.cols as number,
+          msg.rows as number
+        );
       }
     });
 
@@ -563,13 +570,30 @@ export class WebviewMessageRouter {
         workflowId,
         cwd,
         onData: (s, chunk) => {
-          postMsg({ type: MESSAGE_TYPES.TERMINAL_OUTPUT, workflowId: s.workflowId, sessionId: s.id, data: chunk });
+          postMsg({
+            type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+            workflowId: s.workflowId,
+            sessionId: s.id,
+            data: chunk,
+          });
         },
         onExit: (s, exitCode) => {
-          postMsg({ type: MESSAGE_TYPES.TERMINAL_ENDED, workflowId: s.workflowId, sessionId: s.id, kind: s.kind, exitCode });
+          postMsg({
+            type: MESSAGE_TYPES.TERMINAL_ENDED,
+            workflowId: s.workflowId,
+            sessionId: s.id,
+            kind: s.kind,
+            exitCode,
+          });
         },
       });
-      postMsg({ type: MESSAGE_TYPES.TERMINAL_STARTED, workflowId, sessionId: session.id, stepName: session.stepName, kind: "shell" });
+      postMsg({
+        type: MESSAGE_TYPES.TERMINAL_STARTED,
+        workflowId,
+        sessionId: session.id,
+        stepName: session.stepName,
+        kind: "shell",
+      });
     });
 
     table.set(MESSAGE_TYPES.TERMINAL_RESTART_SHELL, async (msg) => {
@@ -577,16 +601,36 @@ export class WebviewMessageRouter {
       const postMsg = this.postMessage;
       if (!ptyManager || !msg.sessionId || !msg.workflowId) return;
       const workflowId = msg.workflowId as string;
-      const newSession = ptyManager.restartShellSession(msg.sessionId as string, {
-        onData: (s, chunk) => {
-          postMsg({ type: MESSAGE_TYPES.TERMINAL_OUTPUT, workflowId: s.workflowId, sessionId: s.id, data: chunk });
-        },
-        onExit: (s, exitCode) => {
-          postMsg({ type: MESSAGE_TYPES.TERMINAL_ENDED, workflowId: s.workflowId, sessionId: s.id, kind: s.kind, exitCode });
-        },
-      });
+      const newSession = ptyManager.restartShellSession(
+        msg.sessionId as string,
+        {
+          onData: (s, chunk) => {
+            postMsg({
+              type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+              workflowId: s.workflowId,
+              sessionId: s.id,
+              data: chunk,
+            });
+          },
+          onExit: (s, exitCode) => {
+            postMsg({
+              type: MESSAGE_TYPES.TERMINAL_ENDED,
+              workflowId: s.workflowId,
+              sessionId: s.id,
+              kind: s.kind,
+              exitCode,
+            });
+          },
+        }
+      );
       if (newSession) {
-        postMsg({ type: MESSAGE_TYPES.TERMINAL_STARTED, workflowId, sessionId: newSession.id, stepName: newSession.stepName, kind: "shell" });
+        postMsg({
+          type: MESSAGE_TYPES.TERMINAL_STARTED,
+          workflowId,
+          sessionId: newSession.id,
+          stepName: newSession.stepName,
+          kind: "shell",
+        });
       }
     });
 
@@ -1054,7 +1098,9 @@ export class WebviewMessageRouter {
             target.kind === FINAL_PROMPT_PHASES.QUEUE
               ? history.promptOutputs[target.stepIndex]
               : history.finalPromptOutputs?.[target.loopIndex]
-          ) as { undoRecord?: import("../types/OutputHistoryTypes").UndoRecord } | undefined;
+          ) as
+            | { undoRecord?: import("../types/OutputHistoryTypes").UndoRecord }
+            | undefined;
           if (stepOutput?.undoRecord) {
             this.postMessage({
               type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
@@ -1103,7 +1149,10 @@ export class WebviewMessageRouter {
     for (const entry of entries) {
       if (entry.files.length === 0) continue;
       try {
-        const result = await snapshotService.undoFiles(entry.files, workspacePath);
+        const result = await snapshotService.undoFiles(
+          entry.files,
+          workspacePath
+        );
         totalRestored.push(...result.restoredFiles);
         totalFailed.push(...result.failedFiles);
 
@@ -1115,9 +1164,14 @@ export class WebviewMessageRouter {
           };
           const historyFilePath = await this.resolveHistoryFilePath();
           if (historyFilePath) {
-            const outputHistoryManager = this.getOrchestrator()?.getOutputHistoryManager();
+            const outputHistoryManager =
+              this.getOrchestrator()?.getOutputHistoryManager();
             if (outputHistoryManager) {
-              await outputHistoryManager.saveUndoRecord(historyFilePath, entry.target, undoRecord);
+              await outputHistoryManager.saveUndoRecord(
+                historyFilePath,
+                entry.target,
+                undoRecord
+              );
               this.postMessage({
                 type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
                 target: entry.target,
@@ -1128,11 +1182,16 @@ export class WebviewMessageRouter {
         }
       } catch (error) {
         const errMsg = getErrorMessage(error);
-        totalFailed.push(...entry.files.map((f) => ({ path: f.path, error: errMsg })));
+        totalFailed.push(
+          ...entry.files.map((f) => ({ path: f.path, error: errMsg }))
+        );
       }
     }
 
-    const firstTarget = entries[0]?.target ?? { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 };
+    const firstTarget = entries[0]?.target ?? {
+      kind: FINAL_PROMPT_PHASES.QUEUE,
+      stepIndex: 0,
+    };
     this.postMessage({
       type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
       data: {
@@ -1169,17 +1228,26 @@ export class WebviewMessageRouter {
     for (const entry of entries) {
       if (entry.files.length === 0) continue;
       try {
-        const result = await snapshotService.undoFiles(entry.files, workspacePath);
+        const result = await snapshotService.undoFiles(
+          entry.files,
+          workspacePath
+        );
         totalRestored.push(...result.restoredFiles);
         totalFailed.push(...result.failedFiles);
 
         if (result.restoredFiles.length > 0) {
           const redoneAt = Date.now();
           const historyFilePath = await this.resolveHistoryFilePath();
-          const outputHistoryManager = this.getOrchestrator()?.getOutputHistoryManager();
+          const outputHistoryManager =
+            this.getOrchestrator()?.getOutputHistoryManager();
           if (historyFilePath && outputHistoryManager) {
-            await outputHistoryManager.markUndoRecordRedone(historyFilePath, entry.target, redoneAt);
-            const history = await outputHistoryManager.loadHistory(historyFilePath);
+            await outputHistoryManager.markUndoRecordRedone(
+              historyFilePath,
+              entry.target,
+              redoneAt
+            );
+            const history =
+              await outputHistoryManager.loadHistory(historyFilePath);
             const stepOutput = (
               entry.target.kind === FINAL_PROMPT_PHASES.QUEUE
                 ? history.promptOutputs[entry.target.stepIndex]
@@ -1196,11 +1264,16 @@ export class WebviewMessageRouter {
         }
       } catch (error) {
         const errMsg = getErrorMessage(error);
-        totalFailed.push(...entry.files.map((f) => ({ path: f.path, error: errMsg })));
+        totalFailed.push(
+          ...entry.files.map((f) => ({ path: f.path, error: errMsg }))
+        );
       }
     }
 
-    const firstTarget = entries[0]?.target ?? { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 };
+    const firstTarget = entries[0]?.target ?? {
+      kind: FINAL_PROMPT_PHASES.QUEUE,
+      stepIndex: 0,
+    };
     this.postMessage({
       type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
       data: {
@@ -1275,7 +1348,9 @@ export class WebviewMessageRouter {
     );
   }
 
-  private async loadMcpWorkspaceServers(): Promise<import("../types/FlightPathTypes").McpServerConfig[]> {
+  private async loadMcpWorkspaceServers(): Promise<
+    import("../types/FlightPathTypes").McpServerConfig[]
+  > {
     const filePath = this.getMcpWorkspaceServersPath();
     if (!filePath) return [];
     try {
@@ -1294,9 +1369,15 @@ export class WebviewMessageRouter {
     if (!filePath) return;
     try {
       await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-      await fs.promises.writeFile(filePath, JSON.stringify(servers, null, 2), "utf-8");
+      await fs.promises.writeFile(
+        filePath,
+        JSON.stringify(servers, null, 2),
+        "utf-8"
+      );
     } catch (err) {
-      Log.error(`Failed to save workspace MCP servers: ${getErrorMessage(err)}`);
+      Log.error(
+        `Failed to save workspace MCP servers: ${getErrorMessage(err)}`
+      );
     }
   }
 }

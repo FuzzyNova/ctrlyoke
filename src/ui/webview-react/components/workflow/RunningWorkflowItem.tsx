@@ -112,8 +112,10 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         </span>
       ) : (isRunning || isPaused) && (
         <div
+          role="group"
           className="flex items-center gap-1 flex-shrink-0"
           onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
         >
           {isRunning ? (
             <button

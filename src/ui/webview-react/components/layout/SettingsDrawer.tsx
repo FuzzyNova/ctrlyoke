@@ -70,18 +70,16 @@ const SetAsDefaultButton: React.FC<{
   if (!show && state === BUTTON_STATE.IDLE) return null;
 
   return (
-    <a
+    <button
+      type="button"
       onClick={handleClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && handleClick()}
       className={`text-[10px] font-semibold uppercase text-link-fg hover:underline cursor-pointer transition-colors ${
         state === BUTTON_STATE.SUCCESS ? "text-green-500" : ""
       } ${state === BUTTON_STATE.FADING ? "opacity-0" : ""}`}
       title="Set this as the default for new workflows"
     >
       {state === BUTTON_STATE.SUCCESS ? "✓ Default" : "Set as Default"}
-    </a>
+    </button>
   );
 };
 
@@ -487,9 +485,13 @@ export const SettingsPanel: React.FC<{
   }, [vscode, setMcpLocalServersLoading]);
 
   const handleSearchRegistry = useCallback(
-    (query: string) => {
+    (query: string, cursor?: string) => {
       setMcpRegistryLoading(true);
-      vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_MCP_REGISTRY, query });
+      vscode.postMessage({
+        type: MESSAGE_TYPES.REQUEST_MCP_REGISTRY,
+        query,
+        cursor,
+      });
     },
     [vscode, setMcpRegistryLoading]
   );
@@ -502,7 +504,10 @@ export const SettingsPanel: React.FC<{
   const handleWorkspaceServersChange = useCallback(
     (servers: import("@root/types/FlightPathTypes").McpServerConfig[]) => {
       setMcpWorkspaceServers(servers);
-      vscode.postMessage({ type: MESSAGE_TYPES.SAVE_MCP_WORKSPACE_SERVERS, servers });
+      vscode.postMessage({
+        type: MESSAGE_TYPES.SAVE_MCP_WORKSPACE_SERVERS,
+        servers,
+      });
     },
     [vscode, setMcpWorkspaceServers]
   );

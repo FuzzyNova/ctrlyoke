@@ -97,6 +97,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
   return (
     <div
       ref={containerRef}
+      role="combobox"
       className="relative inline-flex items-center"
       onKeyDown={handleKeyDown}
     >

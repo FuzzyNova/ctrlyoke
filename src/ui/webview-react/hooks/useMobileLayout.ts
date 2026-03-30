@@ -229,7 +229,6 @@ export function useMobileLayout({
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     uiLayoutReady,
     isMobile,

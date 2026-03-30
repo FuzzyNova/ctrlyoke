@@ -1,0 +1,445 @@
+{
+  "servers": [
+    {
+      "server": {
+        "name": "com.canva.mcp/canva",
+        "version": "1.0.0",
+        "description": "Browse, summarize, autofill, and even generate new Canva designs directly from Claude. Make Canva a native part of your AI workflow—an AI-powered design agent that helps you create polished visuals faster, with less friction.",
+        "title": "Canva",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.canva.com/mcp"
+          }
+        ]
+      },
+      "_meta": {
+        "com.anthropic.api/mcp-registry": {
+          "uuid": "eb9240f2-e1c1-43c1-828f-0fda40c22e4c",
+          "type": "remote",
+          "toolNames": [
+            "search-designs",
+            "get-design",
+            "get-design-pages",
+            "get-design-content",
+            "search",
+            "fetch",
+            "import-design-from-url",
+            "get-design-import-from-url-status",
+            "export-design",
+            "get-export-formats",
+            "get-design-export-status",
+            "create-folder",
+            "move-item-to-folder",
+            "list-folder-items",
+            "add-comment-thread-to-design",
+            "generate-design",
+            "get-design-generation-job"
+          ],
+          "promptNames": [],
+          "isAuthless": false,
+          "displayName": "Canva",
+          "oneLiner": "Search, create, autofill, and export Canva designs",
+          "iconUrl": "https://mcp.canva.com/mcp",
+          "documentation": "https://www.canva.dev/docs/connect/canva-mcp-server-setup/",
+          "support": "https://www.canva.com/en_au/help/",
+          "privacyPolicy": "https://www.canva.com/policies/privacy-policy/",
+          "url": "https://mcp.canva.com/mcp",
+          "author": {
+            "name": "Canva",
+            "url": "https://canva.com"
+          },
+          "slug": "canva",
+          "directoryUrl": "http://claude.ai/directory/eb9240f2-e1c1-43c1-828f-0fda40c22e4c",
+          "claudeCodeCopyText": "claude mcp add --transport http canva https://mcp.canva.com/mcp",
+          "permissions": "Read and write",
+          "useCases": ["design"],
+          "worksWith": ["claude", "claude-api", "claude-code"],
+          "publishedOn": "Fri Jan 16 2026 19:33:48 GMT+0000 (Coordinated Universal Time)",
+          "createdOn": "Thu Aug 28 2025 14:02:54 GMT+0000 (Coordinated Universal Time)",
+          "updatedOn": "Fri Jan 16 2026 19:33:28 GMT+0000 (Coordinated Universal Time)",
+          "logo": "canva",
+          "backgroundPattern": "Line 1",
+          "heroVideoId": "wXC2u36w2Rc",
+          "heroVideoPreviewLink": "https://cdn.sanity.io/files/4zrzovbb/website/4925fcd732bab964631e2678e413dfa2a549a2a9.mp4",
+          "serverLabel": "mcp.canva.com",
+          "itemId": "68b0618e3f55cc591b6b22a2",
+          "collectionId": "68b05e2de975b4de7dd02d9d",
+          "localeId": "68a44d4040f98a4adf2207b5",
+          "htmlContent": "<p id=\"\">Browse, summarize, autofill, and even generate new Canva designs directly from Claude. Make Canva a native part of your workflow—helping you create polished visuals faster, with less friction.</p><p id=\"\">You can use the Canva connector to: <br>‍<br>Browse, Search &amp; Summarize: <br>\"Summarize my Q2 product strategy doc\"</p><p id=\"\">Create New Designs from Conversation:<br>\"Generate a pitch deck for our AI launch with 5 slides and a bold tone\"</p><p id=\"\">Autofill Charts:<br>\"Add a chart showing monthly signups in NZ for Q1\"</p><p id=\"\">Autofill Brand Templates:<br>\"Populate our branded template with content for a product launch presentation, 8 slides, professional tone\"</p><p id=\"\">Import Files via Link:<br>\"Import this PDF [insert URL] into Canva\"</p><p id=\"\">Resize or Export:<br>\"Resize my Instagram post for LinkedIn and export as a PNG\"</p>",
+          "imageUrls": [
+            {
+              "prompt": "Generate a sales report presentation with outline ",
+              "imageUrl": "https://storage.googleapis.com/media-assets-299d7136-cb52-d546-ee02-34bc1307c35f/Connectors%20Directory/Carousel%20Prompt%20Images/App%20Canva%20Card%201.png"
+            },
+            {
+              "prompt": "Create a social post for the upcoming Big Chopper Burger. Use the Chopify brand kit",
+              "imageUrl": "https://storage.googleapis.com/media-assets-299d7136-cb52-d546-ee02-34bc1307c35f/Connectors%20Directory/Carousel%20Prompt%20Images/App%20Canva%20Card%202.png"
+            },
+            {
+              "prompt": "Create a sales report for the last quarter to share our wins internally",
+              "imageUrl": "https://storage.googleapis.com/media-assets-299d7136-cb52-d546-ee02-34bc1307c35f/Connectors%20Directory/Carousel%20Prompt%20Images/App%20Canva%20Card%203.png"
+            }
+          ],
+          "hasMcpApp": true,
+          "source": "auto-sync",
+          "visibility": ["commercial"],
+          "added_at": "2025-11-12",
+          "rank": 2,
+          "popularityScore": 20069,
+          "scoreVersion": "v1",
+          "trendingScore": 82102,
+          "sortOrder": 1
+        },
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+        "name": "com.notion/mcp",
+        "description": "Notion MCP helps you plug tools into your Notion workspace, allowing you to create, edit, search and organize content directly from Claude. Get contextual and relevant assistance from Claude, while keeping knowledge organized in Notion.",
+        "repository": {},
+        "version": "1.0.1",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.notion.com/mcp"
+          }
+        ],
+        "title": "Notion"
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "publishedAt": "2025-09-11T22:25:50.737872Z",
+          "updatedAt": "2025-09-11T22:25:50.737872Z",
+          "isLatest": true
+        },
+        "com.anthropic.api/mcp-registry": {
+          "uuid": "69f3a300-cc60-48c4-b237-dfac56530dbf",
+          "type": "remote",
+          "toolNames": [
+            "search",
+            "fetch",
+            "create-pages",
+            "update-page",
+            "move-pages",
+            "duplicate-page",
+            "create-database",
+            "update-database",
+            "create-comment",
+            "get-comments",
+            "get-users",
+            "get-self",
+            "get-user"
+          ],
+          "promptNames": [],
+          "isAuthless": false,
+          "displayName": "Notion",
+          "oneLiner": "Connect your Notion workspace to search, update, and power workflows across tools",
+          "iconUrl": "https://www.notion.so/images/notion-logo-block-main.svg",
+          "documentation": "https://developers.notion.com/docs/mcp",
+          "support": "mailto:developers@makenotion.com",
+          "privacyPolicy": "https://www.notion.so/notion/Privacy-Policy-3468d120cf614d4c9014c09f6adc9091",
+          "url": "https://mcp.notion.com/mcp",
+          "author": {
+            "name": "Notion",
+            "url": "https://notion.com"
+          },
+          "slug": "notion",
+          "directoryUrl": "http://claude.ai/directory/69f3a300-cc60-48c4-b237-dfac56530dbf",
+          "claudeCodeCopyText": "claude mcp add --transport http notion https://mcp.notion.com/mcp",
+          "permissions": "Read and write",
+          "useCases": ["productivity"],
+          "worksWith": ["claude", "claude-api", "claude-code"],
+          "publishedOn": "Fri Jan 16 2026 19:33:48 GMT+0000 (Coordinated Universal Time)",
+          "createdOn": "Thu Aug 28 2025 14:02:56 GMT+0000 (Coordinated Universal Time)",
+          "updatedOn": "Fri Jan 16 2026 19:32:31 GMT+0000 (Coordinated Universal Time)",
+          "logo": "notion",
+          "backgroundPattern": "Line 1",
+          "heroVideoId": "xBV60h9_lbw",
+          "heroVideoPreviewLink": "https://cdn.sanity.io/files/4zrzovbb/website/5a520c2349640aa2e64105cfa1398a0da575ddd6.mp4",
+          "serverLabel": "mcp.notion.com",
+          "itemId": "68b0619053b61cf2e850aa90",
+          "collectionId": "68b05e2de975b4de7dd02d9d",
+          "localeId": "68a44d4040f98a4adf2207b5",
+          "htmlContent": "<p id=\"\">Create, edit, search and organize Notion content directly from Claude. Get contextual and relevant assistance from Claude, while keeping knowledge organized in Notion.</p><p id=\"\">You can use the Notion connector to:<br><br>Create pages with structured content:<br>\"Create a meeting notes page for today's standup with action items\"</p><p id=\"\">Check workspace connections:<br>\"Which Notion workspace am I currently connected to?\"</p><p id=\"\">Search across pages:<br>\"Find all project pages that mention 'ready for dev'\"</p><p id=\"\">Update page properties:<br>\"Change the status of this task from 'In Progress' to 'Complete'\"<br><br>You also combine the Notion Connector with <a href=\"https://www.claude.com/blog/skills\">Skills</a> to help with:<br>‍<br>• Meeting intelligence: Prepare meeting materials by gathering context from Notion, enriching with Claude research, and creating both an internal pre-read and external agenda saved to Notion.<br> <br>• Research &amp; Documentation: Search across your Notion workspace, synthesize findings from multiple pages, and create a comprehensive research documentation saved as new Notion pages. <br>‍<br>• Knowledge Capture: Turn discussions into durable knowledge in Notion. Capture insights and decisions from chat, format them clearly, and file them to the right wiki or database with smart linking.<br>‍<br>• Spec to Implementation: Turn product or tech specs into concrete Notion tasks that Claude Code can implement.<br><br>See <a id=\"\" href=\"https://notiondevs.notion.site/notion-skills-for-claude\">here</a> for details on how to use Skills with Notion's connector. </p>",
+          "source": "auto-sync",
+          "visibility": ["commercial"],
+          "added_at": "2025-11-12",
+          "rank": 3,
+          "popularityScore": 19989,
+          "scoreVersion": "v1",
+          "trendingScore": 74141,
+          "sortOrder": 0
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+        "name": "com.figma.mcp/mcp",
+        "description": "The Figma MCP server helps you pull in Figma context and generate high-quality code that aligns with your codebase and design intent. Use the MCP server to retrieve code resources from Figma Design or Make files, and turn your ideas into production apps.\n\n **Key features:** \n• **Generate code from selected frames or nodes** - Select a frame in Figma or provide a node URL to have an AI agent turn your design into code. \n• **Extract design context from layers** - Pull out variables, components, and layouts from a design to ensure builds adhere to design patterns. \n• **Code smarter with Code Connect** - Boost output quality by reusing your actual components, the MCP server informs AI agents about existing components derived from Code Connect information. \n• **Map your flows with diagrams** - The Figma MCP server can turn your Claude prompts into flow charts, Gantt charts, or other diagrams in FigJam. \n\n **Note:** The get_screenshot tool is currently limited to returning a descripton of screenshots in Figma when called in Claude and Claude Code. See developer term [here](https://www.figma.com/legal/developer-terms/)",
+        "title": "Figma",
+        "repository": {
+          "url": "https://github.com/figma/mcp-server-guide",
+          "source": "github"
+        },
+        "version": "1.0.3",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.figma.com/mcp"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "publishedAt": "2025-10-16T17:40:56.949472Z",
+          "updatedAt": "2025-10-16T17:40:56.949472Z",
+          "isLatest": true
+        },
+        "com.anthropic.api/mcp-registry": {
+          "uuid": "c758d038-d8eb-4421-b426-9dd68dc7f84a",
+          "type": "remote",
+          "toolNames": [
+            "generate_diagram",
+            "get_design_context",
+            "get_screenshot",
+            "get_metadata",
+            "create_design_system_rules",
+            "get_variable_defs",
+            "get_code_connect_map",
+            "get_figjam",
+            "whoami"
+          ],
+          "promptNames": [],
+          "isAuthless": false,
+          "displayName": "Figma",
+          "oneLiner": "Generate diagrams and better code from Figma context",
+          "iconUrl": "https://www.figma.com",
+          "documentation": "https://help.figma.com/hc/en-us/articles/32132100833559",
+          "support": "https://help.figma.com/hc/en-us/requests/new?chatStartExpanded",
+          "privacyPolicy": "https://www.figma.com/legal/privacy-trust-center/",
+          "url": "https://mcp.figma.com/mcp",
+          "author": {
+            "name": "Figma",
+            "url": "https://www.figma.com"
+          },
+          "slug": "figma",
+          "directoryUrl": "https://claude.ai/directory/c758d038-d8eb-4421-b426-9dd68dc7f84a",
+          "claudeCodeCopyText": "claude mcp add --transport http figma-remote-mcp https://mcp.figma.com/mcp",
+          "permissions": "Read",
+          "useCases": ["design"],
+          "worksWith": ["claude", "claude-api", "claude-code"],
+          "publishedOn": "Fri Jan 16 2026 19:30:54 GMT+0000 (Coordinated Universal Time)",
+          "createdOn": "Tue Sep 23 2025 00:56:30 GMT+0000 (Coordinated Universal Time)",
+          "updatedOn": "Fri Jan 16 2026 19:30:54 GMT+0000 (Coordinated Universal Time)",
+          "logo": "figma-mcp",
+          "backgroundPattern": "Loop 1",
+          "heroVideoId": "dcKXca3Bs2o",
+          "heroVideoPreviewLink": "https://cdn.sanity.io/files/4zrzovbb/website/26319125157fe148de65ac3d39e1a0b5b2f8f3fa.mp4",
+          "serverLabel": "mcp.figma.com/mcp",
+          "itemId": "68d1f03e687403c54948ca34",
+          "collectionId": "68b05e2de975b4de7dd02d9d",
+          "localeId": "68a44d4040f98a4adf2207b5",
+          "htmlContent": "<p id=\"\">Pull in Figma context and generate high-quality code that aligns with your codebase and design intent. Use the connector to retrieve code resources from Figma Design or Make files, and turn your ideas into production apps.</p><p id=\"\">You can use the Figma connector to:<br><br>Implement designs as websites:<br>\"Help me implement my Figma design as a website in HTML and CSS\"</p><p id=\"\">Generate code from selections with annotations:<br>\"Get code from the Figma selection and make sure to take into account my annotations\"</p><p id=\"\">Check variables for issues:<br>\"Get the variables used in my Figma selection, and tell me if there are any issues\"</p><p id=\"\">Implement components following codebase standards:<br>\"Help me fetch the navbar behavior from my Figma Make file and implement it following my codebase standards\"</p>",
+          "imageUrls": [
+            {
+              "prompt": "Can you visualize the proposed data flow in part 2?",
+              "imageUrl": "https://storage.googleapis.com/media-assets-299d7136-cb52-d546-ee02-34bc1307c35f/Connectors%20Directory/Carousel%20Prompt%20Images/App%20Figma%20Card%201.png"
+            },
+            {
+              "prompt": "Visualize how these React components would be structured",
+              "imageUrl": "https://storage.googleapis.com/media-assets-299d7136-cb52-d546-ee02-34bc1307c35f/Connectors%20Directory/Carousel%20Prompt%20Images/App%20Figma%20Card%202.png"
+            }
+          ],
+          "hasMcpApp": true,
+          "source": "auto-sync",
+          "visibility": ["commercial"],
+          "added_at": "2025-11-12",
+          "rank": 4,
+          "popularityScore": 19839,
+          "scoreVersion": "v1",
+          "trendingScore": 76410,
+          "sortOrder": 0
+        }
+      }
+    },
+    {
+      "server": {
+        "name": "com.slack.mcp/slack",
+        "version": "1.0.0",
+        "description": "Connect to Slack to share messages and create canvases directly to simplify collaboration and boost productivity. Search and retrieve messages, channels, threads, files, and users, giving Claude the context to streamline your work.",
+        "title": "Slack",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.slack.com/mcp"
+          }
+        ]
+      },
+      "_meta": {
+        "com.anthropic.api/mcp-registry": {
+          "uuid": "597f662f-36de-437e-836e-5a81013cbfbe",
+          "type": "remote",
+          "toolNames": [
+            "slack_send_message",
+            "slack_search_public_and_private",
+            "slack_search_users",
+            "slack_search_channels",
+            "slack_search_public",
+            "slack_read_channel",
+            "slack_read_thread",
+            "slack_create_canvas",
+            "slack_update_canvas",
+            "slack_read_canvas",
+            "slack_read_user_profile"
+          ],
+          "promptNames": [],
+          "isAuthless": false,
+          "oneLiner": "Send messages, create canvases, and fetch Slack data",
+          "iconUrl": "https://slack.com",
+          "documentation": "https://docs.slack.dev/ai/mcp-server",
+          "support": "mailto:feedback@slack.com",
+          "privacyPolicy": "https://slack.com/trust/privacy/privacy-policy",
+          "author": {
+            "name": "Slack",
+            "url": "https://slack.com"
+          },
+          "worksWith": ["claude", "claude-api", "claude-code"],
+          "imageUrls": [
+            {
+              "prompt": "Draft Sean a message about attending our next startup event",
+              "imageUrl": "https://storage.googleapis.com/media-assets-299d7136-cb52-d546-ee02-34bc1307c35f/Connectors%20Directory/Carousel%20Prompt%20Images/App%20Slack%20Card%201.png"
+            },
+            {
+              "prompt": "Take last week's update and draft jerome a message recapping everything",
+              "imageUrl": "https://storage.googleapis.com/media-assets-299d7136-cb52-d546-ee02-34bc1307c35f/Connectors%20Directory/Carousel%20Prompt%20Images/App%20Slack%20Card%202.png"
+            }
+          ],
+          "hasMcpApp": true,
+          "source": "manual",
+          "visibility": ["commercial"],
+          "added_at": "2025-11-14",
+          "useCases": ["productivity", "communication"],
+          "rank": 5,
+          "popularityScore": 19530,
+          "scoreVersion": "v1",
+          "trendingScore": 72434,
+          "sortOrder": 0
+        },
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.atlassian/atlassian-mcp-server",
+        "description": "Atlassian’s Rovo MCP Server enables secure, permission-aware access to Jira and Confluence from external AI tools like Claude. It supports summarization, creation, and multi-step actions, helping teams tap into structured enterprise knowledge wherever they work—all while preserving data privacy and leveraging Atlassian’s open, interoperable Teamwork Graph foundation.",
+        "version": "1.1.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.atlassian.com/v1/mcp"
+          }
+        ],
+        "title": "Atlassian Rovo"
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "publishedAt": "2026-01-09T17:53:25.104949Z",
+          "updatedAt": "2026-01-09T17:53:25.104949Z",
+          "isLatest": true
+        },
+        "com.anthropic.api/mcp-registry": {
+          "uuid": "11ba10d9-477b-4988-bd1c-90a7fa680dc1",
+          "type": "remote",
+          "toolNames": [
+            "atlassianUserInfo",
+            "getAccessibleAtlassianResources",
+            "getConfluenceSpaces",
+            "getConfluencePage",
+            "getPagesInConfluenceSpace",
+            "getConfluencePageAncestors",
+            "getConfluencePageFooterComments",
+            "getConfluencePageInlineComments",
+            "getConfluencePageDescendants",
+            "createConfluencePage",
+            "updateConfluencePage",
+            "createConfluenceFooterComment",
+            "createConfluenceInlineComment",
+            "searchConfluenceUsingCql",
+            "getJiraIssue",
+            "editJiraIssue",
+            "createJiraIssue",
+            "getTransitionsForJiraIssue",
+            "transitionJiraIssue",
+            "lookupJiraAccountId",
+            "searchJiraIssuesUsingJql",
+            "addCommentToJiraIssue",
+            "getJiraIssueRemoteIssueLinks",
+            "getVisibleJiraProjects",
+            "getJiraProjectIssueTypesMetadataZapier",
+            "getCompassComponents",
+            "getCompassComponent",
+            "getCompassCustomFieldDefinitions",
+            "createCompassCustomFieldDefinition",
+            "createCompassComponent",
+            "createCompassComponentRelationship"
+          ],
+          "promptNames": [],
+          "isAuthless": false,
+          "displayName": "Atlassian Rovo",
+          "oneLiner": "Access Jira & Confluence from Claude",
+          "iconUrl": "https://www.atlassian.com",
+          "documentation": "https://community.atlassian.com/forums/Atlassian-Platform-articles/Using-the-Atlassian-Remote-MCP-Server-beta/ba-p/3005104",
+          "support": "https://support.atlassian.com/contact",
+          "privacyPolicy": "https://www.atlassian.com/legal/privacy-policy",
+          "url": "https://mcp.atlassian.com/v1/mcp",
+          "author": {
+            "name": "Atlassian",
+            "url": "https://atlassian.com"
+          },
+          "slug": "atlassian",
+          "directoryUrl": "http://claude.ai/directory/11ba10d9-477b-4988-bd1c-90a7fa680dc1",
+          "claudeCodeCopyText": "claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp",
+          "permissions": "Read and write",
+          "useCases": ["productivity"],
+          "worksWith": ["claude", "claude-code"],
+          "publishedOn": "Fri Jan 16 2026 19:33:48 GMT+0000 (Coordinated Universal Time)",
+          "createdOn": "Thu Aug 28 2025 14:02:54 GMT+0000 (Coordinated Universal Time)",
+          "updatedOn": "Mon Feb 09 2026 21:00:00 GMT+0000 (Coordinated Universal Time)",
+          "logo": "atlassian",
+          "backgroundPattern": "Line 1",
+          "serverLabel": "mcp.atlassian.com",
+          "itemId": "68b0618e45c5e2b19680853d",
+          "collectionId": "68b05e2de975b4de7dd02d9d",
+          "localeId": "68a44d4040f98a4adf2207b5",
+          "htmlContent": "<p>Connect to Jira, Confluence, and other Atlassian apps to manage issues, access documentation, track sprints, create tickets, update project status, and coordinate development workflows. Streamline project management and knowledge sharing across your development and collaboration tools through conversational interactions.</p><p>You can use the Atlassian Rovo connector to:</p><p>‍</p><p>Summarize Jira issues:</p><p>\"Summarize all Jira issues assigned to me in the 'Q3 Planning' project that are still marked as 'In Progress'\"</p><p>‍</p><p>Create Confluence pages:</p><p>\"Create a new Confluence page titled 'Post-Mortem: Sprint 24' in the 'Engineering/Incidents' space. Include a summary of key takeaways and assign action items to team members\"</p><p>‍</p><p>Perform bulk Jira actions:</p><p>\"Create five Jira issues in the 'Mobile App' project for the following tasks: fix login bug, update onboarding flow, test Android push notifications, redesign settings page, and review user analytics dashboard\"</p><p>‍</p><p>Users must have a Confluence account to use the server if 'User Installed Apps' setting is blocked.</p>",
+          "source": "auto-sync",
+          "visibility": ["commercial"],
+          "added_at": "2025-11-12",
+          "rank": 6,
+          "popularityScore": 19317,
+          "scoreVersion": "v1",
+          "trendingScore": 81834,
+          "sortOrder": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "count": 100,
+    "nextCursor": "com.ravenpack.bigdata/bigdata:1.0.0"
+  }
+}
