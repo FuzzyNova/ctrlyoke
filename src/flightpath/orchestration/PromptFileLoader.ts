@@ -342,7 +342,8 @@ export class PromptFileLoader {
     }
     // toolPermissions requires sub-field merging: if mode is set but
     // allowedTools/deniedTools are missing, fill in defaults for the missing
-    // sub-fields. null means passthrough — don't seed.
+    // sub-fields. null means passthrough — don't seed. A fully-specified
+    // object means nothing is missing — don't put anything in defaults.
     const explicitTP = explicitValues.toolPermissions as
       | Record<string, unknown>
       | null
@@ -350,20 +351,22 @@ export class PromptFileLoader {
     if (explicitTP !== null) {
       const base =
         typeof explicitTP === "object" && explicitTP ? explicitTP : {};
-      defaults.toolPermissions = {
-        mode:
-          base.mode !== undefined
-            ? base.mode
-            : ConfigurationUtils.getCliToolPermissions(),
-        allowedTools:
-          base.allowedTools !== undefined
-            ? base.allowedTools
-            : ConfigurationUtils.getCliAllowedTools(),
-        deniedTools:
-          base.deniedTools !== undefined
-            ? base.deniedTools
-            : ConfigurationUtils.getCliDeniedTools(),
-      };
+      const needsMode = base.mode === undefined;
+      const needsAllowed = base.allowedTools === undefined;
+      const needsDenied = base.deniedTools === undefined;
+      if (needsMode || needsAllowed || needsDenied) {
+        defaults.toolPermissions = {
+          mode: needsMode
+            ? ConfigurationUtils.getCliToolPermissions()
+            : base.mode,
+          allowedTools: needsAllowed
+            ? ConfigurationUtils.getCliAllowedTools()
+            : base.allowedTools,
+          deniedTools: needsDenied
+            ? ConfigurationUtils.getCliDeniedTools()
+            : base.deniedTools,
+        };
+      }
     }
 
     return defaults;
