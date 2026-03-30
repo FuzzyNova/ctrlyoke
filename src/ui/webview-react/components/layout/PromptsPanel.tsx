@@ -224,6 +224,15 @@ export const PromptsPanel: React.FC<{
       });
     }
 
+    // hooks — show when explicitly set
+    if (prompt.hooks !== undefined) {
+      if (prompt.hooks === null) {
+        result.push({ label: "hooks: none" });
+      } else if (Array.isArray(prompt.hooks) && prompt.hooks.length > 0) {
+        result.push({ label: `hooks: ${prompt.hooks.length}` });
+      }
+    }
+
     // resumeSession — show whenever explicitly set
     if (prompt.resumeSession !== undefined) {
       result.push({

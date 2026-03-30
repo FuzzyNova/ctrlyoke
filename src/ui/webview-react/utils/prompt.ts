@@ -50,6 +50,7 @@ export interface RawPrompt {
   resumeSession?: boolean;
   sessionId?: string | number;
   mcpServers?: (string | object)[] | null;
+  hooks?: object[] | null;
   endCondition?: EndCondition | null;
   _runtime?: PromptRuntime;
 }
@@ -93,6 +94,8 @@ export interface PromptItem {
   sessionId?: string | number;
   /** MCP servers to attach for this prompt */
   mcpServers?: (string | object)[] | null;
+  /** User hooks configuration */
+  hooks?: object[] | null;
   /** End condition configuration */
   endCondition?: EndCondition | null;
   /** Runtime metadata from execution */
@@ -138,6 +141,7 @@ export function createPromptItem(
       resumeSession: undefined,
       sessionId: undefined,
       mcpServers: undefined,
+      hooks: undefined,
       endCondition: undefined,
     };
   }
@@ -155,6 +159,7 @@ export function createPromptItem(
     resumeSession: prompt.resumeSession,
     sessionId: prompt.sessionId,
     mcpServers: prompt.mcpServers,
+    hooks: (prompt as any).hooks,
     endCondition: prompt.endCondition,
     _runtime: prompt._runtime,
   };
@@ -180,6 +185,7 @@ export function promptItemToRaw(item: PromptItem): RawPrompt {
   if (item.resumeSession !== undefined) raw.resumeSession = item.resumeSession;
   if (item.sessionId !== undefined) raw.sessionId = item.sessionId;
   if (item.mcpServers !== undefined) raw.mcpServers = item.mcpServers;
+  if (item.hooks !== undefined) raw.hooks = item.hooks;
   if (item.endCondition !== undefined) raw.endCondition = item.endCondition;
   if (item._runtime !== undefined) raw._runtime = item._runtime;
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import {
   useEditorStore,
@@ -38,6 +38,7 @@ import {
   getPermissionHarnessSupport,
   buildPermissionsDefaultLabel,
 } from "../shared";
+import { HooksEditor } from "./HooksEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import {
   COMPARE_SOURCE_LABELS,
@@ -255,6 +256,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     workflowProperties.harness ??
     globalSettings.harness) as HarnessId;
   const permHarnessSupport = getPermissionHarnessSupport(effectivePermHarness);
+
+  // ── Hooks page derived values ───────────────────────────────────────────
+  const resolvedHooks = useMemo(() => {
+    const effective = useSettingsStore.getState().getEffectiveHooks();
+    return Array.isArray(effective) ? effective : [];
+  }, [properties.hooks, globalSettings.hooks]);
 
   const resolvedPriorContext =
     workflowProperties.priorContext ??
@@ -1074,10 +1081,17 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
           </div>
         )}
 
-        {/* Page: Hooks (placeholder) */}
+        {/* Page: Hooks */}
         {activePage === DRAWER_PAGES.HOOKS && (
-          <div className="flex items-center justify-center h-32 text-description-fg text-xs">
-            Coming Soon
+          <div className="space-y-2">
+            <label className="text-[11px] font-semibold uppercase text-description-fg">
+              User Hooks
+            </label>
+            <HooksEditor
+              value={properties.hooks}
+              onChange={(v) => setProperty("hooks", v)}
+              inheritedValue={resolvedHooks}
+            />
           </div>
         )}
       </div>

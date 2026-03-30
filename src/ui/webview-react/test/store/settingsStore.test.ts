@@ -157,6 +157,7 @@ describe("setGlobalSettings", () => {
       executionMode: "headless",
       resumeSession: true,
       mcpServers: ["flightpath"],
+      hooks: [],
       toolPermissions: {
         mode: "allowAll",
         allowedTools: [],

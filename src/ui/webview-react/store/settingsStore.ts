@@ -64,6 +64,7 @@ export interface GlobalSettings {
   executionMode: ExecutionMode;
   resumeSession: boolean;
   mcpServers: (string | object)[];
+  hooks: object[];
   toolPermissions: {
     mode: string;
     allowedTools: string[];
@@ -87,6 +88,7 @@ export interface WorkflowProperties {
   resumeSession?: boolean;
   sessionId?: string | number; // UUID string or prompt number reference
   mcpServers?: (string | object)[] | null;
+  hooks?: object[] | null;
   endCondition?: {
     script?: string; // Made optional - fields can be set incrementally
     returns?: string;
@@ -173,6 +175,7 @@ interface SettingsActions {
   getEffectiveAgent: () => string;
   getEffectiveResumeSession: () => boolean;
   getEffectiveMcpServers: () => (string | object)[] | null;
+  getEffectiveHooks: () => object[] | null;
   getEffectivePriorContext: () => PriorContext;
   getEffectiveToolPermissions: () => WorkflowProperties["toolPermissions"];
 
@@ -196,6 +199,7 @@ const initialGlobalSettings: GlobalSettings = {
   executionMode: EXECUTION_MODES.INTERACTIVE,
   resumeSession: false,
   mcpServers: [],
+  hooks: [],
   toolPermissions: {
     mode: "allowAll",
     allowedTools: [],
@@ -386,6 +390,13 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       return workflowProperties.mcpServers !== undefined
         ? workflowProperties.mcpServers
         : globalSettings.mcpServers;
+    },
+
+    getEffectiveHooks: () => {
+      const { workflowProperties, globalSettings } = get();
+      return workflowProperties.hooks !== undefined
+        ? workflowProperties.hooks
+        : globalSettings.hooks;
     },
 
     getEffectivePriorContext: () => {

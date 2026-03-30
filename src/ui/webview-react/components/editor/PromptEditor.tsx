@@ -280,6 +280,13 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         clearProperties.push("mcpServers");
       }
 
+      // Hooks
+      if (properties.hooks !== undefined) {
+        result.hooks = properties.hooks;
+      } else if (includeNullsForDefaults) {
+        clearProperties.push("hooks");
+      }
+
       // Skills
       if (properties.skills === null) {
         result.skills = null;

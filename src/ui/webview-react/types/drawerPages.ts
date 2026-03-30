@@ -23,7 +23,7 @@ export const DRAWER_TABS: DrawerTab[] = [
   { id: "context", label: "Context", codicon: "book" },
   { id: "validation", label: "Validation", codicon: "coverage" },
   { id: "mcp", label: "MCP", codicon: "mcp" },
-  { id: "hooks", label: "Hooks", codicon: "symbol-event", placeholder: true },
+  { id: "hooks", label: "Hooks", codicon: "symbol-event" },
   {
     id: "permissions",
     label: "Permissions",

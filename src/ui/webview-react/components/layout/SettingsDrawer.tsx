@@ -38,6 +38,7 @@ import {
   PERMISSION_MODE_OPTIONS,
   getPermissionHarnessSupport,
 } from "../shared";
+import { HooksEditor } from "../editor/HooksEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
@@ -260,6 +261,14 @@ export const SettingsPanel: React.FC<{
           JSON.stringify(normalize(globalSettings.mcpServers))
         );
       }
+      // Deep comparison for hooks
+      if (property === "hooks") {
+        const normalize = (v: unknown) => (Array.isArray(v) ? v : []);
+        return (
+          JSON.stringify(normalize(workflowValue)) !==
+          JSON.stringify(normalize(globalSettings.hooks))
+        );
+      }
       // Deep comparison for toolPermissions — normalize null/undefined/passthrough
       // to a canonical form so the button hides when values match the global defaults.
       if (property === "toolPermissions") {
@@ -473,6 +482,23 @@ export const SettingsPanel: React.FC<{
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "mcpServers",
+        value: newValue,
+      });
+    },
+    [vscode]
+  );
+
+  const handleHooksChange = useCallback(
+    (newValue: object[] | null | undefined) => {
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty(
+        "hooks",
+        newValue as WorkflowProperties["hooks"]
+      );
+
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+        property: "hooks",
         value: newValue,
       });
     },
@@ -1329,9 +1355,30 @@ export const SettingsPanel: React.FC<{
           )}
 
           {activePage === DRAWER_PAGES.HOOKS && (
-            <div className="flex items-center justify-center h-32 text-description-fg text-xs">
-              Coming Soon
-            </div>
+            <>
+              <FormField
+                label="User Hooks"
+                description="User-defined hooks to run alongside FlightPath's completion-detection hooks. Supported events vary by harness."
+                setAsDefaultButton={
+                  <SetAsDefaultButton
+                    property="hooks"
+                    show={isDifferentFromGlobal("hooks")}
+                    onSetDefault={() =>
+                      handleSetAsDefault(
+                        "hooks",
+                        workflowProperties.hooks
+                      )
+                    }
+                  />
+                }
+              >
+                <HooksEditor
+                  value={workflowProperties.hooks}
+                  onChange={handleHooksChange}
+                  showDefault={false}
+                />
+              </FormField>
+            </>
           )}
         </div>
       </div>

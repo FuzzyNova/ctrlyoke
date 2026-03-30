@@ -290,6 +290,7 @@ export class WebviewSettingsSync {
         resumeSession: workingFile.resumeSession,
         sessionId: workingFile.sessionId,
         mcpServers: workingFile.mcpServers,
+        hooks: workingFile.hooks,
         endCondition: workingFile.endCondition,
         priorContext: workingFile.priorContext,
         additionalArgs: workingFile.additionalArgs,
@@ -448,6 +449,8 @@ export class WebviewSettingsSync {
     } else if (property === "mcpServers") {
       // null (None mode) → [] so we never write null to an array-typed setting
       await ConfigurationUtils.setDefaultMcpServers(value ?? []);
+    } else if (property === "hooks") {
+      await ConfigurationUtils.setDefaultHooks(value ?? []);
     } else if (property === "toolPermissions") {
       const override = value as ToolPermissionsOverride | null;
       await ConfigurationUtils.updateSetting(
@@ -609,6 +612,7 @@ export class WebviewSettingsSync {
       executionMode,
       resumeSession: resumeExistingSession,
       mcpServers: defaultMcpServers,
+      hooks: ConfigurationUtils.getDefaultHooks(),
       toolPermissions: {
         mode: ConfigurationUtils.getCliToolPermissions(),
         allowedTools: ConfigurationUtils.getCliAllowedTools(),

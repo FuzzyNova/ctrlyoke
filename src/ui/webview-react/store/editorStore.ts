@@ -38,6 +38,7 @@ export interface PropertyValues {
   resumeSession: Inheritable<boolean>; // undefined = inherit, true = yes, false = no
   sessionId: string; // "" or session ID or prompt number reference
   mcpServers: (string | object)[] | null | undefined; // undefined = inherit, null = none, array = custom
+  hooks: object[] | null | undefined; // undefined = inherit, null = none, array = custom
   endCondition?: EndConditionConfig | null;
   priorContext?: PriorContext; // undefined = inherit/default
   additionalArgs: Disableable<string>; // undefined = inherit, null = none, string = custom args
@@ -56,6 +57,7 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
   resumeSession: undefined,
   sessionId: "",
   mcpServers: undefined,
+  hooks: undefined,
   endCondition: undefined, // undefined = inherit from workflow
   additionalArgs: undefined,
   toolPermissions: undefined,
@@ -362,6 +364,7 @@ export const useEditorStore = create<
       sessionId:
         promptData.sessionId !== undefined ? String(promptData.sessionId) : "",
       mcpServers: promptData.mcpServers,
+      hooks: promptData.hooks,
       endCondition: promptData.endCondition ?? null,
       priorContext: promptData.priorContext,
       additionalArgs: promptData.additionalArgs,
@@ -761,6 +764,11 @@ export const useEditorStore = create<
     if (properties.mcpServers !== undefined) {
       // PropertyValues uses (string | object)[] which is structurally compatible with McpServerConfig
       result.mcpServers = properties.mcpServers as any;
+    }
+
+    // Add hooks if overridden
+    if (properties.hooks !== undefined) {
+      result.hooks = properties.hooks as any;
     }
 
     // Add end condition if configured
