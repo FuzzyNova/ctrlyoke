@@ -3,7 +3,7 @@ applyTo: "src/utils/**"
 ---
 
 <purpose>
-Shared utilities for file system operations, logging, validation, CLI process management, context expansion, model management, configuration, session management, agent/skill discovery, workspace snapshots, and process coordination.
+Shared utilities for file system operations, logging, validation, CLI process management, context expansion, model management, configuration, session management, agent/skill discovery, workspace snapshots, process coordination, MCP server discovery, git operations, caching, and error handling.
 </purpose>
 
 <keyUtilities>
@@ -66,6 +66,14 @@ Shared utilities for file system operations, logging, validation, CLI process ma
 **CliArgParser:** `parseArgString(input)` — parses shell-style argument strings to `string[]`. Supports whitespace separation, double/single-quoted strings, and `\"` escapes within double quotes. No bash substitution or env expansion (intentional — inputs are static YAML strings).
 
 **promptPathUtils:** Pure functions with no Node.js or `vscode` imports — safe for both extension backend and React webview. `looksLikeFilePath(value)` detects lone file-path references (relative `./`, `../`, absolute `/`, Windows drive letter). `PROMPT_FILE_EXTENSIONS` constant.
+
+**McpDiscoveryUtils:** Discovers MCP servers from local config files and the Anthropic public registry. Local sources (priority order, first wins on duplicate id): `.vscode/mcp.json` (key: `servers`), `.mcp.json` (key: `mcpServers`), VS Code user config, `~/.claude.json` (top-level `mcpServers` only). Registry: cursor-based pagination, server-side search via `fetchAnthropicRegistry()`. Safe wrappers (`safeDiscoverLocalMcpServers`, `safeFetchAnthropicRegistry`) never throw — return empty results with error string on failure.
+
+**GitUtils:** Git operations via `execFile` with 10s timeout. Functions: `getRecentCommits()` (NUL-delimited log parsing), `getCommitDiff()` (stat + full diff), `getWorkingTreeDiff()` (unstaged changes + untracked file summary), `getStagedDiff()` (cached diff), `getStashList()`, `getStashDiff()`, `searchCommitsBySubject()` (case-insensitive `--grep`), `isValidCommitHash()` (7-40 hex char validation). Returns `CommitInfo` / `StashInfo` interfaces.
+
+**TtlCache:** Generic TTL-based cache for async discovery results. `get(fn)` returns cached items if fresh, otherwise calls `fn` to refresh. `invalidate()` forces refresh on next call. Used by agent/skill discovery to avoid re-scanning filesystem on every request.
+
+**ErrorUtils:** `getErrorMessage(error: unknown): string` — centralizes the `error instanceof Error ? error.message : String(error)` pattern to eliminate duplication across the codebase.
 </keyUtilities>
 
 <terminology>
@@ -78,8 +86,12 @@ Shared utilities for file system operations, logging, validation, CLI process ma
 - PromptFileParser: Uses ValidationUtils for schema validation, promptPathUtils for file-path detection
 - PromptQueue: Uses PromptIdentity for deduplication, SessionResolver for session tracking
 - FlightPathWebviewProvider: Uses ModelRegistry, Log, ConfigurationUtils
+- WebviewMessageRouter: Uses McpDiscoveryUtils for MCP server discovery
 - PromptCompletionProvider: Uses ModelRegistry, AgentDiscovery for IntelliSense
+- ContextExpander, CompletionHelpers: Use GitUtils for commit/stash context
+- AgentExpander, SkillExpander: Use TtlCache for discovery result caching
 - extension.ts / cli.ts: Sets RuntimeMode; CLI uses BuildConfig for feature flags
+- ErrorUtils: Used across codebase (Log, WorkflowOrchestrator, CliIntegration, parsers, etc.)
 </relatedComponents>
 
 <pathConstants>
@@ -95,4 +107,7 @@ ConfigurationUtils.PATH_CONSTANTS provides single source of truth for directory 
 - HISTORY_DIR: ".history"
 - AGENTS_DIR: "agents"
 - SKILLS_DIR: "skills"
+- CAPABILITIES_FILE: "capabilities.json"
+- MCP_DIR: "mcp"
+- MCP_SERVERS_FILE: "servers.json"
 </pathConstants>

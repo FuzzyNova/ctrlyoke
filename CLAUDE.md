@@ -26,6 +26,7 @@ When editing or analyzing files, read the corresponding instruction file:
 | `src/test/**`                          | `.github/instructions/test.instructions.md`                  | Testing patterns and conventions                                                            |
 | `src/completions/**`                   | `.github/instructions/completions.instructions.md`           | IntelliSense providers                                                                      |
 | `src/utils/**`                         | `.github/instructions/utils.instructions.md`                 | Utility functions and helpers                                                               |
+| `src/platform/**`                      | `.github/instructions/platform.instructions.md`              | Platform abstraction (PlatformAdapter, CliAdapter, VsCodeAdapter, vscode-shim)              |
 | `src/ui/webview-react/**`              | `.github/instructions/webview-react.instructions.md`         | React dashboard (components, stores, hooks)                                                 |
 
 ### How to Use

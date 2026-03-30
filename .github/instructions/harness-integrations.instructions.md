@@ -26,6 +26,8 @@ FlightPath uses **composition over inheritance** for harness integrations:
 - Handles execution lifecycle (interactive/headless modes, VS Code terminal or CLI spawn)
 - Manages session continuity, cancellation, temp file creation/cleanup, and status updates
 - Terminal tab name: `FP: {Harness}` or `FP: {Harness} · {name} [n/total]`
+- Coordinates hook-based completion detection alongside log file monitoring
+- Calls `provider.cleanupWorkspaceArtifacts()` at workflow end to restore modified workspace files
 - Rarely needs modification when adding new harnesses (changes only when new shared capabilities are needed)
 
 **IntegrationFactory** (src/flightpath/IntegrationFactory.ts):
@@ -37,38 +39,56 @@ FlightPath uses **composition over inheritance** for harness integrations:
 
 **CliLogMonitor** (src/flightpath/harness/CliLogMonitor.ts):
 
-- Wraps `INotificationMonitor` with polling logic and file-based session end detection
-- Used by `CliIntegration` to detect when a headless AI CLI process has completed
-- Monitors hook/notification files written by the AI CLI's notify scripts
+- Focused single-responsibility class for log file monitoring and event processing
+- Uses composition via `ILogParser` interface — works with any CLI harness
+- Dual completion detection: log-based events AND parallel notification monitor (hook files)
+- When notification monitor active, hook is authoritative (prevents false positives from intermediate log events)
+- Drains remaining log entries after completion signal (race-safe)
+- Detects PTY process exit via `isPtyTerminated()` callback for abnormal exit handling
+- Extracts context window data from process logs (Copilot-specific augmentation)
+
+**PtyProcessManager** (src/flightpath/harness/PtyProcessManager.ts):
+
+- Manages node-pty sessions for embedded terminal support (webview xterm.js bridge)
+- Singleton pattern initialized by extension.ts
+- Handles both AI CLI sessions (`kind: 'ai-cli'`) and user shell sessions (`kind: 'shell'`)
+- Maintains `reconnectBuffer` per session for webview reconnection (replays recent output)
+- Default PTY dimensions: 220 cols × 50 rows (webview ResizeObserver corrects on mount)
+- Lazy-loads node-pty at spawn time; Windows shell resolution prefers `pwsh.exe` over `powershell.exe`
 
 **ICliProvider Interface** (src/flightpath/harness/shared/interfaces/ICliProvider.ts):
 
 - Main provider contract — defines what a CLI provider must implement
 - **Required**: `config` (HarnessConfig), `responseParser`, `notificationMonitor`, `toolPermissionMapper`
 - **Required methods**: `buildCliArgs()`, `buildHeadlessArgs()`, `buildInteractiveTuiCommand()`, `checkAvailability()`
-- **Optional**: `logParser`, `formatFileReference()`, `getMcpConfigArgs()`, `getMcpConfigFilePath()`, `getAdditionalCleanupFilePaths()`, `getVersion()`, `getInteractiveSpawnEnv()`, `extractSessionIdFromLogs()`, `augmentParsedOutput()`
+- **Optional**: `logParser`, `formatFileReference()`, `getMcpConfigArgs()`, `getMcpConfigFilePath()`, `getAdditionalCleanupFilePaths()`, `cleanupWorkspaceArtifacts()`, `getVersion()`, `getInteractiveSpawnEnv()`, `extractSessionIdFromLogs()`, `augmentParsedOutput()`
+- `cleanupWorkspaceArtifacts(workspaceRoot, workingFilePath)` — restores workspace files modified during interactive hook/MCP setup (backup-and-restore pattern for `.gemini/settings.json`, `.qwen/settings.json`)
+- `getInteractiveSpawnEnv()` — environment overrides for interactive spawning (e.g., unset `CLAUDECODE` to allow nested Claude CLI)
 - `HarnessConfig` fields: `name`, `displayName`, `terminalName`, `installHint`, `shouldStreamHeadlessOutput`, `usesInteractiveNotificationMonitor`, `rawTextOutput`
 </coreComponents>
 
 <providerStructure>
-Each provider is self-contained in its own directory with 5 required files:
+Each provider is self-contained in its own directory with 6 required files:
 
 ```
 src/flightpath/harness/copilot/
 ├── CopilotCliProvider.ts          # Main provider descriptor (implements ICliProvider)
 ├── CopilotResponseParser.ts       # Implements IResponseParser (parse output, extract tokens)
-├── CopilotNotificationMonitor.ts  # Implements INotificationMonitor (completion detection)
+├── CopilotNotificationMonitor.ts  # Implements INotificationMonitor (completion detection + hooks)
 ├── CopilotToolPermissionMapper.ts # Implements IToolPermissionMapper (permission args)
+├── CopilotToolBuilder.ts          # Converts tool call payloads into CliEvent objects
 └── CopilotLogParser.ts            # Implements ILogParser (log file monitoring/session ID)
 ```
 
 **CopilotCliProvider.ts** (main provider class):
 
-- Aggregates all 4 components (config, parser, monitor, mapper)
+- Aggregates all components (config, parser, monitor, mapper)
 - Implements provider-specific CLI argument building
 - Defines TUI patterns (escapeIndicator, chromePatterns, screenEndPattern)
 - Handles file reference formatting (@file for Copilot)
 - Generates MCP configuration (if supported)
+- Builds per-prompt hook files for interactive mode
+- Implements `cleanupWorkspaceArtifacts()` for providers that modify workspace files
 
 **CopilotResponseParser.ts**:
 
@@ -79,10 +99,12 @@ src/flightpath/harness/copilot/
 
 **CopilotNotificationMonitor.ts**:
 
-- Configures hook/notification scripts (sessionEnd, Stop, notify)
+- Configures hook/notification scripts (sessionStart, sessionEnd, Stop, notify)
+- Builds hook config with FlightPath completion-detection hooks AND user-defined hooks
 - Monitors for completion events (file-based polling)
 - Extracts session IDs from notifications (if available)
 - Handles both specific file and wildcard monitoring modes
+- Accepts `userHooks` parameter in `buildHookConfig()` for hook merging
 
 **CopilotToolPermissionMapper.ts**:
 
@@ -90,6 +112,14 @@ src/flightpath/harness/copilot/
 - Implements dangerouslyAllowAll, allowAll, and custom modes
 - Handles allow/deny pattern translation
 - Determines if full permissions granted (no prompts)
+
+**CopilotToolBuilder.ts**:
+
+- Static utility class converting CLI tool call payloads into `CliEvent` objects
+- `buildInitiatedEvent()` — called on tool.execution_start (includes old/new content for FILE_EDIT)
+- `buildCompletedEvents()` — called on tool.execution_complete (carries `structuredPatch` with accurate line numbers)
+- Uses `CliEventMapper` for semantic tool classification
+- Enables code reuse between LogParser and ResponseParser (both call ToolBuilder)
 
 **CopilotLogParser.ts** (extends BaseLogParser):
 
@@ -269,13 +299,13 @@ See: `docs/ADDING_NEW_CLI_HARNESS.md` for the complete guide to adding a new har
 
 Summary of required layers:
 
-1. **Harness directory** (`src/flightpath/harness/<name>/`) — 5-6 files implementing ICliProvider, IResponseParser, INotificationMonitor, IToolPermissionMapper, and BaseLogParser
+1. **Harness directory** (`src/flightpath/harness/<name>/`) — 6 files implementing ICliProvider, IResponseParser, INotificationMonitor, IToolPermissionMapper, BaseLogParser, and ToolBuilder
 2. **Hook script** (`src/scripts/flightpath-<name>-hook.js`) — if hook-based completion detection
 3. **Type layer** — add `Harness` enum value, `HARNESS_IDS` entry, display names, and model list in `DashboardConstants.ts` and `FlightPathTypes.ts`
 4. **Wiring layer** — factory method in `IntegrationFactory.ts`, integration field/lifecycle in `WorkflowOrchestrator.ts`
 5. **Settings layer** — model/args getters in `ConfigurationUtils.ts`, model arrays in `ModelConstants.ts`, settings in `package.json`
 6. **UI layer** — availability state and model options in `WebviewSettingsSync.ts`, display name and group in `HarnessDropdown.tsx`, initial state in `settingsStore.ts`
-</addingNewProviders>
+</addingNewHarnesses>
 
 <testingProviders>
 **Provider Testing Checklist**:
@@ -303,6 +333,12 @@ Summary of required layers:
    - ✅ allowAll grants permissions but respects deny list
    - ✅ custom mode uses specific patterns
    - ✅ Patterns converted correctly for CLI
+6. **User-Defined Hooks**:
+   - ✅ User hooks merged alongside FlightPath completion-detection hooks
+   - ✅ Hook event mapping correct for provider (stop → native event name)
+   - ✅ Parallel workflows don't corrupt shared hook config (per-prompt files or ref-counting)
+   - ✅ Hook files cleaned up after workflow completes
+   - ✅ Pre-trust entries written for Gemini/Qwen (no interactive approval prompts)
 
 **Manual test files**: `manual-test/*.flightpath.json`
 **Unit tests**: `src/test/suite/harness/`
@@ -315,12 +351,15 @@ Summary of required layers:
 
 - **Headless**: Process exit (deterministic)
 - **Interactive**: sessionStart + sessionEnd hooks (write JSON to `.flightpath/temp/copilot-notifications/`)
-- **Hook format**: `.github/hooks/flightpath.json` with bash/powershell fields
-- **File naming**: `{sessionId}.json` — SAME file for both events; `status` field distinguishes them
+- **Hook format**: `.github/hooks/flightpath-<stem>-p<promptIndex>.json` with bash/powershell fields
+- **Per-prompt files**: Each prompt gets a unique hook file — no merging conflicts in parallel workflows
+- **File naming**: `session-{sessionId}.json` in notification directory; `status` field distinguishes start/end
   - sessionStart writes: `{ status: "started", sessionId: "...", hookType: "sessionStart" }`
   - sessionEnd overwrites: `{ status: "completed", sessionId: "...", hookType: "sessionEnd" }`
-- **Monitoring**: Status-aware mode — polls `{sessionId}.json` for `status: "completed"`, skips `status: "started"`
+- **Monitoring**: Status-aware mode — polls `session-{sessionId}.json` for `status: "completed"`, skips `status: "started"`
 - **Session ID**: Extracted from sessionStart hook notification (no log file search needed)
+- **User hooks**: Appended to FlightPath hooks per event (sessionStart, sessionEnd) in the hook config JSON
+- **Cleanup**: Hook files tracked in `interactiveHookFilePaths[]` for deletion after workflow
 
 **Output Format**: Plain text with statistics on stderr
 **Tool Permissions**: `--allow-all-tools`, `--allow-tools`, `--deny-tools` with Copilot-specific patterns
@@ -339,10 +378,13 @@ Summary of required layers:
 **Completion Detection**:
 
 - **Headless**: JSON events in stream-json output
-- **Interactive**: Stop hook (writes JSON to `.flightpath/temp/claude-notifications/{thread-id}.json`)
-- **Hook format**: JSON string passed via `--stop-hook` flag
+- **Interactive**: Stop hook (writes JSON to `.flightpath/temp/claude-notifications/session-{thread-id}.json`)
+- **Hook format**: JSON settings file passed via `--settings <path>` flag
+- **Per-prompt files**: Temp file pattern `claude-hook-settings-<safeStem>-p<promptIndex>.json` — avoids parallel collisions
 - **Monitoring**: Specific file mode (uses thread ID from initial output)
 - **Session ID**: Extracted from JSON `thread_id` field
+- **User hooks**: Appended per event (SessionStart, Stop, PreToolUse, PostToolUse) in settings JSON
+- **Cleanup**: Hook settings files tracked in `interactiveHookSettingsPaths[]` for deletion
 
 **Output Format**: JSON streaming (`--stream-json` required)
 **Tool Permissions**: `--dangerously-skip-permissions`, `--tools default`, tool-specific allows/denies
@@ -362,9 +404,10 @@ Summary of required layers:
 
 - **Headless**: JSONL events (`{"type":"turn.completed"}`)
 - **Interactive**: notify hook (writes JSON to `~/.flightpath/codex-notifications/{thread-id}.json`)
-- **Hook format**: TOML-style inline config `notify='["node","<script>"]'`
+- **Hook format**: TOML-style inline config `notify='["node","<script>"]'` via `--config` flag
 - **Monitoring**: Specific file mode (thread ID from initial output) with wildcard fallback
 - **Session ID**: Extracted from JSONL events or notify hook data
+- **User hooks**: Cannot be inlined in TOML — generates a chain script (`flightpath-codex-notify-chain.js`) that runs FlightPath notify hook first, then user hooks sequentially; user hook failures are non-fatal
 
 **Output Format**: JSONL streaming (one JSON object per line)
 **Tool Permissions**: Same as Copilot (auto-converted from shared settings)
@@ -386,12 +429,15 @@ Summary of required layers:
 - **Interactive**: TypeScript plugin written to `.opencode/plugin/flightpath-completion-hook.js` before each run; the plugin fires on session status changes
 - **Monitoring**: Plugin-based (not hook file polling)
 - **Session ID**: Extracted from JSONL events
+- **User hooks**: Embedded directly in generated plugin by `OpenCodePluginGenerator`; if no user hooks, static plugin file copied as-is
 
 **Output Format**: JSONL streaming (`--format json`, `opencode run "prompt"` for headless; `opencode --prompt "..."` for interactive)
 **Tool Permissions**: Config-file driven (`opencode.json`); `OpenCodeToolPermissionMapper` returns `[]` (no CLI permission args)
 **File Reference**: Not applicable (prompt passed inline or as `-f` arg depending on mode)
-**MCP Config**: Not supported
+**MCP Config**: Written to `.opencode/opencode.json` (auto-discovered, format: `{ mcp: { flightpath: { type: "local", command: [...] } } }`)
 **Models**: `provider/model` format (e.g. `anthropic/claude-sonnet-4-6`, `openai/gpt-5`)
+
+**Additional files**: `OpenCodeEventMapper.ts` — provider-specific event mapping, `OpenCodePluginGenerator.ts` — generates completion plugin with optional user hooks
 
 **Session Resumption**: `-s <sessionId>`
 
@@ -404,13 +450,18 @@ Summary of required layers:
 **Completion Detection**:
 
 - **Headless**: Process exit + JSONL events
-- **Interactive**: Hook/notify file (writes to `.flightpath/temp/qwen-notifications/`)
+- **Interactive**: Hooks via `.qwen/settings.json` (requires `--experimental-hooks` flag)
+- **Events**: `SessionStart`, `UserPromptSubmit`, `Stop`
 - **Session ID**: From `system.init` or `result` JSONL events; fallback via log file analysis (`QwenLogParser`)
+- **User hooks**: Converted to Qwen format and merged into settings.json per event (Stop, SessionStart, PreToolUse, PostToolUse, UserPromptSubmit)
+- **Reliable start signal**: Monitors both `SessionStart` AND `UserPromptSubmit` — SessionStart fires fire-and-forget in React's useEffect and may not complete before fast prompts end
+- **Pre-trust**: Hook commands auto-trusted in `~/.qwen/trusted_hooks.json` (colon-prefixed key format `:${command}`)
+- **Windows caveat**: No quotes in hook command strings — Qwen's `spawn(cmd.exe, ['/d','/s','/c', command], {shell:false})` passes quotes literally
 
 **Output Format**: JSONL streaming
 **Tool Permissions**: `--approval-mode`, `-y`, `--allowed-tools`, `--exclude-tools` (via `QwenToolPermissionMapper`)
 **File Reference**: Prompt passed inline or via temp file
-**MCP Config**: Not supported
+**MCP Config**: Parallel-safe via `SettingsJsonMcpTracker`; written to `.qwen/settings.json` with `--allowed-mcp-server-names` flag
 **Models**: e.g. `coder-model` (via `--model`)
 
 **Session Resumption**: `--continue` flag
@@ -424,13 +475,16 @@ Summary of required layers:
 **Completion Detection**:
 
 - **Headless**: JSON streaming events
-- **Interactive**: Stop hook (writes JSON to `.flightpath/temp/gemini-notifications/`)
+- **Interactive**: Hooks via `.gemini/settings.json` (auto-discovered, no flag needed)
+- **Events**: `SessionStart` and `AfterAgent` (Gemini's native completion event)
 - **Session ID**: Extracted from JSON `init` events
+- **User hooks**: Converted to Gemini format and merged into settings.json per event (AfterAgent, SessionStart)
+- **Pre-trust**: Hook commands auto-trusted in `~/.gemini/trusted_hooks.json` (colon-prefixed key format `:${command}`)
 
 **Output Format**: JSON streaming
 **Tool Permissions**: Mode-based via `GeminiToolPermissionMapper`
 **File Reference**: Prompt passed inline or via temp file
-**MCP Config**: Supported (`getMcpConfigArgs()` / `getMcpConfigFilePath()`)
+**MCP Config**: Parallel-safe via `SettingsJsonMcpTracker`; written to `.gemini/settings.json` with `--allowed-mcp-server-names` flag; supports workspace MCP
 **Models**: `gemini-2.5-pro` | etc. (via `--model`)
 
 **Session Resumption**: Via session ID flag
@@ -453,6 +507,8 @@ Summary of required layers:
 - Shared notification/hook file monitoring
 - Supports both specific-file and wildcard polling modes
 - Extracts completion events and session IDs from hook output
+- Notification file naming: `session-{id}.json` or `thread-{id}.json`
+- Auto-deletes notification files after reading via `FileSystemUtils.readJsonFileAndDelete()`
 
 **CliOutputFormatter** (src/flightpath/harness/shared/CliOutputFormatter.ts):
 
@@ -474,21 +530,94 @@ Summary of required layers:
 
 **CliMcpConfigGenerator** (src/flightpath/harness/shared/CliMcpConfigGenerator.ts):
 
-- MCP configuration JSON generation
-- Template-based config creation
-- Provider-agnostic (caller specifies provider-specific fields)
+- Centralized, harness-agnostic MCP configuration generation
+- `getConfigFilePath()` — single source of truth for file-based MCP config paths (parallel-safe with working file suffix)
+- `generateJsonConfig()` — JSON MCP config for FlightPath server only
+- `generateJsonConfigWithUserServers()` — merges FlightPath server with user-defined `McpServerConfig` objects
+- `generateUserServersOnlyConfig()` — config with only user-defined servers (when FlightPath excluded from mcpServers list)
+- `generateInlineTomlConfig()` — inline TOML config for Codex (single-quote escaping for PowerShell)
+- Injects `FLIGHTPATH_WORKSPACE`, `FLIGHTPATH_WORKING_FILE`, and dynamic queue env vars
+
+**CliProviderUtils** (src/flightpath/harness/shared/CliProviderUtils.ts):
+
+- Single source of truth for common CLI provider utilities (avoids cross-provider duplication)
+- `shouldResumeSession()` — guards against accidental session resume from stale sessionId
+- `getWorkspaceDirs()` — collects VS Code workspace folders + `flightpath.cliAdditionalDirs` setting
+- `buildMcpConfigBlock()` — shared MCP injection decision logic; checks mcpServers list, extracts user servers, calls provider-specific `getMcpConfigArgs`
+- `buildProcessEnv()` — builds process environment with optional `FLIGHTPATH_DIAGNOSTIC_LOGS`
+- `buildSettingsJsonMcpEntries()` — builds MCP server entries for settings.json format (Gemini/Qwen); FlightPath server gets `trust: true`
+
+**CliEventMapper** (src/flightpath/harness/shared/CliEventMapper.ts):
+
+- Single source of truth for semantic tool name → CLI event type classification
+- Eliminates duplicated switch/if-else chains across parsers (~500 lines consolidated)
+- `classifyTool()` — maps any CLI tool name to `ToolClassification` (BASH_COMMAND, FILE_READ, FILE_WRITE, FILE_EDIT, FILE_DELETE, WEB_SEARCH, MCP_TOOL_CALL, TOOL_CALL)
+- MCP patterns detected FIRST (before lowercasing) to prevent misclassification of MCP tools named "search"
+- Supports MCP formats: `server(tool)` (Copilot), `server__tool` (Codex), `server.tool` / `mcp_*` (Claude)
+
+**SettingsJsonHooksTracker** (src/flightpath/harness/shared/SettingsJsonHooksTracker.ts):
+
+- Manages FlightPath hook injection into settings.json for CLIs that use config-file-based hooks (Qwen, Gemini)
+- Singleton per tool — one instance per CLI tool name
+- Reference-counted: tracks hook state per workflow (`registerWorkflow` / `unregisterWorkflow`)
+- Captures baseline hooks before any FlightPath modification; restores on last workflow unregister
+- Parallel-safe: each concurrent workflow's hooks are preserved until that specific workflow unregisters
+- Must be called under `mcpTracker.withLock()` to prevent races (both modify the same settings.json)
+- Works with `.qwen/settings.json` or `.gemini/settings.json` (tool-specific subdirectories)
+
+**SettingsJsonMcpTracker** (src/flightpath/harness/shared/SettingsJsonMcpTracker.ts):
+
+- Tracks MCP server lifecycle in settings.json for CLIs that use config-file-based MCP (Gemini, Qwen)
+- Singleton per tool with reference counting — servers aren't removed while another workflow needs them
+- `captureBaseline()` — lazily captures pre-existing MCP servers from both workspace and home directories; baseline servers are never removed
+- `registerServers()` — increments ref counts, only writes new entries to settings.json (skips existing)
+- `unregisterWorkflow()` — decrements ref counts, removes zero-ref servers (preserves baseline)
+- `getAllowedServerNames()` — returns `--allowed-mcp-server-names` values combining baseline + prompt's servers
+- `withLock()` — AsyncMutex-based serialization for all read-modify-write operations on settings.json
+- Used by SettingsJsonHooksTracker (hooks) to share the same file lock
 
 **Interfaces** (src/flightpath/harness/shared/interfaces/):
 
 - ICliProvider.ts: Main provider contract
 - IResponseParser.ts: Output parsing interface
-- INotificationMonitor.ts: Completion detection interface
+- INotificationMonitor.ts: Completion detection and hook configuration interface
 - IToolPermissionMapper.ts: Permission mapping interface
 - ILogParser.ts: Log file monitoring interface
 - index.ts: Barrel export for all interfaces
 
+**INotificationMonitor key types**:
+- `HookConfig`: Union type — `{ type: "json"; config: object }` (Copilot) | `{ type: "json-string"; config: string }` (Claude) | `{ type: "toml-inline"; config: string }` (Codex) | `{ type: "none" }` (OpenCode)
+- `buildHookConfig(scriptPath, notifyDir, workspaceRoot, userHooks?)` — builds hook config with optional user-defined hooks merged alongside FlightPath completion-detection hooks
+- `waitForSessionStart?(config, startTime, runId?, onCancel?)` — optional method for providers that support session start detection
+
 **Note**: These utilities contain NO provider-specific logic. All harness-specific behavior lives in provider directories.
 </sharedUtilities>
+
+<userDefinedHooks>
+**User-Defined Hooks** — all harnesses inject user hooks alongside FlightPath's built-in completion-detection hooks.
+
+**Architecture**: Each provider's `INotificationMonitor.buildHookConfig()` accepts an optional `userHooks` parameter. User hooks are defined in prompt files and forwarded through `WorkflowContext`.
+
+**Three injection patterns** based on CLI capabilities:
+
+1. **Per-prompt files** (Copilot, Claude): Each prompt execution creates its own hook file with FlightPath + user hooks merged. No conflicts in parallel workflows.
+   - Copilot: `.github/hooks/flightpath-<stem>-p<N>.json` (auto-discovered by CLI)
+   - Claude: `.flightpath/temp/claude-hook-settings-<stem>-p<N>.json` (passed via `--settings`)
+
+2. **Settings.json with ref-counting** (Gemini, Qwen): Hooks written to `.{tool}/settings.json` via `SettingsJsonHooksTracker`. Reference-counted for parallel safety — baseline captured before modification, restored when last workflow unregisters. Must acquire `SettingsJsonMcpTracker.withLock()` since both hooks and MCP share the same file.
+
+3. **Plugin/chain generation** (OpenCode, Codex):
+   - OpenCode: `OpenCodePluginGenerator` embeds user hooks directly in generated completion plugin
+   - Codex: Generates `flightpath-codex-notify-chain.js` chain script (runs FlightPath hook first, then user hooks sequentially; failures non-fatal)
+
+**Pre-trust mechanisms** (Gemini, Qwen): Both auto-approve FlightPath hook commands by writing entries to `~/.{tool}/trusted_hooks.json` with colon-prefixed key format (`:${command}`). Prevents interactive approval prompts during automated workflow execution.
+
+**Event mapping**: Each provider maps generic hook events to CLI-native event names:
+- `stop` → Copilot: `sessionEnd`, Claude: `Stop`, Gemini: `AfterAgent`, Qwen: `Stop`
+- `sessionStart` → all: respective native `SessionStart` / `sessionStart`
+- Claude/Qwen additionally support: `preToolUse`, `postToolUse`
+- Qwen additionally supports: `userPromptSubmit`
+</userDefinedHooks>
 
 <importantNotes>
 1. **Composition over inheritance**: Providers use "has-a" not "is-a" relationships
@@ -505,6 +634,10 @@ Summary of required layers:
 12. **Provider isolation**: Each provider directory is self-contained - no cross-provider dependencies
 13. **Interface contracts**: TypeScript interfaces (ICliProvider, IResponseParser, ILogParser, etc.) prevent implementation mistakes
 14. **Testable components**: Provider components testable in isolation without mocking
-15. **All integrations instantiated eagerly**: WorkflowOrchestrator creates all 4 integrations at startup (not lazy/on-demand)
+15. **All integrations instantiated eagerly**: WorkflowOrchestrator creates all 7 integrations at startup (not lazy/on-demand)
 16. **CliTerminalFormatter is NOT here**: It lives in `src/cli/CliTerminalFormatter.ts` — it is strictly a FlightPath CLI binary display helper, not a harness utility
+17. **User hooks are cross-cutting**: All 6 CLI providers inject user-defined hooks alongside FlightPath completion-detection hooks; three injection patterns (per-prompt files, settings.json ref-counting, plugin/chain generation)
+18. **Settings.json trackers are parallel-safe**: SettingsJsonHooksTracker and SettingsJsonMcpTracker use AsyncMutex + ref-counting for concurrent workflow execution (Gemini, Qwen)
+19. **ToolBuilder pattern**: Each provider has a `*ToolBuilder.ts` that converts raw tool call payloads into structured `CliEvent` objects, enabling code reuse between LogParser and ResponseParser
+20. **CliEventMapper centralizes tool classification**: Single source of truth mapping tool names to semantic types (BASH_COMMAND, FILE_EDIT, MCP_TOOL_CALL, etc.) — replaces ~500 lines of duplicated switch/case
 </importantNotes>

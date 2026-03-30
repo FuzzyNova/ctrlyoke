@@ -42,6 +42,7 @@ src/ui/webview-react/
 ├── tsconfig.json            # TypeScript config for webview
 ├── tsconfig.node.json       # TypeScript config for Vite/Node tooling
 ├── static/                  # Static assets (custom-icons.css, dictionaries)
+├── terminalRegistry.ts      # xterm.js instance owner (outside React lifecycle)
 ├── components/              # React components
 │   ├── layout/              # Main layout sections
 │   │   ├── CenterContentArea.tsx # Center panel container
@@ -51,10 +52,16 @@ src/ui/webview-react/
 │   │   ├── PromptsPanel.tsx      # Prompt list with drag-and-drop
 │   │   └── SettingsDrawer.tsx    # Harness/model settings
 │   ├── editor/              # Editor components
+│   │   ├── AgentQuickPicker.tsx  # Agent override in EditorFooter
 │   │   ├── CodeMirrorEditor.tsx  # CodeMirror 6 instance
-│   │   ├── EditorFooter.tsx      # Token count / status bar below editor
+│   │   ├── EditorFooter.tsx      # Token count / status bar + quick pickers
+│   │   ├── FooterQuickPicker.tsx # Reusable popup button for footer pickers
+│   │   ├── HarnessQuickPicker.tsx # Harness override in EditorFooter
+│   │   ├── HooksEditor.tsx       # Lifecycle hooks editor (Default/None/Custom)
+│   │   ├── ModelQuickPicker.tsx  # Model override in EditorFooter
 │   │   ├── PromptEditor.tsx      # Editor with toolbar
-│   │   └── PropertiesDrawer.tsx  # Prompt properties panel
+│   │   ├── PropertiesDrawer.tsx  # Prompt properties (6-tab drawer)
+│   │   └── SkillsQuickPicker.tsx # Skills override in EditorFooter
 │   ├── prompts/             # Prompt list components
 │   │   ├── BoundaryBar.tsx       # Visual separator between queue and final prompt
 │   │   ├── FinalPromptFooter.tsx # Footer for the final prompt section
@@ -65,9 +72,14 @@ src/ui/webview-react/
 │   ├── output/              # Output rendering components
 │   │   ├── BashOutput.tsx        # Shell command output block
 │   │   ├── CliOutput.tsx         # Main CLI output container
+│   │   ├── DiffView.tsx          # Lazy collapsible diff renderer with HLJS
+│   │   ├── FileOperationOutput.tsx # File read/write/edit/delete displays
 │   │   ├── MarkdownText.tsx      # Markdown renderer
+│   │   ├── OutputMinimap.tsx     # Right-rail step positions + diff regions
 │   │   ├── outputStyles.ts       # Shared output style constants
 │   │   ├── StatusMessage.tsx     # Status/info message block
+│   │   ├── TerminalInstance.tsx  # Single xterm.js terminal (mount/resize)
+│   │   ├── TerminalView.tsx      # Terminal panel (canvas + session rail)
 │   │   ├── ToolCallOutput.tsx    # Tool invocation display
 │   │   └── UndoChangesDialog.tsx # Confirm dialog for undoing file changes
 │   ├── workflow/            # Workflow management
@@ -82,34 +94,56 @@ src/ui/webview-react/
 │       ├── Button.tsx            # Base button component
 │       ├── Collapsible.tsx       # Expand/collapse wrapper
 │       ├── CustomSelect.tsx      # Styled select dropdown
+│       ├── DeleteConfirmModal.tsx # Destructive action confirm (with "don't ask again")
+│       ├── DrawerRow.tsx         # 2-column grid (wide) / fragment (narrow)
+│       ├── DrawerTabBar.tsx      # Tab bar for PropertiesDrawer pages
+│       ├── ErrorBoundary.tsx     # React error boundary with stack logging
+│       ├── HarnessDropdown.tsx   # Grouped harness selector with status badges
+│       ├── HarnessIcon.tsx       # SVG harness icons as data URIs
 │       ├── IconToggleButton.tsx  # Icon-only toggle button
+│       ├── McpServersEditor.tsx  # MCP server config + registry search
 │       ├── Modal.tsx             # Base modal wrapper
 │       ├── MultiCheckboxDropdown.tsx # Multi-select checkbox dropdown
 │       ├── PanelBar.tsx          # Collapsible panel header bar
+│       ├── PriorContextSelect.tsx # Prior context mode selector (6 keywords + custom)
+│       ├── ResetConfirmModal.tsx # Recoverable action confirm (with "don't ask again")
 │       ├── RunSelector.tsx       # Run history selector
-│       └── SplitButton.tsx       # Button with dropdown arrow
+│       ├── SkillsSelect.tsx      # Hybrid skills dropdown with portal popup
+│       ├── SplitButton.tsx       # Button with dropdown arrow
+│       └── permissionUtils.ts    # Tool permission mode logic per harness
 ├── hooks/                   # React hooks
+│   ├── terminalMessageHandlers.ts # Terminal PTY message routing
 │   ├── useAttachmentTokenCount.ts # Token counting with attachment caching
+│   ├── useDesktopLayout.ts      # Desktop 3-panel layout refs and resize logic
 │   ├── useElementNarrow.ts      # ResizeObserver-based width threshold
 │   ├── useMediaQuery.ts         # Responsive layout detection
 │   ├── useMessageHandler.ts     # Message routing from extension
+│   ├── useMobileLayout.ts       # Mobile single-column layout refs
+│   ├── useUndoRedoKeyHandler.ts # Ctrl+Z/Y undo/redo with running guard
 │   └── useVsCodeApi.ts          # VS Code API singleton
 ├── store/                   # Zustand state stores
 │   ├── workflowStore.ts     # Core workflow data + run history
 │   ├── uiStore.ts           # Layout, modals, history browsing
-│   ├── editorStore.ts       # Prompt editor state
-│   └── settingsStore.ts     # Harness/model/skills configuration
+│   ├── editorStore.ts       # Prompt editor state + properties
+│   ├── settingsStore.ts     # Harness/model/skills/hooks configuration
+│   └── terminalStore.ts     # Terminal session lifecycle
 ├── types/                   # TypeScript types
 │   ├── cliEvents.ts         # CLI event type definitions
-│   ├── dropdownNamespaces.ts # Dropdown namespace constants
+│   ├── drawerPages.ts       # Drawer page constants and tab definitions
+│   ├── dropdownNamespaces.ts # Dropdown namespace constants per harness
 │   ├── messages.ts          # Re-exports from src/types/
 │   └── vscode.ts            # VS Code API types
 ├── utils/                   # Utility functions
 │   ├── diff.ts              # Diff/patch utilities
+│   ├── diffUtils.ts         # Diff display helpers
 │   ├── endCondition.ts      # End condition helpers
+│   ├── hljsUtils.ts         # Highlight.js integration (language detection, styles)
 │   ├── logger.ts            # Webview logging utilities
+│   ├── markdownExport.ts    # Markdown export generation
 │   ├── outputUtils.ts       # Output formatting helpers
+│   ├── panelAnimation.ts    # Panel animation utilities
 │   ├── prompt.ts            # Prompt text utilities
+│   ├── promptUndo.ts        # Undo dialog logic and prompt undo actions
 │   ├── status.ts            # Status/state helpers
 │   ├── string.ts            # String utilities
 │   ├── time.ts              # Time/duration formatting
@@ -123,7 +157,7 @@ src/ui/webview-react/
 
 ## Zustand Store Pattern
 
-Four separate stores by domain (avoid mixing concerns):
+Five separate stores by domain (avoid mixing concerns):
 
 ### workflowStore - Core Workflow Data
 
@@ -194,19 +228,25 @@ interface UiState {
 
 ```typescript
 interface EditorState {
+  selectionTarget: EditorSelectionTarget; // NEW_PROMPT | QUEUE(index) | FINAL_PROMPT
   selectedPromptIndex: number | null; // null = new prompt mode
   originalPromptData: PromptItem | null; // for Cancel/revert
   savedNewPromptState: SavedNewPromptState | null; // saved when switching to edit mode
+  pendingEdits: Record<string, SavedNewPromptState>; // unsaved edits cache by target
   hasActiveQueue: boolean;
   promptText: string;
   promptName: string;
-  properties: PropertyValues; // harness, model, agent, skills, resumeSession, sessionId, etc.
+  properties: PropertyValues; // harness, model, agent, skills, hooks, mcpServers, toolPermissions, etc.
   isDirty: boolean;
   validationErrors: Record<string, string>;
 }
 ```
 
-**Mode determination**: `selectedPromptIndex === null` → new prompt mode; `number` → editing existing
+**PropertyValues** includes: `harness`, `model`, `agent`, `skills`, `resumeSession`, `sessionId`, `mcpServers`, `hooks` (object[] | null | undefined), `endCondition`, `priorContext`, `additionalArgs`, `toolPermissions`
+
+**Inheritance convention**: `undefined` = inherit from workflow/global, `null` = explicitly none, value = override
+
+**Mode determination**: `selectionTarget` drives the editor mode — `NEW_PROMPT` for new, `QUEUE(index)` or `FINAL_PROMPT` for editing existing
 
 **endCondition** is part of `PropertyValues` (not a top-level field)
 
@@ -222,13 +262,38 @@ interface SettingsState {
   availableAgents: AgentOption[];
   availableSkills: SkillOption[]; // workspace + user skill options
   harnessStatus: Record<HarnessId, HarnessStatus>;
-  globalSettings: GlobalSettings;
-  workflowProperties: WorkflowProperties;
+  globalSettings: GlobalSettings; // includes hooks, toolPermissions, confirmDeleteOperations, etc.
+  workflowProperties: WorkflowProperties; // includes hooks, toolPermissions overrides
   workflowLoaded: boolean; // enables settings panel
 }
 ```
 
-**Use cases**: Harness/model/skills selection, workflow properties, global defaults
+**Use cases**: Harness/model/skills selection, workflow properties, global defaults, hooks resolution
+
+**Hooks resolution**: `getEffectiveHooks()` resolves prompt → workflow → global inheritance. Returns workflow-level hooks if defined, otherwise global hooks.
+
+### terminalStore - Terminal Session Lifecycle
+
+```typescript
+interface TerminalState {
+  sessions: Record<string, TerminalSession[]>; // workflowId → ordered sessions
+  activeSessionIds: Record<string, string | null>; // workflowId → active session
+}
+
+interface TerminalSession {
+  id: string;
+  workflowId: string;
+  stepName: string;
+  kind: SessionKind; // "ai-cli" | "shell"
+  promptNumber?: number;
+  status: TerminalSessionStatus;
+  pendingOutput: string[]; // chunks buffered before xterm mount
+}
+```
+
+**Use cases**: Terminal session tracking, active session switching, output buffering
+
+**Lifecycle**: AI CLI sessions are cleared on each new run; shell sessions survive across runs. `pendingOutput` buffers PTY data before the xterm instance mounts.
 
 ## Store Access Patterns
 
@@ -371,6 +436,9 @@ Throughout the React webview, "provider" was renamed to "harness" for consistenc
 - `copilot-chat` - Copilot Chat window
 - `claude-cli` - Anthropic Claude CLI
 - `codex-cli` - OpenAI Codex CLI
+- `opencode-cli` - OpenCode CLI
+- `qwen-cli` - Qwen Code CLI
+- `gemini-cli` - Google Gemini CLI
 
 **Affected areas**:
 
@@ -467,6 +535,53 @@ function PromptEditor() {
   );
 }
 ```
+
+### PropertiesDrawer Tab System
+
+PropertiesDrawer uses a 6-tab layout with `DrawerTabBar` at the bottom:
+
+| Tab | Page ID | Content |
+|-----|---------|---------|
+| Harness | `harness` | Harness + Model selection |
+| Context | `context` | Resume Session + Prior Context + Session ID |
+| Validation | `validation` | End Condition (script, returns, timeout, retries) |
+| MCP | `mcp` | MCP Servers editor (McpServersEditor) |
+| Hooks | `hooks` | Lifecycle hooks editor (HooksEditor) |
+| Permissions | `permissions` | Tool permission mode + allow/deny lists |
+
+Tab definitions in `types/drawerPages.ts`. `DrawerTabBar` renders icons + responsive labels.
+
+### 3-Tier Property Inheritance
+
+Properties resolve: **Prompt** → **Workflow** → **Global settings**
+
+- `undefined` = inherit from next tier
+- `null` = explicitly none/disabled
+- value = override
+
+Each drawer control shows `"Default (X)"` label revealing the effective inherited value. Resolution for hooks: `settingsStore.getEffectiveHooks()`.
+
+### Terminal Architecture
+
+xterm.js instances live **outside React** in `terminalRegistry.ts`:
+
+- `terminalStore` tracks sessions (ai-cli vs shell), active session, pending output
+- `terminalRegistry` owns Terminal instances, handles create/attach/detach/freeze lifecycle
+- `TerminalView` renders the terminal panel (canvas + session rail)
+- `TerminalInstance` mounts a single xterm via registry attach
+
+**Session types**: `ai-cli` sessions clear on each run; `shell` sessions persist across runs. Pending output buffers PTY data before mount.
+
+### EditorFooter Quick Pickers
+
+`FooterQuickPicker` provides a reusable popup button pattern for compact property overrides in `EditorFooter`:
+
+- `HarnessQuickPicker` - Harness override (wraps HarnessDropdown)
+- `ModelQuickPicker` - Model override (wraps CustomSelect)
+- `AgentQuickPicker` - Agent selection
+- `SkillsQuickPicker` - Skills multi-select
+
+Each renders a portal-positioned upward popup. Override values show bold/colored styling.
 
 </componentPatterns>
 
@@ -625,15 +740,48 @@ async function loadWorkflow(filePath: string) {
 
 <testing>
 
-## Testing Status
+## Testing
 
-**Current**: No unit tests for React components (manual testing only)
+**Framework**: Vitest + React Testing Library
 
-**Planned**:
+**Test directory**: `src/ui/webview-react/test/`
 
-- Vitest for component tests
-- React Testing Library for integration tests
-- Store tests with mock state updates
+```
+test/
+├── setup.ts                       # Test setup (jsdom, mocks)
+├── hooks/
+│   └── useMessageHandler.test.ts  # Message routing tests
+├── utils/
+│   ├── diff.test.ts               # Diff/patch logic
+│   ├── endCondition.test.ts       # End condition helpers
+│   ├── outputUtils.test.ts        # Output formatting
+│   ├── prompt.test.ts             # Prompt utilities
+│   ├── promptUndo.test.ts         # Undo action computation
+│   ├── status.test.ts             # Status helpers
+│   ├── string.test.ts             # String utilities
+│   └── time.test.ts               # Time formatting
+├── components/
+│   ├── workflow/
+│   │   ├── WorkflowControls.test.tsx
+│   │   └── WorkflowStatus.test.tsx
+│   ├── output/
+│   │   ├── BashOutput.test.tsx
+│   │   └── MarkdownText.test.tsx
+│   └── shared/
+│       ├── Button.test.tsx
+│       ├── CustomSelect.test.tsx
+│       └── Modal.test.tsx
+└── store/
+    ├── editorStore.test.ts
+    ├── workflowStore.test.ts
+    └── workflowStore.temporal.test.ts
+```
+
+**Running tests**:
+
+```bash
+npm run test:webview         # Run webview tests
+```
 
 **Manual testing**:
 
@@ -700,6 +848,7 @@ npm run watch                # Watch mode
 
 1. Create component in appropriate subdirectory:
    - Layout sections → components/layout/
+   - Editor/properties → components/editor/
    - Reusable UI → components/shared/
    - Domain-specific → components/prompts/, components/output/, etc.
 

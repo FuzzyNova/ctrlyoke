@@ -10,38 +10,42 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 **Root-Level Unit Tests** (`src/test/*.test.ts`):
 - `promptFileParser.test.ts` (302 lines) - JSON/YAML parsing, schema validation, file path resolution
 - `validationUtils.test.ts` (473 lines) - Security validation, script path validation, end condition validation
-- `promptQueue.test.ts` (1005 lines) - State machine, lifecycle, pause/resume, dynamic queue extension
+- `promptQueue.test.ts` (1064 lines) - State machine, lifecycle, pause/resume, dynamic queue extension
 - `endConditionEvaluator.test.ts` (365 lines) - Script execution, timeout handling, retry logic with template substitution
-- `promptIdentity.test.ts` (144 lines) - Content hashing, duplicate detection
-- `flightpath.test.ts` (101 lines) - Component instantiation and integration
+- `promptIdentity.test.ts` (83 lines) - Content hashing, duplicate detection
+- `flightpath.test.ts` (100 lines) - Component instantiation and integration
 - `chatSessionParser.test.ts` (483 lines) - Chat session file parsing, UniversalCliOutput conversion
 - `agentExpander.test.ts` (497 lines) - Agent file expansion and context injection logic
+- `contextExpander.test.ts` (242 lines) - Context expansion with @-references, file/directory resolution
 - `promptFileSplitter.test.ts` (430 lines) - Large prompt splitting logic (token/line limits)
 - `retryUtils.test.ts` (321 lines) - Retry with backoff, permanent failures, custom delays
 - `SessionValidator.test.ts` (164 lines) - Session ID validation (UUID for Copilot/Claude, thread_ for Codex)
 
 **Unit Tests** (`src/test/unit/*.test.ts`):
 
-- `PropertyResolver.test.ts` (405 lines) - Three-tier property resolution (prompt → workflow → settings)
+- `PropertyResolver.test.ts` (727 lines) - Three-tier property resolution (prompt → workflow → settings), hooks property resolution
 - `SessionResolver.test.ts` (626 lines) - Session ID resolution, cross-harness validation, auto-resume logic
-- `CliOutputFormatter.test.ts` (624 lines) - Universal CLI output formatting for dashboard display
+- `CliOutputFormatter.test.ts` (603 lines) - Universal CLI output formatting for dashboard display
 - `CliEventMapper.test.ts` (249 lines) - Maps tool calls to CLI_EVENT_TYPES (BASH_COMMAND, FILE_WRITE, etc.), ToolClassification
-- `CliMcpConfigGenerator.test.ts` (259 lines) - MCP JSON config generation for CLI harnesses
+- `CliMcpConfigGenerator.test.ts` (258 lines) - MCP JSON config generation for CLI harnesses
 - `CliResponseParser.test.ts` (226 lines) - JSON object extraction from CLI stdout streams, CliUsage parsing
-- `CliToolPermissionMapper.test.ts` (301 lines) - Copilot→Claude tool permission pattern mapping, COPILOT_TO_CLAUDE_MAP
-- `ToolPermissionMappers.test.ts` (350 lines) - Copilot/Claude/Codex/OpenCode tool permission flag generation
-- `FileReferenceParser.test.ts` (281 lines) - Parses `@file`, `@dir/`, `#file:`, `#sym:` references from prompt text
+- `CliToolPermissionMapper.test.ts` (297 lines) - Copilot→Claude tool permission pattern mapping, COPILOT_TO_CLAUDE_MAP
+- `ToolPermissionMappers.test.ts` (475 lines) - Copilot/Claude/Codex/OpenCode tool permission flag generation
+- `FileReferenceParser.test.ts` (280 lines) - Parses `@file`, `@dir/`, `#file:`, `#sym:` references from prompt text
 - `DiscoveryUtils.test.ts` (95 lines) - `formatDisplayName` (kebab→Title Case), `isAccessibleDirectory`
 - `FileLockUtils.test.ts` (119 lines) - `withFileLock` concurrency safety for JSON file operations
 - `TempFileManager.test.ts` (189 lines) - Temp file creation/cleanup inside workspace root (`.flightpath/tmp/`)
 - `TypedEmitter.test.ts` (133 lines) - TypedEmitter fire/event pub-sub, subscription disposal
 - `QueueOperations.test.ts` (109 lines) - `getQueueStatus` workflow name extraction, `appendToQueue`
 - `OutputHistoryManager.test.ts` (118 lines) - Execution target persistence to `.flightpath/output-history.json`
-- `PriorContext.test.ts` (380 lines) - HarnessIntegration prior-context building (buildPriorContextSection and helpers)
+- `PriorContext.test.ts` (384 lines) - HarnessIntegration prior-context building (buildPriorContextSection and helpers)
+- `PromptFileLoader.test.ts` (99 lines) - PromptFileLoader.populateSettingsDefaults, settings seeding from VS Code config
+- `SettingsJsonHooksTracker.test.ts` (194 lines) - Hook baseline capture, FlightPath hook injection/restoration tracking
 - `OpenCodeResponseParser.test.ts` (140 lines) - OpenCode JSON stream parsing (text, tool events, session ID, token usage)
-- `OpenCodeNotificationMonitor.test.ts` (50 lines) - OpenCode hook config (returns none; OpenCode uses plugin file)
-- `WorkflowExecutor.test.ts` (434 lines) - WorkflowExecutor execution context, prompt cycling, state transitions
-- `WorkflowInstance.test.ts` (423 lines) - WorkflowInstance lifecycle and state management
+- `OpenCodeNotificationMonitor.test.ts` (33 lines) - OpenCode hook config (returns none; OpenCode uses plugin file)
+- `WorkflowExecutor.test.ts` (433 lines) - WorkflowExecutor execution context, prompt cycling, state transitions
+- `WorkflowInstance.test.ts` (432 lines) - WorkflowInstance lifecycle and state management
+- `WorkflowOrchestrator.test.ts` (68 lines) - Startup auto-load gating (dashboard-ready + init coordination)
 - `WorkingFileManager.test.ts` (233 lines) - WorkingFile state (startWork, completeWork, reset)
 
 **Integration Tests** (`src/test/integration/*.test.ts`):
@@ -52,7 +56,7 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 
 **Harness Log Parser Tests** (`src/test/suite/harness/*.test.ts`):
 
-- `LogParsers.test.ts` (1747 lines) - All harness log parsers:
+- `LogParsers.test.ts` (1746 lines) - All harness log parsers:
   - ClaudeLogParser (JSONL from `~/.claude/projects/`)
   - CopilotLogParser (flat file + subdirectory formats)
   - CodexLogParser (nested payload, date-based directories)
@@ -70,7 +74,7 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - Nested `suite()` blocks for logical grouping
 - Descriptive test names: "should [expected behavior] when [condition]"
 - TDD style (Mocha UI: `'tdd'`)
-- Total: ~12,100 lines across 36 test files
+- Total: ~13,100 lines across 40 test files
 </testStructure>
 
 <testCoverage>
@@ -79,11 +83,14 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - Validation: ValidationUtils, SessionValidator
 - State management: PromptQueue, PromptIdentity, WorkflowInstance, WorkingFileManager
 - Execution: EndConditionEvaluator, RetryUtils, WorkflowExecutor
+- Orchestration: WorkflowOrchestrator (startup auto-load gating), PromptFileLoader (settings defaults)
 - CLI harness shared: CliEventMapper, CliMcpConfigGenerator, CliResponseParser, CliToolPermissionMapper
 - Tool permissions: Copilot/Claude/Codex/OpenCode mappers
+- Hooks: SettingsJsonHooksTracker (baseline capture, injection tracking), PropertyResolver hooks resolution
 - OpenCode: OpenCodeResponseParser, OpenCodeNotificationMonitor
 - Log parsers: ClaudeLogParser, CopilotLogParser, CodexLogParser
 - Utilities: PropertyResolver, SessionResolver, CliOutputFormatter, DiscoveryUtils, FileLockUtils, TempFileManager, TypedEmitter
+- Context: ContextExpander (@-reference resolution, file/directory expansion)
 - Queue helpers: QueueOperations, OutputHistoryManager
 - HarnessIntegration: prior-context building
 - Chat integration: ChatSessionParser, AgentExpander

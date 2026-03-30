@@ -3,13 +3,14 @@ applyTo: "src/types/**"
 ---
 
 <purpose>
-Core data structures and constants for FlightPath extension. TypeScript strict mode enforced. Six primary files:
+Core data structures and constants for FlightPath extension. TypeScript strict mode enforced. Seven primary files:
 - **FlightPathTypes.ts** - Core workflow and integration types
 - **IDashboardSink.ts** - Interface decoupling WorkflowInstance from VS Code API
 - **DashboardConstants.ts** - Shared constants (SINGLE SOURCE OF TRUTH for all string literals, enums, and UI values)
 - **CliOutputTypes.ts** - Universal CLI output types for standardizing output across harnesses
 - **WebviewMessageTypes.ts** - Consolidated message types for extension ↔ webview communication
 - **OutputHistoryTypes.ts** - Per-run workflow output history, workspace snapshots, and undo types
+- **WorkflowContextTypes.ts** - Workflow context passed to harness sendPrompt calls
 </purpose>
 
 <flightPathTypes>
@@ -19,24 +20,33 @@ Core data structures and constants for FlightPath extension. TypeScript strict m
 
 **`Harness` enum:** `CopilotCli` | `CopilotChat` | `ClaudeCli` | `CodexCli` | `OpenCodeCli` | `QwenCli` | `GeminiCli` — values: `"copilot-cli"` | `"copilot-chat"` | `"claude-cli"` | `"codex-cli"` | `"opencode-cli"` | `"qwen-cli"` | `"gemini-cli"`
 
+**`HookEvent` type:** `"stop" | "sessionStart" | "preToolUse" | "postToolUse" | "userPromptSubmit"` — logical hook event names mapped to CLI-specific event names at inject time. Unsupported events for the active harness are silently skipped.
+
+**`UserHookConfig` interface:** `event: HookEvent`, `command: string`, `timeoutSec?: number` — user-defined hook to run alongside FlightPath's built-in hooks.
+
+**`ToolPermissionsOverride` interface:** `mode?: ToolPermissionMode`, `allowedTools?: string[]`, `deniedTools?: string[]` — per-workflow/prompt tool permission overrides. Uses Copilot CLI format; auto-converted for Claude/Qwen.
+
+**`EndConditionCompareSource` type:** `"auto" | "stdout" | "stderr" | "exitCode"` — controls which output source is compared against `returns`.
+
+**Re-export:** `ToolPermissionMode` from `IToolPermissionMapper` — `"dangerouslyAllowAll" | "allowAll" | "custom"`
+
 **`ExecutionProperties` interface** — shared by `PromptFile`, `PromptItem`, `PromptRuntimeMetadata`. Three-tier precedence: prompt-level > workflow-level > global settings.
 
-Fields: `harness?`, `model?`, `agent?: string | null` (null = explicitly disable), `skills?: string[] | null`, `resumeSession?`, `mcpServers?: (string | McpServerConfig)[] | null` (null = explicitly disable), `sessionId?: string | number`, `endCondition?: EndCondition | null` (null = explicitly disable), `priorContext?: PriorContext`, `additionalArgs?: string | null`
+Fields: `harness?`, `model?`, `agent?: string | null` (null = explicitly disable), `skills?: string[] | null`, `resumeSession?`, `mcpServers?: (string | McpServerConfig)[] | null` (null = explicitly disable), `sessionId?: string | number`, `endCondition?: EndCondition | null` (null = explicitly disable), `priorContext?: PriorContext`, `additionalArgs?: string | null`, `toolPermissions?: ToolPermissionsOverride | null` (null = passthrough to harness local config), `hooks?: UserHookConfig[] | null` (null or [] = explicitly no hooks)
 
 **Core interfaces:**
 
 - `PromptFile extends ExecutionProperties` — `prompt?`, `prompts?: PromptItem[]`, `finalPrompt?: PromptItem`
 - `PromptItem extends ExecutionProperties` — `name?`, `prompt`, `sessionId?`, `_runtime?: PromptRuntimeMetadata`
-- `PromptRuntimeMetadata extends ExecutionProperties` — `startedAt`, `completedAt?`, `retryCount?`, `responseText?` (for priorContext injection)
+- `PromptRuntimeMetadata extends ExecutionProperties` — `startedAt`, `completedAt?`, `terminalStatus?: "completed" | "cancelled" | "failed"`, `retryCount?`, `responseText?` (for priorContext injection)
 - `WorkingFile extends PromptFile` — `originalFile?`, `workflowName`, `startedAt`, `lastModifiedAt?`, `_runtime?: WorkingFileRuntime`
 - `WorkingFileRuntime` — `currentIndex`, `executionState: ExecutionState`, `finalPrompt?: FinalPromptRuntimeState`
 - `FinalPromptRuntimeState` — `phase: FinalPromptPhase`, `loopCount`, `status?`, `startedAt?`, `completedAt?`, `responseTexts?: string[]`
 - `QueueState` — `currentIndex`, `status: ExecutionState`, `prompts`, `results`, `stopped`, `completedIndices: Set<string>`, `totalExecutionTime`, `queueExtensions`, `lastReloadTime?`, `startTime?`, `pausedTime?`, `totalPausedDuration`, `workingFilePath?`, `workflowName?`
 - `PromptResult` — `prompt`, `status: StepStatus`, `timestamp`, `endConditionResult?`, `error?`, `retryCount?`, `scriptOutput?`
-- `EndCondition` — `script`, `returns`, `timeout?`, `maxRetries?`, `retryPrompt?`, `resumeSessionOnRetry?`
-- `DynamicQueueConfig` — `enabled`, `maxQueueSize`, `maxWorkflowExecutionTime`, `unlimitedMode`, `notifyOnExtension`
-- `WorkflowContext` — `promptIndex`, `allPrompts`, `filePath?`, `workflowFile?`, `promptQueue?`
-- `WorkflowSummary` — `id`, `workflowName`, `filePath`, `workingFilePath?`, `executionState`, `currentStep` (0-indexed), `totalSteps`, `startedAt?`, `completedAt?`, `managedBy?: "vscode" | "cli"`
+- `EndCondition` — `script`, `returns`, `compareSource?: EndConditionCompareSource`, `timeout?`, `maxRetries?`, `retryPrompt?`, `resumeSessionOnRetry?`
+- `DynamicQueueConfig` — `maxQueueSize`, `maxWorkflowExecutionTime`, `unlimitedMode`, `notifyOnExtension`
+- `WorkflowSummary` — `id`, `workflowName`, `filePath`, `workingFilePath?`, `executionState`, `currentStep` (0-indexed), `totalSteps`, `startedAt?`, `completedAt?`, `managedBy?: RunnerId`
 - `WorkflowRunnerLock` — `runner: RunnerId`, `pid`, `startedAt`, `lastHeartbeat`, `instanceId`, `workflowId`
 
 **Utility:** `workflowDisplayStep(s)` — returns `currentStep + 1` for 1-based display labels.
@@ -52,12 +62,14 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 **Key methods:**
 - `updateFileSelected(fileName, prompts, workflowName?, finalPrompt?, finalPromptRuntime?)` — initial load
 - `updateSessionRestored(fileName, prompts, results, executionState, currentIndex, ...)` — restore paused/stopped session
-- `updateExecutionStarted(fileName, totalSteps, isContinuation?, preserveStepCount?)` — run begins
+- `updateExecutionStarted(workflowId, fileName, totalSteps, isContinuation?, preserveStepCount?)` — run begins
 - `updateProgress(current, total)` / `updateExecutionState(state)`
 - `updateStepStatus(stepIndex, status, details?)` / `updateRetryAttempt(stepIndex, currentRetry, maxRetries)`
 - `updateCliOutput(stepIndex, output)` / `updateCliStreamingChunk(stepIndex, chunk)` / `updateCliStreamingEvents(stepIndex, events)`
 - `updatePromptsExtended(prompts, finalPrompt?, executionState?)` / `updatePromptDeleted(...)`
 - `updateFinalPrompt(finalPrompt)` / `updateFinalPromptStatus(status, loopCount, phase)` / `updateFinalPromptOutput(loopIndex, output)`
+- `updateFinalPromptStreamingChunk(loopIndex, chunk)` / `updateFinalPromptStreamingEvents(loopIndex, events)`
+- `updateWorkflowName(name)`
 - `notifyRunHistoryUpdated(runCount, runTimestamps?, runStates?)` / `notifyWorkflowStateReset(prompts)` / `notifyStartPositionSet(prompts, currentIndex)` / `notifyPromptsReordered(prompts)` / `notifyUndoRedoSynced()`
 </iDashboardSink>
 
@@ -88,16 +100,25 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 
 **Core types defined here:**
 
-- `CliOutput` — `prompt`, `response`, `structured?: StructuredOutput`, `elapsed`, `tokens?: TokenStats`, `isStreaming`, `cliCommand?`, `workingDirectory?`, `timestampMs?`, `attemptIndex?`, `rawTextOutput?`
+- `CliOutput` — `prompt`, `response`, `structured?: StructuredOutput`, `elapsed`, `tokens?: TokenStats`, `isStreaming`, `cliCommand?`, `workingDirectory?`, `timestampMs?`, `attemptIndex?`, `rawTextOutput?`, `errorMessage?`
 - `TokenStats` — `prompt`, `completion`, `cached?`, `cacheCreated?`, `contextWindowUsed?`, `contextWindowSize?`
 - `StructuredOutput = UniversalCliOutput` (alias)
 - `PromptItem` — webview-facing shape matching `FlightPathTypes.PromptItem` (includes all `ExecutionProperties` fields + `status?: StepStatus` + `_runtime?`)
 - `StatusMessage` — `message`, `severity: StatusSeverity`, `timestamp: number`
+- `OutputStatusMessage` — `message`, `severity: StatusSeverity`, `timestamp: string`, `timestampMs: number`
 - `RetryState` — `currentRetry`, `maxRetries`
 - `EndConditionConfig` — `script`, `returns?`, `timeout?`, `maxRetries?`, `retryPrompt?`
+- `UndoFileAction` — `"delete" | "restore-content" | "reverse-patch"`
+- `UndoCandidateTier` — `"tier1" | "tier2"` (event-attributed vs snapshot-only)
 
 **Message payload interfaces** (selection of key types):
-`InitMessageData`, `FileSelectedMessage`, `SessionRestoredMessage`, `ExecutionStartedMessage` (with `isContinuation?`/`preserveStepCount?`), `CliOutputMessage`, `CliStreamingEventsMessage`, `FinalPromptStatusChangedMessage`, `FinalPromptOutputMessage`, `AgentsUpdateMessage`, `SkillsUpdateMessage`, `GlobalSettingsUpdatedMessage`, `WorkflowsListMessage`, `WorkflowAddedMessage`, `WorkflowDismissedMessage`, `WorkflowSummaryUpdatedMessage`, `SaveWorkflowDialogDataMessage`, `OutputHistoryLoadedMessage`, `StepUndoDataUpdatedMessage`, `UndoPromptChangesMessage`, `UndoPromptResultMessage`, `UndoRecordUpdatedMessage`, `RedoPromptChangesMessage`
+`InitMessageData` (globalSettings includes `hooks: UserHookConfig[]`), `FileSelectedMessage`, `SessionRestoredMessage`, `ExecutionStartedMessage` (with `workflowId`, `isContinuation?`/`preserveStepCount?`), `CliOutputMessage`, `CliStreamingEventsMessage`, `FinalPromptStatusChangedMessage`, `FinalPromptOutputMessage`, `FinalPromptStreamingChunkMessage`, `FinalPromptStreamingEventsMessage`, `AgentsUpdateMessage`, `SkillsUpdateMessage`, `GlobalSettingsUpdatedMessage` (globalSettings includes `hooks`, `harnessDefaultModels?`, `harnessDefaultAdditionalArgs?`, `skills?`, `respectGitignore?`, `confirmDeleteOperations?`, `confirmResetOperations?`), `WorkflowsListMessage`, `WorkflowAddedMessage`, `WorkflowDismissedMessage`, `WorkflowSummaryUpdatedMessage`, `SaveWorkflowDialogDataMessage`, `OutputHistoryLoadedMessage`, `StepUndoDataUpdatedMessage`, `UndoPromptChangesMessage`, `UndoPromptResultMessage`, `UndoRecordUpdatedMessage`, `RedoPromptChangesMessage`, `UndoWorkflowChangesMessage`, `RedoWorkflowChangesMessage`, `ReorderPromptsMessage`
+
+**MCP Discovery types:**
+
+- `LocalMcpServerEntry` — `id`, `command`, `args?`, `env?`, `source: "vscode-workspace" | "vscode-user" | "claude-workspace" | "claude-user"`
+- `RegistryMcpEntry` — `id`, `name`, `description`, `packageName?`, `installCommand?`, `envVars?`, `verified?`, `claudeCodeCopyText?`, `popularityScore?`, `trendingScore?`
+- MCP request/result messages: `RequestMcpLocalServersMessage`, `McpLocalServersResultMessage`, `RequestMcpRegistryMessage`, `McpRegistryResultMessage`, `RequestMcpWorkspaceServersMessage`, `McpWorkspaceServersResultMessage`, `SaveMcpWorkspaceServersMessage`
 
 **Undo types (also re-exported from OutputHistoryTypes):**
 
@@ -142,6 +163,14 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 - `UndoDialogScope = { mode: "prompt"; target } | { mode: "singleFile"; target; attemptIndex; path }`
 </outputHistoryTypes>
 
+<workflowContextTypes>
+**File: WorkflowContextTypes.ts**
+
+Workflow context passed to harness `sendPrompt` calls. Single source of truth — replaces all per-file inline type duplicates. Add fields here; no other file needs updating for new context properties.
+
+**`WorkflowContext` interface:** `promptIndex`, `allPrompts: PromptItem[]`, `filePath?`, `workflowName?` (human-readable, for temp file naming), `instanceId?` (workflow UUID for PTY session keying), `workingFilePath?` (sets `FLIGHTPATH_WORKING_FILE` for MCP), `resolvedProperties?: ResolvedProperties`, `workflowFile?: PromptFile`, `promptQueue?: PromptQueue`, `finalPromptSessionId?` (consumed by SessionResolver when sessionId is the "finalPrompt" sentinel)
+</workflowContextTypes>
+
 <dashboardConstants>
 **File: DashboardConstants.ts - SINGLE SOURCE OF TRUTH**
 
@@ -149,7 +178,7 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 
 **Constant objects:**
 
-- `MESSAGE_TYPES` — 100+ extension↔webview message type strings
+- `MESSAGE_TYPES` — 100+ extension↔webview message type strings (includes Terminal I/O, MCP Discovery, Workflow Undo/Redo)
 - `EXECUTION_STATES` — `idle | running | paused | stopped | cancelling | completed | error`
 - `STEP_STATUS` — `pending | sent | running | completed | failed | cancelled | skipped`
 - `FINAL_PROMPT_PHASES` — `queue | finalPrompt`
@@ -162,16 +191,23 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 - `HARNESS_STATUS_STRINGS` — `checking | available | unavailable`
 - `UI_STRINGS` — loading/checking text
 - `QUEUE_POSITION` — `next | end | beforeCurrent`
+- `EDITOR_TARGET_KINDS` — `newPrompt`
+- `EDITOR_PLACEHOLDER_TEXT` — `DEFAULT`, `FINAL_PROMPT` (placeholder hints for CodeMirrorEditor)
+- `TERMINAL_SESSION_STATUS` — `running | completed | failed`
+- `SESSION_KINDS` — `ai-cli | shell`
 - `SESSION_ID_SENTINELS` — `{ FINAL_PROMPT: "finalPrompt" }` (resume session from prior finalPrompt loop)
-- `PROMPT_PROPERTIES`, `END_CONDITION_PROPERTIES` — property name constants
+- `PROMPT_PROPERTIES` — property name constants: `PROMPT`, `ID`, `HARNESS`, `MODEL`, `AGENT`, `SKILLS`, `RESUME_SESSION`, `SESSION_ID`, `MCP_SERVERS`, `HOOKS`, `END_CONDITION`
+- `END_CONDITION_PROPERTIES` — `SCRIPT`, `RETURNS`, `TIMEOUT`, `MAX_RETRIES`, `RETRY_PROMPT`, `RESUME_SESSION_ON_RETRY`
 - `CLI_EVENT_TYPES` — `text | thinking | bashCommand | fileRead | fileWrite | fileEdit | fileDelete | mcpToolCall | webSearch | toolCall | toolResult`
 - `OPERATION_STATUS` — `initiated | completed | failed`
 - `STATUS_MESSAGE_SEVERITY` — `info | warning | error`
 - `RUNNER_IDS` — `vscode | cli` (written into workflow lock files)
 - `LOCK_STATUS` — `none | stale | active-vscode | active-cli`
 - `LOG_LEVELS` — `debug | info | warn | error` (webview → extension LOG_MESSAGE payload)
+- `ATTACHMENT_PREFIXES` — `file | symbol | directory | selection | git` (id namespace for `<attachment>` XML elements)
+- `DEFAULT_WORKFLOW_NAME` — `"New Workflow"`
 
-**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `FinalPromptPhase`, `HarnessId`, `StatusMessageSeverity`, `ActionType`, `QueuePosition`, `FileOperationStatus`, `CliEventType`, `HarnessStatusString`, `WebviewLogLevel`, `RunnerId`, `LockStatus`
+**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `FinalPromptPhase`, `HarnessId`, `StatusMessageSeverity`, `ActionType`, `QueuePosition`, `FileOperationStatus`, `CliEventType`, `HarnessStatusString`, `WebviewLogLevel`, `RunnerId`, `LockStatus`, `ExecutionMode`, `EditorTargetKind`, `TerminalSessionStatus`, `SessionKind`
 </dashboardConstants>
 
 <typeSafetyPatterns>
@@ -205,10 +241,12 @@ const model = prompt.model || workflow.model || ConfigurationUtils.getModel();
 const agent = prompt.agent ?? workflow.agent ?? undefined; // null = explicitly disabled
 const skills = prompt.skills ?? workflow.skills ?? undefined; // null = explicitly disabled
 const additionalArgs = prompt.additionalArgs ?? workflow.additionalArgs ?? undefined; // null = explicitly disabled
+const hooks = prompt.hooks ?? workflow.hooks ?? undefined; // null or [] = explicitly no hooks
+const toolPermissions = prompt.toolPermissions ?? workflow.toolPermissions ?? undefined; // null = passthrough to harness config
 const resumeSession = prompt.resumeSession ?? workflow.resumeSession ?? ConfigurationUtils.getResumeSession();
 ```
 
-**`agent`, `skills`, `additionalArgs` null semantics:** `null` explicitly disables the inherited value; `undefined` inherits from the next tier. Always use `??` (not `||`) when checking these fields.
+**Null-disableable field semantics (`agent`, `skills`, `additionalArgs`, `hooks`, `toolPermissions`, `mcpServers`, `endCondition`):** `null` explicitly disables the inherited value; `undefined` inherits from the next tier. Always use `??` (not `||`) when checking these fields.
 </typeSafetyPatterns>
 
 <relatedFiles>
@@ -217,6 +255,7 @@ const resumeSession = prompt.resumeSession ?? workflow.resumeSession ?? Configur
 - `../flightpath/PromptQueue.ts` - Uses QueueState and PromptResult
 - `../flightpath/orchestration/PromptSessionResolver.ts` - Session ID resolution
 - `../utils/PromptIdentity.ts` - Hash-based prompt identity for deduplication
+- `../utils/PropertyResolver.ts` - Three-tier property resolution (ResolvedProperties used by WorkflowContext)
 - `/schemas/prompt-schema.json` - JSON Schema mirrors TypeScript types
 
 **Integrations:**
@@ -241,7 +280,7 @@ const resumeSession = prompt.resumeSession ?? workflow.resumeSession ?? Configur
 3. **Type Safety** - Use ExecutionState, StepStatus, MessageType, HarnessId, FinalPromptPhase, etc. instead of raw strings
 4. **Import Consistency** - Always import from DashboardConstants for shared values
 5. **Harness terminology** - Use "harness" (not "provider") for AI framework/tool selection
-6. **Null semantics for agent/skills/additionalArgs** - `null` = explicitly disable, `undefined` = inherit; use `??` not `||`
+6. **Null semantics for agent/skills/additionalArgs/hooks/toolPermissions/mcpServers/endCondition** - `null` = explicitly disable, `undefined` = inherit; use `??` not `||`
 7. **When adding new constants:**
    - Add to appropriate constant object in DashboardConstants.ts
    - Export as const with `as const` assertion

@@ -3,7 +3,7 @@ applyTo: "src/cli.ts,src/cli/**"
 ---
 
 <purpose>
-The standalone FlightPath CLI binary. Invoked as `flightpath run <file>` or `flightpath validate <file>` from the terminal. This is a separate Node.js executable built by esbuild, distinct from the VS Code extension. It uses the same core engine (WorkflowInstance, PromptQueue, harness integrations) but bridges them through a CLI adapter instead of the VS Code API.
+The standalone FlightPath CLI binary. Invoked as `flightpath run <file>`, `flightpath run --prompt <text>`, or `flightpath validate <file>` from the terminal. This is a separate Node.js executable built by esbuild, distinct from the VS Code extension. It uses the same core engine (WorkflowInstance, PromptQueue, harness integrations) but bridges them through a CLI adapter instead of the VS Code API.
 </purpose>
 
 <architecture>
@@ -30,7 +30,7 @@ The FlightPath CLI adds only: argument parsing (Commander.js), TTY detection, `C
 2. Instantiates `CliAdapter` + registers it via `registerCliAdapter()`
 3. Creates `IntegrationFactory(platform)` + `WorkflowInstance`
 4. In headless mode, subscribes: `onPromptStart`, `onStreamingEvents`, `onStreamingChunk`, `onWorkflowStatusMessage`, `onPromptComplete`
-5. Calls `instance.loadPromptFile()`, acquires `WorkflowLockManager` lock with 5s heartbeat
+5. Calls `instance.loadPromptFile()` or `instance.loadPromptString()` (for `--prompt`), acquires `WorkflowLockManager` lock with 5s heartbeat
 6. Applies `--resume` / `--new-session` overrides to the first prompt's `sessionId`
 7. Calls `instance.executeLoadedPromptFile(harness)`
 8. Maps final state to an exit code via `getExitCode()`, releases lock

@@ -21,7 +21,7 @@ Orchestration, parsing, queue, validation, and template management. Top-level `s
 
 <integrationFactory>
 **`IntegrationFactory.ts`** — platform-agnostic factory for CLI harness integrations only.
-- `createCopilotCli()`, `createClaudeCli()`, `createCodexCli()`, `createOpenCodeCli()` — each wraps the matching provider in a `CliIntegration`
+- `createCopilotCli()`, `createClaudeCli()`, `createCodexCli()`, `createOpenCodeCli()`, `createQwenCli()`, `createGeminiCli()` — each wraps the matching provider in a `CliIntegration`
 - `createForHarness(harness)` — switch-dispatches to the correct CLI factory method
 - `createForExecution(harness)` — creates an isolated per-run integration (`registerWithContext=false`, calls `markAsReady()`)
 
@@ -43,10 +43,12 @@ Orchestration, parsing, queue, validation, and template management. Top-level `s
 
 <workflowInstance>
 **`WorkflowInstance.ts`** encapsulates all per-workflow execution state.
-**Owns:** `PromptQueue`, `WorkflowExecutor`, `EndConditionHandler`, `EndConditionEvaluator`, `PromptFileLoader`, `PromptFileWatcher`, `OutputHistoryManager`, `activeIntegration`
-**Dependencies injected by WorkflowOrchestrator:** `integrationFactory` (for per-run execution integrations), `getDetectorIntegration(harness?)` callback, `onWorkflowNameChange`, `onStatusBarUpdate`
-**Events:** `onPromptStart`, `onPromptComplete` — carry `PromptStartData` / `PromptCompleteData` payloads
-**Phase 1:** Orchestrator holds exactly one instance; Phase 2 will hold many in parallel.
+**Owns:** `PromptQueue`, `WorkflowExecutor`, `EndConditionHandler`, `EndConditionEvaluator`, `PromptFileLoader`, `PromptFileWatcher`, `OutputHistoryManager`, `OutputCaptureBuffer`, `activeIntegration`
+**`executionIntegrations` map:** Caches per-run integrations keyed by harness ID; reuses the same integration across prompts when harness doesn't change (avoids allocation per prompt in long-running workflows)
+**`lastRunIntegrations`:** Previous run's integrations kept for terminal cleanup (closed at start of next run)
+**Dependencies injected by WorkflowOrchestrator:** `integrationFactory` (for per-run execution integrations), `getDetectorIntegration(harness?)` callback, `onWorkflowNameChange`, `onStatusBarUpdate`, `dashboardSink`
+**Events:** `onPromptStart`, `onPromptComplete`, `onStreamingEvents`, `onStreamingChunk`, `onWorkflowStatusMessage` — carry typed payloads
+**Background buffering:** `OutputCaptureBuffer` stores per-step output for replay when switching between multiple parallel workflows; `bufferedEvents` array (max 500) for dashboard event replay
 </workflowInstance>
 
 <promptQueue>
@@ -70,7 +72,7 @@ AJV validation, normalizes single/multi formats, loads schema from `out/schemas/
 **Never edit schemas in `out/`** — source is `/schemas/`, auto-copied during build
 **Supported formats:** .flightpath.yaml/.yml, .flightpath.json, .prompt.md
 **Prompt path resolution:** If a prompt value looks like a file path, resolves relative to: prompt file dir → workspace root → `.flightpath/` dir
-**Workflow-level properties** (`harness`, `model`, `agent`, `skills`, `resumeSession`, `sessionId`, `mcpServers`, `endCondition`, `priorContext`, `additionalArgs`) are copied to `PromptFile` and also applied per-`PromptItem`
+**Workflow-level properties** (`harness`, `model`, `agent`, `skills`, `resumeSession`, `sessionId`, `mcpServers`, `hooks`, `endCondition`, `priorContext`, `additionalArgs`) are copied to `PromptFile` and also applied per-`PromptItem`
 **`PlatformAdapter` dependency:** Optional; used for user-facing error messages
 </promptFileParser>
 
@@ -138,6 +140,7 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 - `EndConditionHandler` — Retry logic
 - `EndConditionEvaluator` — Script execution
 - `PromptQueue` + `WorkingFileManager` — Queue state + file persistence
+- `OutputCaptureBuffer` — Output replay for background/parallel workflows
 - `IntegrationFactory` / `VsCodeIntegrationFactory` — Harness integration factories
 </orchestrationClasses>
 
@@ -164,6 +167,7 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 - `./IntegrationFactory.ts` — CLI harness factory (platform-agnostic)
 - `./VsCodeIntegrationFactory.ts` — Extends IntegrationFactory with copilot-chat support
 - `./WorkflowInstance.ts` — Per-workflow execution lifecycle container
+- `./OutputCaptureBuffer.ts` — Per-step output capture and replay for background workflows
 - `./WorkingFileManager.ts` — Working file I/O extracted from PromptQueue
 - `./harness/CliIntegration.ts` — Generic CLI integration (composition-based)
 - `./harness/copilot/CopilotCliProvider.ts` — Copilot CLI harness
