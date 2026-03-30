@@ -1254,7 +1254,9 @@ export class CliIntegration extends HarnessIntegration {
       getWorkspaceRoot: () => this.getWorkspaceRoot(),
       isCancelling: () => this.isCancelling,
       isPtyTerminated: () =>
-        this.ptyExitedWithError !== null ? { exitCode: this.ptyExitedWithError } : null,
+        this.ptyExitedWithError !== null
+          ? { exitCode: this.ptyExitedWithError }
+          : null,
       onStreamingEvents: (events) => this.streamingEventsEmitter.fire(events),
       onResponseComplete: (msg) => this.responseCompleteEmitter.fire(msg),
       logResponse: (response, statistics) =>
@@ -1752,7 +1754,10 @@ export class CliIntegration extends HarnessIntegration {
       await fs.promises.unlink(p).catch(() => {});
     }
     // Restore workspace config files modified during interactive hook setup (e.g., Gemini, Qwen)
-    await this.provider.cleanupWorkspaceArtifacts?.(workspaceRoot);
+    await this.provider.cleanupWorkspaceArtifacts?.(
+      workspaceRoot,
+      workingFilePath
+    );
   }
 
   /**

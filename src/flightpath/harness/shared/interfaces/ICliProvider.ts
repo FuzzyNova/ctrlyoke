@@ -202,8 +202,12 @@ export interface ICliProvider {
    * instead — this method is specifically for backup-and-restore patterns.
    *
    * @param workspaceRoot Workspace root directory
+   * @param workingFilePath The working file path for this workflow run (unique key)
    */
-  cleanupWorkspaceArtifacts?(workspaceRoot: string): Promise<void>;
+  cleanupWorkspaceArtifacts?(
+    workspaceRoot: string,
+    workingFilePath?: string
+  ): Promise<void>;
 
   /**
    * Check if CLI is available on the system

@@ -15,16 +15,16 @@ import { GeminiResponseParser } from "./GeminiResponseParser";
 import { GeminiNotificationMonitor } from "./GeminiNotificationMonitor";
 import { GeminiToolPermissionMapper } from "./GeminiToolPermissionMapper";
 import { GeminiLogParser } from "./GeminiLogParser";
-import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
-import {
-  ConfigurationUtils,
-  PATH_CONSTANTS,
-} from "../../../utils/ConfigurationUtils";
+import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getGeminiModelName, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import { parseArgString } from "../../../utils/CliArgParser";
-import type { PromptItem } from "../../../types/FlightPathTypes";
+import type {
+  PromptItem,
+  McpServerConfig,
+} from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 const execAsync = promisify(exec);
@@ -39,6 +39,10 @@ const execAsync = promisify(exec);
  * - Session ID extraction from init events
  */
 export class GeminiCliProvider implements ICliProvider {
+  /** Shared singleton tracker for parallel-safe MCP management in .gemini/settings.json */
+  private static readonly mcpTracker =
+    SettingsJsonMcpTracker.getInstance("gemini");
+
   readonly config: HarnessConfig = {
     name: "gemini",
     displayName: "Gemini CLI",
@@ -92,8 +96,21 @@ export class GeminiCliProvider implements ICliProvider {
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
-      // Note: Gemini CLI auto-approval flags are TBD — user-defined MCP server
-      // tools will require manual approval at runtime until Gemini adds support.
+      Log.debug("🔧 FlightPath MCP config written for Gemini");
+    }
+
+    // Parallel workflow isolation: restrict MCP server access so prompts in
+    // one workflow can't accidentally use another workflow's servers from the
+    // shared .gemini/settings.json.
+    if (workspaceRoot) {
+      const promptMcpNames = this.getPromptMcpServerNames(
+        workflowContext?.resolvedProperties?.mcpServers
+      );
+      const allowed =
+        GeminiCliProvider.mcpTracker.getAllowedServerNames(promptMcpNames);
+      if (allowed) {
+        args.push("--allowed-mcp-server-names", ...allowed);
+      }
     }
 
     // Model selection
@@ -154,12 +171,24 @@ export class GeminiCliProvider implements ICliProvider {
   }
 
   /**
+   * Extract MCP server names configured for this prompt.
+   * Used for `--allowed-mcp-server-names` parallel workflow isolation.
+   */
+  private getPromptMcpServerNames(
+    mcpServers?: Array<string | McpServerConfig> | null
+  ): string[] {
+    if (!mcpServers) {
+      return [];
+    }
+    return mcpServers.map((s) => (typeof s === "string" ? s : s.id));
+  }
+
+  /**
    * Merge FlightPath hooks into .gemini/settings.json and pre-trust them in
    * ~/.gemini/trusted_hooks.json so Gemini doesn't prompt the user for approval.
    *
-   * Backs up the original settings file to .flightpath/temp/gemini-settings-backup.json
-   * so cleanupWorkspaceArtifacts() can restore it after the workflow completes.
-   * If the backup already exists (multi-prompt workflow), skips the backup step.
+   * Only the `hooks` section is backed up (not the full file) so that MCP entries
+   * managed by SettingsJsonMcpTracker are preserved across backup/restore cycles.
    */
   private async buildInteractiveHookSettings(
     extensionPath: string,
@@ -183,62 +212,48 @@ export class GeminiCliProvider implements ICliProvider {
       throw new Error("Unexpected hook config type for Gemini CLI");
     }
 
-    const geminiDir = path.join(workspaceRoot, ".gemini");
-    const settingsPath = path.join(geminiDir, "settings.json");
-    const tempDir = path.join(
+    const settingsPath = path.join(workspaceRoot, ".gemini", "settings.json");
+    const backupPath = CliProviderUtils.getHooksBackupPath(
       workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
-      PATH_CONSTANTS.TEMP_DIR
+      "gemini-hooks-backup.json"
     );
-    const backupPath = path.join(tempDir, "gemini-settings-backup.json");
 
-    // Read existing settings (if any)
-    let existingSettings: Record<string, unknown> = {};
-    try {
-      const content = await fs.readFile(settingsPath, "utf-8");
-      existingSettings = JSON.parse(content);
-    } catch {
-      // File doesn't exist or invalid JSON — start fresh
-    }
+    // Serialize settings.json read-modify-write under the shared mutex
+    // to prevent parallel workflows from overwriting each other's changes.
+    await GeminiCliProvider.mcpTracker.withLock(async () => {
+      // Read settings and back up only the hooks section (MCP handled by tracker)
+      const existingSettings =
+        await CliProviderUtils.readSettingsAndBackupHooks(
+          settingsPath,
+          backupPath
+        );
 
-    // Back up the original only once (skip if backup already exists for this workflow run)
-    try {
-      await fs.access(backupPath);
-      // Backup exists — already set up by a prior prompt in this workflow
-    } catch {
-      await fs.mkdir(tempDir, { recursive: true });
+      // Deep-merge FlightPath hooks into existing hooks — append user's existing handlers
+      // after FlightPath's so all three layers coexist: (1) FlightPath completion detection,
+      // (2) future workflow hooks, (3) user's pre-existing settings hooks.
+      const flightpathHooksSection = (
+        hookConfig.config as Record<string, unknown>
+      )["hooks"] as Record<string, unknown[]>;
+      const existingHooks =
+        (existingSettings.hooks as Record<string, unknown[]> | undefined) ?? {};
+      const mergedHooks: Record<string, unknown[]> = { ...existingHooks };
+      for (const [event, handlers] of Object.entries(flightpathHooksSection)) {
+        const userHandlers =
+          (existingHooks[event] as unknown[] | undefined) ?? [];
+        mergedHooks[event] = [...handlers, ...userHandlers];
+      }
+
+      const mergedSettings = {
+        ...existingSettings,
+        hooks: mergedHooks,
+      };
+      await fs.mkdir(path.join(workspaceRoot, ".gemini"), { recursive: true });
       await fs.writeFile(
-        backupPath,
-        JSON.stringify(existingSettings, null, 2),
+        settingsPath,
+        JSON.stringify(mergedSettings, null, 2),
         "utf-8"
       );
-    }
-
-    // Deep-merge FlightPath hooks into existing hooks — append user's existing handlers
-    // after FlightPath's so all three layers coexist: (1) FlightPath completion detection,
-    // (2) future workflow hooks, (3) user's pre-existing settings hooks.
-    const flightpathHooksSection = (
-      hookConfig.config as Record<string, unknown>
-    )["hooks"] as Record<string, unknown[]>;
-    const existingHooks =
-      (existingSettings.hooks as Record<string, unknown[]> | undefined) ?? {};
-    const mergedHooks: Record<string, unknown[]> = { ...existingHooks };
-    for (const [event, handlers] of Object.entries(flightpathHooksSection)) {
-      const userHandlers =
-        (existingHooks[event] as unknown[] | undefined) ?? [];
-      mergedHooks[event] = [...handlers, ...userHandlers];
-    }
-
-    const mergedSettings = {
-      ...existingSettings,
-      hooks: mergedHooks,
-    };
-    await fs.mkdir(geminiDir, { recursive: true });
-    await fs.writeFile(
-      settingsPath,
-      JSON.stringify(mergedSettings, null, 2),
-      "utf-8"
-    );
+    });
 
     // Pre-trust the hook commands in ~/.gemini/trusted_hooks.json
     // Key format: "${name}:${command}" where name defaults to ""
@@ -274,32 +289,36 @@ export class GeminiCliProvider implements ICliProvider {
   }
 
   /**
-   * Restore .gemini/settings.json from the backup created by buildInteractiveHookSettings().
-   * Called by CliIntegration.cleanupWorkflowArtifacts() after workflow completion.
+   * Clean up workflow artifacts from .gemini/settings.json.
+   *
+   * Two independent cleanup steps:
+   * 1. MCP servers: unregister via tracker (ref-counted, parallel-safe)
+   * 2. Hooks: restore original hooks section from backup
+   *
+   * @param workspaceRoot Workspace root directory
+   * @param workingFilePath Unique workflow key for MCP tracker
    */
-  async cleanupWorkspaceArtifacts(workspaceRoot: string): Promise<void> {
-    const backupPath = path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
-      PATH_CONSTANTS.TEMP_DIR,
-      "gemini-settings-backup.json"
-    );
-    const settingsPath = path.join(workspaceRoot, ".gemini", "settings.json");
-
-    try {
-      const backup = await fs.readFile(backupPath, "utf-8");
-      const backupSettings = JSON.parse(backup);
-
-      if (Object.keys(backupSettings).length === 0) {
-        // Original settings file didn't exist — remove the one we created
-        await fs.unlink(settingsPath).catch(() => {});
-      } else {
-        await fs.writeFile(settingsPath, backup, "utf-8");
-      }
-      await fs.unlink(backupPath).catch(() => {});
-    } catch {
-      // Backup doesn't exist (headless run or no interactive session started)
+  async cleanupWorkspaceArtifacts(
+    workspaceRoot: string,
+    workingFilePath?: string
+  ): Promise<void> {
+    // Unregister MCP servers (ref-counted — only removes when no other workflow needs them)
+    if (workingFilePath) {
+      await GeminiCliProvider.mcpTracker.unregisterWorkflow(
+        workingFilePath,
+        workspaceRoot
+      );
     }
+
+    // Restore hooks section from backup (serialized to avoid file races)
+    const settingsPath = path.join(workspaceRoot, ".gemini", "settings.json");
+    const backupPath = CliProviderUtils.getHooksBackupPath(
+      workspaceRoot,
+      "gemini-hooks-backup.json"
+    );
+    await GeminiCliProvider.mcpTracker.withLock(async () => {
+      await CliProviderUtils.restoreHooksFromBackup(settingsPath, backupPath);
+    });
   }
 
   private validateAndGetModel(requestedModel?: string): string | undefined {
@@ -325,6 +344,17 @@ export class GeminiCliProvider implements ICliProvider {
     return `gemini --prompt-interactive "${promptText.replace(/"/g, '\\"')}" ${baseArgs.join(" ")}`;
   }
 
+  /**
+   * Generate MCP server configuration for Gemini CLI.
+   *
+   * Gemini CLI auto-discovers MCP servers from `.gemini/settings.json` in the project root.
+   * This method registers servers with the shared SettingsJsonMcpTracker which handles:
+   * - Reference counting for parallel workflow safety
+   * - Idempotent adds (skip if server already in settings.json)
+   * - Cleanup via unregisterWorkflow() in cleanupWorkspaceArtifacts()
+   *
+   * @returns Empty array (config is auto-discovered from settings.json, no CLI args needed)
+   */
   async getMcpConfigArgs(
     mcpServerPath: string | undefined,
     workspaceRoot: string,
@@ -332,51 +362,47 @@ export class GeminiCliProvider implements ICliProvider {
     additionalEnv?: Record<string, string>,
     userServers?: import("../../../types/FlightPathTypes").McpServerConfig[]
   ): Promise<string[] | null> {
-    // Gemini CLI uses standard MCP config format
-    let configJson: string;
-    if (mcpServerPath && userServers && userServers.length > 0) {
-      configJson = CliMcpConfigGenerator.generateJsonConfigWithUserServers(
-        mcpServerPath,
-        workspaceRoot,
-        userServers,
-        { type: "stdio" },
-        workingFilePath,
-        additionalEnv
-      );
-    } else if (mcpServerPath) {
-      configJson = CliMcpConfigGenerator.generateJsonConfig(
-        mcpServerPath,
-        workspaceRoot,
-        { type: "stdio" },
-        workingFilePath,
-        additionalEnv
-      );
-    } else if (userServers && userServers.length > 0) {
-      configJson = CliMcpConfigGenerator.generateUserServersOnlyConfig(userServers);
-    } else {
+    if (!mcpServerPath && (!userServers || userServers.length === 0)) {
       return null;
     }
 
-    const configPath = this.getMcpConfigFilePath(
-      workingFilePath,
-      workspaceRoot
-    );
-    const fs = require("fs/promises");
-    await fs.mkdir(require("path").dirname(configPath), { recursive: true });
-    await fs.writeFile(configPath, configJson, "utf-8");
+    try {
+      // Build MCP server entries using shared helper
+      const mcpEntries = CliProviderUtils.buildSettingsJsonMcpEntries(
+        mcpServerPath,
+        workspaceRoot,
+        workingFilePath,
+        additionalEnv,
+        userServers
+      );
 
-    return ["--mcp-config", configPath];
+      // Register with tracker (ref-counted, idempotent adds to settings.json)
+      const workflowKey = workingFilePath ?? "default";
+      await GeminiCliProvider.mcpTracker.registerServers(
+        workflowKey,
+        workspaceRoot,
+        mcpEntries
+      );
+
+      Log.debug(`🔧 Gemini MCP servers registered via tracker`);
+
+      // Return empty array — Gemini auto-discovers settings.json, no CLI arg needed
+      return [];
+    } catch (error) {
+      Log.warn(`Failed to register Gemini MCP servers: ${error}`);
+      return null;
+    }
   }
 
+  /**
+   * Return null — MCP config is merged into .gemini/settings.json (not a separate file).
+   * Cleanup is handled by cleanupWorkspaceArtifacts() which restores from backup.
+   */
   getMcpConfigFilePath(
-    workingFilePath: string | undefined,
-    workspaceRoot: string
-  ): string {
-    return CliMcpConfigGenerator.getConfigFilePath(
-      workingFilePath,
-      workspaceRoot,
-      "mcp-config-gemini"
-    );
+    _workingFilePath: string | undefined,
+    _workspaceRoot: string
+  ): null {
+    return null;
   }
 
   async checkAvailability(): Promise<boolean> {

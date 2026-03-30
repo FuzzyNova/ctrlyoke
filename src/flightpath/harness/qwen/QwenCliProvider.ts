@@ -15,14 +15,15 @@ import { QwenResponseParser } from "./QwenResponseParser";
 import { QwenNotificationMonitor } from "./QwenNotificationMonitor";
 import { QwenToolPermissionMapper } from "./QwenToolPermissionMapper";
 import { QwenLogParser } from "./QwenLogParser";
-import {
-  ConfigurationUtils,
-  PATH_CONSTANTS,
-} from "../../../utils/ConfigurationUtils";
+import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import { parseArgString } from "../../../utils/CliArgParser";
-import type { PromptItem } from "../../../types/FlightPathTypes";
+import type {
+  PromptItem,
+  McpServerConfig,
+} from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 const execAsync = promisify(exec);
@@ -56,6 +57,10 @@ const execAsync = promisify(exec);
  * ```
  */
 export class QwenCliProvider implements ICliProvider {
+  /** Shared singleton tracker for parallel-safe MCP management in .qwen/settings.json */
+  private static readonly mcpTracker =
+    SettingsJsonMcpTracker.getInstance("qwen");
+
   readonly config: HarnessConfig = {
     name: "qwen",
     displayName: "Qwen Code CLI",
@@ -114,6 +119,39 @@ export class QwenCliProvider implements ICliProvider {
     const resolvedModel = workflowContext?.resolvedProperties?.model;
     const resolvedResumeSession =
       workflowContext?.resolvedProperties?.resumeSession;
+
+    // MCP configuration (when dynamic queue extension or user MCP servers are enabled)
+    const mcpArgs = await CliProviderUtils.buildMcpConfigBlock(
+      workflowContext,
+      workspaceRoot,
+      extensionPath,
+      (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
+        this.getMcpConfigArgs(
+          serverPath,
+          wsRoot,
+          workingFile,
+          additionalEnv,
+          userServers
+        )
+    );
+    if (mcpArgs.length > 0) {
+      args.push(...mcpArgs);
+      Log.debug("🔧 FlightPath MCP config written for Qwen");
+    }
+
+    // Parallel workflow isolation: restrict MCP server access so prompts in
+    // one workflow can't accidentally use another workflow's servers from the
+    // shared .qwen/settings.json.
+    if (workspaceRoot) {
+      const promptMcpNames = this.getPromptMcpServerNames(
+        workflowContext?.resolvedProperties?.mcpServers
+      );
+      const allowed =
+        QwenCliProvider.mcpTracker.getAllowedServerNames(promptMcpNames);
+      if (allowed) {
+        args.push("--allowed-mcp-server-names", ...allowed);
+      }
+    }
 
     // Note: Headless-specific flags (--output-format) are added by
     // buildHeadlessArgs() to ensure correct positioning after the prompt argument.
@@ -190,12 +228,24 @@ export class QwenCliProvider implements ICliProvider {
   }
 
   /**
+   * Extract MCP server names configured for this prompt.
+   * Used for `--allowed-mcp-server-names` parallel workflow isolation.
+   */
+  private getPromptMcpServerNames(
+    mcpServers?: Array<string | McpServerConfig> | null
+  ): string[] {
+    if (!mcpServers) {
+      return [];
+    }
+    return mcpServers.map((s) => (typeof s === "string" ? s : s.id));
+  }
+
+  /**
    * Merge FlightPath hooks into .qwen/settings.json and pre-trust them in
    * ~/.qwen/trusted_hooks.json so Qwen doesn't prompt the user for approval.
    *
-   * Backs up the original settings file to .flightpath/temp/qwen-settings-backup.json
-   * so cleanupWorkspaceArtifacts() can restore it after the workflow completes.
-   * If the backup already exists (multi-prompt workflow), skips the backup step.
+   * Only the `hooks` section is backed up (not the full file) so that MCP entries
+   * managed by SettingsJsonMcpTracker are preserved across backup/restore cycles.
    */
   private async buildInteractiveHookSettings(
     extensionPath: string,
@@ -223,60 +273,46 @@ export class QwenCliProvider implements ICliProvider {
       hookConfig as { type: string; config: { hooks: Record<string, unknown> } }
     ).config.hooks;
 
-    const qwenDir = path.join(workspaceRoot, ".qwen");
-    const settingsPath = path.join(qwenDir, "settings.json");
-    const tempDir = path.join(
+    const settingsPath = path.join(workspaceRoot, ".qwen", "settings.json");
+    const backupPath = CliProviderUtils.getHooksBackupPath(
       workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
-      PATH_CONSTANTS.TEMP_DIR
+      "qwen-hooks-backup.json"
     );
-    const backupPath = path.join(tempDir, "qwen-settings-backup.json");
 
-    // Read existing settings (if any)
-    let existingSettings: Record<string, unknown> = {};
-    try {
-      const content = await fs.readFile(settingsPath, "utf-8");
-      existingSettings = JSON.parse(content);
-    } catch {
-      // File doesn't exist or invalid JSON — start fresh
-    }
+    // Serialize settings.json read-modify-write under the shared mutex
+    // to prevent parallel workflows from overwriting each other's changes.
+    await QwenCliProvider.mcpTracker.withLock(async () => {
+      // Read settings and back up only the hooks section (MCP handled by tracker)
+      const existingSettings =
+        await CliProviderUtils.readSettingsAndBackupHooks(
+          settingsPath,
+          backupPath
+        );
 
-    // Back up the original only once (skip if backup already exists for this workflow run)
-    try {
-      await fs.access(backupPath);
-      // Backup exists — already set up by a prior prompt in this workflow
-    } catch {
-      await fs.mkdir(tempDir, { recursive: true });
+      // Deep-merge FlightPath hooks into existing hooks — append user's existing handlers
+      // after FlightPath's so all three layers coexist: (1) FlightPath completion detection,
+      // (2) future workflow hooks, (3) user's pre-existing settings hooks.
+      const existingHooks =
+        (existingSettings.hooks as Record<string, unknown[]> | undefined) ?? {};
+      const flightpathHooks = hooksSection as Record<string, unknown[]>;
+      const mergedHooks: Record<string, unknown[]> = { ...existingHooks };
+      for (const [event, handlers] of Object.entries(flightpathHooks)) {
+        const userHandlers =
+          (existingHooks[event] as unknown[] | undefined) ?? [];
+        mergedHooks[event] = [...handlers, ...userHandlers];
+      }
+
+      const mergedSettings = {
+        ...existingSettings,
+        hooks: mergedHooks,
+      };
+      await fs.mkdir(path.join(workspaceRoot, ".qwen"), { recursive: true });
       await fs.writeFile(
-        backupPath,
-        JSON.stringify(existingSettings, null, 2),
+        settingsPath,
+        JSON.stringify(mergedSettings, null, 2),
         "utf-8"
       );
-    }
-
-    // Deep-merge FlightPath hooks into existing hooks — append user's existing handlers
-    // after FlightPath's so all three layers coexist: (1) FlightPath completion detection,
-    // (2) future workflow hooks, (3) user's pre-existing settings hooks.
-    const existingHooks =
-      (existingSettings.hooks as Record<string, unknown[]> | undefined) ?? {};
-    const flightpathHooks = hooksSection as Record<string, unknown[]>;
-    const mergedHooks: Record<string, unknown[]> = { ...existingHooks };
-    for (const [event, handlers] of Object.entries(flightpathHooks)) {
-      const userHandlers =
-        (existingHooks[event] as unknown[] | undefined) ?? [];
-      mergedHooks[event] = [...handlers, ...userHandlers];
-    }
-
-    const mergedSettings = {
-      ...existingSettings,
-      hooks: mergedHooks,
-    };
-    await fs.mkdir(qwenDir, { recursive: true });
-    await fs.writeFile(
-      settingsPath,
-      JSON.stringify(mergedSettings, null, 2),
-      "utf-8"
-    );
+    });
 
     // Pre-trust the hook command in ~/.qwen/trusted_hooks.json.
     // Key format: "${name}:${command}" where name defaults to "".
@@ -313,32 +349,36 @@ export class QwenCliProvider implements ICliProvider {
   }
 
   /**
-   * Restore .qwen/settings.json from the backup created by buildInteractiveHookSettings().
-   * Called by CliIntegration.cleanupWorkflowArtifacts() after workflow completion.
+   * Clean up workflow artifacts from .qwen/settings.json.
+   *
+   * Two independent cleanup steps:
+   * 1. MCP servers: unregister via tracker (ref-counted, parallel-safe)
+   * 2. Hooks: restore original hooks section from backup
+   *
+   * @param workspaceRoot Workspace root directory
+   * @param workingFilePath Unique workflow key for MCP tracker
    */
-  async cleanupWorkspaceArtifacts(workspaceRoot: string): Promise<void> {
-    const backupPath = path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
-      PATH_CONSTANTS.TEMP_DIR,
-      "qwen-settings-backup.json"
-    );
-    const settingsPath = path.join(workspaceRoot, ".qwen", "settings.json");
-
-    try {
-      const backup = await fs.readFile(backupPath, "utf-8");
-      const backupSettings = JSON.parse(backup);
-
-      if (Object.keys(backupSettings).length === 0) {
-        // Original settings file didn't exist — remove the one we created
-        await fs.unlink(settingsPath).catch(() => {});
-      } else {
-        await fs.writeFile(settingsPath, backup, "utf-8");
-      }
-      await fs.unlink(backupPath).catch(() => {});
-    } catch {
-      // Backup doesn't exist (headless run or no interactive session started)
+  async cleanupWorkspaceArtifacts(
+    workspaceRoot: string,
+    workingFilePath?: string
+  ): Promise<void> {
+    // Unregister MCP servers (ref-counted — only removes when no other workflow needs them)
+    if (workingFilePath) {
+      await QwenCliProvider.mcpTracker.unregisterWorkflow(
+        workingFilePath,
+        workspaceRoot
+      );
     }
+
+    // Restore hooks section from backup (serialized to avoid file races)
+    const settingsPath = path.join(workspaceRoot, ".qwen", "settings.json");
+    const backupPath = CliProviderUtils.getHooksBackupPath(
+      workspaceRoot,
+      "qwen-hooks-backup.json"
+    );
+    await QwenCliProvider.mcpTracker.withLock(async () => {
+      await CliProviderUtils.restoreHooksFromBackup(settingsPath, backupPath);
+    });
 
     // Qwen Code CLI creates settings.json.orig as its own backup when it reads our
     // settings.json. Clean it up since the user didn't have it before we ran.
@@ -411,24 +451,63 @@ export class QwenCliProvider implements ICliProvider {
   }
 
   /**
-   * Generate MCP server configuration arguments (not yet supported by Qwen CLI)
+   * Generate MCP server configuration for Qwen Code CLI.
    *
-   * Qwen Code CLI does not currently support MCP server configuration.
-   * Returns null to indicate MCP is not supported.
+   * Qwen CLI auto-discovers MCP servers from `.qwen/settings.json` in the project root.
+   * This method registers servers with the shared SettingsJsonMcpTracker which handles:
+   * - Reference counting for parallel workflow safety
+   * - Idempotent adds (skip if server already in settings.json)
+   * - Cleanup via unregisterWorkflow() in cleanupWorkspaceArtifacts()
    *
-   * @param mcpServerPath Absolute path to MCP server executable
-   * @param workspaceRoot Workspace root directory
-   * @param workingFilePath Active working file for this workflow
-   * @returns null (MCP not supported)
+   * @returns Empty array (config is auto-discovered from settings.json, no CLI args needed)
    */
   async getMcpConfigArgs(
-    _mcpServerPath: string | undefined,
-    _workspaceRoot: string,
-    _workingFilePath?: string,
-    _additionalEnv?: Record<string, string>,
-    _userServers?: import("../../../types/FlightPathTypes").McpServerConfig[]
+    mcpServerPath: string | undefined,
+    workspaceRoot: string,
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>,
+    userServers?: import("../../../types/FlightPathTypes").McpServerConfig[]
   ): Promise<string[] | null> {
-    // MCP not supported by Qwen CLI yet
+    if (!mcpServerPath && (!userServers || userServers.length === 0)) {
+      return null;
+    }
+
+    try {
+      // Build MCP server entries using shared helper
+      const mcpEntries = CliProviderUtils.buildSettingsJsonMcpEntries(
+        mcpServerPath,
+        workspaceRoot,
+        workingFilePath,
+        additionalEnv,
+        userServers
+      );
+
+      // Register with tracker (ref-counted, idempotent adds to settings.json)
+      const workflowKey = workingFilePath ?? "default";
+      await QwenCliProvider.mcpTracker.registerServers(
+        workflowKey,
+        workspaceRoot,
+        mcpEntries
+      );
+
+      Log.debug(`🔧 Qwen MCP servers registered via tracker`);
+
+      // Return empty array — Qwen auto-discovers settings.json, no CLI arg needed
+      return [];
+    } catch (error) {
+      Log.warn(`Failed to register Qwen MCP servers: ${error}`);
+      return null;
+    }
+  }
+
+  /**
+   * Return null — MCP config is merged into .qwen/settings.json (not a separate file).
+   * Cleanup is handled by cleanupWorkspaceArtifacts() which restores from backup.
+   */
+  getMcpConfigFilePath(
+    _workingFilePath: string | undefined,
+    _workspaceRoot: string
+  ): null {
     return null;
   }
 
