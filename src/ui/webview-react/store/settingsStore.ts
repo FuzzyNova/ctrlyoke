@@ -177,6 +177,7 @@ interface SettingsActions {
   getEffectiveMcpServers: () => (string | object)[] | null;
   getEffectiveHooks: () => object[] | null;
   getEffectivePriorContext: () => PriorContext;
+  getEffectiveAdditionalArgs: () => string;
   getEffectiveToolPermissions: () => WorkflowProperties["toolPermissions"];
 
   // Reset
@@ -405,6 +406,16 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
         (workflowProperties.priorContext as PriorContext) ??
         (globalSettings.priorContext as PriorContext)
       );
+    },
+
+    getEffectiveAdditionalArgs: () => {
+      const { workflowProperties, globalSettings } = get();
+      if (workflowProperties.additionalArgs !== undefined) {
+        return workflowProperties.additionalArgs ?? "";
+      }
+      const effectiveHarness =
+        (workflowProperties.harness as HarnessId) ?? globalSettings.harness;
+      return globalSettings.harnessDefaultAdditionalArgs[effectiveHarness] ?? "";
     },
 
     getEffectiveToolPermissions: () => {

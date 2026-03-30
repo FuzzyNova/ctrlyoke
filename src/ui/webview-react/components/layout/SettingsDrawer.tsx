@@ -169,6 +169,7 @@ export const SettingsPanel: React.FC<{
     getEffectiveSkills,
     getEffectiveResumeSession,
     getEffectivePriorContext,
+    getEffectiveAdditionalArgs,
   } = useSettingsStore();
 
   // Active drawer page
@@ -211,6 +212,7 @@ export const SettingsPanel: React.FC<{
   const effectiveSkills = getEffectiveSkills();
   const effectiveResumeSession = getEffectiveResumeSession();
   const effectivePriorContext = getEffectivePriorContext();
+  const effectiveAdditionalArgs = getEffectiveAdditionalArgs();
 
   // Derive the active model namespace from the current harness
   const modelNamespace = modelNamespaceForHarness(effectiveHarness);
@@ -920,7 +922,7 @@ export const SettingsPanel: React.FC<{
                   <input
                     type="text"
                     id="settings-append-args"
-                    value={workflowProperties.additionalArgs ?? ""}
+                    value={effectiveAdditionalArgs}
                     onChange={(e) => handleAdditionalArgsChange(e.target.value)}
                     placeholder="e.g. --effort high --max-turns 10"
                     className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
