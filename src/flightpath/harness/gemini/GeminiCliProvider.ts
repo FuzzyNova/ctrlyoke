@@ -25,6 +25,7 @@ import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   PromptItem,
   McpServerConfig,
+  UserHookConfig,
 } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
@@ -165,7 +166,8 @@ export class GeminiCliProvider implements ICliProvider {
     } else {
       // Interactive mode: write AfterAgent hook to .gemini/settings.json
       if (workspaceRoot) {
-        await this.buildInteractiveHookSettings(extensionPath, workspaceRoot);
+        const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
+        await this.buildInteractiveHookSettings(extensionPath, workspaceRoot, userHooks);
         Log.debug(
           `🔔 Configured AfterAgent hook for Gemini completion detection`
         );
@@ -196,7 +198,8 @@ export class GeminiCliProvider implements ICliProvider {
    */
   private async buildInteractiveHookSettings(
     extensionPath: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    userHooks?: UserHookConfig[]
   ): Promise<void> {
     const scriptPath = path.join(
       extensionPath,
@@ -220,13 +223,31 @@ export class GeminiCliProvider implements ICliProvider {
       hookConfig.config as Record<string, unknown>
     )["hooks"] as Record<string, unknown[]>;
 
+    // Convert user hooks to Gemini native format
+    const geminiEventMap: Record<string, string> = {
+      stop: "AfterAgent",
+      sessionStart: "SessionStart",
+    };
+
+    const workflowUserHooks: Record<string, unknown[]> = {};
+    if (userHooks) {
+      for (const uh of userHooks) {
+        const nativeEvent = geminiEventMap[uh.event];
+        if (!nativeEvent) continue;
+        if (!workflowUserHooks[nativeEvent]) workflowUserHooks[nativeEvent] = [];
+        workflowUserHooks[nativeEvent].push({
+          hooks: [{ type: "command", command: uh.command }],
+        });
+      }
+    }
+
     // Register hooks via ref-counted tracker under shared mutex
     await GeminiCliProvider.mcpTracker.withLock(async () => {
       await GeminiCliProvider.hooksTracker.registerWorkflow(
         workspaceRoot,
         workspaceRoot,
         flightpathHooksSection,
-        {}
+        workflowUserHooks
       );
     });
 
@@ -253,6 +274,16 @@ export class GeminiCliProvider implements ICliProvider {
     }
     if (!trustedHooks[workspaceRoot].includes(hookKey)) {
       trustedHooks[workspaceRoot].push(hookKey);
+    }
+
+    // Also pre-trust user hook commands
+    if (userHooks) {
+      for (const uh of userHooks) {
+        const userKey = `:${uh.command}`;
+        if (!trustedHooks[workspaceRoot].includes(userKey)) {
+          trustedHooks[workspaceRoot].push(userKey);
+        }
+      }
     }
 
     await fs.mkdir(globalGeminiDir, { recursive: true });

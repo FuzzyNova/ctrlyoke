@@ -4,6 +4,7 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
+import type { UserHookConfig } from "../../../types/FlightPathTypes";
 
 /**
  * Copilot CLI Notification Monitor
@@ -37,7 +38,8 @@ export class CopilotNotificationMonitor
   buildHookConfig(
     scriptPath: string,
     notifyDir: string,
-    _workspaceRoot: string
+    _workspaceRoot: string,
+    userHooks?: UserHookConfig[]
   ): HookConfig {
     // Normalize Windows drive letter to lowercase for stable output (VS Code returns
     // uppercase from GUI launches, lowercase from CLI launches — normalize to avoid
@@ -55,29 +57,50 @@ export class CopilotNotificationMonitor
     const psScriptPath = normalizedScriptPath.replace(/\\/g, "\\\\");
     const psNotifyDir = normalizedNotifyDir.replace(/\\/g, "\\\\");
 
+    // Map logical event names to Copilot's native event names
+    const eventMap: Record<string, string> = {
+      stop: "sessionEnd",
+      sessionStart: "sessionStart",
+    };
+
+    // Start with FlightPath's entries
+    const hooks: Record<string, unknown[]> = {
+      sessionStart: [
+        {
+          type: "command",
+          bash: `node "${bashScriptPath}" "${bashNotifyDir}" "sessionStart"`,
+          powershell: `node "${psScriptPath}" "${psNotifyDir}" "sessionStart"`,
+          timeoutSec: 10,
+        },
+      ],
+      sessionEnd: [
+        {
+          type: "command",
+          bash: `node "${bashScriptPath}" "${bashNotifyDir}" "sessionEnd"`,
+          powershell: `node "${psScriptPath}" "${psNotifyDir}" "sessionEnd"`,
+          timeoutSec: 10,
+        },
+      ],
+    };
+
+    // Append user hooks
+    if (userHooks) {
+      for (const uh of userHooks) {
+        const nativeEvent = eventMap[uh.event];
+        if (!nativeEvent) continue;
+        if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
+        hooks[nativeEvent].push({
+          type: "command",
+          bash: uh.command,
+          powershell: uh.command,
+          timeoutSec: uh.timeoutSec ?? 10,
+        });
+      }
+    }
+
     return {
       type: "json",
-      config: {
-        version: 1,
-        hooks: {
-          sessionStart: [
-            {
-              type: "command",
-              bash: `node "${bashScriptPath}" "${bashNotifyDir}" "sessionStart"`,
-              powershell: `node "${psScriptPath}" "${psNotifyDir}" "sessionStart"`,
-              timeoutSec: 10,
-            },
-          ],
-          sessionEnd: [
-            {
-              type: "command",
-              bash: `node "${bashScriptPath}" "${bashNotifyDir}" "sessionEnd"`,
-              powershell: `node "${psScriptPath}" "${psNotifyDir}" "sessionEnd"`,
-              timeoutSec: 10,
-            },
-          ],
-        },
-      },
+      config: { version: 1, hooks },
     };
   }
 

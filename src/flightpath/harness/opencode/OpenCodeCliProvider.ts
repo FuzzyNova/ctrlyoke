@@ -20,8 +20,9 @@ import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
-import type { PromptItem } from "../../../types/FlightPathTypes";
+import type { PromptItem, UserHookConfig } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import { OpenCodePluginGenerator } from "./OpenCodePluginGenerator";
 
 const execAsync = promisify(exec);
 
@@ -181,7 +182,8 @@ export class OpenCodeCliProvider implements ICliProvider {
 
     // Interactive mode: deploy the completion detection plugin
     if (isInteractive && workspaceRoot) {
-      await this.deployCompletionPlugin(workspaceRoot, extensionPath);
+      const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
+      await this.deployCompletionPlugin(workspaceRoot, extensionPath, userHooks);
     }
 
     // Extra CLI flags from additionalArgs (appended before prompt positional arg)
@@ -452,7 +454,8 @@ export class OpenCodeCliProvider implements ICliProvider {
    */
   private async deployCompletionPlugin(
     workspaceRoot: string,
-    extensionPath: string
+    extensionPath: string,
+    userHooks?: UserHookConfig[]
   ): Promise<void> {
     try {
       const pluginDir = path.join(workspaceRoot, ".opencode", "plugin");
@@ -465,7 +468,15 @@ export class OpenCodeCliProvider implements ICliProvider {
       );
 
       await fs.promises.mkdir(pluginDir, { recursive: true });
-      await fs.promises.copyFile(sourcePath, pluginPath);
+
+      if (userHooks && userHooks.length > 0) {
+        // Generate a customized plugin with user hooks embedded
+        const pluginContent = OpenCodePluginGenerator.generate(userHooks);
+        await fs.promises.writeFile(pluginPath, pluginContent, "utf-8");
+      } else {
+        // No user hooks — copy the static plugin file as-is
+        await fs.promises.copyFile(sourcePath, pluginPath);
+      }
 
       this.pluginFilePath = pluginPath;
       Log.debug(`🔌 OpenCode completion plugin deployed to: ${pluginPath}`);

@@ -5,6 +5,7 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
+import type { UserHookConfig } from "../../../types/FlightPathTypes";
 
 /**
  * Gemini CLI Notification Monitor
@@ -33,7 +34,8 @@ export class GeminiNotificationMonitor
   buildHookConfig(
     scriptPath: string,
     notifyDir: string,
-    _workspaceRoot: string
+    _workspaceRoot: string,
+    _userHooks?: UserHookConfig[]
   ): HookConfig {
     const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
     const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");

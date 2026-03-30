@@ -5,6 +5,7 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
+import type { UserHookConfig } from "../../../types/FlightPathTypes";
 
 /**
  * Claude CLI Notification Monitor
@@ -38,40 +39,51 @@ export class ClaudeNotificationMonitor
   buildHookConfig(
     scriptPath: string,
     notifyDir: string,
-    _workspaceRoot: string
+    _workspaceRoot: string,
+    userHooks?: UserHookConfig[]
   ): HookConfig {
     // Convert paths to forward slashes (works on Windows and avoids escaping issues)
     const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
     const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
 
-    const settings = {
-      hooks: {
-        SessionStart: [
-          {
-            hooks: [
-              {
-                type: "command",
-                command: `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`,
-              },
-            ],
-          },
-        ],
-        Stop: [
-          {
-            hooks: [
-              {
-                type: "command",
-                command: `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`,
-              },
-            ],
-          },
-        ],
-      },
+    const flightpathEntry = {
+      hooks: [
+        {
+          type: "command",
+          command: `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`,
+        },
+      ],
     };
+
+    // Map logical event names to Claude's native event names
+    const eventMap: Record<string, string> = {
+      stop: "Stop",
+      sessionStart: "SessionStart",
+      preToolUse: "PreToolUse",
+      postToolUse: "PostToolUse",
+    };
+
+    // Build hooks object starting with FlightPath's entries
+    const hooks: Record<string, unknown[]> = {
+      SessionStart: [flightpathEntry],
+      Stop: [flightpathEntry],
+    };
+
+    // Append user hooks to their respective events
+    if (userHooks) {
+      for (const uh of userHooks) {
+        const nativeEvent = eventMap[uh.event];
+        if (!nativeEvent) continue; // Skip unsupported events
+        if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
+        hooks[nativeEvent].push({
+          hooks: [{ type: "command", command: uh.command }],
+        });
+      }
+    }
 
     return {
       type: "json-string",
-      config: JSON.stringify(settings),
+      config: JSON.stringify({ hooks }),
     };
   }
 

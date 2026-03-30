@@ -22,7 +22,7 @@ import { getClaudeModelName, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
-import type { PromptItem } from "../../../types/FlightPathTypes";
+import type { PromptItem, UserHookConfig } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 const execAsync = promisify(exec);
@@ -241,11 +241,13 @@ export class ClaudeCliProvider implements ICliProvider {
     } else {
       // Interactive mode: Configure stop hook for completion detection
       if (workspaceRoot) {
+        const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
         const hookSettingsPath = await this.buildStopHookSettings(
           extensionPath,
           workspaceRoot,
           workflowContext?.promptIndex ?? 0,
-          workflowContext?.workingFilePath
+          workflowContext?.workingFilePath,
+          userHooks
         );
         args.push("--settings", hookSettingsPath);
         Log.debug(`🔔 Configured stop hook for completion detection`);
@@ -300,7 +302,8 @@ export class ClaudeCliProvider implements ICliProvider {
     extensionPath: string,
     workspaceRoot: string,
     promptIndex: number,
-    workingFilePath?: string
+    workingFilePath?: string,
+    userHooks?: UserHookConfig[]
   ): Promise<string> {
     const fs = require("fs/promises");
 
@@ -316,7 +319,8 @@ export class ClaudeCliProvider implements ICliProvider {
     const hookConfig = this.notificationMonitor.buildHookConfig(
       scriptPath,
       notifyDir,
-      workspaceRoot
+      workspaceRoot,
+      userHooks
     );
 
     // Extract JSON string from hook config (type guard for json-string variant)

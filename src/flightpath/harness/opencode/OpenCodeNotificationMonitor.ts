@@ -5,6 +5,7 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
+import type { UserHookConfig } from "../../../types/FlightPathTypes";
 
 /**
  * OpenCode CLI Notification Monitor
@@ -40,7 +41,8 @@ export class OpenCodeNotificationMonitor
   buildHookConfig(
     _scriptPath: string,
     _notifyDir: string,
-    _workspaceRoot: string
+    _workspaceRoot: string,
+    _userHooks?: UserHookConfig[]
   ): HookConfig {
     return { type: "none" };
   }

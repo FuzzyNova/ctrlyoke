@@ -27,7 +27,7 @@ import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
-import type { PromptItem } from "../../../types/FlightPathTypes";
+import type { PromptItem, UserHookConfig } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 const execAsync = promisify(exec);
@@ -209,11 +209,13 @@ export class CopilotCliProvider implements ICliProvider {
     } else {
       // Interactive mode: Configure sessionEnd hook for completion detection
       if (workspaceRoot) {
+        const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
         const hookArgs = await this.buildSessionEndHookArgs(
           extensionPath,
           workspaceRoot,
           workflowContext?.promptIndex ?? 0,
-          workflowContext?.workingFilePath
+          workflowContext?.workingFilePath,
+          userHooks
         );
         args.push(...hookArgs);
         Log.debug(`🔔 Configured sessionEnd hook for completion detection`);
@@ -322,7 +324,8 @@ export class CopilotCliProvider implements ICliProvider {
     extensionPath: string,
     workspaceRoot: string,
     promptIndex: number,
-    workingFilePath?: string
+    workingFilePath?: string,
+    userHooks?: UserHookConfig[]
   ): Promise<string[]> {
     // Get notification directory from notification monitor
     const notifyDir =
@@ -338,7 +341,8 @@ export class CopilotCliProvider implements ICliProvider {
     const hookConfig = this.notificationMonitor.buildHookConfig(
       hookScriptPath,
       notifyDir,
-      workspaceRoot
+      workspaceRoot,
+      userHooks
     );
 
     // Write a uniquely-named hook file for this prompt.

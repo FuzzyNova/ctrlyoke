@@ -4,6 +4,7 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
+import type { UserHookConfig } from "../../../types/FlightPathTypes";
 
 /**
  * Qwen Code CLI Notification Monitor
@@ -43,7 +44,8 @@ export class QwenNotificationMonitor
   buildHookConfig(
     scriptPath: string,
     notifyDir: string,
-    _workspaceRoot: string
+    _workspaceRoot: string,
+    _userHooks?: UserHookConfig[]
   ): HookConfig {
     const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
     const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");

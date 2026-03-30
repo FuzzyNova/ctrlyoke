@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Log } from "../../../../utils/Log";
+import type { UserHookConfig } from "../../../../types/FlightPathTypes";
 
 /**
  * Notification monitoring configuration
@@ -98,7 +99,8 @@ export interface INotificationMonitor {
   buildHookConfig(
     scriptPath: string,
     notifyDir: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    userHooks?: UserHookConfig[]
   ): HookConfig;
 
   /**
@@ -192,7 +194,8 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
   abstract buildHookConfig(
     scriptPath: string,
     notifyDir: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    userHooks?: UserHookConfig[]
   ): HookConfig;
 
   abstract getNotificationDirectory(workspaceRoot: string): string;

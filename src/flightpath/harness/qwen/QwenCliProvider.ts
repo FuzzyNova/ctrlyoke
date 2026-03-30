@@ -24,6 +24,7 @@ import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   PromptItem,
   McpServerConfig,
+  UserHookConfig,
 } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
@@ -222,7 +223,8 @@ export class QwenCliProvider implements ICliProvider {
       // Interactive mode: enable experimental hooks and write Stop hook to .qwen/settings.json
       args.push("--experimental-hooks");
       if (workspaceRoot) {
-        await this.buildInteractiveHookSettings(extensionPath, workspaceRoot);
+        const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
+        await this.buildInteractiveHookSettings(extensionPath, workspaceRoot, userHooks);
         Log.debug(`🔔 Configured Stop hook for Qwen completion detection`);
       }
     }
@@ -253,7 +255,8 @@ export class QwenCliProvider implements ICliProvider {
    */
   private async buildInteractiveHookSettings(
     extensionPath: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    userHooks?: UserHookConfig[]
   ): Promise<void> {
     const scriptPath = path.join(
       extensionPath,
@@ -277,13 +280,34 @@ export class QwenCliProvider implements ICliProvider {
       hookConfig as { type: string; config: { hooks: Record<string, unknown> } }
     ).config.hooks;
 
+    // Convert user hooks to Qwen native format
+    const qwenEventMap: Record<string, string> = {
+      stop: "Stop",
+      sessionStart: "SessionStart",
+      preToolUse: "PreToolUse",
+      postToolUse: "PostToolUse",
+      userPromptSubmit: "UserPromptSubmit",
+    };
+
+    const workflowUserHooks: Record<string, unknown[]> = {};
+    if (userHooks) {
+      for (const uh of userHooks) {
+        const nativeEvent = qwenEventMap[uh.event];
+        if (!nativeEvent) continue;
+        if (!workflowUserHooks[nativeEvent]) workflowUserHooks[nativeEvent] = [];
+        workflowUserHooks[nativeEvent].push({
+          hooks: [{ type: "command", command: uh.command }],
+        });
+      }
+    }
+
     // Register hooks via ref-counted tracker under shared mutex
     await QwenCliProvider.mcpTracker.withLock(async () => {
       await QwenCliProvider.hooksTracker.registerWorkflow(
         workspaceRoot,
         workspaceRoot,
         hooksSection as Record<string, unknown[]>,
-        {}
+        workflowUserHooks
       );
     });
 
@@ -311,6 +335,16 @@ export class QwenCliProvider implements ICliProvider {
     const key = `:${baseCommand}`;
     if (!trustedHooks[workspaceRoot].includes(key)) {
       trustedHooks[workspaceRoot].push(key);
+    }
+
+    // Also pre-trust user hook commands
+    if (userHooks) {
+      for (const uh of userHooks) {
+        const userKey = `:${uh.command}`;
+        if (!trustedHooks[workspaceRoot].includes(userKey)) {
+          trustedHooks[workspaceRoot].push(userKey);
+        }
+      }
     }
 
     await fs.mkdir(globalQwenDir, { recursive: true });
