@@ -19,6 +19,7 @@ import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
+import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   PromptItem,
@@ -60,6 +61,10 @@ export class QwenCliProvider implements ICliProvider {
   /** Shared singleton tracker for parallel-safe MCP management in .qwen/settings.json */
   private static readonly mcpTracker =
     SettingsJsonMcpTracker.getInstance("qwen");
+
+  /** Shared singleton tracker for parallel-safe hooks management in .qwen/settings.json */
+  private static readonly hooksTracker =
+    SettingsJsonHooksTracker.getInstance("qwen");
 
   readonly config: HarnessConfig = {
     name: "qwen",
@@ -244,8 +249,7 @@ export class QwenCliProvider implements ICliProvider {
    * Merge FlightPath hooks into .qwen/settings.json and pre-trust them in
    * ~/.qwen/trusted_hooks.json so Qwen doesn't prompt the user for approval.
    *
-   * Only the `hooks` section is backed up (not the full file) so that MCP entries
-   * managed by SettingsJsonMcpTracker are preserved across backup/restore cycles.
+   * Uses SettingsJsonHooksTracker for parallel-safe ref-counted hook management.
    */
   private async buildInteractiveHookSettings(
     extensionPath: string,
@@ -273,44 +277,13 @@ export class QwenCliProvider implements ICliProvider {
       hookConfig as { type: string; config: { hooks: Record<string, unknown> } }
     ).config.hooks;
 
-    const settingsPath = path.join(workspaceRoot, ".qwen", "settings.json");
-    const backupPath = CliProviderUtils.getHooksBackupPath(
-      workspaceRoot,
-      "qwen-hooks-backup.json"
-    );
-
-    // Serialize settings.json read-modify-write under the shared mutex
-    // to prevent parallel workflows from overwriting each other's changes.
+    // Register hooks via ref-counted tracker under shared mutex
     await QwenCliProvider.mcpTracker.withLock(async () => {
-      // Read settings and back up only the hooks section (MCP handled by tracker)
-      const existingSettings =
-        await CliProviderUtils.readSettingsAndBackupHooks(
-          settingsPath,
-          backupPath
-        );
-
-      // Deep-merge FlightPath hooks into existing hooks — append user's existing handlers
-      // after FlightPath's so all three layers coexist: (1) FlightPath completion detection,
-      // (2) future workflow hooks, (3) user's pre-existing settings hooks.
-      const existingHooks =
-        (existingSettings.hooks as Record<string, unknown[]> | undefined) ?? {};
-      const flightpathHooks = hooksSection as Record<string, unknown[]>;
-      const mergedHooks: Record<string, unknown[]> = { ...existingHooks };
-      for (const [event, handlers] of Object.entries(flightpathHooks)) {
-        const userHandlers =
-          (existingHooks[event] as unknown[] | undefined) ?? [];
-        mergedHooks[event] = [...handlers, ...userHandlers];
-      }
-
-      const mergedSettings = {
-        ...existingSettings,
-        hooks: mergedHooks,
-      };
-      await fs.mkdir(path.join(workspaceRoot, ".qwen"), { recursive: true });
-      await fs.writeFile(
-        settingsPath,
-        JSON.stringify(mergedSettings, null, 2),
-        "utf-8"
+      await QwenCliProvider.hooksTracker.registerWorkflow(
+        workspaceRoot,
+        workspaceRoot,
+        hooksSection as Record<string, unknown[]>,
+        {}
       );
     });
 
@@ -353,7 +326,7 @@ export class QwenCliProvider implements ICliProvider {
    *
    * Two independent cleanup steps:
    * 1. MCP servers: unregister via tracker (ref-counted, parallel-safe)
-   * 2. Hooks: restore original hooks section from backup
+   * 2. Hooks: unregister via tracker (ref-counted, restores baseline on last unregister)
    *
    * @param workspaceRoot Workspace root directory
    * @param workingFilePath Unique workflow key for MCP tracker
@@ -370,14 +343,12 @@ export class QwenCliProvider implements ICliProvider {
       );
     }
 
-    // Restore hooks section from backup (serialized to avoid file races)
-    const settingsPath = path.join(workspaceRoot, ".qwen", "settings.json");
-    const backupPath = CliProviderUtils.getHooksBackupPath(
-      workspaceRoot,
-      "qwen-hooks-backup.json"
-    );
+    // Unregister hooks via ref-counted tracker (serialized to avoid file races)
     await QwenCliProvider.mcpTracker.withLock(async () => {
-      await CliProviderUtils.restoreHooksFromBackup(settingsPath, backupPath);
+      await QwenCliProvider.hooksTracker.unregisterWorkflow(
+        workspaceRoot,
+        workspaceRoot
+      );
     });
 
     // Qwen Code CLI creates settings.json.orig as its own backup when it reads our

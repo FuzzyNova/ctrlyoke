@@ -50,6 +50,9 @@ const execAsync = promisify(exec);
  * ```
  */
 export class ClaudeCliProvider implements ICliProvider {
+  /** Tracks per-prompt hook settings files for cleanup */
+  private interactiveHookSettingsPaths: string[] = [];
+
   readonly config: HarnessConfig = {
     name: "claude",
     displayName: "Claude Code CLI",
@@ -240,7 +243,9 @@ export class ClaudeCliProvider implements ICliProvider {
       if (workspaceRoot) {
         const hookSettingsPath = await this.buildStopHookSettings(
           extensionPath,
-          workspaceRoot
+          workspaceRoot,
+          workflowContext?.promptIndex ?? 0,
+          workflowContext?.workingFilePath
         );
         args.push("--settings", hookSettingsPath);
         Log.debug(`🔔 Configured stop hook for completion detection`);
@@ -289,10 +294,13 @@ export class ClaudeCliProvider implements ICliProvider {
   /**
    * Write stop hook settings JSON to a temp file and return its path.
    * Claude CLI's --settings flag requires a file path, not inline JSON.
+   * Uses unique filenames per prompt to avoid parallel workflow collisions.
    */
   private async buildStopHookSettings(
     extensionPath: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    promptIndex: number,
+    workingFilePath?: string
   ): Promise<string> {
     const fs = require("fs/promises");
 
@@ -322,9 +330,39 @@ export class ClaudeCliProvider implements ICliProvider {
       PATH_CONSTANTS.TEMP_DIR
     );
     await fs.mkdir(tempDir, { recursive: true });
-    const settingsPath = path.join(tempDir, "claude-hook-settings.json");
+    const hookFileName = ClaudeCliProvider.buildHookSettingsFileName(promptIndex, workingFilePath);
+    const settingsPath = path.join(tempDir, hookFileName);
+    this.interactiveHookSettingsPaths.push(settingsPath);
     await fs.writeFile(settingsPath, hookConfig.config, "utf-8");
     return settingsPath;
+  }
+
+  /**
+   * Build a unique hook settings filename for a prompt.
+   *
+   * Format: `claude-hook-settings-<stem>-p<promptIndex>.json`
+   * Follows the same pattern as CopilotCliProvider.buildHookFileName().
+   */
+  private static buildHookSettingsFileName(
+    promptIndex: number,
+    workingFilePath?: string
+  ): string {
+    let stem: string;
+    if (workingFilePath) {
+      stem = path.basename(workingFilePath).replace(/\.flightpath\.json$/i, "");
+    } else {
+      stem = String(Date.now());
+    }
+    const safeStem = stem.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-");
+    return `claude-hook-settings-${safeStem}-p${promptIndex}.json`;
+  }
+
+  /**
+   * Return additional file paths to delete after workflow cleanup.
+   * Includes all per-prompt hook settings files created during interactive sessions.
+   */
+  getAdditionalCleanupFilePaths(_workspaceRoot: string): string[] {
+    return [...this.interactiveHookSettingsPaths];
   }
 
   /**

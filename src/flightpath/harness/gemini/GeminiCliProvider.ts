@@ -20,6 +20,7 @@ import { getGeminiModelName, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
+import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   PromptItem,
@@ -42,6 +43,10 @@ export class GeminiCliProvider implements ICliProvider {
   /** Shared singleton tracker for parallel-safe MCP management in .gemini/settings.json */
   private static readonly mcpTracker =
     SettingsJsonMcpTracker.getInstance("gemini");
+
+  /** Shared singleton tracker for parallel-safe hooks management in .gemini/settings.json */
+  private static readonly hooksTracker =
+    SettingsJsonHooksTracker.getInstance("gemini");
 
   readonly config: HarnessConfig = {
     name: "gemini",
@@ -187,8 +192,7 @@ export class GeminiCliProvider implements ICliProvider {
    * Merge FlightPath hooks into .gemini/settings.json and pre-trust them in
    * ~/.gemini/trusted_hooks.json so Gemini doesn't prompt the user for approval.
    *
-   * Only the `hooks` section is backed up (not the full file) so that MCP entries
-   * managed by SettingsJsonMcpTracker are preserved across backup/restore cycles.
+   * Uses SettingsJsonHooksTracker for parallel-safe ref-counted hook management.
    */
   private async buildInteractiveHookSettings(
     extensionPath: string,
@@ -212,46 +216,17 @@ export class GeminiCliProvider implements ICliProvider {
       throw new Error("Unexpected hook config type for Gemini CLI");
     }
 
-    const settingsPath = path.join(workspaceRoot, ".gemini", "settings.json");
-    const backupPath = CliProviderUtils.getHooksBackupPath(
-      workspaceRoot,
-      "gemini-hooks-backup.json"
-    );
+    const flightpathHooksSection = (
+      hookConfig.config as Record<string, unknown>
+    )["hooks"] as Record<string, unknown[]>;
 
-    // Serialize settings.json read-modify-write under the shared mutex
-    // to prevent parallel workflows from overwriting each other's changes.
+    // Register hooks via ref-counted tracker under shared mutex
     await GeminiCliProvider.mcpTracker.withLock(async () => {
-      // Read settings and back up only the hooks section (MCP handled by tracker)
-      const existingSettings =
-        await CliProviderUtils.readSettingsAndBackupHooks(
-          settingsPath,
-          backupPath
-        );
-
-      // Deep-merge FlightPath hooks into existing hooks — append user's existing handlers
-      // after FlightPath's so all three layers coexist: (1) FlightPath completion detection,
-      // (2) future workflow hooks, (3) user's pre-existing settings hooks.
-      const flightpathHooksSection = (
-        hookConfig.config as Record<string, unknown>
-      )["hooks"] as Record<string, unknown[]>;
-      const existingHooks =
-        (existingSettings.hooks as Record<string, unknown[]> | undefined) ?? {};
-      const mergedHooks: Record<string, unknown[]> = { ...existingHooks };
-      for (const [event, handlers] of Object.entries(flightpathHooksSection)) {
-        const userHandlers =
-          (existingHooks[event] as unknown[] | undefined) ?? [];
-        mergedHooks[event] = [...handlers, ...userHandlers];
-      }
-
-      const mergedSettings = {
-        ...existingSettings,
-        hooks: mergedHooks,
-      };
-      await fs.mkdir(path.join(workspaceRoot, ".gemini"), { recursive: true });
-      await fs.writeFile(
-        settingsPath,
-        JSON.stringify(mergedSettings, null, 2),
-        "utf-8"
+      await GeminiCliProvider.hooksTracker.registerWorkflow(
+        workspaceRoot,
+        workspaceRoot,
+        flightpathHooksSection,
+        {}
       );
     });
 
@@ -293,7 +268,7 @@ export class GeminiCliProvider implements ICliProvider {
    *
    * Two independent cleanup steps:
    * 1. MCP servers: unregister via tracker (ref-counted, parallel-safe)
-   * 2. Hooks: restore original hooks section from backup
+   * 2. Hooks: unregister via tracker (ref-counted, restores baseline on last unregister)
    *
    * @param workspaceRoot Workspace root directory
    * @param workingFilePath Unique workflow key for MCP tracker
@@ -310,14 +285,12 @@ export class GeminiCliProvider implements ICliProvider {
       );
     }
 
-    // Restore hooks section from backup (serialized to avoid file races)
-    const settingsPath = path.join(workspaceRoot, ".gemini", "settings.json");
-    const backupPath = CliProviderUtils.getHooksBackupPath(
-      workspaceRoot,
-      "gemini-hooks-backup.json"
-    );
+    // Unregister hooks via ref-counted tracker (serialized to avoid file races)
     await GeminiCliProvider.mcpTracker.withLock(async () => {
-      await CliProviderUtils.restoreHooksFromBackup(settingsPath, backupPath);
+      await GeminiCliProvider.hooksTracker.unregisterWorkflow(
+        workspaceRoot,
+        workspaceRoot
+      );
     });
   }
 
