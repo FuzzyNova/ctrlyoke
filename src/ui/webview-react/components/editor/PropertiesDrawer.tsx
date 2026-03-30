@@ -96,8 +96,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     mcpRegistryServers,
     mcpRegistryLoading,
     mcpRegistryError,
+    mcpWorkspaceServers,
+    mcpWorkspaceServersLoading,
     setMcpLocalServersLoading,
     setMcpRegistryLoading,
+    setMcpWorkspaceServersLoading,
+    setMcpWorkspaceServers,
   } = useUiStore();
 
   const vscode = useVsCodeApi();
@@ -113,6 +117,19 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_MCP_REGISTRY, query });
     },
     [vscode, setMcpRegistryLoading]
+  );
+
+  const handleRequestWorkspaceServers = useCallback(() => {
+    setMcpWorkspaceServersLoading(true);
+    vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_MCP_WORKSPACE_SERVERS });
+  }, [vscode, setMcpWorkspaceServersLoading]);
+
+  const handleWorkspaceServersChange = useCallback(
+    (servers: import("@root/types/FlightPathTypes").McpServerConfig[]) => {
+      setMcpWorkspaceServers(servers);
+      vscode.postMessage({ type: MESSAGE_TYPES.SAVE_MCP_WORKSPACE_SERVERS, servers });
+    },
+    [vscode, setMcpWorkspaceServers]
   );
   const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(576);
 
@@ -861,6 +878,10 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               registryServers={mcpRegistryServers}
               isLoadingRegistry={mcpRegistryLoading}
               registryError={mcpRegistryError}
+              workspaceServers={mcpWorkspaceServers}
+              isLoadingWorkspaceServers={mcpWorkspaceServersLoading}
+              onRequestWorkspaceServers={handleRequestWorkspaceServers}
+              onWorkspaceServersChange={handleWorkspaceServersChange}
             />
           </div>
         )}

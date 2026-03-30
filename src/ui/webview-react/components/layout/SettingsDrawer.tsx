@@ -145,8 +145,12 @@ export const SettingsPanel: React.FC<{
     mcpRegistryServers,
     mcpRegistryLoading,
     mcpRegistryError,
+    mcpWorkspaceServers,
+    mcpWorkspaceServersLoading,
     setMcpLocalServersLoading,
     setMcpRegistryLoading,
+    setMcpWorkspaceServersLoading,
+    setMcpWorkspaceServers,
   } = useUiStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
@@ -488,6 +492,19 @@ export const SettingsPanel: React.FC<{
       vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_MCP_REGISTRY, query });
     },
     [vscode, setMcpRegistryLoading]
+  );
+
+  const handleRequestWorkspaceServers = useCallback(() => {
+    setMcpWorkspaceServersLoading(true);
+    vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_MCP_WORKSPACE_SERVERS });
+  }, [vscode, setMcpWorkspaceServersLoading]);
+
+  const handleWorkspaceServersChange = useCallback(
+    (servers: import("@root/types/FlightPathTypes").McpServerConfig[]) => {
+      setMcpWorkspaceServers(servers);
+      vscode.postMessage({ type: MESSAGE_TYPES.SAVE_MCP_WORKSPACE_SERVERS, servers });
+    },
+    [vscode, setMcpWorkspaceServers]
   );
 
   const handleToolPermissionsChange = useCallback(
@@ -1175,6 +1192,10 @@ export const SettingsPanel: React.FC<{
                   registryServers={mcpRegistryServers}
                   isLoadingRegistry={mcpRegistryLoading}
                   registryError={mcpRegistryError}
+                  workspaceServers={mcpWorkspaceServers}
+                  isLoadingWorkspaceServers={mcpWorkspaceServersLoading}
+                  onRequestWorkspaceServers={handleRequestWorkspaceServers}
+                  onWorkspaceServersChange={handleWorkspaceServersChange}
                 />
               </FormField>
             </>

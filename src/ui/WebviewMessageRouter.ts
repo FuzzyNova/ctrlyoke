@@ -288,6 +288,18 @@ export class WebviewMessageRouter {
       });
     });
 
+    table.set(MESSAGE_TYPES.REQUEST_MCP_WORKSPACE_SERVERS, async () => {
+      const servers = await this.loadMcpWorkspaceServers();
+      this.postMessage({
+        type: MESSAGE_TYPES.MCP_WORKSPACE_SERVERS_RESULT,
+        servers,
+      });
+    });
+
+    table.set(MESSAGE_TYPES.SAVE_MCP_WORKSPACE_SERVERS, async (message) => {
+      await this.saveMcpWorkspaceServers(message.servers ?? []);
+    });
+
     // ── Output History ───────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.LOAD_RUN_HISTORY, async (message) => {
       await this.serializer.handleLoadRunHistory(message.runIndex);
@@ -1249,6 +1261,42 @@ export class WebviewMessageRouter {
       default:
         Log.debug(prefixed);
         break;
+    }
+  }
+
+  private getMcpWorkspaceServersPath(): string | null {
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceRoot) return null;
+    return path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.MCP_DIR,
+      PATH_CONSTANTS.MCP_SERVERS_FILE
+    );
+  }
+
+  private async loadMcpWorkspaceServers(): Promise<import("../types/FlightPathTypes").McpServerConfig[]> {
+    const filePath = this.getMcpWorkspaceServersPath();
+    if (!filePath) return [];
+    try {
+      const content = await fs.promises.readFile(filePath, "utf-8");
+      const parsed = JSON.parse(content);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private async saveMcpWorkspaceServers(
+    servers: import("../types/FlightPathTypes").McpServerConfig[]
+  ): Promise<void> {
+    const filePath = this.getMcpWorkspaceServersPath();
+    if (!filePath) return;
+    try {
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.promises.writeFile(filePath, JSON.stringify(servers, null, 2), "utf-8");
+    } catch (err) {
+      Log.error(`Failed to save workspace MCP servers: ${getErrorMessage(err)}`);
     }
   }
 }

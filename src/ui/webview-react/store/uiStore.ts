@@ -10,6 +10,7 @@ import type {
   LocalMcpServerEntry,
   RegistryMcpEntry,
 } from "@root/types/WebviewMessageTypes";
+import type { McpServerConfig } from "@root/types/FlightPathTypes";
 import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
 
 // ============================================================================
@@ -205,6 +206,9 @@ interface UiState {
   mcpRegistryLoading: boolean;
   mcpRegistryError: string | undefined;
   mcpRegistryQuery: string;
+  // MCP Workspace registry (undefined = not yet loaded)
+  mcpWorkspaceServers: McpServerConfig[] | undefined;
+  mcpWorkspaceServersLoading: boolean;
 }
 
 /**
@@ -315,6 +319,9 @@ interface UiActions {
   setMcpLocalServersResult: (servers: LocalMcpServerEntry[], error?: string) => void;
   setMcpRegistryLoading: (loading: boolean) => void;
   setMcpRegistryResult: (servers: RegistryMcpEntry[], query?: string, error?: string) => void;
+  setMcpWorkspaceServersLoading: (loading: boolean) => void;
+  setMcpWorkspaceServersResult: (servers: McpServerConfig[], error?: string) => void;
+  setMcpWorkspaceServers: (servers: McpServerConfig[]) => void;
 
   // Reset UI to defaults
   resetUi: () => void;
@@ -367,6 +374,8 @@ const initialState: UiState = {
   mcpRegistryLoading: false,
   mcpRegistryError: undefined,
   mcpRegistryQuery: "",
+  mcpWorkspaceServers: undefined,
+  mcpWorkspaceServersLoading: false,
 };
 
 // Fields to persist via vscode.getState()/setState()
@@ -703,6 +712,18 @@ export const useUiStore = create<UiState & UiActions>()(
           mcpRegistryError: error,
           mcpRegistryQuery: query ?? "",
         }),
+
+      setMcpWorkspaceServersLoading: (loading) =>
+        set({ mcpWorkspaceServersLoading: loading }),
+
+      setMcpWorkspaceServersResult: (servers, _error) =>
+        set({
+          mcpWorkspaceServers: servers,
+          mcpWorkspaceServersLoading: false,
+        }),
+
+      setMcpWorkspaceServers: (servers) =>
+        set({ mcpWorkspaceServers: servers }),
 
       // ============================================================================
       // RESET

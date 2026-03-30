@@ -782,6 +782,15 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // MCP_WORKSPACE_SERVERS_RESULT - Workspace MCP server registry
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.MCP_WORKSPACE_SERVERS_RESULT] = (message) => {
+    useUiStore
+      .getState()
+      .setMcpWorkspaceServersResult(message.servers ?? [], message.error);
+  };
+
+  // --------------------------------------------------------------------------
   // WORKFLOW_PROPERTIES_UPDATE - Update workflow-level properties
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE] = (message) => {

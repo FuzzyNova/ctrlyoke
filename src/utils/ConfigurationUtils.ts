@@ -46,6 +46,12 @@ export const PATH_CONSTANTS = {
 
   /** Capabilities file name (written by extension, read by MCP server) */
   CAPABILITIES_FILE: "capabilities.json",
+
+  /** MCP directory name (subdirectory of FLIGHTPATH_DIR) */
+  MCP_DIR: "mcp",
+
+  /** Workspace MCP server registry file name (inside MCP_DIR) */
+  MCP_SERVERS_FILE: "servers.json",
 } as const;
 
 /**

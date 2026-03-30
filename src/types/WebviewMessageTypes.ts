@@ -920,6 +920,21 @@ export interface McpRegistryResultMessage {
   query?: string;
 }
 
+export interface RequestMcpWorkspaceServersMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_MCP_WORKSPACE_SERVERS;
+}
+
+export interface McpWorkspaceServersResultMessage {
+  type: typeof MESSAGE_TYPES.MCP_WORKSPACE_SERVERS_RESULT;
+  servers: McpServerConfig[];
+  error?: string;
+}
+
+export interface SaveMcpWorkspaceServersMessage {
+  type: typeof MESSAGE_TYPES.SAVE_MCP_WORKSPACE_SERVERS;
+  servers: McpServerConfig[];
+}
+
 /**
  * Union type for all incoming messages from extension to webview
  */
@@ -984,4 +999,5 @@ export type IncomingMessage =
   | UndoPromptResultMessage
   | UndoRecordUpdatedMessage
   | McpLocalServersResultMessage
-  | McpRegistryResultMessage;
+  | McpRegistryResultMessage
+  | McpWorkspaceServersResultMessage;

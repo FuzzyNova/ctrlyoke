@@ -163,6 +163,9 @@ export const MESSAGE_TYPES = {
   MCP_LOCAL_SERVERS_RESULT: "mcpLocalServersResult", // Extension -> Webview: { servers: LocalMcpServerEntry[], error? }
   REQUEST_MCP_REGISTRY: "requestMcpRegistry", // Webview -> Extension: Search Anthropic MCP registry
   MCP_REGISTRY_RESULT: "mcpRegistryResult", // Extension -> Webview: { servers: RegistryMcpEntry[], error?, query? }
+  REQUEST_MCP_WORKSPACE_SERVERS: "requestMcpWorkspaceServers", // Webview -> Extension: Load workspace MCP registry
+  MCP_WORKSPACE_SERVERS_RESULT: "mcpWorkspaceServersResult", // Extension -> Webview: { servers: McpServerConfig[], error? }
+  SAVE_MCP_WORKSPACE_SERVERS: "saveMcpWorkspaceServers", // Webview -> Extension: Save workspace MCP registry { servers: McpServerConfig[] }
 
   // Settings — Webview → Extension
   UPDATE_CONFIRM_DELETE: "updateConfirmDelete", // Update confirmDeleteOperations setting: { value: boolean }
