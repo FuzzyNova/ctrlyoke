@@ -1176,6 +1176,7 @@
     "restore-package": "node scripts/strip-dev-commands.mjs --restore",
     "pretest": "npm run compile && npm run compile-tests && node esbuild.js",
     "test": "node ./out/test/runTest.js && npm run test:ui",
+    "pretest:headless": "npm run compile && npm run compile-tests && node esbuild.js",
     "test:headless": "xvfb-run -a node ./out/test/runTest.js && npm run test:ui",
     "test:ui": "vitest run --config src/ui/webview-react/vitest.config.ts",
     "test:ui:watch": "vitest --config src/ui/webview-react/vitest.config.ts",
