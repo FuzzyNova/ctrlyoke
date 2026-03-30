@@ -77,6 +77,9 @@ export class CopilotCliProvider implements ICliProvider {
     new CopilotToolPermissionMapper();
   readonly logParser = new CopilotLogParser();
 
+  /** Hook files created during interactive mode (cleaned up after workflow). */
+  private interactiveHookFilePaths: string[] = [];
+
   constructor() {
     // No initialization needed
   }
@@ -208,7 +211,9 @@ export class CopilotCliProvider implements ICliProvider {
       if (workspaceRoot) {
         const hookArgs = await this.buildSessionEndHookArgs(
           extensionPath,
-          workspaceRoot
+          workspaceRoot,
+          workflowContext?.promptIndex ?? 0,
+          workflowContext?.workingFilePath
         );
         args.push(...hookArgs);
         Log.debug(`🔔 Configured sessionEnd hook for completion detection`);
@@ -297,15 +302,27 @@ export class CopilotCliProvider implements ICliProvider {
 
   /**
    * Build sessionEnd hook arguments for interactive mode.
-   * Returns CLI arguments to configure the hook.
    *
-   * @param context Extension context for accessing hook script path
+   * Creates a uniquely-named hook file per prompt in `.github/hooks/` so that
+   * parallel workflows don't interfere with each other. Copilot auto-discovers
+   * all JSON files in the hooks directory, so each prompt's file is loaded
+   * independently — no merging or ref-counting needed.
+   *
+   * This also sets up cleanly for the upcoming `hooks` property (HOOKS_EXPOSURE_PLAN)
+   * where different prompts may define different user hooks alongside FlightPath's
+   * completion detection hooks.
+   *
+   * @param extensionPath Extension path for accessing hook script
    * @param workspaceRoot Workspace root directory
-   * @returns CLI arguments array
+   * @param promptIndex Zero-based prompt index within the workflow
+   * @param workingFilePath Working file path (used to derive a unique filename)
+   * @returns CLI arguments array (empty — Copilot auto-discovers hooks)
    */
   private async buildSessionEndHookArgs(
     extensionPath: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    promptIndex: number,
+    workingFilePath?: string
   ): Promise<string[]> {
     // Get notification directory from notification monitor
     const notifyDir =
@@ -324,12 +341,14 @@ export class CopilotCliProvider implements ICliProvider {
       workspaceRoot
     );
 
-    // For Copilot, the hook config is written to .github/hooks/flightpath.json
-    // However, we can also pass inline JSON via --hook argument if supported
-    // For now, we'll create the hook file and let Copilot discover it automatically
-
-    // Create the hook file
-    await this.createHookFile(hookConfig, workspaceRoot);
+    // Write a uniquely-named hook file for this prompt.
+    // Copilot loads all *.json files in .github/hooks/, so per-prompt files
+    // coexist safely across parallel workflows.
+    const hookFileName = CopilotCliProvider.buildHookFileName(
+      promptIndex,
+      workingFilePath
+    );
+    await this.createHookFile(hookConfig, workspaceRoot, hookFileName);
 
     // No additional CLI args needed - Copilot auto-discovers hooks in .github/hooks/
     return [];
@@ -338,13 +357,12 @@ export class CopilotCliProvider implements ICliProvider {
   /**
    * Return additional file paths to delete after workflow cleanup.
    *
-   * Copilot writes flightpath.json to .github/hooks/ for interactive mode
-   * completion detection. It is auto-generated each run, so clean it up
-   * after the workflow finishes (consistent with OpenCode plugin cleanup).
+   * Includes all per-prompt hook files created during this workflow's
+   * interactive sessions, plus the Copilot OTel telemetry file.
    */
   getAdditionalCleanupFilePaths(workspaceRoot: string): string[] {
     return [
-      path.join(workspaceRoot, ".github", "hooks", "flightpath.json"),
+      ...this.interactiveHookFilePaths,
       // Copilot CLI writes OpenTelemetry telemetry to COPILOT_OTEL_FILE_EXPORTER_PATH,
       // which is internally set to the relative path "NUL". When the CWD is the workspace
       // root this resolves to a real file rather than the Windows null device.
@@ -354,18 +372,17 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   /**
-   * Create the sessionEnd hook file for Copilot
+   * Create a per-prompt hook file for Copilot in .github/hooks/.
    */
   private async createHookFile(
     hookConfig: any,
-    workspaceRoot: string
+    workspaceRoot: string,
+    hookFileName: string
   ): Promise<void> {
     try {
       const hookDir = path.join(workspaceRoot, ".github", "hooks");
 
       // Security: Validate that the resolved hook path stays within the workspace root.
-      // Defense-in-depth — workspaceRoot comes from VS Code's trusted workspace API,
-      // but path.join with crafted segments could theoretically escape the workspace.
       const normalizedWorkspaceRoot = path.resolve(workspaceRoot);
       const resolvedHookDir = path.resolve(hookDir);
       if (!resolvedHookDir.startsWith(normalizedWorkspaceRoot)) {
@@ -377,17 +394,47 @@ export class CopilotCliProvider implements ICliProvider {
 
       await fs.mkdir(hookDir, { recursive: true });
 
-      const hookPath = path.join(hookDir, "flightpath.json");
+      const hookPath = path.join(hookDir, hookFileName);
       await fs.writeFile(
         hookPath,
         JSON.stringify(hookConfig.config, null, 2),
         "utf-8"
       );
 
+      this.interactiveHookFilePaths.push(hookPath);
       Log.debug(`📁 Created hook file: ${hookPath}`);
     } catch (error) {
       Log.warn(`⚠️ Failed to create hook file: ${error}`);
     }
+  }
+
+  /**
+   * Build a unique hook filename for a prompt.
+   *
+   * Format: `flightpath-<stem>-p<promptIndex>.json`
+   * where stem is derived from the working file basename (already contains a
+   * timestamp and workflow name), or falls back to a timestamp.
+   *
+   * Examples:
+   * - `flightpath-1774891046-my-workflow-p0.json`
+   * - `flightpath-1774891046-my-workflow-p1.json`
+   * - `flightpath-1774891200-p0.json` (fallback when no workingFilePath)
+   */
+  private static buildHookFileName(
+    promptIndex: number,
+    workingFilePath?: string
+  ): string {
+    let stem: string;
+    if (workingFilePath) {
+      // Working file is like "1774891046-my-workflow.flightpath.json"
+      // Strip extensions to get "1774891046-my-workflow"
+      stem = path.basename(workingFilePath).replace(/\.flightpath\.json$/i, "");
+    } else {
+      stem = String(Date.now());
+    }
+    // Sanitize: keep alphanumeric, hyphens, underscores only
+    const safeStem = stem.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-");
+    return `flightpath-${safeStem}-p${promptIndex}.json`;
   }
 
   /**
