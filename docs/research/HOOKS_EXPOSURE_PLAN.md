@@ -16,14 +16,14 @@
 
 FlightPath injects its own completion-detection hooks into each CLI's hook system when running in interactive mode. The current behavior varies by harness:
 
-| Harness | Hook Method | Conflict Risk | User Hooks Preserved? |
-|---------|-------------|---------------|----------------------|
-| **Copilot CLI** | Creates `.github/hooks/flightpath.json` (separate file) | None | YES — Copilot loads all JSON files in `.github/hooks/` |
-| **Claude CLI** | Temp file via `--settings` flag (overlay, not replacement) | None | YES — `--settings` is additive in Claude's settings chain |
-| **Codex CLI** | Inline `--config notify=[...]` argument | Partial | NO — only one `notify` command can be passed inline |
-| **OpenCode CLI** | Plugin file deployment (not hook-based) | None | YES — plugin is separate; no hooks key used |
-| **Qwen CLI** | Reads `.qwen/settings.json`, overwrites `hooks` key | **HIGH** | **NO** — entire `hooks` section replaced during run |
-| **Gemini CLI** | Reads `.gemini/settings.json`, overwrites `hooks` key | **HIGH** | **NO** — entire `hooks` section replaced during run |
+| Harness | Hook Method | Conflict Risk | User Hooks Preserved? | Parallel Safe? |
+|---------|-------------|---------------|----------------------|----------------|
+| **Copilot CLI** | Creates `.github/hooks/flightpath-<stem>-p<n>.json` per prompt | None | YES — Copilot loads all JSON files in `.github/hooks/` | **YES** — unique filename per prompt (fixed in `ce423b7`) |
+| **Claude CLI** | Fixed temp file `claude-hook-settings.json` via `--settings` flag | None | YES — `--settings` is additive in Claude's settings chain | **NO** — shared temp file clobbered by concurrent prompts (see Section 11) |
+| **Codex CLI** | Inline `--config notify=[...]` argument | Partial | NO — only one `notify` command can be passed inline | N/A — stateless flag, no shared file |
+| **OpenCode CLI** | Plugin file deployment (not hook-based) | None | YES — plugin is separate; no hooks key used | N/A — plugin re-deployed each run |
+| **Qwen CLI** | Reads `.qwen/settings.json`, deep-merges `hooks` key | None (deep-merge implemented) | **YES** — deep-merge preserves pre-existing hooks (fixed) | **NO** — shared backup file and no ref-counting causes restore race (see Section 11) |
+| **Gemini CLI** | Reads `.gemini/settings.json`, deep-merges `hooks` key | None (deep-merge implemented) | **YES** — deep-merge preserves pre-existing hooks (fixed) | **NO** — shared backup file and no ref-counting causes restore race (see Section 11) |
 
 ### The Core Bug (Qwen & Gemini)
 
@@ -270,10 +270,10 @@ hooks?: UserHookConfig[] | null;
 
 **`schemas/prompt-schema.json`:**
 
-Add to `$defs`:
+Add to `definitions` (the schema uses JSON Schema draft-07 with `"definitions"`, not `"$defs"`):
 
 ```json
-"UserHookConfig": {
+"userHookConfig": {
   "type": "object",
   "required": ["event", "command"],
   "additionalProperties": false,
@@ -295,14 +295,14 @@ Add to `$defs`:
 }
 ```
 
-The `hooks` property on both `PromptFile` and `PromptItem`:
+Add `hooks` inside `executionProperties` (alongside `mcpServers` — both workflow-level and prompt-level share the same `executionProperties` definition):
 
 ```json
 "hooks": {
   "oneOf": [
     {
       "type": "array",
-      "items": { "$ref": "#/$defs/UserHookConfig" },
+      "items": { "$ref": "#/definitions/userHookConfig" },
       "description": "User-defined hooks. Per-event override: events present in this array replace the tier below for that event; events absent inherit from the tier below. An empty array explicitly disables all hooks."
     },
     {
@@ -521,9 +521,10 @@ This is the key behavioral difference from `mcpServers` and most other propertie
 
 | `hooks` value at a tier | Effect on that event at that tier |
 |-------------------------|----------------------------------|
-| Omitted (`undefined`) | No override — events inherit from the tier below |
-| `null` or `[]` | All events explicitly cleared — return `[]` immediately, no further fallback |
-| `[{ event: "stop", ... }]` | `stop` is overridden; all other events not mentioned still inherit from the tier below |
+| Omitted (`undefined`) | No override — events inherit from the tier below (global default is pre-seeded into workflow tier by `populateSettingsDefaults()`) |
+| `null` | All events explicitly suppressed — return `[]` immediately, no inheritance |
+| `[]` | Empty list — effectively no hooks, but semantically "use this empty list" rather than "suppress". Behaviorally identical to null since both produce no hooks. |
+| `[{ event: "stop", ... }]` | `stop` is overridden for this tier; all other events not mentioned inherit from the tier below |
 
 **Example — most common case:**
 ```yaml
@@ -552,45 +553,39 @@ Result: no user hooks fire for `cleanup-step` regardless of workflow or global d
 
 **Algorithm in `resolveHooks()`:**
 
+> **Two-tier only, not three.** Because `populateSettingsDefaults()` bakes the global `flightpath.hooks` setting into `workflowFile.hooks` (the same pattern `mcpServers` uses), `resolveHooks()` does NOT need to call `ConfigurationUtils.getDefaultHooks()` at runtime. The global default is already embedded in the working file by the time resolution runs. `resolveMcpServers()` in `PropertyResolver.ts` follows the same pattern and never re-reads the VS Code setting. This also means `workflowFile.hooks` is **never `undefined`** at resolve time — it is always at least `[]` (the seeded global default or an explicit user value).
+
+> **`null` is the only suppress sentinel.** `null` in the YAML (`hooks: null`) copies through `extractWorkflowProperties()` (since `null !== undefined`), causes `populateSettingsDefaults()` to skip the default, and arrives at `resolveHooks()` as `null`. An empty array `hooks: []` is ambiguous — it could be an explicit "use no hooks" or the seeded global default being empty. Since the behavioral outcome is identical in either case (no hooks), the ambiguity is harmless: both `null` and `[]` resolve to no hooks. Use `=== null` checks, not `length === 0`, to avoid confusion.
+
 ```typescript
 resolveHooks(promptItem: PromptItem, workflowFile: PromptFile): UserHookConfig[] {
-  // Explicit null/empty at prompt level → no hooks, no fallback
-  if (promptItem.hooks !== undefined) {
-    if (promptItem.hooks === null || promptItem.hooks.length === 0) return [];
+  // Explicit null at prompt level → no hooks for this prompt, no inheritance
+  if (promptItem.hooks === null) return [];
+
+  // Explicit null at workflow level (no prompt override) → no hooks for this prompt
+  if (promptItem.hooks === undefined && workflowFile.hooks === null) return [];
+
+  // workflowFile.hooks is never undefined here (seeded by populateSettingsDefaults)
+  const workflowHooks = workflowFile.hooks ?? [];
+
+  // No prompt-level override → return workflow hooks (which include global default)
+  if (promptItem.hooks === undefined || promptItem.hooks.length === 0) {
+    return workflowHooks;
   }
 
-  // Explicit null/empty at workflow level → no hooks, no fallback
-  if (workflowFile.hooks !== undefined && promptItem.hooks === undefined) {
-    if (workflowFile.hooks === null || workflowFile.hooks.length === 0) return [];
-  }
-
-  const promptHooks   = promptItem.hooks   ?? [];
-  const workflowHooks = workflowFile.hooks  ?? [];
-  const globalHooks   = ConfigurationUtils.getDefaultHooks();  // new method (Section 7a)
-
-  // Build per-event map from lowest priority to highest
+  // Prompt has hooks → per-event override against workflow level
   const eventMap = new Map<HookEvent, UserHookConfig[]>();
 
-  // Tier 3: global defaults (lowest priority)
-  for (const hook of globalHooks) {
+  // Base: workflow-level hooks (includes baked-in global default)
+  for (const hook of workflowHooks) {
     if (!eventMap.has(hook.event)) eventMap.set(hook.event, []);
     eventMap.get(hook.event)!.push(hook);
   }
 
-  // Tier 2: workflow overrides per event
-  if (workflowFile.hooks !== undefined && workflowFile.hooks !== null) {
-    const workflowEvents = new Set(workflowHooks.map(h => h.event));
-    for (const event of workflowEvents) {
-      eventMap.set(event, workflowHooks.filter(h => h.event === event));
-    }
-  }
-
-  // Tier 1: prompt overrides per event (highest priority)
-  if (promptItem.hooks !== undefined && promptItem.hooks !== null) {
-    const promptEvents = new Set(promptHooks.map(h => h.event));
-    for (const event of promptEvents) {
-      eventMap.set(event, promptHooks.filter(h => h.event === event));
-    }
+  // Override: prompt-level hooks replace workflow hooks per event
+  const promptEvents = new Set(promptItem.hooks.map(h => h.event));
+  for (const event of promptEvents) {
+    eventMap.set(event, promptItem.hooks!.filter(h => h.event === event));
   }
 
   return [...eventMap.values()].flat();
@@ -602,18 +597,29 @@ A workflow-level "always run tests on stop" hook should remain the default — b
 
 ---
 
-## 7a. VS Code Setting — `flightpath.defaultHooks`
+## 7a. VS Code Setting — `flightpath.hooks`
 
 Analogous to `flightpath.mcpServers` — a global default array used to pre-populate new workflow files and as the ultimate fallback in `resolveHooks()`.
+
+> **Naming:** The VS Code setting is `flightpath.hooks` (not `flightpath.defaultHooks`). This matches the `flightpath.mcpServers` precedent, where the setting key matches the property name directly rather than using a "default" prefix.
 
 **`package.json` setting:**
 
 ```json
-"flightpath.defaultHooks": {
+"flightpath.hooks": {
+  "order": 610,
   "type": "array",
   "default": [],
-  "items": { "$ref": "#/$defs/UserHookConfig" },
-  "description": "Default hooks injected for workflow prompts when no per-prompt or per-workflow hooks are specified. Used to pre-populate new workflow files. An empty array disables default injection."
+  "description": "[Hooks] Default user hooks to run alongside FlightPath's completion-detection hooks. Used to pre-populate new workflow files. An empty array disables default injection.",
+  "items": {
+    "type": "object",
+    "required": ["event", "command"],
+    "properties": {
+      "event": { "type": "string", "enum": ["stop", "sessionStart", "preToolUse", "postToolUse", "userPromptSubmit"] },
+      "command": { "type": "string" },
+      "timeoutSec": { "type": "number" }
+    }
+  }
 }
 ```
 
@@ -621,27 +627,103 @@ Analogous to `flightpath.mcpServers` — a global default array used to pre-popu
 
 ```typescript
 getDefaultHooks(): UserHookConfig[] {
-  return getConfig().get<UserHookConfig[]>("defaultHooks", []);
+  return getConfig().get<UserHookConfig[]>("hooks", []);
 }
 
 async setDefaultHooks(hooks: UserHookConfig[]): Promise<void> {
-  await this.updateSetting("defaultHooks", hooks);
+  await this.updateSetting("hooks", hooks);
 }
 ```
 
-### "Set as Default" Action
+**`PromptFileLoader.populateSettingsDefaults()` addition:**
 
-The dashboard should expose a "Set as Default" action (matching the pattern used for Skills) that copies the current workflow's `hooks` array into `flightpath.defaultHooks`. This allows users to define hooks once in a workflow, validate them, then promote them to their global default for all future workflows.
+`hooks` MUST follow the same pattern as `mcpServers` and be added to `populateSettingsDefaults()`:
+
+```typescript
+if (explicitValues.hooks === undefined) {
+  defaults.hooks = ConfigurationUtils.getDefaultHooks();
+}
+```
+
+Without this, the `SettingsDrawer` cannot show the "Set as Default" button (it compares `workflowProperties.hooks` against the global setting — if `workflowProperties.hooks` is always `undefined`, the comparison never triggers). This also means new workflows silently ignore the global `flightpath.hooks` default.
+
+### "Set as Default" Button in SettingsDrawer
+
+The "Set as Default" button appears in `SettingsDrawer.tsx` (NOT `PropertiesDrawer.tsx`). For `mcpServers`, the button is rendered as a `<SetAsDefaultButton>` adjacent to the `<McpServersEditor>` block. The full plumbing path for the `hooks` equivalent:
+
+1. **User clicks "Set as Default"** in SettingsDrawer → calls `handleSetAsDefault("hooks", workflowProperties.hooks)`
+2. **`handleSetAsDefault`** sends `{ type: MESSAGE_TYPES.SET_AS_DEFAULT, property: "hooks", value: workflowProperties.hooks }`
+3. **`WebviewSettingsSync.handleSetAsDefault()`** routes `property === "hooks"` → calls `ConfigurationUtils.setDefaultHooks(value ?? [])`
+4. **VS Code settings** updated globally via `updateSetting("hooks", hooks)`
+
+**`isDifferentFromGlobal("hooks")`** in SettingsDrawer needs the same null/`[]` normalization as `mcpServers` — both null and empty array count as "no hooks" and should not show the button when the global is also empty.
+
+**`buildGlobalSettings()` in `WebviewSettingsSync.ts`** must include:
+```typescript
+hooks: ConfigurationUtils.getDefaultHooks(),
+```
+
+This is needed in both `buildGlobalSettings()` (used by `GlobalSettingsUpdatedMessage`) AND in `sendInitialState()` (used by `InitMessageData.globalSettings`). Both message types must carry the global hooks default so the SettingsDrawer can compare workflow vs global.
 
 ### Single Array vs Per-Event Settings
 
-A single `flightpath.defaultHooks` array is the right choice — not separate settings per event (e.g., `flightpath.defaultHooks.stop`, `flightpath.defaultHooks.sessionStart`). Reasons:
-- Consistent with `flightpath.mcpServers` pattern
-- Per-event settings would require users to understand all supported event names upfront when browsing VS Code's settings UI
-- The settings UI can render the array; users who need fine-grained event control are already editing YAML
-- Adding events later doesn't require new settings — the array extends naturally
+A single `flightpath.hooks` array is the right choice — not separate settings per event. Consistent with `flightpath.mcpServers`; per-event settings would require users to know all event names upfront. The VS Code setting holds a simple list — complex per-event override logic lives in the YAML.
 
-The VS Code setting is intentionally **not** a place for sophisticated configuration. It holds a simple list of "always run these commands on these events." Complex per-prompt and per-workflow override logic lives in the YAML workflow files.
+---
+
+## 7b. PropertiesDrawer UX
+
+> **Not deferred.** The `hooks` property needs a usable editor in `PropertiesDrawer` — without it, users have no way to set per-prompt hooks short of editing raw YAML. The editor does NOT need to be as complex as `McpServersEditor`. A simple inline list editor is sufficient for V1.
+
+### New Tab Page: HOOKS
+
+Add a new `DRAWER_PAGES.HOOKS` entry to `src/ui/webview-react/types/drawerPages.ts`. This gives hooks its own tab in PropertiesDrawer, following the same pattern as `DRAWER_PAGES.MCP` and `DRAWER_PAGES.PERMISSIONS`.
+
+The tab label is "Hooks". A hook icon (or a simple 🪝 emoji in dev) suffices; a proper SVG icon can be added alongside the others in the icons package.
+
+### Editor Layout
+
+Each hook entry is rendered as a compact inline row:
+
+```
+[ Event dropdown ▼ ] [ Command text input                          ] [ ✕ ]
+[ Event dropdown ▼ ] [ Command text input                          ] [ ✕ ]
+                                                    [ + Add Hook ]
+```
+
+**Event dropdown** — `<select>` or `<CustomSelect>` showing the 5 logical event names with human-readable labels:
+| Value | Label |
+|-------|-------|
+| `stop` | Stop (session end) |
+| `sessionStart` | Session Start |
+| `preToolUse` | Pre Tool Use |
+| `postToolUse` | Post Tool Use |
+| `userPromptSubmit` | User Prompt Submit |
+
+**Command input** — plain `<input type="text">` with `font-mono` styling and placeholder `node ./scripts/my-hook.js`. Commands are entered as-is (resolved relative to workspace root at inject time).
+
+**Optional timeout** — collapsed behind a "▸ Options" disclosure toggle per row to avoid visual clutter in the common case. When expanded, shows `<input type="number" placeholder="10">` labeled "Timeout (sec)". This matches the `timeoutSec` field — Copilot-only for V1.
+
+**Add Hook button** — plain text link `+ Add Hook` that appends `{ event: "stop", command: "" }` to the array (defaulting to the most common event).
+
+**Remove button** — `✕` icon button per row (matching the pattern used in `McpServersEditor` row actions).
+
+### Default / Inherited / Custom Mode
+
+Like `mcpServers`, use the three-mode pattern:
+- **Default** (shown when `hooks === undefined`): displays the resolved inherited value (from workflow level or global default) in a read-only preview, with a "Customize" link to switch to Custom mode.
+- **None** (shown when `hooks === null` or `hooks === []`): shows "No hooks — inherited hooks suppressed" label.
+- **Custom** (shown when `hooks` is a non-null non-undefined array): shows the add/remove list editor described above.
+
+A `CustomSelect` or button group to switch between Default / None / Custom (same pattern as `mcpServers` in PropertiesDrawer: the `McpServersEditor` exposes `value === undefined` as Default mode, `value === null` as None mode).
+
+### Inherited Value Preview
+
+When in Default mode, show the resolved hooks list in a muted read-only style (opacity-60 or similar), so users can see what hooks will actually run without switching to Custom mode. This is the `inheritedValue` prop pattern from `McpServersEditor`.
+
+### SettingsDrawer Hook Editor
+
+In `SettingsDrawer.tsx`, the global `flightpath.hooks` setting is edited using the **same component**. The SettingsDrawer renders it without the Default/None/Custom mode (since the global setting is always a concrete value — there is no tier above it to inherit from). A "Set as Default" button appears when `workflowProperties.hooks` differs from the global setting.
 
 ---
 
@@ -650,42 +732,70 @@ The VS Code setting is intentionally **not** a place for sophisticated configura
 | File | Change |
 |------|--------|
 | `src/types/FlightPathTypes.ts` | Add `HookEvent` type, `UserHookConfig` interface, `hooks?: UserHookConfig[] \| null` to `ExecutionProperties` |
-| `schemas/prompt-schema.json` | Add `UserHookConfig` def and `hooks` `oneOf` array/null property |
+| `schemas/prompt-schema.json` | Add `userHookConfig` entry under `definitions` (draft-07, NOT `$defs`); add `hooks` `oneOf` array/null inside `executionProperties` alongside `mcpServers` |
 | `src/flightpath/PropertyResolver.ts` | Add `resolveHooks()` with per-event override semantics (Section 7) |
 | `src/flightpath/PromptFileParser.ts` | Copy `hooks` array/null from source |
-| `src/flightpath/WorkflowInstance.ts` | Add `hooks` array/null handling |
-| `src/flightpath/orchestration/PromptFileLoader.ts` | Copy `hooks` from `promptFile` in `extractWorkflowLevelUpdates()` (like `mcpServers`). **Do NOT add `hooks` to `populateSettingsDefaults()`** — unlike `mcpServers`, the VS Code default fallback lives exclusively in `resolveHooks()`. Baking it into the loaded workflow object would collapse `undefined` (not set) and `[]` (explicitly empty) into the same value, breaking per-event inheritance. |
+| `src/flightpath/WorkflowInstance.ts` | Add `hooks` to the webview property coercion block (parallel to `mcpServers` cast at lines 2259–2261): `...(props?.hooks !== undefined && { hooks: props.hooks as UserHookConfig[] | null })` |
+| `src/flightpath/orchestration/PromptFileLoader.ts` | (1) Copy `hooks` in `extractWorkflowLevelUpdates()` like `mcpServers`. (2) Add `hooks` to `populateSettingsDefaults()`: `if (explicitValues.hooks === undefined) { defaults.hooks = ConfigurationUtils.getDefaultHooks(); }` — required for SettingsDrawer comparison and new-workflow pre-population from global default. |
 | `src/flightpath/harness/shared/interfaces/INotificationMonitor.ts` | Add optional `userHooks` param to `buildHookConfig()` in interface and base |
-| `src/flightpath/harness/qwen/QwenCliProvider.ts` | Read `userHooks` from `workflowContext.resolvedProperties.hooks`; pass to `buildInteractiveHookSettings()`; add user commands to `trusted_hooks.json` pre-trust step (Section 5) |
+| `src/flightpath/harness/qwen/QwenCliProvider.ts` | (1) Replace backup/restore with `SettingsJsonHooksTracker.registerWorkflow()` / `unregisterWorkflow()` under `mcpTracker.withLock()` (Section 11b). (2) Read `userHooks` from resolved properties; pass as `workflowUserHooks`. (3) Add user commands to `trusted_hooks.json`. |
 | `src/flightpath/harness/qwen/QwenNotificationMonitor.ts` | No change to `buildHookConfig()` — user hooks are not injected here (see Section 5) |
-| `src/flightpath/harness/gemini/GeminiCliProvider.ts` | Read `userHooks` from `workflowContext.resolvedProperties.hooks`; pass to `buildInteractiveHookSettings()` (Section 5) |
+| `src/flightpath/harness/gemini/GeminiCliProvider.ts` | (1) Replace backup/restore with `SettingsJsonHooksTracker` under `mcpTracker.withLock()` (Section 11b). (2) Read `userHooks` from resolved properties; pass as `workflowUserHooks`. |
 | `src/flightpath/harness/gemini/GeminiNotificationMonitor.ts` | No change to `buildHookConfig()` — user hooks are not injected here (see Section 5) |
-| `src/flightpath/harness/claude/ClaudeCliProvider.ts` | Pass `userHooks` to `buildHookConfig` |
+| `src/flightpath/harness/claude/ClaudeCliProvider.ts` | (1) Unique per-prompt settings filename `claude-hook-settings-<stem>-p<n>.json`; push to `interactiveHookSettingsPaths[]`; spread in `getAdditionalCleanupFilePaths()` (Section 11a). (2) Pass `userHooks` to `buildHookConfig`. |
 | `src/flightpath/harness/claude/ClaudeNotificationMonitor.ts` | Accept `userHooks` in `buildHookConfig`, append to Stop/SessionStart arrays |
 | `src/flightpath/harness/copilot/CopilotCliProvider.ts` | Pass `userHooks` to `buildHookConfig` |
 | `src/flightpath/harness/copilot/CopilotNotificationMonitor.ts` | Accept `userHooks` in `buildHookConfig`, append to sessionEnd/sessionStart arrays |
+| `src/flightpath/harness/shared/SettingsJsonHooksTracker.ts` | **New file:** ref-counted hook injection for Qwen/Gemini; singleton-per-tool; in-memory baseline; restore on last unregister (Section 11b) |
+| `src/flightpath/harness/shared/CliProviderUtils.ts` | Remove `readSettingsAndBackupHooks()` and `restoreHooksFromBackup()` once both providers migrated to `SettingsJsonHooksTracker` |
 | `src/flightpath/harness/codex/CodexCliProvider.ts` | Implement chain script generation when `userHooks` contains stop events |
 | `src/flightpath/harness/codex/CodexNotificationMonitor.ts` | Accept `userHooks`, generate chain script if needed |
 | `src/flightpath/harness/opencode/OpenCodeCliProvider.ts` | Replace static file copy with `OpenCodePluginGenerator.generate(userHooks)` call |
 | `src/flightpath/harness/opencode/OpenCodePluginGenerator.ts` | **New file:** generates the plugin JS string with user hook commands embedded |
 | `src/scripts/flightpath-opencode-plugin.js` | No change — remains static source/reference; generator uses it as a template base |
-| `package.json` | Add `flightpath.defaultHooks` array setting (Section 7a) |
-| `src/utils/ConfigurationUtils.ts` | Add `getDefaultHooks()` and `setDefaultHooks()` (Section 7a) |
-| `src/ui/WebviewSettingsSync.ts` | Add `hooks` property handling; add `defaultHooks` to global settings sent to webview |
-| `src/ui/WorkflowSerializer.ts` | Add `"hooks"` to property lists |
-| `src/types/DashboardConstants.ts` | Add `HOOKS` constant |
-| `src/types/WebviewMessageTypes.ts` | Add `hooks?: UserHookConfig[] \| null` to relevant interfaces; add `defaultHooks` to global settings interface |
-| `src/utils/ValidationUtils.ts` | Add `UserHookConfig` shape + `hooks` array/null definition to AJV runtime schema |
-| `src/test/unit/PropertyResolver.test.ts` | Add `resolveHooks()` tests covering per-event override, null/empty, and inheritance |
+| `package.json` | Add `flightpath.hooks` array setting with inline item schema (key is `hooks`, NOT `defaultHooks`) |
+| `src/utils/ConfigurationUtils.ts` | Add `getDefaultHooks()` reading `config.get("hooks")` and `setDefaultHooks()` calling `updateSetting("hooks", ...)` |
+| `src/ui/WebviewSettingsSync.ts` | (1) Add `hooks: ConfigurationUtils.getDefaultHooks()` to `buildGlobalSettings()`. (2) Add `hooks` to `sendWorkflowPropertiesToSettings()`. (3) Add `hooks` branch to `handleSetAsDefault()`. Must update BOTH `InitMessageData.globalSettings` and `GlobalSettingsUpdatedMessage.globalSettings` — they have different shape declarations. |
+| `src/ui/WorkflowSerializer.ts` | Add `"hooks"` to **both** `WORKFLOW_FIELDS` and `PROMPT_FIELDS` arrays — omitting either causes silent data loss during save |
+| `src/types/DashboardConstants.ts` | Add `HOOKS: "hooks"` to `PROMPT_PROPERTIES` constant |
+| `src/types/WebviewMessageTypes.ts` | (1) Add `hooks?: UserHookConfig[] \| null` to `PromptItem`. (2) Add `hooks: UserHookConfig[]` to `GlobalSettingsUpdatedMessage.globalSettings`. (3) Add `hooks: UserHookConfig[]` to `InitMessageData.globalSettings` (these two types have different shapes — both need updating). |
+| `src/utils/ValidationUtils.ts` | Add `userHookConfig` shape + `hooks` array/null to AJV runtime schema |
+| `src/ui/webview-react/types/drawerPages.ts` | Add `HOOKS` entry to `DRAWER_PAGES` |
+| `src/ui/webview-react/components/editor/PropertiesDrawer.tsx` | Add HOOKS tab page: Default/None/Custom mode, inline list editor with event dropdown + command input + timeout disclosure + Add/Remove (Section 7b) |
+| `src/ui/webview-react/components/editor/PromptEditor.tsx` | Add prompt-level hooks editor (parallel to existing prompt-level `mcpServers` editor) |
+| `src/ui/webview-react/components/layout/SettingsDrawer.tsx` | Add hooks inline list editor (no mode selector at global level); add `SetAsDefaultButton` for hooks; add `isDifferentFromGlobal("hooks")` with null/`[]` normalization |
+| `src/ui/webview-react/components/layout/PromptsPanel.tsx` | Add `hooks` badge in the prompt list (parallel to existing `mcpServers` badge) |
+| `src/ui/webview-react/store/settingsStore.ts` | Add `hooks?: UserHookConfig[] \| null` to `WorkflowProperties`; add `hooks: UserHookConfig[]` to `GlobalSettings`; add `getEffectiveHooks()` action |
+| `src/ui/webview-react/store/editorStore.ts` | Add `hooks` to `WorkflowProperties` interface, default state, `updatePromptData()`, and `buildRawPromptItem()` — all four locations that enumerate `mcpServers` |
+| `src/ui/webview-react/utils/prompt.ts` | Add `hooks` to `WorkflowProperties` type (line 52), `EditablePromptItem` type (line 95), default value (line 140), mapping-from-prompt (line 157), and serialization-to-raw (line 182) |
+| `src/test/unit/PropertyResolver.test.ts` | Add `resolveHooks()` tests: per-event override, null sentinel, empty array, two-tier inheritance (no tier-3 read at runtime) |
+| `src/test/unit/SettingsJsonHooksTracker.test.ts` | **New test file:** ref-counting, baseline capture, parallel register/unregister, restore-on-last-unregister |
+| `src/ui/webview-react/test/store/settingsStore.test.ts` | Add hooks defaults and effective-value tests |
+| `src/ui/webview-react/test/hooks/useMessageHandler.test.ts` | Add hooks message handling test (parallel to mcpServers test at line 148) |
+| `src/ui/webview-react/test/utils/prompt.test.ts` | Add hooks field round-trip test (parallel to mcpServers tests at lines 47, 56) |
 | `docs/` + templates | Document `hooks` property in workflow YAML examples |
 
 ---
 
 ## 9. Implementation Order
 
+### Phase 0 — Parallel Safety (prerequisite, no schema changes required)
+
+0a. **Claude CLI — unique per-prompt settings file** (Section 11a): Generate `claude-hook-settings-<stem>-p<n>.json` in `ClaudeCliProvider`. Push path to `interactiveHookSettingsPaths[]`. Spread in `getAdditionalCleanupFilePaths()`. No interface changes needed.
+
+0b. **`SettingsJsonHooksTracker`** (Section 11b): Implement new `src/flightpath/harness/shared/SettingsJsonHooksTracker.ts` — singleton-per-tool, in-memory baseline, ref counting, re-merge on register, restore on last unregister.
+
+0c. **Qwen + Gemini — migrate to `SettingsJsonHooksTracker`**: Replace `readSettingsAndBackupHooks()` / `restoreHooksFromBackup()` calls with `hooksTracker.registerWorkflow()` / `unregisterWorkflow()` calls inside `mcpTracker.withLock()`. Remove the temp backup files. Delete backup/restore helpers from `CliProviderUtils` once unused.
+
+> These three steps are independent of the `hooks` schema property and should be shipped as a standalone parallel-safety fix before the full `hooks` feature lands.
+
+---
+
+### Phase 1 — `hooks` Property
+
 1. **Types + schema** — `HookEvent`, `UserHookConfig`, `ExecutionProperties.hooks?: UserHookConfig[] | null`, JSON schema with `oneOf` null support. Run `npm run generate-schema` after. Unblocks everything.
 
-2. **VS Code setting + `ConfigurationUtils`** — Add `flightpath.defaultHooks` array setting in `package.json`; add `getDefaultHooks()` / `setDefaultHooks()` to `ConfigurationUtils` (Section 7a).
+2. **VS Code setting + `ConfigurationUtils`** — Add `flightpath.hooks` array setting in `package.json`; add `getDefaultHooks()` / `setDefaultHooks()` to `ConfigurationUtils` (Section 7a).
 
 3. **`PropertyResolver.resolveHooks()`** — per-event override semantics with three-tier fallback: prompt → workflow → `getDefaultHooks()` (Section 7).
 
@@ -695,16 +805,189 @@ The VS Code setting is intentionally **not** a place for sophisticated configura
 
 6. **Harness implementations:**
    - **Claude, Copilot** — `userHooks` flows into `buildHookConfig()`; each monitor appends entries to the relevant event arrays.
-   - **Qwen, Gemini** — `userHooks` flows into `buildInteractiveHookSettings()` as the middle layer of the three-layer merge (Section 5). For Qwen, also write user commands to `trusted_hooks.json`.
+   - **Qwen, Gemini** — `userHooks` flows into `SettingsJsonHooksTracker.registerWorkflow()` as the `workflowUserHooks` parameter (replaces the TODO comment in `buildInteractiveHookSettings()`). For Qwen, also write user commands to `trusted_hooks.json`.
    - **OpenCode** — generate plugin dynamically via `OpenCodePluginGenerator` (Section 5).
 
 7. **Codex chain script** — generate per-run chain script when user stop hooks are present (Section 5).
 
-8. **Webview layer** — `DashboardConstants`, `WebviewMessageTypes`, `WebviewSettingsSync`, `WorkflowSerializer`, `ValidationUtils`. "Set as Default" action in the dashboard. UI editing of hooks is low priority for V1.
+8. **Types + webview plumbing** — `DashboardConstants` (`HOOKS` constant), `WebviewMessageTypes` (all three message type updates), `WebviewSettingsSync` (global settings + `handleSetAsDefault`), `WorkflowSerializer` (both `WORKFLOW_FIELDS` and `PROMPT_FIELDS`), `ValidationUtils`, `settingsStore.ts` (`WorkflowProperties`, `GlobalSettings`, `getEffectiveHooks`).
 
-9. **Tests** — `PropertyResolver.test.ts` covering per-event override, null/empty, inheritance, and three-tier fallback.
+9. **PropertiesDrawer + SettingsDrawer UI** — `drawerPages.ts` (new HOOKS page), PropertiesDrawer HOOKS tab with Default/None/Custom mode and inline list editor (Section 7b), SettingsDrawer hooks editor with `SetAsDefaultButton` and `isDifferentFromGlobal` normalization.
 
-10. **Templates + docs** — update workflow templates and documentation.
+10. **Tests** — `PropertyResolver.test.ts` covering per-event override, null/empty, inheritance, and three-tier fallback. `SettingsJsonHooksTracker.test.ts` covering ref counting, baseline capture, and parallel registration/unregistration scenarios.
+
+11. **Templates + docs** — update workflow templates and documentation.
+
+---
+
+## 11. Parallel Workflow Safety
+
+> **Status: Not yet implemented.** All three issues below must be resolved before the `hooks` property ships — parallel workflows are a supported scenario for all harnesses.
+
+When multiple FlightPath workflows run simultaneously in the same workspace, each harness's hook injection mechanism must not corrupt the others' state. This section documents the exact failure mode for each affected harness and the required fix.
+
+---
+
+### 11a. Claude CLI — Unique Per-Prompt Temp Settings File
+
+**Current problem:** `ClaudeNotificationMonitor.buildHookConfig()` returns a `json-string` config that `ClaudeCliProvider` writes to a **fixed path**: `.flightpath/temp/claude-hook-settings.json`. This file is passed via `--settings` to the Claude CLI process.
+
+**Race condition:**
+1. Workflow A starts prompt 0 → writes `claude-hook-settings.json` with `notifyDir` for A → spawns `claude --settings .flightpath/temp/claude-hook-settings.json`
+2. Workflow B starts prompt 0 → **overwrites** `claude-hook-settings.json` with `notifyDir` for B → spawns its own `claude --settings ...`
+3. If Claude re-reads the settings file after spawn (e.g., for hot-reload), or if the OS hasn't fully flushed A's file to the process before B writes, A's hooks point to B's notify directory — A's completion signal goes to the wrong directory and A hangs forever.
+
+Even if the race window is narrow, the consequences (hung workflow, missed completion signal) are severe. This must be made deterministic.
+
+**Required fix:** Same pattern as the Copilot unique-per-prompt fix (`ce423b7`).
+
+Generate a unique settings filename per prompt invocation:
+
+```
+.flightpath/temp/claude-hook-settings-<stem>-p<promptIndex>.json
+```
+
+Where `stem` is derived from the working file's basename (same helper used by Copilot's `buildHookFileName()`), with `Date.now()` as fallback.
+
+**Implementation changes:**
+
+- `ClaudeCliProvider.buildSessionHookArgs()` (or equivalent method that writes the temp settings file) receives `promptIndex: number` and `workingFilePath?: string`, calls a new static `buildHookSettingsFileName(stem, promptIndex)` helper, and pushes the resulting path onto `this.interactiveHookSettingsPaths: string[]`.
+- `getAdditionalCleanupFilePaths()` spreads `this.interactiveHookSettingsPaths` (same pattern as Copilot's `this.interactiveHookFilePaths`).
+- `ClaudeNotificationMonitor.buildHookConfig()` signature unchanged — the unique path is determined by the provider, not the monitor.
+- The `--settings` flag value passed to the Claude CLI uses the unique path.
+
+No coordination between parallel workflows is needed — each Claude process reads only its own settings file, and each file is cleaned up after its prompt completes.
+
+---
+
+### 11b. Qwen CLI & Gemini CLI — Hooks Ref-Counting via `SettingsJsonHooksTracker`
+
+**Current problem:** Both providers use a backup/restore pattern with a **single shared backup file** per workspace:
+- Qwen: `.flightpath/temp/qwen-hooks-backup.json`
+- Gemini: `.flightpath/temp/gemini-hooks-backup.json`
+
+The "backup only once" guard (`if backup file does not exist: write backup`) prevents a second parallel workflow from overwriting the backup with already-mutated hooks. But the restore step **deletes the backup file** after use. This creates the following race:
+
+**Race condition with two parallel workflows (A and B):**
+
+1. **Workflow A starts** → reads `.qwen/settings.json` (original: `{hooks: null}`) → no backup file → writes backup `{hooks: null}` → merges FlightPath hooks → settings now: `{hooks: {SessionStart: [...A...], Stop: [...A...]}}`
+2. **Workflow B starts** → reads settings → backup file **exists** → skips backup → merges FlightPath hooks on top → settings now: `{hooks: {SessionStart: [...A..., ...B...], Stop: [...A..., ...B...]}}`
+3. **Workflow A completes** → reads backup `{hooks: null}` → restores → settings now: `{hooks: null}` → **deletes backup file** → **B's hooks are gone; B's completion detection is broken**
+4. **Workflow B completes** → tries to read backup → **backup file does not exist** → no-op → FlightPath's hooks for B are not cleaned up if they somehow survived step 3 (they didn't — A's restore wiped them)
+
+Result: Workflow B hangs (completion signal never arrives because its hooks were stripped in step 3), or completes by timeout rather than completion detection.
+
+**Required fix:** Reference-counted hooks management via a new `SettingsJsonHooksTracker` class, modelled exactly on `SettingsJsonMcpTracker`.
+
+---
+
+**`SettingsJsonHooksTracker` design:**
+
+```typescript
+/**
+ * Manages FlightPath hook injection into settings.json for Qwen and Gemini CLIs.
+ *
+ * Parallel safety guarantee: hooks injected by workflow A are preserved in
+ * settings.json until workflow A unregisters, regardless of other workflows
+ * registering or unregistering concurrently. The original (pre-FlightPath)
+ * hooks are restored only when the last active workflow unregisters.
+ *
+ * Coordinates with SettingsJsonMcpTracker via shared mutex — both trackers
+ * modify the same settings.json file and must not interleave reads/writes.
+ */
+export class SettingsJsonHooksTracker {
+  private static instances = new Map<string, SettingsJsonHooksTracker>();
+
+  static getInstance(toolName: string): SettingsJsonHooksTracker { ... }
+  static resetAll(): void { ... }
+
+  /**
+   * Register a workflow's hook injection.
+   *
+   * - First registration: captures original hooks from settings.json as baseline.
+   * - All registrations: increments ref count, merges FlightPath + user hooks
+   *   into settings.json via 3-layer merge (FlightPath first, workflow user hooks
+   *   middle, pre-existing settings-file hooks last).
+   *
+   * Must be called under mcpTracker.withLock() — shares file access with MCP tracker.
+   */
+  async registerWorkflow(
+    workflowKey: string,
+    workspaceRoot: string,
+    flightpathHooksSection: Record<string, unknown[]>,
+    workflowUserHooks: Record<string, unknown[]>  // pre-converted to native format
+  ): Promise<void>;
+
+  /**
+   * Unregister a workflow.
+   *
+   * Decrements ref count. When count reaches 0: restores the original hooks
+   * baseline captured at first registration, clearing all FlightPath-injected hooks.
+   *
+   * Must be called under mcpTracker.withLock() — shares file access with MCP tracker.
+   */
+  async unregisterWorkflow(
+    workflowKey: string,
+    workspaceRoot: string
+  ): Promise<void>;
+
+  /** Ref count for current active workflows (for testing/debugging). */
+  getActiveWorkflowCount(): number;
+}
+```
+
+**Key design decisions:**
+
+1. **Shared mutex with `SettingsJsonMcpTracker`:** Both trackers operate on the same `settings.json` file. Rather than introducing a second mutex (risk of deadlock or interleaving), `SettingsJsonHooksTracker` operations are called inside `mcpTracker.withLock()` in the provider. Both the MCP and hooks phases of `buildInteractiveHookSettings()` execute under a single lock acquisition.
+
+2. **Baseline captured at first registration (not from file backup):** The baseline is stored in-memory as a field on the tracker instance, not in a file. This eliminates the backup-file race entirely. The baseline is the hooks state before any FlightPath workflow touched the file. Because ref counting ensures the baseline is only captured once (when `activeCount === 0` before incrementing), subsequent registrations read the already-captured in-memory baseline — no file I/O for baseline capture on subsequent parallel workflows.
+
+3. **Full re-merge on each registration:** When workflow B registers while A is already active, the tracker re-reads `settings.json`, and re-merges all currently-active workflows' FlightPath hooks plus the baseline. This is simpler than tracking incremental deltas and guarantees the file reflects the union of all active workflows' hooks at all times.
+
+4. **On unregister with count > 0:** Re-write `settings.json` with the union of remaining active workflows' hooks (remove the unregistering workflow's FlightPath hooks, keep all others). This keeps the file clean even mid-flight.
+
+5. **On unregister with count = 0:** Restore `settings.json` to the captured baseline hooks. Clear the in-memory baseline so the next registration cycle starts fresh.
+
+**Updated `buildInteractiveHookSettings()` call sequence (Qwen & Gemini):**
+
+```typescript
+// In QwenCliProvider.buildInteractiveHookSettings() / GeminiCliProvider equivalent:
+await mcpTracker.withLock(async () => {
+  await hooksTracker.registerWorkflow(
+    workflowKey,
+    workspaceRoot,
+    this.monitor.buildHookConfig(scriptPath, notifyDir, workspaceRoot).flightpathHooks,
+    convertedWorkflowUserHooks
+  );
+  // MCP registration (if any) happens in the same lock window
+  await mcpTracker.registerServersUnderLock(workflowKey, workspaceRoot, mcpEntries);
+});
+```
+
+```typescript
+// In cleanupWorkspaceArtifacts():
+await mcpTracker.withLock(async () => {
+  await hooksTracker.unregisterWorkflow(workflowKey, workspaceRoot);
+  await mcpTracker.unregisterWorkflowUnderLock(workflowKey, workspaceRoot);
+});
+```
+
+> **Note:** `SettingsJsonMcpTracker.registerServers()` and `unregisterWorkflow()` currently acquire the mutex internally. For coordinated hooks+MCP operations in a single lock window, internal versions (`registerServersUnderLock`, `unregisterWorkflowUnderLock`) that skip the mutex acquire/release will be needed, called only from within `withLock()`. Alternatively, the existing public methods can be used in two separate lock windows if the timing guarantees are sufficient — but a single window is safer.
+
+**Trusted hooks (Qwen only):** The `~/.qwen/trusted_hooks.json` pre-trust step is unchanged — it operates on a separate file and does not require the shared mutex.
+
+---
+
+### 11c. Summary — Parallel Safety Across All Harnesses (Post-Fix)
+
+| Harness | Parallel strategy | Shared resource | Conflict resolution |
+|---------|------------------|-----------------|---------------------|
+| **Copilot** | Unique per-prompt hook files | `.github/hooks/` directory | Each file independently discovered; no coordination needed |
+| **Claude** | Unique per-prompt settings files | `.flightpath/temp/` directory | Each `--settings` file independently consumed; no coordination needed |
+| **Qwen** | `SettingsJsonHooksTracker` ref-counting | `.qwen/settings.json` | In-memory baseline + ref count; restore only on last unregister |
+| **Gemini** | `SettingsJsonHooksTracker` ref-counting | `.gemini/settings.json` | In-memory baseline + ref count; restore only on last unregister |
+| **Codex** | Stateless CLI flag (`--config notify=`) | None | No shared state; each invocation independent |
+| **OpenCode** | Plugin file re-deployed per run | `.opencode/plugin/flightpath-completion-hook.js` | Single plugin file, but overwritten atomically each run; parallel risk is low and acceptable for V1 |
 
 ---
 
