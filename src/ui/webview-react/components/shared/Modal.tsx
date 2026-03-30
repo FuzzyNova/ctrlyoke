@@ -54,7 +54,7 @@ export const Modal: React.FC<ModalProps> = ({
         type="button"
         className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 border-0 p-0 bg-transparent cursor-default"
         onClick={onClose}
-        aria-label="Close modal"
+        aria-label="Close modal backdrop"
       />
       {/* Modal content wrapper */}
       <div className="fixed inset-0 z-[201] flex items-center justify-center overflow-y-auto pointer-events-none">

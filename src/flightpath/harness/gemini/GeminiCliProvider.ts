@@ -167,7 +167,8 @@ export class GeminiCliProvider implements ICliProvider {
       // Interactive mode: write AfterAgent hook to .gemini/settings.json
       if (workspaceRoot) {
         const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
-        await this.buildInteractiveHookSettings(extensionPath, workspaceRoot, userHooks);
+        const workflowKey = workflowContext?.workingFilePath ?? workspaceRoot;
+        await this.buildInteractiveHookSettings(extensionPath, workspaceRoot, workflowKey, userHooks);
         Log.debug(
           `🔔 Configured AfterAgent hook for Gemini completion detection`
         );
@@ -199,6 +200,7 @@ export class GeminiCliProvider implements ICliProvider {
   private async buildInteractiveHookSettings(
     extensionPath: string,
     workspaceRoot: string,
+    workflowKey: string,
     userHooks?: UserHookConfig[]
   ): Promise<void> {
     const scriptPath = path.join(
@@ -244,7 +246,7 @@ export class GeminiCliProvider implements ICliProvider {
     // Register hooks via ref-counted tracker under shared mutex
     await GeminiCliProvider.mcpTracker.withLock(async () => {
       await GeminiCliProvider.hooksTracker.registerWorkflow(
-        workspaceRoot,
+        workflowKey,
         workspaceRoot,
         flightpathHooksSection,
         workflowUserHooks
@@ -317,9 +319,10 @@ export class GeminiCliProvider implements ICliProvider {
     }
 
     // Unregister hooks via ref-counted tracker (serialized to avoid file races)
+    const hookKey = workingFilePath ?? workspaceRoot;
     await GeminiCliProvider.mcpTracker.withLock(async () => {
       await GeminiCliProvider.hooksTracker.unregisterWorkflow(
-        workspaceRoot,
+        hookKey,
         workspaceRoot
       );
     });

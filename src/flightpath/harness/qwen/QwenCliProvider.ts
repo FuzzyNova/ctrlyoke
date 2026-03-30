@@ -224,7 +224,8 @@ export class QwenCliProvider implements ICliProvider {
       args.push("--experimental-hooks");
       if (workspaceRoot) {
         const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
-        await this.buildInteractiveHookSettings(extensionPath, workspaceRoot, userHooks);
+        const workflowKey = workflowContext?.workingFilePath ?? workspaceRoot;
+        await this.buildInteractiveHookSettings(extensionPath, workspaceRoot, workflowKey, userHooks);
         Log.debug(`🔔 Configured Stop hook for Qwen completion detection`);
       }
     }
@@ -256,6 +257,7 @@ export class QwenCliProvider implements ICliProvider {
   private async buildInteractiveHookSettings(
     extensionPath: string,
     workspaceRoot: string,
+    workflowKey: string,
     userHooks?: UserHookConfig[]
   ): Promise<void> {
     const scriptPath = path.join(
@@ -304,7 +306,7 @@ export class QwenCliProvider implements ICliProvider {
     // Register hooks via ref-counted tracker under shared mutex
     await QwenCliProvider.mcpTracker.withLock(async () => {
       await QwenCliProvider.hooksTracker.registerWorkflow(
-        workspaceRoot,
+        workflowKey,
         workspaceRoot,
         hooksSection as Record<string, unknown[]>,
         workflowUserHooks
@@ -378,9 +380,10 @@ export class QwenCliProvider implements ICliProvider {
     }
 
     // Unregister hooks via ref-counted tracker (serialized to avoid file races)
+    const hookKey = workingFilePath ?? workspaceRoot;
     await QwenCliProvider.mcpTracker.withLock(async () => {
       await QwenCliProvider.hooksTracker.unregisterWorkflow(
-        workspaceRoot,
+        hookKey,
         workspaceRoot
       );
     });

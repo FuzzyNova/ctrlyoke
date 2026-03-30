@@ -132,6 +132,19 @@ definitions:
           MCP servers to attach to the harness for this prompt/workflow. Include "flightpath" to
           enable dynamic queue extension via FlightPath's MCP server. Use null to explicitly disable
           inherited servers.
+      hooks:
+        oneOf:
+          - type: array
+            items:
+              $ref: '#/definitions/userHookConfig'
+            description: >-
+              User-defined hooks. Per-event override: events present replace the tier below for that
+              event; absent events inherit.
+          - type: 'null'
+            description: Explicitly disables all hooks for this prompt/workflow.
+        description: >-
+          User-defined hooks run alongside FlightPath's completion-detection hooks. Supported events
+          vary by harness; unsupported events are silently skipped.
       sessionId:
         type:
           - string
@@ -424,6 +437,30 @@ definitions:
       - currentIndex
       - executionState
     additionalProperties: false
+  userHookConfig:
+    type: object
+    required:
+      - event
+      - command
+    additionalProperties: false
+    properties:
+      event:
+        type: string
+        enum:
+          - stop
+          - sessionStart
+          - preToolUse
+          - postToolUse
+          - userPromptSubmit
+        description: >-
+          Logical hook event. Unsupported events for the active harness are silently skipped. 'stop'
+          maps to Stop (Claude/Qwen), sessionEnd (Copilot), AfterAgent (Gemini), notify (Codex).
+      command:
+        type: string
+        description: Command to execute. Resolved relative to workspace root if not absolute.
+      timeoutSec:
+        type: number
+        description: Timeout in seconds. Only respected by CLIs that support per-hook timeouts.
   mcpServerConfig:
     type: object
     description: >-
