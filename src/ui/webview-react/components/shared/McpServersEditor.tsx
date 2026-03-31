@@ -10,6 +10,8 @@ export type McpServersValue = (string | McpServerConfig)[] | null | undefined;
 
 interface AddServerForm {
   id: string;
+  /** Active tab: "stdio" for command/args/env, "remote" for url/transport */
+  activeTab: "stdio" | "remote";
   /** For stdio servers: the executable command */
   command: string;
   args: string;
@@ -24,6 +26,7 @@ interface AddServerForm {
 
 const EMPTY_FORM: AddServerForm = {
   id: "",
+  activeTab: "stdio",
   command: "",
   args: "",
   env: "",
@@ -81,6 +84,7 @@ function buildArray(
 function serverToForm(server: McpServerConfig): AddServerForm {
   return {
     id: server.id,
+    activeTab: server.url ? "remote" : "stdio",
     command: server.command ?? "",
     args: server.args ? server.args.join(" ") : "",
     env: envObjectToString(server.env),
@@ -92,19 +96,21 @@ function serverToForm(server: McpServerConfig): AddServerForm {
 }
 
 function formToServer(form: AddServerForm): McpServerConfig {
-  const trimmedUrl = form.url.trim();
-  const trimmedCmd = form.command.trim();
-  if (trimmedUrl) {
-    // Remote server
-    const server: McpServerConfig = { id: form.id.trim(), url: trimmedUrl };
-    if (form.transport !== "streamable-http") {
-      server.transport = form.transport;
-    }
+  if (form.activeTab === "remote") {
+    // Remote server — always store transport to avoid future default-change footguns
+    const server: McpServerConfig = {
+      id: form.id.trim(),
+      url: form.url.trim(),
+      transport: form.transport,
+    };
     if (form.autoApprove) server.autoApprove = true;
     return server;
   }
   // stdio server
-  const server: McpServerConfig = { id: form.id.trim(), command: trimmedCmd };
+  const server: McpServerConfig = {
+    id: form.id.trim(),
+    command: form.command.trim(),
+  };
   if (form.args.trim()) {
     server.args = form.args.trim().split(/\s+/);
   }
@@ -486,11 +492,12 @@ export const McpServersEditor: React.FC<{
   };
 
   const handleSaveEdit = () => {
-    if (
-      !editForm.id.trim() ||
-      (!editForm.command.trim() && !editForm.url.trim())
-    )
-      return;
+    const trimmedId = editForm.id.trim();
+    const isValid =
+      editForm.activeTab === "stdio"
+        ? trimmedId && editForm.command.trim()
+        : trimmedId && editForm.url.trim();
+    if (!isValid) return;
     const updatedServer = formToServer(editForm);
     const oldId = editingId!;
 
@@ -548,14 +555,12 @@ export const McpServersEditor: React.FC<{
     let server: McpServerConfig;
 
     if (entry.remoteUrl) {
-      // Remote HTTP/SSE server — use URL-based config
-      server = { id, url: entry.remoteUrl };
-      if (
-        entry.remoteTransport &&
-        entry.remoteTransport !== "streamable-http"
-      ) {
-        server.transport = entry.remoteTransport;
-      }
+      // Remote HTTP/SSE server — always store transport to avoid future default-change footguns
+      server = {
+        id,
+        url: entry.remoteUrl,
+        transport: entry.remoteTransport ?? "streamable-http",
+      };
       // Add empty-string placeholders for required auth headers so the user
       // knows which keys need to be filled in before the server will work.
       const requiredHeaders = entry.remoteHeaders?.filter((h) => h.isRequired);
@@ -661,9 +666,11 @@ export const McpServersEditor: React.FC<{
 
   const handleAddServer = () => {
     const trimmedId = form.id.trim();
-    const trimmedCmd = form.command.trim();
-    const trimmedUrl = form.url.trim();
-    if (!trimmedId || (!trimmedCmd && !trimmedUrl)) return;
+    const isValid =
+      form.activeTab === "stdio"
+        ? trimmedId && form.command.trim()
+        : trimmedId && form.url.trim();
+    if (!isValid) return;
 
     const newServer = formToServer(form);
     addServerToWorkspaceAndValue(newServer);
@@ -792,52 +799,83 @@ export const McpServersEditor: React.FC<{
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                       autoFocus
                     />
-                    <input
-                      type="text"
-                      placeholder="command (stdio, e.g. node or npx)"
-                      value={editForm.command}
-                      onChange={(e) =>
-                        setEditForm((f) => ({ ...f, command: e.target.value }))
-                      }
-                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
-                    />
-                    <input
-                      type="text"
-                      placeholder="args (space-separated, stdio only)"
-                      value={editForm.args}
-                      onChange={(e) =>
-                        setEditForm((f) => ({ ...f, args: e.target.value }))
-                      }
-                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
-                    />
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] text-description-fg">
-                        env (KEY=VALUE, one per line — stdio only)
-                      </span>
-                      <textarea
-                        placeholder={"MY_KEY=value\nANOTHER_KEY=value"}
-                        value={editForm.env}
-                        onChange={(e) =>
-                          setEditForm((f) => ({ ...f, env: e.target.value }))
-                        }
-                        rows={3}
-                        className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono resize-none"
-                      />
+                    {/* stdio / remote tab selector */}
+                    <div className="flex gap-1">
+                      {(["stdio", "remote"] as const).map((tab) => (
+                        <button
+                          key={tab}
+                          type="button"
+                          onClick={() =>
+                            setEditForm((f) => ({ ...f, activeTab: tab }))
+                          }
+                          className={`px-2 py-0.5 text-[11px] rounded border transition-colors ${
+                            editForm.activeTab === tab
+                              ? "bg-btn-bg text-btn-fg border-btn-bg"
+                              : "text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
+                          }`}
+                        >
+                          {tab}
+                        </button>
+                      ))}
                     </div>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] text-description-fg">
-                        — or remote (HTTP/SSE) —
-                      </span>
-                      <input
-                        type="text"
-                        placeholder="url (e.g. https://mcp.example.com)"
-                        value={editForm.url}
-                        onChange={(e) =>
-                          setEditForm((f) => ({ ...f, url: e.target.value }))
-                        }
-                        className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
-                      />
-                      {editForm.url.trim() && (
+                    {editForm.activeTab === "stdio" ? (
+                      <>
+                        <input
+                          type="text"
+                          placeholder="command (e.g. node or npx)"
+                          value={editForm.command}
+                          onChange={(e) =>
+                            setEditForm((f) => ({
+                              ...f,
+                              command: e.target.value,
+                            }))
+                          }
+                          className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                        />
+                        <input
+                          type="text"
+                          placeholder="args (space-separated)"
+                          value={editForm.args}
+                          onChange={(e) =>
+                            setEditForm((f) => ({
+                              ...f,
+                              args: e.target.value,
+                            }))
+                          }
+                          className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                        />
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] text-description-fg">
+                            env (KEY=VALUE, one per line)
+                          </span>
+                          <textarea
+                            placeholder={"MY_KEY=value\nANOTHER_KEY=value"}
+                            value={editForm.env}
+                            onChange={(e) =>
+                              setEditForm((f) => ({
+                                ...f,
+                                env: e.target.value,
+                              }))
+                            }
+                            rows={3}
+                            className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono resize-none"
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          type="text"
+                          placeholder="url (e.g. https://mcp.example.com)"
+                          value={editForm.url}
+                          onChange={(e) =>
+                            setEditForm((f) => ({
+                              ...f,
+                              url: e.target.value,
+                            }))
+                          }
+                          className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                        />
                         <select
                           value={editForm.transport}
                           onChange={(e) =>
@@ -855,8 +893,8 @@ export const McpServersEditor: React.FC<{
                           </option>
                           <option value="sse">sse</option>
                         </select>
-                      )}
-                    </div>
+                      </>
+                    )}
                     <label className="flex items-center gap-1.5 cursor-pointer">
                       <input
                         type="checkbox"
@@ -879,7 +917,9 @@ export const McpServersEditor: React.FC<{
                         onClick={handleSaveEdit}
                         disabled={
                           !editForm.id.trim() ||
-                          (!editForm.command.trim() && !editForm.url.trim())
+                          (editForm.activeTab === "stdio"
+                            ? !editForm.command.trim()
+                            : !editForm.url.trim())
                         }
                         className="px-2 py-0.5 text-[11px] bg-btn-bg text-btn-fg rounded hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -1055,52 +1095,71 @@ export const McpServersEditor: React.FC<{
                   className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                   autoFocus
                 />
-                <input
-                  type="text"
-                  placeholder="command (stdio, e.g. node or npx)"
-                  value={form.command}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, command: e.target.value }))
-                  }
-                  className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
-                />
-                <input
-                  type="text"
-                  placeholder="args (space-separated, e.g. /path/to/server.js)"
-                  value={form.args}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, args: e.target.value }))
-                  }
-                  className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
-                />
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[10px] text-description-fg">
-                    env (KEY=VALUE, one per line — stdio only)
-                  </span>
-                  <textarea
-                    placeholder={"MY_KEY=value\nANOTHER_KEY=value"}
-                    value={form.env}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, env: e.target.value }))
-                    }
-                    rows={3}
-                    className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono resize-none"
-                  />
+                {/* stdio / remote tab selector */}
+                <div className="flex gap-1">
+                  {(["stdio", "remote"] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() =>
+                        setForm((f) => ({ ...f, activeTab: tab }))
+                      }
+                      className={`px-2 py-0.5 text-[11px] rounded border transition-colors ${
+                        form.activeTab === tab
+                          ? "bg-btn-bg text-btn-fg border-btn-bg"
+                          : "text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
+                      }`}
+                    >
+                      {tab}
+                    </button>
+                  ))}
                 </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[10px] text-description-fg">
-                    — or remote (HTTP/SSE) —
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="url (e.g. https://mcp.example.com)"
-                    value={form.url}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, url: e.target.value }))
-                    }
-                    className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
-                  />
-                  {form.url.trim() && (
+                {form.activeTab === "stdio" ? (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="command (e.g. node or npx)"
+                      value={form.command}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, command: e.target.value }))
+                      }
+                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                    />
+                    <input
+                      type="text"
+                      placeholder="args (space-separated, e.g. /path/to/server.js)"
+                      value={form.args}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, args: e.target.value }))
+                      }
+                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                    />
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[10px] text-description-fg">
+                        env (KEY=VALUE, one per line)
+                      </span>
+                      <textarea
+                        placeholder={"MY_KEY=value\nANOTHER_KEY=value"}
+                        value={form.env}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, env: e.target.value }))
+                        }
+                        rows={3}
+                        className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono resize-none"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="url (e.g. https://mcp.example.com)"
+                      value={form.url}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, url: e.target.value }))
+                      }
+                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                    />
                     <select
                       value={form.transport}
                       onChange={(e) =>
@@ -1116,8 +1175,8 @@ export const McpServersEditor: React.FC<{
                       <option value="streamable-http">streamable-http</option>
                       <option value="sse">sse</option>
                     </select>
-                  )}
-                </div>
+                  </>
+                )}
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="checkbox"
@@ -1140,7 +1199,9 @@ export const McpServersEditor: React.FC<{
                     onClick={handleAddServer}
                     disabled={
                       !form.id.trim() ||
-                      (!form.command.trim() && !form.url.trim())
+                      (form.activeTab === "stdio"
+                        ? !form.command.trim()
+                        : !form.url.trim())
                     }
                     className="px-2 py-0.5 text-[11px] bg-btn-bg text-btn-fg rounded hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
                   >

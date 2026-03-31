@@ -4,7 +4,10 @@ import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
 
 /** Options for the permission mode selector (used by both SettingsDrawer and PropertiesDrawer) */
 export const PERMISSION_MODE_OPTIONS = [
-  { value: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, label: "Dangerously Allow All" },
+  {
+    value: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+    label: "Dangerously Allow All (yolo)",
+  },
   { value: PERMISSION_MODES.ALLOW_ALL, label: "Allow All" },
   { value: PERMISSION_MODES.CUSTOM, label: "Custom" },
   { value: PERMISSION_MODES.NONE, label: "None" },
@@ -46,7 +49,8 @@ export function buildPermissionsDefaultLabel(
   }
   if (workflowValue.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
     return "Default (dangerouslyAllowAll)";
-  if (workflowValue.mode === PERMISSION_MODES.ALLOW_ALL) return "Default (allowAll)";
+  if (workflowValue.mode === PERMISSION_MODES.ALLOW_ALL)
+    return "Default (allowAll)";
   const count =
     (workflowValue.allowedTools?.length ?? 0) +
     (workflowValue.deniedTools?.length ?? 0);

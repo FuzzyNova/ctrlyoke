@@ -2,7 +2,14 @@
   {
     "id": "test-mcp",
     "command": "node",
-    "args": ["manual-test/mcp/test-mcp-server.js"],
+    "args": [
+      "manual-test/mcp/test-mcp-server.js"
+    ],
     "autoApprove": true
+  },
+  {
+    "id": "ai-exa-exa",
+    "url": "https://mcp.exa.ai/mcp",
+    "transport": "streamable-http"
   }
 ]

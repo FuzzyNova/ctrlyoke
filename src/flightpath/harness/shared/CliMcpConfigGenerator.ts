@@ -18,8 +18,24 @@ export interface McpHarnessServerConfig {
 }
 
 /**
- * MCP configuration options
+ * Harness-specific formatting options for user-defined MCP server entries.
+ * Allows each harness to map transport values to its own type field syntax
+ * and add required fields (e.g., "tools").
  */
+export interface McpUserServerHarnessConfig {
+  /** type field value for stdio servers (e.g., "local" for Copilot, "stdio" for Claude) */
+  stdioType?: string;
+  /**
+   * Maps FlightPath transport values to the harness-specific type field value for remote servers.
+   * e.g., { "streamable-http": "http", "sse": "sse" } for Copilot CLI.
+   * If not provided, the transport value is used as-is.
+   */
+  remoteTypeMap?: Record<string, string>;
+  /** Tools array to add to every server entry (e.g., ["*"] for Copilot CLI) */
+  tools?: string[];
+}
+
+
 export interface McpConfigOptions {
   /** Path to MCP server script (e.g., out/mcp-server.js) */
   serverPath: string;
@@ -139,6 +155,7 @@ export class CliMcpConfigGenerator {
    * @param serverConfig Optional harness server configuration fields (type, tools, etc.)
    * @param workingFilePath Active working file path
    * @param additionalEnv Additional environment variables for FlightPath server
+   * @param userServerConfig Optional harness-specific formatting for user server entries
    * @returns JSON config string
    */
   static generateJsonConfigWithUserServers(
@@ -147,7 +164,8 @@ export class CliMcpConfigGenerator {
     userServers: McpServerConfig[],
     serverConfig?: McpHarnessServerConfig,
     workingFilePath?: string,
-    additionalEnv?: Record<string, string>
+    additionalEnv?: Record<string, string>,
+    userServerConfig?: McpUserServerHarnessConfig
   ): string {
     // Parse the base config with the flightpath server
     const baseConfig = JSON.parse(
@@ -156,19 +174,7 @@ export class CliMcpConfigGenerator {
 
     // Merge user-defined servers
     for (const server of userServers) {
-      const entry: any = server.url
-        ? { url: server.url, type: server.transport ?? "streamable-http" }
-        : { command: server.command };
-      if (!server.url) {
-        if (server.args) entry.args = server.args;
-        if (server.env) entry.env = server.env;
-      } else {
-        if (server.headers) entry.headers = server.headers;
-      }
-      if (server.autoApprove !== undefined) {
-        entry.autoApprove = server.autoApprove;
-      }
-      baseConfig.mcpServers[server.id] = entry;
+      baseConfig.mcpServers[server.id] = this.buildUserServerEntry(server, userServerConfig);
     }
 
     return JSON.stringify(baseConfig, null, 2);
@@ -181,26 +187,52 @@ export class CliMcpConfigGenerator {
    * in the mcpServers list. Generates a config with just the user's servers.
    *
    * @param userServers User-defined MCP server configs
+   * @param userServerConfig Optional harness-specific formatting for user server entries
    * @returns JSON config string
    */
-  static generateUserServersOnlyConfig(userServers: McpServerConfig[]): string {
+  static generateUserServersOnlyConfig(
+    userServers: McpServerConfig[],
+    userServerConfig?: McpUserServerHarnessConfig
+  ): string {
     const mcpServers: any = {};
     for (const server of userServers) {
-      const entry: any = server.url
-        ? { url: server.url, type: server.transport ?? "streamable-http" }
-        : { command: server.command };
-      if (!server.url) {
-        if (server.args) entry.args = server.args;
-        if (server.env) entry.env = server.env;
-      } else {
-        if (server.headers) entry.headers = server.headers;
-      }
-      if (server.autoApprove !== undefined) {
-        entry.autoApprove = server.autoApprove;
-      }
-      mcpServers[server.id] = entry;
+      mcpServers[server.id] = this.buildUserServerEntry(server, userServerConfig);
     }
     return JSON.stringify({ mcpServers }, null, 2);
+  }
+
+  /**
+   * Build the harness-formatted entry object for a single user-defined MCP server.
+   *
+   * Applies harness-specific type mapping and adds required fields (e.g., tools).
+   */
+  private static buildUserServerEntry(
+    server: McpServerConfig,
+    userServerConfig?: McpUserServerHarnessConfig
+  ): Record<string, unknown> {
+    const entry: Record<string, unknown> = {};
+
+    if (server.url) {
+      // Remote server
+      entry.url = server.url;
+      const rawTransport = server.transport ?? "streamable-http";
+      entry.type = userServerConfig?.remoteTypeMap?.[rawTransport] ?? rawTransport;
+      if (server.headers) entry.headers = server.headers;
+    } else {
+      // stdio server
+      entry.command = server.command;
+      if (userServerConfig?.stdioType) entry.type = userServerConfig.stdioType;
+      if (server.args) entry.args = server.args;
+      if (server.env) entry.env = server.env;
+    }
+
+    if (userServerConfig?.tools) entry.tools = userServerConfig.tools;
+
+    if (server.autoApprove !== undefined) {
+      entry.autoApprove = server.autoApprove;
+    }
+
+    return entry;
   }
 
   /**

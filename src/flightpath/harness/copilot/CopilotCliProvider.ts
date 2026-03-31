@@ -477,7 +477,7 @@ export class CopilotCliProvider implements ICliProvider {
    * Generate MCP server configuration arguments for Copilot CLI
    *
    * Copilot CLI uses --additional-mcp-config @<file> format.
-   * Config file format: JSON with "type": "local" and "tools" field.
+   * Config file format: JSON with "type": "local"/"http"/"sse" and "tools" field.
    *
    * @param mcpServerPath Absolute path to MCP server executable
    * @param workspaceRoot Workspace root directory
@@ -493,7 +493,13 @@ export class CopilotCliProvider implements ICliProvider {
   ): Promise<string[] | null> {
     try {
       // Generate MCP config JSON using shared utility
-      // Copilot CLI requires "type": "local" and "tools" field
+      // Copilot CLI requires "type": "local" and "tools" field for FlightPath server;
+      // user servers need "type": "local"/"http"/"sse" and "tools": ["*"]
+      const copilotUserServerConfig = {
+        stdioType: "local",
+        remoteTypeMap: { "streamable-http": "http", "sse": "sse" },
+        tools: ["*"] as string[],
+      };
       let configJson: string;
       if (mcpServerPath && userServers && userServers.length > 0) {
         configJson = CliMcpConfigGenerator.generateJsonConfigWithUserServers(
@@ -502,7 +508,8 @@ export class CopilotCliProvider implements ICliProvider {
           userServers,
           { type: "local", tools: ["*"] },
           workingFilePath,
-          additionalEnv
+          additionalEnv,
+          copilotUserServerConfig
         );
       } else if (mcpServerPath) {
         configJson = CliMcpConfigGenerator.generateJsonConfig(
@@ -513,7 +520,10 @@ export class CopilotCliProvider implements ICliProvider {
           additionalEnv
         );
       } else if (userServers && userServers.length > 0) {
-        configJson = CliMcpConfigGenerator.generateUserServersOnlyConfig(userServers);
+        configJson = CliMcpConfigGenerator.generateUserServersOnlyConfig(
+          userServers,
+          copilotUserServerConfig
+        );
       } else {
         return null;
       }
