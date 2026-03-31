@@ -34,6 +34,14 @@ oneOf:
             description: Timestamp when workflow started (working files only)
           _runtime:
             $ref: '#/definitions/runtimeMetadata'
+          vars:
+            type: object
+            description: >-
+              Workflow-level variable defaults for {{varName}} substitution in prompt text, model,
+              additionalArgs, hook commands, and endCondition script paths. CLI --var key=value
+              flags override these at runtime.
+            additionalProperties:
+              type: string
         required:
           - prompts
 definitions:

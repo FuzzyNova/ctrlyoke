@@ -24,6 +24,12 @@ export interface ResolvedCliConfig {
   color: boolean;
   headless?: boolean;
   /**
+   * Variables from --var key=value flags. Merged over workflow-level vars: defaults.
+   * Applied as {{key}} substitution in prompt text, model, additionalArgs, hook commands,
+   * and endCondition script paths before execution.
+   */
+  vars: Record<string, string>;
+  /**
    * Execution mode for CLI operation.
    * Detected from TTY presence (default) or overridden by --interactive / --headless flags.
    * Exposed so that CliAdapter.getConfig("cliExecutionMode") returns the

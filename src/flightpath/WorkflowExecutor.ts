@@ -25,6 +25,7 @@ import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { Log } from "../utils/Log";
 import { PropertyResolver } from "../utils/PropertyResolver";
+import { VarSubstitutor } from "../utils/VarSubstitutor";
 import {
   CliOutputFormatter,
   DashboardOutput,
@@ -421,7 +422,23 @@ export class WorkflowExecutor {
     }
 
     const workflowFile = this.promptQueue.getWorkflowFile();
-    const resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
+    let resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
+
+    // Apply {{var}} substitution when the workflow has vars defined.
+    const vars = workflowFile.vars;
+    if (vars && Object.keys(vars).length > 0) {
+      resolvedProperties = VarSubstitutor.applyToResolvedProperties(
+        resolvedProperties,
+        vars
+      );
+      if (prompt.prompt) {
+        // Substitute on a local copy so the working file is not mutated.
+        prompt = {
+          ...prompt,
+          prompt: VarSubstitutor.applyToPromptText(prompt.prompt, vars),
+        };
+      }
+    }
 
     const integration = context.getIntegrationForPrompt(
       prompt,
@@ -552,7 +569,8 @@ export class WorkflowExecutor {
         context,
         target,
         target.kind === FINAL_PROMPT_PHASES.QUEUE ? legacyStepIndex : undefined,
-        duration
+        duration,
+        vars && Object.keys(vars).length > 0 ? vars : undefined
       );
 
       if (!shouldContinue) {
@@ -759,7 +777,8 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
     legacyStepIndex: number | undefined,
-    duration: number
+    duration: number,
+    vars?: Record<string, string>
   ): Promise<boolean> {
     Log.debug(
       `Evaluating end condition for ${this.describeExecutionTarget(target)}...`
@@ -798,7 +817,8 @@ export class WorkflowExecutor {
 
     const evaluationResult = await this.endConditionEvaluator.evaluateCondition(
       prompt.endCondition,
-      context.workspaceFolderPath
+      context.workspaceFolderPath,
+      vars
     );
 
     {

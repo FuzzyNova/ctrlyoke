@@ -54,10 +54,13 @@ export class EndConditionEvaluator {
 
   /**
    * Evaluate an end condition
+   * @param vars Optional variable map — injected as FLIGHTPATH_VAR_<KEY> environment
+   *   variables so end condition scripts can branch on workflow variables.
    */
   async evaluateCondition(
     condition: EndCondition,
-    workingDirectory?: string
+    workingDirectory?: string,
+    vars?: Record<string, string>
   ): Promise<EvaluationResult> {
     const startTime = Date.now();
 
@@ -107,7 +110,8 @@ export class EndConditionEvaluator {
         command.executable,
         command.args,
         workingDirectory,
-        timeout
+        timeout,
+        vars
       );
 
       const success = this.evaluateSuccess(result, condition.returns, condition.compareSource);
@@ -251,7 +255,8 @@ export class EndConditionEvaluator {
     executable: string,
     args: string[],
     workingDirectory?: string,
-    timeout: number = ConfigurationUtils.getScriptTimeoutMs()
+    timeout: number = ConfigurationUtils.getScriptTimeoutMs(),
+    vars?: Record<string, string>
   ): Promise<{
     success: boolean;
     result: string;
@@ -284,6 +289,13 @@ export class EndConditionEvaluator {
     Log.debug(
       `Cleaned ${vsCodeEnvVars.length} VS Code env vars for isolated execution`
     );
+
+    // Inject workflow variables as FLIGHTPATH_VAR_<KEY>=value so scripts can branch on them.
+    if (vars && Object.keys(vars).length > 0) {
+      for (const [k, v] of Object.entries(vars)) {
+        cleanEnv[`FLIGHTPATH_VAR_${k.toUpperCase()}`] = v;
+      }
+    }
 
     try {
       const result = await this.processManager.spawn(executable, args, {

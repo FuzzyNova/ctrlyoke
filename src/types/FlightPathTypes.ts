@@ -204,6 +204,13 @@ export interface PromptFile extends ExecutionProperties {
   prompt?: string;
   prompts?: PromptItem[];
   finalPrompt?: PromptItem;
+  /**
+   * Workflow-level variable defaults for `{{varName}}` substitution.
+   * CLI `--var key=value` flags override these at runtime (highest precedence).
+   * Variables are substituted in: prompt text, model, additionalArgs, hook commands,
+   * and endCondition script paths before execution.
+   */
+  vars?: Record<string, string>;
 }
 
 /**

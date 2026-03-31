@@ -70,6 +70,12 @@ program
     collectRepeatable,
     [] as string[]
   )
+  .option(
+    "--var <assignment>",
+    "Variable substitution: key=value (repeatable). Replaces {{key}} in prompt text, model, hooks, and endCondition.",
+    collectVar,
+    {} as Record<string, string>
+  )
   .option("-p, --prompt <text>", "Inline prompt string (alternative to file)")
   .option("--resume <session-id>", "Resume an existing session by ID")
   .option(
@@ -107,6 +113,7 @@ interface RunOptions {
   denyTool: string[];
   allowAllTools?: boolean;
   addDir: string[];
+  var: Record<string, string>;
   prompt?: string;
   resume?: string;
   newSession?: boolean;
@@ -118,6 +125,23 @@ interface RunOptions {
 
 function collectRepeatable(value: string, previous: string[]): string[] {
   return [...previous, value];
+}
+
+function collectVar(
+  value: string,
+  previous: Record<string, string>
+): Record<string, string> {
+  const eqIndex = value.indexOf("=");
+  if (eqIndex === -1) {
+    console.error(
+      chalk.red(`Error: --var "${value}" must be in key=value format`)
+    );
+    process.exit(2);
+  }
+  return {
+    ...previous,
+    [value.slice(0, eqIndex)]: value.slice(eqIndex + 1),
+  };
 }
 
 /**
@@ -198,6 +222,7 @@ async function runCommand(file: string | undefined, options: RunOptions): Promis
     deniedTools: options.denyTool || [],
     allowAllTools,
     additionalDirs: options.addDir || [],
+    vars: options.var || {},
     resume: options.resume,
     newSession: options.newSession,
     verbose: options.verbose ?? false,
@@ -227,6 +252,14 @@ async function runCommand(file: string | undefined, options: RunOptions): Promis
       console.log(chalk.dim(`[verbose] Model: ${config.model}`));
     }
     console.log(chalk.dim(`[verbose] Workspace root: ${workingDir}`));
+    const varEntries = Object.entries(config.vars);
+    if (varEntries.length > 0) {
+      console.log(
+        chalk.dim(
+          `[verbose] Vars: ${varEntries.map(([k, v]) => `${k}=${v}`).join(", ")}`
+        )
+      );
+    }
   }
 
   if (!options.quiet && !options.json) {
@@ -339,6 +372,13 @@ async function runCommand(file: string | undefined, options: RunOptions): Promis
       instance.loadPromptString(options.prompt);
     } else {
       await instance.loadPromptFile(resolvedFile!);
+    }
+
+    // Merge CLI --var flags into the workflow's vars (CLI vars take highest precedence).
+    // This must happen after loading so the workflow's own vars: defaults are already set.
+    if (Object.keys(config.vars).length > 0) {
+      const workflowFile = instance.promptQueue.getWorkflowFile();
+      workflowFile.vars = { ...(workflowFile.vars ?? {}), ...config.vars };
     }
 
     // Acquire the process lock after loading so workingFilePath is available
