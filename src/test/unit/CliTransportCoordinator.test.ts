@@ -1,0 +1,340 @@
+import * as assert from "assert";
+import { suite, test } from "mocha";
+import { CliTransportCoordinator } from "../../flightpath/harness/shared/CliTransportCoordinator";
+import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+
+function createLogger() {
+  return {
+    debug(_message: string): void {},
+    info(_message: string): void {},
+    warn(_message: string): void {},
+    error(_message: string, _error?: unknown): void {},
+  };
+}
+
+suite("CliTransportCoordinator", () => {
+  test("should normalize headless prompt text and emit prompt-ready info", async () => {
+    let preparedCommand:
+      | { promptArgument: string; cliCommand: string }
+      | undefined;
+    const streamedChunks: string[] = [];
+    const cleanedTempPaths: string[][] = [];
+
+    const coordinator = new CliTransportCoordinator({
+      provider: {
+        config: {
+          name: "test-cli",
+          displayName: "Test CLI",
+          terminalName: "Test",
+          installHint: "",
+          shouldStreamHeadlessOutput: true,
+        },
+        responseParser: {
+          parse: () => ({ events: [], metadata: {} }),
+          parseTokenCounts: () => undefined,
+          processStreamingChunk: (chunk: string) => `processed:${chunk}`,
+        },
+        notificationMonitor: {
+          supportsSessionIdInFilename: true,
+          supportsSessionStart: false,
+          monitorForCompletion: async () => ({ completed: false }),
+          buildHookConfig: () => ({ type: "none" as const }),
+          getNotificationDirectory: () => process.cwd(),
+        },
+        toolPermissionMapper: {},
+        buildCliArgs: async () => [],
+        buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
+          ...baseArgs,
+          prompt,
+        ],
+        buildInteractiveTuiCommand: () => "test-cli",
+        checkAvailability: async () => true,
+      } as unknown as ICliProvider,
+      processManager: {
+        spawn: async (
+          _command: string,
+          args: string[],
+          options?: { onStdout?: (chunk: string) => void }
+        ) => {
+          assert.strictEqual(args[0], "line one line two");
+          options?.onStdout?.("chunk");
+          return { stdout: "stdout", stderr: "", exitCode: 0 };
+        },
+        isActive: () => false,
+      } as any,
+      getWorkspaceRoot: () => process.cwd(),
+      getTerminalName: () => "FP: Test",
+      onBeforeInteractiveStart: () => {},
+      onCommandPrepared: (info) => {
+        preparedCommand = info;
+      },
+      onStreamingChunk: (chunk) => streamedChunks.push(chunk),
+      onStreamingEvents: () => {
+        throw new Error("expected plain-text streaming path");
+      },
+      onResponseComplete: () => {},
+      onPtyExit: () => {},
+      isCancelling: () => false,
+      cleanupTempFiles: async (tempFilePaths) => {
+        cleanedTempPaths.push(tempFilePaths);
+      },
+      logger: createLogger(),
+    });
+
+    const success = await coordinator.executeHeadless(
+      [],
+      "line one\nline two",
+      ["temp-a.md"],
+      async (result) => {
+        assert.deepStrictEqual(result, {
+          stdout: "stdout",
+          stderr: "",
+          exitCode: 0,
+        });
+        return true;
+      }
+    );
+
+    assert.strictEqual(success, true);
+    assert.deepStrictEqual(preparedCommand, {
+      promptArgument: "line one\nline two",
+      cliCommand: "test-cli line one line two",
+    });
+    assert.deepStrictEqual(streamedChunks, ["processed:chunk"]);
+    assert.deepStrictEqual(cleanedTempPaths, [["temp-a.md"]]);
+  });
+
+  test("should log raw streaming chunks when raw CLI logging is enabled", async () => {
+    const debugMessages: string[] = [];
+    const originalShouldLogRawCliOutput =
+      ConfigurationUtils.shouldLogRawCliOutput;
+    (
+      ConfigurationUtils as unknown as { shouldLogRawCliOutput: () => boolean }
+    ).shouldLogRawCliOutput = () => true;
+
+    try {
+      const coordinator = new CliTransportCoordinator({
+        provider: {
+          config: {
+            name: "test-cli",
+            displayName: "Test CLI",
+            terminalName: "Test",
+            installHint: "",
+            shouldStreamHeadlessOutput: true,
+          },
+          responseParser: {
+            parse: () => ({ events: [], metadata: {} }),
+            parseTokenCounts: () => undefined,
+            processStreamingChunk: (chunk: string) => chunk,
+          },
+          notificationMonitor: {
+            supportsSessionIdInFilename: true,
+            supportsSessionStart: false,
+            monitorForCompletion: async () => ({ completed: false }),
+            buildHookConfig: () => ({ type: "none" as const }),
+            getNotificationDirectory: () => process.cwd(),
+          },
+          toolPermissionMapper: {},
+          buildCliArgs: async () => [],
+          buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
+            ...baseArgs,
+            prompt,
+          ],
+          buildInteractiveTuiCommand: () => "test-cli",
+          checkAvailability: async () => true,
+        } as unknown as ICliProvider,
+        processManager: {
+          spawn: async (
+            _command: string,
+            _args: string[],
+            options?: { onStdout?: (chunk: string) => void }
+          ) => {
+            options?.onStdout?.("raw-chunk");
+            return { stdout: "stdout", stderr: "", exitCode: 0 };
+          },
+          isActive: () => false,
+        } as any,
+        getWorkspaceRoot: () => process.cwd(),
+        getTerminalName: () => "FP: Test",
+        onBeforeInteractiveStart: () => {},
+        onCommandPrepared: () => {},
+        onStreamingChunk: () => {},
+        onStreamingEvents: () => {},
+        onResponseComplete: () => {},
+        onPtyExit: () => {},
+        isCancelling: () => false,
+        cleanupTempFiles: async () => {},
+        logger: {
+          debug(message: string): void {
+            debugMessages.push(message);
+          },
+          info(_message: string): void {},
+          warn(_message: string): void {},
+          error(_message: string, _error?: unknown): void {},
+        },
+      });
+
+      const success = await coordinator.executeHeadless(
+        [],
+        "prompt",
+        [],
+        async () => true
+      );
+
+      assert.strictEqual(success, true);
+      assert.ok(
+        debugMessages.some((message) =>
+          message.includes("[Test CLI RAW OUTPUT]: raw-chunk")
+        )
+      );
+    } finally {
+      (
+        ConfigurationUtils as unknown as {
+          shouldLogRawCliOutput: () => boolean;
+        }
+      ).shouldLogRawCliOutput = originalShouldLogRawCliOutput;
+    }
+  });
+
+  test("should use workflow name as PTY workflow ID fallback", async () => {
+    const postedMessages: Array<{ workflowId?: string }> = [];
+
+    const coordinator = new CliTransportCoordinator({
+      provider: {
+        config: {
+          name: "test-cli",
+          displayName: "Test CLI",
+          terminalName: "Test",
+          installHint: "",
+          shouldStreamHeadlessOutput: false,
+        },
+        responseParser: {
+          parse: () => ({ events: [], metadata: {} }),
+          parseTokenCounts: () => undefined,
+        },
+        notificationMonitor: {
+          supportsSessionIdInFilename: true,
+          supportsSessionStart: false,
+          monitorForCompletion: async () => ({ completed: false }),
+          buildHookConfig: () => ({ type: "none" as const }),
+          getNotificationDirectory: () => process.cwd(),
+        },
+        toolPermissionMapper: {},
+        buildCliArgs: async () => [],
+        buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
+          ...baseArgs,
+          prompt,
+        ],
+        buildInteractiveTuiCommand: () => "test-cli --interactive",
+        checkAvailability: async () => true,
+      } as unknown as ICliProvider,
+      processManager: {} as any,
+      getWorkspaceRoot: () => process.cwd(),
+      getTerminalName: () => "FP: Test",
+      getWorkflowName: () => "named-workflow",
+      onBeforeInteractiveStart: () => {},
+      onCommandPrepared: () => {},
+      onStreamingChunk: () => {},
+      onStreamingEvents: () => {},
+      onResponseComplete: () => {},
+      onPtyExit: () => {},
+      isCancelling: () => false,
+      cleanupTempFiles: async () => {},
+      logger: createLogger(),
+      postTerminalMessage: (message: unknown) => {
+        postedMessages.push(message as { workflowId?: string });
+      },
+      getPtyManager: () =>
+        ({
+          spawnPty: (config: {
+            sessionId: string;
+            workflowId: string;
+            kind: string;
+          }) => ({
+            id: config.sessionId,
+            workflowId: config.workflowId,
+            kind: config.kind,
+            reconnectBuffer: [],
+          }),
+        }) as any,
+    });
+
+    await coordinator.startInteractiveProcess([], "prompt", []);
+
+    assert.strictEqual(postedMessages[0]?.workflowId, "named-workflow");
+  });
+
+  test("should run standalone interactive launch and stop-hook monitor", async () => {
+    let disposedProcess = false;
+    let responseCompleted: string | undefined;
+
+    const coordinator = new CliTransportCoordinator({
+      provider: {
+        config: {
+          name: "test-cli",
+          displayName: "Test CLI",
+          terminalName: "Test",
+          installHint: "",
+          shouldStreamHeadlessOutput: false,
+          usesInteractiveNotificationMonitor: true,
+        },
+        responseParser: {
+          parse: () => ({ events: [], metadata: {} }),
+          parseTokenCounts: () => undefined,
+        },
+        notificationMonitor: {
+          supportsSessionIdInFilename: true,
+          supportsSessionStart: false,
+          monitorForCompletion: async () => ({
+            completed: true,
+            data: { sessionId: "hook-session" },
+          }),
+          buildHookConfig: () => ({ type: "none" as const }),
+          getNotificationDirectory: () => process.cwd(),
+          extractSessionId: () => "hook-session",
+        },
+        toolPermissionMapper: {},
+        buildCliArgs: async () => [],
+        buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
+          ...baseArgs,
+          prompt,
+        ],
+        buildInteractiveTuiCommand: () => "test-cli --interactive",
+        checkAvailability: async () => true,
+      } as unknown as ICliProvider,
+      processManager: {
+        spawnInteractive: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        },
+        disposeProcess: () => {
+          disposedProcess = true;
+        },
+      } as any,
+      getWorkspaceRoot: () => process.cwd(),
+      getTerminalName: () => "FP: Test",
+      onBeforeInteractiveStart: () => {},
+      onCommandPrepared: () => {},
+      onStreamingChunk: () => {},
+      onStreamingEvents: () => {},
+      onResponseComplete: (response) => {
+        responseCompleted = response;
+      },
+      onPtyExit: () => {},
+      isCancelling: () => false,
+      cleanupTempFiles: async () => {},
+      logger: createLogger(),
+    });
+
+    const result = await coordinator.executeStandaloneInteractiveProcess(
+      [],
+      "prompt",
+      [],
+      undefined
+    );
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(disposedProcess, true);
+    assert.strictEqual(responseCompleted, "Interactive session ended");
+  });
+});

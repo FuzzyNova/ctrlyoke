@@ -1,0 +1,104 @@
+export type InteractiveAbortState =
+  | { kind: "user-cancelled" }
+  | { kind: "process-exited"; exitCode: number };
+
+/**
+ * Tracks abnormal CLI process exits for a single prompt send attempt.
+ *
+ * Separates three related but distinct concerns:
+ * - raw PTY exit observation (the process died)
+ * - failure classification (the exit should fail the attempt)
+ * - last visible PTY tail for user-facing diagnostics
+ */
+export class CliFailureTracker {
+  private ptyExitCode: number | null = null;
+  private processExitTermination: number | null = null;
+  private lastFailureOutput?: string;
+
+  reset(): void {
+    this.ptyExitCode = null;
+    this.processExitTermination = null;
+    this.lastFailureOutput = undefined;
+  }
+
+  capturePtyExit(exitCode: number, reconnectBuffer: string[]): void {
+    this.ptyExitCode = exitCode;
+    this.lastFailureOutput = this.extractInteractiveOutputTail(reconnectBuffer);
+  }
+
+  getPtyTermination(): { exitCode: number } | null {
+    if (this.ptyExitCode === null) {
+      return null;
+    }
+
+    return { exitCode: this.ptyExitCode };
+  }
+
+  getInteractiveAbortState(
+    isCancelling: boolean
+  ): InteractiveAbortState | null {
+    if (isCancelling) {
+      return { kind: "user-cancelled" };
+    }
+
+    if (this.ptyExitCode !== null) {
+      return { kind: "process-exited", exitCode: this.ptyExitCode };
+    }
+
+    return null;
+  }
+
+  markProcessExitDuringStage(stage: string, exitCode: number): string {
+    return this.markProcessExitReason(
+      exitCode,
+      `CLI process exited unexpectedly while ${stage} (exit code ${exitCode})`
+    );
+  }
+
+  markCompletionDetectionProcessExit(exitCode: number): string {
+    return this.markProcessExitReason(
+      exitCode,
+      `CLI process exited unexpectedly (exit code ${exitCode})`
+    );
+  }
+
+  getLastFailureOutput(): string | undefined {
+    return this.lastFailureOutput;
+  }
+
+  wasLastFailureProcessExit(): boolean {
+    return this.processExitTermination !== null;
+  }
+
+  private markProcessExitReason(exitCode: number, reason: string): string {
+    this.processExitTermination = exitCode;
+    return reason;
+  }
+
+  private extractInteractiveOutputTail(chunks: string[]): string | undefined {
+    if (chunks.length === 0) {
+      return undefined;
+    }
+
+    const cleaned = chunks
+      .join("")
+      .replace(/\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)/g, "")
+      .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "")
+      .replace(/\x1B[@-_]/g, "")
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+
+    const lines = cleaned
+      .split("\n")
+      .map((line) => line.trimEnd())
+      .filter((line) => line.trim().length > 0);
+
+    if (lines.length === 0) {
+      return undefined;
+    }
+
+    const tail = lines.slice(-10).join("\n").trim();
+    return tail || undefined;
+  }
+}

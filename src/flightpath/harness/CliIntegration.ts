@@ -1,4 +1,3 @@
-import type * as vscode from "vscode";
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
@@ -9,41 +8,32 @@ import { PromptItem, Harness } from "../../types/FlightPathTypes";
 import { WorkflowContext } from "../../types/WorkflowContextTypes";
 import { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
-import type { PromptSections } from "../HarnessIntegration";
-import { TempFileManager } from "../../utils/TempFileManager";
-import { PromptFileSplitter } from "../../utils/PromptFileSplitter";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
-import {
-  getPtyProcessManager,
-  ptyPostMessage,
-  resolveWindowsShell,
-} from "./PtyProcessManager";
-import type { PtySession } from "./PtyProcessManager";
+import type { TempFileManager } from "../../utils/TempFileManager";
 import { Log } from "../../utils/Log";
 import {
   EXECUTION_MODES,
-  MESSAGE_TYPES,
   type ExecutionMode,
 } from "../../types/DashboardConstants";
 import { getErrorMessage } from "../../utils/ErrorUtils";
-import { ICliProvider } from "./shared/interfaces/ICliProvider";
+import type { ICliProvider } from "./shared/interfaces/ICliProvider";
 import type { ToolPermissionConfig } from "./shared/interfaces/IToolPermissionMapper";
 import { CliOutputFormatter } from "./shared/CliOutputFormatter";
 import { CliLogMonitor } from "./CliLogMonitor";
+import { CliFailureTracker } from "./shared/CliFailureTracker";
+import { CliInteractiveStartupCoordinator } from "./shared/CliInteractiveStartupCoordinator";
 import {
-  ResolvedProperties,
-  PropertyResolver,
-} from "../../utils/PropertyResolver";
-import { CliProviderUtils } from "./shared/CliProviderUtils";
-import { SessionResolver } from "../../utils/SessionResolver";
-import { SessionValidator } from "../../utils/SessionValidator";
+  CliPromptPreparer,
+  type PromptFileResult,
+} from "./shared/CliPromptPreparer";
+import { CliPromptRuntimeCoordinator } from "./shared/CliPromptRuntimeCoordinator";
+import { CliResponseCollector } from "./shared/CliResponseCollector";
+import { CliSessionResolverAdapter } from "./shared/CliSessionResolverAdapter";
+import { CliTransportCoordinator } from "./shared/CliTransportCoordinator";
+import type { ResolvedProperties } from "../../utils/PropertyResolver";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
-const SESSION_START_TIMEOUT_MS = 60_000;
-/** Polling interval (ms) when waiting for SessionStart hook */
-const SESSION_START_POLL_MS = 100;
-const INTERACTIVE_WAIT_ABORTED = Symbol("interactiveWaitAborted");
 /**
  * Execution mode for CLI integrations
  */
@@ -61,17 +51,6 @@ export const CLI_WARNING_MESSAGES = {
   HEADLESS_WITHOUT_PERMISSIONS:
     "Headless mode without full permissions: CLI will auto-deny tool/file access. Workflow may not make progress.",
 } as const;
-
-/**
- * Result of creating prompt file(s) with reference instruction
- */
-interface PromptFileResult {
-  /** Array of temp file paths (for cleanup) */
-  tempFilePaths: string[];
-
-  /** Instruction prompt that references all files */
-  promptWithInstruction: string;
-}
 
 /**
  * Generic CLI integration class using composition.
@@ -132,31 +111,26 @@ export class CliIntegration extends HarnessIntegration {
   /** Actual prompt text sent to CLI (may be file reference if using temp files) */
   protected actualPromptSent?: string;
 
-  /** Tail of PTY output captured for the most recent sendPrompt failure. */
-  protected lastFailureOutput?: string;
-
   // NOTE: currentProcess field removed — the child process lives in processManager,
   // not on this class. See processManager.isActive() for process state.
 
   /** Process/terminal manager for CLI execution */
   protected processManager: CliProcessManager;
 
-  // Interactive terminal mode properties
-  protected currentExecution?: vscode.TerminalShellExecution;
+  /** Tracks PTY exits, process-exit classification, and captured PTY tail output. */
+  private readonly failureTracker = new CliFailureTracker();
 
-  /** Active PTY session for interactive mode (node-pty path) */
-  private currentPtySession?: PtySession;
+  /** Prompt/file assembly helper extracted from CliIntegration. */
+  private readonly promptPreparer: CliPromptPreparer;
 
-  /** Set when the AI CLI PTY exits with ANY exit code; cleared before each prompt.
-   *  All CLI harnesses are TUIs that stay open between prompts — any process exit
-   *  before completion detection is abnormal (Ctrl+C, crash, SIGKILL).
-   *  The log monitor picks this up to drain remaining events and stop the workflow. */
-  private ptyExitCode: number | null = null;
+  /** Session/property resolution helper extracted from CliIntegration. */
+  private readonly sessionResolverAdapter: CliSessionResolverAdapter;
 
-  /** Set when log monitoring ended due to a process exit before completion was detected.
-   *  All CLI harnesses are TUIs that stay open between prompts — any process exit
-   *  before completion is abnormal (Ctrl+C, crash, SIGKILL). Cleared before each prompt. */
-  private processExitTermination: number | null = null;
+  /** Per-prompt runtime metadata persistence helper extracted from CliIntegration. */
+  private readonly promptRuntimeCoordinator: CliPromptRuntimeCoordinator;
+
+  /** Launch/cancellation helper extracted from CliIntegration. */
+  private readonly transportCoordinator: CliTransportCoordinator;
 
   /** Workflow display name used for VS Code terminal tab naming */
   private workflowName?: string;
@@ -200,6 +174,113 @@ export class CliIntegration extends HarnessIntegration {
         this.provider.logParser as { setWorkspaceRoot(r: string): void }
       ).setWorkspaceRoot(workspaceRoot);
     }
+
+    this.promptPreparer = new CliPromptPreparer({
+      shouldOmitAgentsAndSkillsOnResume: () =>
+        ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume(),
+      buildPromptSections: (prompt, resolvedAgent, resolvedSkills) =>
+        this.buildPromptSections(prompt, resolvedAgent, resolvedSkills),
+      isSimplePrompt: (promptText) => this.isSimplePrompt(promptText),
+      buildPriorContextXml: (
+        resolvedPriorContext,
+        allPrompts,
+        promptIndex,
+        finalPromptResponseTexts
+      ) => {
+        const contextItems = this.gatherPriorContextItems(
+          resolvedPriorContext,
+          allPrompts,
+          promptIndex,
+          finalPromptResponseTexts
+        );
+        return contextItems.length > 0
+          ? this.buildPriorContextXml(contextItems)
+          : "";
+      },
+      getWorkspaceRoot: () => this.getWorkspaceRoot(),
+      getTempFileSplitConfig: () => this.getTempFileSplitConfig(),
+      formatDirectFileRef: (absolutePath) =>
+        this.formatDirectFileRef(absolutePath),
+      formatTempFileRef: (tempMgr, absolutePath) =>
+        this.formatTempFileRef(tempMgr, absolutePath),
+      formatCategorizedReferences: (
+        agentRefs,
+        skillRefs,
+        directRefs,
+        contextRefs,
+        excerptRefs,
+        promptRefs
+      ) =>
+        this.formatCategorizedReferences(
+          agentRefs,
+          skillRefs,
+          directRefs,
+          contextRefs,
+          excerptRefs,
+          promptRefs
+        ),
+      logInfo: (message) => Log.info(message),
+    });
+
+    this.sessionResolverAdapter = new CliSessionResolverAdapter({
+      getIntegrationHarness: () => this.getIntegrationMode() as Harness,
+      logger: {
+        info: (message) => Log.info(message),
+      },
+    });
+
+    this.promptRuntimeCoordinator = new CliPromptRuntimeCoordinator({
+      getIntegrationHarness: () => this.getIntegrationMode() as Harness,
+      logger: {
+        debug: (message) => Log.debug(message),
+      },
+    });
+
+    this.transportCoordinator = new CliTransportCoordinator({
+      provider: this.provider,
+      processManager: this.processManager,
+      getWorkspaceRoot: () => this.getWorkspaceRoot(),
+      getTerminalName: () => this.buildTerminalName(),
+      getWorkflowName: () => this.workflowName,
+      onBeforeInteractiveStart: (workflowContext) => {
+        if (workflowContext) {
+          this.currentPromptNumber = workflowContext.promptIndex + 1;
+          this.currentPromptTotal = workflowContext.allPrompts.length;
+        }
+      },
+      onCommandPrepared: ({ promptArgument, cliCommand }) => {
+        this.lastCliCommand = cliCommand;
+        this.actualPromptSent = promptArgument;
+        this.promptReadyEmitter.fire({
+          fullPrompt: promptArgument,
+          cliCommand,
+        });
+      },
+      onStreamingChunk: (chunk) => this.streamingChunkEmitter.fire(chunk),
+      onStreamingEvents: (events) => this.streamingEventsEmitter.fire(events),
+      onResponseComplete: (response) =>
+        this.responseCompleteEmitter.fire(response),
+      onPtyExit: (session, exitCode) => {
+        this.failureTracker.capturePtyExit(exitCode, session.reconnectBuffer);
+        if (exitCode !== 0) {
+          Log.warn(
+            `⚠️ AI CLI PTY session ${session.id} exited with code ${exitCode} — workflow step will be stopped`
+          );
+        } else {
+          Log.info(
+            `🛑 AI CLI PTY session ${session.id} exited with code 0 before completion — workflow step will be stopped`
+          );
+        }
+      },
+      isCancelling: () => this.isCancelling,
+      cleanupTempFiles: (tempFilePaths) => this.cleanupTempFiles(tempFilePaths),
+      logger: {
+        debug: (message) => Log.debug(message),
+        info: (message) => Log.info(message),
+        warn: (message) => Log.warn(message),
+        error: (message, error) => Log.error(message, error),
+      },
+    });
   }
 
   // ============================================================
@@ -227,29 +308,6 @@ export class CliIntegration extends HarnessIntegration {
    */
   protected override getWorkspaceRoot(): string | undefined {
     return this.platform.getWorkspaceRoot() || undefined;
-  }
-
-  /**
-   * Dispose the current terminal if it exists.
-   * This does NOT clear the session ID - that's preserved for potential resume.
-   *
-   * Call this before starting a new CLI process in interactive mode to ensure
-   * we get a fresh terminal. The old terminal output remains visible until
-   * the user closes it or the new terminal opens.
-   */
-  protected disposeTerminalIfExists(): void {
-    const hasTerminal = !!this.processManager.getTerminal();
-    if (hasTerminal) {
-      Log.info(
-        `🗑️ Closing previous terminal before starting next prompt (was: "${this.buildTerminalName()}")`
-      );
-    } else {
-      Log.debug(
-        "🗑️ disposeTerminalIfExists: no terminal open, nothing to close"
-      );
-    }
-    this.processManager.disposeTerminal();
-    this.currentExecution = undefined;
   }
 
   /**
@@ -282,36 +340,6 @@ export class CliIntegration extends HarnessIntegration {
         ? ` [${this.currentPromptNumber}/${this.currentPromptTotal}]`
         : "";
     return `${base} · ${short}${promptSuffix}`;
-  }
-
-  /**
-   * Create a fresh VS Code terminal for interactive execution.
-   * Always creates a new terminal, disposing any existing one first.
-   */
-  protected async createFreshTerminal(
-    env?: Record<string, string>
-  ): Promise<vscode.Terminal> {
-    this.disposeTerminalIfExists();
-    return await this.processManager.createTerminal(
-      this.buildTerminalName(),
-      this.getWorkspaceRoot(),
-      env
-    );
-  }
-
-  /**
-   * Wait for shell integration to become available on a terminal
-   * @param terminal The terminal to wait for
-   * @param timeoutMs Maximum time to wait (default 5 seconds)
-   */
-  protected async waitForShellIntegration(
-    terminal: vscode.Terminal,
-    timeoutMs: number = 5000
-  ): Promise<vscode.TerminalShellIntegration> {
-    return await this.processManager.waitForShellIntegration(
-      terminal,
-      timeoutMs
-    );
   }
 
   // ============================================================
@@ -370,9 +398,8 @@ export class CliIntegration extends HarnessIntegration {
    * agent, skills, prior context, or critical instruction, returns the raw
    * text directly with no temp files (no disk I/O).
    *
-   * Otherwise: calls buildPromptSections() (expandContextSplit) and
-   * createCategorizedPromptFiles() to produce named per-category temp files
-   * with a structured reference instruction.
+   * Otherwise: delegates to CliPromptPreparer to build sections, create any
+   * categorized temp files, and return the structured reference instruction.
    *
    * @param prompt Prompt item to prepare
    * @param workflowContext Workflow execution context
@@ -387,54 +414,12 @@ export class CliIntegration extends HarnessIntegration {
     resolvedSessionId: string | undefined,
     finalPromptResponseTexts?: string[]
   ): Promise<PromptFileResult> {
-    const omitAgentsAndSkills =
-      !!resolvedSessionId &&
-      ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume();
-    const sections = await this.buildPromptSections(
+    return await this.promptPreparer.preparePrompt(
       prompt,
-      omitAgentsAndSkills ? undefined : resolvedProperties?.agent,
-      omitAgentsAndSkills ? undefined : resolvedProperties?.skills
-    );
-
-    const promptIndex = workflowContext?.promptIndex ?? 0;
-    const allPrompts = workflowContext?.allPrompts ?? [prompt];
-    const resolvedPriorContext = resolvedProperties?.priorContext;
-    const hasPriorContext =
-      resolvedPriorContext !== undefined && resolvedPriorContext !== "none";
-
-    // Fast path: no extras + short shell-safe text → skip file I/O entirely
-    const hasExtras =
-      !!sections.agentContent ||
-      !!sections.skillContent ||
-      sections.directFileRefs.length > 0 ||
-      !!sections.excerptContent ||
-      hasPriorContext;
-    if (!hasExtras && this.isSimplePrompt(sections.userPromptText)) {
-      return {
-        promptWithInstruction: sections.userPromptText,
-        tempFilePaths: [],
-      };
-    }
-
-    // Categorized path: write per-category temp files, return structured reference instruction
-    const priorContextItems = hasPriorContext
-      ? this.gatherPriorContextItems(
-          resolvedPriorContext!,
-          allPrompts,
-          promptIndex,
-          finalPromptResponseTexts ?? []
-        )
-      : [];
-    const priorContextBlock =
-      priorContextItems.length > 0
-        ? this.buildPriorContextXml(priorContextItems)
-        : "";
-    const contextContent = priorContextBlock || undefined;
-
-    return this.createCategorizedPromptFiles(
-      sections,
       workflowContext,
-      contextContent
+      resolvedProperties,
+      resolvedSessionId,
+      finalPromptResponseTexts
     );
   }
 
@@ -464,131 +449,6 @@ export class CliIntegration extends HarnessIntegration {
     return (
       this.provider.formatFileReference?.(relativePath) ?? `@${relativePath}`
     );
-  }
-
-  /**
-   * Create categorized temp files (agent, skills, context, excerpts, prompt) and
-   * return the structured instruction string that references all of them.
-   *
-   * Agent and excerpt files are split on token/line limits; skills, context, and
-   * prompt are written as single files (context must not be split mid-XML).
-   *
-   * @param sections Prompt sections from buildPromptSections()
-   * @param workflowContext Optional workflow context for meaningful filenames
-   * @param contextContent Optional prior context block
-   * @returns Object with tempFilePaths (for cleanup) and promptWithInstruction
-   */
-  protected async createCategorizedPromptFiles(
-    sections: PromptSections,
-    workflowContext?: WorkflowContext,
-    contextContent?: string
-  ): Promise<PromptFileResult> {
-    const workspaceRoot = this.getWorkspaceRoot();
-    if (!workspaceRoot) {
-      throw new Error("No workspace root available for categorized temp files");
-    }
-
-    const tempMgr = new TempFileManager(workspaceRoot);
-    const splitter = new PromptFileSplitter(this.getTempFileSplitConfig());
-    const allTempFilePaths: string[] = [];
-    // Prefer workflowName for temp file naming — it's always meaningful (derived from
-    // prompt text or the workflow file's base name) and never contains the ISO timestamp
-    // that gets embedded in working file paths for ephemeral workflows.
-    const filePath = workflowContext?.workflowName ?? workflowContext?.filePath;
-    const stepNumber = workflowContext
-      ? workflowContext.promptIndex + 1
-      : undefined;
-
-    const fmtRef = (p: string) => this.formatTempFileRef(tempMgr, p);
-
-    // Agent: wrap in tags, split if large
-    const agentRefs: string[] = [];
-    if (sections.agentContent) {
-      const agentText = `<agentInstructions>\n${sections.agentContent}\n</agentInstructions>`;
-      const agentPaths = await tempMgr.createCategorySplitFiles(
-        splitter.split(agentText).chunks,
-        "agent",
-        filePath,
-        stepNumber
-      );
-      allTempFilePaths.push(...agentPaths);
-      agentRefs.push(...agentPaths.map(fmtRef));
-    }
-
-    // Skills: split if large (rare, but handled for completeness)
-    const skillRefs: string[] = [];
-    if (sections.skillContent) {
-      const skillPaths = await tempMgr.createCategorySplitFiles(
-        splitter.split(sections.skillContent).chunks,
-        "skills",
-        filePath,
-        stepNumber
-      );
-      allTempFilePaths.push(...skillPaths);
-      skillRefs.push(...skillPaths.map(fmtRef));
-    }
-
-    // Direct file refs: workspace files the harness reads natively — no temp file
-    const directRefs = sections.directFileRefs.map((p) =>
-      this.formatDirectFileRef(p)
-    );
-
-    // Prior context: split on <step> boundaries so no file exceeds the token limit.
-    const contextRefs: string[] = [];
-    if (contextContent) {
-      const contextPaths = await tempMgr.createCategorySplitFiles(
-        splitter.splitContextContent(contextContent).chunks,
-        "context",
-        filePath,
-        stepNumber
-      );
-      allTempFilePaths.push(...contextPaths);
-      contextRefs.push(...contextPaths.map(fmtRef));
-    }
-
-    // Excerpts: selection/sym/git/dir attachment blocks, split if large
-    const excerptRefs: string[] = [];
-    if (sections.excerptContent) {
-      const excerptPaths = await tempMgr.createCategorySplitFiles(
-        splitter.split(sections.excerptContent).chunks,
-        "excerpts",
-        filePath,
-        stepNumber
-      );
-      allTempFilePaths.push(...excerptPaths);
-      excerptRefs.push(...excerptPaths.map(fmtRef));
-    }
-
-    // User prompt: own file (with split support for very large prompts)
-    const promptSplit = splitter.split(sections.userPromptText);
-    const promptPaths: string[] = [];
-    for (let i = 0; i < promptSplit.chunks.length; i++) {
-      const partNumber = promptSplit.chunks.length > 1 ? i + 1 : undefined;
-      const p = await tempMgr.createCategoryFile(
-        promptSplit.chunks[i],
-        "prompt",
-        filePath,
-        stepNumber,
-        partNumber
-      );
-      promptPaths.push(p);
-    }
-    allTempFilePaths.push(...promptPaths);
-    const promptRefs = promptPaths.map(fmtRef);
-
-    Log.info(`📁 Categorized prompt files: ${allTempFilePaths.length} file(s)`);
-
-    return {
-      tempFilePaths: allTempFilePaths,
-      promptWithInstruction: this.formatCategorizedReferences(
-        agentRefs,
-        skillRefs,
-        directRefs,
-        contextRefs,
-        excerptRefs,
-        promptRefs
-      ),
-    };
   }
 
   /**
@@ -633,155 +493,49 @@ export class CliIntegration extends HarnessIntegration {
   // INTERACTIVE TUI EXECUTION
   // ============================================================
 
-  /**
-   * Discover the session log file and extract session ID.
-   *
-   * Consolidates the common pattern used in all 3 session discovery paths:
-   * resumed session, SessionStart hook, and fallback prompt matching.
-   *
-   * @param promptText The prompt text (for log discovery via matching)
-   * @param startTime Execution start time
-   * @param sessionId Known session ID (from resumption or hook), or null for prompt matching
-   * @param errorContext Human-readable failure reason set on `this.lastFailureReason`
-   * @returns Log path and session ID, or null if log file not found
-   */
-  private async discoverAndExtractSession(
-    promptText: string,
-    startTime: Date,
-    sessionId: string | null,
-    errorContext: string
-  ): Promise<{ logPath: string; sessionId: string | null } | null> {
-    const promptForDiscovery = this.actualPromptSent || promptText;
-
-    const discoveredLogPath = await this.waitForInteractiveStartupOperation(
-      this.provider.logParser!.discoverSessionLog(
-        promptForDiscovery,
-        startTime,
-        sessionId || undefined
-      )
-    );
-
-    if (discoveredLogPath === INTERACTIVE_WAIT_ABORTED) {
-      return null;
-    }
-
-    const logPath = discoveredLogPath;
-
-    if (!logPath) {
-      this.lastFailureReason = errorContext;
-      return null;
-    }
-
-    // If no session ID was provided, try to extract it from the log events
-    if (!sessionId) {
-      const events = await this.provider.logParser!.readNewLines(logPath);
-      const extractedId = this.provider.logParser!.extractSessionId(events);
-      if (extractedId) {
-        Log.debug(`💾 Extracted session ID from log: ${extractedId}`);
-      }
-      return { logPath, sessionId: extractedId };
-    }
-
-    return { logPath, sessionId };
-  }
-
   private getInteractiveAbortState():
     | { kind: "user-cancelled" }
     | { kind: "process-exited"; exitCode: number }
     | null {
-    if (this.isCancelling) {
-      return { kind: "user-cancelled" };
-    }
-
-    if (this.ptyExitCode !== null) {
-      return { kind: "process-exited", exitCode: this.ptyExitCode };
-    }
-
-    return null;
+    return this.failureTracker.getInteractiveAbortState(this.isCancelling);
   }
 
-  private markProcessExitFailure(stage: string, exitCode: number): void {
-    this.processExitTermination = exitCode;
-    this.lastFailureReason =
-      `CLI process exited unexpectedly while ${stage} ` +
-      `(exit code ${exitCode})`;
+  private createInteractiveStartupCoordinator(): CliInteractiveStartupCoordinator {
+    return new CliInteractiveStartupCoordinator({
+      logParser: this.provider.logParser!,
+      notificationMonitor: this.provider.notificationMonitor,
+      getWorkspaceRoot: () => this.getWorkspaceRoot(),
+      getAbortState: () => this.getInteractiveAbortState(),
+      markProcessExitDuringStage: (stage, exitCode) =>
+        this.failureTracker.markProcessExitDuringStage(stage, exitCode),
+      setFailureReason: (reason) => {
+        this.lastFailureReason = reason;
+      },
+      logger: {
+        debug: (message) => Log.debug(message),
+        info: (message) => Log.info(message),
+        warn: (message) => Log.warn(message),
+        error: (message) => Log.error(message),
+      },
+    });
   }
 
-  private handleInteractiveStartupAbort(
-    stage: string
-  ): { success: false } | null {
-    const abortState = this.getInteractiveAbortState();
-    if (!abortState) {
-      return null;
-    }
-
-    if (abortState.kind === "user-cancelled") {
-      Log.info(`⏹️ Interactive execution cancelled while ${stage}`);
-      return { success: false };
-    }
-
-    this.markProcessExitFailure(stage, abortState.exitCode);
-    Log.warn(
-      `⚠️ CLI process exited while ${stage} (exit code ${abortState.exitCode})`
-    );
-    return { success: false };
-  }
-
-  private extractInteractiveOutputTail(chunks: string[]): string | undefined {
-    if (chunks.length === 0) {
-      return undefined;
-    }
-
-    const cleaned = chunks
-      .join("")
-      .replace(/\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)/g, "")
-      .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "")
-      .replace(/\x1B[@-_]/g, "")
-      .replace(/\r\n/g, "\n")
-      .replace(/\r/g, "\n")
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-
-    const lines = cleaned
-      .split("\n")
-      .map((line) => line.trimEnd())
-      .filter((line) => line.trim().length > 0);
-
-    if (lines.length === 0) {
-      return undefined;
-    }
-
-    const tail = lines.slice(-10).join("\n").trim();
-    return tail || undefined;
-  }
-
-  private async waitForInteractiveStartupOperation<T>(
-    operation: Promise<T>
-  ): Promise<T | typeof INTERACTIVE_WAIT_ABORTED> {
-    return new Promise((resolve, reject) => {
-      let settled = false;
-
-      const finish = (action: () => void) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearInterval(intervalHandle);
-        action();
-      };
-
-      const intervalHandle = setInterval(() => {
-        if (this.getInteractiveAbortState()) {
-          finish(() => resolve(INTERACTIVE_WAIT_ABORTED));
-        }
-      }, SESSION_START_POLL_MS);
-
-      void operation
-        .then((value) => {
-          finish(() => resolve(value));
-        })
-        .catch((error) => {
-          finish(() => reject(error));
-        });
+  private createResponseCollector(): CliResponseCollector {
+    return new CliResponseCollector({
+      responseParser: this.provider.responseParser,
+      augmentParsedOutput: this.provider.augmentParsedOutput,
+      extractSessionIdFromLogs: this.provider.extractSessionIdFromLogs,
+      extractTextFromEvents: (output) =>
+        CliLogMonitor.extractTextFromEvents(output),
+      formatStatistics: (metadata) =>
+        CliOutputFormatter.formatStatistics(metadata),
+      logResponse: (response, statistics) =>
+        this.logResponse(response, statistics),
+      onResponseComplete: (response) =>
+        this.responseCompleteEmitter.fire(response),
+      logger: {
+        debug: (message) => Log.debug(message),
+      },
     });
   }
 
@@ -841,92 +595,16 @@ export class CliIntegration extends HarnessIntegration {
         Log.info("\n");
       }
 
-      this.actualPromptSent = promptArgument;
-
-      // Build the interactive TUI command string
-      const tuiCommand = this.provider.buildInteractiveTuiCommand(
+      return await this.transportCoordinator.executeStandaloneInteractiveProcess(
         args,
-        promptArgument
+        promptArgument,
+        tempFilePaths,
+        resolvedSessionId
       );
-      const commandStr = String(tuiCommand).replace(/\s+/g, " ").trim();
-      this.lastCliCommand = commandStr;
-
-      this.promptReadyEmitter.fire({
-        fullPrompt: promptArgument,
-        cliCommand: commandStr,
-      });
-
-      // Record start time before spawning so we can filter stale notification files
-      const startTime = new Date();
-
-      // Spawn with stdio:'inherit' — the user sees the AI CLI TUI directly.
-      const workingDir = this.getWorkspaceRoot() || process.cwd();
-      const interactiveEnv =
-        this.provider.getInteractiveSpawnEnv?.() ??
-        CliProviderUtils.buildProcessEnv();
-      let processExited = false;
-      const spawnPromise = this.processManager
-        .spawnInteractive(commandStr, workingDir, interactiveEnv)
-        .finally(() => {
-          processExited = true;
-        });
-
-      // When the harness supports hook-based completion detection, monitor for the
-      // stop notification in parallel. When it fires, kill the process so the
-      // workflow automatically advances to the next prompt without user interaction.
-      const workspaceRoot = this.getWorkspaceRoot();
-      let hookSessionId: string | undefined;
-
-      if (
-        workspaceRoot &&
-        this.provider.config.usesInteractiveNotificationMonitor
-      ) {
-        const notifyDir =
-          this.provider.notificationMonitor.getNotificationDirectory(
-            workspaceRoot
-          );
-        const timeoutMs =
-          ConfigurationUtils.getMaxPromptExecutionTimeMs() ?? 3_600_000;
-
-        const monitorPromise = this.provider.notificationMonitor
-          .monitorForCompletion(
-            { directory: notifyDir, timeoutMs },
-            resolvedSessionId, // wildcard mode when undefined (new session)
-            startTime,
-            () => this.isCancelling || processExited
-          )
-          .then((result) => {
-            if (result.completed && !processExited) {
-              hookSessionId =
-                this.provider.notificationMonitor.extractSessionId?.(
-                  result.data
-                );
-              // Completion hook fired — terminate the TUI so the next prompt can start.
-              // Terminal scrollback remains visible to the user.
-              Log.info(
-                `✅ Stop hook detected — terminating interactive session` +
-                  (hookSessionId ? ` (session: ${hookSessionId})` : "")
-              );
-              this.processManager.disposeProcess();
-            }
-          });
-
-        await Promise.all([spawnPromise, monitorPromise]);
-      } else {
-        // No hook monitoring — wait for the user to exit manually (Ctrl+D, /exit, etc.)
-        await spawnPromise;
-      }
-
-      // Session ended. Fire responseComplete so WorkflowExecutor can advance to the next prompt.
-      this.responseCompleteEmitter.fire("Interactive session ended");
-
-      return { success: true, sessionId: hookSessionId ?? resolvedSessionId };
     } catch (error) {
       Log.error("❌ CLI interactive execution error", error);
       this.lastFailureReason = getErrorMessage(error);
       return { success: false };
-    } finally {
-      await this.cleanupTempFiles(tempFilePaths);
     }
   }
 
@@ -1038,173 +716,24 @@ export class CliIntegration extends HarnessIntegration {
       );
 
       // 3. Wait for SessionStart hook and discover log file
-      let sessionId: string | null = resolvedSessionId || null;
-      let logPath: string | null = null;
+      const startupCoordinator = this.createInteractiveStartupCoordinator();
+      const discovery = await startupCoordinator.resolveSession({
+        promptForDiscovery: this.actualPromptSent || promptArgument,
+        startTime,
+        resolvedSessionId,
+        runId,
+      });
 
-      // If we already have a resolved session ID (from resumption), use it directly
-      if (resolvedSessionId) {
-        Log.debug(
-          `🔄 Resuming session ${resolvedSessionId} - discovering log file directly...`
-        );
-
-        const discovery = await this.discoverAndExtractSession(
-          promptArgument,
-          startTime,
-          resolvedSessionId,
-          "Log file not found for resumed session"
-        );
-
-        if (!discovery) {
-          const abortResult = this.handleInteractiveStartupAbort(
-            "discovering the resumed session log"
-          );
-          if (abortResult) {
-            return abortResult;
-          }
-
-          Log.error(
-            `❌ Could not find log file for resumed session ${resolvedSessionId}\n` +
-              `   The session may have been deleted or never existed.\n` +
-              `   To fix: Remove the sessionId property to start a new session.`
-          );
-          return { success: false };
-        }
-
-        logPath = discovery.logPath;
-        sessionId = discovery.sessionId;
-        Log.info(`✅ Found log file for resumed session: ${logPath}`);
-
-        // Seek past existing file content so the initial readNewLines() call in
-        // CliLogMonitor only sees events appended AFTER this point. Without this,
-        // old completion events from prior prompts in the same session file would
-        // trigger immediate false completion — especially for events that lack a
-        // `timestamp` field and therefore bypass the timestamp filter entirely.
-        // (The Stop hook remains the reliable completion path for fast prompts.)
-        this.provider.logParser!.seekToEnd?.(logPath);
-      } else if (this.provider.notificationMonitor.supportsSessionStart) {
-        // Harness supports SessionStart hook (Claude, Copilot)
-        Log.info("🔍 Waiting for SessionStart hook and log file creation...");
-
-        const workspaceRoot = this.getWorkspaceRoot();
-        if (!workspaceRoot) {
-          Log.error("❌ No workspace root for session start monitoring");
-          return { success: false };
-        }
-
-        const notifyDir =
-          this.provider.notificationMonitor.getNotificationDirectory(
-            workspaceRoot
-          );
-
-        // Wait for SessionStart notification
-        const startResultNotify = await this.provider.notificationMonitor
-          .waitForSessionStart!(
-          {
-            directory: notifyDir,
-            timeoutMs: SESSION_START_TIMEOUT_MS,
-            pollMs: SESSION_START_POLL_MS,
-          },
-          startTime,
-          runId,
-          () => this.getInteractiveAbortState() !== null
-        );
-
-        if (!startResultNotify.completed) {
-          const abortResult = this.handleInteractiveStartupAbort(
-            "waiting for SessionStart hook"
-          );
-          if (abortResult) {
-            return abortResult;
-          }
-
-          Log.error(
-            `❌ SessionStart hook timeout: ${startResultNotify.error || "Unknown error"}`
-          );
-          this.lastFailureReason =
-            startResultNotify.error || "SessionStart hook timeout";
-          return { success: false };
-        }
-
-        // Extract session ID if provided (Claude provides it, Copilot doesn't)
-        const hookSessionId = startResultNotify.data?.sessionId || null;
-
-        if (hookSessionId) {
-          Log.debug(
-            `✅ SessionStart hook provided session ID: ${hookSessionId}`
-          );
-        } else {
-          Log.debug(
-            "✅ SessionStart hook confirmed (session ID not provided by CLI)"
-          );
-          Log.debug(
-            "🔍 Discovering session log file via prompt text matching..."
-          );
-        }
-
-        const discovery = await this.discoverAndExtractSession(
-          promptArgument,
-          startTime,
-          hookSessionId,
-          hookSessionId
-            ? "Log file not found after SessionStart"
-            : "Session log not found"
-        );
-
-        if (!discovery) {
-          const abortResult = this.handleInteractiveStartupAbort(
-            "discovering the session log after SessionStart"
-          );
-          if (abortResult) {
-            return abortResult;
-          }
-
-          if (hookSessionId) {
-            Log.error(
-              `❌ Could not find log file for session ${hookSessionId} - this should not happen!`
-            );
-          } else {
-            Log.error(
-              "❌ Could not discover session log - no matching prompt found"
-            );
-          }
-          return { success: false };
-        }
-
-        logPath = discovery.logPath;
-        sessionId = discovery.sessionId;
-        Log.info(`✅ Found session log: ${logPath}`);
-      } else {
-        // Harness doesn't support SessionStart hook - use old method (Copilot, Codex)
-        Log.info("🔍 Discovering session log file (no SessionStart hook)...");
-
-        const discovery = await this.discoverAndExtractSession(
-          promptArgument,
-          startTime,
-          null,
-          "Session log not found"
-        );
-
-        if (!discovery) {
-          const abortResult = this.handleInteractiveStartupAbort(
-            "discovering the session log"
-          );
-          if (abortResult) {
-            return abortResult;
-          }
-
-          Log.error(
-            "❌ Could not discover session log - no matching prompt found"
-          );
-          return { success: false };
-        }
-
-        logPath = discovery.logPath;
-        sessionId = discovery.sessionId;
-        Log.info(`✅ Found session log: ${logPath}`);
+      if (!discovery) {
+        return { success: false };
       }
 
       // 4. Monitor log file for completion
-      const result = await this.monitorLogFile(logPath, sessionId, startTime);
+      const result = await this.monitorLogFile(
+        discovery.logPath,
+        discovery.sessionId,
+        startTime
+      );
 
       return result;
     } catch (error) {
@@ -1238,156 +767,13 @@ export class CliIntegration extends HarnessIntegration {
     workflowContext?: WorkflowContext,
     env?: Record<string, string>
   ): Promise<void> {
-    const tuiCommand = this.provider.buildInteractiveTuiCommand(
+    await this.transportCoordinator.startInteractiveProcess(
       args,
-      promptArgument
+      promptArgument,
+      tempFilePaths,
+      workflowContext,
+      env
     );
-
-    // Persist the actual TUI command (trimmed and collapsed to one line)
-    this.lastCliCommand = String(tuiCommand).replace(/\s+/g, " ").trim();
-
-    // Store the actual prompt sent for log discovery
-    this.actualPromptSent = promptArgument;
-
-    // Update prompt number for terminal tab naming before creating the terminal
-    if (workflowContext) {
-      this.currentPromptNumber = workflowContext.promptIndex + 1;
-      this.currentPromptTotal = workflowContext.allPrompts.length;
-    }
-
-    this.promptReadyEmitter.fire({
-      fullPrompt: promptArgument,
-      cliCommand: this.lastCliCommand,
-    });
-
-    const ptyManager = getPtyProcessManager();
-    if (ptyManager) {
-      // PTY path: spawn via node-pty and route I/O to webview
-      // Use the instance UUID so PTY sessions are keyed by the same ID the webview
-      // uses for activeWorkflowId. Fall back to filePath for ad-hoc (non-executor) calls.
-      const workflowId =
-        workflowContext?.instanceId ??
-        workflowContext?.filePath ??
-        this.workflowName ??
-        "unknown";
-      const stepName = workflowContext
-        ? (workflowContext.allPrompts[workflowContext.promptIndex]?.name ??
-          `Step ${workflowContext.promptIndex + 1}`)
-        : "interactive";
-
-      // On Windows, use PowerShell instead of cmd.exe.
-      // node-pty escapes inner double-quotes as \" when wrapping the command string in outer
-      // quotes for CreateProcess. cmd.exe does not recognise \" as an escape sequence (\ is
-      // not a special character in cmd.exe), so the prompt argument gets split at the first
-      // space after the opening quote. PowerShell's -Command flag uses the Windows
-      // CommandLineToArgvW rules, which DO treat \" as a literal " (odd backslashes before a
-      // quote = escaped quote), so the full command string is preserved correctly.
-      const shell =
-        process.platform === "win32"
-          ? resolveWindowsShell()
-          : (process.env.SHELL ?? "/bin/bash");
-      const shellArgs =
-        process.platform === "win32"
-          ? ["-NoProfile", "-Command", String(tuiCommand)]
-          : ["-c", String(tuiCommand)];
-      const cwd = this.getWorkspaceRoot() ?? process.cwd();
-      const mergedEnv = env ? { ...process.env, ...env } : process.env;
-
-      // Generate the session ID up-front so we can post TERMINAL_STARTED to the
-      // webview *before* spawning the PTY. This guarantees the session exists in
-      // the webview store before any TERMINAL_OUTPUT messages arrive — without
-      // this, output produced in the first few milliseconds of process startup
-      // (banners, version headers) would be silently dropped because
-      // pushPendingOutput maps over existing sessions and finds no match.
-      const promptNumber = workflowContext
-        ? workflowContext.promptIndex + 1
-        : undefined;
-      const preSessionId = `ai-cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      ptyPostMessage({
-        type: MESSAGE_TYPES.TERMINAL_STARTED,
-        workflowId,
-        sessionId: preSessionId,
-        stepName,
-        kind: "ai-cli",
-        promptNumber,
-      });
-
-      const session = ptyManager.spawnPty({
-        workflowId,
-        stepName,
-        kind: "ai-cli",
-        promptNumber,
-        sessionId: preSessionId,
-        command: shell,
-        args: shellArgs,
-        cwd,
-        env: mergedEnv,
-        onData: (s, chunk) => {
-          ptyPostMessage({
-            type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-            workflowId: s.workflowId,
-            sessionId: s.id,
-            data: chunk,
-          });
-        },
-        onExit: (s, exitCode) => {
-          this.lastFailureOutput = this.extractInteractiveOutputTail(
-            s.reconnectBuffer
-          );
-          ptyPostMessage({
-            type: MESSAGE_TYPES.TERMINAL_ENDED,
-            workflowId: s.workflowId,
-            sessionId: s.id,
-            kind: s.kind,
-            exitCode,
-          });
-          if (this.currentPtySession === s) {
-            this.currentPtySession = undefined;
-          }
-          // Signal log monitor that the AI CLI process has exited.
-          // All CLI harnesses are TUIs that stay open between prompts — any
-          // process exit before completion detection is abnormal (Ctrl+C,
-          // SIGKILL, crash). The log monitor drains remaining events and stops.
-          if (s.kind === "ai-cli") {
-            this.ptyExitCode = exitCode;
-            if (exitCode !== 0) {
-              Log.warn(
-                `⚠️ AI CLI PTY session ${s.id} exited with code ${exitCode} — workflow step will be stopped`
-              );
-            } else {
-              Log.info(
-                `🛑 AI CLI PTY session ${s.id} exited with code 0 before completion — workflow step will be stopped`
-              );
-            }
-          }
-        },
-      });
-
-      this.currentPtySession = session;
-
-      Log.info(
-        `🖥️ PTY session spawned: "${stepName}" (${session.id.slice(0, 8)}) workflowId=inst:${workflowId.slice(0, 8)}`
-      );
-    } else {
-      // Fallback: VS Code terminal path (when PtyProcessManager not initialized)
-      const terminal = await this.createFreshTerminal(env);
-      Log.info(`🖥️ Opened terminal: "${this.buildTerminalName()}"`);
-      if (tempFilePaths.length > 0) {
-        Log.debug(
-          `📁 Interactive mode using ${tempFilePaths.length} temp file(s)`
-        );
-      }
-      terminal.show();
-
-      this.streamingChunkEmitter.fire(
-        "📺 Interactive mode: Output is streaming to the VS Code terminal.\n" +
-          "   View the terminal for real-time output.\n\n"
-      );
-
-      const shellIntegration = await this.waitForShellIntegration(terminal);
-      const execution = shellIntegration.executeCommand(tuiCommand);
-      this.currentExecution = execution;
-    }
   }
 
   /**
@@ -1411,8 +797,7 @@ export class CliIntegration extends HarnessIntegration {
       notificationMonitor: this.provider.notificationMonitor,
       getWorkspaceRoot: () => this.getWorkspaceRoot(),
       isCancelling: () => this.isCancelling,
-      isPtyTerminated: () =>
-        this.ptyExitCode !== null ? { exitCode: this.ptyExitCode } : null,
+      isPtyTerminated: () => this.failureTracker.getPtyTermination(),
       onStreamingEvents: (events) => this.streamingEventsEmitter.fire(events),
       onResponseComplete: (msg) => this.responseCompleteEmitter.fire(msg),
       logResponse: (response, statistics) =>
@@ -1432,8 +817,10 @@ export class CliIntegration extends HarnessIntegration {
     // Flag process-exit termination so callers (WorkflowExecutor) can
     // distinguish it from user cancellation or normal failure.
     if (result.processExited) {
-      this.processExitTermination = result.processExited.exitCode;
-      this.lastFailureReason = `CLI process exited unexpectedly (exit code ${result.processExited.exitCode})`;
+      this.lastFailureReason =
+        this.failureTracker.markCompletionDetectionProcessExit(
+          result.processExited.exitCode
+        );
     }
 
     return { success: result.success, sessionId: result.sessionId };
@@ -1485,139 +872,12 @@ export class CliIntegration extends HarnessIntegration {
       exitCode: number;
     }) => Promise<boolean>
   ): Promise<boolean> {
-    try {
-      if (tempFilePaths.length > 0) {
-        Log.info(
-          `🚀 Starting headless mode with ${tempFilePaths.length} file(s)`
-        );
-      } else {
-        Log.info(`🚀 Starting headless mode with direct prompt (fast path)`);
-      }
-
-      // Build headless arguments.
-      // Normalize newlines to spaces before passing as a shell argument: on Windows,
-      // cmd.exe (shell:true) treats newline characters as command separators even inside
-      // double-quoted strings, which truncates the prompt at the first newline.
-      // The multi-line formatting in promptWithInstruction (joinSeparator = ",\n") is
-      // for human readability only — replacing with spaces preserves the full instruction.
-      const shellSafePrompt = promptArgument.replace(/[\r\n]+/g, " ");
-      const headlessArgs = this.provider.buildHeadlessArgs(
-        args,
-        shellSafePrompt
-      );
-      const displayCommand = `${this.provider.config.name} ${headlessArgs.join(" ")}`;
-
-      this.lastCliCommand = displayCommand;
-
-      // Store the actual prompt sent for log discovery (may be a file reference)
-      this.actualPromptSent = promptArgument;
-
-      this.promptReadyEmitter.fire({
-        fullPrompt: promptArgument,
-        cliCommand: displayCommand,
-      });
-
-      // Check if we should stream output in real-time
-      const shouldStream = this.provider.config.shouldStreamHeadlessOutput;
-
-      // Create streaming state map for harness's response parser
-      const streamState = new Map<string, any>();
-
-      // Spawn and execute
-      const result = await this.spawnProcess(
-        this.provider.config.name,
-        headlessArgs,
-        {
-          timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
-          onStdout: shouldStream
-            ? (chunk) => {
-                // Debug logging: Log raw CLI output if enabled
-                const logRawOutput = ConfigurationUtils.shouldLogRawCliOutput();
-                if (logRawOutput) {
-                  Log.debug(
-                    `[${this.provider.config.displayName} RAW OUTPUT]: ${chunk}`
-                  );
-                }
-
-                // Delegate to provider's response parser for streaming
-                if (this.provider.responseParser.processStreamingChunk) {
-                  const processedChunk =
-                    this.provider.responseParser.processStreamingChunk(
-                      chunk,
-                      streamState
-                    );
-                  if (processedChunk !== undefined) {
-                    // Check if response parser returned structured events or plain text
-                    if (Array.isArray(processedChunk)) {
-                      // Modern harnesses (Claude, Codex) return CliEvent[]
-                      this.streamingEventsEmitter.fire(processedChunk);
-                    } else {
-                      // Legacy harnesses (Copilot) return string
-                      this.streamingChunkEmitter.fire(processedChunk);
-                    }
-                  }
-                } else {
-                  // No streaming processor, emit raw chunk
-                  this.streamingChunkEmitter.fire(chunk);
-                }
-              }
-            : undefined,
-        }
-      );
-
-      // Check for cancellation
-      if (this.isCancelling) {
-        Log.info("⏹️ Prompt execution cancelled by user");
-        return false;
-      }
-
-      // Delegate result handling to callback
-      return await executeCallback(result);
-    } catch (error) {
-      Log.error(`❌ Headless execution error`, error);
-      return false;
-    } finally {
-      // Cleanup temp file(s) (if used)
-      if (tempFilePaths.length > 0) {
-        await this.deleteTempFiles(tempFilePaths);
-        Log.debug(`🗑️ Cleaned up ${tempFilePaths.length} temp file(s)`);
-      }
-    }
-  }
-
-  /**
-   * Spawn a child process for headless CLI execution.
-   *
-   * @param command The command to run
-   * @param args Command arguments (including prompt file reference)
-   * @param options Timeout and streaming options
-   */
-  protected async spawnProcess(
-    command: string,
-    args: string[],
-    options: {
-      timeout?: number;
-      onStdout?: (chunk: string) => void;
-    } = {}
-  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-    // Use the same PowerShell-preferred shell as interactive mode on Windows.
-    // Node's spawn({ shell: true }) defaults to cmd.exe on Windows, which
-    // cannot handle special characters (e.g. newlines in quoted args).
-    const shell = process.platform === "win32" ? resolveWindowsShell() : true;
-
-    const env = CliProviderUtils.buildProcessEnv();
-
-    const result = await this.processManager.spawn(command, args, {
-      cwd: this.getWorkspaceRoot() || "",
-      timeout: options.timeout,
-      onStdout: options.onStdout,
-      shell,
-      env,
-    });
-
-    Log.info("✅ Process exited - execution complete");
-
-    return result;
+    return await this.transportCoordinator.executeHeadless(
+      args,
+      promptArgument,
+      tempFilePaths,
+      executeCallback
+    );
   }
 
   /**
@@ -1656,14 +916,6 @@ export class CliIntegration extends HarnessIntegration {
         `\n[PROMPT ${new Date().toLocaleTimeString()}] ${preview}`
       );
     }
-  }
-
-  /**
-   * Extract text content from events array.
-   * Delegates to CliLogMonitor.extractTextFromEvents (single source of truth).
-   */
-  private extractTextFromEvents(output: UniversalCliOutput): string {
-    return CliLogMonitor.extractTextFromEvents(output);
   }
 
   /**
@@ -1719,7 +971,7 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   override getLastFailureOutput(): string | undefined {
-    return this.lastFailureOutput;
+    return this.failureTracker.getLastFailureOutput();
   }
 
   // ============================================================
@@ -1810,8 +1062,7 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   override closeTerminal(): void {
-    this.processManager.disposeTerminal();
-    this.currentExecution = undefined;
+    this.transportCoordinator.closeTerminal();
   }
 
   /**
@@ -1845,55 +1096,34 @@ export class CliIntegration extends HarnessIntegration {
       `⏹️ CLI Integration cancel called (harness: ${this.provider.config.displayName})`
     );
 
-    // Kill active PTY session if one exists (interactive mode via node-pty)
-    if (this.currentPtySession) {
-      const ptyManager = getPtyProcessManager();
-      if (ptyManager) {
-        ptyManager.killSession(this.currentPtySession.id);
-      }
-      this.currentPtySession = undefined;
-    }
+    const hadActiveProcess = await this.transportCoordinator.cancel();
 
-    // Check if we have an actively running process or execution.
-    // In headless mode, the child process lives in processManager.
-    const hasActiveProcess =
-      this.currentExecution || this.processManager.isActive();
-
-    if (!hasActiveProcess) {
+    if (!hadActiveProcess) {
       // No active process anywhere - fire responseComplete immediately
       Log.debug(
         "⏹️ No active process/execution - firing responseComplete immediately"
       );
       this.responseCompleteEmitter.fire("Cancelled before process started");
-      this.currentExecution = undefined;
       return;
     }
 
     // Active process exists: Kill it. responseComplete will be fired by the
     // process close handler (in spawnProcess) when the process actually exits.
     Log.info("⏹️ Active process found - sending kill signal");
-    await this.processManager.cancel(this.currentExecution);
-    this.currentExecution = undefined;
 
     Log.info("⏹️ Kill signal sent - waiting for process to exit");
   }
 
   /**
-   * Dispose of resources
-   */
-  /**
    * Dispose of resources.
    * If closeTerminalWhenPromptCompletes is false (default), the terminal is kept open
-   * so the user can review output. The next prompt will close it via createFreshTerminal().
+   * so the user can review output. The next prompt launch will close it before reuse.
    */
   dispose(): void {
     super.dispose();
-    if (ConfigurationUtils.shouldCloseTerminalWhenPromptCompletes()) {
-      this.processManager.dispose();
-    } else {
-      this.processManager.disposeProcess();
-    }
-    this.currentExecution = undefined;
+    this.transportCoordinator.dispose(
+      ConfigurationUtils.shouldCloseTerminalWhenPromptCompletes()
+    );
   }
 
   /**
@@ -1943,7 +1173,7 @@ export class CliIntegration extends HarnessIntegration {
    * between prompts, so any process exit before completion is abnormal.
    */
   override wasLastFailureProcessExit(): boolean {
-    return this.processExitTermination !== null;
+    return this.failureTracker.wasLastFailureProcessExit();
   }
 
   // ============================================================
@@ -1975,6 +1205,8 @@ export class CliIntegration extends HarnessIntegration {
     stderr: string;
     exitCode: number;
   }) => Promise<boolean> {
+    const responseCollector = this.createResponseCollector();
+
     return async (result) => {
       // Debug logging: Log raw stdout/stderr if enabled
       const logRawOutput = ConfigurationUtils.shouldLogRawCliOutput();
@@ -1989,66 +1221,24 @@ export class CliIntegration extends HarnessIntegration {
         }
       }
 
-      // Parse result using provider's response parser (returns UniversalCliOutput)
-      let parsedOutput = this.provider.responseParser.parse(
-        result.stdout,
-        result.stderr,
-        result.exitCode
-      );
-
-      // Let provider augment parsed output with data unavailable during synchronous parsing
-      // (e.g., Copilot reads session log for context window stats after process exits).
-      if (this.provider.augmentParsedOutput) {
-        parsedOutput = await this.provider.augmentParsedOutput(parsedOutput);
-      }
-
-      // Store structured output for tool call/event access
-      this.lastParsedOutput = parsedOutput;
-
-      // Extract text from events for legacy CliResult
-      const responseText = this.extractTextFromEvents(parsedOutput);
-
-      // Format statistics for display
-      const statistics = CliOutputFormatter.formatStatistics(
-        parsedOutput.metadata
-      );
-
-      // Create legacy CliResult for backward compatibility
-      const cliResult: CliResult = {
-        success: result.exitCode === 0,
-        response: responseText,
-        statistics,
+      const collected = await responseCollector.collectHeadlessResponse({
+        stdout: result.stdout,
+        stderr: result.stderr,
         exitCode: result.exitCode,
-        error: result.exitCode !== 0 ? result.stderr : undefined,
-      };
+        promptForSessionLog: this.actualPromptSent || finalPromptText,
+        executionStartTime,
+        resolvedSessionId,
+        label,
+      });
 
-      // Store legacy result
-      this.lastResult = cliResult;
+      this.lastParsedOutput = collected.parsedOutput;
+      this.lastResult = collected.cliResult;
 
-      // Extract session ID if available from output or logs
-      if (parsedOutput.metadata.sessionId) {
-        extractedSessionIdSetter(parsedOutput.metadata.sessionId);
-        Log.debug(
-          `📝 Session ID from output${label}: ${parsedOutput.metadata.sessionId}`
-        );
-      } else if (!resolvedSessionId && this.provider.extractSessionIdFromLogs) {
-        const logSessionId = await this.provider.extractSessionIdFromLogs(
-          this.actualPromptSent || finalPromptText,
-          executionStartTime
-        );
-        if (logSessionId) {
-          extractedSessionIdSetter(logSessionId);
-          Log.debug(`📝 Session ID from logs${label}: ${logSessionId}`);
-        }
+      if (collected.extractedSessionId) {
+        extractedSessionIdSetter(collected.extractedSessionId);
       }
 
-      // Log response
-      this.logResponse(responseText, statistics);
-
-      // Fire response complete event
-      this.responseCompleteEmitter.fire(responseText);
-
-      return result.exitCode === 0;
+      return collected.success;
     };
   }
 
@@ -2073,34 +1263,11 @@ export class CliIntegration extends HarnessIntegration {
   ): Promise<boolean> {
     try {
       this.resetCancellationFlag();
-      this.ptyExitCode = null;
-      this.processExitTermination = null;
-      this.lastFailureOutput = undefined;
+      this.failureTracker.reset();
 
-      // Resolve session ID for current prompt using SessionResolver
-      let resolvedSessionId = SessionResolver.resolve(
-        prompt,
-        workflowContext?.promptIndex ?? 0,
-        workflowContext?.allPrompts ?? [prompt],
-        workflowContext?.workflowFile,
-        workflowContext?.finalPromptSessionId
-      );
-
-      // Resolve execution properties (harness, model, agent)
-      const resolvedProperties = workflowContext?.workflowFile
-        ? PropertyResolver.resolve(prompt, workflowContext.workflowFile)
-        : workflowContext?.resolvedProperties;
-
-      // Validate session ID format before passing to CLI (Phase 5)
-      if (resolvedSessionId) {
-        const harness =
-          resolvedProperties?.harness ?? (this.getIntegrationMode() as Harness);
-        if (!SessionValidator.validate(resolvedSessionId, harness)) {
-          // Invalid format - start new session instead
-          Log.info(`🔄 Starting new session due to invalid session ID format`);
-          resolvedSessionId = undefined;
-        }
-      }
+      const { resolvedProperties, resolvedSessionId: initialSessionId } =
+        this.sessionResolverAdapter.resolve(prompt, workflowContext);
+      let resolvedSessionId = initialSessionId;
 
       // Detect leading slash command (e.g. /handoff, /context) in the original prompt text.
       // Pure slash commands (/word only) bypass instruction assembly and are sent directly —
@@ -2291,79 +1458,24 @@ export class CliIntegration extends HarnessIntegration {
         );
       }
 
-      // When cancelled by the user, persist startedAt and sessionId so the session can be
-      // resumed later (resumeSession:true appends to the same session instead of starting new).
       if (!success && this.isCancelling && workflowContext?.promptQueue) {
-        if (!prompt._runtime) {
-          prompt._runtime = { startedAt: executionStartTime.getTime() };
-        } else if (!prompt._runtime.startedAt) {
-          prompt._runtime.startedAt = executionStartTime.getTime();
-        }
-        if (extractedSessionId && !prompt._runtime.sessionId) {
-          prompt._runtime.sessionId = extractedSessionId;
-        }
-        await workflowContext.promptQueue.updateWorkingFile();
-        Log.debug(
-          `💾 Saved cancelled-prompt runtime to working file (sessionId: ${extractedSessionId || "none"})`
-        );
+        await this.promptRuntimeCoordinator.persistCancelledPromptRuntime({
+          prompt,
+          executionStartTime,
+          extractedSessionId,
+          promptQueue: workflowContext.promptQueue,
+        });
       }
 
-      // Store runtime metadata in prompt's _runtime (always on success, session ID optional)
       if (success) {
-        // IMPORTANT: Always create/update harness and model fields, even when resuming from working file
-        // This ensures _runtime accurately reflects what was ACTUALLY used, not stale data from previous runs
-        const actualHarness =
-          resolvedProperties?.harness ?? (this.getIntegrationMode() as Harness);
-        const actualModel = resolvedProperties?.model ?? "";
-        const actualAgent = resolvedProperties?.agent;
-
-        if (!prompt._runtime) {
-          // First execution - create new _runtime
-          prompt._runtime = {
-            harness: actualHarness,
-            model: actualModel,
-            agent: actualAgent,
-            startedAt: Date.now(),
-          };
-        } else {
-          // Resuming from working file - update harness/model to match what actually ran
-          prompt._runtime.harness = actualHarness;
-          prompt._runtime.model = actualModel;
-          prompt._runtime.agent = actualAgent;
-          // Keep existing startedAt (from first attempt)
-        }
-
-        // Add session ID if available (may be undefined for first prompt or if extraction failed)
-        if (extractedSessionId) {
-          prompt._runtime.sessionId = extractedSessionId;
-
-          // Propagate session ID back into lastParsedOutput.metadata so the dashboard
-          // renders it in the stats section. Copilot's response parser always sets
-          // metadata.sessionId=undefined (session ID comes from log files, not CLI output),
-          // so this is the only place where it gets merged into the structured output.
-          if (
-            this.lastParsedOutput &&
-            !this.lastParsedOutput.metadata.sessionId
-          ) {
-            this.lastParsedOutput = {
-              ...this.lastParsedOutput,
-              metadata: {
-                ...this.lastParsedOutput.metadata,
-                sessionId: extractedSessionId,
-              },
-            };
-          }
-        }
-
-        prompt._runtime.completedAt = Date.now();
-
-        // Persist runtime metadata to working file
-        if (workflowContext?.promptQueue) {
-          await workflowContext.promptQueue.updateWorkingFile();
-          Log.debug(
-            `💾 Saved runtime metadata to working file (sessionId: ${extractedSessionId || "none"})`
-          );
-        }
+        this.lastParsedOutput =
+          await this.promptRuntimeCoordinator.persistSuccessfulPromptRuntime({
+            prompt,
+            resolvedProperties,
+            extractedSessionId,
+            parsedOutput: this.lastParsedOutput,
+            promptQueue: workflowContext?.promptQueue,
+          });
       }
 
       return success;

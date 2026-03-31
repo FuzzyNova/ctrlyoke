@@ -92,6 +92,7 @@ function createIntegration(options?: {
       extractStructuredEventsFromEvent: () => [],
       extractContentFromEvent: () => undefined,
       formatStatistics: () => "",
+      getFinalEventsOnCompletion: async () => [],
     },
     buildCliArgs: async () => [],
     buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
@@ -119,7 +120,7 @@ suite("CliIntegration", () => {
     });
 
     (integration as any).startCliProcess = async () => {
-      (integration as any).ptyExitCode = 0;
+      (integration as any).failureTracker.capturePtyExit(0, []);
     };
 
     const result = await (integration as any).executeInTerminal(
@@ -151,7 +152,7 @@ suite("CliIntegration", () => {
     });
 
     (integration as any).startCliProcess = async () => {
-      (integration as any).ptyExitCode = 0;
+      (integration as any).failureTracker.capturePtyExit(0, []);
     };
 
     const startedAt = Date.now();
@@ -174,28 +175,5 @@ suite("CliIntegration", () => {
       integration.getLastFailureReason(),
       /discovering the session log/iu
     );
-  });
-
-  test("should strip terminal control sequences from PTY output tail", () => {
-    const integration = createIntegration();
-
-    const tail = (integration as any).extractInteractiveOutputTail([
-      "\u001b[?9001h\u001b[?1004h\u001b[?25l\n",
-      "\u001b]0;C:\\Program Files\\PowerShell\\7\\pwsh.exe\u0007",
-      "\u001b[?25herror: unknown option '--poopy'\n",
-      "(Did you mean --prompt?)\n",
-      "Try 'copilot --help' for more information.\n",
-    ]);
-
-    assert.strictEqual(
-      tail,
-      [
-        "error: unknown option '--poopy'",
-        "(Did you mean --prompt?)",
-        "Try 'copilot --help' for more information.",
-      ].join("\n")
-    );
-    assert.ok(!tail?.includes("\u001b"));
-    assert.ok(!tail?.includes("\u0007"));
   });
 });

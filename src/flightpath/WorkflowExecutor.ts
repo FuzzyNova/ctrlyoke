@@ -742,7 +742,8 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
     message: string,
-    severity: string = STATUS_MESSAGE_SEVERITY.INFO
+    severity: string = STATUS_MESSAGE_SEVERITY.INFO,
+    timestampMs?: number
   ): void {
     const key = this.getExecutionKey(target);
     const legacyStepIndex = this.getLegacyStepIndex(target);
@@ -766,7 +767,7 @@ export class WorkflowExecutor {
     messages.push({
       message,
       severity: severity as any,
-      timestamp: Date.now(),
+      timestamp: timestampMs ?? Date.now(),
     });
     this.stepStatusMessages.set(key, messages);
   }
@@ -1353,6 +1354,7 @@ export class WorkflowExecutor {
       const failureOutput = integration.getLastFailureOutput?.();
       const attemptTimestampMs =
         this.getAttemptStartTimestamp(target, 0) ?? Date.now();
+      const warningTimestampMs = Math.max(Date.now(), attemptTimestampMs + 1);
       const warningMessage = `Process exited unexpectedly — workflow stopped. ${failureReason}`;
       Log.warn(
         `⚠️ CLI process exited before completion — stopping workflow: ${failureReason}`
@@ -1362,7 +1364,8 @@ export class WorkflowExecutor {
         context,
         target,
         warningMessage,
-        STATUS_MESSAGE_SEVERITY.WARNING
+        STATUS_MESSAGE_SEVERITY.WARNING,
+        warningTimestampMs
       );
 
       const processExitOutput = {
