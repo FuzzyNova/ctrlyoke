@@ -730,10 +730,10 @@ export const SettingsPanel: React.FC<{
 
       {/* Body - Scrollable (pointer-events disabled in CLI watch mode) */}
       <div
-        className={`flex-1 overflow-y-auto${isCLIManaged ? " pointer-events-none opacity-60 select-none" : ""}`}
+        className={`flex-1 overflow-y-auto${activePage === DRAWER_PAGES.MCP ? " flex flex-col" : ""}${isCLIManaged ? " pointer-events-none opacity-60 select-none" : ""}`}
       >
         <div
-          className={`px-4 py-2 space-y-2${activePage === DRAWER_PAGES.PERMISSIONS || activePage === DRAWER_PAGES.MCP ? " min-h-full flex flex-col" : ""}`}
+          className={`px-4 py-2${activePage === DRAWER_PAGES.MCP ? " flex flex-col flex-1 min-h-0 gap-2" : ` space-y-2${activePage === DRAWER_PAGES.PERMISSIONS ? " min-h-full flex flex-col" : ""}`}`}
         >
           {activePage === DRAWER_PAGES.HARNESS && (
             <>
