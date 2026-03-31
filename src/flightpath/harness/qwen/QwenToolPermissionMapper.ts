@@ -4,6 +4,7 @@ import {
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
 import { Log } from "../../../utils/Log";
+import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 
 /**
  * Qwen Code CLI Tool Permission Mapper
@@ -47,11 +48,11 @@ export class QwenToolPermissionMapper
       `[QwenPermissionMapper] Building args: mode=${config.mode}, allowed=${config.allowedTools.length}, denied=${config.deniedTools.length}`
     );
 
-    if (config.mode === "dangerouslyAllowAll") {
+    if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
       // YOLO mode - bypass all approval prompts
       args.push("-y");
       Log.debug("🔓 Qwen YOLO mode enabled (dangerouslyAllowAll)");
-    } else if (config.mode === "allowAll") {
+    } else if (config.mode === PERMISSION_MODES.ALLOW_ALL) {
       // Auto-approve most operations
       args.push("--approval-mode", "auto-edit");
       Log.debug("✅ Qwen auto-edit mode enabled (allowAll)");
@@ -98,12 +99,12 @@ export class QwenToolPermissionMapper
    */
   hasFullPermissions(config: ToolPermissionConfig): boolean {
     // YOLO mode bypasses all prompts
-    if (config.mode === "dangerouslyAllowAll") {
+    if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
       return true;
     }
 
     // Auto-edit mode auto-approves most operations
-    if (config.mode === "allowAll") {
+    if (config.mode === PERMISSION_MODES.ALLOW_ALL) {
       return true;
     }
 

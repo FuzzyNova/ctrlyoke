@@ -14,6 +14,7 @@ import {
   CODEX_CLI_MODELS as CODEX_CLI_MODEL_LIST,
   QWEN_CLI_MODELS as QWEN_CLI_MODEL_LIST,
   GEMINI_CLI_MODELS as GEMINI_CLI_MODEL_LIST,
+  PERMISSION_MODES,
 } from "@root/types/DashboardConstants";
 
 /**
@@ -202,7 +203,7 @@ const initialGlobalSettings: GlobalSettings = {
   mcpServers: [],
   hooks: [],
   toolPermissions: {
-    mode: "allowAll",
+    mode: PERMISSION_MODES.ALLOW_ALL,
     allowedTools: [],
     deniedTools: [],
   },

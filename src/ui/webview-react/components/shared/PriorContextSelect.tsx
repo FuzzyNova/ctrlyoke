@@ -165,10 +165,20 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
       const spaceBelow = window.innerHeight - rect.bottom - 4;
       const propMaxH = parsePropMaxHeight(dropdownMaxHeight);
       if (spaceBelow >= 80) {
-        setPopupPos({ top: rect.bottom + 4, left: rect.left, width: rect.width, maxHeight: Math.min(propMaxH, spaceBelow) });
+        setPopupPos({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width,
+          maxHeight: Math.min(propMaxH, spaceBelow),
+        });
       } else {
         const spaceAbove = rect.top - 4;
-        setPopupPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width, maxHeight: Math.min(propMaxH, spaceAbove) });
+        setPopupPos({
+          bottom: window.innerHeight - rect.top + 4,
+          left: rect.left,
+          width: rect.width,
+          maxHeight: Math.min(propMaxH, spaceAbove),
+        });
       }
     }
   }, [dropdownMaxHeight]);
@@ -199,7 +209,8 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
     };
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [isOpen]);
 
@@ -251,8 +262,23 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   }
 
   const keywords: KeywordMode[] = showDefault
-    ? ["default", "none", "previous", "all", "finalPromptPrevious", "finalPromptAll", "custom"]
-    : ["none", "previous", "all", "finalPromptPrevious", "finalPromptAll", "custom"];
+    ? [
+        "default",
+        "none",
+        "previous",
+        "all",
+        "finalPromptPrevious",
+        "finalPromptAll",
+        "custom",
+      ]
+    : [
+        "none",
+        "previous",
+        "all",
+        "finalPromptPrevious",
+        "finalPromptAll",
+        "custom",
+      ];
 
   return (
     <div className="flex flex-col gap-1 w-full">
@@ -271,7 +297,8 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           />
         </button>
 
-        {isOpen && popupPos &&
+        {isOpen &&
+          popupPos &&
           createPortal(
             <div
               ref={popupRef}
@@ -319,8 +346,12 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
 
       {/* Custom range input — always rendered, disabled when not in custom mode */}
       <div
-        className={showCustomInput ? "" : "opacity-50 pointer-events-none"}
-        title={showCustomInput ? undefined : "Select 'Custom' to specify prompt ranges"}
+        className={`mt-1${showCustomInput ? "" : " opacity-50 pointer-events-none"}`}
+        title={
+          showCustomInput
+            ? undefined
+            : "Select 'Custom' to specify prompt ranges"
+        }
       >
         <input
           type="text"

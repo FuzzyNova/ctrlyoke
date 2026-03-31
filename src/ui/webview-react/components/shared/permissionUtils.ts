@@ -1,12 +1,13 @@
 import { HARNESS_IDS, type HarnessId } from "../../types/messages";
 import type { ToolPermissionsOverride } from "../../types/messages";
+import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
 
 /** Options for the permission mode selector (used by both SettingsDrawer and PropertiesDrawer) */
 export const PERMISSION_MODE_OPTIONS = [
-  { value: "dangerouslyAllowAll", label: "Dangerously Allow All" },
-  { value: "allowAll", label: "Allow All" },
-  { value: "custom", label: "Custom" },
-  { value: "passthrough", label: "Passthrough" },
+  { value: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, label: "Dangerously Allow All" },
+  { value: PERMISSION_MODES.ALLOW_ALL, label: "Allow All" },
+  { value: PERMISSION_MODES.CUSTOM, label: "Custom" },
+  { value: PERMISSION_MODES.NONE, label: "None" },
 ];
 
 export type PermissionHarnessSupport = "full" | "mode-only" | "n/a";
@@ -39,13 +40,13 @@ export function buildPermissionsDefaultLabel(
   if (
     workflowValue === null ||
     workflowValue === undefined ||
-    workflowValue.mode === "passthrough"
+    workflowValue.mode === PERMISSION_MODES.NONE
   ) {
-    return "Default (none / passthrough)";
+    return "Default (none)";
   }
-  if (workflowValue.mode === "dangerouslyAllowAll")
+  if (workflowValue.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
     return "Default (dangerouslyAllowAll)";
-  if (workflowValue.mode === "allowAll") return "Default (allowAll)";
+  if (workflowValue.mode === PERMISSION_MODES.ALLOW_ALL) return "Default (allowAll)";
   const count =
     (workflowValue.allowedTools?.length ?? 0) +
     (workflowValue.deniedTools?.length ?? 0);

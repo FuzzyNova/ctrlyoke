@@ -5,6 +5,7 @@ import {
 } from "../shared/interfaces/IToolPermissionMapper";
 import { COPILOT_TO_CLAUDE_MAP } from "../shared/CliToolPermissionMapper";
 import { Log } from "../../../utils/Log";
+import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 
 /**
  * Claude CLI Tool Permission Mapper
@@ -41,14 +42,14 @@ export class ClaudeToolPermissionMapper
    * @returns CLI arguments array
    */
   buildArgs(config: ToolPermissionConfig): string[] {
-    if (config.mode === "dangerouslyAllowAll") {
+    if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
       return ["--dangerously-skip-permissions"];
     }
 
     // Both allowAll and custom modes use --permission-mode bypassPermissions
     const args: string[] = ["--permission-mode", "bypassPermissions"];
 
-    if (config.mode === "allowAll") {
+    if (config.mode === PERMISSION_MODES.ALLOW_ALL) {
       // Allow all tools (--tools "default") but still apply deny list
       args.push("--tools", "default");
     } else {
@@ -99,7 +100,7 @@ export class ClaudeToolPermissionMapper
    * @returns True if all permissions auto-granted with no restrictions
    */
   hasFullPermissions(config: ToolPermissionConfig): boolean {
-    if (config.mode === "dangerouslyAllowAll") {
+    if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
       return true; // Bypasses ALL checks including deny list
     }
     // Other modes respect deny list — if any denied tools, not truly "full"

@@ -3,6 +3,7 @@ import {
   ToolPermissionConfig,
   ToolPermissionMapperBase,
 } from "../shared/interfaces/IToolPermissionMapper";
+import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 
 /**
  * Gemini CLI Tool Permission Mapper
@@ -12,11 +13,11 @@ export class GeminiToolPermissionMapper
   implements IToolPermissionMapper
 {
   buildArgs(config: ToolPermissionConfig): string[] {
-    if (config.mode === "dangerouslyAllowAll") {
+    if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
       return ["--approval-mode", "yolo"];
     }
 
-    if (config.mode === "allowAll") {
+    if (config.mode === PERMISSION_MODES.ALLOW_ALL) {
       return ["--approval-mode", "auto_edit"];
     }
 
@@ -25,6 +26,6 @@ export class GeminiToolPermissionMapper
   }
 
   hasFullPermissions(config: ToolPermissionConfig): boolean {
-    return config.mode === "dangerouslyAllowAll";
+    return config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL;
   }
 }

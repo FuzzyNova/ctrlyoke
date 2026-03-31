@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { DynamicQueueConfig, Harness, McpServerConfig, UserHookConfig } from "../types/FlightPathTypes";
-import { HARNESS_IDS, EXECUTION_MODES } from "../types/DashboardConstants";
+import { HARNESS_IDS, EXECUTION_MODES, PERMISSION_MODES, type PermissionMode } from "../types/DashboardConstants";
 
 /**
  * Configuration namespace for FlightPath settings
@@ -276,10 +276,10 @@ export const ConfigurationUtils = {
   /**
    * Get CLI tool permissions mode (shared between Copilot and Claude)
    */
-  getCliToolPermissions(): "dangerouslyAllowAll" | "allowAll" | "custom" {
-    return getConfig().get<"dangerouslyAllowAll" | "allowAll" | "custom">(
+  getCliToolPermissions(): Exclude<PermissionMode, "none"> {
+    return getConfig().get<Exclude<PermissionMode, "none">>(
       "cliToolPermissions",
-      "allowAll"
+      PERMISSION_MODES.ALLOW_ALL
     );
   },
 

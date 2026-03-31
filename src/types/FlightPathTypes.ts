@@ -175,7 +175,7 @@ export interface ExecutionProperties {
   /**
    * Tool permission overrides for this prompt/workflow.
    * - object: Override tool permissions (mode, allowedTools, deniedTools)
-   * - null: Explicitly disable inherited overrides (passthrough to harness local config)
+   * - null: Explicitly disable inherited overrides (use harness local config)
    * - undefined: Inherit from workflow/settings
    */
   toolPermissions?: ToolPermissionsOverride | null;

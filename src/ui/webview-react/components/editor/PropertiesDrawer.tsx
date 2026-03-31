@@ -15,6 +15,7 @@ import {
   type ToolPermissionsOverride,
   type ToolPermissionMode,
 } from "../../types/messages";
+import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
 import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
@@ -936,14 +937,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     properties.toolPermissions === undefined
                       ? "default"
                       : properties.toolPermissions === null
-                        ? "none"
-                        : (properties.toolPermissions.mode ?? "allowAll")
+                        ? PERMISSION_MODES.NONE
+                        : (properties.toolPermissions.mode ?? PERMISSION_MODES.ALLOW_ALL)
                   }
                   onChange={(v) => {
                     if (v === "default") {
                       setProperty("toolPermissions", undefined);
-                    } else if (v === "none") {
-                      setProperty("toolPermissions", null);
                     } else {
                       const current =
                         (properties.toolPermissions as
@@ -958,7 +957,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   options={[
                     { value: "default", label: defaultPermissionsLabel },
                     ...PERMISSION_MODE_OPTIONS,
-                    { value: "none", label: "None (passthrough)" },
                   ]}
                   dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
@@ -970,21 +968,21 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 const effectivePermMode: string =
                   properties.toolPermissions === undefined
                     ? workflowProperties.toolPermissions === null
-                      ? "passthrough"
-                      : (workflowProperties.toolPermissions?.mode ?? "allowAll")
+                      ? PERMISSION_MODES.NONE
+                      : (workflowProperties.toolPermissions?.mode ?? PERMISSION_MODES.ALLOW_ALL)
                     : properties.toolPermissions === null
-                      ? "passthrough"
-                      : (properties.toolPermissions.mode ?? "allowAll");
+                      ? PERMISSION_MODES.NONE
+                      : (properties.toolPermissions.mode ?? PERMISSION_MODES.ALLOW_ALL);
                 const isInheriting = properties.toolPermissions === undefined;
                 const allowedDisabled =
                   isInheriting ||
                   permHarnessSupport === "mode-only" ||
-                  effectivePermMode !== "custom";
+                  effectivePermMode !== PERMISSION_MODES.CUSTOM;
                 const deniedDisabled =
                   isInheriting ||
                   permHarnessSupport === "mode-only" ||
-                  effectivePermMode === "dangerouslyAllowAll" ||
-                  effectivePermMode === "passthrough";
+                  effectivePermMode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
+                  effectivePermMode === PERMISSION_MODES.NONE;
 
                 return (
                   <div

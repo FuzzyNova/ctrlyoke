@@ -327,7 +327,7 @@ export class CliIntegration extends HarnessIntegration {
    *
    * @param toolPermissions Resolved permissions from workflow context.
    *   - undefined: no workflow context — falls back to ConfigurationUtils global settings
-   *   - null: passthrough mode — returns false (FlightPath can't know what the harness allows)
+   *   - null: none mode — returns false (FlightPath can't know what the harness allows)
    *   - ToolPermissionConfig: use the resolved config directly
    */
   protected hasFullPermissions(

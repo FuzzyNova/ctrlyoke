@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { PromptFileLoader } from "../../flightpath/orchestration/PromptFileLoader";
+import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
 suite("PromptFileLoader Tests", () => {
   suite("populateSettingsDefaults", () => {
@@ -39,7 +40,7 @@ suite("PromptFileLoader Tests", () => {
 
     test("should NOT overwrite toolPermissions when explicitly set in source", () => {
       const explicitPermissions = {
-        mode: "custom",
+        mode: PERMISSION_MODES.CUSTOM,
         allowedTools: ["write"],
         deniedTools: ["shell(rm:*)"],
       };
@@ -59,7 +60,7 @@ suite("PromptFileLoader Tests", () => {
       );
     });
 
-    test("should preserve toolPermissions null (explicit passthrough)", () => {
+    test("should preserve toolPermissions null (explicit none)", () => {
       const explicitValues: Record<string, unknown> = {
         harness: "copilot-cli",
         toolPermissions: null,
@@ -68,7 +69,7 @@ suite("PromptFileLoader Tests", () => {
       const defaults =
         PromptFileLoader.populateSettingsDefaults(explicitValues);
 
-      // null is a defined value (explicit passthrough) — should not be overwritten
+      // null is a defined value (explicit none) — should not be overwritten
       // The check is `explicitValues.toolPermissions === undefined`, and null !== undefined
       assert.strictEqual(
         defaults.toolPermissions,

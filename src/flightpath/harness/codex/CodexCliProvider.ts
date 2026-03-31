@@ -18,6 +18,7 @@ import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { CODEX_CLI_MODELS, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type { PromptItem } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
@@ -185,14 +186,14 @@ export class CodexCliProvider implements ICliProvider {
         args.push(...toolPermissionArgs);
 
         // Add additional allowed directories (only in headless mode when not dangerous mode)
-        if (permissionConfig.mode !== "dangerouslyAllowAll") {
+        if (permissionConfig.mode !== PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
           const additionalDirs = ConfigurationUtils.getCodexAllowedDirs();
           additionalDirs.forEach((dir: string) => {
             args.push("--add-dir", dir);
           });
         }
       } else if (toolPermissions !== null) {
-        // Resolved non-passthrough permissions from workflow
+        // Resolved non-none permissions from workflow
         const sandboxMode = ConfigurationUtils.getCodexSandboxMode();
         const approvalPolicy = ConfigurationUtils.getCodexApprovalPolicy();
         const toolPermissionArgs = (
@@ -201,14 +202,14 @@ export class CodexCliProvider implements ICliProvider {
         args.push(...toolPermissionArgs);
 
         // Add additional allowed directories (only when not dangerous mode)
-        if (toolPermissions.mode !== "dangerouslyAllowAll") {
+        if (toolPermissions.mode !== PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
           const additionalDirs = ConfigurationUtils.getCodexAllowedDirs();
           additionalDirs.forEach((dir: string) => {
             args.push("--add-dir", dir);
           });
         }
       }
-      // else: toolPermissions === null → passthrough, skip permission flags entirely
+      // else: toolPermissions === null → none mode, skip permission flags entirely
     } else {
       // Interactive mode: Configure notify hook for completion detection
       if (workspaceRoot) {

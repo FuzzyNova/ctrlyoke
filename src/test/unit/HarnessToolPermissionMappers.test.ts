@@ -7,15 +7,16 @@ import { OpenCodeToolPermissionMapper } from "../../flightpath/harness/opencode/
 import { QwenToolPermissionMapper } from "../../flightpath/harness/qwen/QwenToolPermissionMapper";
 import { GeminiToolPermissionMapper } from "../../flightpath/harness/gemini/GeminiToolPermissionMapper";
 import type { ToolPermissionConfig } from "../../flightpath/harness/shared/interfaces/IToolPermissionMapper";
+import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 function cfg(
-  mode: ToolPermissionConfig["mode"],
+  mode: ToolPermissionConfig["mode"] | (string & {}),
   allowedTools: string[] = [],
   deniedTools: string[] = []
 ): ToolPermissionConfig {
-  return { mode, allowedTools, deniedTools };
+  return { mode: mode as ToolPermissionConfig["mode"], allowedTools, deniedTools };
 }
 
 /** Return all args after the first occurrence of `flag` */
@@ -46,13 +47,13 @@ suite("HarnessToolPermissionMappers", () => {
 
     suite("buildArgs", () => {
       test("dangerouslyAllowAll returns --allow-all-tools only", () => {
-        const args = mapper.buildArgs(cfg("dangerouslyAllowAll"));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL));
         assert.deepStrictEqual(args, ["--allow-all-tools"]);
       });
 
       test("dangerouslyAllowAll suppresses deny list", () => {
         const args = mapper.buildArgs(
-          cfg("dangerouslyAllowAll", [], ["write", "shell"])
+          cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, [], ["write", "shell"])
         );
         assert.ok(args.includes("--allow-all-tools"));
         assert.ok(
@@ -62,25 +63,25 @@ suite("HarnessToolPermissionMappers", () => {
       });
 
       test("allowAll returns --allow-all-tools with no deny-tool when deny list empty", () => {
-        const args = mapper.buildArgs(cfg("allowAll"));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.ALLOW_ALL));
         assert.deepStrictEqual(args, ["--allow-all-tools"]);
       });
 
       test("allowAll includes --deny-tool for denied tools", () => {
-        const args = mapper.buildArgs(cfg("allowAll", [], ["write"]));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.ALLOW_ALL, [], ["write"]));
         assert.ok(args.includes("--allow-all-tools"));
         assert.ok(args.includes("--deny-tool"));
         assert.ok(args.some((a) => a.includes("write")));
       });
 
       test("custom mode with allowed tools produces --allow-tool", () => {
-        const args = mapper.buildArgs(cfg("custom", ["write", "shell"], []));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.CUSTOM, ["write", "shell"], []));
         assert.ok(args.includes("--allow-tool"));
         assert.ok(!args.includes("--allow-all-tools"));
       });
 
       test("custom mode with no tools produces no flags", () => {
-        const args = mapper.buildArgs(cfg("custom", [], []));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.CUSTOM, [], []));
         assert.deepStrictEqual(args, []);
       });
 
@@ -92,7 +93,7 @@ suite("HarnessToolPermissionMappers", () => {
           "read_file",
           "search_files",
         ];
-        const args = mapper.buildArgs(cfg("custom", readOnlyTools, []));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.CUSTOM, readOnlyTools, []));
         assert.ok(
           !args.includes("--allow-tool"),
           "all tools filtered → no --allow-tool"
@@ -101,7 +102,7 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("custom mode keeps non-read-only tools alongside filtered ones", () => {
         const args = mapper.buildArgs(
-          cfg("custom", ["grep", "write", "read"], [])
+          cfg(PERMISSION_MODES.CUSTOM, ["grep", "write", "read"], [])
         );
         assert.ok(
           args.includes("--allow-tool"),
@@ -121,13 +122,13 @@ suite("HarnessToolPermissionMappers", () => {
       });
 
       test("custom mode with denied tools produces --deny-tool", () => {
-        const args = mapper.buildArgs(cfg("custom", [], ["shell"]));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.CUSTOM, [], ["shell"]));
         assert.ok(args.includes("--deny-tool"));
       });
 
       test("custom mode deduplicates allowed tool entries", () => {
         const args = mapper.buildArgs(
-          cfg("custom", ["write", "write", "shell"], [])
+          cfg(PERMISSION_MODES.CUSTOM, ["write", "write", "shell"], [])
         );
         const allowValues = argsAfterFlag(args, "--allow-tool");
         const writeCount = allowValues.filter((v) =>
@@ -138,7 +139,7 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("MCP-style tool patterns pass through in custom mode", () => {
         const args = mapper.buildArgs(
-          cfg("custom", ["github(search_repositories)"], [])
+          cfg(PERMISSION_MODES.CUSTOM, ["github(search_repositories)"], [])
         );
         assert.ok(args.includes("--allow-tool"));
         const allowValues = argsAfterFlag(args, "--allow-tool");
@@ -151,39 +152,39 @@ suite("HarnessToolPermissionMappers", () => {
     suite("hasFullPermissions", () => {
       test("dangerouslyAllowAll with empty deny list → true", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("dangerouslyAllowAll")),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)),
           true
         );
       });
 
       test("dangerouslyAllowAll with deny list → false", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("dangerouslyAllowAll", [], ["write"])),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, [], ["write"])),
           false
         );
       });
 
       test("allowAll with empty deny list → true", () => {
-        assert.strictEqual(mapper.hasFullPermissions(cfg("allowAll")), true);
+        assert.strictEqual(mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)), true);
       });
 
       test("allowAll with deny list → false", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("allowAll", [], ["shell"])),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell"])),
           false
         );
       });
 
       test("custom mode → false even with many allowed tools", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("custom", ["write", "shell"], [])),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.CUSTOM, ["write", "shell"], [])),
           false
         );
       });
 
-      test("passthrough mode → false", () => {
+    test("none mode → false", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("passthrough")),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.NONE)),
           false
         );
       });
@@ -198,19 +199,19 @@ suite("HarnessToolPermissionMappers", () => {
 
     suite("buildArgs", () => {
       test("dangerouslyAllowAll → exactly ['--dangerously-skip-permissions']", () => {
-        const args = mapper.buildArgs(cfg("dangerouslyAllowAll"));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL));
         assert.deepStrictEqual(args, ["--dangerously-skip-permissions"]);
       });
 
       test("dangerouslyAllowAll ignores allow and deny lists", () => {
         const args = mapper.buildArgs(
-          cfg("dangerouslyAllowAll", ["write"], ["shell"])
+          cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, ["write"], ["shell"])
         );
         assert.deepStrictEqual(args, ["--dangerously-skip-permissions"]);
       });
 
       test("allowAll → --permission-mode bypassPermissions --tools default", () => {
-        const args = mapper.buildArgs(cfg("allowAll"));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.ALLOW_ALL));
         assert.deepStrictEqual(args, [
           "--permission-mode",
           "bypassPermissions",
@@ -220,7 +221,7 @@ suite("HarnessToolPermissionMappers", () => {
       });
 
       test("allowAll with denied tools appends --disallowedTools", () => {
-        const args = mapper.buildArgs(cfg("allowAll", [], ["write", "shell"]));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.ALLOW_ALL, [], ["write", "shell"]));
         assert.ok(args.includes("--disallowedTools"));
         const disallowedValues = argsAfterFlag(args, "--disallowedTools");
         assert.ok(
@@ -235,7 +236,7 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("custom mode with allowed tools converts Copilot names to Claude names", () => {
         const args = mapper.buildArgs(
-          cfg("custom", ["shell", "write", "edit", "glob"], [])
+          cfg(PERMISSION_MODES.CUSTOM, ["shell", "write", "edit", "glob"], [])
         );
         assert.ok(args.includes("--allowedTools"));
         const allowedValues = argsAfterFlag(args, "--allowedTools");
@@ -258,7 +259,7 @@ suite("HarnessToolPermissionMappers", () => {
       });
 
       test("custom mode with no tools → only --permission-mode bypassPermissions", () => {
-        const args = mapper.buildArgs(cfg("custom", [], []));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.CUSTOM, [], []));
         assert.deepStrictEqual(args, [
           "--permission-mode",
           "bypassPermissions",
@@ -268,7 +269,7 @@ suite("HarnessToolPermissionMappers", () => {
       test("custom mode deduplicates converted tool names", () => {
         // "shell" and "bash" both map to "Bash"
         const args = mapper.buildArgs(
-          cfg("custom", ["shell", "bash"], [])
+          cfg(PERMISSION_MODES.CUSTOM, ["shell", "bash"], [])
         );
         const allowedValues = argsAfterFlag(args, "--allowedTools");
         const bashCount = allowedValues.filter((v) =>
@@ -279,7 +280,7 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("MCP tool patterns pass through unchanged in custom mode", () => {
         const args = mapper.buildArgs(
-          cfg("custom", ["github(search)"], [])
+          cfg(PERMISSION_MODES.CUSTOM, ["github(search)"], [])
         );
         assert.ok(args.includes("--allowedTools"));
         const allowedValues = argsAfterFlag(args, "--allowedTools");
@@ -288,7 +289,7 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("custom mode with both allowed and denied tools", () => {
         const args = mapper.buildArgs(
-          cfg("custom", ["write"], ["shell"])
+          cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"])
         );
         assert.ok(args.includes("--allowedTools"));
         assert.ok(args.includes("--disallowedTools"));
@@ -300,39 +301,39 @@ suite("HarnessToolPermissionMappers", () => {
     suite("hasFullPermissions", () => {
       test("dangerouslyAllowAll → true regardless of deny list", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("dangerouslyAllowAll", [], ["write"])),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, [], ["write"])),
           true
         );
       });
 
       test("allowAll with empty deny list → true", () => {
-        assert.strictEqual(mapper.hasFullPermissions(cfg("allowAll")), true);
+        assert.strictEqual(mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)), true);
       });
 
       test("allowAll with deny list → false", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("allowAll", [], ["write"])),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL, [], ["write"])),
           false
         );
       });
 
       test("custom with empty deny list → true", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("custom", ["write"], [])),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.CUSTOM, ["write"], [])),
           true
         );
       });
 
       test("custom with deny list → false", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("custom", [], ["shell"])),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.CUSTOM, [], ["shell"])),
           false
         );
       });
 
-      test("passthrough with empty deny list → true", () => {
+      test("none with empty deny list → true", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("passthrough")),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.NONE)),
           true
         );
       });
@@ -347,31 +348,31 @@ suite("HarnessToolPermissionMappers", () => {
 
     suite("buildArgs", () => {
       test("dangerouslyAllowAll → --dangerously-bypass-approvals-and-sandbox", () => {
-        const args = mapper.buildArgs(cfg("dangerouslyAllowAll"));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL));
         assert.deepStrictEqual(args, [
           "--dangerously-bypass-approvals-and-sandbox",
         ]);
       });
 
       test("allowAll → --full-auto", () => {
-        const args = mapper.buildArgs(cfg("allowAll"));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.ALLOW_ALL));
         assert.deepStrictEqual(args, ["--full-auto"]);
       });
 
       test("custom with no sandbox/approval → fallback to --full-auto", () => {
-        const args = mapper.buildArgs(cfg("custom"));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.CUSTOM));
         assert.deepStrictEqual(args, ["--full-auto"]);
       });
 
       test("custom with tool patterns still falls back to --full-auto (Codex ignores patterns)", () => {
         const args = mapper.buildArgs(
-          cfg("custom", ["write", "shell"], ["edit"])
+          cfg(PERMISSION_MODES.CUSTOM, ["write", "shell"], ["edit"])
         );
         assert.deepStrictEqual(args, ["--full-auto"]);
       });
 
-      test("passthrough mode falls back to --full-auto (default switch case)", () => {
-        const args = mapper.buildArgs(cfg("passthrough"));
+      test("none mode falls back to --full-auto (default switch case)", () => {
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.NONE));
         assert.deepStrictEqual(args, ["--full-auto"]);
       });
     });
@@ -379,7 +380,7 @@ suite("HarnessToolPermissionMappers", () => {
     suite("buildCodexSpecificArgs", () => {
       test("dangerouslyAllowAll ignores sandbox/approval overrides", () => {
         const args = mapper.buildCodexSpecificArgs(
-          cfg("dangerouslyAllowAll"),
+          cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL),
           "filesystem",
           "interactive"
         );
@@ -390,7 +391,7 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("allowAll ignores sandbox/approval overrides → --full-auto", () => {
         const args = mapper.buildCodexSpecificArgs(
-          cfg("allowAll"),
+          cfg(PERMISSION_MODES.ALLOW_ALL),
           "none",
           "auto"
         );
@@ -399,7 +400,7 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("custom with sandbox=filesystem, approval=auto → -s filesystem -a auto", () => {
         const args = mapper.buildCodexSpecificArgs(
-          cfg("custom"),
+          cfg(PERMISSION_MODES.CUSTOM),
           "filesystem",
           "auto"
         );
@@ -408,7 +409,7 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("custom with sandbox=network, approval=interactive → -s network -a interactive", () => {
         const args = mapper.buildCodexSpecificArgs(
-          cfg("custom"),
+          cfg(PERMISSION_MODES.CUSTOM),
           "network",
           "interactive"
         );
@@ -417,7 +418,7 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("custom with sandbox=none, approval=deny → -s none -a deny", () => {
         const args = mapper.buildCodexSpecificArgs(
-          cfg("custom"),
+          cfg(PERMISSION_MODES.CUSTOM),
           "none",
           "deny"
         );
@@ -426,7 +427,7 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("custom with only sandboxMode (no approvalPolicy) → fallback --full-auto", () => {
         const args = mapper.buildCodexSpecificArgs(
-          cfg("custom"),
+          cfg(PERMISSION_MODES.CUSTOM),
           "filesystem"
         );
         assert.deepStrictEqual(args, ["--full-auto"]);
@@ -434,7 +435,7 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("custom with only approvalPolicy (no sandboxMode) → fallback --full-auto", () => {
         const args = mapper.buildCodexSpecificArgs(
-          cfg("custom"),
+          cfg(PERMISSION_MODES.CUSTOM),
           undefined,
           "auto"
         );
@@ -445,22 +446,22 @@ suite("HarnessToolPermissionMappers", () => {
     suite("hasFullPermissions", () => {
       test("dangerouslyAllowAll → true", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("dangerouslyAllowAll")),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)),
           true
         );
       });
 
       test("allowAll → false", () => {
-        assert.strictEqual(mapper.hasFullPermissions(cfg("allowAll")), false);
+        assert.strictEqual(mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)), false);
       });
 
       test("custom → false", () => {
-        assert.strictEqual(mapper.hasFullPermissions(cfg("custom")), false);
+        assert.strictEqual(mapper.hasFullPermissions(cfg(PERMISSION_MODES.CUSTOM)), false);
       });
 
-      test("passthrough → false", () => {
+      test("none → false", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("passthrough")),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.NONE)),
           false
         );
       });
@@ -475,45 +476,45 @@ suite("HarnessToolPermissionMappers", () => {
 
     suite("buildArgs", () => {
       test("dangerouslyAllowAll → --approval-mode yolo", () => {
-        const args = mapper.buildArgs(cfg("dangerouslyAllowAll"));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL));
         assert.deepStrictEqual(args, ["--approval-mode", "yolo"]);
       });
 
       test("allowAll → --approval-mode auto_edit", () => {
-        const args = mapper.buildArgs(cfg("allowAll"));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.ALLOW_ALL));
         assert.deepStrictEqual(args, ["--approval-mode", "auto_edit"]);
       });
 
       test("custom mode → --approval-mode default", () => {
-        const args = mapper.buildArgs(cfg("custom"));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.CUSTOM));
         assert.deepStrictEqual(args, ["--approval-mode", "default"]);
       });
 
       test("custom with tool patterns → --approval-mode default (patterns ignored)", () => {
         const args = mapper.buildArgs(
-          cfg("custom", ["write", "shell"], ["edit"])
+          cfg(PERMISSION_MODES.CUSTOM, ["write", "shell"], ["edit"])
         );
         assert.deepStrictEqual(args, ["--approval-mode", "default"]);
       });
 
-      test("passthrough mode → --approval-mode default (falls through to default branch)", () => {
-        const args = mapper.buildArgs(cfg("passthrough"));
+      test("none mode → --approval-mode default (falls through to default branch)", () => {
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.NONE));
         assert.deepStrictEqual(args, ["--approval-mode", "default"]);
       });
 
       test("dangerouslyAllowAll ignores allow/deny lists", () => {
         const args = mapper.buildArgs(
-          cfg("dangerouslyAllowAll", ["write"], ["shell"])
+          cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, ["write"], ["shell"])
         );
         assert.deepStrictEqual(args, ["--approval-mode", "yolo"]);
       });
 
       test("always returns exactly 2 args", () => {
         for (const mode of [
-          "dangerouslyAllowAll",
-          "allowAll",
-          "custom",
-          "passthrough",
+          PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+          PERMISSION_MODES.ALLOW_ALL,
+          PERMISSION_MODES.CUSTOM,
+          PERMISSION_MODES.NONE,
         ] as const) {
           const args = mapper.buildArgs(cfg(mode));
           assert.strictEqual(
@@ -529,25 +530,25 @@ suite("HarnessToolPermissionMappers", () => {
     suite("hasFullPermissions", () => {
       test("dangerouslyAllowAll → true", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("dangerouslyAllowAll")),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)),
           true
         );
       });
 
       test("allowAll → false", () => {
-        assert.strictEqual(mapper.hasFullPermissions(cfg("allowAll")), false);
+        assert.strictEqual(mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)), false);
       });
 
       test("custom → false", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("custom", ["write"], [])),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.CUSTOM, ["write"], [])),
           false
         );
       });
 
-      test("passthrough → false", () => {
+      test("none → false", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("passthrough")),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.NONE)),
           false
         );
       });
@@ -555,7 +556,7 @@ suite("HarnessToolPermissionMappers", () => {
       test("dangerouslyAllowAll with deny list → still true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
-            cfg("dangerouslyAllowAll", [], ["write"])
+            cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, [], ["write"])
           ),
           true
         );
@@ -571,23 +572,23 @@ suite("HarnessToolPermissionMappers", () => {
 
     suite("buildArgs", () => {
       test("dangerouslyAllowAll → [-y]", () => {
-        const args = mapper.buildArgs(cfg("dangerouslyAllowAll"));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL));
         assert.deepStrictEqual(args, ["-y"]);
       });
 
       test("allowAll → --approval-mode auto-edit", () => {
-        const args = mapper.buildArgs(cfg("allowAll"));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.ALLOW_ALL));
         assert.deepStrictEqual(args, ["--approval-mode", "auto-edit"]);
       });
 
       test("custom with no tools → --approval-mode default only", () => {
-        const args = mapper.buildArgs(cfg("custom", [], []));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.CUSTOM, [], []));
         assert.deepStrictEqual(args, ["--approval-mode", "default"]);
       });
 
       test("custom with allowed tools → --allowed-tools with comma-separated list", () => {
         const args = mapper.buildArgs(
-          cfg("custom", ["write", "shell"], [])
+          cfg(PERMISSION_MODES.CUSTOM, ["write", "shell"], [])
         );
         assert.ok(args.includes("--approval-mode"));
         assert.ok(args.includes("default"));
@@ -600,7 +601,7 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("custom with denied tools → --exclude-tools with comma-separated list", () => {
         const args = mapper.buildArgs(
-          cfg("custom", [], ["write", "shell"])
+          cfg(PERMISSION_MODES.CUSTOM, [], ["write", "shell"])
         );
         assert.ok(args.includes("--exclude-tools"));
         const toolsIdx = args.indexOf("--exclude-tools");
@@ -611,21 +612,21 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("custom with both allowed and denied tools → both flags present", () => {
         const args = mapper.buildArgs(
-          cfg("custom", ["write"], ["shell"])
+          cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"])
         );
         assert.ok(args.includes("--allowed-tools"));
         assert.ok(args.includes("--exclude-tools"));
       });
 
       test("tool conversion: edit → Edit", () => {
-        const args = mapper.buildArgs(cfg("custom", ["edit"], []));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.CUSTOM, ["edit"], []));
         const toolsIdx = args.indexOf("--allowed-tools");
         const toolsArg = args[toolsIdx + 1];
         assert.ok(toolsArg.includes("Edit"));
       });
 
       test("tool conversion: read → Read", () => {
-        const args = mapper.buildArgs(cfg("custom", ["read"], []));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.CUSTOM, ["read"], []));
         const toolsIdx = args.indexOf("--allowed-tools");
         const toolsArg = args[toolsIdx + 1];
         assert.ok(toolsArg.includes("Read"));
@@ -633,7 +634,7 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("unknown tools pass through as-is", () => {
         const args = mapper.buildArgs(
-          cfg("custom", ["myCustomTool"], [])
+          cfg(PERMISSION_MODES.CUSTOM, ["myCustomTool"], [])
         );
         const toolsIdx = args.indexOf("--allowed-tools");
         const toolsArg = args[toolsIdx + 1];
@@ -642,7 +643,7 @@ suite("HarnessToolPermissionMappers", () => {
 
       test("dangerouslyAllowAll does not include approval-mode or tool lists", () => {
         const args = mapper.buildArgs(
-          cfg("dangerouslyAllowAll", ["write"], ["shell"])
+          cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, ["write"], ["shell"])
         );
         assert.deepStrictEqual(args, ["-y"]);
       });
@@ -651,29 +652,29 @@ suite("HarnessToolPermissionMappers", () => {
     suite("hasFullPermissions", () => {
       test("dangerouslyAllowAll → true", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("dangerouslyAllowAll")),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)),
           true
         );
       });
 
       test("allowAll → true", () => {
-        assert.strictEqual(mapper.hasFullPermissions(cfg("allowAll")), true);
+        assert.strictEqual(mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)), true);
       });
 
       test("custom → false", () => {
-        assert.strictEqual(mapper.hasFullPermissions(cfg("custom")), false);
+        assert.strictEqual(mapper.hasFullPermissions(cfg(PERMISSION_MODES.CUSTOM)), false);
       });
 
       test("custom with tools → false", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("custom", ["write"], [])),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.CUSTOM, ["write"], [])),
           false
         );
       });
 
-      test("passthrough → false", () => {
+      test("none → false", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("passthrough")),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.NONE)),
           false
         );
       });
@@ -689,36 +690,36 @@ suite("HarnessToolPermissionMappers", () => {
     suite("buildArgs", () => {
       test("dangerouslyAllowAll → empty array", () => {
         assert.deepStrictEqual(
-          mapper.buildArgs(cfg("dangerouslyAllowAll")),
+          mapper.buildArgs(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)),
           []
         );
       });
 
       test("allowAll → empty array", () => {
-        assert.deepStrictEqual(mapper.buildArgs(cfg("allowAll")), []);
+        assert.deepStrictEqual(mapper.buildArgs(cfg(PERMISSION_MODES.ALLOW_ALL)), []);
       });
 
       test("custom → empty array", () => {
-        assert.deepStrictEqual(mapper.buildArgs(cfg("custom")), []);
+        assert.deepStrictEqual(mapper.buildArgs(cfg(PERMISSION_MODES.CUSTOM)), []);
       });
 
       test("custom with allowed and denied tools → still empty array", () => {
         assert.deepStrictEqual(
-          mapper.buildArgs(cfg("custom", ["write", "shell"], ["edit"])),
+          mapper.buildArgs(cfg(PERMISSION_MODES.CUSTOM, ["write", "shell"], ["edit"])),
           []
         );
       });
 
-      test("passthrough → empty array", () => {
-        assert.deepStrictEqual(mapper.buildArgs(cfg("passthrough")), []);
+      test("none → empty array", () => {
+        assert.deepStrictEqual(mapper.buildArgs(cfg(PERMISSION_MODES.NONE)), []);
       });
 
       test("always returns empty array regardless of config", () => {
         for (const mode of [
-          "dangerouslyAllowAll",
-          "allowAll",
-          "custom",
-          "passthrough",
+          PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
+          PERMISSION_MODES.ALLOW_ALL,
+          PERMISSION_MODES.CUSTOM,
+          PERMISSION_MODES.NONE,
         ] as const) {
           assert.deepStrictEqual(
             mapper.buildArgs(cfg(mode, ["write"], ["shell"])),
@@ -732,29 +733,29 @@ suite("HarnessToolPermissionMappers", () => {
     suite("hasFullPermissions", () => {
       test("dangerouslyAllowAll → true", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("dangerouslyAllowAll")),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)),
           true
         );
       });
 
       test("allowAll → true", () => {
-        assert.strictEqual(mapper.hasFullPermissions(cfg("allowAll")), true);
+        assert.strictEqual(mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)), true);
       });
 
       test("custom → false", () => {
-        assert.strictEqual(mapper.hasFullPermissions(cfg("custom")), false);
+        assert.strictEqual(mapper.hasFullPermissions(cfg(PERMISSION_MODES.CUSTOM)), false);
       });
 
       test("custom with tools → false", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("custom", ["write"], [])),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.CUSTOM, ["write"], [])),
           false
         );
       });
 
-      test("passthrough → false", () => {
+      test("none → false", () => {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("passthrough")),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.NONE)),
           false
         );
       });
@@ -776,7 +777,7 @@ suite("HarnessToolPermissionMappers", () => {
 
     test("all mappers return string arrays from buildArgs", () => {
       for (const [name, mapper] of Object.entries(mappers)) {
-        const args = mapper.buildArgs(cfg("allowAll"));
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.ALLOW_ALL));
         assert.ok(
           Array.isArray(args),
           `${name}.buildArgs should return an array`
@@ -793,7 +794,7 @@ suite("HarnessToolPermissionMappers", () => {
 
     test("all mappers return boolean from hasFullPermissions", () => {
       for (const [name, mapper] of Object.entries(mappers)) {
-        const result = mapper.hasFullPermissions(cfg("dangerouslyAllowAll"));
+        const result = mapper.hasFullPermissions(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL));
         assert.strictEqual(
           typeof result,
           "boolean",
@@ -805,7 +806,7 @@ suite("HarnessToolPermissionMappers", () => {
     test("dangerouslyAllowAll grants full permissions for all mappers", () => {
       for (const [name, mapper] of Object.entries(mappers)) {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("dangerouslyAllowAll")),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)),
           true,
           `${name}: dangerouslyAllowAll should grant full permissions`
         );
@@ -815,7 +816,7 @@ suite("HarnessToolPermissionMappers", () => {
     test("custom mode with deny list never grants full permissions", () => {
       for (const [name, mapper] of Object.entries(mappers)) {
         assert.strictEqual(
-          mapper.hasFullPermissions(cfg("custom", [], ["write"])),
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.CUSTOM, [], ["write"])),
           false,
           `${name}: custom with deny list should not grant full permissions`
         );

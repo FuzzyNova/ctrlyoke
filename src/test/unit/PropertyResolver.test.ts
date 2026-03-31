@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { PropertyResolver } from "../../utils/PropertyResolver";
 import { Harness, PromptFile, PromptItem } from "../../types/FlightPathTypes";
+import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
 suite("PropertyResolver Tests", () => {
   suite("resolveHarness", () => {
@@ -422,7 +423,7 @@ suite("PropertyResolver Tests", () => {
   });
 
   suite("resolveToolPermissions", () => {
-    test("should return null (passthrough) when prompt toolPermissions is null", () => {
+    test("should return null (none) when prompt toolPermissions is null", () => {
       const prompt: PromptItem = {
         prompt: "test",
         toolPermissions: null,
@@ -430,7 +431,7 @@ suite("PropertyResolver Tests", () => {
       const workflow: PromptFile = {
         prompts: [],
         toolPermissions: {
-          mode: "allowAll",
+          mode: PERMISSION_MODES.ALLOW_ALL,
           allowedTools: [],
           deniedTools: [],
         },
@@ -440,7 +441,7 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(resolved.toolPermissions, null);
     });
 
-    test("should return null (passthrough) when workflow toolPermissions is null and prompt is undefined", () => {
+    test("should return null (none) when workflow toolPermissions is null and prompt is undefined", () => {
       const prompt: PromptItem = {
         prompt: "test",
       };
@@ -453,7 +454,7 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(resolved.toolPermissions, null);
     });
 
-    test("should return null (passthrough) when both levels are undefined", () => {
+    test("should return null (none) when both levels are undefined", () => {
       const prompt: PromptItem = {
         prompt: "test",
       };
@@ -465,27 +466,27 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(resolved.toolPermissions, null);
     });
 
-    test("should return null (passthrough) when mode is 'passthrough'", () => {
+    test("should return null (none) when mode is 'none'", () => {
       const prompt: PromptItem = {
         prompt: "test",
-        toolPermissions: { mode: "passthrough" },
+        toolPermissions: { mode: PERMISSION_MODES.NONE },
       };
       const workflow: PromptFile = {
         prompts: [],
-        toolPermissions: { mode: "allowAll" },
+        toolPermissions: { mode: PERMISSION_MODES.ALLOW_ALL },
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
       assert.strictEqual(resolved.toolPermissions, null);
     });
 
-    test("should return null (passthrough) when workflow mode is 'passthrough' and prompt is undefined", () => {
+    test("should return null (none) when workflow mode is 'none' and prompt is undefined", () => {
       const prompt: PromptItem = {
         prompt: "test",
       };
       const workflow: PromptFile = {
         prompts: [],
-        toolPermissions: { mode: "passthrough" },
+        toolPermissions: { mode: PERMISSION_MODES.NONE },
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -496,19 +497,19 @@ suite("PropertyResolver Tests", () => {
       const prompt: PromptItem = {
         prompt: "test",
         toolPermissions: {
-          mode: "custom",
+          mode: PERMISSION_MODES.CUSTOM,
           allowedTools: ["write"],
           deniedTools: [],
         },
       };
       const workflow: PromptFile = {
         prompts: [],
-        toolPermissions: { mode: "allowAll" },
+        toolPermissions: { mode: PERMISSION_MODES.ALLOW_ALL },
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
       assert.deepStrictEqual(resolved.toolPermissions, {
-        mode: "custom",
+        mode: PERMISSION_MODES.CUSTOM,
         allowedTools: ["write"],
         deniedTools: [],
       });
@@ -521,7 +522,7 @@ suite("PropertyResolver Tests", () => {
       const workflow: PromptFile = {
         prompts: [],
         toolPermissions: {
-          mode: "dangerouslyAllowAll",
+          mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
           allowedTools: [],
           deniedTools: [],
         },
@@ -529,7 +530,7 @@ suite("PropertyResolver Tests", () => {
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
       assert.deepStrictEqual(resolved.toolPermissions, {
-        mode: "dangerouslyAllowAll",
+        mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
         allowedTools: [],
         deniedTools: [],
       });
@@ -546,14 +547,14 @@ suite("PropertyResolver Tests", () => {
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
       assert.ok(resolved.toolPermissions);
-      assert.strictEqual(resolved.toolPermissions.mode, "allowAll");
+      assert.strictEqual(resolved.toolPermissions.mode, PERMISSION_MODES.ALLOW_ALL);
       assert.deepStrictEqual(resolved.toolPermissions.allowedTools, ["write"]);
     });
 
     test("should default allowedTools and deniedTools to [] when omitted", () => {
       const prompt: PromptItem = {
         prompt: "test",
-        toolPermissions: { mode: "custom" },
+        toolPermissions: { mode: PERMISSION_MODES.CUSTOM },
       };
       const workflow: PromptFile = {
         prompts: [],
@@ -561,7 +562,7 @@ suite("PropertyResolver Tests", () => {
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
       assert.ok(resolved.toolPermissions);
-      assert.strictEqual(resolved.toolPermissions.mode, "custom");
+      assert.strictEqual(resolved.toolPermissions.mode, PERMISSION_MODES.CUSTOM);
       assert.deepStrictEqual(resolved.toolPermissions.allowedTools, []);
       assert.deepStrictEqual(resolved.toolPermissions.deniedTools, []);
     });
@@ -570,7 +571,7 @@ suite("PropertyResolver Tests", () => {
       const prompt: PromptItem = {
         prompt: "test",
         toolPermissions: {
-          mode: "custom",
+          mode: PERMISSION_MODES.CUSTOM,
           allowedTools: ["write", "shell(git:*)"],
           deniedTools: ["shell(rm:*)"],
         },
@@ -581,7 +582,7 @@ suite("PropertyResolver Tests", () => {
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
       assert.deepStrictEqual(resolved.toolPermissions, {
-        mode: "custom",
+        mode: PERMISSION_MODES.CUSTOM,
         allowedTools: ["write", "shell(git:*)"],
         deniedTools: ["shell(rm:*)"],
       });

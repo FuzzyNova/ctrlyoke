@@ -11,6 +11,7 @@ import {
 } from "../types/FlightPathTypes";
 import { ToolPermissionConfig } from "../flightpath/harness/shared/interfaces/IToolPermissionMapper";
 import { ConfigurationUtils } from "./ConfigurationUtils";
+import { PERMISSION_MODES } from "../types/DashboardConstants";
 
 /**
  * Resolved execution properties with all optionals filled in.
@@ -56,7 +57,7 @@ export interface ResolvedProperties {
   /** Extra CLI flags appended to FlightPath's standard argument set - undefined if not specified */
   additionalArgs?: string;
 
-  /** Tool permission config - null means passthrough (no permission flags injected) */
+  /** Tool permission config - null means none (no permission flags injected) */
   toolPermissions: ToolPermissionConfig | null;
 }
 
@@ -534,39 +535,39 @@ export class PropertyResolver {
    * Precedence order:
    * 1. Prompt-level override (prompt.toolPermissions)
    *    - Object: Use these permissions
-   *    - null: Passthrough — no permission flags injected
+   *    - null: None — no permission flags injected
    *    - undefined: Fall through to workflow
    * 2. Workflow-level default (workflow.toolPermissions)
-   * 3. No fallback — returns null (passthrough)
+   * 3. No fallback — returns null (none)
    *
    * Note: This is a two-tier resolver. VS Code settings are NOT consulted at runtime.
    * They are seeded into working files on creation via populateSettingsDefaults().
    *
    * @param prompt The prompt to resolve permissions for
    * @param workflow The parent workflow file
-   * @returns Resolved ToolPermissionConfig, or null for passthrough
+   * @returns Resolved ToolPermissionConfig, or null for none
    */
   private static resolveToolPermissions(
     prompt: PromptItem,
     workflow: PromptFile
   ): ToolPermissionConfig | null {
-    // Prompt takes precedence; use explicit undefined check — null is meaningful ("passthrough")
+    // Prompt takes precedence; use explicit undefined check — null is meaningful ("none")
     const effective: ToolPermissionsOverride | null | undefined =
       prompt.toolPermissions !== undefined
         ? prompt.toolPermissions
         : workflow.toolPermissions;
 
-    // null, undefined, or { mode: "passthrough" } → inject no flags
+    // null, undefined, or { mode: "none" } → inject no flags
     if (
       effective === null ||
       effective === undefined ||
-      effective.mode === "passthrough"
+      effective.mode === PERMISSION_MODES.NONE
     ) {
       return null;
     }
 
     return {
-      mode: effective.mode ?? "allowAll",
+      mode: effective.mode ?? PERMISSION_MODES.ALLOW_ALL,
       allowedTools: effective.allowedTools ?? [],
       deniedTools: effective.deniedTools ?? [],
     };

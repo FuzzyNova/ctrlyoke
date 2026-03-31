@@ -9,6 +9,7 @@ import {
   EXECUTION_STATES,
   EXECUTION_MODES,
   DEFAULT_MODELS,
+  PERMISSION_MODES,
   type HarnessStatusString,
 } from "../types/DashboardConstants";
 import {
@@ -455,9 +456,9 @@ export class WebviewSettingsSync {
       const override = value as ToolPermissionsOverride | null;
       await ConfigurationUtils.updateSetting(
         "cliToolPermissions",
-        override?.mode && override.mode !== "passthrough"
+        override?.mode && override.mode !== PERMISSION_MODES.NONE
           ? override.mode
-          : "allowAll"
+          : PERMISSION_MODES.ALLOW_ALL
       );
       await ConfigurationUtils.updateSetting(
         "cliAllowedTools",
@@ -682,7 +683,7 @@ export class WebviewSettingsSync {
         label: getModelDisplayName(m.id),
       }));
 
-    const noneOption = { value: "none", label: "None (skip --model flag)" };
+    const noneOption = { value: "none", label: "None" };
 
     const copilotCliOptions = [
       noneOption,

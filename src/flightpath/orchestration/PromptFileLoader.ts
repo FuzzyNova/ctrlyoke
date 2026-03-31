@@ -348,7 +348,7 @@ export class PromptFileLoader {
     }
     // toolPermissions requires sub-field merging: if mode is set but
     // allowedTools/deniedTools are missing, fill in defaults for the missing
-    // sub-fields. null means passthrough — don't seed. A fully-specified
+    // sub-fields. null means none — don't seed. A fully-specified
     // object means nothing is missing — don't put anything in defaults.
     const explicitTP = explicitValues.toolPermissions as
       | Record<string, unknown>

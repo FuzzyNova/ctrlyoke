@@ -1,11 +1,7 @@
-/**
- * Tool permission mode
- */
-export type ToolPermissionMode =
-  | "dangerouslyAllowAll"
-  | "allowAll"
-  | "custom"
-  | "passthrough";
+import { PermissionMode } from "../../../../types/DashboardConstants";
+
+/** Tool permission mode */
+export type ToolPermissionMode = PermissionMode;
 
 /**
  * Tool permission configuration

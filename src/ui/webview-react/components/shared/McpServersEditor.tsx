@@ -248,6 +248,8 @@ export const McpServersEditor: React.FC<{
   onRequestWorkspaceServers?: () => void;
   /** Called when workspace server list should be persisted */
   onWorkspaceServersChange?: (servers: McpServerConfig[]) => void;
+  /** When true, the registry browser expands to fill available vertical space instead of using a fixed max-height */
+  fillHeight?: boolean;
 }> = ({
   value,
   onChange,
@@ -266,6 +268,7 @@ export const McpServersEditor: React.FC<{
   isLoadingWorkspaceServers,
   onRequestWorkspaceServers,
   onWorkspaceServersChange,
+  fillHeight = false,
 }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [form, setForm] = useState<AddServerForm>(EMPTY_FORM);
@@ -282,6 +285,7 @@ export const McpServersEditor: React.FC<{
   const [registryQuery, setRegistryQuery] = useState("");
   const [registrySort, setRegistrySort] = useState<RegistrySort>("default");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const shouldFill = fillHeight && discoveryTab === "registry";
 
   // Client-side filter + sort: Anthropic registry has no server-side search
   const filteredRegistryServers = useMemo(() => {
@@ -545,7 +549,7 @@ export const McpServersEditor: React.FC<{
       : userServers.some((s) => s.id === id);
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={`flex flex-col gap-2${shouldFill ? " flex-1 min-h-0" : ""}`}>
       {/* Mode selector (prompt level only) */}
       {showDefault && (
         <div className="flex gap-1">
@@ -578,7 +582,7 @@ export const McpServersEditor: React.FC<{
 
       {/* Custom / always-editable mode */}
       {mode === "custom" && (
-        <div className="flex flex-col gap-2">
+        <div className={`flex flex-col gap-2${shouldFill ? " flex-1 min-h-0" : ""}`}>
           {/* FlightPath built-in */}
           <div className="flex flex-col gap-1">
             <div className="text-[10px] font-semibold uppercase text-description-fg tracking-wide">
@@ -613,7 +617,7 @@ export const McpServersEditor: React.FC<{
           </div>
 
           {/* Custom servers */}
-          <div className="flex flex-col gap-1">
+          <div className={`flex flex-col gap-1${shouldFill ? " flex-1 min-h-0" : ""}`}>
             <div className="text-[10px] font-semibold uppercase text-description-fg tracking-wide">
               Custom Servers
             </div>
@@ -933,7 +937,7 @@ export const McpServersEditor: React.FC<{
 
             {/* Discovery shortcuts */}
             {showDiscovery && (
-              <div className="flex flex-col gap-1 mt-1">
+              <div className={`flex flex-col gap-1 mt-1${shouldFill ? " flex-1 min-h-0" : ""}`}>
                 <div className="flex gap-1">
                   {onRequestLocalServers && (
                     <button
@@ -1032,7 +1036,7 @@ export const McpServersEditor: React.FC<{
 
                 {/* Registry panel */}
                 {discoveryTab === "registry" && (
-                  <div className="flex flex-col gap-1.5 p-2 rounded border border-panel-border bg-editor-bg">
+                  <div className={`flex flex-col gap-1.5 p-2 rounded border border-panel-border bg-editor-bg${shouldFill ? " flex-1 min-h-0" : ""}`}>
                     {/* Filter input — client-side search (Anthropic registry has no server-side search) */}
                     <input
                       ref={searchInputRef}
@@ -1092,7 +1096,7 @@ export const McpServersEditor: React.FC<{
                             </button>
                           ))}
                         </div>
-                        <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                        <div className={`flex flex-col gap-1 overflow-y-auto${shouldFill ? " flex-1 min-h-[120px]" : " max-h-48"}`}>
                           {filteredRegistryServers.map((entry) => {
                             const id = registryEntryToSlug(entry);
                             const alreadyAdded = isInWorkspace(id);

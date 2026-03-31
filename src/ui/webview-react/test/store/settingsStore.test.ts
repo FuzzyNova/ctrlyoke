@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useSettingsStore } from "@store/settingsStore";
 import { HARNESS_IDS, HARNESS_STATUS_STRINGS } from "@/types/messages";
+import { PERMISSION_MODES } from "@root/types/DashboardConstants";
 import type { GlobalSettings, WorkflowProperties } from "@store/settingsStore";
 
 // Zustand stores are module singletons — reset between tests.
@@ -159,7 +160,7 @@ describe("setGlobalSettings", () => {
       mcpServers: ["flightpath"],
       hooks: [],
       toolPermissions: {
-        mode: "allowAll",
+        mode: PERMISSION_MODES.ALLOW_ALL,
         allowedTools: [],
         deniedTools: [],
       },

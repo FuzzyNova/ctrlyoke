@@ -40,6 +40,7 @@ import {
 } from "../shared";
 import { HooksEditor } from "../editor/HooksEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
+import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
 
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const SETTINGS_DRAWER_BREAKPOINT = 400;
@@ -271,26 +272,26 @@ export const SettingsPanel: React.FC<{
           JSON.stringify(normalize(globalSettings.hooks))
         );
       }
-      // Deep comparison for toolPermissions — normalize null/undefined/passthrough
+      // Deep comparison for toolPermissions — normalize null/undefined/none
       // to a canonical form so the button hides when values match the global defaults.
       if (property === "toolPermissions") {
         const wv = workflowValue as WorkflowProperties["toolPermissions"];
         const gv = globalSettings.toolPermissions;
-        // null/undefined/passthrough all mean "no override" — compare as empty
+        // null/undefined/none all mean "no override" — compare as empty
         const normalizePerms = (
           v:
             | WorkflowProperties["toolPermissions"]
             | GlobalSettings["toolPermissions"]
         ) => {
-          if (v === null || v === undefined || v.mode === "passthrough") {
+          if (v === null || v === undefined || v.mode === PERMISSION_MODES.NONE) {
             return {
-              mode: "passthrough",
+              mode: PERMISSION_MODES.NONE,
               allowedTools: [] as string[],
               deniedTools: [] as string[],
             };
           }
           return {
-            mode: v.mode ?? "allowAll",
+            mode: v.mode ?? PERMISSION_MODES.ALLOW_ALL,
             allowedTools: v.allowedTools ?? [],
             deniedTools: v.deniedTools ?? [],
           };
@@ -697,7 +698,7 @@ export const SettingsPanel: React.FC<{
   // Permissions page derived values
   const toolPerms = workflowProperties.toolPermissions;
   const permMode =
-    toolPerms === null ? "passthrough" : (toolPerms?.mode ?? "allowAll");
+    toolPerms === null ? PERMISSION_MODES.NONE : (toolPerms?.mode ?? PERMISSION_MODES.ALLOW_ALL);
   // Fall back to global settings when workflow doesn't have lists yet
   const effectiveAllowedTools =
     toolPerms?.allowedTools ?? globalSettings.toolPermissions.allowedTools;
@@ -732,7 +733,7 @@ export const SettingsPanel: React.FC<{
         className={`flex-1 overflow-y-auto${isCLIManaged ? " pointer-events-none opacity-60 select-none" : ""}`}
       >
         <div
-          className={`px-4 py-2 space-y-2${activePage === DRAWER_PAGES.PERMISSIONS ? " min-h-full flex flex-col" : ""}`}
+          className={`px-4 py-2 space-y-2${activePage === DRAWER_PAGES.PERMISSIONS || activePage === DRAWER_PAGES.MCP ? " min-h-full flex flex-col" : ""}`}
         >
           {activePage === DRAWER_PAGES.HARNESS && (
             <>
@@ -1196,10 +1197,11 @@ export const SettingsPanel: React.FC<{
           )}
 
           {activePage === DRAWER_PAGES.MCP && (
-            <>
+            <div className="flex-1 flex flex-col min-h-0">
               <FormField
                 label="MCP Servers"
                 description="MCP servers to attach to the harness for this workflow. Include FlightPath to enable dynamic queue extension. Add custom McpServerConfig entries for additional MCP servers. Set to None to explicitly disable MCP injection."
+                className="flex-1 min-h-0"
                 setAsDefaultButton={
                   <SetAsDefaultButton
                     property="mcpServers"
@@ -1217,6 +1219,7 @@ export const SettingsPanel: React.FC<{
                   value={workflowProperties.mcpServers as McpServersValue}
                   onChange={handleMcpServersChange}
                   showDefault={false}
+                  fillHeight={true}
                   onRequestLocalServers={handleRequestLocalServers}
                   onSearchRegistry={handleSearchRegistry}
                   localServers={mcpLocalServers}
@@ -1231,7 +1234,7 @@ export const SettingsPanel: React.FC<{
                   onWorkspaceServersChange={handleWorkspaceServersChange}
                 />
               </FormField>
-            </>
+            </div>
           )}
 
           {activePage === DRAWER_PAGES.PERMISSIONS && (
@@ -1309,11 +1312,11 @@ export const SettingsPanel: React.FC<{
                         });
                       }}
                       disabled={
-                        harnessSupport === "mode-only" || permMode !== "custom"
+                        harnessSupport === "mode-only" || permMode !== PERMISSION_MODES.CUSTOM
                       }
                       placeholder={"read\nglob\ngrep"}
                       className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
-                        harnessSupport === "mode-only" || permMode !== "custom"
+                        harnessSupport === "mode-only" || permMode !== PERMISSION_MODES.CUSTOM
                           ? " opacity-50 cursor-not-allowed"
                           : ""
                       }`}
@@ -1338,14 +1341,14 @@ export const SettingsPanel: React.FC<{
                       }}
                       disabled={
                         harnessSupport === "mode-only" ||
-                        permMode === "dangerouslyAllowAll" ||
-                        permMode === "passthrough"
+                        permMode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
+                        permMode === PERMISSION_MODES.NONE
                       }
                       placeholder={"shell(rm:*)\nwrite"}
                       className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
                         harnessSupport === "mode-only" ||
-                        permMode === "dangerouslyAllowAll" ||
-                        permMode === "passthrough"
+                        permMode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
+                        permMode === PERMISSION_MODES.NONE
                           ? " opacity-50 cursor-not-allowed"
                           : ""
                       }`}

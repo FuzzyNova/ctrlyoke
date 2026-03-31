@@ -232,12 +232,12 @@ export class ClaudeCliProvider implements ICliProvider {
           this.toolPermissionMapper.buildArgs(permissionConfig);
         args.push(...toolPermissionArgs);
       } else if (toolPermissions !== null) {
-        // Resolved non-passthrough permissions from workflow
+        // Resolved non-none permissions from workflow
         const toolPermissionArgs =
           this.toolPermissionMapper.buildArgs(toolPermissions);
         args.push(...toolPermissionArgs);
       }
-      // else: toolPermissions === null → passthrough, skip permission flags entirely
+      // else: toolPermissions === null → none mode, skip permission flags entirely
     } else {
       // Interactive mode: Configure stop hook for completion detection
       if (workspaceRoot) {

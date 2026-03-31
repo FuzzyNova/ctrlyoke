@@ -4,6 +4,7 @@ import {
   ToolPermissionMapperBase,
 } from "../shared/interfaces/IToolPermissionMapper";
 import { Log } from "../../../utils/Log";
+import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 
 /**
  * Codex CLI Tool Permission Mapper
@@ -57,7 +58,7 @@ export class CodexToolPermissionMapper
    * @returns True if all permissions auto-granted
    */
   hasFullPermissions(config: ToolPermissionConfig): boolean {
-    return config.mode === "dangerouslyAllowAll";
+    return config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL;
   }
 
   /**
@@ -84,15 +85,15 @@ export class CodexToolPermissionMapper
     }
 
     switch (config.mode) {
-      case "dangerouslyAllowAll":
+      case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
         // Bypass ALL checks (dangerous!)
         return ["--dangerously-bypass-approvals-and-sandbox"];
 
-      case "allowAll":
+      case PERMISSION_MODES.ALLOW_ALL:
         // Safe automation: auto-grant all but respect deny list
         return ["--full-auto"];
 
-      case "custom":
+      case PERMISSION_MODES.CUSTOM:
         // Use Codex-specific sandbox and approval settings
         // Note: --add-dir is handled elsewhere, not here
         if (sandboxMode && approvalPolicy) {

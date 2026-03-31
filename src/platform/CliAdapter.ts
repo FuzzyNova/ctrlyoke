@@ -1,5 +1,6 @@
 import * as path from "path";
 import type { PlatformAdapter } from "./PlatformAdapter";
+import { PERMISSION_MODES } from "../types/DashboardConstants";
 
 export interface ResolvedCliConfig {
   harness: string;
@@ -48,13 +49,13 @@ export class CliAdapter implements PlatformAdapter {
         return this.config.deniedTools as unknown as T;
       case "cliToolPermissions":
         if (this.config.allowAllTools)
-          return "dangerouslyAllowAll" as unknown as T;
+          return PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL as unknown as T;
         if (
           this.config.allowedTools.length > 0 ||
           this.config.deniedTools.length > 0
         )
-          return "custom" as unknown as T;
-        return "allowAll" as unknown as T;
+          return PERMISSION_MODES.CUSTOM as unknown as T;
+        return PERMISSION_MODES.ALLOW_ALL as unknown as T;
 
       // ── Additional directories (--add-dir) ─────────────────────────────
       // CliProviderUtils.getWorkspaceDirs() reads this key to build --add-dir args.

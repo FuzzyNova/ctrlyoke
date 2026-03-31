@@ -327,7 +327,7 @@ export const DEFAULT_MODELS = {
 // CLAUDE CLI MODELS - Static options (no programmatic way to query)
 // ============================================================================
 export const CLAUDE_CLI_MODELS = [
-  { value: "none", label: "None (skip --model flag)" },
+  { value: "none", label: "None" },
   { value: "sonnet", label: "Sonnet" },
   { value: "sonnet[1m]", label: "Sonnet 1M Context" },
   { value: "opus", label: "Opus" },
@@ -339,7 +339,7 @@ export const CLAUDE_CLI_MODELS = [
 // CODEX CLI MODELS - Static options (from codex /model command)
 // ============================================================================
 export const CODEX_CLI_MODELS = [
-  { value: "none", label: "None (skip --model flag)" },
+  { value: "none", label: "None" },
   { value: "gpt-5.3-codex", label: "GPT 5.3 Codex" },
   { value: "gpt-5.4", label: "GPT 5.4" },
   { value: "gpt-5.2-codex", label: "GPT 5.2 Codex" },
@@ -352,7 +352,7 @@ export const CODEX_CLI_MODELS = [
 // QWEN CLI MODELS - Static options (from Qwen Code CLI documentation)
 // ============================================================================
 export const QWEN_CLI_MODELS = [
-  { value: "none", label: "None (skip --model flag)" },
+  { value: "none", label: "None" },
   { value: "coder-model", label: "Qwen Coder (Qwen 3.5 Plus)" },
 ] as const;
 
@@ -360,7 +360,7 @@ export const QWEN_CLI_MODELS = [
 // GEMINI CLI MODELS - Static options (from Gemini CLI documentation)
 // ============================================================================
 export const GEMINI_CLI_MODELS = [
-  { value: "none", label: "None (skip --model flag)" },
+  { value: "none", label: "None" },
   { value: "gemini-3-pro-preview", label: "Gemini 3 Pro (Preview)" },
   { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (Preview)" },
   { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite (Preview)" },
@@ -508,6 +508,18 @@ export const RUNNER_IDS = {
   VSCODE: "vscode",
   CLI: "cli",
 } as const;
+
+// ============================================================================
+// PERMISSION MODES - Tool permission mode values
+// ============================================================================
+export const PERMISSION_MODES = {
+  DANGEROUSLY_ALLOW_ALL: "dangerouslyAllowAll",
+  ALLOW_ALL: "allowAll",
+  CUSTOM: "custom",
+  NONE: "none",
+} as const;
+
+export type PermissionMode = (typeof PERMISSION_MODES)[keyof typeof PERMISSION_MODES];
 
 // ============================================================================
 // LOCK STATUS - Status values returned by WorkflowLockManager.checkLock()

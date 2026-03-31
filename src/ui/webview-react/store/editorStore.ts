@@ -42,7 +42,7 @@ export interface PropertyValues {
   endCondition?: EndConditionConfig | null;
   priorContext?: PriorContext; // undefined = inherit/default
   additionalArgs: Disableable<string>; // undefined = inherit, null = none, string = custom args
-  toolPermissions?: ToolPermissionsOverride | null; // undefined = inherit workflow, null = passthrough, object = override
+  toolPermissions?: ToolPermissionsOverride | null; // undefined = inherit workflow, null = none (omit flags), object = override
 }
 
 /**
@@ -788,7 +788,7 @@ export const useEditorStore = create<
       result.additionalArgs = properties.additionalArgs;
     }
 
-    // Add toolPermissions if overridden (undefined = inherit, null = passthrough, object = override)
+    // Add toolPermissions if overridden (undefined = inherit, null = none (omit flags), object = override)
     if (properties.toolPermissions !== undefined) {
       result.toolPermissions = properties.toolPermissions;
     }

@@ -4,6 +4,7 @@ import {
   ToolPermissionMapperBase,
 } from "../shared/interfaces/IToolPermissionMapper";
 import { Log } from "../../../utils/Log";
+import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 
 /**
  * OpenCode CLI Tool Permission Mapper
@@ -33,7 +34,7 @@ export class OpenCodeToolPermissionMapper
    */
   buildArgs(config: ToolPermissionConfig): string[] {
     if (
-      config.mode === "custom" &&
+      config.mode === PERMISSION_MODES.CUSTOM &&
       (config.allowedTools.length > 0 || config.deniedTools.length > 0)
     ) {
       Log.debug(
@@ -51,6 +52,6 @@ export class OpenCodeToolPermissionMapper
    * @returns True for dangerouslyAllowAll and allowAll modes
    */
   hasFullPermissions(config: ToolPermissionConfig): boolean {
-    return config.mode === "dangerouslyAllowAll" || config.mode === "allowAll";
+    return config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL || config.mode === PERMISSION_MODES.ALLOW_ALL;
   }
 }
