@@ -12,7 +12,13 @@ export function run(): Promise<void> {
   const testsRoot = path.resolve(__dirname, "..");
 
   return new Promise((c, e) => {
-    const testFiles = new glob.Glob("**/**.test.js", { cwd: testsRoot });
+    // Harness integration tests (src/test/harness/) run separately via
+    // `npm run test:harness` — they invoke real AI CLIs and need long
+    // timeouts that aren't compatible with the VS Code extension host.
+    const testFiles = new glob.Glob("**/**.test.js", {
+      cwd: testsRoot,
+      ignore: ["harness/**"],
+    });
     const testFileStream = testFiles.stream();
 
     testFileStream.on("data", (file) => {
