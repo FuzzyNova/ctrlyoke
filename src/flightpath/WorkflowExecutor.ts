@@ -117,6 +117,7 @@ type ExecutionTarget =
   | { kind: "finalPrompt"; loopIndex: number };
 
 type StepExecutionKey = `queue:${number}` | `final:${number}`;
+type AttemptExecutionKey = `${StepExecutionKey}:attempt:${number}`;
 
 /**
  * Drives the sequential execution loop for a FlightPath workflow.
@@ -137,6 +138,7 @@ export class WorkflowExecutor {
 
   private stepStatusMessages: Map<StepExecutionKey, StatusMessage[]> =
     new Map();
+  private attemptStartTimestamps: Map<AttemptExecutionKey, number> = new Map();
 
   constructor(
     private readonly promptQueue: PromptQueue,
@@ -157,6 +159,7 @@ export class WorkflowExecutor {
   ): Promise<void> {
     this.clearPendingState();
     this.stepStatusMessages.clear();
+    this.attemptStartTimestamps.clear();
 
     await this.promptQueue.start();
     this.promptQueue.startExecutionTimer();
@@ -601,6 +604,33 @@ export class WorkflowExecutor {
       : `final:${target.loopIndex}`;
   }
 
+  private getAttemptExecutionKey(
+    target: ExecutionTarget,
+    attemptIndex: number
+  ): AttemptExecutionKey {
+    return `${this.getExecutionKey(target)}:attempt:${attemptIndex}`;
+  }
+
+  private setAttemptStartTimestamp(
+    target: ExecutionTarget,
+    attemptIndex: number,
+    timestampMs: number
+  ): void {
+    this.attemptStartTimestamps.set(
+      this.getAttemptExecutionKey(target, attemptIndex),
+      timestampMs
+    );
+  }
+
+  private getAttemptStartTimestamp(
+    target: ExecutionTarget,
+    attemptIndex: number
+  ): number | undefined {
+    return this.attemptStartTimestamps.get(
+      this.getAttemptExecutionKey(target, attemptIndex)
+    );
+  }
+
   private async captureAndEmitSnapshot(
     target: ExecutionTarget,
     beforeState: RawWorkspaceState,
@@ -892,6 +922,7 @@ export class WorkflowExecutor {
 
     const initTimestampMs = Date.now();
     const rawTextOutput = integration.rawTextOutput || undefined;
+    this.setAttemptStartTimestamp(target, attemptIndex, initTimestampMs);
 
     if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
       if (context.dashboardProvider && legacyStepIndex !== undefined) {
@@ -969,7 +1000,7 @@ export class WorkflowExecutor {
             isStreaming: true,
             cliCommand,
             workingDirectory: context.workspaceFolderPath,
-            timestampMs: Date.now(),
+            timestampMs: initTimestampMs,
             attemptIndex,
             rawTextOutput,
           });
@@ -981,7 +1012,7 @@ export class WorkflowExecutor {
             promptItem.prompt,
             cliCommand,
             context.workspaceFolderPath,
-            Date.now(),
+            initTimestampMs,
             attemptIndex,
             rawTextOutput
           );
@@ -995,7 +1026,7 @@ export class WorkflowExecutor {
           isStreaming: true,
           cliCommand,
           workingDirectory: context.workspaceFolderPath,
-          timestampMs: Date.now(),
+          timestampMs: initTimestampMs,
           attemptIndex,
           rawTextOutput,
         });
@@ -1005,7 +1036,7 @@ export class WorkflowExecutor {
           promptItem.prompt,
           cliCommand,
           context.workspaceFolderPath,
-          Date.now(),
+          initTimestampMs,
           attemptIndex,
           rawTextOutput
         );
@@ -1299,20 +1330,83 @@ export class WorkflowExecutor {
     // Treat like a stop: show warning, stop queue, don't mark as errored.
     if (integration.wasLastFailureProcessExit()) {
       const failureReason = integration.getLastFailureReason();
+      const failureOutput = integration.getLastFailureOutput?.();
+      const attemptTimestampMs =
+        this.getAttemptStartTimestamp(target, 0) ?? Date.now();
+      const warningMessage = `Process exited unexpectedly — workflow stopped. ${failureReason}`;
       Log.warn(
         `⚠️ CLI process exited before completion — stopping workflow: ${failureReason}`
       );
 
-      // Show warning in the output section via status message
+      this.trackStatusMessage(
+        context,
+        target,
+        warningMessage,
+        STATUS_MESSAGE_SEVERITY.WARNING
+      );
+
+      const processExitOutput = {
+        prompt: prompt.prompt,
+        response: failureOutput ?? "",
+        isStreaming: false,
+        elapsed: 0,
+        tokens: undefined,
+        cliCommand: context.shouldShowCliCommand
+          ? integration.getLastCliCommand()
+          : undefined,
+        workingDirectory: context.workspaceFolderPath,
+        timestampMs: attemptTimestampMs,
+        attemptIndex: 0,
+        rawTextOutput:
+          failureOutput !== undefined
+            ? true
+            : integration.rawTextOutput || undefined,
+        errorMessage: failureReason,
+      };
+
       if (context.dashboardProvider && legacyStepIndex >= 0) {
-        context.dashboardProvider.updateStatusMessage(
+        context.dashboardProvider.updateCliOutput(
           legacyStepIndex,
-          `Process exited unexpectedly — workflow stopped. ${failureReason}`,
-          STATUS_MESSAGE_SEVERITY.WARNING
+          processExitOutput
+        );
+      } else if (
+        context.dashboardProvider &&
+        target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
+      ) {
+        context.dashboardProvider.updateFinalPromptOutput(
+          target.loopIndex,
+          processExitOutput
         );
       }
 
+      if (legacyStepIndex >= 0) {
+        context.captureCompletedOutput?.(legacyStepIndex, processExitOutput);
+      } else if (target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+        context.captureFinalPromptCompletedOutput?.(
+          target.loopIndex,
+          processExitOutput
+        );
+      }
+
+      if (context.historyFilePath && context.outputHistoryManager) {
+        const key = this.getExecutionKey(target);
+        const statusMessages = this.stepStatusMessages.get(key) ?? [];
+        await context.outputHistoryManager
+          .saveExecutionOutput(
+            context.historyFilePath,
+            target.kind === FINAL_PROMPT_PHASES.QUEUE
+              ? { kind: "queue", stepIndex: target.stepIndex }
+              : { kind: "finalPrompt", loopIndex: target.loopIndex },
+            [processExitOutput],
+            statusMessages
+          )
+          .catch((err) =>
+            Log.warn("Failed to save process-exit output to history:", err)
+          );
+      }
+
       this.promptQueue.stop();
+      await this.promptQueue.confirmedStopped();
       return false;
     }
 
@@ -1348,7 +1442,7 @@ export class WorkflowExecutor {
         ? integration.getLastCliCommand()
         : undefined,
       workingDirectory: context.workspaceFolderPath,
-      timestampMs: Date.now(),
+      timestampMs: this.getAttemptStartTimestamp(target, 0) ?? Date.now(),
       attemptIndex: 0,
       rawTextOutput: integration.rawTextOutput || undefined,
       errorMessage: failureReason,
@@ -1455,7 +1549,8 @@ export class WorkflowExecutor {
       isStreaming: false,
       cliCommand,
       workingDirectory: context.workspaceFolderPath,
-      timestampMs: Date.now(),
+      timestampMs:
+        this.getAttemptStartTimestamp(target, attemptIndex) ?? Date.now(),
       attemptIndex,
       rawTextOutput: integration.rawTextOutput || undefined,
     };

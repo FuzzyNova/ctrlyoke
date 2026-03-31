@@ -3,6 +3,7 @@ import {
   shortenPath,
   formatTimeHMS,
   extractKeyParameters,
+  getStatusMessageSortTimestamp,
   parseUnifiedDiff,
   generateDiffLines,
 } from "@utils/outputUtils";
@@ -59,7 +60,9 @@ describe("extractKeyParameters", () => {
   });
 
   it("returns truncated command for bash tool", () => {
-    const result = extractKeyParameters("bash", { command: "npm test --watch" });
+    const result = extractKeyParameters("bash", {
+      command: "npm test --watch",
+    });
     expect(result).toContain("npm test");
   });
 
@@ -79,7 +82,9 @@ describe("extractKeyParameters", () => {
   });
 
   it("returns count for multiedit with multiple files", () => {
-    const result = extractKeyParameters("multiedit", { files: ["a.ts", "b.ts", "c.ts"] });
+    const result = extractKeyParameters("multiedit", {
+      files: ["a.ts", "b.ts", "c.ts"],
+    });
     expect(result).toBe("3 files");
   });
 
@@ -94,20 +99,63 @@ describe("extractKeyParameters", () => {
   });
 
   it("returns pattern + path for grep tool", () => {
-    const result = extractKeyParameters("grep", { pattern: "TODO", path: "src" });
+    const result = extractKeyParameters("grep", {
+      pattern: "TODO",
+      path: "src",
+    });
     expect(result).toContain('"TODO"');
     expect(result).toContain("src");
   });
 
   it("returns description for task tool", () => {
-    const result = extractKeyParameters("task", { description: "Do something useful" });
+    const result = extractKeyParameters("task", {
+      description: "Do something useful",
+    });
     expect(result).toContain("Do something");
   });
 
   it("returns key:value pairs for unknown tool", () => {
-    const result = extractKeyParameters("customTool", { alpha: "one", beta: "two" });
+    const result = extractKeyParameters("customTool", {
+      alpha: "one",
+      beta: "two",
+    });
     expect(result).toContain("alpha:");
     expect(result).toContain("beta:");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getStatusMessageSortTimestamp
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("getStatusMessageSortTimestamp", () => {
+  it("keeps process-exit status after older saved CLI output timestamps", () => {
+    const result = getStatusMessageSortTimestamp(
+      {
+        message:
+          "Process exited unexpectedly — workflow stopped. CLI process exited unexpectedly while waiting for SessionStart hook (exit code 0)",
+        timestamp: 2000,
+      },
+      0,
+      0,
+      [{ timestampMs: 2500, attemptIndex: 0 }]
+    );
+
+    expect(result).toBe(2501);
+  });
+
+  it("leaves non-process-exit status timestamps unchanged", () => {
+    const result = getStatusMessageSortTimestamp(
+      {
+        message: "End condition Passed - Output: true",
+        timestamp: 2000,
+      },
+      0,
+      0,
+      [{ timestampMs: 2500, attemptIndex: 0 }]
+    );
+
+    expect(result).toBe(2000);
   });
 });
 
@@ -157,8 +205,20 @@ describe("parseUnifiedDiff", () => {
 
   it("increments line numbers across multiple hunks", () => {
     const twoHunks: UnifiedDiffHunk[] = [
-      { oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ["+line A"] },
-      { oldStart: 5, oldLines: 1, newStart: 5, newLines: 1, lines: ["+line B"] },
+      {
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 1,
+        lines: ["+line A"],
+      },
+      {
+        oldStart: 5,
+        oldLines: 1,
+        newStart: 5,
+        newLines: 1,
+        lines: ["+line B"],
+      },
     ];
     const result = parseUnifiedDiff(twoHunks);
     expect(result[0].newLineNum).toBe(1);
@@ -224,7 +284,9 @@ describe("generateMarkdownExport", () => {
   });
 
   it("shows 'No output captured' for empty outputs", () => {
-    expect(generateMarkdownExport([], metadata)).toContain("No output captured");
+    expect(generateMarkdownExport([], metadata)).toContain(
+      "No output captured"
+    );
   });
 
   it("renders a status entry as a blockquote", () => {
@@ -312,12 +374,55 @@ describe("generateMarkdownExport", () => {
 
   it("sorts outputs chronologically when out of order", () => {
     const outputs = [
-      { type: "cli" as const, stepIndex: 1, timestamp: 3000, attemptIndex: 0, data: { response: "second" } },
-      { type: "cli" as const, stepIndex: 0, timestamp: 1000, attemptIndex: 0, data: { response: "first" } },
+      {
+        type: "cli" as const,
+        stepIndex: 1,
+        timestamp: 3000,
+        attemptIndex: 0,
+        data: { response: "second" },
+      },
+      {
+        type: "cli" as const,
+        stepIndex: 0,
+        timestamp: 1000,
+        attemptIndex: 0,
+        data: { response: "first" },
+      },
     ];
     const md = generateMarkdownExport(outputs, metadata);
     const firstIdx = md.indexOf("first");
     const secondIdx = md.indexOf("second");
     expect(firstIdx).toBeLessThan(secondIdx);
+  });
+
+  it("keeps prompt output before a later status message for the same step", () => {
+    const outputs = [
+      {
+        type: "status" as const,
+        stepIndex: 0,
+        timestamp: 2000,
+        data: {
+          message: "Process exited unexpectedly — workflow stopped",
+          timestamp: "10:00:02",
+        },
+      },
+      {
+        type: "cli" as const,
+        stepIndex: 0,
+        timestamp: 1000,
+        attemptIndex: 0,
+        data: {
+          prompt: "just say hi",
+          response: "error: unknown option '--poopy'",
+        },
+      },
+    ];
+
+    const md = generateMarkdownExport(outputs, metadata);
+    const promptIdx = md.indexOf("## Prompt 1 - Initial Attempt");
+    const statusIdx = md.indexOf(
+      "Process exited unexpectedly — workflow stopped"
+    );
+    expect(promptIdx).toBeLessThan(statusIdx);
   });
 });

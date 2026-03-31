@@ -755,6 +755,15 @@ export abstract class HarnessIntegration {
   }
 
   /**
+   * Get supplemental plain-text output captured for the last prompt-send
+   * failure, such as the tail of PTY output from an interactive CLI crash.
+   * Returns undefined when no additional failure output is available.
+   */
+  getLastFailureOutput(): string | undefined {
+    return undefined;
+  }
+
+  /**
    * Parse token counts from statistics string
    * Returns undefined for non-CLI integrations or unparseable stats
    */

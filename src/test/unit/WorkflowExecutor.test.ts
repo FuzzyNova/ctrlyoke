@@ -44,6 +44,9 @@ type SendOutcome = {
 
 class MockHarnessIntegration extends HarnessIntegration {
   public sentPrompts: string[] = [];
+  public processExitFailure: boolean = false;
+  public lastFailureOutput?: string;
+  public lastCliCommandValue?: string;
   public onSend?: (
     prompt: PromptItem,
     workflowContext?: Parameters<HarnessIntegration["sendPrompt"]>[2]
@@ -80,6 +83,18 @@ class MockHarnessIntegration extends HarnessIntegration {
 
   getStatus(): { available: boolean; message: string; strategy: string } {
     return { available: true, message: "ready", strategy: "mock" };
+  }
+
+  override wasLastFailureProcessExit(): boolean {
+    return this.processExitFailure;
+  }
+
+  override getLastFailureOutput(): string | undefined {
+    return this.lastFailureOutput;
+  }
+
+  override getLastCliCommand(): string | undefined {
+    return this.lastCliCommandValue;
   }
 
   isIntegrationAvailable(): boolean {
@@ -429,5 +444,100 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     assert.strictEqual(completedCalls[0].loopIndex, 0);
     assert.strictEqual(completedCalls[0].output.prompt, "final-capture");
     assert.strictEqual(completedCalls[0].output.isStreaming, false);
+  });
+
+  test("stops on process exit and persists warning plus PTY tail", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+
+    const captureCalls: Array<{ stepIndex: number; output: any }> = [];
+    const statusCalls: Array<{
+      stepIndex: number;
+      message: string;
+      severity: string;
+    }> = [];
+    const historySaves: Array<{
+      target: unknown;
+      cliOutputs: any[];
+      statusMessages: any[];
+    }> = [];
+
+    integration.processExitFailure = true;
+    integration.lastFailureOutput = [
+      "copilot: starting interactive session",
+      "error: unknown option '--poopy'",
+    ].join("\n");
+    integration.lastCliCommandValue = "copilot --poopy";
+    integration.onSend = async () => {
+      (integration as any).lastFailureReason =
+        "CLI process exited unexpectedly while waiting for SessionStart hook (exit code 0)";
+      return { success: false };
+    };
+
+    const context = makeContext(integration);
+    context.captureCompletedOutput = (stepIndex, output) => {
+      captureCalls.push({ stepIndex, output });
+    };
+    context.onStatusMessage = (stepIndex, message, severity) => {
+      statusCalls.push({ stepIndex, message, severity });
+    };
+    context.historyFilePath = "history.json";
+    context.outputHistoryManager = {
+      saveExecutionOutput: async (
+        _historyFilePath: string,
+        target: unknown,
+        cliOutputs: any[],
+        statusMessages: any[]
+      ) => {
+        historySaves.push({ target, cliOutputs, statusMessages });
+      },
+    } as any;
+
+    queue.loadPrompts({
+      prompts: [{ prompt: "bad-args" }, { prompt: "next-step" }],
+    });
+
+    await executor.execute(integration, context);
+
+    const finalState = queue.getState();
+    assert.strictEqual(finalState.status, EXECUTION_STATES.STOPPED);
+    assert.strictEqual(finalState.currentIndex, 1);
+    assert.strictEqual(finalState.results[0].status, STEP_STATUS.CANCELLED);
+    assert.strictEqual(finalState.results[1].status, STEP_STATUS.PENDING);
+
+    assert.strictEqual(statusCalls.length, 1);
+    assert.strictEqual(statusCalls[0].stepIndex, 0);
+    assert.strictEqual(statusCalls[0].severity, "warning");
+    assert.match(statusCalls[0].message, /Process exited unexpectedly/);
+
+    assert.strictEqual(captureCalls.length, 1);
+    assert.strictEqual(captureCalls[0].stepIndex, 0);
+    assert.strictEqual(
+      captureCalls[0].output.errorMessage,
+      "CLI process exited unexpectedly while waiting for SessionStart hook (exit code 0)"
+    );
+    assert.match(captureCalls[0].output.response, /unknown option '--poopy'/);
+    assert.strictEqual(captureCalls[0].output.rawTextOutput, true);
+
+    assert.strictEqual(historySaves.length, 1);
+    assert.deepStrictEqual(historySaves[0].target, {
+      kind: "queue",
+      stepIndex: 0,
+    });
+    assert.strictEqual(historySaves[0].cliOutputs.length, 1);
+    assert.match(
+      historySaves[0].cliOutputs[0].response,
+      /unknown option '--poopy'/
+    );
+    assert.ok(
+      historySaves[0].cliOutputs[0].timestampMs <
+        historySaves[0].statusMessages[0].timestamp
+    );
+    assert.ok(
+      historySaves[0].statusMessages.some((msg) =>
+        /Process exited unexpectedly/.test(msg.message)
+      )
+    );
   });
 });

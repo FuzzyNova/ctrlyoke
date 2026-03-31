@@ -43,6 +43,7 @@ import { SessionValidator } from "../../utils/SessionValidator";
 const SESSION_START_TIMEOUT_MS = 60_000;
 /** Polling interval (ms) when waiting for SessionStart hook */
 const SESSION_START_POLL_MS = 100;
+const INTERACTIVE_WAIT_ABORTED = Symbol("interactiveWaitAborted");
 /**
  * Execution mode for CLI integrations
  */
@@ -130,6 +131,9 @@ export class CliIntegration extends HarnessIntegration {
 
   /** Actual prompt text sent to CLI (may be file reference if using temp files) */
   protected actualPromptSent?: string;
+
+  /** Tail of PTY output captured for the most recent sendPrompt failure. */
+  protected lastFailureOutput?: string;
 
   // NOTE: currentProcess field removed — the child process lives in processManager,
   // not on this class. See processManager.isActive() for process state.
@@ -649,11 +653,19 @@ export class CliIntegration extends HarnessIntegration {
   ): Promise<{ logPath: string; sessionId: string | null } | null> {
     const promptForDiscovery = this.actualPromptSent || promptText;
 
-    const logPath = await this.provider.logParser!.discoverSessionLog(
-      promptForDiscovery,
-      startTime,
-      sessionId || undefined
+    const discoveredLogPath = await this.waitForInteractiveStartupOperation(
+      this.provider.logParser!.discoverSessionLog(
+        promptForDiscovery,
+        startTime,
+        sessionId || undefined
+      )
     );
+
+    if (discoveredLogPath === INTERACTIVE_WAIT_ABORTED) {
+      return null;
+    }
+
+    const logPath = discoveredLogPath;
 
     if (!logPath) {
       this.lastFailureReason = errorContext;
@@ -671,6 +683,106 @@ export class CliIntegration extends HarnessIntegration {
     }
 
     return { logPath, sessionId };
+  }
+
+  private getInteractiveAbortState():
+    | { kind: "user-cancelled" }
+    | { kind: "process-exited"; exitCode: number }
+    | null {
+    if (this.isCancelling) {
+      return { kind: "user-cancelled" };
+    }
+
+    if (this.ptyExitCode !== null) {
+      return { kind: "process-exited", exitCode: this.ptyExitCode };
+    }
+
+    return null;
+  }
+
+  private markProcessExitFailure(stage: string, exitCode: number): void {
+    this.processExitTermination = exitCode;
+    this.lastFailureReason =
+      `CLI process exited unexpectedly while ${stage} ` +
+      `(exit code ${exitCode})`;
+  }
+
+  private handleInteractiveStartupAbort(
+    stage: string
+  ): { success: false } | null {
+    const abortState = this.getInteractiveAbortState();
+    if (!abortState) {
+      return null;
+    }
+
+    if (abortState.kind === "user-cancelled") {
+      Log.info(`⏹️ Interactive execution cancelled while ${stage}`);
+      return { success: false };
+    }
+
+    this.markProcessExitFailure(stage, abortState.exitCode);
+    Log.warn(
+      `⚠️ CLI process exited while ${stage} (exit code ${abortState.exitCode})`
+    );
+    return { success: false };
+  }
+
+  private extractInteractiveOutputTail(chunks: string[]): string | undefined {
+    if (chunks.length === 0) {
+      return undefined;
+    }
+
+    const cleaned = chunks
+      .join("")
+      .replace(/\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)/g, "")
+      .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "")
+      .replace(/\x1B[@-_]/g, "")
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+
+    const lines = cleaned
+      .split("\n")
+      .map((line) => line.trimEnd())
+      .filter((line) => line.trim().length > 0);
+
+    if (lines.length === 0) {
+      return undefined;
+    }
+
+    const tail = lines.slice(-10).join("\n").trim();
+    return tail || undefined;
+  }
+
+  private async waitForInteractiveStartupOperation<T>(
+    operation: Promise<T>
+  ): Promise<T | typeof INTERACTIVE_WAIT_ABORTED> {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+
+      const finish = (action: () => void) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearInterval(intervalHandle);
+        action();
+      };
+
+      const intervalHandle = setInterval(() => {
+        if (this.getInteractiveAbortState()) {
+          finish(() => resolve(INTERACTIVE_WAIT_ABORTED));
+        }
+      }, SESSION_START_POLL_MS);
+
+      void operation
+        .then((value) => {
+          finish(() => resolve(value));
+        })
+        .catch((error) => {
+          finish(() => reject(error));
+        });
+    });
   }
 
   /**
@@ -943,6 +1055,13 @@ export class CliIntegration extends HarnessIntegration {
         );
 
         if (!discovery) {
+          const abortResult = this.handleInteractiveStartupAbort(
+            "discovering the resumed session log"
+          );
+          if (abortResult) {
+            return abortResult;
+          }
+
           Log.error(
             `❌ Could not find log file for resumed session ${resolvedSessionId}\n` +
               `   The session may have been deleted or never existed.\n` +
@@ -987,10 +1106,17 @@ export class CliIntegration extends HarnessIntegration {
           },
           startTime,
           runId,
-          () => this.isCancelling
+          () => this.getInteractiveAbortState() !== null
         );
 
         if (!startResultNotify.completed) {
+          const abortResult = this.handleInteractiveStartupAbort(
+            "waiting for SessionStart hook"
+          );
+          if (abortResult) {
+            return abortResult;
+          }
+
           Log.error(
             `❌ SessionStart hook timeout: ${startResultNotify.error || "Unknown error"}`
           );
@@ -1025,6 +1151,13 @@ export class CliIntegration extends HarnessIntegration {
         );
 
         if (!discovery) {
+          const abortResult = this.handleInteractiveStartupAbort(
+            "discovering the session log after SessionStart"
+          );
+          if (abortResult) {
+            return abortResult;
+          }
+
           if (hookSessionId) {
             Log.error(
               `❌ Could not find log file for session ${hookSessionId} - this should not happen!`
@@ -1052,6 +1185,13 @@ export class CliIntegration extends HarnessIntegration {
         );
 
         if (!discovery) {
+          const abortResult = this.handleInteractiveStartupAbort(
+            "discovering the session log"
+          );
+          if (abortResult) {
+            return abortResult;
+          }
+
           Log.error(
             "❌ Could not discover session log - no matching prompt found"
           );
@@ -1191,6 +1331,9 @@ export class CliIntegration extends HarnessIntegration {
           });
         },
         onExit: (s, exitCode) => {
+          this.lastFailureOutput = this.extractInteractiveOutputTail(
+            s.reconnectBuffer
+          );
           ptyPostMessage({
             type: MESSAGE_TYPES.TERMINAL_ENDED,
             workflowId: s.workflowId,
@@ -1575,6 +1718,10 @@ export class CliIntegration extends HarnessIntegration {
     return this.lastCliCommand;
   }
 
+  override getLastFailureOutput(): string | undefined {
+    return this.lastFailureOutput;
+  }
+
   // ============================================================
   // INITIALIZATION
   // ============================================================
@@ -1928,6 +2075,7 @@ export class CliIntegration extends HarnessIntegration {
       this.resetCancellationFlag();
       this.ptyExitCode = null;
       this.processExitTermination = null;
+      this.lastFailureOutput = undefined;
 
       // Resolve session ID for current prompt using SessionResolver
       let resolvedSessionId = SessionResolver.resolve(

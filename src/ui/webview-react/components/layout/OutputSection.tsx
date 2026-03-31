@@ -11,7 +11,11 @@ import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { CliOutput, StatusMessage } from "../output";
 import { PanelBar, RunSelector } from "../shared";
-import { formatTime, generateDiffLines } from "@utils/outputUtils";
+import {
+  formatTime,
+  generateDiffLines,
+  getStatusMessageSortTimestamp,
+} from "@utils/outputUtils";
 import { generateMarkdownExport } from "@utils/markdownExport";
 import type {
   CliOutput as CliOutputType,
@@ -281,7 +285,12 @@ export const OutputSection: React.FC = () => {
         messages.push({
           type: "status",
           target,
-          timestamp: statusMsg.timestamp || executionIndex * 10000 + index,
+          timestamp: getStatusMessageSortTimestamp(
+            statusMsg,
+            index,
+            executionIndex,
+            step.cliOutputs || []
+          ),
           data: {
             message: statusMsg.message,
             severity: statusMsg.severity,
@@ -510,7 +519,8 @@ export const OutputSection: React.FC = () => {
   // ── Workflow-level undo/redo aggregation ───────────────────────────────────
   // Iterates all steps to collect entries for the workflow undo/redo dialog.
   const workflowUndoRedoData = useMemo(() => {
-    if (!allowUndoActions) return { undoEntries: [], redoEntries: [], workspacePath: "" };
+    if (!allowUndoActions)
+      return { undoEntries: [], redoEntries: [], workspacePath: "" };
 
     const undoEntries: WorkflowStepEntry[] = [];
     const redoEntries: WorkflowStepEntry[] = [];
@@ -525,9 +535,11 @@ export const OutputSection: React.FC = () => {
       const lastOutput = lastMsg?.data as CliOutputType | undefined;
       if (!lastOutput || lastOutput.isStreaming) continue;
 
-      if (lastOutput.workingDirectory) workspacePath = lastOutput.workingDirectory;
+      if (lastOutput.workingDirectory)
+        workspacePath = lastOutput.workingDirectory;
 
-      const isFinalPrompt = step.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT;
+      const isFinalPrompt =
+        step.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT;
       const stepIndex = step.target.index;
 
       let effectiveSnapshot: WorkspaceSnapshot | undefined;
@@ -541,7 +553,9 @@ export const OutputSection: React.FC = () => {
           ? historyOutputs.finalPromptOutputs?.[stepIndex]?.undoRecord
           : historyOutputs.steps[stepIndex]?.undoRecord;
       } else {
-        const targetKey = isFinalPrompt ? `finalPrompt-${stepIndex}` : `queue-${stepIndex}`;
+        const targetKey = isFinalPrompt
+          ? `finalPrompt-${stepIndex}`
+          : `queue-${stepIndex}`;
         effectiveSnapshot = isFinalPrompt
           ? finalPromptWorkspaceSnapshots[stepIndex]
           : workspaceSnapshots[stepIndex];
@@ -567,10 +581,16 @@ export const OutputSection: React.FC = () => {
       }
 
       // Undo entry: undoable candidates excluding already-undone files
-      const allCandidates = buildUndoCandidatesForOutputs(stepOutputs, effectiveSnapshot);
+      const allCandidates = buildUndoCandidatesForOutputs(
+        stepOutputs,
+        effectiveSnapshot
+      );
       const candidates =
         redoInstructions.length > 0
-          ? allCandidates.filter((c) => !redoInstructions.some((ri) => sameFilePath(c.path, ri.path)))
+          ? allCandidates.filter(
+              (c) =>
+                !redoInstructions.some((ri) => sameFilePath(c.path, ri.path))
+            )
           : allCandidates;
       const undoCandidates = candidates.filter((c) => c.instruction !== null);
       if (undoCandidates.length > 0) {
@@ -1060,47 +1080,55 @@ export const OutputSection: React.FC = () => {
           {activeOutputTab === "output" && (
             <>
               {/* Workflow-level undo button */}
-              {workflowUndoRedoData.undoEntries.length > 0 && (() => {
-                const count = workflowUndoRedoData.undoEntries.reduce((n, e) => n + (e.undoCandidates?.length ?? 0), 0);
-                return (
-                  <button
-                    className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-link-fg hover:text-link-active-fg transition-colors"
-                    title={`Undo workflow changes (${count} file${count !== 1 ? "s" : ""})`}
-                    onClick={() =>
-                      setWorkflowDialogState({
-                        mode: "undo",
-                        workspacePath: workflowUndoRedoData.workspacePath,
-                        entries: workflowUndoRedoData.undoEntries,
-                        requestId: crypto.randomUUID(),
-                      })
-                    }
-                  >
-                    <i className="codicon codicon-discard text-[12px]" />
-                    <span>Undo {count} changes</span>
-                  </button>
-                );
-              })()}
+              {workflowUndoRedoData.undoEntries.length > 0 &&
+                (() => {
+                  const count = workflowUndoRedoData.undoEntries.reduce(
+                    (n, e) => n + (e.undoCandidates?.length ?? 0),
+                    0
+                  );
+                  return (
+                    <button
+                      className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-link-fg hover:text-link-active-fg transition-colors"
+                      title={`Undo workflow changes (${count} file${count !== 1 ? "s" : ""})`}
+                      onClick={() =>
+                        setWorkflowDialogState({
+                          mode: "undo",
+                          workspacePath: workflowUndoRedoData.workspacePath,
+                          entries: workflowUndoRedoData.undoEntries,
+                          requestId: crypto.randomUUID(),
+                        })
+                      }
+                    >
+                      <i className="codicon codicon-discard text-[12px]" />
+                      <span>Undo {count} changes</span>
+                    </button>
+                  );
+                })()}
               {/* Workflow-level redo button */}
-              {workflowUndoRedoData.redoEntries.length > 0 && (() => {
-                const count = workflowUndoRedoData.redoEntries.reduce((n, e) => n + (e.redoInstructions?.length ?? 0), 0);
-                return (
-                  <button
-                    className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-terminal-ansiGreen hover:opacity-80 transition-opacity"
-                    title={`Redo workflow changes (${count} file${count !== 1 ? "s" : ""})`}
-                    onClick={() =>
-                      setWorkflowDialogState({
-                        mode: "redo",
-                        workspacePath: workflowUndoRedoData.workspacePath,
-                        entries: workflowUndoRedoData.redoEntries,
-                        requestId: crypto.randomUUID(),
-                      })
-                    }
-                  >
-                    <i className="codicon codicon-redo text-[12px]" />
-                    <span>Redo {count} changes</span>
-                  </button>
-                );
-              })()}
+              {workflowUndoRedoData.redoEntries.length > 0 &&
+                (() => {
+                  const count = workflowUndoRedoData.redoEntries.reduce(
+                    (n, e) => n + (e.redoInstructions?.length ?? 0),
+                    0
+                  );
+                  return (
+                    <button
+                      className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-terminal-ansiGreen hover:opacity-80 transition-opacity"
+                      title={`Redo workflow changes (${count} file${count !== 1 ? "s" : ""})`}
+                      onClick={() =>
+                        setWorkflowDialogState({
+                          mode: "redo",
+                          workspacePath: workflowUndoRedoData.workspacePath,
+                          entries: workflowUndoRedoData.redoEntries,
+                          requestId: crypto.randomUUID(),
+                        })
+                      }
+                    >
+                      <i className="codicon codicon-redo text-[12px]" />
+                      <span>Redo {count} changes</span>
+                    </button>
+                  );
+                })()}
               {availableRuns > 0 && (
                 <RunSelector
                   availableRuns={availableRuns}

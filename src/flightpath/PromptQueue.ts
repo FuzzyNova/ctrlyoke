@@ -495,6 +495,7 @@ export class PromptQueue {
   async confirmedStopped(): Promise<void> {
     if (this.state.status === EXECUTION_STATES.CANCELLING) {
       const index = this.state.currentIndex;
+      let advancedPastQueuePrompt = false;
 
       // Record terminal state on the cancelled prompt before advancing
       const prompt = this.state.prompts[index];
@@ -506,24 +507,25 @@ export class PromptQueue {
           completedAt: now,
           terminalStatus: "cancelled",
         };
+        this.state.completedIndices.add(String(index));
+        this.state.currentIndex++;
+        advancedPastQueuePrompt = true;
       }
-      this.state.completedIndices.add(String(index));
-      this.state.currentIndex++;
 
-      this.state.status =
-        this.state.currentIndex >= this.state.prompts.length
-          ? EXECUTION_STATES.COMPLETED
-          : EXECUTION_STATES.STOPPED;
+      this.state.status = EXECUTION_STATES.STOPPED;
 
       this.emitStateChange();
-      Log.info(
-        `Queue execution fully stopped - advanced past cancelled step ${index}`
-      );
+      if (advancedPastQueuePrompt) {
+        Log.info(
+          `Queue execution fully stopped - advanced past cancelled step ${index}`
+        );
+      } else {
+        Log.info("Queue execution fully stopped");
+      }
 
       await this.updateWorkingFile();
     }
   }
-
 
   /**
    * Restart queue from the beginning
@@ -1274,7 +1276,7 @@ export class PromptQueue {
           `appendPrompts: Setting to STOPPED (appended to COMPLETED queue, ${this.state.completedIndices.size} prompts previously completed, user can Resume)`
         );
         this.state.status = EXECUTION_STATES.STOPPED;
-            this.state.stopped = true; // Mark as stopped so Resume will work
+        this.state.stopped = true; // Mark as stopped so Resume will work
       } else {
         Log.info(
           `appendPrompts: NOT changing state (current: ${previousStatus}, willRunImmediately: ${willRunImmediately}, completed count: ${this.state.completedIndices.size})`
