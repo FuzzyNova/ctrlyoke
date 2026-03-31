@@ -230,14 +230,14 @@ export class CliProviderUtils {
     // User-defined MCP servers
     if (userServers) {
       for (const server of userServers) {
-        const entry: Record<string, unknown> = {
-          command: server.command,
-        };
-        if (server.args) {
-          entry.args = server.args;
-        }
-        if (server.env) {
-          entry.env = server.env;
+        const entry: Record<string, unknown> = server.url
+          ? { url: server.url, type: server.transport ?? "streamable-http" }
+          : { command: server.command };
+        if (!server.url) {
+          if (server.args) entry.args = server.args;
+          if (server.env) entry.env = server.env;
+        } else {
+          if (server.headers) entry.headers = server.headers;
         }
         if (server.autoApprove === true) {
           entry.trust = true;

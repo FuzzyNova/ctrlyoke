@@ -29,9 +29,11 @@ export class FlightPathMcpServerProvider implements vscode.McpServerDefinitionPr
   }
 
   provideMcpServerDefinitions(): vscode.McpStdioServerDefinition[] {
-    return this.activeServers.map(
-      (s) => new vscode.McpStdioServerDefinition(s.id, s.command, s.args ?? [], s.env ?? {})
-    );
+    // Only stdio servers are supported here — remote (URL-based) servers are not
+    // representable as McpStdioServerDefinition and are skipped for copilot-chat.
+    return this.activeServers
+      .filter((s) => !!s.command)
+      .map((s) => new vscode.McpStdioServerDefinition(s.id, s.command!, s.args ?? [], s.env ?? {}));
   }
 
   resolveMcpServerDefinition(

@@ -879,10 +879,10 @@ export interface LocalMcpServerEntry {
 }
 
 /**
- * A single MCP server entry from the Anthropic MCP registry.
+ * A single MCP server entry from the MCP registry (registry.modelcontextprotocol.io).
  */
 export interface RegistryMcpEntry {
-  /** Registry-assigned server identifier (e.g. slug or UUID) */
+  /** Registry-assigned server identifier (qualified name, e.g. "agency.lona/trading") */
   id: string;
   name: string;
   description: string;
@@ -892,17 +892,22 @@ export interface RegistryMcpEntry {
   installCommand?: string;
   /** Environment variables required by this server */
   envVars?: Array<{ name: string; description?: string }>;
-  /** Whether this server is officially verified in the registry */
+  /** Whether this server is officially listed in the registry */
   verified?: boolean;
-  /**
-   * The exact `claude mcp add ...` command from the Anthropic registry.
-   * Shown in the UI as a reference; not used for import.
-   */
-  claudeCodeCopyText?: string;
-  /** Registry-assigned popularity score (higher = more popular) */
-  popularityScore?: number;
-  /** Registry-assigned trending score (higher = more trending) */
-  trendingScore?: number;
+  /** ISO 8601 timestamp of when this server entry was last updated — used for "Recently Updated" sort */
+  updatedAt?: string;
+  // ── Remote transport (streamable-http / SSE servers) ──────────────────────
+  /** Endpoint URL for remote servers (when no stdio package is available) */
+  remoteUrl?: string;
+  /** Transport protocol for remote servers */
+  remoteTransport?: "streamable-http" | "sse";
+  /** Required HTTP headers for remote servers (e.g. Authorization) */
+  remoteHeaders?: Array<{
+    name: string;
+    description?: string;
+    isRequired?: boolean;
+    isSecret?: boolean;
+  }>;
 }
 
 export interface RequestMcpLocalServersMessage {

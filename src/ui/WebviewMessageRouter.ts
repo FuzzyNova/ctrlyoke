@@ -34,7 +34,7 @@ import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import { getPtyProcessManager } from "../flightpath/harness/PtyProcessManager";
 import {
   safeDiscoverLocalMcpServers,
-  safeFetchAnthropicRegistry,
+  safeFetchMcpRegistry,
 } from "../utils/McpDiscoveryUtils";
 
 /**
@@ -275,7 +275,7 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.REQUEST_MCP_REGISTRY, async (message) => {
-      const result = await safeFetchAnthropicRegistry({
+      const result = await safeFetchMcpRegistry({
         cursor: message.cursor,
       });
       this.postMessage({

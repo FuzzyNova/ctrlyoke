@@ -315,12 +315,14 @@ export class OpenCodeCliProvider implements ICliProvider {
       // User-defined MCP servers
       if (hasUserServers) {
         for (const server of userServers) {
-          const entry: Record<string, unknown> = {
-            type: "local",
-            command: [server.command, ...(server.args ?? [])],
-          };
-          if (server.env) {
+          const entry: Record<string, unknown> = server.url
+            ? { type: "remote", url: server.url }
+            : { type: "local", command: [server.command ?? "", ...(server.args ?? [])] };
+          if (!server.url && server.env) {
             entry["environment"] = server.env;
+          }
+          if (server.url && server.headers) {
+            entry["headers"] = server.headers;
           }
           mcpEntries[server.id] = entry;
         }

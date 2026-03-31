@@ -156,14 +156,14 @@ export class CliMcpConfigGenerator {
 
     // Merge user-defined servers
     for (const server of userServers) {
-      const entry: any = {
-        command: server.command,
-      };
-      if (server.args) {
-        entry.args = server.args;
-      }
-      if (server.env) {
-        entry.env = server.env;
+      const entry: any = server.url
+        ? { url: server.url, type: server.transport ?? "streamable-http" }
+        : { command: server.command };
+      if (!server.url) {
+        if (server.args) entry.args = server.args;
+        if (server.env) entry.env = server.env;
+      } else {
+        if (server.headers) entry.headers = server.headers;
       }
       if (server.autoApprove !== undefined) {
         entry.autoApprove = server.autoApprove;
@@ -186,12 +186,14 @@ export class CliMcpConfigGenerator {
   static generateUserServersOnlyConfig(userServers: McpServerConfig[]): string {
     const mcpServers: any = {};
     for (const server of userServers) {
-      const entry: any = { command: server.command };
-      if (server.args) {
-        entry.args = server.args;
-      }
-      if (server.env) {
-        entry.env = server.env;
+      const entry: any = server.url
+        ? { url: server.url, type: server.transport ?? "streamable-http" }
+        : { command: server.command };
+      if (!server.url) {
+        if (server.args) entry.args = server.args;
+        if (server.env) entry.env = server.env;
+      } else {
+        if (server.headers) entry.headers = server.headers;
       }
       if (server.autoApprove !== undefined) {
         entry.autoApprove = server.autoApprove;

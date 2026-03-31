@@ -44,18 +44,28 @@ export enum Harness {
 
 /**
  * User-defined MCP server configuration for attaching external MCP servers to harness invocations.
+ *
+ * Supports two transport modes — exactly one of `command` or `url` must be set:
+ * - **stdio** (`command`): Spawns a local process (e.g. `npx -y @scope/server`)
+ * - **remote** (`url`): Connects to a hosted HTTP/SSE endpoint (e.g. `https://mcp.example.com`)
  */
 export interface McpServerConfig {
   /** Unique server identifier */
   id: string;
-  /** Command to run the MCP server (e.g., "node", "python") */
-  command: string;
-  /** Arguments to pass to the command */
+  /** Command to run the MCP server process (stdio servers). Required when `url` is not set. */
+  command?: string;
+  /** Arguments to pass to the command (stdio servers only) */
   args?: string[];
-  /** Environment variables for the server process */
+  /** Environment variables for the server process (stdio servers only) */
   env?: Record<string, string>;
   /** Tools to auto-approve: true = all tools, string[] = specific tools */
   autoApprove?: boolean | string[];
+  /** Remote endpoint URL (streamable-http or SSE servers). Required when `command` is not set. */
+  url?: string;
+  /** Transport protocol for remote servers. Defaults to "streamable-http". */
+  transport?: "streamable-http" | "sse";
+  /** HTTP headers to send with every request (remote servers only, e.g. Authorization) */
+  headers?: Record<string, string>;
 }
 
 /**

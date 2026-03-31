@@ -1,0 +1,1292 @@
+{
+  "servers": [
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "agency.lona/trading",
+        "description": "AI-powered trading strategy development: backtesting, market data, and portfolio analysis",
+        "repository": {
+          "url": "https://github.com/mindsightventures/lona",
+          "source": "github",
+          "id": "891584339",
+          "subfolder": "packages/lona-mcp-server"
+        },
+        "version": "2.0.0",
+        "websiteUrl": "https://lona.agency",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.lona.agency/mcp"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-02-24T00:07:27.525636Z",
+          "publishedAt": "2026-02-24T00:07:27.525636Z",
+          "updatedAt": "2026-02-24T00:07:27.525636Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.aarna/atars-mcp",
+        "description": "Crypto market signals, technical indicators, and sentiment analysis for AI agents.",
+        "title": "aTars MCP",
+        "version": "0.1.0",
+        "websiteUrl": "https://mcp.aarna.ai/mcp",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.aarna.ai/mcp"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-03-10T11:09:59.15927Z",
+          "publishedAt": "2026-03-10T11:09:59.15927Z",
+          "updatedAt": "2026-03-10T11:09:59.15927Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.adadvisor/mcp-server",
+        "description": "Query Meta Ads performance data — accounts, campaigns, ad sets, ads, metrics & settings.",
+        "title": "AdAdvisor MCP Server",
+        "version": "1.0.0",
+        "websiteUrl": "https://www.adadvisor.ai?utm_source=mcp-registry",
+        "icons": [
+          {
+            "src": "https://app.adadvisor.ai/adadvisor-logo.png",
+            "mimeType": "image/png"
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.adadvisor.ai/mcp",
+            "headers": [
+              {
+                "description": "Bearer token (adv_sk_...). Get key: https://www.adadvisor.ai/docs/user-guide/managing-api-keys?utm_source=mcp-registry",
+                "isRequired": true,
+                "isSecret": true,
+                "name": "Authorization"
+              }
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-02-28T12:39:22.82128Z",
+          "publishedAt": "2026-02-28T12:39:22.82128Z",
+          "updatedAt": "2026-02-28T12:39:22.82128Z",
+          "isLatest": false
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.adadvisor/mcp-server",
+        "description": "Query Meta Ads performance data — accounts, campaigns, ad sets, ads, metrics & settings.",
+        "title": "AdAdvisor MCP Server",
+        "version": "1.0.1",
+        "websiteUrl": "https://www.adadvisor.ai/docs/user-guide/getting-started-with-mcp?utm_source=mcp-registry",
+        "icons": [
+          {
+            "src": "https://app.adadvisor.ai/adadvisor-logo.png",
+            "mimeType": "image/png"
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.adadvisor.ai/mcp",
+            "headers": [
+              {
+                "description": "Bearer token (adv_sk_...). Get key: https://www.adadvisor.ai/docs/user-guide/getting-started-with-mcp?utm_source=mcp-registry",
+                "isRequired": true,
+                "isSecret": true,
+                "name": "Authorization"
+              }
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-02-28T13:09:52.236521Z",
+          "publishedAt": "2026-02-28T13:09:52.236521Z",
+          "updatedAt": "2026-02-28T13:09:52.236521Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.adramp/google-ads",
+        "description": "Google Ads MCP server — manage campaigns, keywords, and metrics.",
+        "repository": {
+          "url": "https://github.com/stylemi-co/adramp",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "sse",
+            "url": "https://mcp.adramp.ai/sse"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-03-20T10:48:50.293302Z",
+          "publishedAt": "2026-03-20T10:48:50.293302Z",
+          "updatedAt": "2026-03-20T10:48:50.293302Z",
+          "isLatest": false
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.adramp/google-ads",
+        "description": "Google Ads MCP server — manage campaigns, keywords, and metrics.",
+        "repository": {
+          "url": "https://github.com/stylemi-co/adramp",
+          "source": "github"
+        },
+        "version": "1.0.1",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.adramp.ai"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-03-20T10:50:44.749808Z",
+          "publishedAt": "2026-03-20T10:50:44.749808Z",
+          "updatedAt": "2026-03-20T10:50:44.749808Z",
+          "isLatest": false
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.adramp/google-ads",
+        "description": "Google Ads MCP server — manage campaigns, keywords, and metrics.",
+        "version": "1.0.2",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.adramp.ai"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-03-20T11:06:29.964194Z",
+          "publishedAt": "2026-03-20T11:06:29.964194Z",
+          "updatedAt": "2026-03-20T11:06:29.964194Z",
+          "isLatest": false
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.adramp/google-ads",
+        "description": "Google Ads MCP server — manage campaigns, keywords, and metrics.",
+        "version": "1.0.3",
+        "websiteUrl": "https://adramp.ai",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.adramp.ai"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-03-20T11:16:36.853329Z",
+          "publishedAt": "2026-03-20T11:16:36.853329Z",
+          "updatedAt": "2026-03-20T11:16:36.853329Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agentdm/agentdm",
+        "description": "Agent-to-agent messaging platform using MCP for cross-model communication.",
+        "title": "AgentDM",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.agentdm.ai/api/v1/grid",
+            "headers": [
+              {
+                "description": "Bearer token for authentication (e.g., 'Bearer agentdm_...'). Get your token at https://app.agentdm.ai",
+                "isRequired": true,
+                "isSecret": true,
+                "name": "Authorization"
+              }
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-03-21T03:25:57.564566Z",
+          "publishedAt": "2026-03-21T03:25:57.564566Z",
+          "updatedAt": "2026-03-21T03:25:57.564566Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+        "name": "ai.agentrapay/agentra",
+        "description": "Identity oracle and trust layer for autonomous AI agents. Bidirectional KYA and trust scoring.",
+        "repository": {},
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "sse",
+            "url": "https://api.agentrapay.ai/mcp"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-03-22T18:16:07.628131Z",
+          "publishedAt": "2026-03-22T18:16:07.628131Z",
+          "updatedAt": "2026-03-22T18:16:07.628131Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.agenttrust/mcp-server",
+        "description": "Identity, trust, and A2A orchestration for autonomous AI agents. Official A2A partner.",
+        "title": "AgentTrust — Identity & Trust for A2A Agents",
+        "repository": {
+          "url": "https://github.com/agenttrust/mcp-server",
+          "source": "github"
+        },
+        "version": "1.1.1",
+        "websiteUrl": "https://agenttrust.ai",
+        "icons": [
+          {
+            "src": "https://agenttrust.ai/icon.png",
+            "sizes": ["96x96"]
+          }
+        ],
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "@agenttrust/mcp-server",
+            "version": "1.1.1",
+            "transport": {
+              "type": "stdio"
+            },
+            "environmentVariables": [
+              {
+                "description": "Your AgentTrust API key from https://agenttrust.ai",
+                "isRequired": true,
+                "isSecret": true,
+                "name": "AGENTTRUST_API_KEY"
+              }
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-03-06T11:23:10.721165Z",
+          "publishedAt": "2026-03-06T11:23:10.721165Z",
+          "updatedAt": "2026-03-06T11:23:10.721165Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+        "name": "ai.aliengiraffe/spotdb",
+        "description": "Ephemeral data sandbox for AI workflows with guardrails and security",
+        "repository": {
+          "url": "https://github.com/aliengiraffe/spotdb",
+          "source": "github"
+        },
+        "version": "0.1.0",
+        "packages": [
+          {
+            "registryType": "oci",
+            "identifier": "docker.io/aliengiraffe/spotdb:0.1.0",
+            "transport": {
+              "type": "stdio"
+            },
+            "environmentVariables": [
+              {
+                "description": "Optional API key for request authentication",
+                "format": "string",
+                "isSecret": true,
+                "name": "X-API-Key"
+              }
+            ]
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2025-10-09T17:05:17.793149Z",
+          "publishedAt": "2025-10-09T17:05:17.793149Z",
+          "updatedAt": "2025-10-09T17:05:17.793149Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.alpic.mcp/alpic-mcp",
+        "description": "Manage your projects, debug deployment, and check analytics for any MCP server you host with Alpic",
+        "title": "Alpic",
+        "version": "0.0.1",
+        "websiteUrl": "https://alpic.ai",
+        "icons": [
+          {
+            "src": "https://raw.githubusercontent.com/alpic-ai/public-assets/refs/heads/main/alpic%20logo%20light%20200x200.png",
+            "mimeType": "image/png",
+            "sizes": ["200x200"]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.alpic.ai"
+          },
+          {
+            "type": "sse",
+            "url": "https://mcp.alpic.ai"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-02-18T15:32:32.672631Z",
+          "publishedAt": "2026-02-18T15:32:32.672631Z",
+          "updatedAt": "2026-02-18T15:32:32.672631Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+        "name": "ai.alpic.test/test-mcp-server",
+        "description": "Alpic Test MCP Server - great server!",
+        "repository": {},
+        "version": "0.0.1",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://test.alpic.ai/"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2025-09-10T13:57:43.256739Z",
+          "publishedAt": "2025-09-10T13:57:43.256739Z",
+          "updatedAt": "2025-09-10T13:57:43.256739Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+        "name": "ai.anzenna/anzenna",
+        "description": "MCP server for Anzenna",
+        "repository": {},
+        "version": "0.1",
+        "remotes": [
+          {
+            "type": "sse",
+            "url": "https://mcp.anzenna.ai/sse"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-02-21T23:53:55.798606Z",
+          "publishedAt": "2026-02-21T23:53:55.798606Z",
+          "updatedAt": "2026-02-21T23:53:55.798606Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.appdeploy/deploy-app",
+        "description": "AppDeploy turns app ideas described in AI chat into live full-stack web applications",
+        "title": "AppDeploy",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api-v2.appdeploy.ai/mcp"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-02-09T15:16:30.60739Z",
+          "publishedAt": "2026-02-09T15:16:30.60739Z",
+          "updatedAt": "2026-02-09T15:16:30.60739Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.auteng/docs",
+        "description": "Publish markdown documents as public share links with mermaid diagram support. Built by AutEng.ai",
+        "title": "AutEng MCP - Markdown Publishing & Document Share Links",
+        "version": "1.1.0",
+        "websiteUrl": "https://auteng.ai",
+        "icons": [
+          {
+            "src": "https://auteng.ai/auteng-sqr.jpg",
+            "mimeType": "image/jpeg",
+            "sizes": ["755x755"]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://auteng.ai/mcp/docs"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-02-06T20:56:39.150934Z",
+          "publishedAt": "2026-02-06T20:56:39.150934Z",
+          "updatedAt": "2026-02-06T20:56:39.150934Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.auteng/mcp",
+        "description": "Publish markdown as a publicly shareable AutEng document",
+        "title": "AutEng Document Publisher",
+        "repository": {
+          "url": "https://github.com/auteng/auteng",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://auteng.ai/mcp"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-02-06T16:52:00.816324Z",
+          "publishedAt": "2026-02-06T16:52:00.816324Z",
+          "updatedAt": "2026-02-06T16:52:00.816324Z",
+          "isLatest": false
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.auteng/mcp",
+        "description": "Publish markdown documents as public share links with mermaid diagrams. Built by AutEng.ai",
+        "title": "AutEng MCP - Markdown Publishing & Document Share Links",
+        "version": "1.0.1",
+        "websiteUrl": "https://auteng.ai",
+        "icons": [
+          {
+            "src": "https://auteng.ai/auteng-sqr.jpg",
+            "mimeType": "image/jpeg",
+            "sizes": ["755x755"]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://auteng.ai/mcp"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-02-06T17:18:22.957864Z",
+          "publishedAt": "2026-02-06T17:18:22.957864Z",
+          "updatedAt": "2026-02-06T17:18:22.957864Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.autoblocks/contextlayer-mcp",
+        "description": "Personal context management for AI assistants",
+        "repository": {
+          "url": "https://github.com/autoblocksai/ctxl",
+          "source": "github"
+        },
+        "version": "0.0.3",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "@contextlayer/mcp",
+            "version": "0.0.3",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-01-12T03:52:52.134106Z",
+          "publishedAt": "2026-01-12T03:52:52.134106Z",
+          "updatedAt": "2026-01-12T03:52:52.134106Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.autoblocks/ctxl",
+        "description": "Personal context management for AI assistants",
+        "repository": {
+          "url": "https://github.com/autoblocksai/ctxl",
+          "source": "github"
+        },
+        "version": "0.0.2",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "ctxl",
+            "version": "0.0.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-01-12T03:52:12.746584Z",
+          "publishedAt": "2026-01-12T03:52:12.746584Z",
+          "updatedAt": "2026-01-12T03:52:12.746584Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.autoblocks/ctxl-mcp",
+        "description": "Personal context management for AI assistants",
+        "repository": {
+          "url": "https://github.com/autoblocksai/ctxl",
+          "source": "github"
+        },
+        "version": "0.0.2",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "ctxl-mcp",
+            "version": "0.0.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-01-12T03:52:19.009876Z",
+          "publishedAt": "2026-01-12T03:52:19.009876Z",
+          "updatedAt": "2026-01-12T03:52:19.009876Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+        "name": "ai.bezal/local-commerce",
+        "description": "Search 7,000+ local service businesses across America by category, location, or keyword.",
+        "title": "Bezal — Local Business Intelligence for AI Agents",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://app.bezal.ai/api/mcp"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-03-03T01:28:17.439049Z",
+          "publishedAt": "2026-03-03T01:28:17.439049Z",
+          "updatedAt": "2026-03-03T01:28:17.439049Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+        "name": "ai.cirra/salesforce-mcp",
+        "description": "Comprehensive Salesforce administration and data management capabilities",
+        "title": "Cirra AI Salesforce Admin MCP Server",
+        "repository": {
+          "url": "https://github.com/cirra-ai/mcp-server",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "icons": [
+          {
+            "src": "https://cirra.ai/icon-gradient-onwhite.svg"
+          },
+          {
+            "src": "https://cirra.ai/icon-gradient-onwhite.jpg"
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.cirra.ai/sfdc/mcp"
+          }
+        ],
+        "_meta": {}
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2025-12-13T01:53:10.483779Z",
+          "publishedAt": "2025-12-13T01:53:10.483779Z",
+          "updatedAt": "2025-12-13T01:53:10.483779Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.clarid/compliance",
+        "description": "Check bank marketing for FDIC, NCUA, TILA, Reg DD, Reg Z, UDAAP, and Equal Housing compliance.",
+        "title": "Clarid Compliance",
+        "repository": {
+          "url": "https://github.com/clarid-ai/compliance-checker",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "https://clarid.ai",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.clarid.ai/mcp"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-02-26T19:00:43.930817Z",
+          "publishedAt": "2026-02-26T19:00:43.930817Z",
+          "updatedAt": "2026-02-26T19:00:43.930817Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.clarid/hmda",
+        "description": "Validate HMDA LAR files against CFPB edit checks for community banks and credit unions.",
+        "title": "Clarid HMDA Validator",
+        "repository": {
+          "url": "https://github.com/clarid-ai/compliance-checker",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "https://clarid.ai",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.clarid.ai/mcp"
+          }
+        ]
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-02-26T19:00:44.38512Z",
+          "publishedAt": "2026-02-26T19:00:44.38512Z",
+          "updatedAt": "2026-02-26T19:00:44.38512Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.com.mcp/contabo",
+        "description": "Contabo API (v1.0.0) as MCP tools for cloud provisioning, and management. Powered by HAPI MCP server",
+        "title": "Contabo (VPS) MCP Server",
+        "repository": {
+          "url": "https://github.com/la-rebelion/hapimcp",
+          "source": "github"
+        },
+        "version": "0.6.0",
+        "websiteUrl": "https://run.mcp.com.ai",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://contabo.run.mcp.com.ai/mcp",
+            "headers": [
+              {
+                "description": "Bearer token for authenticating with the Contabo API. Obtain via the documented token endpoint.",
+                "isRequired": true,
+                "format": "string",
+                "isSecret": true,
+                "name": "Authorization"
+              },
+              {
+                "description": "Optional request ID for tracing (recommended for support/debugging)",
+                "format": "string",
+                "name": "x-request-id"
+              }
+            ]
+          }
+        ],
+        "_meta": {
+          "io.modelcontextprotocol.registry/publisher-provided": {
+            "documentation": "https://api.contabo.com/#section/Introduction",
+            "examples": [
+              {
+                "config": "Add 'https://contabo.run.mcp.com.ai/mcp' as a remote MCP server in your MCP client. Ensure ACCESS_TOKEN is set in Authorization argument.",
+                "description": "Connect to the Contabo MCP server to manage cloud resources (VPS, VDS, Object Storage, etc.)",
+                "name": "Basic Connection"
+              },
+              {
+                "description": "List all your Contabo compute instances using the MCP tools",
+                "name": "Get Instances",
+                "note": "Ask the MCP client (i.e.: https://chat.mcp.com.ai) to invoke the 'listInstances' tool to retrieve your VPS and VDS instances"
+              },
+              {
+                "config": "curl -d 'client_id=...' -d 'client_secret=...' --data-urlencode 'username=...' --data-urlencode 'password=...' -d 'grant_type=password' 'https://auth.contabo.com/auth/realms/contabo/protocol/openid-connect/token' | jq -r '.access_token'",
+                "description": "Obtain ACCESS_TOKEN using documented OAuth2 flow (see docs and example curl in contabo.md)",
+                "name": "Authentication"
+              }
+            ],
+            "keywords": [
+              "openapi",
+              "rest-api",
+              "contabo",
+              "cloud",
+              "vps",
+              "bare-metal",
+              "automation",
+              "infrastructure"
+            ],
+            "license": "MIT",
+            "notes": [
+              "This MCP server exposes the full Contabo API as MCP tools for cloud automation.",
+              "Authentication is required for all operations. Obtain credentials from the Contabo Customer Control Panel.",
+              "Download the full API specification from https://api.contabo.com, or from the HAPI MCP server documentation: https://docs.mcp.com.ai/servers-apis/openapi/",
+              "See https://api.contabo.com/#section/Introduction and https://contabo.com/en-us/contabo-api/ for full API documentation.",
+              "Run your own HAPI MCP server using Docker: docker run -p 3030:3030  -v ~/.hapi:/app/.hapi serve contabo --port 3030 --headless --url https://api.contabo.com",
+              "Or the HAPI MCP CLI: hapi serve contabo --port 3030 --headless --url https://api.contabo.com --openapi https://docs.mcp.com.ai/apis/openapi/contabo.json",
+              "Documentation: https://docs.mcp.com.ai/deployment/"
+            ],
+            "publisher": "La Rebelion Labs"
+          }
+        }
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-01-08T13:19:46.430479Z",
+          "publishedAt": "2026-01-08T13:19:46.430479Z",
+          "updatedAt": "2026-01-08T13:19:46.430479Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.com.mcp/hapi-mcp",
+        "description": "HAPI MCP server: Dynamically exposes OpenAPI REST APIs as MCP tools for AI assistants",
+        "title": "HAPI MCP Server",
+        "repository": {
+          "url": "https://github.com/larebelion/hapimcp",
+          "source": "github"
+        },
+        "version": "0.6.0",
+        "websiteUrl": "https://docs.mcp.com.ai/components/hapi-server/hapi-cli",
+        "packages": [
+          {
+            "registryType": "oci",
+            "identifier": "docker.io/hapimcp/hapi-cli:0.6.0",
+            "runtimeHint": "docker",
+            "transport": {
+              "type": "streamable-http",
+              "url": "https://{HAPI_FQDN}:{HAPI_PORT}/mcp",
+              "headers": [
+                {
+                  "description": "Authorization token for accessing the MCP server",
+                  "format": "string",
+                  "isSecret": true,
+                  "name": "Authorization"
+                }
+              ]
+            },
+            "runtimeArguments": [
+              {
+                "description": "Port mapping for the host to container (e.g., '3030:3030'). Adjust second port if changing internal container port (HAPI_PORT)",
+                "isRequired": true,
+                "format": "string",
+                "default": "3030:3030",
+                "type": "named",
+                "name": "-p",
+                "valueHint": "port"
+              },
+              {
+                "description": "Volume mapping for HAPI configuration directory",
+                "format": "string",
+                "default": "~/.hapi:/app/.hapi",
+                "type": "named",
+                "name": "-v",
+                "valueHint": "volume",
+                "isRepeated": true
+              }
+            ],
+            "packageArguments": [
+              {
+                "description": "Command to start the HAPI MCP server",
+                "isRequired": true,
+                "format": "string",
+                "default": "serve",
+                "type": "positional",
+                "name": "serve",
+                "valueHint": "serve"
+              },
+              {
+                "description": "The name of the project/API to serve (e.g., 'petstore'). Optional when using HAPI_OPENAPI environment variable",
+                "format": "string",
+                "type": "positional",
+                "name": "projectName",
+                "valueHint": "petstore"
+              },
+              {
+                "description": "The port to listen on inside the container",
+                "format": "number",
+                "default": "3030",
+                "type": "named",
+                "name": "--port",
+                "valueHint": "port"
+              },
+              {
+                "description": "Run in headless mode (serve MCP-only, no business logic)",
+                "format": "boolean",
+                "default": "true",
+                "type": "named",
+                "name": "--headless"
+              },
+              {
+                "description": "The server provides REST API's business logic AND also exposes them as MCP tools",
+                "format": "boolean",
+                "default": "true",
+                "type": "named",
+                "name": "--mcp"
+              },
+              {
+                "description": "Enable development mode with verbose logging",
+                "format": "boolean",
+                "type": "named",
+                "name": "--dev"
+              },
+              {
+                "description": "The full URL for the backend API server (overrides OpenAPI spec servers). Uses OAS server URL if not provided",
+                "format": "string",
+                "type": "named",
+                "name": "--url",
+                "valueHint": "url"
+              },
+              {
+                "description": "OpenAPI spec file path or URL to use instead of loading from HAPI_HOME",
+                "format": "string",
+                "type": "named",
+                "name": "--openapi",
+                "valueHint": "openapi"
+              },
+              {
+                "description": "Comma-separated list of allowed origins for CORS (e.g., 'http://localhost:3000,https://example.com')",
+                "format": "string",
+                "type": "named",
+                "name": "--cors",
+                "valueHint": "origins"
+              },
+              {
+                "description": "Comma-separated list of OAS configuration files to apply (can be URLs)",
+                "format": "string",
+                "type": "named",
+                "name": "--filename",
+                "valueHint": "files"
+              },
+              {
+                "description": "Path to SSL certificate file for HTTPS. Volume mount required if using Docker. https://docs.mcp.com.ai/components/hapi-server/hapi-cli#running-with-tls-https",
+                "format": "string",
+                "type": "named",
+                "name": "--cert",
+                "valueHint": "path"
+              },
+              {
+                "description": "Path to SSL key file for HTTPS. Volume mount required if using Docker",
+                "format": "string",
+                "type": "named",
+                "name": "--key",
+                "valueHint": "path"
+              }
+            ],
+            "environmentVariables": [
+              {
+                "description": "Fully Qualified Domain Name for the HAPI server (used in MCP tool URLs)",
+                "format": "string",
+                "default": "localhost",
+                "name": "HAPI_FQDN"
+              },
+              {
+                "description": "Directory path for HAPI configuration and specs. Should be mounted as a volume in Docker",
+                "format": "string",
+                "default": "/app/.hapi",
+                "name": "HAPI_HOME"
+              },
+              {
+                "description": "The name of the project/API (alternative to positional argument)",
+                "format": "string",
+                "name": "PROJECT_NAME"
+              },
+              {
+                "description": "OpenAPI spec URL or path (alternative to --openapi flag)",
+                "format": "string",
+                "name": "HAPI_OPENAPI"
+              },
+              {
+                "description": "Backend API base URL (alternative to --url flag)",
+                "format": "string",
+                "name": "HAPI_URL"
+              },
+              {
+                "description": "Server port (alternative to --port flag) - this is the internal container port",
+                "format": "number",
+                "default": "3030",
+                "name": "HAPI_PORT"
+              },
+              {
+                "description": "Enable headless mode (alternative to --headless flag)",
+                "format": "boolean",
+                "default": "true",
+                "name": "HAPI_HEADLESS"
+              },
+              {
+                "description": "Enable MCP mode (alternative to --mcp flag)",
+                "format": "boolean",
+                "default": "true",
+                "name": "HAPI_MCP"
+              },
+              {
+                "description": "Enable development mode (alternative to --dev flag)",
+                "format": "boolean",
+                "name": "HAPI_DEV"
+              },
+              {
+                "description": "Comma-separated allowed CORS origins (alternative to --cors flag)",
+                "format": "string",
+                "name": "HAPI_CORS"
+              },
+              {
+                "description": "Comma-separated configuration files (alternative to --filename flag)",
+                "format": "string",
+                "name": "HAPI_CONFIG_FILES"
+              },
+              {
+                "description": "Node environment (development, production). 'development' enables verbose logging and debugging features.",
+                "format": "string",
+                "default": "production",
+                "name": "NODE_ENV"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://{HAPI_FQDN}:{HAPI_PORT}/mcp",
+            "variables": {
+              "HAPI_FQDN": {
+                "description": "Fully Qualified Domain Name for the HAPI server",
+                "format": "string",
+                "default": "localhost"
+              },
+              "HAPI_PORT": {
+                "description": "Port for the HAPI server",
+                "format": "number",
+                "default": "3030"
+              }
+            }
+          }
+        ],
+        "_meta": {
+          "io.modelcontextprotocol.registry/publisher-provided": {
+            "documentation": "https://docs.mcp.com.ai/deployment/docker",
+            "examples": [
+              {
+                "command": "docker run -p 3030:3030 -v ~/.hapi:/app/.hapi hapimcp/hapi-cli:0.6.0 serve petstore --port 3030 --headless --url https://petstore3.swagger.io/api/v3",
+                "description": "Save specs in ~/.hapi/specs. Download example if not present: https://petstore3.swagger.io/api/v3/swagger.json",
+                "name": "Quick Start with a local API spec"
+              },
+              {
+                "command": "docker run -p 3030:3030 -e HAPI_OPENAPI=https://api.example.com/openapi.json -e HAPI_URL=https://api.example.com hapimcp/hapi-cli:0.6.0 serve my-api --headless",
+                "description": "Serve a custom API using environment variables",
+                "name": "Custom OpenAPI with Environment Variables"
+              },
+              {
+                "config": "See https://docs.mcp.com.ai/deployment/docker#docker-compose-example",
+                "description": "Run with persistent volumes and custom specs",
+                "name": "Docker Compose Setup"
+              }
+            ],
+            "keywords": [
+              "openapi",
+              "rest-api",
+              "api-first",
+              "headless",
+              "docker"
+            ],
+            "license": "MIT",
+            "publisher": "La Rebelion Labs"
+          }
+        }
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-01-07T00:32:01.41626Z",
+          "publishedAt": "2026-01-07T00:32:01.41626Z",
+          "updatedAt": "2026-01-07T00:32:01.41626Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.com.mcp/lenny-rachitsky-podcast",
+        "description": "MCP server for structured access to Lenny Rachitsky podcast transcripts. For content creators.",
+        "title": "Lenny Rachitsky Podcast Transcripts MCP Server",
+        "repository": {
+          "url": "https://github.com/la-rebelion/hapimcp",
+          "source": "github"
+        },
+        "version": "0.6.0",
+        "websiteUrl": "https://mcp.com.ai",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://lenny-rachitsky.run.mcp.com.ai/mcp"
+          }
+        ],
+        "_meta": {
+          "io.modelcontextprotocol.registry/publisher-provided": {
+            "documentation": "https://docs.mcp.com.ai/servers-apis/openapi/podcast-transcripts.yaml",
+            "examples": [
+              {
+                "config": "Add 'https://lenny-rachitsky.run.mcp.com.ai/mcp' as a remote MCP server in your MCP client.",
+                "description": "Connect to the Lenny Rachitsky Podcast MCP server to access and search podcast transcripts.",
+                "name": "Basic Connection"
+              },
+              {
+                "description": "The server exposes podcast transcript search, retrieval, and metadata operations as MCP tools.",
+                "name": "Available Operations",
+                "note": "See the OpenAPI spec for endpoints and schema: https://docs.mcp.com.ai/servers-apis/openapi/podcast-transcripts.yaml"
+              }
+            ],
+            "keywords": [
+              "openapi",
+              "rest-api",
+              "podcast",
+              "transcripts",
+              "lenny rachitsky",
+              "influencer",
+              "ai",
+              "content",
+              "search",
+              "archive",
+              "vlog",
+              "content creators"
+            ],
+            "license": "MIT",
+            "notes": [
+              "This MCP server is designed for influencers and content creators to make their content accessible to AI tools.",
+              "All that is needed are the transcripts in a structured format.",
+              "Lenny Rachitsky is a leading voice in product management and startups, hosting a popular podcast with industry experts.",
+              "The backend API is https://lenny-rachitsky.search.mcp.com.ai",
+              "No authentication required for public transcript access.",
+              "For production or private deployments, see the HAPI MCP server documentation.",
+              "OpenAPI spec: https://docs.mcp.com.ai/servers-apis/openapi/podcast-transcripts.yaml",
+              "Documentation: https://docs.mcp.com.ai"
+            ],
+            "publisher": "La Rebelion Labs"
+          }
+        }
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-01-16T11:08:36.481149Z",
+          "publishedAt": "2026-01-16T11:08:36.481149Z",
+          "updatedAt": "2026-01-16T11:08:36.481149Z",
+          "isLatest": true
+        }
+      }
+    },
+    {
+      "server": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ai.com.mcp/linkedin",
+        "description": "LinkedIn API as MCP tools to retrieve profile data and publish content. Powered by HAPI MCP.",
+        "title": "LinkedIn MCP Server",
+        "repository": {
+          "url": "https://github.com/la-rebelion/hapimcp",
+          "source": "github"
+        },
+        "version": "1.0.0+0.7.1",
+        "websiteUrl": "https://run.mcp.com.ai",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://linkedin.run.mcp.com.ai/mcp"
+          }
+        ],
+        "_meta": {
+          "io.modelcontextprotocol.registry/publisher-provided": {
+            "documentation": "https://learn.microsoft.com/en-us/linkedin/shared/authentication/authorization-code-flow",
+            "examples": [
+              {
+                "config": "Add 'https://linkedin.run.mcp.com.ai/mcp' as a remote MCP server in your MCP client, then authenticate with your LinkedIn app credentials when prompted.",
+                "description": "Connect once and let your MCP client + HAPI orchestrate the OAuth2 Authorization Code flow.",
+                "name": "Basic Connection"
+              },
+              {
+                "description": "This server exposes 3 LinkedIn operations as MCP tools:",
+                "name": "What You Can Do",
+                "note": "createSharePost, getSharePosts, getPersonProfile."
+              },
+              {
+                "config": "hapi deploy --openapi https://docs.mcp.com.ai/apis/openapi/linkedin-connector.yaml --url https://api.linkedin.com --host https://linkedin.run.mcp.com.ai",
+                "description": "Publish your LinkedIn MCP Server with a public host your clients can reach.",
+                "name": "Deploy your own in One Command"
+              }
+            ],
+            "keywords": [
+              "openapi",
+              "rest-api",
+              "linkedin",
+              "social",
+              "oauth2",
+              "mcp",
+              "automation",
+              "publishing"
+            ],
+            "license": "LinkedIn API License",
+            "notes": [
+              "MCP clients must support OAuth2 Authorization Code flow for LinkedIn integrations.",
+              "HAPI handles the heavy lifting for OAuth2 flow and API tool exposure.",
+              "Default LinkedIn API base URL: https://api.linkedin.com.",
+              "The --host value is required because ChatGPT, Claude, and other MCP clients connect to your server using that external FQDN/URL. Used to generate the absolute URLs as per MCP specification.",
+              "Use a public internet hostname (or VPN-reachable internal FQDN/IP) that clients can access.",
+              "OpenAPI source: https://docs.mcp.com.ai/apis/openapi/linkedin-connector.yaml",
+              "Documentation: https://docs.mcp.com.ai/deployment/"
+            ],
+            "publisher": "La Rebelion Labs"
+          }
+        }
+      },
+      "_meta": {
+        "io.modelcontextprotocol.registry/official": {
+          "status": "active",
+          "statusChangedAt": "2026-02-19T15:17:12.346134Z",
+          "publishedAt": "2026-02-19T15:17:12.346134Z",
+          "updatedAt": "2026-02-19T15:17:12.346134Z",
+          "isLatest": true
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "nextCursor": "ai.com.mcp/linkedin:1.0.0+0.7.1",
+    "count": 30
+  }
+}

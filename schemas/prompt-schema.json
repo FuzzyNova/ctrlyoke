@@ -436,7 +436,7 @@
     },
     "mcpServerConfig": {
       "type": "object",
-      "description": "User-defined MCP server configuration for attaching external MCP servers to harness invocations.",
+      "description": "User-defined MCP server configuration. Exactly one of `command` (stdio) or `url` (remote) must be set.",
       "properties": {
         "id": {
           "type": "string",
@@ -444,17 +444,17 @@
         },
         "command": {
           "type": "string",
-          "description": "Command to run the MCP server (e.g., \"node\", \"python\")"
+          "description": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")"
         },
         "args": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Arguments to pass to the command"
+          "description": "Arguments to pass to the command (stdio servers only)"
         },
         "env": {
           "type": "object",
           "additionalProperties": { "type": "string" },
-          "description": "Environment variables for the server process"
+          "description": "Environment variables for the server process (stdio servers only)"
         },
         "autoApprove": {
           "oneOf": [
@@ -462,9 +462,23 @@
             { "type": "array", "items": { "type": "string" } }
           ],
           "description": "Tools to auto-approve: true = all tools, string[] = specific tools"
+        },
+        "url": {
+          "type": "string",
+          "description": "Remote endpoint URL for streamable-http or SSE servers (e.g. \"https://mcp.example.com\")"
+        },
+        "transport": {
+          "type": "string",
+          "enum": ["streamable-http", "sse"],
+          "description": "Transport protocol for remote servers. Defaults to \"streamable-http\"."
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "HTTP headers to send with every request (remote servers only, e.g. { \"Authorization\": \"Bearer token\" })"
         }
       },
-      "required": ["id", "command"],
+      "required": ["id"],
       "additionalProperties": false
     }
   }

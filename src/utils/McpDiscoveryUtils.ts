@@ -206,16 +206,16 @@ export async function discoverLocalMcpServers(
 }
 
 // ============================================================================
-// Anthropic MCP Registry
+// MCP Registry (registry.modelcontextprotocol.io)
 // ============================================================================
 
 /**
- * Raw response shape from the Anthropic MCP registry.
- * Based on verified live API responses from 2026-03-29.
+ * Raw response shape from the MCP registry.
+ * Based on verified live API responses from 2026-03-31.
  * Not exported — only used internally.
  */
-interface AnthropicRegistryResponse {
-  servers?: AnthropicRegistryItem[];
+interface McpIoRegistryResponse {
+  servers?: McpIoRegistryItem[];
   metadata?: {
     count?: number;
     nextCursor?: string;
@@ -223,13 +223,15 @@ interface AnthropicRegistryResponse {
 }
 
 /**
- * Each item in the registry has a `server` (standard MCP fields) and `_meta` (Anthropic enrichment).
+ * Each item in the registry has a `server` (standard MCP fields) and `_meta` (registry enrichment).
  */
-interface AnthropicRegistryItem {
+interface McpIoRegistryItem {
   server?: {
-    name?: string; // qualified name e.g. "com.canva.mcp/canva"
+    name?: string; // qualified name e.g. "agency.lona/trading"
     title?: string; // display name e.g. "Canva"
     description?: string;
+    version?: string;
+    websiteUrl?: string;
     packages?: Array<{
       registryType?: string; // "npm", "pip", "docker"
       identifier?: string; // npm package name
@@ -240,58 +242,51 @@ interface AnthropicRegistryItem {
     remotes?: Array<{
       type?: string; // "streamable-http", "sse"
       url?: string;
+      headers?: Array<{
+        name?: string;
+        description?: string;
+        isRequired?: boolean;
+        isSecret?: boolean;
+      }>;
     }>;
   };
   _meta?: {
-    "com.anthropic.api/mcp-registry"?: {
-      uuid?: string;
-      displayName?: string;
-      oneLiner?: string;
-      slug?: string;
-      claudeCodeCopyText?: string;
-      toolNames?: string[];
-      worksWith?: string[];
-      isAuthless?: boolean;
-      popularityScore?: number;
-      trendingScore?: number;
+    "io.modelcontextprotocol.registry/official"?: {
+      status?: string;
+      isLatest?: boolean;
+      publishedAt?: string;
+      updatedAt?: string;
+      statusChangedAt?: string;
     };
   };
 }
 
-const ANTHROPIC_REGISTRY_URL =
-  "https://api.anthropic.com/mcp-registry/v0/servers";
+const MCP_REGISTRY_URL = "https://registry.modelcontextprotocol.io/v0/servers";
 
 /**
- * Fetches MCP servers from the Anthropic public registry.
+ * Fetches MCP servers from the official MCP registry (registry.modelcontextprotocol.io).
  * No authentication required.
  *
- * The registry returns results ordered by popularity (descending rank).
- * Server-side sorting is not supported — the `sort` param has no effect.
- *
- * Server-side search is supported via the `search` query parameter.
- * Client-side filtering is still used in the webview for the filter-as-you-type
- * UX, but server-side search could be leveraged for targeted queries.
+ * The registry returns results in alphabetical order by default.
+ * Client-side filtering is used in the webview for filter-as-you-type UX.
  *
  * Pagination is cursor-based: pass the `nextCursor` from a previous response
  * to fetch the next page.
  *
- * @param options.limit Maximum results per page (default 100, API max 100)
+ * Only entries with `isLatest: true` are included to avoid showing stale
+ * duplicate entries for servers that have multiple published versions.
+ *
+ * @param options.limit Maximum results per page (default 100)
  * @param options.cursor Cursor from a previous response's `nextCursor`
- * @param options.search Server-side search query (optional)
  */
-export async function fetchAnthropicRegistry(
-  options: { limit?: number; cursor?: string; search?: string } = {}
+export async function fetchMcpRegistry(
+  options: { limit?: number; cursor?: string } = {}
 ): Promise<{ servers: RegistryMcpEntry[]; nextCursor?: string }> {
-  const { limit = 100, cursor, search } = options;
-  const params = new URLSearchParams({
-    version: "latest",
-    visibility: "commercial",
-    limit: String(limit),
-  });
+  const { limit = 100, cursor } = options;
+  const params = new URLSearchParams({ limit: String(limit) });
   if (cursor) params.set("cursor", cursor);
-  if (search) params.set("search", search);
 
-  const url = `${ANTHROPIC_REGISTRY_URL}?${params}`;
+  const url = `${MCP_REGISTRY_URL}?${params}`;
 
   // fetch() is available in Node 18+; VS Code extension host runs Node 22.
   const response = await fetch(url, {
@@ -301,32 +296,59 @@ export async function fetchAnthropicRegistry(
 
   if (!response.ok) {
     throw new Error(
-      `Anthropic registry returned ${response.status}: ${response.statusText}`
+      `MCP registry returned ${response.status}: ${response.statusText}`
     );
   }
 
-  const data = (await response.json()) as AnthropicRegistryResponse;
+  const data = (await response.json()) as McpIoRegistryResponse;
   const items = data.servers ?? [];
 
   const entries = items.flatMap((item): RegistryMcpEntry[] => {
     const s = item.server;
-    const meta = item._meta?.["com.anthropic.api/mcp-registry"];
+    const meta = item._meta?.["io.modelcontextprotocol.registry/official"];
     if (!s) return [];
 
-    const id = meta?.uuid ?? s.name ?? "";
+    // Skip stale versions — only show the latest for each server name
+    if (meta?.isLatest === false) return [];
+
+    const id = s.name ?? "";
     if (!id) return [];
 
-    const name = meta?.displayName ?? s.title ?? s.name ?? id;
-    const description = meta?.oneLiner ?? s.description ?? "";
+    const name = s.title ?? s.name ?? id;
+    const description = s.description ?? "";
 
     const entry: RegistryMcpEntry = {
       id,
       name,
       description,
-      verified: true, // all Anthropic commercial registry entries are curated
+      verified: true, // all entries in the official registry are curated
     };
 
-    // Prefer npm package for install command; fall back to other package types
+    if (meta?.updatedAt) {
+      entry.updatedAt = meta.updatedAt;
+    }
+
+    // ── Remote transport (streamable-http / SSE) ─────────────────────────────
+    // When a server only exposes a hosted endpoint (no stdio package), extract
+    // the URL, transport type, and any required auth headers.
+    const firstRemote = s.remotes?.[0];
+    if (firstRemote?.url) {
+      entry.remoteUrl = firstRemote.url;
+      entry.remoteTransport = firstRemote.type === "sse" ? "sse" : "streamable-http";
+      const headerDefs = (firstRemote.headers ?? []).filter((h) => h.name);
+      if (headerDefs.length > 0) {
+        entry.remoteHeaders = headerDefs.map((h) => ({
+          name: h.name!,
+          description: h.description,
+          isRequired: h.isRequired,
+          isSecret: h.isSecret,
+        }));
+      }
+    }
+
+    // ── stdio transport (local package / npm / pip) ──────────────────────────
+    // Only populate installCommand / envVars when the server has a package
+    // definition (i.e. it can be run as a local process).
     const npmPkg = s.packages?.find((p) => p.registryType === "npm");
     const anyPkg = s.packages?.[0];
     const pkg = npmPkg ?? anyPkg;
@@ -344,25 +366,13 @@ export async function fetchAnthropicRegistry(
       entry.installCommand = [runtimeHint, ...runtimeArgs, pkg.identifier]
         .filter(Boolean)
         .join(" ");
-    }
 
-    const envVars = pkg?.environmentVariables;
-    if (envVars && envVars.length > 0) {
-      entry.envVars = envVars.flatMap((e) =>
-        e.name ? [{ name: e.name, description: e.description }] : []
-      );
-    }
-
-    // Include the claudeCodeCopyText as a reference (not used in import, but useful for display)
-    if (meta?.claudeCodeCopyText) {
-      entry.claudeCodeCopyText = meta.claudeCodeCopyText;
-    }
-
-    if (typeof meta?.popularityScore === "number") {
-      entry.popularityScore = meta.popularityScore;
-    }
-    if (typeof meta?.trendingScore === "number") {
-      entry.trendingScore = meta.trendingScore;
+      const envVars = pkg.environmentVariables;
+      if (envVars && envVars.length > 0) {
+        entry.envVars = envVars.flatMap((e) =>
+          e.name ? [{ name: e.name, description: e.description }] : []
+        );
+      }
     }
 
     return [entry];
@@ -389,19 +399,18 @@ export async function safeDiscoverLocalMcpServers(
 }
 
 /**
- * Safely fetches the Anthropic registry and returns an empty result on error.
- *
- * Supports cursor-based pagination and server-side search.
+ * Safely fetches the MCP registry and returns an empty result on error.
+ * Supports cursor-based pagination.
  */
-export async function safeFetchAnthropicRegistry(
-  options: { cursor?: string; search?: string } = {}
+export async function safeFetchMcpRegistry(
+  options: { cursor?: string } = {}
 ): Promise<{
   servers: RegistryMcpEntry[];
   nextCursor?: string;
   error?: string;
 }> {
   try {
-    const result = await fetchAnthropicRegistry(options);
+    const result = await fetchMcpRegistry(options);
     return result;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
