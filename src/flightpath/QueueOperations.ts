@@ -134,8 +134,9 @@ export function getQueueStatus(
       model: workflowFile.model ?? null,
       currentIndex: state.currentIndex,
       totalPrompts: state.prompts.length,
-      completedPrompts: state.results.filter((r) => r.status === STEP_STATUS.COMPLETED)
-        .length,
+      completedPrompts: state.results.filter(
+        (r) => r.status === STEP_STATUS.COMPLETED
+      ).length,
       executionState: state.status,
       maxQueueSize: unlimitedMode ? 0 : maxQueueSize, // 0 means unlimited
       remainingSlots: remainingSlots === Infinity ? 0 : remainingSlots,

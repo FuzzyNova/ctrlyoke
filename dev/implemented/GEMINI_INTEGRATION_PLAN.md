@@ -3,7 +3,7 @@
 **Date:** March 17, 2026  
 **Status:** Ready for Implementation  
 **Gemini CLI Version:** 1.0.0 (based on research)
-**Target FlightPath Version:** 1.2.0  
+**Target FlightPath Version:** 1.2.0
 
 ---
 
@@ -42,6 +42,7 @@ This plan outlines the implementation of **Gemini CLI** as a first-class harness
 **Goal:** Headless mode with `stream-json` output, process-exit completion detection.
 
 **Deliverables:**
+
 - ✅ 5 provider files in `src/flightpath/harness/gemini/`
 - ✅ Stream-JSON parser for real-time output
 - ✅ Session ID extraction from stdout
@@ -56,6 +57,7 @@ This plan outlines the implementation of **Gemini CLI** as a first-class harness
 **Goal:** TUI support with log file monitoring for completion detection.
 
 **Deliverables:**
+
 - ✅ Log file monitor with inactivity timeout
 - ✅ Session discovery via log file matching
 - ✅ TUI stream processor for terminal UI
@@ -80,6 +82,7 @@ src/flightpath/harness/gemini/
 #### Step 1: GeminiCliProvider.ts
 
 **Key Fields:**
+
 - `harnessId`: `gemini-cli`
 - `cliCommand`: `gemini`
 - `shouldStreamHeadlessOutput`: `true`
@@ -88,6 +91,7 @@ src/flightpath/harness/gemini/
 #### Step 2: GeminiResponseParser.ts
 
 **Stream-JSON Event Mapping:**
+
 - `init` -> Extract `session_id`, `model`
 - `message` (role: assistant) -> Extract text content (handle `delta: true`)
 - `tool_use` -> Map to `TOOL_CALL` event
@@ -98,17 +102,18 @@ src/flightpath/harness/gemini/
 
 **Mapping Table:**
 
-| FlightPath Setting | Gemini Mapping |
-|-------------------|----------------|
-| `dangerouslyAllowAll` | `-y` or `--approval-mode yolo` |
-| `allowAll` | `--approval-mode auto_edit` |
-| `custom` | `--approval-mode default` (Gemini's policy engine preferred) |
+| FlightPath Setting    | Gemini Mapping                                               |
+| --------------------- | ------------------------------------------------------------ |
+| `dangerouslyAllowAll` | `-y` or `--approval-mode yolo`                               |
+| `allowAll`            | `--approval-mode auto_edit`                                  |
+| `custom`              | `--approval-mode default` (Gemini's policy engine preferred) |
 
 #### Step 4: GeminiLogParser.ts
 
 **Log Location:** `~/.gemini/tmp/<project-name>/chats/session-<timestamp>-<short-uuid>.json`
 
 **Logic:**
+
 - Read the entire JSON object (it's a valid single JSON, not NDJSON)
 - Parse the `messages` array
 - Map `gemini` type messages to assistant responses
@@ -156,6 +161,7 @@ prompts:
 ## Appendix A: Event and Log Formats
 
 ### Sample Stream-JSON
+
 ```json
 {"type":"init","session_id":"656a5df3-e1dd-406e-83a7-7974d1f29238","model":"auto-gemini-3"}
 {"type":"message","role":"assistant","content":"Hello!","delta":true}
@@ -164,16 +170,21 @@ prompts:
 ```
 
 ### Sample Log File Structure
+
 ```json
 {
   "sessionId": "UUID",
   "messages": [
-    { "type": "user", "content": [{"text": "hi"}] },
-    { 
-      "type": "gemini", 
-      "content": "Hello!", 
+    { "type": "user", "content": [{ "text": "hi" }] },
+    {
+      "type": "gemini",
+      "content": "Hello!",
       "toolCalls": [
-        { "name": "list_directory", "status": "success", "resultDisplay": "..." }
+        {
+          "name": "list_directory",
+          "status": "success",
+          "resultDisplay": "..."
+        }
       ]
     }
   ]

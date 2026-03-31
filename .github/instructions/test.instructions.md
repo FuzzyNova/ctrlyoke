@@ -75,7 +75,7 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - Descriptive test names: "should [expected behavior] when [condition]"
 - TDD style (Mocha UI: `'tdd'`)
 - Total: ~13,100 lines across 40 test files
-</testStructure>
+  </testStructure>
 
 <testCoverage>
 **Fully Tested:**
@@ -105,7 +105,7 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - Full workflows with real AI responses
 - UI components (dashboard, settings webview)
 - Real CLI/Chat harness interactions
-</testCoverage>
+  </testCoverage>
 
 <testingChallenges>
 **AI Integration:** Cannot mock real CLI/Chat responses; test setup/parsing only, manual for full workflows

@@ -21,7 +21,9 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
   const { prompts, totalSteps, executionState } = useWorkflowStore();
 
   // Calculate completed count based on prompt statuses
-  const completedCount = prompts.filter((p) => p.status === STEP_STATUS.COMPLETED).length;
+  const completedCount = prompts.filter(
+    (p) => p.status === STEP_STATUS.COMPLETED
+  ).length;
 
   // Determine if workflow is actively running
   const isRunning =
@@ -47,7 +49,9 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
   // Idle state: Show count (or just the number when narrow)
   return (
     <span className={`text-xs text-description-fg ${className}`}>
-      {narrow ? totalSteps : `${totalSteps} ${totalSteps === 1 ? "prompt" : "prompts"}`}
+      {narrow
+        ? totalSteps
+        : `${totalSteps} ${totalSteps === 1 ? "prompt" : "prompts"}`}
     </span>
   );
 };

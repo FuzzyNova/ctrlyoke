@@ -405,7 +405,10 @@ export class PromptFileParser {
    * Discover prompt files in workspace
    */
   async discoverPromptFiles(workspaceFolderPath: string): Promise<string[]> {
-    const promptsDirPath = path.join(workspaceFolderPath, PATH_CONSTANTS.FLIGHTPATH_DIR);
+    const promptsDirPath = path.join(
+      workspaceFolderPath,
+      PATH_CONSTANTS.FLIGHTPATH_DIR
+    );
 
     try {
       const files = await this.findPromptFilesRecursive(promptsDirPath);

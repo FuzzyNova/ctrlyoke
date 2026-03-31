@@ -11,11 +11,13 @@
 `allowDynamicExtension` is opaque. Its actual behavior — injecting an MCP server config so the AI can call `flightpath_append_queue` and `flightpath_queue_status` — maps directly to the MCP concept. Renaming to `mcpServers` is more accurate and opens a natural extension point: users can inject their own MCP servers (database, search, custom tools) into individual workflow prompts.
 
 **Current state:**
+
 - `allowDynamicExtension: true` → CLI harnesses get `--mcp-config` flags; copilot-chat does nothing (LM tools are always on)
 - `allowDynamicExtension: false` → no MCP config injected
 - Chat harness: `allowDynamicExtension` is a **complete no-op today** — LM tools are registered unconditionally at activation and cannot be disabled per-prompt
 
 **Target state:**
+
 - `mcpServers: ["flightpath"]` → same as `allowDynamicExtension: true`
 - `mcpServers: null` or `mcpServers: []` → same as `allowDynamicExtension: false`
 - `mcpServers: ["flightpath", { id: "my-db", command: "node", args: [...] }]` → FlightPath MCP + user MCP
@@ -201,14 +203,14 @@ Signature change: accept `mcpServers: (string | McpServerConfig)[] | null` inste
 
 When a `McpServerConfig` has `autoApprove: true` and the harness is CLI, each harness needs server-specific approval flags:
 
-| Harness | Format | Example |
-|---|---|---|
-| Claude CLI | `--allowed-tools mcp__<server-id>` | `--allowed-tools mcp__my-database` |
-| Copilot CLI | `--allow-tool <server-id>` | `--allow-tool my-database` |
-| Codex CLI | none (auto-approves all MCPs by default) | — |
-| OpenCode CLI | config file merge | added to `opencode.json` |
-| Qwen CLI | TBD | — |
-| Gemini CLI | TBD | — |
+| Harness      | Format                                   | Example                            |
+| ------------ | ---------------------------------------- | ---------------------------------- |
+| Claude CLI   | `--allowed-tools mcp__<server-id>`       | `--allowed-tools mcp__my-database` |
+| Copilot CLI  | `--allow-tool <server-id>`               | `--allow-tool my-database`         |
+| Codex CLI    | none (auto-approves all MCPs by default) | —                                  |
+| OpenCode CLI | config file merge                        | added to `opencode.json`           |
+| Qwen CLI     | TBD                                      | —                                  |
+| Gemini CLI   | TBD                                      | —                                  |
 
 When `autoApprove` is a `string[]`, treat each entry as a tool name pattern. For Claude CLI: `--allowed-tools mcp__<server-id>__<tool-pattern>`. For Copilot CLI: `--allow-tool <tool-pattern>`.
 
@@ -221,10 +223,11 @@ When `autoApprove` is a `string[]`, treat each entry as a tool name pattern. For
 VS Code exposes a **stable public API** for extensions to programmatically register MCP servers without touching any config file:
 
 ```typescript
-vscode.lm.registerMcpServerDefinitionProvider(providerId, provider)
+vscode.lm.registerMcpServerDefinitionProvider(providerId, provider);
 ```
 
 This is superior to writing `.vscode/mcp.json` because:
+
 - No filesystem mutation
 - Immediately reversible (clear active servers, fire change event → VS Code stops them)
 - No cleanup files to forget on error/crash
@@ -260,7 +263,9 @@ This is superior to writing `.vscode/mcp.json` because:
  * unconditionally at activation via registerLanguageModelTools() and are always
  * available to Copilot Chat regardless of mcpServers.
  */
-export class FlightPathMcpServerProvider implements vscode.McpServerDefinitionProvider {
+export class FlightPathMcpServerProvider
+  implements vscode.McpServerDefinitionProvider
+{
   private activeServers: McpServerConfig[] = [];
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChangeMcpServerDefinitions = this._onDidChange.event;
@@ -276,7 +281,13 @@ export class FlightPathMcpServerProvider implements vscode.McpServerDefinitionPr
 
   provideMcpServerDefinitions(): vscode.McpStdioServerDefinition[] {
     return this.activeServers.map(
-      (s) => new vscode.McpStdioServerDefinition(s.id, s.command, s.args ?? [], s.env ?? {})
+      (s) =>
+        new vscode.McpStdioServerDefinition(
+          s.id,
+          s.command,
+          s.args ?? [],
+          s.env ?? {}
+        )
     );
   }
 
@@ -412,14 +423,14 @@ This section covers where users get server configs to put in `mcpServers`. No im
 
 If FlightPath wants to offer "import from existing config" or autocomplete suggestions:
 
-| Source | Path | Top-level key |
-|---|---|---|
-| VS Code (workspace) | `.vscode/mcp.json` | `servers` |
-| VS Code (user, Windows) | `%APPDATA%\Code\User\mcp.json` | `servers` |
-| VS Code (user, macOS/Linux) | `~/.config/Code/User/mcp.json` | `servers` |
-| Claude Code (project) | `.mcp.json` at workspace root | `mcpServers` |
-| Claude Code (user) | `~/.claude.json` (under project key) | `mcpServers` |
-| Copilot CLI (user) | `~/.copilot/mcp-config.json` | `mcpServers` |
+| Source                      | Path                                 | Top-level key |
+| --------------------------- | ------------------------------------ | ------------- |
+| VS Code (workspace)         | `.vscode/mcp.json`                   | `servers`     |
+| VS Code (user, Windows)     | `%APPDATA%\Code\User\mcp.json`       | `servers`     |
+| VS Code (user, macOS/Linux) | `~/.config/Code/User/mcp.json`       | `servers`     |
+| Claude Code (project)       | `.mcp.json` at workspace root        | `mcpServers`  |
+| Claude Code (user)          | `~/.claude.json` (under project key) | `mcpServers`  |
+| Copilot CLI (user)          | `~/.copilot/mcp-config.json`         | `mcpServers`  |
 
 Note: VS Code uses `servers` as the top-level key; all other tools use `mcpServers`. The server object structure is equivalent (both support `command`, `args`, `env`).
 
@@ -444,97 +455,97 @@ Returns `servers[].qualifiedName`, `servers[].displayName`, `servers[].descripti
 
 ### Core Types and Schema
 
-| File | Change |
-|---|---|
-| `src/types/FlightPathTypes.ts` | Add `McpServerConfig` interface; replace `allowDynamicExtension?: boolean` with `mcpServers?: (string \| McpServerConfig)[] \| null` in `ExecutionProperties` |
-| `src/types/DashboardConstants.ts` | Rename `ALLOW_DYNAMIC_EXTENSION` → `MCP_SERVERS`; update value to `"mcpServers"` |
+| File                               | Change                                                                                                                                                                                                                            |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/types/FlightPathTypes.ts`     | Add `McpServerConfig` interface; replace `allowDynamicExtension?: boolean` with `mcpServers?: (string \| McpServerConfig)[] \| null` in `ExecutionProperties`                                                                     |
+| `src/types/DashboardConstants.ts`  | Rename `ALLOW_DYNAMIC_EXTENSION` → `MCP_SERVERS`; update value to `"mcpServers"`                                                                                                                                                  |
 | `src/types/WebviewMessageTypes.ts` | Replace `allowDynamicExtension?: boolean` with `mcpServers?: (string \| McpServerConfig)[] \| null` in **three** interfaces: `PromptItemUpdate`, the global settings object in `WebviewInitMessage`, and `WorkflowSettingsUpdate` |
-| `schemas/prompt-schema.json` | Remove `allowDynamicExtension`; add `McpServerConfig` def + `mcpServers` array property with `oneOf` string/object items; update `finalPrompt` description |
+| `schemas/prompt-schema.json`       | Remove `allowDynamicExtension`; add `McpServerConfig` def + `mcpServers` array property with `oneOf` string/object items; update `finalPrompt` description                                                                        |
 
 Run `npm run generate-schema` after schema changes.
 
 ### Settings
 
-| File | Change |
-|---|---|
-| `package.json` | Remove `flightpath.enableDynamicQueue` boolean; add `flightpath.mcpServers` array setting (see Section 5a); add `mcpServerDefinitionProviders` contribution point |
+| File                              | Change                                                                                                                                                                             |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `package.json`                    | Remove `flightpath.enableDynamicQueue` boolean; add `flightpath.mcpServers` array setting (see Section 5a); add `mcpServerDefinitionProviders` contribution point                  |
 | `src/utils/ConfigurationUtils.ts` | Remove `enabled` from `DynamicQueueConfig` + `getDynamicQueueConfig()`; add `getDefaultMcpServers()` + `setDefaultMcpServers()`; remove `setEnableDynamicQueue()` (see Section 5a) |
 
 ### Core Logic
 
-| File | Change |
-|---|---|
-| `src/flightpath/PropertyResolver.ts` | Rename `resolveAllowDynamicExtension()` → `resolveMcpServers()`; return `(string \| McpServerConfig)[] \| null`; update fallback to call `getDefaultMcpServers()` |
-| `src/flightpath/WorkflowExecutor.ts` | Remove `allowDynamicExtension` loop gate entirely (see Section 5); call `mcpProvider.setActiveServers()` around chat prompts |
-| `src/flightpath/PromptFileParser.ts` | Copy `mcpServers` from source (replace `allowDynamicExtension` copies at both prompt-level and workflow-level) |
-| `src/flightpath/WorkflowInstance.ts` | Replace `allowDynamicExtension` coerce with `mcpServers` array handling |
-| `src/flightpath/orchestration/PromptFileLoader.ts` | Replace `allowDynamicExtension` load + defaults logic with `mcpServers`; update fallback to call `getDefaultMcpServers()` |
-| `src/flightpath/harness/shared/CliProviderUtils.ts` | `buildMcpConfigBlock()` accepts `mcpServers: (string \| McpServerConfig)[] \| null` instead of boolean; remove `getDynamicQueueConfig()` call |
-| `src/flightpath/harness/shared/CliMcpConfigGenerator.ts` | Add `generateJsonConfigWithUserServers(userServers: McpServerConfig[])` merging all servers into one file |
+| File                                                     | Change                                                                                                                                                            |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/flightpath/PropertyResolver.ts`                     | Rename `resolveAllowDynamicExtension()` → `resolveMcpServers()`; return `(string \| McpServerConfig)[] \| null`; update fallback to call `getDefaultMcpServers()` |
+| `src/flightpath/WorkflowExecutor.ts`                     | Remove `allowDynamicExtension` loop gate entirely (see Section 5); call `mcpProvider.setActiveServers()` around chat prompts                                      |
+| `src/flightpath/PromptFileParser.ts`                     | Copy `mcpServers` from source (replace `allowDynamicExtension` copies at both prompt-level and workflow-level)                                                    |
+| `src/flightpath/WorkflowInstance.ts`                     | Replace `allowDynamicExtension` coerce with `mcpServers` array handling                                                                                           |
+| `src/flightpath/orchestration/PromptFileLoader.ts`       | Replace `allowDynamicExtension` load + defaults logic with `mcpServers`; update fallback to call `getDefaultMcpServers()`                                         |
+| `src/flightpath/harness/shared/CliProviderUtils.ts`      | `buildMcpConfigBlock()` accepts `mcpServers: (string \| McpServerConfig)[] \| null` instead of boolean; remove `getDynamicQueueConfig()` call                     |
+| `src/flightpath/harness/shared/CliMcpConfigGenerator.ts` | Add `generateJsonConfigWithUserServers(userServers: McpServerConfig[])` merging all servers into one file                                                         |
 
 ### UI
 
-| File | Change |
-|---|---|
-| `src/ui/WebviewSettingsSync.ts` | Replace `allowDynamicExtension` refs with `mcpServers`; update global settings sent to webview |
-| `src/ui/WorkflowSerializer.ts` | Replace `"allowDynamicExtension"` with `"mcpServers"` in both `PROMPT_ITEM_SERIALIZABLE_KEYS` and workflow-level key arrays |
-| `src/ui/webview-react/utils/prompt.ts` | Replace `allowDynamicExtension` in `PromptItemData`, `WorkflowPropertiesData`, `createEmptyPromptItem()`, and all mapping functions |
-| `src/ui/webview-react/store/settingsStore.ts` | Replace `allowDynamicExtension: boolean` with `mcpServers: (string \| McpServerConfig)[]` in settings state and initial values |
-| `src/ui/webview-react/components/editor/PropertiesDrawer.tsx` | Replace `allowDynamicExtension` `CustomSelect` with `mcpServers` editor (array of string/object entries) |
-| `src/ui/webview-react/components/layout/SettingsDrawer.tsx` | Update global `allowDynamicExtension` toggle to `mcpServers` array control |
-| `src/ui/webview-react/components/layout/PromptsPanel.tsx` | Update any `allowDynamicExtension` badge/indicator |
+| File                                                          | Change                                                                                                                              |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `src/ui/WebviewSettingsSync.ts`                               | Replace `allowDynamicExtension` refs with `mcpServers`; update global settings sent to webview                                      |
+| `src/ui/WorkflowSerializer.ts`                                | Replace `"allowDynamicExtension"` with `"mcpServers"` in both `PROMPT_ITEM_SERIALIZABLE_KEYS` and workflow-level key arrays         |
+| `src/ui/webview-react/utils/prompt.ts`                        | Replace `allowDynamicExtension` in `PromptItemData`, `WorkflowPropertiesData`, `createEmptyPromptItem()`, and all mapping functions |
+| `src/ui/webview-react/store/settingsStore.ts`                 | Replace `allowDynamicExtension: boolean` with `mcpServers: (string \| McpServerConfig)[]` in settings state and initial values      |
+| `src/ui/webview-react/components/editor/PropertiesDrawer.tsx` | Replace `allowDynamicExtension` `CustomSelect` with `mcpServers` editor (array of string/object entries)                            |
+| `src/ui/webview-react/components/layout/SettingsDrawer.tsx`   | Update global `allowDynamicExtension` toggle to `mcpServers` array control                                                          |
+| `src/ui/webview-react/components/layout/PromptsPanel.tsx`     | Update any `allowDynamicExtension` badge/indicator                                                                                  |
 
 ### New Files
 
-| File | Change |
-|---|---|
+| File                                            | Change                                                                                                   |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | **NEW** `src/ui/FlightPathMcpServerProvider.ts` | Implements `McpServerDefinitionProvider`; manages runtime MCP injection for chat harness (see Section 4) |
 
 ### Extension Entry Point
 
-| File | Change |
-|---|---|
+| File               | Change                                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `src/extension.ts` | Register `FlightPathMcpServerProvider` via `vscode.lm.registerMcpServerDefinitionProvider`; pass provider reference to `FlightPathManager` |
 
 ### Tests
 
-| File | Change |
-|---|---|
-| `src/test/unit/PropertyResolver.test.ts` | Replace `resolveAllowDynamicExtension` suite with `resolveMcpServers`; update expected return types |
-| `src/test/unit/WorkflowExecutor.test.ts` | Remove `allowDynamicExtension: true` from `finalPrompt` fixtures; verify loop tests still pass on queue growth alone |
-| `src/ui/webview-react/test/store/settingsStore.test.ts` | Replace `allowDynamicExtension` in test settings objects |
-| `src/ui/webview-react/test/utils/prompt.test.ts` | Replace `allowDynamicExtension` in prompt item fixtures |
-| `src/ui/webview-react/test/hooks/useMessageHandler.test.ts` | Replace `allowDynamicExtension` in message handler fixtures |
+| File                                                        | Change                                                                                                               |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `src/test/unit/PropertyResolver.test.ts`                    | Replace `resolveAllowDynamicExtension` suite with `resolveMcpServers`; update expected return types                  |
+| `src/test/unit/WorkflowExecutor.test.ts`                    | Remove `allowDynamicExtension: true` from `finalPrompt` fixtures; verify loop tests still pass on queue growth alone |
+| `src/ui/webview-react/test/store/settingsStore.test.ts`     | Replace `allowDynamicExtension` in test settings objects                                                             |
+| `src/ui/webview-react/test/utils/prompt.test.ts`            | Replace `allowDynamicExtension` in prompt item fixtures                                                              |
+| `src/ui/webview-react/test/hooks/useMessageHandler.test.ts` | Replace `allowDynamicExtension` in message handler fixtures                                                          |
 
 ### Validation
 
-| File | Change |
-|---|---|
+| File                           | Change                                                                                                            |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
 | `src/utils/ValidationUtils.ts` | Replace `allowDynamicExtension: { type: "boolean" }` with `mcpServers` array definition in the AJV runtime schema |
 
 ### Remaining `DynamicQueueConfig` Fields
 
 After removing `enabled`, `DynamicQueueConfig` retains four fields — all unrelated to MCP injection:
 
-| Field | Setting | Notes |
-|---|---|---|
-| `maxQueueSize` | `flightpath.maxQueueSize` | Max prompts allowed; unchanged |
-| `unlimitedMode` | `flightpath.unlimitedMode` | Removes queue size + time limits; unchanged |
-| `maxWorkflowExecutionTime` | `flightpath.maxWorkflowExecutionTime` | Max total workflow runtime; unchanged |
-| `notifyOnExtension` | `flightpath.notifyOnQueueExtension` | Fires a notification when AI appends prompts; unchanged, still relevant |
+| Field                      | Setting                               | Notes                                                                   |
+| -------------------------- | ------------------------------------- | ----------------------------------------------------------------------- |
+| `maxQueueSize`             | `flightpath.maxQueueSize`             | Max prompts allowed; unchanged                                          |
+| `unlimitedMode`            | `flightpath.unlimitedMode`            | Removes queue size + time limits; unchanged                             |
+| `maxWorkflowExecutionTime` | `flightpath.maxWorkflowExecutionTime` | Max total workflow runtime; unchanged                                   |
+| `notifyOnExtension`        | `flightpath.notifyOnQueueExtension`   | Fires a notification when AI appends prompts; unchanged, still relevant |
 
 Additionally, these four settings currently carry `[Dynamic Queue]` prefix labels in `package.json` descriptions. That label predates MCP and should be updated to `[Queue]` — "dynamic" implied an opt-in mode that no longer exists. Low-priority cosmetic change; include in the docs/templates sweep (step 10).
 
 ### Docs and Templates
 
-| File | Change |
-|---|---|
-| `src/templates/workflows/spec-driven-loop.flightpath.yaml` | Replace `allowDynamicExtension: true` with `mcpServers: [flightpath]` |
-| `docs/` | Update `WORKFLOW_PROPERTIES.md`, `QUEUE_APPEND_FEATURE.md`, `SESSION_MANAGEMENT.md` |
-| `manual-test/` | Update example workflows using `allowDynamicExtension` → `mcpServers: [flightpath]` |
-| `README.md` | Update property table |
-| `.github/copilot-instructions.md` | Update schema fields table |
-| `.github/instructions/*.instructions.md` | Update any references |
+| File                                                       | Change                                                                              |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `src/templates/workflows/spec-driven-loop.flightpath.yaml` | Replace `allowDynamicExtension: true` with `mcpServers: [flightpath]`               |
+| `docs/`                                                    | Update `WORKFLOW_PROPERTIES.md`, `QUEUE_APPEND_FEATURE.md`, `SESSION_MANAGEMENT.md` |
+| `manual-test/`                                             | Update example workflows using `allowDynamicExtension` → `mcpServers: [flightpath]` |
+| `README.md`                                                | Update property table                                                               |
+| `.github/copilot-instructions.md`                          | Update schema fields table                                                          |
+| `.github/instructions/*.instructions.md`                   | Update any references                                                               |
 
 ---
 

@@ -9,7 +9,10 @@ import {
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
-import { mapOpenCodeToolPartToCliEvent, accumulateOpenCodeStepTokens } from "./OpenCodeEventMapper";
+import {
+  mapOpenCodeToolPartToCliEvent,
+  accumulateOpenCodeStepTokens,
+} from "./OpenCodeEventMapper";
 
 /**
  * OpenCode CLI Response Parser
@@ -47,7 +50,11 @@ export class OpenCodeResponseParser
   /**
    * Parse complete JSONL output into structured result
    */
-  parse(stdout: string, _stderr: string, _exitCode: number): UniversalCliOutput {
+  parse(
+    stdout: string,
+    _stderr: string,
+    _exitCode: number
+  ): UniversalCliOutput {
     const events: CliEvent[] = [];
     let sessionId: string | undefined;
     const tokenUsage: TokenUsage = {
@@ -75,7 +82,10 @@ export class OpenCodeResponseParser
         }
 
         if (event.type === "step_finish" && event.part?.tokens) {
-          const stepTotal = accumulateOpenCodeStepTokens(event.part.tokens, tokenUsage);
+          const stepTotal = accumulateOpenCodeStepTokens(
+            event.part.tokens,
+            tokenUsage
+          );
           if (stepTotal !== undefined) lastStepTotal = stepTotal;
         }
       } catch {
@@ -220,5 +230,4 @@ export class OpenCodeResponseParser
         return undefined;
     }
   }
-
 }

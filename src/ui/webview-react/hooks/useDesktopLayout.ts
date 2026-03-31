@@ -6,7 +6,10 @@
  * concerns so App.tsx can focus on rendering and cross-layout transitions.
  */
 import { useEffect, useLayoutEffect, useRef } from "react";
-import type { PanelImperativeHandle, GroupImperativeHandle } from "react-resizable-panels";
+import type {
+  PanelImperativeHandle,
+  GroupImperativeHandle,
+} from "react-resizable-panels";
 import { WebviewLog } from "@utils/logger";
 import { useUiStore } from "@store/uiStore";
 import {
@@ -55,7 +58,9 @@ export function useDesktopLayout({
   const needsForcedResize = useRef(false);
 
   // Size persistence — initialized from store so sizes survive VS Code restarts
-  const lastDesktopSizes = useRef({ ...useUiStore.getState().lastDesktopSizes });
+  const lastDesktopSizes = useRef({
+    ...useUiStore.getState().lastDesktopSizes,
+  });
 
   // Stable mount defaults — only recomputed by App.tsx on Group remount
   // transitions; keeping them constant while the Group is alive prevents the
@@ -140,7 +145,10 @@ export function useDesktopLayout({
       if (verticalGroupRef.current) {
         const outputSize = Math.round(lastDesktopSizes.current.output);
         const editorSize = 100 - outputSize;
-        const layout = { "output-panel": outputSize, "editor-panel": editorSize };
+        const layout = {
+          "output-panel": outputSize,
+          "editor-panel": editorSize,
+        };
         try {
           verticalGroupRef.current.setLayout(layout);
         } catch (error) {

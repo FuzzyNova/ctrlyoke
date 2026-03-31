@@ -3,7 +3,11 @@ import { sendMessage } from "@hooks/useMessageHandler";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
 import { terminalRegistry } from "../../terminalRegistry";
-import { MESSAGE_TYPES, TERMINAL_SESSION_STATUS, SESSION_KINDS } from "../../types/messages";
+import {
+  MESSAGE_TYPES,
+  TERMINAL_SESSION_STATUS,
+  SESSION_KINDS,
+} from "../../types/messages";
 import "@xterm/xterm/css/xterm.css";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
@@ -48,7 +52,9 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       // we flushed pendingOutput after attach() those earlier chunks would be
       // written out-of-order (after chunks that arrived during the WebGL import).
       const { sessions, clearPendingOutput } = useTerminalStore.getState();
-      const session = (sessions[workflowId] ?? []).find((s) => s.id === sessionId);
+      const session = (sessions[workflowId] ?? []).find(
+        (s) => s.id === sessionId
+      );
       if (session?.pendingOutput.length) {
         for (const chunk of session.pendingOutput) {
           entry.term.write(chunk);
@@ -57,12 +63,20 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       }
 
       // Attach the xterm DOM element into this container (async: loads WebGL addon on first open)
-      await terminalRegistry.attach(workflowId, sessionId, containerRef.current);
+      await terminalRegistry.attach(
+        workflowId,
+        sessionId,
+        containerRef.current
+      );
 
       // Register onData for input routing (skip if session is frozen or already listening)
       if (!entry.frozen && !entry.onDataDisposable) {
         entry.onDataDisposable = entry.term.onData((input) => {
-          sendMessage(MESSAGE_TYPES.TERMINAL_INPUT, { workflowId, sessionId, data: input });
+          sendMessage(MESSAGE_TYPES.TERMINAL_INPUT, {
+            workflowId,
+            sessionId,
+            data: input,
+          });
           // Ad-hoc prompt capture for ai-cli sessions
           const captured = entry.inputCapture.accumulate(input);
           if (captured) {
@@ -78,7 +92,12 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         try {
           entry.fitAddon.fit();
           const { cols, rows } = entry.term;
-          sendMessage(MESSAGE_TYPES.TERMINAL_RESIZE, { workflowId, sessionId, cols, rows });
+          sendMessage(MESSAGE_TYPES.TERMINAL_RESIZE, {
+            workflowId,
+            sessionId,
+            cols,
+            rows,
+          });
         } catch {
           // Ignore — may fire before terminal is fully initialized
         }
@@ -133,9 +152,13 @@ const FrozenOverlay: React.FC<{ workflowId: string; sessionId: string }> = ({
   workflowId,
   sessionId,
 }) => {
-  const sessions = useTerminalStore((s) => s.sessions[workflowId] ?? EMPTY_SESSIONS);
+  const sessions = useTerminalStore(
+    (s) => s.sessions[workflowId] ?? EMPTY_SESSIONS
+  );
   const session = sessions.find((s) => s.id === sessionId);
-  const isFrozen = session?.kind === SESSION_KINDS.AI_CLI && session.status !== TERMINAL_SESSION_STATUS.RUNNING;
+  const isFrozen =
+    session?.kind === SESSION_KINDS.AI_CLI &&
+    session.status !== TERMINAL_SESSION_STATUS.RUNNING;
 
   if (!isFrozen) return null;
 
@@ -145,7 +168,9 @@ const FrozenOverlay: React.FC<{ workflowId: string; sessionId: string }> = ({
       style={{ background: "rgba(0,0,0,0.4)" }}
     >
       <span className="text-[11px] text-description-fg select-none">
-        {session?.status === TERMINAL_SESSION_STATUS.FAILED ? "Process exited with error" : "Process exited"}
+        {session?.status === TERMINAL_SESSION_STATUS.FAILED
+          ? "Process exited with error"
+          : "Process exited"}
       </span>
     </div>
   );

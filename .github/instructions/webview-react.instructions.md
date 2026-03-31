@@ -540,14 +540,14 @@ function PromptEditor() {
 
 PropertiesDrawer uses a 6-tab layout with `DrawerTabBar` at the bottom:
 
-| Tab | Page ID | Content |
-|-----|---------|---------|
-| Harness | `harness` | Harness + Model selection |
-| Context | `context` | Resume Session + Prior Context + Session ID |
-| Validation | `validation` | End Condition (script, returns, timeout, retries) |
-| MCP | `mcp` | MCP Servers editor (McpServersEditor) |
-| Hooks | `hooks` | Lifecycle hooks editor (HooksEditor) |
-| Permissions | `permissions` | Tool permission mode + allow/deny lists |
+| Tab         | Page ID       | Content                                           |
+| ----------- | ------------- | ------------------------------------------------- |
+| Harness     | `harness`     | Harness + Model selection                         |
+| Context     | `context`     | Resume Session + Prior Context + Session ID       |
+| Validation  | `validation`  | End Condition (script, returns, timeout, retries) |
+| MCP         | `mcp`         | MCP Servers editor (McpServersEditor)             |
+| Hooks       | `hooks`       | Lifecycle hooks editor (HooksEditor)              |
+| Permissions | `permissions` | Tool permission mode + allow/deny lists           |
 
 Tab definitions in `types/drawerPages.ts`. `DrawerTabBar` renders icons + responsive labels.
 

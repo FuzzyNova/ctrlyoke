@@ -214,7 +214,7 @@ interface Usage {
 - `input_tokens` includes `cached_input_tokens` (total input)
 - `cached_input_tokens` indicates cache hits (lower cost)
 - `output_tokens` is generated tokens only
-- Total cost = (input_tokens - cached_input_tokens) _ input_rate + output_tokens _ output_rate
+- Total cost = (input*tokens - cached_input_tokens) * input*rate + output_tokens * output_rate
 
 ---
 

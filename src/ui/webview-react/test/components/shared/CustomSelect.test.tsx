@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { CustomSelect, type SelectOption } from "@components/shared/CustomSelect";
+import {
+  CustomSelect,
+  type SelectOption,
+} from "@components/shared/CustomSelect";
 
 const OPTIONS: SelectOption[] = [
   { value: "a", label: "Option A" },
@@ -82,7 +85,9 @@ describe("CustomSelect — basic behavior", () => {
     ];
     render(<CustomSelect value="a" onChange={onChange} options={opts} />);
     await user.click(getTrigger());
-    const disabledBtn = screen.getAllByText("B (disabled)")[0].closest("button")!;
+    const disabledBtn = screen
+      .getAllByText("B (disabled)")[0]
+      .closest("button")!;
     await user.click(disabledBtn);
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -105,7 +110,12 @@ describe("CustomSelect — basic behavior", () => {
 
   it("applies custom className to container", () => {
     const { container } = render(
-      <CustomSelect value="a" onChange={vi.fn()} options={OPTIONS} className="my-custom" />
+      <CustomSelect
+        value="a"
+        onChange={vi.fn()}
+        options={OPTIONS}
+        className="my-custom"
+      />
     );
     expect(container.firstChild).toHaveClass("my-custom");
   });
@@ -144,7 +154,9 @@ describe("CustomSelect — hide/unhide feature", () => {
     // Option B is hidden — should not appear in visible option buttons
     // (the trigger may show "Option A" but Option B should not be in visible list)
     const allBtns = screen.getAllByRole("button");
-    const visibleOptionBtns = allBtns.filter((b) => b.textContent === "Option B");
+    const visibleOptionBtns = allBtns.filter(
+      (b) => b.textContent === "Option B"
+    );
     expect(visibleOptionBtns.length).toBe(0);
   });
 

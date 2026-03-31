@@ -113,7 +113,12 @@ export class PromptFileSplitter {
         );
         const tokenCounts = attachmentChunks.map((c) => this.countTokens(c));
         const lineCounts = attachmentChunks.map((c) => this.countLines(c));
-        return { needsSplit: true, chunks: attachmentChunks, tokenCounts, lineCounts };
+        return {
+          needsSplit: true,
+          chunks: attachmentChunks,
+          tokenCounts,
+          lineCounts,
+        };
       }
     }
 
@@ -257,9 +262,7 @@ export class PromptFileSplitter {
         const subChunks = this.splitIntoChunks(segment);
         chunks.push(...subChunks);
       } else {
-        currentChunk = currentChunk
-          ? currentChunk + "\n\n" + segment
-          : segment;
+        currentChunk = currentChunk ? currentChunk + "\n\n" + segment : segment;
         currentTokens += segTokens;
         currentLines += segLines;
       }

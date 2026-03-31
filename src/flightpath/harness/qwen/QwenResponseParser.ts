@@ -7,7 +7,10 @@ import {
   CliEvent,
   TokenUsage,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  HARNESS_IDS,
+} from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliResponseParser } from "../shared/CliResponseParser";
@@ -309,7 +312,9 @@ export class QwenResponseParser
     for (const json of objects) {
       // Session ID can be in system init or result event
       if (
-        (json.type === "system" && json.subtype === "init" && json.session_id) ||
+        (json.type === "system" &&
+          json.subtype === "init" &&
+          json.session_id) ||
         (json.type === "result" && json.session_id)
       ) {
         return json.session_id;

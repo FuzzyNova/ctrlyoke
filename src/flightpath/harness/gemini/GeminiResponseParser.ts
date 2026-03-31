@@ -7,7 +7,10 @@ import {
   CliEvent,
   TokenUsage,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  HARNESS_IDS,
+} from "../../../types/DashboardConstants";
 import { getGeminiContextWindowSize } from "../../../utils/ModelConstants";
 import { CliResponseParser } from "../shared/CliResponseParser";
 import { GeminiToolBuilder } from "./GeminiToolBuilder";
@@ -56,7 +59,11 @@ export class GeminiResponseParser
         cliVersion = json.version;
       }
 
-      if (json.type === "message" && json.role === "assistant" && json.content) {
+      if (
+        json.type === "message" &&
+        json.role === "assistant" &&
+        json.content
+      ) {
         events.push({
           type: CLI_EVENT_TYPES.TEXT,
           timestamp: Date.now(),
@@ -118,7 +125,8 @@ export class GeminiResponseParser
       tokenUsage = {
         inputTokens,
         outputTokens,
-        totalTokens: (usage.total_tokens as number) || inputTokens + outputTokens,
+        totalTokens:
+          (usage.total_tokens as number) || inputTokens + outputTokens,
         cachedInputTokens: cachedTokens > 0 ? cachedTokens : undefined,
         contextWindowUsedTokens: inputTokens + outputTokens,
         contextWindowSize: getGeminiContextWindowSize(model ?? ""),
@@ -151,7 +159,11 @@ export class GeminiResponseParser
     const events: CliEvent[] = [];
 
     for (const json of objects) {
-      if (json.type === "message" && json.role === "assistant" && json.content) {
+      if (
+        json.type === "message" &&
+        json.role === "assistant" &&
+        json.content
+      ) {
         events.push({
           type: CLI_EVENT_TYPES.TEXT,
           timestamp: Date.now(),

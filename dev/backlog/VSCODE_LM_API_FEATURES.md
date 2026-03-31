@@ -14,13 +14,15 @@ The VS Code Language Model API (`vscode.lm`) lets extensions access AI language 
 ```typescript
 // Select an available model
 const [model] = await vscode.lm.selectChatModels({
-  vendor: 'copilot',
-  family: 'gpt-4o-mini', // or 'gpt-4o', 'claude-3.5-sonnet', 'o1', 'o1-mini'
+  vendor: "copilot",
+  family: "gpt-4o-mini", // or 'gpt-4o', 'claude-3.5-sonnet', 'o1', 'o1-mini'
 });
 
 // Build messages (only User and Assistant roles — no system role)
 const messages = [
-  vscode.LanguageModelChatMessage.User('You are a prompt engineering assistant...'),
+  vscode.LanguageModelChatMessage.User(
+    "You are a prompt engineering assistant..."
+  ),
   vscode.LanguageModelChatMessage.User(currentPromptText),
 ];
 
@@ -28,7 +30,7 @@ const messages = [
 const response = await model.sendRequest(messages, {}, cancellationToken);
 
 // Stream the response
-let result = '';
+let result = "";
 for await (const chunk of response.text) {
   result += chunk;
 }
@@ -39,12 +41,12 @@ const tokenCount = await model.countTokens(messages, cancellationToken);
 
 ### Available Model Families (via Copilot)
 
-| Family | Speed | Quality | Best for |
-|---|---|---|---|
-| `gpt-4o-mini` | Fast | Good | Prompt improvement, short completions |
-| `gpt-4o` | Medium | High | Complex rewrites, multi-step reasoning |
-| `o1-mini` | Medium | High | Reasoning tasks |
-| `claude-3.5-sonnet` | Medium | High | Long-form prompt rewriting |
+| Family              | Speed  | Quality | Best for                               |
+| ------------------- | ------ | ------- | -------------------------------------- |
+| `gpt-4o-mini`       | Fast   | Good    | Prompt improvement, short completions  |
+| `gpt-4o`            | Medium | High    | Complex rewrites, multi-step reasoning |
+| `o1-mini`           | Medium | High    | Reasoning tasks                        |
+| `claude-3.5-sonnet` | Medium | High    | Long-form prompt rewriting             |
 
 **Important:** The user must have GitHub Copilot active. `selectChatModels()` returns an empty array if no matching model is available — always guard against this. Models like `gpt-4o-mini` are included with Copilot Free tier, making them effectively "always available" for Copilot users.
 
@@ -69,6 +71,7 @@ The highest-value feature. A button (or toolbar action) in the prompt editor tha
 Call `vscode.lm` directly from the extension host using whichever free Copilot model is available.
 
 **Flow:**
+
 ```
 User clicks "Improve Prompt"
   → webview postMessage({ type: 'IMPROVE_PROMPT_REQUEST', prompt: currentText })
@@ -81,6 +84,7 @@ User clicks "Improve Prompt"
 ```
 
 **System prompt for improvement:**
+
 ```
 You are a prompt engineering assistant for AI coding workflows.
 Rewrite the following prompt to be clearer, more specific, and better structured
@@ -89,6 +93,7 @@ Return ONLY the improved prompt text with no explanation or preamble.
 ```
 
 **Editor UX during streaming:**
+
 - Editor goes read-only, shows a spinner/loading state
 - Improved text streams in and replaces current content progressively
 - "Cancel" button sends cancellation token
@@ -101,6 +106,7 @@ Return ONLY the improved prompt text with no explanation or preamble.
 Instead of `vscode.lm`, route the improvement request through a user-selected FlightPath harness in headless mode.
 
 **Flow:**
+
 ```
 User clicks "Improve Prompt"
   → FlightPathManager.runHeadless(improvePromptHarness, systemPrompt + currentText)
@@ -109,20 +115,21 @@ User clicks "Improve Prompt"
 ```
 
 **Settings required:**
+
 - `flightpath.improvePromptHarness` — harness ID to use (e.g., `claude-cli`, `copilot-cli`)
 - `flightpath.improvePromptModel` — model override for the improve harness
 - A "Improve Prompt settings" gear icon next to the button to open these settings
 
 **Tradeoffs vs Option A:**
 
-| | vscode.lm (Option A) | Harness Headless (Option B) |
-|---|---|---|
-| Setup required | None (works if Copilot active) | User must configure which harness |
-| Model flexibility | Copilot models only | Any supported CLI harness |
-| Speed | Fast (API call) | Slower (spawns CLI process) |
-| Streaming | Easy | Harder (CLI output parsing) |
-| Works offline | No | Depends on harness |
-| Good for | Default "just works" | Power users with preferred models |
+|                   | vscode.lm (Option A)           | Harness Headless (Option B)       |
+| ----------------- | ------------------------------ | --------------------------------- |
+| Setup required    | None (works if Copilot active) | User must configure which harness |
+| Model flexibility | Copilot models only            | Any supported CLI harness         |
+| Speed             | Fast (API call)                | Slower (spawns CLI process)       |
+| Streaming         | Easy                           | Harder (CLI output parsing)       |
+| Works offline     | No                             | Depends on harness                |
+| Good for          | Default "just works"           | Power users with preferred models |
 
 ### Recommended Approach: Option A with Option B as Fallback
 
@@ -151,6 +158,7 @@ Current prompt: <text up to cursor>
 **Rendering:** Use a CodeMirror `ViewPlugin` with a `Decoration.widget` (or `Decoration.mark`) to render ghost text after the cursor in a muted color. Accepting: `Tab` key appends the completion.
 
 **Architecture:**
+
 ```
 User pauses typing (debounce 600ms)
   → postMessage({ type: 'LM_INLINE_COMPLETION_REQUEST', textBefore, textAfter, seq })
@@ -183,6 +191,7 @@ Instead of automatic inline suggestions, a discrete button/command that asks the
 **Feature:** A small indicator below or beside the editor showing estimated token count for the current prompt text. Could include a colored bar that shifts from green → yellow → red as the prompt approaches typical model context limits.
 
 **Implementation:**
+
 - Debounce token count requests (500ms after last keystroke)
 - Request via `postMessage({ type: 'COUNT_TOKENS_REQUEST', text })`
 - Extension calls `model.countTokens(messages, token)` and returns count
@@ -230,6 +239,7 @@ COUNT_TOKENS_RESPONSE: 'countTokensResponse',
 ### New Extension-Side Handler (in `FlightPathWebviewProvider.ts`)
 
 A new `LmFeatureHandler` class (or methods added to the existing webview provider) that:
+
 1. Receives the above message types from the webview
 2. Calls `vscode.lm.selectChatModels` with fallback handling
 3. Streams results back via `panel.webview.postMessage`
@@ -268,14 +278,14 @@ A new `LmFeatureHandler` class (or methods added to the existing webview provide
 
 ## 7. Recommended Implementation Order
 
-| Priority | Feature | Complexity | Value |
-|---|---|---|---|
-| 1 | "Improve Prompt" button (vscode.lm, Option A) | Medium | Very High |
-| 2 | Token counter indicator | Low | High |
-| 3 | Harness-based improve prompt (Option B) | Medium | Medium |
-| 4 | "Complete Prompt" button (Option C) | Low-Medium | Medium |
-| 5 | Inline ghost text completions (Option A) | High | Medium |
-| 6 | "Explain Prompt" hints | Low | Low-Medium |
+| Priority | Feature                                       | Complexity | Value      |
+| -------- | --------------------------------------------- | ---------- | ---------- |
+| 1        | "Improve Prompt" button (vscode.lm, Option A) | Medium     | Very High  |
+| 2        | Token counter indicator                       | Low        | High       |
+| 3        | Harness-based improve prompt (Option B)       | Medium     | Medium     |
+| 4        | "Complete Prompt" button (Option C)           | Low-Medium | Medium     |
+| 5        | Inline ghost text completions (Option A)      | High       | Medium     |
+| 6        | "Explain Prompt" hints                        | Low        | Low-Medium |
 
 Start with the "Improve Prompt" button — it has the clearest UX, the most obvious value for FlightPath users who iterate on prompts, and the infrastructure it builds (vscode.lm request/stream/response pipeline) directly enables every other feature on this list.
 

@@ -17,6 +17,7 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - Listens for model registry updates (`onModelsLoaded`) and config changes to forward to webview
 
 **WebviewSettingsSync:** Settings/config management and broadcast.
+
 - Builds and sends `INIT`, `GLOBAL_SETTINGS_UPDATED`, `MODEL_OPTIONS_UPDATE`, `HARNESS_STATUS_UPDATE`, `AGENTS_UPDATE`, `SKILLS_UPDATE`, `WORKFLOW_PROPERTIES_UPDATE`, `WORKFLOW_LOADED`, `WORKFLOW_UNLOADED`, `CONFIG_VALUE` messages
 - Tracks harness availability for all 7 harnesses (including Qwen CLI and Gemini CLI)
 - Discovers agents (`AgentDiscovery`) and skills (`SkillDiscovery`) in background
@@ -27,6 +28,7 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - Config read/write gated to `flightpath.*` keys (security allowlist)
 
 **WebviewMessageRouter:** Dispatch table replacing a monolithic switch statement.
+
 - Routes all incoming webview messages via a `Map<string, handler>` dispatch table (~70 message types)
 - Serializes handlers through a `routeQueue` promise chain (prevents concurrent execution)
 - Delegates to `WebviewSettingsSync`, `WorkflowSerializer`, or orchestrator commands
@@ -36,6 +38,7 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - Undo/redo routes: `UNDO_PROMPT_CHANGES`, `REDO_PROMPT_CHANGES`, `UNDO_WORKFLOW_CHANGES`, `REDO_WORKFLOW_CHANGES`
 
 **WorkflowSerializer:** Workflow persistence operations.
+
 - Save workflow to disk (YAML or JSON), strips runtime/working-file-only fields
 - Field whitelisting: only known fields persisted (WORKFLOW_FIELDS includes harness, model, agent, resumeSession, mcpServers, hooks, sessionId, endCondition; PROMPT_FIELDS includes corresponding per-prompt fields)
 - Export output as markdown
@@ -44,6 +47,7 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - Run history (load, clear)
 
 **StatusBarManager:** Status bar item (`flightpath.openPanel` command).
+
 - **Queue execution states:**
   - `$(compass) FlightPath` — idle (default)
   - `$(compass-dot) FlightPath N/M` — running (prominentBackground)
@@ -60,6 +64,7 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - Uses `vscode.ThemeColor` for background colors
 
 **Icons:** Custom icon system in `src/ui/icons/`
+
 - Workflow action SVGs: append.svg, append-next.svg, from-template.svg, load-from-file.svg, queue-from-file.svg
 - Harness SVGs in `icons/harnesses/`: claude.svg, codex.svg, copilot-chat.svg, copilot-cli.svg, gemini.svg, opencode.svg, qwen.svg
 - Auto-converted to CSS via `npm run generate-icons` (runs as part of precompile)
@@ -67,13 +72,14 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - Usage: `<i class="custom-icon icon-{name}"></i>`
 
 **FlightPathMcpServerProvider:** Dynamic MCP server injection for copilot-chat harness.
+
 - Implements `vscode.McpServerDefinitionProvider`
 - Converts user-defined `McpServerConfig[]` into `vscode.McpStdioServerDefinition[]` for VS Code's MCP subsystem
 - `setActiveServers()` called by WorkflowExecutor when chat prompt starts; manages only user-defined servers
 - `provideMcpServerDefinitions()` returns active server definitions to VS Code
 - CLI harnesses use `CliMcpConfigGenerator` instead (pass `--mcp-config` flags)
 - The built-in "flightpath" MCP server is NOT managed here — registered unconditionally via `registerLanguageModelTools()` at extension activation
-</architecture>
+  </architecture>
 
 <terminology>
 **Critical:** "Provider" has been renamed to "harness" throughout the codebase
@@ -119,6 +125,7 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - GEMINI_CLI: Gemini CLI executable
 
 **Availability checks:**
+
 - CLI harnesses: Execute --version command
 - Chat harness: Check VS Code extension activation
 - Status: "checking" → "available" | "unavailable"
@@ -126,6 +133,7 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - `notifyHarnessAvailability(harnessId, available)` on `WebviewSettingsSync` updates status and pushes `HARNESS_STATUS_UPDATE`
 
 **Model availability:**
+
 - Copilot Chat: Dynamic discovery via ModelRegistry (vscode.lm API)
 - Copilot CLI: CLI-supported model IDs from ModelRegistry
 - Claude CLI: Static list from `CLAUDE_CLI_MODEL_LABELS`
@@ -134,7 +142,7 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - Qwen CLI: Static list from `QWEN_CLI_MODEL_LABELS`
 - Gemini CLI: Static list from `GEMINI_CLI_MODEL_LABELS`
 - All harness model options include a `{ value: "none", label: "None (skip --model flag)" }` entry (except Copilot Chat)
-</harnessAvailability>
+  </harnessAvailability>
 
 <criticalPatterns>
 **vscodeApi capture:** Must happen BEFORE React modules load (acquireVsCodeApi only callable once)

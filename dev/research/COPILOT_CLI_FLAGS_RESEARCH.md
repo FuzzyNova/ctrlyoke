@@ -18,20 +18,20 @@ more reliable than the current plain-text approach.
 
 ## Flags FlightPath Already Handles
 
-| Flag | How FlightPath Uses It |
-|------|------------------------|
-| `--additional-mcp-config @<file>` | Written when dynamic queue / MCP enabled |
-| `--allow-tool flightpath` | Auto-added when MCP is enabled |
-| `--allow-all-tools` | `cliToolPermissions = dangerouslyAllowAll` or `allowAll` (headless only) |
-| `--allow-tool <patterns>` | `cliToolPermissions = custom` + `cliAllowedTools` |
-| `--deny-tool <patterns>` | `cliDeniedTools` setting |
-| `--allow-all-paths` | `copilotCliAllowAllPaths` setting |
-| `--add-dir <dir>` | Workspace root + extra dirs via `CliProviderUtils.getWorkspaceDirs()` |
-| `--model <model>` | `copilotCliModel` setting / per-prompt `model` property |
-| `--resume <sessionId>` | Per-prompt `resumeSession` / `sessionId` properties |
-| `-p / --prompt <text>` | Headless mode prompt delivery |
-| `-i / --interactive <prompt>` | Interactive mode prompt delivery |
-| Hook config via `.github/hooks/flightpath.json` | Session end detection (interactive) |
+| Flag                                            | How FlightPath Uses It                                                   |
+| ----------------------------------------------- | ------------------------------------------------------------------------ |
+| `--additional-mcp-config @<file>`               | Written when dynamic queue / MCP enabled                                 |
+| `--allow-tool flightpath`                       | Auto-added when MCP is enabled                                           |
+| `--allow-all-tools`                             | `cliToolPermissions = dangerouslyAllowAll` or `allowAll` (headless only) |
+| `--allow-tool <patterns>`                       | `cliToolPermissions = custom` + `cliAllowedTools`                        |
+| `--deny-tool <patterns>`                        | `cliDeniedTools` setting                                                 |
+| `--allow-all-paths`                             | `copilotCliAllowAllPaths` setting                                        |
+| `--add-dir <dir>`                               | Workspace root + extra dirs via `CliProviderUtils.getWorkspaceDirs()`    |
+| `--model <model>`                               | `copilotCliModel` setting / per-prompt `model` property                  |
+| `--resume <sessionId>`                          | Per-prompt `resumeSession` / `sessionId` properties                      |
+| `-p / --prompt <text>`                          | Headless mode prompt delivery                                            |
+| `-i / --interactive <prompt>`                   | Interactive mode prompt delivery                                         |
+| Hook config via `.github/hooks/flightpath.json` | Session end detection (interactive)                                      |
 
 ---
 
@@ -58,6 +58,7 @@ TUI renders its own output regardless of this flag, so it should only be applied
 execution.
 
 **Implementation notes:**
+
 - Add a new `HarnessConfig` flag like `supportsJsonOutputFormat: boolean` or wire it directly
   into `buildHeadlessArgs()` in `CopilotCliProvider`.
 - `CopilotResponseParser` would need a JSON parse path alongside the existing plain-text path
@@ -104,6 +105,7 @@ interactive quality.
 **Conflicts:** None identified. The continuation cap guards against runaway sessions.
 
 **Implementation notes:**
+
 - Add a `flightpath.copilotAutopilot` boolean setting (default: `true` for headless).
 - Add a `flightpath.copilotMaxAutopilotContinues` number setting (default: e.g. 20, matching
   what an interactive session would reasonably use).
@@ -129,6 +131,7 @@ always the correct behavior.
 want the agent to ask questions, so this should be headless-only.
 
 **Implementation notes:**
+
 - Could be added unconditionally to `buildHeadlessArgs()` with no settings needed.
 - Alternatively, expose as `flightpath.copilotNoAskUser` boolean (default: `true` for headless)
   to allow power users to opt out.
@@ -149,6 +152,7 @@ environment — e.g., a read-only analysis workflow that should only have `read_
 and `--deny-tool` but operates at a different layer.
 
 **Conflicts:** Interacts with `--allow-tool` / `--deny-tool`. The distinction is:
+
 - `--available-tools`: controls model visibility (what the model knows exists)
 - `--allow-tool`: controls auto-approval (what runs without user confirmation)
 - `--excluded-tools`: the inverse of `--available-tools` (blacklist instead of whitelist)
@@ -156,6 +160,7 @@ and `--deny-tool` but operates at a different layer.
 All three can be combined.
 
 **Implementation notes:**
+
 - Add `flightpath.copilotAvailableTools` string array setting (default: empty = no restriction).
 - Add `flightpath.copilotExcludedTools` string array setting (default: empty).
 - Apply in `buildCliArgs()` alongside the existing tool permission args.
@@ -178,6 +183,7 @@ cleaner. However, the key gap is that `--allow-all-urls` is not currently applie
 **Conflicts:** None. Supersedes individual flags.
 
 **Implementation notes:**
+
 - When `cliToolPermissions = dangerouslyAllowAll` AND `copilotCliAllowAllPaths = true`, emit
   `--allow-all` instead of the two separate flags, and retire the current two-flag approach.
 - Add a separate `flightpath.copilotAllowAllUrls` boolean setting for cases where users want
@@ -203,6 +209,7 @@ silently in headless mode.
 **Conflicts:** None. These are additive to the existing permission model.
 
 **Implementation notes:**
+
 - Add `flightpath.copilotAllowUrls` string array setting.
 - Add `flightpath.copilotDenyUrls` string array setting.
 - Add `flightpath.copilotAllowAllUrls` boolean setting.
@@ -230,6 +237,7 @@ ability to suppress ambient workspace instructions is valuable.
 **Conflicts:** None.
 
 **Implementation notes:**
+
 - Add `flightpath.copilotNoCustomInstructions` boolean setting (default: `false`).
 - Could also be a per-prompt YAML property.
 
@@ -251,6 +259,7 @@ model has to reason about, potentially improving focus.
 `--enable-all-github-mcp-tools` (disabling then re-enabling specific tools is contradictory).
 
 **Implementation notes:**
+
 - Add `flightpath.copilotDisableBuiltinMcps` boolean setting (default: `false`).
 - `--disable-mcp-server` with a specific name is more surgical — could be a string array
   setting `flightpath.copilotDisabledMcpServers`.
@@ -272,6 +281,7 @@ them through FlightPath.
 **Conflicts:** Conflicts with `--disable-builtin-mcps` (can't enable tools on a disabled server).
 
 **Implementation notes:**
+
 - Add `flightpath.copilotGithubMcpTools` string array setting.
 - Add `flightpath.copilotGithubMcpToolsets` string array setting.
 - Add `flightpath.copilotEnableAllGithubMcpTools` boolean setting.
@@ -295,6 +305,7 @@ server subprocesses while still allowing the shell environment to use them.
 **Conflicts:** None.
 
 **Implementation notes:**
+
 - Add `flightpath.copilotSecretEnvVars` string array setting.
 - Apply in `buildCliArgs()`.
 
@@ -315,6 +326,7 @@ debugging, review, and compliance. The gist option enables sharing without files
 **Conflicts:** Only valid in `--prompt` (headless) mode.
 
 **Implementation notes:**
+
 - Add `flightpath.copilotShareSession` boolean and `flightpath.copilotShareSessionPath` string.
 - The path could default to `.flightpath/.history/<run-id>/session.md` to integrate with
   FlightPath's existing history system.
@@ -332,6 +344,7 @@ debugging, review, and compliance. The gist option enables sharing without files
 **Automation value:** FlightPath already reads Copilot session logs from the default log
 directory for session ID discovery (`CopilotLogParser`). Controlling log verbosity and
 redirect is relevant for:
+
 1. Debugging workflow failures (`debug` or `all` level).
 2. Isolating logs per-workspace (redirect to `.flightpath/logs/copilot/`).
 3. Suppressing log noise in production (`error` only).
@@ -341,6 +354,7 @@ expects logs at `~/.copilot/session-state/` unless the parser is also updated to
 redirect.
 
 **Implementation notes:**
+
 - Add `flightpath.copilotLogLevel` enum setting (`none`/`error`/`warning`/`info`/`debug`/`all`,
   default: `default`).
 - `--log-dir` requires coordinated change in `CopilotLogParser` — defer until log dir
@@ -384,6 +398,7 @@ session-state path derived from `~/.copilot`. Redirecting config-dir without upd
 parser would break session ID discovery.
 
 **Implementation notes:**
+
 - Add `flightpath.copilotConfigDir` string setting (default: empty = use Copilot default).
 - Requires `CopilotLogParser` to accept a configurable base path.
 
@@ -402,6 +417,7 @@ domain-specific tools. Currently there is no way to configure plugin loading thr
 **Conflicts:** None.
 
 **Implementation notes:**
+
 - Add `flightpath.copilotPluginDirs` string array setting.
 - Apply as repeated `--plugin-dir` args in `buildCliArgs()`.
 
@@ -623,6 +639,7 @@ prompts:
 ```
 
 Or at workflow level for all prompts:
+
 ```yaml
 harness: copilot-cli
 extraArgs: "--secret-env-vars MY_API_KEY"
@@ -639,38 +656,38 @@ array, after all FlightPath-managed flags. Split on whitespace respecting shell 
 
 ### Phase 1 — Zero-risk headless hardening (no new settings required)
 
-| Flag | Change |
-|------|--------|
-| `--silent` | Add unconditionally to `buildHeadlessArgs()` |
-| `--no-ask-user` | Add unconditionally to `buildHeadlessArgs()` |
-| `--stream on` | Add explicitly to `buildHeadlessArgs()` for future-proofing |
+| Flag            | Change                                                      |
+| --------------- | ----------------------------------------------------------- |
+| `--silent`      | Add unconditionally to `buildHeadlessArgs()`                |
+| `--no-ask-user` | Add unconditionally to `buildHeadlessArgs()`                |
+| `--stream on`   | Add explicitly to `buildHeadlessArgs()` for future-proofing |
 
 ### Phase 2 — New settings, high value
 
-| Flag(s) | New Setting(s) |
-|---------|----------------|
-| `--output-format json` | `copilotOutputFormat: "text" \| "json"` + update `CopilotResponseParser` |
-| `--autopilot` + `--max-autopilot-continues` | `copilotAutopilot: boolean`, `copilotMaxAutopilotContinues: number` |
-| `--allow-all-urls` / `--allow-url` / `--deny-url` | `copilotAllowAllUrls`, `copilotAllowUrls[]`, `copilotDenyUrls[]` |
-| `--available-tools` / `--excluded-tools` | `copilotAvailableTools[]`, `copilotExcludedTools[]` |
-| `--allow-all` consolidation | Emit `--allow-all` when both tools+paths are unrestricted |
+| Flag(s)                                           | New Setting(s)                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------------------ |
+| `--output-format json`                            | `copilotOutputFormat: "text" \| "json"` + update `CopilotResponseParser` |
+| `--autopilot` + `--max-autopilot-continues`       | `copilotAutopilot: boolean`, `copilotMaxAutopilotContinues: number`      |
+| `--allow-all-urls` / `--allow-url` / `--deny-url` | `copilotAllowAllUrls`, `copilotAllowUrls[]`, `copilotDenyUrls[]`         |
+| `--available-tools` / `--excluded-tools`          | `copilotAvailableTools[]`, `copilotExcludedTools[]`                      |
+| `--allow-all` consolidation                       | Emit `--allow-all` when both tools+paths are unrestricted                |
 
 ### Phase 3 — Useful but lower urgency
 
-| Flag(s) | New Setting(s) |
-|---------|----------------|
-| `--no-custom-instructions` | `copilotNoCustomInstructions: boolean` |
-| `--disable-builtin-mcps` / `--disable-mcp-server` | `copilotDisableBuiltinMcps`, `copilotDisabledMcpServers[]` |
-| `--add-github-mcp-tool` / `--add-github-mcp-toolset` | `copilotGithubMcpTools[]`, `copilotGithubMcpToolsets[]` |
-| `--secret-env-vars` | `copilotSecretEnvVars[]` |
-| `--log-level` | `copilotLogLevel: enum` |
-| `--share` | `copilotShareSession: boolean`, `copilotShareSessionPath: string` |
-| `--plugin-dir` | `copilotPluginDirs: string[]` |
+| Flag(s)                                              | New Setting(s)                                                    |
+| ---------------------------------------------------- | ----------------------------------------------------------------- |
+| `--no-custom-instructions`                           | `copilotNoCustomInstructions: boolean`                            |
+| `--disable-builtin-mcps` / `--disable-mcp-server`    | `copilotDisableBuiltinMcps`, `copilotDisabledMcpServers[]`        |
+| `--add-github-mcp-tool` / `--add-github-mcp-toolset` | `copilotGithubMcpTools[]`, `copilotGithubMcpToolsets[]`           |
+| `--secret-env-vars`                                  | `copilotSecretEnvVars[]`                                          |
+| `--log-level`                                        | `copilotLogLevel: enum`                                           |
+| `--share`                                            | `copilotShareSession: boolean`, `copilotShareSessionPath: string` |
+| `--plugin-dir`                                       | `copilotPluginDirs: string[]`                                     |
 
 ### Phase 4 — Escape hatch
 
-| Capability | Approach |
-|-----------|----------|
+| Capability         | Approach                                                             |
+| ------------------ | -------------------------------------------------------------------- |
 | Any remaining flag | `copilotExtraArgs: string` at workflow + prompt level in YAML schema |
 
 ---

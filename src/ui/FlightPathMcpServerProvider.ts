@@ -13,7 +13,9 @@ import type { McpServerConfig } from "../types/FlightPathTypes";
  * unconditionally at activation via registerLanguageModelTools() and are always
  * available to Copilot Chat regardless of mcpServers.
  */
-export class FlightPathMcpServerProvider implements vscode.McpServerDefinitionProvider {
+export class FlightPathMcpServerProvider
+  implements vscode.McpServerDefinitionProvider
+{
   private activeServers: McpServerConfig[] = [];
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChangeMcpServerDefinitions = this._onDidChange.event;
@@ -33,7 +35,15 @@ export class FlightPathMcpServerProvider implements vscode.McpServerDefinitionPr
     // representable as McpStdioServerDefinition and are skipped for copilot-chat.
     return this.activeServers
       .filter((s) => !!s.command)
-      .map((s) => new vscode.McpStdioServerDefinition(s.id, s.command!, s.args ?? [], s.env ?? {}));
+      .map(
+        (s) =>
+          new vscode.McpStdioServerDefinition(
+            s.id,
+            s.command!,
+            s.args ?? [],
+            s.env ?? {}
+          )
+      );
   }
 
   resolveMcpServerDefinition(

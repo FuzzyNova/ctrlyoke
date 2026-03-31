@@ -15,7 +15,11 @@ import {
   TextData,
   UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, HARNESS_IDS, OPERATION_STATUS } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  HARNESS_IDS,
+  OPERATION_STATUS,
+} from "../../../types/DashboardConstants";
 import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
 import { QwenToolBuilder } from "./QwenToolBuilder";
 
@@ -217,7 +221,9 @@ export class QwenLogParser extends BaseLogParser {
           if (part.functionCall) {
             const args = part.functionCall.args || {};
             // Track file path for later correlation with tool_result resultDisplay
-            const fp = (args.absolute_path ?? args.file_path ?? args.path) as string | undefined;
+            const fp = (args.absolute_path ?? args.file_path ?? args.path) as
+              | string
+              | undefined;
             if (fp) {
               callPathMap.set(part.functionCall.id, fp);
             }
@@ -237,7 +243,8 @@ export class QwenLogParser extends BaseLogParser {
           const u = event.usageMetadata;
           totalInputTokens += u.promptTokenCount || 0;
           // Output = candidate tokens + thinking tokens (both count toward billing)
-          totalOutputTokens += (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0);
+          totalOutputTokens +=
+            (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0);
           totalCachedTokens += u.cachedContentTokenCount || 0;
           lastAssistantUsage = u;
         }
@@ -276,7 +283,8 @@ export class QwenLogParser extends BaseLogParser {
         if (tcr && tcr.resultDisplay && typeof tcr.resultDisplay === "object") {
           const rd = tcr.resultDisplay as Record<string, any>;
           const toolName = event.message.parts[0]?.functionResponse?.name;
-          const fullPath = callPathMap.get(tcr.callId) ?? rd.fileName ?? "unknown";
+          const fullPath =
+            callPathMap.get(tcr.callId) ?? rd.fileName ?? "unknown";
           const succeeded = tcr.status === "success";
 
           if (toolName === "edit" && rd.fileDiff) {
@@ -320,7 +328,8 @@ export class QwenLogParser extends BaseLogParser {
             inputTokens: totalInputTokens,
             outputTokens: totalOutputTokens,
             totalTokens: totalInputTokens + totalOutputTokens,
-            cachedInputTokens: totalCachedTokens > 0 ? totalCachedTokens : undefined,
+            cachedInputTokens:
+              totalCachedTokens > 0 ? totalCachedTokens : undefined,
             contextWindowUsedTokens,
             contextWindowSize: getQwenContextWindowSize(model ?? ""),
           }
@@ -399,32 +408,39 @@ export class QwenLogParser extends BaseLogParser {
       if (sessionId) {
         const logPath = path.join(chatsDir, `${sessionId}.jsonl`);
 
-        const result = await retryWithBackoff(async () => {
-          if (fs.existsSync(logPath)) {
-            const stats = fs.statSync(logPath);
-            if (stats.mtime >= startTime) {
-              return logPath;
-            }
-            Log.debug(
-              `[QwenLogParser] Session log exists but not yet updated (mtime: ${stats.mtime.toISOString()}, startTime: ${startTime.toISOString()}), will retry...`
-            );
-          }
-          return null;
-        }, {
-          onRetry: (attempt, max, delay) => {
-            if (attempt > 1) {
+        const result = await retryWithBackoff(
+          async () => {
+            if (fs.existsSync(logPath)) {
+              const stats = fs.statSync(logPath);
+              if (stats.mtime >= startTime) {
+                return logPath;
+              }
               Log.debug(
-                `[QwenLogParser] Session log not ready (attempt ${attempt}/${max}), retrying in ${delay}ms...`
+                `[QwenLogParser] Session log exists but not yet updated (mtime: ${stats.mtime.toISOString()}, startTime: ${startTime.toISOString()}), will retry...`
               );
             }
+            return null;
           },
-        });
+          {
+            onRetry: (attempt, max, delay) => {
+              if (attempt > 1) {
+                Log.debug(
+                  `[QwenLogParser] Session log not ready (attempt ${attempt}/${max}), retrying in ${delay}ms...`
+                );
+              }
+            },
+          }
+        );
 
         if (result) {
-          Log.debug(`[QwenLogParser] Found session log via session ID: ${result}`);
+          Log.debug(
+            `[QwenLogParser] Found session log via session ID: ${result}`
+          );
           return result;
         } else {
-          Log.debug(`[QwenLogParser] Session log file not found after retries: ${logPath}`);
+          Log.debug(
+            `[QwenLogParser] Session log file not found after retries: ${logPath}`
+          );
         }
       }
 
@@ -435,7 +451,9 @@ export class QwenLogParser extends BaseLogParser {
         return null;
       }
 
-      Log.debug(`[QwenLogParser] Found ${candidates.length} candidate log files`);
+      Log.debug(
+        `[QwenLogParser] Found ${candidates.length} candidate log files`
+      );
 
       const promptPrefix = this.normalizePromptForMatching(
         promptText.substring(0, 100)
@@ -454,7 +472,9 @@ export class QwenLogParser extends BaseLogParser {
                     part.text.substring(0, 100)
                   );
                   if (logPromptPrefix === promptPrefix) {
-                    Log.debug(`[QwenLogParser] Found matching session log: ${candidatePath}`);
+                    Log.debug(
+                      `[QwenLogParser] Found matching session log: ${candidatePath}`
+                    );
                     return candidatePath;
                   }
                 }
@@ -462,7 +482,10 @@ export class QwenLogParser extends BaseLogParser {
             }
           }
         } catch (error) {
-          Log.debug(`[QwenLogParser] Error reading candidate ${candidatePath}:`, error);
+          Log.debug(
+            `[QwenLogParser] Error reading candidate ${candidatePath}:`,
+            error
+          );
           continue;
         }
       }
@@ -509,7 +532,9 @@ export class QwenLogParser extends BaseLogParser {
     const e = event as QwenProviderEvent;
     const cliEvents: CliEvent[] = [];
 
-    const timestamp = e.timestamp ? new Date(e.timestamp).getTime() : Date.now();
+    const timestamp = e.timestamp
+      ? new Date(e.timestamp).getTime()
+      : Date.now();
 
     if (e.type === "assistant" && e.message?.parts) {
       for (const part of e.message.parts) {
@@ -517,7 +542,10 @@ export class QwenLogParser extends BaseLogParser {
           cliEvents.push({
             type: CLI_EVENT_TYPES.THINKING,
             timestamp,
-            data: { text: part.text, label: "Extended Thinking" } as ThinkingBlock,
+            data: {
+              text: part.text,
+              label: "Extended Thinking",
+            } as ThinkingBlock,
           });
         }
 
@@ -641,7 +669,10 @@ export class QwenLogParser extends BaseLogParser {
         continue;
       }
 
-      if (current && (line.startsWith("+") || line.startsWith("-") || line.startsWith(" "))) {
+      if (
+        current &&
+        (line.startsWith("+") || line.startsWith("-") || line.startsWith(" "))
+      ) {
         current.lines.push(line);
       }
     }

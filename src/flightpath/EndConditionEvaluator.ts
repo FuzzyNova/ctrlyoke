@@ -7,7 +7,10 @@ import {
   EndCondition,
   type EndConditionCompareSource,
 } from "../types/FlightPathTypes";
-import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../utils/ConfigurationUtils";
 import { CliProcessManager } from "../utils/CliProcessManager";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 
@@ -114,7 +117,11 @@ export class EndConditionEvaluator {
         vars
       );
 
-      const success = this.evaluateSuccess(result, condition.returns, condition.compareSource);
+      const success = this.evaluateSuccess(
+        result,
+        condition.returns,
+        condition.compareSource
+      );
 
       return {
         success,
@@ -220,7 +227,10 @@ export class EndConditionEvaluator {
 
     switch (ext) {
       case ".py":
-        return { executable: this.resolvePythonExecutable(), args: [scriptPath] };
+        return {
+          executable: this.resolvePythonExecutable(),
+          args: [scriptPath],
+        };
       case ".js":
         return { executable: "node", args: [scriptPath] };
       case ".ts":
@@ -399,8 +409,13 @@ export class EndConditionEvaluator {
       case "auto":
       default: {
         // "true"/"false" use exit code; everything else compares stdout + requires clean exit
-        const checkSuccess = this.checkResult(result.result, returns, result.exitCode);
-        const isBooleanReturn = expectedLower === "true" || expectedLower === "false";
+        const checkSuccess = this.checkResult(
+          result.result,
+          returns,
+          result.exitCode
+        );
+        const isBooleanReturn =
+          expectedLower === "true" || expectedLower === "false";
         return isBooleanReturn ? checkSuccess : checkSuccess && result.success;
       }
     }
@@ -415,7 +430,11 @@ export class EndConditionEvaluator {
    * code instead of stdout content. For explicit `compareSource` values, call
    * `evaluateSuccess` directly; don't pass `exitCode` here.
    */
-  private checkResult(actualResult: string, expectedResult: string, exitCode?: number): boolean {
+  private checkResult(
+    actualResult: string,
+    expectedResult: string,
+    exitCode?: number
+  ): boolean {
     const actual = actualResult.trim().toLowerCase();
     const expected = expectedResult.trim().toLowerCase();
 

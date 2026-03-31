@@ -177,7 +177,11 @@ export class SettingsJsonHooksTracker {
       }
 
       const baselineHandlers = baseHooks[event] ?? [];
-      mergedHooks[event] = [...fpHandlers, ...userHandlers, ...baselineHandlers];
+      mergedHooks[event] = [
+        ...fpHandlers,
+        ...userHandlers,
+        ...baselineHandlers,
+      ];
     }
 
     settings.hooks = mergedHooks;
@@ -185,7 +189,11 @@ export class SettingsJsonHooksTracker {
     await fs.mkdir(path.join(workspaceRoot, this.settingsFileName), {
       recursive: true,
     });
-    await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), "utf-8");
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify(settings, null, 2),
+      "utf-8"
+    );
   }
 
   private async restoreBaseline(settingsPath: string): Promise<void> {

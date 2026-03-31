@@ -2,7 +2,10 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import * as jsYaml from "js-yaml";
-import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 
 /**
@@ -87,21 +90,31 @@ export class TemplateManager {
     try {
       const parsed = jsYaml.load(content) as Record<string, unknown> | null;
       if (!parsed || typeof parsed !== "object") return { variables: {} };
-      const meta = parsed["_templateMeta"] as Record<string, unknown> | undefined;
+      const meta = parsed["_templateMeta"] as
+        | Record<string, unknown>
+        | undefined;
       if (!meta || typeof meta !== "object") return { variables: {} };
 
       const result: ParsedTemplateMeta = { variables: {} };
 
       if (typeof meta["name"] === "string") result.name = meta["name"];
-      if (typeof meta["description"] === "string") result.description = meta["description"];
+      if (typeof meta["description"] === "string")
+        result.description = meta["description"];
 
       const variablesMeta = meta["variables"];
-      if (variablesMeta && typeof variablesMeta === "object" && !Array.isArray(variablesMeta)) {
-        for (const [varName, varMeta] of Object.entries(variablesMeta as Record<string, unknown>)) {
+      if (
+        variablesMeta &&
+        typeof variablesMeta === "object" &&
+        !Array.isArray(variablesMeta)
+      ) {
+        for (const [varName, varMeta] of Object.entries(
+          variablesMeta as Record<string, unknown>
+        )) {
           if (typeof varMeta !== "object" || varMeta === null) continue;
           const vm = varMeta as Record<string, unknown>;
           const entry: Partial<Omit<TemplateVariable, "name">> = {};
-          if (vm["type"] === "file" || vm["type"] === "text") entry.type = vm["type"];
+          if (vm["type"] === "file" || vm["type"] === "text")
+            entry.type = vm["type"];
           if (
             Array.isArray(vm["fileFilter"]) &&
             vm["fileFilter"].every((f) => typeof f === "string")
@@ -193,7 +206,11 @@ export class TemplateManager {
   private getCustomTemplatesPath(): string | null {
     const workspaceFolder = this.getWorkspaceFolder();
     if (!workspaceFolder) return null;
-    return path.join(workspaceFolder.uri.fsPath, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.TEMPLATES_DIR);
+    return path.join(
+      workspaceFolder.uri.fsPath,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.TEMPLATES_DIR
+    );
   }
 
   /**
@@ -226,7 +243,11 @@ export class TemplateManager {
         const content = await fs.promises.readFile(templatePath, "utf-8");
         const meta = this.parseTemplateMeta(content);
         const extracted = this.extractVariables(content);
-        const variables = this.mergeVariablesWithMeta(extracted, meta.variables, id);
+        const variables = this.mergeVariablesWithMeta(
+          extracted,
+          meta.variables,
+          id
+        );
         templates.push({
           id,
           name: meta.name ?? id,
@@ -484,7 +505,11 @@ export class TemplateManager {
             const content = await fs.promises.readFile(fullPath, "utf-8");
             const meta = this.parseTemplateMeta(content);
             const extracted = this.extractVariables(content);
-            const variables = this.mergeVariablesWithMeta(extracted, meta.variables, name);
+            const variables = this.mergeVariablesWithMeta(
+              extracted,
+              meta.variables,
+              name
+            );
 
             templates.push({
               id: `custom:${name}`,

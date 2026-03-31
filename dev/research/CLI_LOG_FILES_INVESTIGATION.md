@@ -206,5 +206,3 @@ FlightPath uses **prompt content matching** as the universal session discovery s
 **For Claude/Codex:** The `Start` hook also provides session IDs directly when available (faster path).
 
 **Why not most-recent file?** Multiple CLI sessions may run concurrently. Matching on prompt content is robust to race conditions.
-
-

@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Panel,
-  Group,
-  Separator,
-} from "react-resizable-panels";
+import { Panel, Group, Separator } from "react-resizable-panels";
 import { useMessageHandler } from "@hooks/useMessageHandler";
 import { useUndoRedoKeyHandler } from "@hooks/useUndoRedoKeyHandler";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
@@ -125,11 +121,16 @@ function App() {
 
       if (openKeys.length > 0) {
         const totalOpen =
-          openKeys.reduce((s, k) => s + mobile.lastMobileSizes.current[k], 0) || 1;
+          openKeys.reduce((s, k) => s + mobile.lastMobileSizes.current[k], 0) ||
+          1;
         for (const k of PANEL_KEYS) {
           mobile.mobileMountDefaults.current[k] = collapsed[k]
             ? PANEL_COLLAPSED_SIZE_DEFAULT
-            : String(Math.round((mobile.lastMobileSizes.current[k] / totalOpen) * 100));
+            : String(
+                Math.round(
+                  (mobile.lastMobileSizes.current[k] / totalOpen) * 100
+                )
+              );
         }
       }
 
@@ -215,12 +216,15 @@ function App() {
       };
       const openKeys = PANEL_KEYS.filter((k) => !collapsed[k]);
       const totalOpen =
-        openKeys.reduce((s, k) => s + mobile.lastMobileSizes.current[k], 0) || 1;
+        openKeys.reduce((s, k) => s + mobile.lastMobileSizes.current[k], 0) ||
+        1;
 
       for (const k of PANEL_KEYS) {
         mobile.mobileMountDefaults.current[k] = collapsed[k]
           ? "30px"
-          : String(Math.round((mobile.lastMobileSizes.current[k] / totalOpen) * 100));
+          : String(
+              Math.round((mobile.lastMobileSizes.current[k] / totalOpen) * 100)
+            );
       }
     }
     mobile.mobileWasAllCollapsed.current = allMobileCollapsed;
@@ -279,11 +283,13 @@ function App() {
               minSize={PANEL_MIN_SIZE_SMALL}
               id="mobile-prompts-panel"
               onResize={() => {
-                if (!mobile.mobileInitializedRef.current || !uiLayoutReady) return;
+                if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
+                  return;
                 const isCollapsed =
                   mobile.mobilePromptsRef.current?.isCollapsed() ?? false;
                 const size =
-                  mobile.mobilePromptsRef.current?.getSize().asPercentage ?? null;
+                  mobile.mobilePromptsRef.current?.getSize().asPercentage ??
+                  null;
                 if (!isCollapsed && size != null) {
                   mobile.lastMobileSizes.current.prompts = size;
                   useUiStore.getState().setLastMobileSizes({ prompts: size });
@@ -306,11 +312,13 @@ function App() {
               minSize={PANEL_MIN_SIZE_SMALL}
               id="mobile-output-panel"
               onResize={() => {
-                if (!mobile.mobileInitializedRef.current || !uiLayoutReady) return;
+                if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
+                  return;
                 const isCollapsed =
                   mobile.mobileOutputRef.current?.isCollapsed() ?? false;
                 const size =
-                  mobile.mobileOutputRef.current?.getSize().asPercentage ?? null;
+                  mobile.mobileOutputRef.current?.getSize().asPercentage ??
+                  null;
                 if (!isCollapsed && size != null) {
                   mobile.lastMobileSizes.current.output = size;
                   useUiStore.getState().setLastMobileSizes({ output: size });
@@ -333,11 +341,13 @@ function App() {
               minSize={PANEL_MIN_SIZE_SMALL}
               id="mobile-editor-panel"
               onResize={() => {
-                if (!mobile.mobileInitializedRef.current || !uiLayoutReady) return;
+                if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
+                  return;
                 const isCollapsed =
                   mobile.mobileEditorRef.current?.isCollapsed() ?? false;
                 const size =
-                  mobile.mobileEditorRef.current?.getSize().asPercentage ?? null;
+                  mobile.mobileEditorRef.current?.getSize().asPercentage ??
+                  null;
                 if (!isCollapsed && size != null) {
                   mobile.lastMobileSizes.current.editor = size;
                   useUiStore.getState().setLastMobileSizes({ editor: size });
@@ -360,11 +370,13 @@ function App() {
               minSize={PANEL_MIN_SIZE_SMALL}
               id="mobile-settings-panel"
               onResize={() => {
-                if (!mobile.mobileInitializedRef.current || !uiLayoutReady) return;
+                if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
+                  return;
                 const isCollapsed =
                   mobile.mobileSettingsRef.current?.isCollapsed() ?? false;
                 const size =
-                  mobile.mobileSettingsRef.current?.getSize().asPercentage ?? null;
+                  mobile.mobileSettingsRef.current?.getSize().asPercentage ??
+                  null;
                 if (!isCollapsed && size != null) {
                   mobile.lastMobileSizes.current.settings = size;
                   useUiStore.getState().setLastMobileSizes({ settings: size });
@@ -407,8 +419,10 @@ function App() {
           maxSize={PANEL_MAX_SIZE_SIDEBAR}
           id="prompts-panel"
           onResize={() => {
-            if (!desktop.horizontalInitializedRef.current || !uiLayoutReady) return;
-            const isCollapsed = desktop.promptsRef.current?.isCollapsed() ?? false;
+            if (!desktop.horizontalInitializedRef.current || !uiLayoutReady)
+              return;
+            const isCollapsed =
+              desktop.promptsRef.current?.isCollapsed() ?? false;
             if (!isCollapsed) {
               const size = desktop.promptsRef.current?.getSize().asPercentage;
               if (size != null) {
@@ -456,16 +470,20 @@ function App() {
                     desktop.outputRef.current?.isCollapsed() ?? false;
                   const isEditorCollapsed =
                     desktop.editorRef.current?.isCollapsed() ?? false;
-                  const currentSize = desktop.outputRef.current?.getSize().asPercentage;
+                  const currentSize =
+                    desktop.outputRef.current?.getSize().asPercentage;
 
                   if (
                     !isOutputCollapsed &&
                     !isEditorCollapsed &&
                     !desktop.isForcingResize.current
                   ) {
-                    const newSize = currentSize ?? desktop.lastDesktopSizes.current.output;
+                    const newSize =
+                      currentSize ?? desktop.lastDesktopSizes.current.output;
                     desktop.lastDesktopSizes.current.output = newSize;
-                    useUiStore.getState().setLastDesktopSizes({ output: newSize });
+                    useUiStore
+                      .getState()
+                      .setLastDesktopSizes({ output: newSize });
                   }
                   setOutputCollapsed(isOutputCollapsed);
                 }}
@@ -488,16 +506,20 @@ function App() {
                     desktop.editorRef.current?.isCollapsed() ?? false;
                   const isOutputCollapsed =
                     desktop.outputRef.current?.isCollapsed() ?? false;
-                  const currentSize = desktop.editorRef.current?.getSize().asPercentage;
+                  const currentSize =
+                    desktop.editorRef.current?.getSize().asPercentage;
 
                   if (
                     !isEditorCollapsed &&
                     !isOutputCollapsed &&
                     !desktop.isForcingResize.current
                   ) {
-                    const newSize = currentSize ?? desktop.lastDesktopSizes.current.editor;
+                    const newSize =
+                      currentSize ?? desktop.lastDesktopSizes.current.editor;
                     desktop.lastDesktopSizes.current.editor = newSize;
-                    useUiStore.getState().setLastDesktopSizes({ editor: newSize });
+                    useUiStore
+                      .getState()
+                      .setLastDesktopSizes({ editor: newSize });
                   }
                   setEditorCollapsed(isEditorCollapsed);
                 }}
@@ -520,8 +542,10 @@ function App() {
           maxSize={PANEL_MAX_SIZE_SIDEBAR}
           id="settings-panel"
           onResize={() => {
-            if (!desktop.horizontalInitializedRef.current || !uiLayoutReady) return;
-            const isCollapsed = desktop.settingsRef.current?.isCollapsed() ?? false;
+            if (!desktop.horizontalInitializedRef.current || !uiLayoutReady)
+              return;
+            const isCollapsed =
+              desktop.settingsRef.current?.isCollapsed() ?? false;
             if (!isCollapsed) {
               const size = desktop.settingsRef.current?.getSize().asPercentage;
               if (size != null) {

@@ -484,7 +484,7 @@ _Timeline is aspirational. Pre-release — prioritize quality over schedule._
 
 | Document                                                                                                | Status          | Roadmap Item |
 | ------------------------------------------------------------------------------------------------------- | --------------- | ------------ |
-| [`GEMINI_INTEGRATION_PLAN.md`](GEMINI_INTEGRATION_PLAN.md)                                          | READY_FOR_IMPL  | —            |
+| [`GEMINI_INTEGRATION_PLAN.md`](GEMINI_INTEGRATION_PLAN.md)                                              | READY_FOR_IMPL  | —            |
 | [`AGENTS_MD_GENERATION.md`](AGENTS_MD_GENERATION.md)                                                    | NOT_IMPLEMENTED | 2.2          |
 | [`BMAD_FOR_FLIGHTPATH.md`](BMAD_FOR_FLIGHTPATH.md)                                                      | NOT_IMPLEMENTED | 1.1          |
 | [`CUSTOM_CLI_ARGS_PLAN.md`](CUSTOM_CLI_ARGS_PLAN.md)                                                    | NOT_IMPLEMENTED | 2.5          |

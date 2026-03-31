@@ -1,7 +1,15 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { HarnessIntegration, HarnessStatus } from "../../flightpath/HarnessIntegration";
-import { PromptItem, PromptFile, PriorContext, Harness } from "../../types/FlightPathTypes";
+import {
+  HarnessIntegration,
+  HarnessStatus,
+} from "../../flightpath/HarnessIntegration";
+import {
+  PromptItem,
+  PromptFile,
+  PriorContext,
+  Harness,
+} from "../../types/FlightPathTypes";
 import { PropertyResolver } from "../../utils/PropertyResolver";
 
 // ---------------------------------------------------------------------------
@@ -54,7 +62,13 @@ class TestHarness extends HarnessIntegration {
 
   public exposeInsert(
     promptText: string,
-    contextItems: { index: number; name?: string; prompt?: string; text: string; type?: "finalPrompt" }[]
+    contextItems: {
+      index: number;
+      name?: string;
+      prompt?: string;
+      text: string;
+      type?: "finalPrompt";
+    }[]
   ) {
     if (contextItems.length === 0) {
       return promptText;
@@ -179,7 +193,11 @@ suite("gatherPriorContextItems", () => {
   });
 
   test("filters prompts with empty responseText", () => {
-    const prompts = [makePrompt("p1", ""), makePrompt("p2", "r2"), makePrompt("p3")];
+    const prompts = [
+      makePrompt("p1", ""),
+      makePrompt("p2", "r2"),
+      makePrompt("p3"),
+    ];
     const items = harness.exposeGather("all", prompts, 2);
     assert.strictEqual(items.length, 1);
     assert.strictEqual(items[0].index, 1);
@@ -238,7 +256,12 @@ suite("gatherPriorContextItems", () => {
   test("'finalPromptPrevious' works on queue prompts (returns last finalPrompt loop)", () => {
     const prompts = [makePrompt("p1", "r1"), makePrompt("p2")];
     const fpTexts = ["orchestrator decided X"];
-    const items = harness.exposeGather("finalPromptPrevious", prompts, 1, fpTexts);
+    const items = harness.exposeGather(
+      "finalPromptPrevious",
+      prompts,
+      1,
+      fpTexts
+    );
     assert.strictEqual(items.length, 1);
     assert.strictEqual(items[0].text, "orchestrator decided X");
     assert.strictEqual(items[0].type, "finalPrompt");
@@ -286,7 +309,7 @@ suite("insertPriorContext", () => {
     const items = [{ index: 0, text: "result" }];
     const result = harness.exposeInsert("Task.", items);
     assert.ok(result.includes('<step index="1">'));
-    assert.ok(!result.includes('name='));
+    assert.ok(!result.includes("name="));
   });
 
   test("includes name attribute when prompt has a name", () => {
@@ -303,7 +326,9 @@ suite("insertPriorContext", () => {
   });
 
   test("adds type='finalPrompt' attribute for finalPrompt loop items", () => {
-    const items = [{ index: 0, text: "orchestrator output", type: "finalPrompt" as const }];
+    const items = [
+      { index: 0, text: "orchestrator output", type: "finalPrompt" as const },
+    ];
     const result = harness.exposeInsert("Do work.", items);
     assert.ok(result.includes('type="finalPrompt"'));
     assert.ok(result.includes('<step index="1" type="finalPrompt">'));
@@ -318,7 +343,9 @@ suite("insertPriorContext", () => {
   });
 
   test("includes <prompt> tag when prompt text is provided", () => {
-    const items = [{ index: 0, prompt: "What is the plan?", text: "The plan is X" }];
+    const items = [
+      { index: 0, prompt: "What is the plan?", text: "The plan is X" },
+    ];
     const result = harness.exposeInsert("Now execute.", items);
     assert.ok(result.includes("<prompt>\nWhat is the plan?\n</prompt>"));
     assert.ok(result.includes("<response>\nThe plan is X\n</response>"));

@@ -14,7 +14,9 @@
 "use strict";
 
 const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
-const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
+const {
+  StdioServerTransport,
+} = require("@modelcontextprotocol/sdk/server/stdio.js");
 
 const server = new McpServer({ name: "test-mcp", version: "1.0.0" });
 

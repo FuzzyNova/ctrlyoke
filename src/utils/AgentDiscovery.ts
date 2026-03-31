@@ -233,7 +233,9 @@ export class AgentDiscovery {
     const addPromptsPath = (appDataRoaming: string) => {
       // Support both the primary VS Code variant and the plain "Code" fallback
       const variant = this.getVSCodeVariant();
-      const candidates = [path.join(appDataRoaming, variant, "User", "prompts")];
+      const candidates = [
+        path.join(appDataRoaming, variant, "User", "prompts"),
+      ];
       if (variant !== "Code") {
         candidates.push(path.join(appDataRoaming, "Code", "User", "prompts"));
       }
@@ -312,10 +314,18 @@ export class AgentDiscovery {
       } else if (platform === "darwin") {
         // macOS: ~/Library/Application Support/Code/User/prompts/
         const homeDir = os.homedir();
-        baseDir = path.join(homeDir, "Library", "Application Support", "Code", "User", "prompts");
+        baseDir = path.join(
+          homeDir,
+          "Library",
+          "Application Support",
+          "Code",
+          "User",
+          "prompts"
+        );
       } else {
         // Linux: ~/.config/Code/User/prompts/ (respects XDG_CONFIG_HOME if set)
-        const configDir = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+        const configDir =
+          process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
         baseDir = path.join(configDir, "Code", "User", "prompts");
       }
 

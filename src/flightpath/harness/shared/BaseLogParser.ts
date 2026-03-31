@@ -1,7 +1,11 @@
 import * as fs from "fs";
 import * as path from "path";
 import { BaseCliEvent, ILogParser } from "./interfaces/ILogParser";
-import { CliEvent, TextData, UniversalCliOutput } from "../../../types/CliOutputTypes";
+import {
+  CliEvent,
+  TextData,
+  UniversalCliOutput,
+} from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
@@ -357,9 +361,7 @@ export abstract class BaseLogParser implements ILogParser {
       return entries;
     } catch (error) {
       // File read errors are thrown (caller should handle)
-      throw new Error(
-        `Failed to read log file: ${getErrorMessage(error)}`
-      );
+      throw new Error(`Failed to read log file: ${getErrorMessage(error)}`);
     }
   }
 

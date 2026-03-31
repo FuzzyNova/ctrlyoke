@@ -44,10 +44,7 @@ suite("promptPathUtils", () => {
     });
 
     test("recognizes Windows drive letter path", () => {
-      assert.strictEqual(
-        looksLikeFilePath("C:\\Users\\prompt.txt"),
-        true
-      );
+      assert.strictEqual(looksLikeFilePath("C:\\Users\\prompt.txt"), true);
     });
 
     test("recognizes path with unknown extension", () => {
@@ -83,10 +80,7 @@ suite("promptPathUtils", () => {
 
     // Edge cases
     test("handles path with spaces when trimmed", () => {
-      assert.strictEqual(
-        looksLikeFilePath("  ./my prompt.md  "),
-        true
-      );
+      assert.strictEqual(looksLikeFilePath("  ./my prompt.md  "), true);
     });
 
     test("returns false for path without extension", () => {

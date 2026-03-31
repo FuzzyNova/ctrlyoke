@@ -76,9 +76,10 @@ export class VarSubstitutor {
         props.additionalArgs !== undefined
           ? this.substitute(props.additionalArgs, vars)
           : undefined,
-      hooks: props.hooks !== null && props.hooks !== undefined
-        ? props.hooks.map((h) => this.applyToHook(h, vars))
-        : props.hooks,
+      hooks:
+        props.hooks !== null && props.hooks !== undefined
+          ? props.hooks.map((h) => this.applyToHook(h, vars))
+          : props.hooks,
       endCondition:
         props.endCondition !== undefined
           ? this.applyToEndCondition(props.endCondition, vars)

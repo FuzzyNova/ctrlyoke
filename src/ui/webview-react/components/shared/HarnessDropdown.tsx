@@ -252,10 +252,20 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
       const spaceBelow = window.innerHeight - rect.bottom - 4;
       const propMaxH = parsePropMaxHeight(dropdownMaxHeight);
       if (spaceBelow >= 80) {
-        setPopupPos({ top: rect.bottom + 4, left: rect.left, width: rect.width, maxHeight: Math.min(propMaxH, spaceBelow) });
+        setPopupPos({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width,
+          maxHeight: Math.min(propMaxH, spaceBelow),
+        });
       } else {
         const spaceAbove = rect.top - 4;
-        setPopupPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width, maxHeight: Math.min(propMaxH, spaceAbove) });
+        setPopupPos({
+          bottom: window.innerHeight - rect.top + 4,
+          left: rect.left,
+          width: rect.width,
+          maxHeight: Math.min(propMaxH, spaceAbove),
+        });
       }
     }
   }, [dropdownMaxHeight]);
@@ -446,7 +456,8 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         </div>
       </button>
 
-      {isOpen && popupPos &&
+      {isOpen &&
+        popupPos &&
         createPortal(
           <div
             ref={popupRef}

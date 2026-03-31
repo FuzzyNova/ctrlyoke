@@ -957,7 +957,10 @@ export class WorkflowOrchestrator {
     prompts: PromptItem[],
     finalPrompt: PromptItem | null
   ): Promise<void> {
-    return this.getActiveInstance().syncPromptsForUndoRedo(prompts, finalPrompt);
+    return this.getActiveInstance().syncPromptsForUndoRedo(
+      prompts,
+      finalPrompt
+    );
   }
 
   async setStartPosition(toIndex: number): Promise<void> {
@@ -1739,7 +1742,8 @@ export class WorkflowOrchestrator {
           startedAt?: number;
         };
 
-        let finalState = workingFile._runtime?.executionState ?? EXECUTION_STATES.STOPPED;
+        let finalState =
+          workingFile._runtime?.executionState ?? EXECUTION_STATES.STOPPED;
 
         // If still shows "running", normalize to "stopped" on disk
         if (finalState === EXECUTION_STATES.RUNNING) {

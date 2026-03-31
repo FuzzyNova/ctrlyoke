@@ -12,6 +12,7 @@
 Which harnesses are installed and which models are available varies per machine and per user — one developer has only Claude Code installed, another has all seven harnesses. OpenCode model lists are user-configured. Copilot model lists come from VS Code's Language Model API at runtime. There is no static list that is correct for all users.
 
 The extension already computes both of these data structures:
+
 - `harnessStatus: Record<HarnessId, { available: boolean; status: string }>` — built during harness initialization checks
 - `modelOptions: Record<HarnessId, Array<{ value: string; label: string }>>` — built by `WebviewSettingsSync.buildModelOptions()` from `ModelRegistry`, sent to the webview on init and on `MODEL_OPTIONS_UPDATE`
 
@@ -22,6 +23,7 @@ The MCP server needs this same information to (a) answer AI queries about what's
 **Location:** `.flightpath/capabilities.json`
 
 **Written by:** The extension (via `WebviewSettingsSync` or a new `CapabilitiesWriter` utility) whenever harness status or model options change. This already happens at two points:
+
 1. After harness initialization (`sendHarnessStatusUpdate`)
 2. After model registry loads (`sendModelOptionsUpdate`)
 
@@ -54,7 +56,10 @@ Both points write to the webview — the same trigger should also write `capabil
       "displayName": "OpenCode",
       "available": true,
       "models": [
-        { "value": "anthropic/claude-sonnet-4-6", "label": "Anthropic / Claude Sonnet 4.6" }
+        {
+          "value": "anthropic/claude-sonnet-4-6",
+          "label": "Anthropic / Claude Sonnet 4.6"
+        }
       ]
     }
   ]
@@ -108,19 +113,23 @@ When `harness` or `model` is provided on `flightpath_append_queue`:
 ### Implementation
 
 **New file or method in `src/ui/WebviewSettingsSync.ts` (or thin `CapabilitiesWriter.ts` utility):**
+
 - `writeCapabilities(workspaceRoot, harnessStatus, modelOptions)` — serializes to `capabilities.json`
 - Called from `sendHarnessStatusUpdate()` and `sendModelOptionsUpdate()` after the existing webview postMessage
 
 **`src/mcp-server.ts`:**
+
 - Add `flightpath_capabilities` to `ListToolsRequestSchema` handler
 - Add `handleCapabilities()` method — reads and parses `.flightpath/capabilities.json`, filters to available harnesses, returns the result
 - Add `readCapabilities()` helper — reads the file, returns parsed object or null if absent
 - Use `readCapabilities()` in `handleQueueAppend` for validation before inserting prompts
 
 **`src/flightpath/QueueOperations.ts`:**
+
 - No changes needed — capabilities validation lives in the MCP server (file-based IPC) and the LM Tool (can call VS Code APIs directly for the in-process path)
 
 **`src/extension.ts` LM Tools:**
+
 - Register `flightpath_capabilities` as a third LM Tool
 - Its `invoke` reads directly from `WorkflowOrchestrator`/`WebviewSettingsSync` in-process (no file needed for the VS Code Chat path — it has direct access to the data)
 
@@ -130,9 +139,10 @@ When `harness` or `model` is provided on `flightpath_append_queue`:
 
 ### Motivation
 
-`flightpath_queue_status` returns prompt text and status but not what the AI *produced*. `PromptRuntimeMetadata.responseText` is already stored per-prompt (the same field `priorContext` uses for static injection). The difference: `priorContext` is fixed at authoring time. `flightpath_read_output` lets an AI dynamically inspect prior results at runtime before deciding what to add next.
+`flightpath_queue_status` returns prompt text and status but not what the AI _produced_. `PromptRuntimeMetadata.responseText` is already stored per-prompt (the same field `priorContext` uses for static injection). The difference: `priorContext` is fixed at authoring time. `flightpath_read_output` lets an AI dynamically inspect prior results at runtime before deciding what to add next.
 
 This enables genuinely adaptive patterns:
+
 - Read step 2's output → decide whether to add a "fix" prompt or a "proceed" prompt
 - Inspect an analysis result → generate targeted follow-up prompts based on actual findings
 - Build conditional branches without pre-planning every path
@@ -184,11 +194,13 @@ Non-completed prompts return `responseText: null` — not an error, the caller c
 ### Implementation
 
 **`src/mcp-server.ts`:**
+
 - Add `flightpath_read_output` to `ListToolsRequestSchema` handler
 - Add `handleReadOutput(args)` — reads the working file, extracts `prompts[i]._runtime?.responseText` for requested indices
 - No file lock needed (read-only)
 
 **`src/flightpath/QueueOperations.ts`:**
+
 - Add `ReadOutputRequest` and `ReadOutputResponse` interfaces
 - Add `readQueueOutput(queue, indices)` function — pulls `responseText` from prompt `_runtime` metadata
 - Wire into `src/extension.ts` LM Tools as a fourth registered tool
@@ -221,27 +233,30 @@ This enhancement also removes the `reason` parameter from `flightpath_append_que
 
 **Session resumption behaviour:**
 
-| `resumeSession` | `sessionId` | Result |
-|---|---|---|
-| `false` / omitted | — | New session |
-| `true` | omitted | Resume session from the immediately preceding prompt |
-| `true` | `3` | Resume session from prompt 3's conversation |
+| `resumeSession`   | `sessionId` | Result                                               |
+| ----------------- | ----------- | ---------------------------------------------------- |
+| `false` / omitted | —           | New session                                          |
+| `true`            | omitted     | Resume session from the immediately preceding prompt |
+| `true`            | `3`         | Resume session from prompt 3's conversation          |
 
 `sessionId` without `resumeSession: true` is ignored — explicitness is required. Only the numeric form is exposed here; string session IDs (actual CLI GUIDs) are internal implementation details the AI should never construct.
 
 ### Implementation
 
 **`src/flightpath/QueueOperations.ts`:**
+
 - Add `resumeSession?: boolean` and `sessionId?: number` to the per-prompt item type in `AppendPromptsRequest`
 - Remove `reason?: string` from `AppendPromptsRequest`
 - Thread both fields through into the `PromptItem` mapping
 
 **`src/mcp-server.ts`:**
+
 - Add `resumeSession` and `sessionId` to `items.properties` in the `flightpath_append_queue` inputSchema
 - Remove `reason` from the `flightpath_append_queue` inputSchema
 - No logic changes — both fields land on the `PromptItem` and the harness resolves them at execution time
 
 **`src/extension.ts` LM Tools:**
+
 - Add `resumeSession` and `sessionId` to the per-prompt object type in the append tool `invoke`
 
 ---
@@ -302,28 +317,31 @@ Sourced from `queueData.harness` / `queueData.model` (top-level `WorkingFile` fi
 ### Implementation
 
 **`src/flightpath/QueueOperations.ts`:**
+
 - Add `harness?: string` to the per-prompt item type in `AppendPromptsRequest`
 - Add `harness?: string | null` and `model?: string | null` (workflow-level) to `QueueStatusResponse.metadata`
 - Thread `harness` through into the `PromptItem` mapping
 
 **`src/mcp-server.ts`:**
+
 - Add `harness` field to the append tool schema (free string, no enum)
 - Add `harness` and `model` to the status metadata block in `handleQueueStatus` from `queueData`
 
 **`src/extension.ts` LM Tools:**
+
 - Add `harness` to per-prompt object in append tool invoke
 
 ---
 
 ## Files Changed Summary
 
-| File | Changes |
-|---|---|
-| `src/ui/WebviewSettingsSync.ts` | Write `capabilities.json` when harness status or model options change |
-| `src/mcp-server.ts` | New `flightpath_capabilities` tool + handler; new `flightpath_read_output` tool + handler; add `resumeSession`/`harness` to append schema + validation against capabilities.json; add `harness`/`model` to status metadata |
-| `src/flightpath/QueueOperations.ts` | New `ReadOutputRequest`/`ReadOutputResponse` interfaces + `readQueueOutput()`; add `resumeSession`/`harness` to `AppendPromptsRequest`; add `harness`/`model` to `QueueStatusResponse.metadata` |
-| `src/extension.ts` | Register `flightpath_capabilities` + `flightpath_read_output` LM Tools; thread `resumeSession`/`harness` through append LM Tool |
-| `src/utils/ConfigurationUtils.ts` | Add `CAPABILITIES_FILE = "capabilities.json"` to `PATH_CONSTANTS` |
+| File                                | Changes                                                                                                                                                                                                                    |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/ui/WebviewSettingsSync.ts`     | Write `capabilities.json` when harness status or model options change                                                                                                                                                      |
+| `src/mcp-server.ts`                 | New `flightpath_capabilities` tool + handler; new `flightpath_read_output` tool + handler; add `resumeSession`/`harness` to append schema + validation against capabilities.json; add `harness`/`model` to status metadata |
+| `src/flightpath/QueueOperations.ts` | New `ReadOutputRequest`/`ReadOutputResponse` interfaces + `readQueueOutput()`; add `resumeSession`/`harness` to `AppendPromptsRequest`; add `harness`/`model` to `QueueStatusResponse.metadata`                            |
+| `src/extension.ts`                  | Register `flightpath_capabilities` + `flightpath_read_output` LM Tools; thread `resumeSession`/`harness` through append LM Tool                                                                                            |
+| `src/utils/ConfigurationUtils.ts`   | Add `CAPABILITIES_FILE = "capabilities.json"` to `PATH_CONSTANTS`                                                                                                                                                          |
 
 ---
 

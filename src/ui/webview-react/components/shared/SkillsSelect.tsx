@@ -51,10 +51,20 @@ export const SkillsSelect: React.FC<{
       const spaceBelow = window.innerHeight - rect.bottom - 4;
       const propMaxH = parsePropMaxHeight(dropdownMaxHeight);
       if (spaceBelow >= 80) {
-        setPopupPos({ top: rect.bottom + 4, left: rect.left, width: rect.width, maxHeight: Math.min(propMaxH, spaceBelow) });
+        setPopupPos({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width,
+          maxHeight: Math.min(propMaxH, spaceBelow),
+        });
       } else {
         const spaceAbove = rect.top - 4;
-        setPopupPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width, maxHeight: Math.min(propMaxH, spaceAbove) });
+        setPopupPos({
+          bottom: window.innerHeight - rect.top + 4,
+          left: rect.left,
+          width: rect.width,
+          maxHeight: Math.min(propMaxH, spaceAbove),
+        });
       }
     }
   }, [dropdownMaxHeight]);
@@ -123,8 +133,7 @@ export const SkillsSelect: React.FC<{
       {(["default", "none"] as const).map((k) => {
         const isSelected =
           k === "default" ? value === undefined : value === null;
-        const label =
-          k === "default" ? (defaultLabel ?? "Default") : "None";
+        const label = k === "default" ? (defaultLabel ?? "Default") : "None";
         return (
           <button
             key={k}
@@ -195,9 +204,7 @@ export const SkillsSelect: React.FC<{
   // ── Inline mode (FooterQuickPicker) ───────────────────────────────────────
   if (inline) {
     return (
-      <div className="flex flex-col flex-1 min-h-0 w-full">
-        {listContent}
-      </div>
+      <div className="flex flex-col flex-1 min-h-0 w-full">{listContent}</div>
     );
   }
 
@@ -216,7 +223,8 @@ export const SkillsSelect: React.FC<{
         />
       </button>
 
-      {isOpen && popupPos &&
+      {isOpen &&
+        popupPos &&
         createPortal(
           <div
             ref={popupRef}

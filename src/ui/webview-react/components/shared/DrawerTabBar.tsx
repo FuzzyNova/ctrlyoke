@@ -19,9 +19,7 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
   isNarrow,
 }) => {
   return (
-    <div
-      className="flex items-center border-t border-panel-border bg-sidebar-bg"
-    >
+    <div className="flex items-center border-t border-panel-border bg-sidebar-bg">
       {DRAWER_TABS.map((tab) => {
         const isActive = activeTab === tab.id;
         return (

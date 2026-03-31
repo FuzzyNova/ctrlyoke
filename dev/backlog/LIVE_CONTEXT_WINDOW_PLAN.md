@@ -10,14 +10,14 @@
 
 All six CLI log parsers already compute `contextWindowUsedTokens` and `contextWindowSize` — but only inside `extractResponse()`, which runs once at completion.
 
-| Harness | Context source event | Fires mid-stream? |
-|---------|---------------------|-------------------|
-| **Copilot** | `session.truncation` → `postTruncationTokensInMessages` | **YES** — every turn |
-| **Claude** | `assistant` event → `message.usage.input_tokens + cache_*` | YES — per-turn assistant message |
-| **Gemini** | `gemini` message event → `tokens.input` | YES — per response chunk |
-| **Qwen** | assistant message → `promptTokenCount` | YES — per turn |
-| **Codex** | `event_msg` with `payload.type === "token_count"` | YES — fires during execution |
-| **OpenCode** | per-step events accumulated by `OpenCodeEventMapper` | YES — per step |
+| Harness      | Context source event                                       | Fires mid-stream?                |
+| ------------ | ---------------------------------------------------------- | -------------------------------- |
+| **Copilot**  | `session.truncation` → `postTruncationTokensInMessages`    | **YES** — every turn             |
+| **Claude**   | `assistant` event → `message.usage.input_tokens + cache_*` | YES — per-turn assistant message |
+| **Gemini**   | `gemini` message event → `tokens.input`                    | YES — per response chunk         |
+| **Qwen**     | assistant message → `promptTokenCount`                     | YES — per turn                   |
+| **Codex**    | `event_msg` with `payload.type === "token_count"`          | YES — fires during execution     |
+| **OpenCode** | per-step events accumulated by `OpenCodeEventMapper`       | YES — per step                   |
 
 Every harness already emits usage-bearing events during streaming; it's just that `extractResponse` is the only place that reads them. This means **no polling is needed** — we can extract context window data from the same event stream already flowing through `CliLogMonitor.processEvent()`.
 
@@ -81,6 +81,7 @@ extractLiveContextWindow(_event: BaseCliEvent): { used: number; size: number } |
 Each log parser implements `extractLiveContextWindow` by recognizing the same events it already tracks in `extractResponse`:
 
 #### Claude (`ClaudeLogParser`)
+
 ```typescript
 extractLiveContextWindow(event: BaseCliEvent) {
   // assistant events contain message.usage after each turn
@@ -98,6 +99,7 @@ extractLiveContextWindow(event: BaseCliEvent) {
 ```
 
 #### Copilot (`CopilotLogParser`)
+
 ```typescript
 extractLiveContextWindow(event: BaseCliEvent) {
   if (event.type === "session.truncation") {
@@ -110,6 +112,7 @@ extractLiveContextWindow(event: BaseCliEvent) {
 ```
 
 #### Codex (`CodexLogParser`)
+
 ```typescript
 extractLiveContextWindow(event: BaseCliEvent) {
   if ((event as any).event_msg?.payload?.type === "token_count") {
@@ -125,6 +128,7 @@ extractLiveContextWindow(event: BaseCliEvent) {
 ```
 
 #### Gemini (`GeminiLogParser`)
+
 ```typescript
 extractLiveContextWindow(event: BaseCliEvent) {
   if (event.type === "gemini" && (event as any).tokens?.input != null) {
@@ -137,6 +141,7 @@ extractLiveContextWindow(event: BaseCliEvent) {
 ```
 
 #### Qwen (`QwenLogParser`)
+
 ```typescript
 extractLiveContextWindow(event: BaseCliEvent) {
   // assistant messages carry promptTokenCount
@@ -150,6 +155,7 @@ extractLiveContextWindow(event: BaseCliEvent) {
 ```
 
 #### OpenCode (`OpenCodeLogParser`)
+
 ```typescript
 extractLiveContextWindow(event: BaseCliEvent) {
   // After each step, OpenCodeEventMapper accumulates lastStepTotal
@@ -253,6 +259,7 @@ Clear `liveContextWindow[stepIndex]` when `clearRuntimeStateFromStep` fires.
 #### `PromptItem.tsx` — Add vertical context bar
 
 The context bar is a narrow column on the right edge of the prompt item. It:
+
 - Is always the same height as the item's content area
 - Fills from the bottom upward proportional to `pct`
 - Shows the percentage number above the bar (or below — consider below to avoid overlap with drag handle area)
@@ -260,6 +267,7 @@ The context bar is a narrow column on the right edge of the prompt item. It:
 - Is hidden when `contextPct === undefined`
 
 **Data flow:**
+
 ```typescript
 // PromptItem receives:
 liveContextWindow?: { used: number; size: number };  // from store for running step
@@ -276,25 +284,28 @@ const contextPct = ctx?.size ? Math.round((ctx.used / ctx.size) * 100) : undefin
 **Render — right-side vertical bar:**
 
 ```tsx
-{contextPct !== undefined && (
-  <div className="flex-shrink-0 flex flex-col items-center w-3 self-stretch ml-1">
-    {/* Percentage label */}
-    <span className="text-[8px] leading-none text-description-fg opacity-75 mb-0.5">
-      {contextPct}
-    </span>
-    {/* Track */}
-    <div className="flex-1 w-1.5 rounded-full bg-panel-border overflow-hidden relative">
-      {/* Fill */}
-      <div
-        className="absolute bottom-0 left-0 right-0 rounded-full bg-description-fg opacity-50 transition-all duration-300"
-        style={{ height: `${contextPct}%` }}
-      />
+{
+  contextPct !== undefined && (
+    <div className="flex-shrink-0 flex flex-col items-center w-3 self-stretch ml-1">
+      {/* Percentage label */}
+      <span className="text-[8px] leading-none text-description-fg opacity-75 mb-0.5">
+        {contextPct}
+      </span>
+      {/* Track */}
+      <div className="flex-1 w-1.5 rounded-full bg-panel-border overflow-hidden relative">
+        {/* Fill */}
+        <div
+          className="absolute bottom-0 left-0 right-0 rounded-full bg-description-fg opacity-50 transition-all duration-300"
+          style={{ height: `${contextPct}%` }}
+        />
+      </div>
     </div>
-  </div>
-)}
+  );
+}
 ```
 
 Color cues:
+
 - 0–70%: `opacity-50` (neutral)
 - 70–85%: `opacity-70` + amber hue (warning)
 - 85–100%: `opacity-90` + red hue (danger)
@@ -447,27 +458,27 @@ Process exits → sidecar.stop() → watcher.close()
 
 ## Files to Modify
 
-| File | Change |
-|------|--------|
-| `src/flightpath/harness/shared/interfaces/ILogParser.ts` | Add optional `extractLiveContextWindow?` method |
-| `src/flightpath/harness/shared/BaseLogParser.ts` | Add default no-op implementation |
-| `src/flightpath/harness/claude/ClaudeLogParser.ts` | Implement `extractLiveContextWindow` |
-| `src/flightpath/harness/copilot/CopilotLogParser.ts` | Implement `extractLiveContextWindow` |
-| `src/flightpath/harness/codex/CodexLogParser.ts` | Implement `extractLiveContextWindow` |
-| `src/flightpath/harness/gemini/GeminiLogParser.ts` | Implement `extractLiveContextWindow` |
-| `src/flightpath/harness/qwen/QwenLogParser.ts` | Implement `extractLiveContextWindow` |
-| `src/flightpath/harness/opencode/OpenCodeLogParser.ts` | Implement `extractLiveContextWindow` |
-| `src/flightpath/harness/CliLogMonitor.ts` | Add `onContextWindowUpdate` to deps; call in `processEvent` |
-| `src/flightpath/harness/CliIntegration.ts` | Add `startContextWindowSidecar()`; wire into `executeHeadlessWithPromptFile` |
-| `src/flightpath/harness/CliIntegration.ts` | Wire `onContextWindowUpdate` from `CliLogMonitor` to caller (interactive) |
-| `src/types/DashboardConstants.ts` | Add `CONTEXT_WINDOW_UPDATE` to `MESSAGE_TYPES` |
-| `src/types/WebviewMessageTypes.ts` | Add `ContextWindowUpdateMessage` type + union |
-| `src/ui/FlightPathWebviewProvider.ts` | Add `updateLiveContextWindow()` method + call from CliIntegration |
-| `src/ui/webview-react/store/workflowStore.ts` | Add `liveContextWindow` state + `updateLiveContextWindow` action |
-| `src/ui/webview-react/store/workflowStore.ts` | Handle `CONTEXT_WINDOW_UPDATE` message |
-| `src/ui/webview-react/components/prompts/PromptItem.tsx` | Add vertical bar + `liveContextWindow` prop |
-| `src/ui/webview-react/components/prompts/PromptItemDetails.tsx` | Remove `{contextPct}%` chip from stats row |
-| Caller of `PromptItem` (PromptsList or similar) | Pass `liveContextWindow` from store |
+| File                                                            | Change                                                                       |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `src/flightpath/harness/shared/interfaces/ILogParser.ts`        | Add optional `extractLiveContextWindow?` method                              |
+| `src/flightpath/harness/shared/BaseLogParser.ts`                | Add default no-op implementation                                             |
+| `src/flightpath/harness/claude/ClaudeLogParser.ts`              | Implement `extractLiveContextWindow`                                         |
+| `src/flightpath/harness/copilot/CopilotLogParser.ts`            | Implement `extractLiveContextWindow`                                         |
+| `src/flightpath/harness/codex/CodexLogParser.ts`                | Implement `extractLiveContextWindow`                                         |
+| `src/flightpath/harness/gemini/GeminiLogParser.ts`              | Implement `extractLiveContextWindow`                                         |
+| `src/flightpath/harness/qwen/QwenLogParser.ts`                  | Implement `extractLiveContextWindow`                                         |
+| `src/flightpath/harness/opencode/OpenCodeLogParser.ts`          | Implement `extractLiveContextWindow`                                         |
+| `src/flightpath/harness/CliLogMonitor.ts`                       | Add `onContextWindowUpdate` to deps; call in `processEvent`                  |
+| `src/flightpath/harness/CliIntegration.ts`                      | Add `startContextWindowSidecar()`; wire into `executeHeadlessWithPromptFile` |
+| `src/flightpath/harness/CliIntegration.ts`                      | Wire `onContextWindowUpdate` from `CliLogMonitor` to caller (interactive)    |
+| `src/types/DashboardConstants.ts`                               | Add `CONTEXT_WINDOW_UPDATE` to `MESSAGE_TYPES`                               |
+| `src/types/WebviewMessageTypes.ts`                              | Add `ContextWindowUpdateMessage` type + union                                |
+| `src/ui/FlightPathWebviewProvider.ts`                           | Add `updateLiveContextWindow()` method + call from CliIntegration            |
+| `src/ui/webview-react/store/workflowStore.ts`                   | Add `liveContextWindow` state + `updateLiveContextWindow` action             |
+| `src/ui/webview-react/store/workflowStore.ts`                   | Handle `CONTEXT_WINDOW_UPDATE` message                                       |
+| `src/ui/webview-react/components/prompts/PromptItem.tsx`        | Add vertical bar + `liveContextWindow` prop                                  |
+| `src/ui/webview-react/components/prompts/PromptItemDetails.tsx` | Remove `{contextPct}%` chip from stats row                                   |
+| Caller of `PromptItem` (PromptsList or similar)                 | Pass `liveContextWindow` from store                                          |
 
 ---
 

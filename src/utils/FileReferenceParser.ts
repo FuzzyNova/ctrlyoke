@@ -200,8 +200,8 @@ export type GitChangeKind = "commit" | "diff" | "staged" | "stash";
 
 export interface GitChangeReference {
   kind: GitChangeKind;
-  raw: string;         // the full matched token, e.g. "~c056e24...", "~diff", "~stash:2"
-  hash?: string;       // for kind === "commit"
+  raw: string; // the full matched token, e.g. "~c056e24...", "~diff", "~stash:2"
+  hash?: string; // for kind === "commit"
   stashIndex?: number; // for kind === "stash"
   startOffset: number;
   endOffset: number;
@@ -227,10 +227,10 @@ export function parseGitChangeReferences(text: string): GitChangeReference[] {
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {
-    const raw = match[0];           // e.g. "~diff", "~stash:2", "~c056e24"
-    const inner = match[1];         // e.g. "diff", "stash:2", "c056e24"
-    const stashNumStr = match[2];   // defined only for stash:<N>
-    const hashStr = match[3];       // defined only for commit hash
+    const raw = match[0]; // e.g. "~diff", "~stash:2", "~c056e24"
+    const inner = match[1]; // e.g. "diff", "stash:2", "c056e24"
+    const stashNumStr = match[2]; // defined only for stash:<N>
+    const hashStr = match[3]; // defined only for commit hash
 
     let kind: GitChangeKind;
     let hash: string | undefined;

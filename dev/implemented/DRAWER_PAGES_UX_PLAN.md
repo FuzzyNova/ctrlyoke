@@ -32,11 +32,11 @@ This is the "what runs" page — everything that configures the harness invocati
 
 _How sessions and prior outputs flow between prompts._
 
-| Field         | SettingsDrawer             | PropertiesDrawer           |
-| ------------- | -------------------------- | -------------------------- |
+| Field          | SettingsDrawer             | PropertiesDrawer           |
+| -------------- | -------------------------- | -------------------------- |
 | Resume Session | workflow default           | per-prompt override        |
-| Session ID    | paired with Resume Session | paired with Resume Session |
-| Prior Context | workflow default           | per-prompt override        |
+| Session ID     | paired with Resume Session | paired with Resume Session |
+| Prior Context  | workflow default           | per-prompt override        |
 
 "Context" captures the idea that these settings govern what information is carried forward: session state and prior output injection.
 
@@ -74,9 +74,9 @@ _MCP server injection per prompt/workflow. Replaces `allowDynamicExtension`._
 
 Per `MCP_SERVERS_PROPERTY_PLAN.md`, `allowDynamicExtension: boolean` is replaced by `mcpServers: (string | McpServerConfig)[] | null`. The "flightpath" string shorthand is the direct equivalent of the old `allowDynamicExtension: true`.
 
-| Field      | SettingsDrawer                                                 | PropertiesDrawer                                  |
-| ---------- | -------------------------------------------------------------- | ------------------------------------------------- |
-| mcpServers | array editor — `"flightpath"` toggle + user-defined MCP list  | same, with `Default (X)` when inheriting workflow |
+| Field      | SettingsDrawer                                               | PropertiesDrawer                                  |
+| ---------- | ------------------------------------------------------------ | ------------------------------------------------- |
+| mcpServers | array editor — `"flightpath"` toggle + user-defined MCP list | same, with `Default (X)` when inheriting workflow |
 
 **UI pattern:**
 
@@ -176,14 +176,14 @@ For SettingsDrawer, the existing footer (interactive/headless toggle, gitignore 
 
 ### Tab Icons Reference
 
-| Page        | Icon                                    | Notes                                                              |
-| ----------- | --------------------------------------- | ------------------------------------------------------------------ |
-| Harness     | `HarnessIcon` (harness-specific SVG)    | 14px, uses active harness ID from the current drawer context       |
-| Context     | `codicon-book`                          |                                                                    |
-| Validation  | `codicon-coverage`                      |                                                                    |
-| MCP         | `codicon-mcp`                           |                                                                    |
-| Hooks       | `codicon-symbol-event`                  | Future/placeholder                                                 |
-| Permissions | `codicon-workspace-trusted`             | Future/placeholder                                                 |
+| Page        | Icon                                 | Notes                                                        |
+| ----------- | ------------------------------------ | ------------------------------------------------------------ |
+| Harness     | `HarnessIcon` (harness-specific SVG) | 14px, uses active harness ID from the current drawer context |
+| Context     | `codicon-book`                       |                                                              |
+| Validation  | `codicon-coverage`                   |                                                              |
+| MCP         | `codicon-mcp`                        |                                                              |
+| Hooks       | `codicon-symbol-event`               | Future/placeholder                                           |
+| Permissions | `codicon-workspace-trusted`          | Future/placeholder                                           |
 
 ### Tab Appearance
 
@@ -204,16 +204,16 @@ For SettingsDrawer, the existing footer (interactive/headless toggle, gitignore 
 
 ## Differences Between the Two Drawers
 
-| Concern               | SettingsDrawer                              | PropertiesDrawer                                                 |
-| --------------------- | ------------------------------------------- | ---------------------------------------------------------------- |
-| Scope                 | Workflow-level                              | Per-prompt override                                              |
-| Default labels        | Not needed (values are the actual defaults) | Each field shows `Default (X)` indicating inherited value        |
-| Set as Default        | `SetAsDefaultButton` per field              | Not present                                                      |
-| Execution Mode toggle | In footer                                   | Not present                                                      |
-| Gitignore toggle      | In footer                                   | Not present                                                      |
-| Narrow layout         | `Row narrow={isBodyNarrow}` 2-col → 1-col   | Fixed 2-col grid today; same breakpoint logic can apply          |
-| Max dropdown height   | Unconstrained                               | `DRAWER_DROPDOWN_MAX_HEIGHT = "150px"` (drawer has fixed height) |
-| End condition label   | "Global End Condition"                      | "Enable End Condition"                                           |
+| Concern               | SettingsDrawer                              | PropertiesDrawer                                                                 |
+| --------------------- | ------------------------------------------- | -------------------------------------------------------------------------------- |
+| Scope                 | Workflow-level                              | Per-prompt override                                                              |
+| Default labels        | Not needed (values are the actual defaults) | Each field shows `Default (X)` indicating inherited value                        |
+| Set as Default        | `SetAsDefaultButton` per field              | Not present                                                                      |
+| Execution Mode toggle | In footer                                   | Not present                                                                      |
+| Gitignore toggle      | In footer                                   | Not present                                                                      |
+| Narrow layout         | `Row narrow={isBodyNarrow}` 2-col → 1-col   | Fixed 2-col grid today; same breakpoint logic can apply                          |
+| Max dropdown height   | Unconstrained                               | `DRAWER_DROPDOWN_MAX_HEIGHT = "150px"` (drawer has fixed height)                 |
+| End condition label   | "Global End Condition"                      | "Enable End Condition"                                                           |
 | Harness tab icon      | Shows the workflow-level harness            | Shows the resolved harness for this prompt (prompt override or workflow default) |
 
 ---

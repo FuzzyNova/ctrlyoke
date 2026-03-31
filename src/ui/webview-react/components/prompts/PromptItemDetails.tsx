@@ -208,7 +208,6 @@ export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
           ))}
         </div>
       )}
-
     </>
   );
 };

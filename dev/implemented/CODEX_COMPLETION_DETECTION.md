@@ -252,13 +252,13 @@ Codex provides the workspace path in `notification.cwd`, which the handler scrip
 
 ## Code References
 
-| File                                                  | Purpose                                      |
-| ----------------------------------------------------- | -------------------------------------------- |
-| `src/scripts/flightpath-codex-notify.js`                      | Notification handler script                  |
-| `src/flightpath/harness/codex/CodexCliProvider.ts`            | Main integration logic                       |
-| `src/flightpath/harness/codex/CodexNotificationMonitor.ts`    | Codex notification monitor                   |
-| `src/flightpath/harness/shared/CliNotificationMonitor.ts`     | Shared monitoring utilities                  |
-| `esbuild.js`                                                  | Copies notification script to `out/scripts/` |
+| File                                                       | Purpose                                      |
+| ---------------------------------------------------------- | -------------------------------------------- |
+| `src/scripts/flightpath-codex-notify.js`                   | Notification handler script                  |
+| `src/flightpath/harness/codex/CodexCliProvider.ts`         | Main integration logic                       |
+| `src/flightpath/harness/codex/CodexNotificationMonitor.ts` | Codex notification monitor                   |
+| `src/flightpath/harness/shared/CliNotificationMonitor.ts`  | Shared monitoring utilities                  |
+| `esbuild.js`                                               | Copies notification script to `out/scripts/` |
 
 ## Change Log
 

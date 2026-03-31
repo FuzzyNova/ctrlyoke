@@ -261,7 +261,8 @@ interface McpIoRegistryItem {
   };
 }
 
-const MCP_REGISTRY_URL = "https://registry.modelcontextprotocol.io/v0.1/servers";
+const MCP_REGISTRY_URL =
+  "https://registry.modelcontextprotocol.io/v0.1/servers";
 
 /**
  * Fetches MCP servers from the official MCP registry (registry.modelcontextprotocol.io).
@@ -280,7 +281,12 @@ const MCP_REGISTRY_URL = "https://registry.modelcontextprotocol.io/v0.1/servers"
  * @param options.updatedSince  Filter to servers updated since this ISO 8601 timestamp
  */
 export async function fetchMcpRegistry(
-  options: { limit?: number; cursor?: string; search?: string; updatedSince?: string } = {}
+  options: {
+    limit?: number;
+    cursor?: string;
+    search?: string;
+    updatedSince?: string;
+  } = {}
 ): Promise<{ servers: RegistryMcpEntry[]; nextCursor?: string }> {
   const { limit = 50, cursor, search, updatedSince } = options;
   const params = new URLSearchParams({ limit: String(limit) });
@@ -336,7 +342,8 @@ export async function fetchMcpRegistry(
     const firstRemote = s.remotes?.[0];
     if (firstRemote?.url) {
       entry.remoteUrl = firstRemote.url;
-      entry.remoteTransport = firstRemote.type === "sse" ? "sse" : "streamable-http";
+      entry.remoteTransport =
+        firstRemote.type === "sse" ? "sse" : "streamable-http";
       const headerDefs = (firstRemote.headers ?? []).filter((h) => h.name);
       if (headerDefs.length > 0) {
         entry.remoteHeaders = headerDefs.map((h) => ({

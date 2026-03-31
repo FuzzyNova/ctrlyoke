@@ -7,6 +7,7 @@ This document details FlightPath's integration with the Claude Code CLI (Anthrop
 FlightPath supports Claude Code CLI (`claude`) as an alternative AI provider to GitHub Copilot. Claude CLI provides deterministic completion detection, structured JSON output, and model selection (sonnet, opus, haiku).
 
 **Key files:**
+
 - `src/flightpath/harness/claude/ClaudeCliProvider.ts` — Main provider (CLI args, session management, MCP config)
 - `src/flightpath/harness/claude/ClaudeResponseParser.ts` — Parses stream-json output
 - `src/flightpath/harness/claude/ClaudeLogParser.ts` — Parses JSONL log files for session discovery
@@ -657,51 +658,52 @@ prompt-building and agent expansion logic used by `CliIntegration` and `CopilotC
 
 ### Key Methods
 
-| Method                           | Class                    | Purpose                                                       |
-| -------------------------------- | ------------------------ | ------------------------------------------------------------- |
-| `buildCliArgs()`                 | ClaudeCliProvider        | Construct CLI arguments from settings/prompt                  |
-| `buildHeadlessArgs()`            | ClaudeCliProvider        | Add headless-specific flags (-p, --output-format, --verbose)  |
-| `buildInteractiveTuiCommand()`   | ClaudeCliProvider        | Build command string for interactive TUI mode                 |
-| `validateAndGetModel()`          | ClaudeCliProvider        | Resolve aliases, validate, fallback if needed                 |
-| `getMcpConfigArgs()`             | ClaudeCliProvider        | Generate --mcp-config file and return args                    |
-| `buildStopHookSettings()`        | ClaudeCliProvider        | Write stop hook settings JSON, return temp file path          |
-| `checkAvailability()`            | ClaudeCliProvider        | Detect CLI availability via `claude --version`                |
-| `parse()`                        | ClaudeResponseParser     | Parse complete stream-json output to structured events        |
-| `processStreamingChunk()`        | ClaudeResponseParser     | Parse stream-json chunks for real-time content extraction     |
-| `extractSessionId()`             | ClaudeResponseParser     | Extract session ID from stream-json output                    |
-| `discoverSessionLog()`           | ClaudeLogParser          | Find matching JSONL session log by prompt text + time         |
-| `extractResponse()`              | ClaudeLogParser          | Extract full response from JSONL log events                   |
-| `buildArgs()`                    | ClaudeToolPermissionMapper | Build --permission-mode, --allowedTools, --disallowedTools  |
-| `monitorForCompletion()`         | ClaudeNotificationMonitor | Monitor Stop hook notification files for completion          |
+| Method                         | Class                      | Purpose                                                      |
+| ------------------------------ | -------------------------- | ------------------------------------------------------------ |
+| `buildCliArgs()`               | ClaudeCliProvider          | Construct CLI arguments from settings/prompt                 |
+| `buildHeadlessArgs()`          | ClaudeCliProvider          | Add headless-specific flags (-p, --output-format, --verbose) |
+| `buildInteractiveTuiCommand()` | ClaudeCliProvider          | Build command string for interactive TUI mode                |
+| `validateAndGetModel()`        | ClaudeCliProvider          | Resolve aliases, validate, fallback if needed                |
+| `getMcpConfigArgs()`           | ClaudeCliProvider          | Generate --mcp-config file and return args                   |
+| `buildStopHookSettings()`      | ClaudeCliProvider          | Write stop hook settings JSON, return temp file path         |
+| `checkAvailability()`          | ClaudeCliProvider          | Detect CLI availability via `claude --version`               |
+| `parse()`                      | ClaudeResponseParser       | Parse complete stream-json output to structured events       |
+| `processStreamingChunk()`      | ClaudeResponseParser       | Parse stream-json chunks for real-time content extraction    |
+| `extractSessionId()`           | ClaudeResponseParser       | Extract session ID from stream-json output                   |
+| `discoverSessionLog()`         | ClaudeLogParser            | Find matching JSONL session log by prompt text + time        |
+| `extractResponse()`            | ClaudeLogParser            | Extract full response from JSONL log events                  |
+| `buildArgs()`                  | ClaudeToolPermissionMapper | Build --permission-mode, --allowedTools, --disallowedTools   |
+| `monitorForCompletion()`       | ClaudeNotificationMonitor  | Monitor Stop hook notification files for completion          |
 
 **Shared execution orchestration (in `src/flightpath/harness/CliIntegration.ts`):**
 
-| Method                      | Purpose                                                           |
-| --------------------------- | ----------------------------------------------------------------- |
-| `initialize()`              | Detect CLI availability and set up integration                    |
-| `sendPrompt()`              | Execute prompt with all configured flags                          |
-| `executeHeadless()`         | Background process mode with temp file prompt                     |
-| `executeInTerminal()`       | Interactive TUI mode with stop hook monitoring                    |
+| Method                | Purpose                                        |
+| --------------------- | ---------------------------------------------- |
+| `initialize()`        | Detect CLI availability and set up integration |
+| `sendPrompt()`        | Execute prompt with all configured flags       |
+| `executeHeadless()`   | Background process mode with temp file prompt  |
+| `executeInTerminal()` | Interactive TUI mode with stop hook monitoring |
 
 ### Process Execution
 
 **Headless mode (background process):**
 
 Prompt is written to a temp file and passed as the first positional argument:
+
 ```
 claude "@.flightpath/temp/prompt.md" -p --output-format stream-json --verbose [other args]
 ```
+
 Output is parsed in real-time by `ClaudeResponseParser.processStreamingChunk()` as stdout chunks arrive. On completion, `ClaudeResponseParser.parse()` extracts the full response, session ID, and token usage from the final stream-json output.
 
 **Interactive mode (TUI terminal):**
 
 Claude runs in a terminal panel. Completion is detected via the Stop hook:
+
 1. `ClaudeCliProvider.buildStopHookSettings()` writes hook config to a temp JSON file
 2. `--settings <file>` is passed to Claude CLI, registering the Stop hook
 3. When Claude finishes, the hook writes a notification file to `.flightpath/temp/claude-notifications/`
 4. `ClaudeNotificationMonitor.monitorForCompletion()` watches for this file and signals completion
-
-
 
 ## Future Enhancements
 

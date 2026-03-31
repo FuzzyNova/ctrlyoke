@@ -19,15 +19,21 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
   disabled = false,
 }) => {
   const { properties, setProperty } = useEditorStore();
-  const { globalSettings, workflowProperties, getModelsForHarness } = useSettingsStore();
-  const { footerOpenPicker, setFooterOpenPicker, hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
-    useUiStore();
+  const { globalSettings, workflowProperties, getModelsForHarness } =
+    useSettingsStore();
+  const {
+    footerOpenPicker,
+    setFooterOpenPicker,
+    hiddenDropdownOptions,
+    hideDropdownOption,
+    unhideDropdownOption,
+  } = useUiStore();
 
   const isOpen = footerOpenPicker === "model";
 
-  const resolvedHarness = (
-    properties.harness ?? workflowProperties.harness ?? globalSettings.harness
-  ) as HarnessId;
+  const resolvedHarness = (properties.harness ??
+    workflowProperties.harness ??
+    globalSettings.harness) as HarnessId;
   const models = getModelsForHarness(resolvedHarness);
   const modelNamespace = modelNamespaceForHarness(resolvedHarness);
 
@@ -36,18 +42,24 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
     globalSettings.harnessDefaultModels[resolvedHarness] ??
     globalSettings.model;
   const resolvedModelLabel =
-    models.find((m) => m.value === resolvedModelValue)?.label ?? resolvedModelValue;
+    models.find((m) => m.value === resolvedModelValue)?.label ??
+    resolvedModelValue;
   const defaultModelLabel = `Default (${resolvedModelLabel || "None"})`;
 
   const valueLabel = properties.model
-    ? (models.find((m) => m.value === properties.model)?.label ?? properties.model)
-    : (resolvedModelLabel || "None");
+    ? (models.find((m) => m.value === properties.model)?.label ??
+      properties.model)
+    : resolvedModelLabel || "None";
 
   return (
     <FooterQuickPicker
       isNarrow={isNarrow}
       showLabel={showLabel}
-      icon={<i className={`codicon codicon-hubot transition-opacity ${properties.model !== undefined ? "text-focus-border" : "opacity-40"}`} />}
+      icon={
+        <i
+          className={`codicon codicon-hubot transition-opacity ${properties.model !== undefined ? "text-focus-border" : "opacity-40"}`}
+        />
+      }
       valueLabel={valueLabel}
       isOverride={properties.model !== undefined}
       isOpen={isOpen}

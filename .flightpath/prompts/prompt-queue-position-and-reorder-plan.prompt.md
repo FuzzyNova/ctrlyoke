@@ -3,12 +3,14 @@
 ## Gaps & Clarifications Found
 
 **Confirmed infrastructure (exists, no changes needed):**
+
 - `clearRuntimeStateFromStep` already exists in `workflowStore.ts`
 - `dashboardSink` is a private field on `WorkflowInstance`
 - `confirmDeleteOperations` pattern — `settingsStore.ts` has its own `GlobalSettings` shape that must also be updated alongside `WebviewMessageTypes.ts`
 - `WebviewMessageRouter.handleResetWorkflowState()` already follows the private-method pattern
 
 **Spec ambiguities resolved:**
+
 1. **`REORDER_PROMPTS_CONFIRMED`**: Given how `UPDATE_PROMPT` works (optimistic webview update, silent persistence), use **optimistic UI** — webview reorders `prompts` state immediately on drag end, then fires `REORDER_PROMPTS` for persistence. No confirmation round-trip needed.
 2. **`getPromptStatus` fallback**: Adding `SKIPPED` to `STEP_STATUS` and merging `results[i].status` into `prompts[i]` before sending to the webview is sufficient. The fallback (`index < currentStep → COMPLETED`) is only reached when no explicit status exists.
 3. **Type safety in `setStartPosition`**: Avoid `as any` cast. `PromptItem._runtime` is already typed as optional — use `{ ...prompt, _runtime: undefined }` directly.
@@ -20,6 +22,7 @@
 ## Phase 1 — Foundation: Constants & Types
 
 ### `src/types/DashboardConstants.ts`
+
 - Add `SKIPPED: "skipped"` to `STEP_STATUS`
 - Add four new message type constants:
   - `SET_START_POSITION: "setStartPosition"` — Webview → Extension
@@ -28,12 +31,14 @@
   - `UPDATE_CONFIRM_RESET: "updateConfirmReset"` — Webview → Extension (persists the "don't ask again" checkbox)
 
 ### `src/types/WebviewMessageTypes.ts`
+
 - Add `SetStartPositionMessage` payload type: `{ type, toIndex: number }`
 - Add `SetStartPositionConfirmedMessage` payload type: `{ type, prompts: PromptItem[], currentIndex: number }`
 - Add `ReorderPromptsMessage` payload type: `{ type, newPendingOrder: number[] }` — array of original indices in new order
 - Add `confirmResetOperations?: boolean` to the `globalSettings` field of `GlobalSettingsUpdatedMessage`
 
 ### `src/types/IDashboardSink.ts`
+
 - Add `notifyStartPositionSet(prompts: PromptItem[], currentIndex: number): void`
 
 ---
@@ -88,6 +93,7 @@ async setStartPosition(toIndex: number): Promise<void> {
 ```
 
 Add `reorderPendingPrompts(newPendingOrder: number[]): Promise<void>`:
+
 ```typescript
 async reorderPendingPrompts(newPendingOrder: number[]): Promise<void> {
   const currentIndex = this.state.currentIndex;
@@ -105,6 +111,7 @@ async reorderPendingPrompts(newPendingOrder: number[]): Promise<void> {
 ### `src/flightpath/WorkflowInstance.ts`
 
 Add `setStartPosition(toIndex: number): Promise<void>`:
+
 - Validate: only allowed when `executionState` is IDLE, STOPPED, PAUSED, or COMPLETED (not RUNNING/CANCELLING)
 - Call `this.promptQueue.setStartPosition(toIndex)`
 - Merge `state.results[i].status` into each `state.prompts[i]` before sending to webview (same pattern as session restore)
@@ -115,16 +122,20 @@ Add `setStartPosition(toIndex: number): Promise<void>`:
 ## Phase 3 — Settings Infrastructure
 
 ### `package.json`
+
 - Add `flightpath.confirmResetOperations` boolean setting (default `true`) to `contributes.configuration.properties` — mirrors `confirmDeleteOperations` entry
 
 ### `src/utils/ConfigurationUtils.ts`
+
 - Add `shouldConfirmResetOperations(): boolean` — `getConfig().get<boolean>("confirmResetOperations", true)`
 - Add `async setConfirmResetOperations(enabled: boolean): Promise<void>` — same pattern as `setConfirmDeleteOperations`
 
 ### `src/ui/WebviewSettingsSync.ts`
+
 - Add `confirmResetOperations: ConfigurationUtils.shouldConfirmResetOperations()` to the `globalSettings` object in both `sendInitialState()` and `sendGlobalSettingsUpdate()`
 
 ### `src/ui/FlightPathWebviewProvider.ts`
+
 - Implement `notifyStartPositionSet(prompts: PromptItem[], currentIndex: number): void` — posts `SET_START_POSITION_CONFIRMED` with `{ prompts, currentIndex }` (mirrors `notifyWorkflowStateReset`)
 
 ---
@@ -132,10 +143,12 @@ Add `setStartPosition(toIndex: number): Promise<void>`:
 ## Phase 4 — Webview Store
 
 ### `src/ui/webview-react/store/settingsStore.ts`
+
 - Add `confirmResetOperations: boolean` to the `GlobalSettings` interface
 - Set initial value to `true` in the default state object
 
 ### `src/ui/webview-react/store/workflowStore.ts`
+
 - Add `applyStartPositionChange(prompts: PromptItem[], newCurrentStep: number): void` to the `WorkflowState` interface and implementation:
   ```typescript
   applyStartPositionChange: (prompts, newCurrentStep) =>
@@ -153,14 +166,18 @@ Add `setStartPosition(toIndex: number): Promise<void>`:
 ## Phase 5 — New Components
 
 ### `src/ui/webview-react/components/shared/ResetConfirmModal.tsx` (new file)
+
 Mirrors `DeleteConfirmModal.tsx`:
+
 - Props: `isOpen`, `title`, `message`, `detail?`, `confirmLabel?` (defaults `"Confirm"`), `onConfirm`, `onCancel`
 - Reads `globalSettings.confirmResetOperations` from `useSettingsStore()`
 - "Don't ask again" checkbox immediately posts `UPDATE_CONFIRM_RESET` with `{ value: !checked }`
 - Confirm button uses `variant="primary"` (not danger — position changes are recoverable)
 
 ### `src/ui/webview-react/components/prompts/BoundaryBar.tsx` (new file)
+
 Pure display component, ~20px height:
+
 - Props: `completedCount: number`, `skippedCount: number`
 - Renders: centered label between two horizontal rules showing e.g. `"✓ 3 completed"` or `"✓ 3 completed · 1 skipped"`
 - Classes: `text-[10px] uppercase tracking-widest text-description-fg`, border color `bg-panel-border`
@@ -171,16 +188,20 @@ Pure display component, ~20px height:
 ## Phase 6 — StatusIcon, PromptItem & PromptsPanel
 
 ### `src/ui/webview-react/components/prompts/StatusIcon.tsx`
+
 - Add `case STEP_STATUS.SKIPPED: return { icon: "codicon-debug-step-over", colorClass: "text-description-fg" }`
 
 ### `src/ui/webview-react/components/prompts/PromptItem.tsx`
+
 New props (all optional):
+
 - `canSetStartPosition?: boolean`
 - `onSetStartPosition?: () => void`
 - `startPositionDirection?: "rewind" | "forward"`
 - `dragHandleProps?: { listeners: SyntheticListenerMap | undefined; attributes: DraggableAttributes }`
 
 Changes:
+
 - Add `const [isHovered, setIsHovered] = useState(false)` + `onMouseEnter`/`onMouseLeave` on outer container
 - Add `group` class to outer container
 - Replace the `StatusIcon` with a conditional: when `canSetStartPosition && isHovered`, show direction-aware icon button (`codicon-debug-reverse-continue` for rewind, `codicon-debug-step-over` for forward) with a tooltip; otherwise show `<StatusIcon />`
@@ -189,16 +210,19 @@ Changes:
 ### `src/ui/webview-react/components/layout/PromptsPanel.tsx`
 
 **State additions:**
+
 - `const [showClearConfirm, setShowClearConfirm] = useState(false)` — for "Clear Workflow State" button
 - `const [setPositionIndex, setPositionIndex_] = useState<number | null>(null)` — pending set-position
 
 **Logic additions:**
+
 - `handleClearState`: if `!globalSettings.confirmResetOperations`, send immediately; else set `showClearConfirm = true`
 - `handleSetPositionClick(index)`: compute direction; if `!confirmResetOperations`, send `SET_START_POSITION` immediately; else set `setPositionIndex`
 - `handleSetPositionConfirm()`: send `SET_START_POSITION` with `toIndex: setPositionIndex`, clear modal state
 - Compute `completedCount` and `skippedCount` from `prompts.slice(0, currentStep)` by checking `results` statuses
 
 **Render changes:**
+
 1. Render done-prefix (indices `0..currentStep-1`) as plain `PromptItem` with `canSetStartPosition={canChangeStartPosition}` and `startPositionDirection="rewind"`
 2. Render `<BoundaryBar completedCount skippedCount />` when `currentStep > 0 && currentStep < prompts.length`
 3. Wrap pending prompts (indices `currentStep..end`) in dnd-kit `DndContext` + `SortableContext`; each item wrapped in a `SortablePromptItem` helper that passes `dragHandleProps` down, with `canSetStartPosition` and `startPositionDirection="forward"` (only for items strictly after `currentStep`; the item AT `currentStep` is current/active)
@@ -207,6 +231,7 @@ Changes:
 6. Render `<ResetConfirmModal>` for set-position operations guarded by `setPositionIndex !== null`, with direction-aware title/message
 
 **dnd-kit setup:**
+
 ```typescript
 const sensors = useSensors(
   useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -220,6 +245,7 @@ const canReorder = !isRunning && pendingPrompts.length > 1;
 ## Phase 7 — Message Routing
 
 ### `src/ui/WebviewMessageRouter.ts`
+
 Add three new entries to the dispatch table in `buildDispatchTable()`:
 
 ```typescript
@@ -230,7 +256,9 @@ table.set(MESSAGE_TYPES.SET_START_POSITION, async (message) => {
 
 table.set(MESSAGE_TYPES.REORDER_PROMPTS, async (message) => {
   const instance = this.getOrchestrator()?.getActiveInstance();
-  await instance?.promptQueue.reorderPendingPrompts(message.newPendingOrder as number[]);
+  await instance?.promptQueue.reorderPendingPrompts(
+    message.newPendingOrder as number[]
+  );
 });
 
 table.set(MESSAGE_TYPES.UPDATE_CONFIRM_RESET, async (message) => {
@@ -239,7 +267,9 @@ table.set(MESSAGE_TYPES.UPDATE_CONFIRM_RESET, async (message) => {
 ```
 
 ### `src/ui/webview-react/hooks/useMessageHandler.ts`
+
 Add handler for `SET_START_POSITION_CONFIRMED`:
+
 ```typescript
 handlers[MESSAGE_TYPES.SET_START_POSITION_CONFIRMED] = (message) => {
   const workflowStore = useWorkflowStore.getState();
@@ -261,15 +291,19 @@ handlers[MESSAGE_TYPES.SET_START_POSITION_CONFIRMED] = (message) => {
 ## Phase 8 — Tests
 
 ### `src/test/unit/WorkflowInstance.test.ts`
+
 - Add `notifyStartPositionSet: () => {}` to every mock `IDashboardSink` stub (multiple exist in the file)
 
 ### `src/test/unit/PromptQueue.test.ts` (new describe block)
+
 Tests for `setStartPosition`:
+
 - REWIND: verify `_runtime` stripped for rewound prompts, results reset to PENDING, `completedIndices` rebuilt correctly, `currentIndex` updated
 - SKIP-AHEAD: verify results marked SKIPPED for skipped range, `_runtime.completedAt` set on skipped prompts, `completedIndices` includes skipped indices
 - No-op: `toIndex === currentIndex` returns early without `emitStateChange`
 
 Tests for `reorderPendingPrompts`:
+
 - Verify done-prefix (indices < currentIndex) is unchanged
 - Verify pending section reordered per `newPendingOrder`
 - Verify `results` array reordered in sync with `prompts`

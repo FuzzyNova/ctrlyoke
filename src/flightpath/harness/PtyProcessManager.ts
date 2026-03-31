@@ -26,7 +26,10 @@ export function resolveWindowsShell(): string {
     return _windowsShell;
   }
   try {
-    const result = execSync("where.exe pwsh.exe", { encoding: "utf8", timeout: 3000 });
+    const result = execSync("where.exe pwsh.exe", {
+      encoding: "utf8",
+      timeout: 3000,
+    });
     const fullPath = result.trim().split(/\r?\n/)[0]?.trim();
     _windowsShell = fullPath || "powershell.exe";
   } catch {
@@ -158,9 +161,13 @@ export class PtyProcessManager {
   spawnPty(options: SpawnPtyOptions): PtySession {
     const nodePty = loadNodePty();
     if (!nodePty) {
-      throw new Error("node-pty native module is not available on this platform");
+      throw new Error(
+        "node-pty native module is not available on this platform"
+      );
     }
-    const sessionId = options.sessionId ?? `${options.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const sessionId =
+      options.sessionId ??
+      `${options.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const ptyInstance = nodePty.spawn(options.command, options.args, {
       name: "xterm-256color",
@@ -190,10 +197,14 @@ export class PtyProcessManager {
       session.status = exitCode === 0 ? "completed" : "failed";
       this.sessions.delete(sessionId);
       options.onExit(session, exitCode ?? 1);
-      Log.debug(`🖥️ PTY session ${sessionId} (${options.kind}) exited with code ${exitCode}`);
+      Log.debug(
+        `🖥️ PTY session ${sessionId} (${options.kind}) exited with code ${exitCode}`
+      );
     });
 
-    Log.debug(`🖥️ Spawned PTY session ${sessionId} (${options.kind}): ${options.command}`);
+    Log.debug(
+      `🖥️ Spawned PTY session ${sessionId} (${options.kind}): ${options.command}`
+    );
     return session;
   }
 

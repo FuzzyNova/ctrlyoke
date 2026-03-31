@@ -67,8 +67,12 @@ export class GeminiToolBuilder {
           timestamp,
           data: {
             path: path || "unknown",
-            oldContent: (input.oldString ?? input.old_string) as string | undefined,
-            newContent: (input.newString ?? input.new_string) as string | undefined,
+            oldContent: (input.oldString ?? input.old_string) as
+              | string
+              | undefined,
+            newContent: (input.newString ?? input.new_string) as
+              | string
+              | undefined,
             status: OPERATION_STATUS.INITIATED,
           } as FileEditData,
         };

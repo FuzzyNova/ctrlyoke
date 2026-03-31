@@ -416,7 +416,9 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       }
       const effectiveHarness =
         (workflowProperties.harness as HarnessId) ?? globalSettings.harness;
-      return globalSettings.harnessDefaultAdditionalArgs[effectiveHarness] ?? "";
+      return (
+        globalSettings.harnessDefaultAdditionalArgs[effectiveHarness] ?? ""
+      );
     },
 
     getEffectiveToolPermissions: () => {

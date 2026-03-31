@@ -228,12 +228,12 @@ Until then, agent mode enforcement is the safest approach.
 
 ## Summary of Chat Mode Limitations
 
-| Limitation                           | Impact                                             | Workaround                                         |
-| ------------------------------------ | -------------------------------------------------- | -------------------------------------------------- |
-| **No API for mode detection**        | Can't verify ask/plan/agent mode                   | Force agent mode via setting                       |
-| **No API for agent selection**       | Can't select custom agents programmatically        | Manually select agent before workflow              |
-| **Session file match window**        | Brief window before session file is identified     | Retry loop handles this automatically              |
-| **Identical-prompt collision**       | Two simultaneous workflows with same prompt text   | Use unique prompt text; prefer CLI for concurrency |
+| Limitation                     | Impact                                           | Workaround                                         |
+| ------------------------------ | ------------------------------------------------ | -------------------------------------------------- |
+| **No API for mode detection**  | Can't verify ask/plan/agent mode                 | Force agent mode via setting                       |
+| **No API for agent selection** | Can't select custom agents programmatically      | Manually select agent before workflow              |
+| **Session file match window**  | Brief window before session file is identified   | Retry loop handles this automatically              |
+| **Identical-prompt collision** | Two simultaneous workflows with same prompt text | Use unique prompt text; prefer CLI for concurrency |
 
 **General Recommendation**: Use **CLI mode** for production workflows. Chat mode is best for:
 

@@ -110,42 +110,44 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-600 text-white flex-shrink-0">
           CLI
         </span>
-      ) : (isRunning || isPaused) && (
-        <div
-          role="group"
-          className="flex items-center gap-1 flex-shrink-0"
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-        >
-          {isRunning ? (
-            <button
-              type="button"
-              title="Pause"
-              onClick={onPause}
-              className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
-            >
-              <i className="codicon codicon-debug-pause" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              title="Resume"
-              onClick={onResume}
-              className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
-            >
-              <i className="codicon codicon-play" />
-            </button>
-          )}
-
-          <button
-            type="button"
-            title="Stop"
-            onClick={onStop}
-            className="p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
+      ) : (
+        (isRunning || isPaused) && (
+          <div
+            role="group"
+            className="flex items-center gap-1 flex-shrink-0"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
           >
-            <i className="codicon codicon-debug-stop" />
-          </button>
-        </div>
+            {isRunning ? (
+              <button
+                type="button"
+                title="Pause"
+                onClick={onPause}
+                className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+              >
+                <i className="codicon codicon-debug-pause" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                title="Resume"
+                onClick={onResume}
+                className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+              >
+                <i className="codicon codicon-play" />
+              </button>
+            )}
+
+            <button
+              type="button"
+              title="Stop"
+              onClick={onStop}
+              className="p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
+            >
+              <i className="codicon codicon-debug-stop" />
+            </button>
+          </div>
+        )
       )}
     </div>
   );

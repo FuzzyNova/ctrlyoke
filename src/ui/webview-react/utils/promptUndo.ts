@@ -461,7 +461,10 @@ export function computePromptUndoActions(
     effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
       ? (effectiveUndoRecord.redoInstructions ?? [])
       : [];
-  const allCandidates = buildUndoCandidatesForOutputs(allStepOutputs, effectiveSnapshot);
+  const allCandidates = buildUndoCandidatesForOutputs(
+    allStepOutputs,
+    effectiveSnapshot
+  );
   const candidates =
     redoInstructions.length > 0
       ? allCandidates.filter(

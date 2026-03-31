@@ -33,7 +33,11 @@ interface TerminalActions {
   /** Explicitly close/remove a session (user × button on shell sessions) */
   removeSession: (workflowId: string, sessionId: string) => void;
 
-  pushPendingOutput: (workflowId: string, sessionId: string, chunk: string) => void;
+  pushPendingOutput: (
+    workflowId: string,
+    sessionId: string,
+    chunk: string
+  ) => void;
   clearPendingOutput: (workflowId: string, sessionId: string) => void;
 
   /** Called on new run start — clears only ai-cli sessions; shell sessions survive */
@@ -69,7 +73,13 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
       set((state) => {
         const sessions = (state.sessions[workflowId] ?? []).map((s) =>
           s.id === sessionId
-            ? { ...s, status: exitCode === 0 ? TERMINAL_SESSION_STATUS.COMPLETED : TERMINAL_SESSION_STATUS.FAILED }
+            ? {
+                ...s,
+                status:
+                  exitCode === 0
+                    ? TERMINAL_SESSION_STATUS.COMPLETED
+                    : TERMINAL_SESSION_STATUS.FAILED,
+              }
             : s
         );
         return { sessions: { ...state.sessions, [workflowId]: sessions } };
@@ -77,7 +87,10 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
 
     setActiveSession: (workflowId, sessionId) =>
       set((state) => ({
-        activeSessionIds: { ...state.activeSessionIds, [workflowId]: sessionId },
+        activeSessionIds: {
+          ...state.activeSessionIds,
+          [workflowId]: sessionId,
+        },
       })),
 
     removeSession: (workflowId, sessionId) =>
@@ -92,7 +105,10 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
             : currentActive;
         return {
           sessions: { ...state.sessions, [workflowId]: sessions },
-          activeSessionIds: { ...state.activeSessionIds, [workflowId]: newActive },
+          activeSessionIds: {
+            ...state.activeSessionIds,
+            [workflowId]: newActive,
+          },
         };
       }),
 
@@ -131,7 +147,10 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
             : currentActive;
         return {
           sessions: { ...state.sessions, [workflowId]: sessions },
-          activeSessionIds: { ...state.activeSessionIds, [workflowId]: newActive },
+          activeSessionIds: {
+            ...state.activeSessionIds,
+            [workflowId]: newActive,
+          },
         };
       }),
   })

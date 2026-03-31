@@ -27,7 +27,10 @@ import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
-import type { PromptItem, UserHookConfig } from "../../../types/FlightPathTypes";
+import type {
+  PromptItem,
+  UserHookConfig,
+} from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 const execAsync = promisify(exec);
@@ -146,7 +149,8 @@ export class CopilotCliProvider implements ICliProvider {
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
       // Auto-approve FlightPath MCP tools only when the FlightPath server is included
-      const mcpServersResolved = workflowContext?.resolvedProperties?.mcpServers ?? [];
+      const mcpServersResolved =
+        workflowContext?.resolvedProperties?.mcpServers ?? [];
       if (mcpServersResolved.includes("flightpath")) {
         args.push("--allow-tool", "flightpath");
         Log.debug("🔧 FlightPath MCP tools auto-approved");
@@ -209,7 +213,8 @@ export class CopilotCliProvider implements ICliProvider {
     } else {
       // Interactive mode: Configure sessionEnd hook for completion detection
       if (workspaceRoot) {
-        const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
+        const userHooks =
+          workflowContext?.resolvedProperties?.hooks ?? undefined;
         const hookArgs = await this.buildSessionEndHookArgs(
           extensionPath,
           workspaceRoot,
@@ -497,7 +502,7 @@ export class CopilotCliProvider implements ICliProvider {
       // user servers need "type": "local"/"http"/"sse" and "tools": ["*"]
       const copilotUserServerConfig = {
         stdioType: "local",
-        remoteTypeMap: { "streamable-http": "http", "sse": "sse" },
+        remoteTypeMap: { "streamable-http": "http", sse: "sse" },
         tools: ["*"] as string[],
       };
       let configJson: string;

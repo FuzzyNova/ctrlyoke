@@ -130,10 +130,10 @@ suite("ContextExpander.expandContextSplit", () => {
       fs.writeFileSync(
         filePath,
         [
-          "alpha",  // line 1
-          "beta",   // line 2
-          "gamma",  // line 3
-          "delta",  // line 4
+          "alpha", // line 1
+          "beta", // line 2
+          "gamma", // line 3
+          "delta", // line 4
         ].join("\n")
       );
 
@@ -219,10 +219,7 @@ suite("ContextExpander.expandContextSplit", () => {
       const fullFile = path.join(root, "full.ts");
       const rangeFile = path.join(root, "range.ts");
       fs.writeFileSync(fullFile, "export const full = true;\n");
-      fs.writeFileSync(
-        rangeFile,
-        ["lineA", "lineB", "lineC"].join("\n")
-      );
+      fs.writeFileSync(rangeFile, ["lineA", "lineB", "lineC"].join("\n"));
 
       const expander = new ContextExpander(root);
       const result = await expander.expandContextSplit(

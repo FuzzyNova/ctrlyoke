@@ -321,6 +321,7 @@ opencode models
 ```
 
 Key properties of the command:
+
 - Plain text output, one `provider/model` string per line (trivial to parse — no JSON flag needed)
 - `opencode models <provider>` filters by provider (e.g., `opencode models anthropic`)
 - `--verbose` flag adds cost metadata
@@ -359,7 +360,6 @@ async getAvailableModels(): Promise<string[]> {
 This method is NOT part of `ICliProvider` — it is an opencode-specific public method called by `ModelRegistry` (or an equivalent opencode model registry utility) at harness initialization time. The discovered list is cached and exposed to the webview for the model dropdown, replacing any static enum in `package.json`.
 
 ---
-
 
 ---
 

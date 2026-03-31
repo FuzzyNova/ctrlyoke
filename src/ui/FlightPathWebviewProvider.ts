@@ -53,7 +53,9 @@ export type { HarnessStatus } from "./WebviewSettingsSync";
  * Settings/config management delegated to WebviewSettingsSync.
  * Save/export/template/history delegated to WorkflowSerializer.
  */
-export class FlightPathWebviewProvider implements vscode.WebviewViewProvider, IDashboardProvider {
+export class FlightPathWebviewProvider
+  implements vscode.WebviewViewProvider, IDashboardProvider
+{
   private view?: vscode.WebviewView;
   private workflowOrchestrator?: WorkflowOrchestrator;
   private outputHistoryManager?: OutputHistoryManager;
@@ -444,7 +446,12 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   /** Notify webview that a terminal PTY session started */
-  public notifyTerminalStarted(workflowId: string, sessionId: string, stepName: string, kind: string): void {
+  public notifyTerminalStarted(
+    workflowId: string,
+    sessionId: string,
+    stepName: string,
+    kind: string
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.TERMINAL_STARTED,
       workflowId,
@@ -455,7 +462,11 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   /** Stream PTY output bytes to the webview terminal */
-  public notifyTerminalOutput(workflowId: string, sessionId: string, data: string): void {
+  public notifyTerminalOutput(
+    workflowId: string,
+    sessionId: string,
+    data: string
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.TERMINAL_OUTPUT,
       workflowId,
@@ -465,7 +476,12 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   /** Notify webview that a PTY session ended */
-  public notifyTerminalEnded(workflowId: string, sessionId: string, kind: string, exitCode: number): void {
+  public notifyTerminalEnded(
+    workflowId: string,
+    sessionId: string,
+    kind: string,
+    exitCode: number
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.TERMINAL_ENDED,
       workflowId,
@@ -554,7 +570,10 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public updateFinalPromptStreamingChunk(loopIndex: number, chunk: string): void {
+  public updateFinalPromptStreamingChunk(
+    loopIndex: number,
+    chunk: string
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK,
       loopIndex,
@@ -562,7 +581,10 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public updateFinalPromptStreamingEvents(loopIndex: number, events: CliEvent[]): void {
+  public updateFinalPromptStreamingEvents(
+    loopIndex: number,
+    events: CliEvent[]
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS,
       loopIndex,
@@ -831,7 +853,6 @@ window.vscodeApi = acquireVsCodeApi();
         runTimestamps,
         runStates,
       });
-
     } catch (error) {
       Log.warn("Failed to load output history for workflow:", error);
     }

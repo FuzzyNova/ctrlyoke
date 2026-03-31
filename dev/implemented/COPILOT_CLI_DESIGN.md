@@ -383,11 +383,11 @@ CLI argument assembly is done in `CopilotCliProvider.buildArgs()`. The pattern i
 
 ## Remaining Enhancements
 
-| Task                     | Priority | Notes                                                       |
-| ------------------------ | -------- | ----------------------------------------------------------- |
-| MCP Server Configuration | Medium   | `--additional-mcp-config` — custom MCP server support       |
-| Parallel Tool Execution  | Low      | `--disable-parallel-tools-execution` flag                   |
-| Custom Instructions      | Low      | `--no-custom-instructions` to disable AGENTS.md loading     |
+| Task                     | Priority | Notes                                                   |
+| ------------------------ | -------- | ------------------------------------------------------- |
+| MCP Server Configuration | Medium   | `--additional-mcp-config` — custom MCP server support   |
+| Parallel Tool Execution  | Low      | `--disable-parallel-tools-execution` flag               |
+| Custom Instructions      | Low      | `--no-custom-instructions` to disable AGENTS.md loading |
 
 ---
 

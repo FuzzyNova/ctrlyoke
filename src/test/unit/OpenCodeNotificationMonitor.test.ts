@@ -26,8 +26,12 @@ suite("OpenCodeNotificationMonitor", () => {
 
     assert.strictEqual(
       notifyDir,
-      path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.TEMP_DIR, "opencode-notifications")
+      path.join(
+        workspaceRoot,
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.TEMP_DIR,
+        "opencode-notifications"
+      )
     );
   });
-
 });

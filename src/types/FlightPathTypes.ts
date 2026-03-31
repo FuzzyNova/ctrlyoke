@@ -292,7 +292,11 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
  * - `"exitCode"`: Compare the numeric exit code. Use `"0"` for success, or any integer string.
  *   `"true"`/`"false"` are also accepted and map to exit 0 / non-zero.
  */
-export type EndConditionCompareSource = "auto" | "stdout" | "stderr" | "exitCode";
+export type EndConditionCompareSource =
+  | "auto"
+  | "stdout"
+  | "stderr"
+  | "exitCode";
 
 export interface EndCondition {
   script: string;

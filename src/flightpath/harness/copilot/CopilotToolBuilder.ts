@@ -62,8 +62,9 @@ export class CopilotToolBuilder {
           timestamp,
           data: {
             command:
-              ((args.command ?? args.cmd ?? args.script) as string | undefined) ||
-              "unknown",
+              ((args.command ?? args.cmd ?? args.script) as
+                | string
+                | undefined) || "unknown",
             workingDir: (args.cwd ?? args.workingDir) as string | undefined,
             status: OPERATION_STATUS.INITIATED,
           } as BashCommandData,

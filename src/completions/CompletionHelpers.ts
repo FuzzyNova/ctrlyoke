@@ -318,7 +318,6 @@ export function initializeCompletionHelpers(
   context.subscriptions.push(configWatcher);
 }
 
-
 /**
  * Get file completions for @ trigger
  * Returns both file and directory completions

@@ -26,11 +26,18 @@ Each CLI provider references its script via an absolute path resolved at runtime
 - Input: JSON read from **stdin** via `readStdinJson` (Copilot pipes hook payload including `sessionId`, `cwd`)
 - Registered via `.github/hooks/*.json` config files (one per event):
   ```json
-  { "version": 1, "hooks": { "sessionStart": [{"type": "command", "bash": "node <script> <dir> sessionStart"}] } }
+  {
+    "version": 1,
+    "hooks": {
+      "sessionStart": [
+        { "type": "command", "bash": "node <script> <dir> sessionStart" }
+      ]
+    }
+  }
   ```
 - Writes notification files using the **shared schema** so `NotificationMonitorBase` can share all monitoring logic:
   - `sessionStart` → `{runId|sessionId}-start.json` with `{ hookEvent: "SessionStart", status: "started", ... }`
-  - `sessionEnd`   → `{sessionId}-stop.json`  with `{ hookEvent: "Stop", status: "completed", ... }`
+  - `sessionEnd` → `{sessionId}-stop.json` with `{ hookEvent: "Stop", status: "completed", ... }`
 - Start file uses `FLIGHTPATH_RUN_ID` env var as prefix when set (for parallel-workflow collision avoidance), falls back to sessionId
 - Falls back to `${hookType}-${Date.now()}.json` if no session ID is present
 
@@ -96,7 +103,7 @@ Each CLI provider references its script via an absolute path resolved at runtime
   - `session.status` (idle, main session) → writes `{sessionId}-stop.json` with `{ hookEvent: "Stop", status: "completed" }`
   - `session.deleted` → removes session from tracking set
 - Self-contained diagnostic logging (derives logs dir from `FLIGHTPATH_NOTIFY_DIR`, does not use `initializeLogger`)
-</scripts>
+  </scripts>
 
 <notificationMechanism>
 All scripts write JSON notification files that FlightPath's `*NotificationMonitor` polls for:
@@ -106,12 +113,14 @@ All scripts write JSON notification files that FlightPath's `*NotificationMonito
 3. The corresponding `*NotificationMonitor` polls that directory
 
 **File naming (shared convention across stdin-based hooks):**
+
 - Start events: `{runId|sessionId}-start.json` — uses `FLIGHTPATH_RUN_ID` env var when set (prevents parallel-workflow collision), falls back to sessionId
 - Stop events: `{sessionId}-stop.json`
 - Codex (unique): `{threadId}.json` (single file, completion only)
 - Copilot fallback: `${hookType}-${Date.now()}.json` when no session ID available
 
 **Notify directory source:**
+
 - Copilot: passed as `argv[2]` by the CLI provider
 - Claude/Gemini/Qwen: passed as `argv[2]` by the CLI provider
 - Codex: derived at runtime from `notification.cwd` (Codex provides workspace path in the payload)
@@ -135,7 +144,7 @@ Debug logging is **opt-in**: scripts check the `FLIGHTPATH_DIAGNOSTIC_LOGS` envi
 - Codex derives the logs directory from `notification.cwd`
 - OpenCode derives the logs directory from `FLIGHTPATH_NOTIFY_DIR`
 - Qwen additionally writes an unconditional invocation log entry before any flag checks (for troubleshooting hook registration)
-</debugLogging>
+  </debugLogging>
 
 <guidelines>
 - Keep scripts self-contained — only Node.js built-ins (`fs`, `path`, `os`, `readline`) plus `flightpath-hook-utils.js`

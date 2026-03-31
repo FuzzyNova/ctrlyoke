@@ -175,7 +175,11 @@ suite("TtlCache", () => {
 
       const result = await cache.get(fn);
       assert.deepStrictEqual(result, [200]);
-      assert.strictEqual(callCount, 2, "should have re-fetched after invalidate");
+      assert.strictEqual(
+        callCount,
+        2,
+        "should have re-fetched after invalidate"
+      );
     });
 
     test("should be safe to call invalidate() multiple times", () => {

@@ -22,7 +22,9 @@ beforeEach(() => {
   useWorkflowStore.getState().resetWorkflow();
   useWorkflowStore.temporal.getState().clear();
   // Reset the vscodeApi mock on each test
-  (window.vscodeApi as unknown as { postMessage: ReturnType<typeof vi.fn> }).postMessage = postMessageSpy;
+  (
+    window.vscodeApi as unknown as { postMessage: ReturnType<typeof vi.fn> }
+  ).postMessage = postMessageSpy;
   postMessageSpy.mockClear();
 });
 
@@ -58,7 +60,9 @@ describe("WorkflowControls — dropdown options", () => {
   it("posts NEW_WORKFLOW when 'New From Template' clicked", async () => {
     const user = userEvent.setup();
     render(<WorkflowControls />);
-    await user.click(screen.getByRole("button", { name: /Open workflow menu/i }));
+    await user.click(
+      screen.getByRole("button", { name: /Open workflow menu/i })
+    );
     await user.click(screen.getByText(/New From Template/i));
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.NEW_WORKFLOW,
@@ -68,7 +72,9 @@ describe("WorkflowControls — dropdown options", () => {
   it("posts SELECT_FILE when 'Load from File' clicked", async () => {
     const user = userEvent.setup();
     render(<WorkflowControls />);
-    await user.click(screen.getByRole("button", { name: /Open workflow menu/i }));
+    await user.click(
+      screen.getByRole("button", { name: /Open workflow menu/i })
+    );
     await user.click(screen.getByText(/Load from File/i));
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.SELECT_FILE,
@@ -78,8 +84,12 @@ describe("WorkflowControls — dropdown options", () => {
   it("'Queue from File' is disabled when no workflow is loaded", async () => {
     const user = userEvent.setup();
     render(<WorkflowControls />);
-    await user.click(screen.getByRole("button", { name: /Open workflow menu/i }));
-    const queueItem = screen.getByText(/Queue from File/i).closest("button, [role='option'], li");
+    await user.click(
+      screen.getByRole("button", { name: /Open workflow menu/i })
+    );
+    const queueItem = screen
+      .getByText(/Queue from File/i)
+      .closest("button, [role='option'], li");
     // The SplitButton option with disabled:true should render as disabled
     expect(queueItem).toBeDisabled();
   });
@@ -89,11 +99,12 @@ describe("WorkflowControls — dropdown options", () => {
     // Set a fileName so hasQueue = true
     useWorkflowStore.setState({ fileName: "/path/to/workflow.yaml" });
     render(<WorkflowControls />);
-    await user.click(screen.getByRole("button", { name: /Open workflow menu/i }));
+    await user.click(
+      screen.getByRole("button", { name: /Open workflow menu/i })
+    );
     await user.click(screen.getByText(/Queue from File/i));
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.APPEND_FILE,
     });
   });
-
 });

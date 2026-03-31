@@ -6,7 +6,11 @@ import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 import { PromptEditor } from "../editor/PromptEditor";
 import { PanelBar } from "../shared";
-import { FINAL_PROMPT_PHASES, RUNNER_IDS, EDITOR_TARGET_KINDS } from "../../types/messages";
+import {
+  FINAL_PROMPT_PHASES,
+  RUNNER_IDS,
+  EDITOR_TARGET_KINDS,
+} from "../../types/messages";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 
 /**
@@ -20,7 +24,8 @@ import { triggerPanelAnimation } from "@utils/panelAnimation";
  * - Handles section collapse state persistence
  */
 export const EditorSection: React.FC = () => {
-  const { selectionTarget, promptName, setPromptName, promptText } = useEditorStore();
+  const { selectionTarget, promptName, setPromptName, promptText } =
+    useEditorStore();
   const tokenCount = useAttachmentTokenCount(promptText);
   const {
     editorCollapsed,

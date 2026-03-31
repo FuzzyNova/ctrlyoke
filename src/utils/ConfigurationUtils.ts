@@ -1,6 +1,16 @@
 import * as vscode from "vscode";
-import { DynamicQueueConfig, Harness, McpServerConfig, UserHookConfig } from "../types/FlightPathTypes";
-import { HARNESS_IDS, EXECUTION_MODES, PERMISSION_MODES, type PermissionMode } from "../types/DashboardConstants";
+import {
+  DynamicQueueConfig,
+  Harness,
+  McpServerConfig,
+  UserHookConfig,
+} from "../types/FlightPathTypes";
+import {
+  HARNESS_IDS,
+  EXECUTION_MODES,
+  PERMISSION_MODES,
+  type PermissionMode,
+} from "../types/DashboardConstants";
 
 /**
  * Configuration namespace for FlightPath settings
@@ -321,7 +331,10 @@ export const ConfigurationUtils = {
    * Get CLI execution mode (interactive terminal or headless)
    */
   getCliExecutionMode(): string {
-    return getConfig().get<string>("cliExecutionMode", EXECUTION_MODES.INTERACTIVE);
+    return getConfig().get<string>(
+      "cliExecutionMode",
+      EXECUTION_MODES.INTERACTIVE
+    );
   },
 
   /**
@@ -665,7 +678,9 @@ export const ConfigurationUtils = {
   /**
    * Set the default MCP servers in settings
    */
-  async setDefaultMcpServers(servers: (string | McpServerConfig)[]): Promise<void> {
+  async setDefaultMcpServers(
+    servers: (string | McpServerConfig)[]
+  ): Promise<void> {
     await this.updateSetting("mcpServers", servers);
   },
 

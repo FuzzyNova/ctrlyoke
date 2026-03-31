@@ -111,104 +111,104 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
       {/* Right side: Action buttons */}
       <div className="editor-actions flex items-center gap-2">
         {isEditMode ? (
-            // Edit mode buttons
-            <>
-              <button
-                className="btn-editor-cancel px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                onClick={onCancel}
-                disabled={isCLIManaged}
-                title={
-                  isCLIManaged
-                    ? "Read-only — workflow is running via FlightPath CLI"
-                    : "Cancel editing and return to new prompt mode"
-                }
-              >
-                <i className="codicon codicon-close" />
-                {!isNarrow && <span className="btn-text">Cancel</span>}
-              </button>
+          // Edit mode buttons
+          <>
+            <button
+              className="btn-editor-cancel px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              onClick={onCancel}
+              disabled={isCLIManaged}
+              title={
+                isCLIManaged
+                  ? "Read-only — workflow is running via FlightPath CLI"
+                  : "Cancel editing and return to new prompt mode"
+              }
+            >
+              <i className="codicon codicon-close" />
+              {!isNarrow && <span className="btn-text">Cancel</span>}
+            </button>
 
-              <button
-                className="btn-editor-update px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                onClick={onUpdate}
-                disabled={
-                  isCLIManaged ||
-                  !hasContent ||
-                  isPromptBeingSent ||
-                  isPromptCompleted
-                }
-                title={
-                  isCLIManaged
-                    ? "Read-only — workflow is running via FlightPath CLI"
+            <button
+              className="btn-editor-update px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              onClick={onUpdate}
+              disabled={
+                isCLIManaged ||
+                !hasContent ||
+                isPromptBeingSent ||
+                isPromptCompleted
+              }
+              title={
+                isCLIManaged
+                  ? "Read-only — workflow is running via FlightPath CLI"
+                  : isPromptCompleted
+                    ? "Cannot edit a completed prompt — use Clear workflow state to reset"
+                    : isPromptBeingSent
+                      ? "Cannot update a prompt that is currently being sent"
+                      : "Update prompt in queue"
+              }
+            >
+              <i className="codicon codicon-check" />
+              {!isNarrow && <span className="btn-text">Update</span>}
+            </button>
+
+            <button
+              className="btn-editor-delete px-3 py-1 text-xs rounded flex items-center gap-1 bg-input-error-bg text-input-error-fg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              onClick={onDelete}
+              disabled={
+                isCLIManaged ||
+                isPromptActivelyRunning ||
+                (!isFinalPromptMode && isPromptCompleted)
+              }
+              title={
+                isCLIManaged
+                  ? "Read-only — workflow is running via FlightPath CLI"
+                  : isFinalPromptMode
+                    ? "Disable final prompt"
                     : isPromptCompleted
-                      ? "Cannot edit a completed prompt — use Clear workflow state to reset"
-                      : isPromptBeingSent
-                        ? "Cannot update a prompt that is currently being sent"
-                        : "Update prompt in queue"
-                }
-              >
-                <i className="codicon codicon-check" />
-                {!isNarrow && <span className="btn-text">Update</span>}
-              </button>
+                      ? "Cannot delete a completed prompt — use Clear workflow state to reset"
+                      : isPromptActivelyRunning
+                        ? "Cannot delete a prompt that is currently running"
+                        : "Delete prompt from queue"
+              }
+            >
+              <i className="codicon codicon-trash" />
+              {!isNarrow && (
+                <span className="btn-text">
+                  {isFinalPromptMode ? "Disable" : "Delete"}
+                </span>
+              )}
+            </button>
+          </>
+        ) : (
+          // New prompt mode buttons
+          <>
+            <button
+              className="btn-editor-queue px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              onClick={onQueue}
+              disabled={isCLIManaged || !hasContent}
+              title={
+                isCLIManaged
+                  ? "Read-only — workflow is running via FlightPath CLI"
+                  : queueButtonTooltip
+              }
+            >
+              <i className="codicon codicon-add" />
+              {!isNarrow && <span className="btn-text">Queue</span>}
+            </button>
 
-              <button
-                className="btn-editor-delete px-3 py-1 text-xs rounded flex items-center gap-1 bg-input-error-bg text-input-error-fg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                onClick={onDelete}
-                disabled={
-                  isCLIManaged ||
-                  isPromptActivelyRunning ||
-                  (!isFinalPromptMode && isPromptCompleted)
-                }
-                title={
-                  isCLIManaged
-                    ? "Read-only — workflow is running via FlightPath CLI"
-                    : isFinalPromptMode
-                      ? "Disable final prompt"
-                      : isPromptCompleted
-                        ? "Cannot delete a completed prompt — use Clear workflow state to reset"
-                        : isPromptActivelyRunning
-                          ? "Cannot delete a prompt that is currently running"
-                          : "Delete prompt from queue"
-                }
-              >
-                <i className="codicon codicon-trash" />
-                {!isNarrow && (
-                  <span className="btn-text">
-                    {isFinalPromptMode ? "Disable" : "Delete"}
-                  </span>
-                )}
-              </button>
-            </>
-          ) : (
-            // New prompt mode buttons
-            <>
-              <button
-                className="btn-editor-queue px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                onClick={onQueue}
-                disabled={isCLIManaged || !hasContent}
-                title={
-                  isCLIManaged
-                    ? "Read-only — workflow is running via FlightPath CLI"
-                    : queueButtonTooltip
-                }
-              >
-                <i className="codicon codicon-add" />
-                {!isNarrow && <span className="btn-text">Queue</span>}
-              </button>
-
-              <button
-                className="btn-editor-run px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                onClick={onRun}
-                disabled={isCLIManaged || !hasContent}
-                title={
-                  isCLIManaged
-                    ? "Read-only — workflow is running via FlightPath CLI"
-                    : runButtonTooltip
-                }
-              >
-                <i className="codicon codicon-send" />
-                {!isNarrow && <span className="btn-text">{runButtonText}</span>}
-              </button>
-            </>
+            <button
+              className="btn-editor-run px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              onClick={onRun}
+              disabled={isCLIManaged || !hasContent}
+              title={
+                isCLIManaged
+                  ? "Read-only — workflow is running via FlightPath CLI"
+                  : runButtonTooltip
+              }
+            >
+              <i className="codicon codicon-send" />
+              {!isNarrow && <span className="btn-text">{runButtonText}</span>}
+            </button>
+          </>
         )}
       </div>
     </div>

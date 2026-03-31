@@ -63,7 +63,8 @@ export class Log {
       );
 
       // Enable/disable file logging based on diagnostic setting.
-      const diagnosticLogsEnabled = ConfigurationUtils.isDiagnosticLogsEnabled();
+      const diagnosticLogsEnabled =
+        ConfigurationUtils.isDiagnosticLogsEnabled();
       if (diagnosticLogsEnabled) {
         this.openLogFile();
       }
@@ -100,10 +101,17 @@ export class Log {
     this.cliMode = true;
     this.logLevel = verbose ? LogLevel.DEBUG : LogLevel.INFO;
 
-    const logDir = path.join(workspaceDir, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.LOGS_DIR);
+    const logDir = path.join(
+      workspaceDir,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.LOGS_DIR
+    );
     try {
       fs.mkdirSync(logDir, { recursive: true });
-      this.cliLogFilePath = path.join(logDir, `flightpath-cli-${Date.now()}.log`);
+      this.cliLogFilePath = path.join(
+        logDir,
+        `flightpath-cli-${Date.now()}.log`
+      );
       fs.writeFileSync(this.cliLogFilePath, ""); // create / truncate
       this.cleanupOldLogs(logDir);
     } catch {
@@ -120,7 +128,11 @@ export class Log {
     if (!this.workspaceRoot) {
       return;
     }
-    const logDir = path.join(this.workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.LOGS_DIR);
+    const logDir = path.join(
+      this.workspaceRoot,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.LOGS_DIR
+    );
     try {
       fs.mkdirSync(logDir, { recursive: true });
       this.logFilePath = path.join(logDir, `flightpath-${Date.now()}.log`);

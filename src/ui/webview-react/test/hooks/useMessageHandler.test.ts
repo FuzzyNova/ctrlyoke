@@ -25,7 +25,10 @@ function dispatch(type: string, payload: Record<string, unknown> = {}) {
   );
 }
 
-function makePrompt(prompt: string, overrides: Partial<PromptItem> = {}): PromptItem {
+function makePrompt(
+  prompt: string,
+  overrides: Partial<PromptItem> = {}
+): PromptItem {
   return { prompt, ...overrides };
 }
 
@@ -156,7 +159,9 @@ describe("INIT", () => {
       });
     });
 
-    expect(useSettingsStore.getState().globalSettings.harness).toBe("claude-cli");
+    expect(useSettingsStore.getState().globalSettings.harness).toBe(
+      "claude-cli"
+    );
   });
 });
 
@@ -174,7 +179,9 @@ describe("EXECUTION_STATE_CHANGED", () => {
       });
     });
 
-    expect(useWorkflowStore.getState().executionState).toBe(EXECUTION_STATES.RUNNING);
+    expect(useWorkflowStore.getState().executionState).toBe(
+      EXECUTION_STATES.RUNNING
+    );
   });
 
   it("updates to PAUSED", () => {
@@ -186,7 +193,9 @@ describe("EXECUTION_STATE_CHANGED", () => {
       });
     });
 
-    expect(useWorkflowStore.getState().executionState).toBe(EXECUTION_STATES.PAUSED);
+    expect(useWorkflowStore.getState().executionState).toBe(
+      EXECUTION_STATES.PAUSED
+    );
   });
 
   it("updates to STOPPED", () => {
@@ -198,7 +207,9 @@ describe("EXECUTION_STATE_CHANGED", () => {
       });
     });
 
-    expect(useWorkflowStore.getState().executionState).toBe(EXECUTION_STATES.STOPPED);
+    expect(useWorkflowStore.getState().executionState).toBe(
+      EXECUTION_STATES.STOPPED
+    );
   });
 });
 
@@ -214,7 +225,9 @@ describe("EXECUTION_COMPLETED", () => {
       dispatch(MESSAGE_TYPES.EXECUTION_COMPLETED);
     });
 
-    expect(useWorkflowStore.getState().executionState).toBe(EXECUTION_STATES.COMPLETED);
+    expect(useWorkflowStore.getState().executionState).toBe(
+      EXECUTION_STATES.COMPLETED
+    );
   });
 });
 
@@ -247,7 +260,11 @@ describe("STEP_STATUS_CHANGED", () => {
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
         fileName: "wf.yaml",
-        prompts: [makePrompt("Step 0"), makePrompt("Step 1"), makePrompt("Step 2")],
+        prompts: [
+          makePrompt("Step 0"),
+          makePrompt("Step 1"),
+          makePrompt("Step 2"),
+        ],
       });
     });
 
@@ -281,7 +298,9 @@ describe("STEP_STATUS_CHANGED", () => {
       });
     });
 
-    expect(useWorkflowStore.getState().prompts[0].status).toBe(STEP_STATUS.RUNNING);
+    expect(useWorkflowStore.getState().prompts[0].status).toBe(
+      STEP_STATUS.RUNNING
+    );
   });
 });
 
@@ -325,7 +344,11 @@ describe("PROMPTS_EXTENDED", () => {
 
     act(() => {
       dispatch(MESSAGE_TYPES.PROMPTS_EXTENDED, {
-        prompts: [makePrompt("Step 0"), makePrompt("Step 1"), makePrompt("Step 2")],
+        prompts: [
+          makePrompt("Step 0"),
+          makePrompt("Step 1"),
+          makePrompt("Step 2"),
+        ],
       });
     });
 
@@ -353,11 +376,17 @@ describe("PROMPTS_EXTENDED", () => {
 
     act(() => {
       dispatch(MESSAGE_TYPES.PROMPTS_EXTENDED, {
-        prompts: [makePrompt("Step 0"), makePrompt("Step 1"), makePrompt("Step 2")],
+        prompts: [
+          makePrompt("Step 0"),
+          makePrompt("Step 1"),
+          makePrompt("Step 2"),
+        ],
       });
     });
 
-    expect(useWorkflowStore.getState().prompts[0].status).toBe(STEP_STATUS.COMPLETED);
+    expect(useWorkflowStore.getState().prompts[0].status).toBe(
+      STEP_STATUS.COMPLETED
+    );
   });
 });
 
@@ -375,6 +404,8 @@ describe("cleanup", () => {
     });
 
     // State should remain IDLE since the listener was removed
-    expect(useWorkflowStore.getState().executionState).toBe(EXECUTION_STATES.IDLE);
+    expect(useWorkflowStore.getState().executionState).toBe(
+      EXECUTION_STATES.IDLE
+    );
   });
 });

@@ -22,12 +22,13 @@ export const END_CONDITION_PROPERTIES = {
 } as const;
 
 /** Display labels for compareSource options */
-export const COMPARE_SOURCE_LABELS: Record<EndConditionCompareSource, string> = {
-  auto: "Auto",
-  stdout: "Stdout",
-  stderr: "Stderr",
-  exitCode: "Exit Code",
-};
+export const COMPARE_SOURCE_LABELS: Record<EndConditionCompareSource, string> =
+  {
+    auto: "Auto",
+    stdout: "Stdout",
+    stderr: "Stderr",
+    exitCode: "Exit Code",
+  };
 
 /** Default values for end condition properties */
 export interface EndConditionDefaults {

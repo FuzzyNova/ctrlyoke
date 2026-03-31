@@ -6,7 +6,9 @@ import { Button } from "@components/shared/Button";
 describe("Button", () => {
   it("renders children", () => {
     render(<Button>Click me</Button>);
-    expect(screen.getByRole("button", { name: "Click me" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Click me" })
+    ).toBeInTheDocument();
   });
 
   it("calls onClick when clicked", async () => {
@@ -20,7 +22,11 @@ describe("Button", () => {
   it("does not call onClick when disabled", async () => {
     const user = userEvent.setup();
     const onClick = vi.fn();
-    render(<Button disabled onClick={onClick}>Click me</Button>);
+    render(
+      <Button disabled onClick={onClick}>
+        Click me
+      </Button>
+    );
     await user.click(screen.getByRole("button"));
     expect(onClick).not.toHaveBeenCalled();
   });
@@ -59,7 +65,11 @@ describe("Button", () => {
   });
 
   it("passes through native button attributes", () => {
-    render(<Button type="submit" aria-label="submit form">Submit</Button>);
+    render(
+      <Button type="submit" aria-label="submit form">
+        Submit
+      </Button>
+    );
     const btn = screen.getByRole("button");
     expect(btn).toHaveAttribute("type", "submit");
     expect(btn).toHaveAttribute("aria-label", "submit form");

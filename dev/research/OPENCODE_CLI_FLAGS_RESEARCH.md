@@ -26,46 +26,46 @@ An "append custom args" escape hatch (`customArgs` field, already planned in `CU
 
 Source: live `opencode run --help` on version 1.2.20.
 
-| Flag | Type | Default | FlightPath Status |
-|---|---|---|---|
-| `message` (positional) | array | `[]` | Handled — prompt passed as trailing positional |
-| `--format` | string (`default`\|`json`) | `default` | Handled — always set to `json` |
-| `-m, --model` | string | (none) | Handled — `provider/model` format |
-| `-s, --session` | string | (none) | Handled — session resumption |
-| `-c, --continue` | boolean | false | Intentionally NOT used (global scope issue) |
-| `--variant` | string | (none) | Planned (`THINKING_LEVEL_PLAN.md`) |
-| `--thinking` | boolean | false | Planned (`THINKING_LEVEL_PLAN.md`) |
-| `--agent` | string | (none) | NOT handled natively (see section 3.3) |
-| `-f, --file` | array | (none) | NOT handled (see section 3.1) |
-| `--fork` | boolean | false | NOT handled (see section 3.2) |
-| `--share` | boolean | false | NOT handled (see section 3.4) |
-| `--title` | string | (none) | NOT handled (see section 3.5) |
-| `--attach` | string | (none) | NOT applicable (see section 3.6) |
-| `--dir` | string | (none) | NOT applicable (see section 3.7) |
-| `--port` | number | random | NOT applicable (see section 3.8) |
-| `--command` | string | (none) | NOT applicable (see section 3.9) |
-| `--print-logs` | boolean | false | NOT applicable |
-| `--log-level` | string | (none) | NOT applicable |
+| Flag                   | Type                       | Default   | FlightPath Status                              |
+| ---------------------- | -------------------------- | --------- | ---------------------------------------------- |
+| `message` (positional) | array                      | `[]`      | Handled — prompt passed as trailing positional |
+| `--format`             | string (`default`\|`json`) | `default` | Handled — always set to `json`                 |
+| `-m, --model`          | string                     | (none)    | Handled — `provider/model` format              |
+| `-s, --session`        | string                     | (none)    | Handled — session resumption                   |
+| `-c, --continue`       | boolean                    | false     | Intentionally NOT used (global scope issue)    |
+| `--variant`            | string                     | (none)    | Planned (`THINKING_LEVEL_PLAN.md`)             |
+| `--thinking`           | boolean                    | false     | Planned (`THINKING_LEVEL_PLAN.md`)             |
+| `--agent`              | string                     | (none)    | NOT handled natively (see section 3.3)         |
+| `-f, --file`           | array                      | (none)    | NOT handled (see section 3.1)                  |
+| `--fork`               | boolean                    | false     | NOT handled (see section 3.2)                  |
+| `--share`              | boolean                    | false     | NOT handled (see section 3.4)                  |
+| `--title`              | string                     | (none)    | NOT handled (see section 3.5)                  |
+| `--attach`             | string                     | (none)    | NOT applicable (see section 3.6)               |
+| `--dir`                | string                     | (none)    | NOT applicable (see section 3.7)               |
+| `--port`               | number                     | random    | NOT applicable (see section 3.8)               |
+| `--command`            | string                     | (none)    | NOT applicable (see section 3.9)               |
+| `--print-logs`         | boolean                    | false     | NOT applicable                                 |
+| `--log-level`          | string                     | (none)    | NOT applicable                                 |
 
 ### 2.2 Top-Level `opencode` Entry Point (Interactive / TUI Mode)
 
 Source: live `opencode --help` on version 1.2.20.
 
-| Flag | Type | Default | FlightPath Status |
-|---|---|---|---|
-| `--prompt` | string | (none) | Handled — prompt injection mechanism |
-| `-m, --model` | string | (none) | Handled |
-| `-s, --session` | string | (none) | Handled |
-| `-c, --continue` | boolean | false | Intentionally NOT used |
-| `--fork` | boolean | false | NOT handled (see section 3.2) |
-| `--agent` | string | (none) | NOT handled natively (see section 3.3) |
-| `--port` | number | 0 (random) | NOT applicable |
-| `--hostname` | string | `127.0.0.1` | NOT applicable |
-| `--mdns` | boolean | false | NOT applicable |
-| `--mdns-domain` | string | `opencode.local` | NOT applicable |
-| `--cors` | array | `[]` | NOT applicable |
-| `--print-logs` | boolean | false | NOT applicable |
-| `--log-level` | string | (none) | NOT applicable |
+| Flag             | Type    | Default          | FlightPath Status                      |
+| ---------------- | ------- | ---------------- | -------------------------------------- |
+| `--prompt`       | string  | (none)           | Handled — prompt injection mechanism   |
+| `-m, --model`    | string  | (none)           | Handled                                |
+| `-s, --session`  | string  | (none)           | Handled                                |
+| `-c, --continue` | boolean | false            | Intentionally NOT used                 |
+| `--fork`         | boolean | false            | NOT handled (see section 3.2)          |
+| `--agent`        | string  | (none)           | NOT handled natively (see section 3.3) |
+| `--port`         | number  | 0 (random)       | NOT applicable                         |
+| `--hostname`     | string  | `127.0.0.1`      | NOT applicable                         |
+| `--mdns`         | boolean | false            | NOT applicable                         |
+| `--mdns-domain`  | string  | `opencode.local` | NOT applicable                         |
+| `--cors`         | array   | `[]`             | NOT applicable                         |
+| `--print-logs`   | boolean | false            | NOT applicable                         |
+| `--log-level`    | string  | (none)           | NOT applicable                         |
 
 **Key difference from headless:** `--variant`, `--thinking`, `-f/--file`, `--share`, `--title`, `--attach`, `--dir`, and `--command` are NOT available on the top-level `opencode` command. They are `opencode run`-only flags.
 
@@ -78,6 +78,7 @@ Source: live `opencode --help` on version 1.2.20.
 **What it does:** Attaches one or more files to the message sent to the model. The model receives the file content as part of its context, alongside the prompt text. Accepts multiple `-f` flags or an array.
 
 **Automation value:** HIGH. Complex prompts that reference source files, specs, or data files can attach them directly rather than embedding their content inline in the prompt text. This is relevant for:
+
 - Sending large reference documents to the model
 - Attaching generated artefacts from a previous workflow step
 - Providing structured data files (JSON, CSV) as context
@@ -85,6 +86,7 @@ Source: live `opencode --help` on version 1.2.20.
 **Conflicts with FlightPath's existing approach:** Moderate. FlightPath currently uses `ContextExpander` to expand `#file:` references by inlining file content into the prompt text before sending. The `-f` flag is an alternative mechanism — the model receives the file via a structured attachment rather than inline text. These are complementary rather than conflicting; `-f` is only available in headless (`opencode run`) mode.
 
 **Implementation options:**
+
 1. Expose as a `files` array property on `PromptItem` (parallel to Claude's `--add-dir`-style expansion)
 2. Users can include `-f path/to/file` in `customArgs` as an immediate workaround
 
@@ -97,6 +99,7 @@ Source: live `opencode --help` on version 1.2.20.
 **What it does:** When combined with `-c` (continue last) or `-s <sessionId>` (resume session), `--fork` creates a branch of the existing session rather than extending it in-place. The original session history is preserved; the new prompts are appended to a copy. Produces a new session ID distinct from the parent.
 
 **Automation value:** MEDIUM. Enables multi-branch experimentation workflows:
+
 - Run the same prompt against a shared base session history, producing two independent branches
 - Safe "what-if" continuation: try a risky refactor without losing the original session state
 - A/B testing two different follow-up prompts from the same starting point
@@ -279,16 +282,16 @@ The following environment variables control OpenCode behavior that FlightPath ca
 
 The following `opencode.json` configuration fields are currently not written by FlightPath when it generates the MCP config file (`.opencode/opencode.json`), but could be useful to expose:
 
-| Config Field | Type | What It Controls | FlightPath Relevance |
-|---|---|---|---|
-| `permission` | object | Per-tool approval requirements (`ask` \| `allow`) | FlightPath has `cliToolPermissions` setting but does NOT currently write permission entries into `opencode.json`. Currently all tools are allowed by default. |
-| `tools` | object | Enable/disable specific tools entirely (`write: false`) | No FlightPath equivalent. Could map to `cliDeniedTools` setting. |
-| `compaction.auto` | boolean | Auto-compact when context fills | Not exposed. Default is `true`. |
-| `compaction.reserved` | number | Token buffer before compaction triggers | Not exposed. |
-| `small_model` | string | Lightweight model for background tasks (title generation, etc.) | Not exposed. |
-| `autoupdate` | boolean\|`"notify"` | Update check behavior | Not exposed. `false` is useful for automation. |
-| `instructions` | array | Additional instruction files to load at startup | Not exposed. Could integrate with FlightPath's agent/skills system. |
-| `share` | `"manual"`\|`"auto"`\|`"disabled"` | Session sharing policy | Not exposed. |
+| Config Field          | Type                               | What It Controls                                                | FlightPath Relevance                                                                                                                                          |
+| --------------------- | ---------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `permission`          | object                             | Per-tool approval requirements (`ask` \| `allow`)               | FlightPath has `cliToolPermissions` setting but does NOT currently write permission entries into `opencode.json`. Currently all tools are allowed by default. |
+| `tools`               | object                             | Enable/disable specific tools entirely (`write: false`)         | No FlightPath equivalent. Could map to `cliDeniedTools` setting.                                                                                              |
+| `compaction.auto`     | boolean                            | Auto-compact when context fills                                 | Not exposed. Default is `true`.                                                                                                                               |
+| `compaction.reserved` | number                             | Token buffer before compaction triggers                         | Not exposed.                                                                                                                                                  |
+| `small_model`         | string                             | Lightweight model for background tasks (title generation, etc.) | Not exposed.                                                                                                                                                  |
+| `autoupdate`          | boolean\|`"notify"`                | Update check behavior                                           | Not exposed. `false` is useful for automation.                                                                                                                |
+| `instructions`        | array                              | Additional instruction files to load at startup                 | Not exposed. Could integrate with FlightPath's agent/skills system.                                                                                           |
+| `share`               | `"manual"`\|`"auto"`\|`"disabled"` | Session sharing policy                                          | Not exposed.                                                                                                                                                  |
 
 **Highest-value gap:** The `permission` object. FlightPath has a tool permissions concept (`cliToolPermissions` setting with `allowAll`, `dangerouslyAllowAll`, `custom` modes) but does not currently write permission entries into the generated `opencode.json`. For the `custom` mode to work with OpenCode, FlightPath needs to translate `cliAllowedTools`/`cliDeniedTools` settings into opencode's `permission` object format and write them to `opencode.json` at execution time.
 
@@ -326,12 +329,12 @@ This is correct. Flags in `customArgs` placed before the trailing prompt positio
 
 If a user includes any of the following in `customArgs`, they will duplicate or conflict with FlightPath's injected args:
 
-| User-provided flag | FlightPath-injected equivalent | Conflict type |
-|---|---|---|
-| `--format default` or `--format json` | `--format json` | Duplicate/override — yargs last-wins for scalar flags. User setting `--format default` would break the response parser. |
-| `-m <model>` | `-m <model>` | Duplicate — skipped by FlightPath when `customArgs` is set (standard `customArgs` behaviour) |
-| `-s <sessionId>` | `-s <sessionId>` | Duplicate — skipped by FlightPath when `customArgs` is set |
-| `run` (subcommand) | `run` | Duplicate subcommand — opencode would receive `run run ...` and error |
+| User-provided flag                    | FlightPath-injected equivalent | Conflict type                                                                                                           |
+| ------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `--format default` or `--format json` | `--format json`                | Duplicate/override — yargs last-wins for scalar flags. User setting `--format default` would break the response parser. |
+| `-m <model>`                          | `-m <model>`                   | Duplicate — skipped by FlightPath when `customArgs` is set (standard `customArgs` behaviour)                            |
+| `-s <sessionId>`                      | `-s <sessionId>`               | Duplicate — skipped by FlightPath when `customArgs` is set                                                              |
+| `run` (subcommand)                    | `run`                          | Duplicate subcommand — opencode would receive `run run ...` and error                                                   |
 
 When `customArgs` is set, FlightPath already skips `-m` and `-s` per the `CUSTOM_CLI_ARGS_PLAN.md` behaviour. The `--format json` flag is one of the "always-injected" args that FlightPath must keep regardless. Users should not include `--format` in `customArgs` for the OpenCode harness — document this as a known limitation.
 
@@ -345,38 +348,38 @@ When `customArgs` is set, FlightPath already skips `-m` and `-s` per the `CUSTOM
 
 ### Implement Natively (High Value)
 
-| Feature | Flag | Effort | Notes |
-|---|---|---|---|
-| Reasoning effort | `--variant` + `--thinking` | Low | Already fully planned in `THINKING_LEVEL_PLAN.md`. Maps to FlightPath `thinkingLevel` property. Headless only. |
-| Native agent selection | `--agent <name>` | Low | Map `agent` property to `--agent` when value is an agent name (no path). Falls back to file injection for `.agent.md` paths. |
+| Feature                | Flag                                   | Effort | Notes                                                                                                                                                                                                               |
+| ---------------------- | -------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reasoning effort       | `--variant` + `--thinking`             | Low    | Already fully planned in `THINKING_LEVEL_PLAN.md`. Maps to FlightPath `thinkingLevel` property. Headless only.                                                                                                      |
+| Native agent selection | `--agent <name>`                       | Low    | Map `agent` property to `--agent` when value is an agent name (no path). Falls back to file injection for `.agent.md` paths.                                                                                        |
 | Tool permissions write | `opencode.json` `permission` + `tools` | Medium | FlightPath's `cliToolPermissions`/`cliAllowedTools`/`cliDeniedTools` settings need to be translated into the `opencode.json` config written at execution time. Currently this config section is not written at all. |
 
 ### Implement Natively (Medium Value)
 
-| Feature | Flag | Effort | Notes |
-|---|---|---|---|
-| File attachment | `-f / --file` | Medium | New `files` array property on `PromptItem`. Headless only. Complements rather than replaces `ContextExpander`. |
-| Session forking | `--fork` | Low | New `fork: boolean` property on `PromptItem`. Works alongside `resumeSession: true`. Available in both modes. |
-| Disable auto-compaction | `OPENCODE_DISABLE_AUTOCOMPACT` env var | Low | New `disableAutocompact: boolean` workflow/prompt property or global setting. Injected at spawn time. |
-| Session title | `--title` | Low | Auto-populate from workflow `name` or `id`. Headless only. |
+| Feature                 | Flag                                   | Effort | Notes                                                                                                          |
+| ----------------------- | -------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| File attachment         | `-f / --file`                          | Medium | New `files` array property on `PromptItem`. Headless only. Complements rather than replaces `ContextExpander`. |
+| Session forking         | `--fork`                               | Low    | New `fork: boolean` property on `PromptItem`. Works alongside `resumeSession: true`. Available in both modes.  |
+| Disable auto-compaction | `OPENCODE_DISABLE_AUTOCOMPACT` env var | Low    | New `disableAutocompact: boolean` workflow/prompt property or global setting. Injected at spawn time.          |
+| Session title           | `--title`                              | Low    | Auto-populate from workflow `name` or `id`. Headless only.                                                     |
 
 ### Handle via `customArgs` Escape Hatch (Low Value / Niche)
 
-| Feature | Flag | Notes |
-|---|---|---|
-| Session sharing | `--share` | Niche. `customArgs: "--share"` works. |
-| Custom port | `--port` | Edge case for CI environments. |
-| Debug logging | `--print-logs` / `--log-level` | Dev tooling only. |
-| Command templates | `--command` | Requires opencode.json setup by user. |
-| Output token cap | `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX` | Experimental, unstable. |
-| Bash timeout | `OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS` | Experimental, unstable. |
+| Feature           | Flag                                            | Notes                                 |
+| ----------------- | ----------------------------------------------- | ------------------------------------- |
+| Session sharing   | `--share`                                       | Niche. `customArgs: "--share"` works. |
+| Custom port       | `--port`                                        | Edge case for CI environments.        |
+| Debug logging     | `--print-logs` / `--log-level`                  | Dev tooling only.                     |
+| Command templates | `--command`                                     | Requires opencode.json setup by user. |
+| Output token cap  | `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX`        | Experimental, unstable.               |
+| Bash timeout      | `OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS` | Experimental, unstable.               |
 
 ### Architecture Improvement (Future Work)
 
-| Feature | Mechanism | Notes |
-|---|---|---|
-| MCP config via env var | `OPENCODE_CONFIG_CONTENT` | Replaces file write+cleanup with env var injection. Requires `getSpawnEnv()` on provider interface. See `OPENCODE_HARNESS.md` section 5. |
-| Disable update checks | `OPENCODE_DISABLE_AUTOUPDATE` | Always set in spawn env for headless runs to eliminate update check latency. |
+| Feature                | Mechanism                     | Notes                                                                                                                                    |
+| ---------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| MCP config via env var | `OPENCODE_CONFIG_CONTENT`     | Replaces file write+cleanup with env var injection. Requires `getSpawnEnv()` on provider interface. See `OPENCODE_HARNESS.md` section 5. |
+| Disable update checks  | `OPENCODE_DISABLE_AUTOUPDATE` | Always set in spawn env for headless runs to eliminate update check latency.                                                             |
 
 ---
 
@@ -385,7 +388,7 @@ When `customArgs` is set, FlightPath already skips `-m` and `-s` per the `CUSTOM
 - Live CLI output: `opencode --help` and `opencode run --help` (version 1.2.20, 2026-03-07)
 - [OpenCode CLI Documentation](https://opencode.ai/docs/cli/)
 - [OpenCode Config Documentation](https://opencode.ai/docs/config/)
-- [DeepWiki — OpenCode CLI Reference](https://deepwiki.com/sst/opencode/6.1-command-line-interface-(cli))
+- [DeepWiki — OpenCode CLI Reference](<https://deepwiki.com/sst/opencode/6.1-command-line-interface-(cli)>)
 - `docs/OPENCODE_HARNESS.md` — FlightPath OpenCode implementation reference (version 1.1.48 research)
 - `docs/research/THINKING_LEVEL_PLAN.md` — `--variant` / `--thinking` implementation plan
 - `docs/research/CUSTOM_CLI_ARGS_PLAN.md` — `customArgs` escape hatch design

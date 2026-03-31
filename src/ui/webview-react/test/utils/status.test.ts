@@ -26,7 +26,9 @@ describe("getStatusIconClass", () => {
   });
 
   it("returns pending icon for unknown status", () => {
-    expect(getStatusIconClass("unknown" as never)).toBe(STATUS_ICONS[STEP_STATUS.PENDING]);
+    expect(getStatusIconClass("unknown" as never)).toBe(
+      STATUS_ICONS[STEP_STATUS.PENDING]
+    );
   });
 });
 
@@ -46,7 +48,9 @@ describe("getStatusColorClass", () => {
   });
 
   it("returns pending color for unknown status", () => {
-    expect(getStatusColorClass("unknown" as never)).toBe(STATUS_COLORS[STEP_STATUS.PENDING]);
+    expect(getStatusColorClass("unknown" as never)).toBe(
+      STATUS_COLORS[STEP_STATUS.PENDING]
+    );
   });
 });
 

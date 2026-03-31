@@ -43,12 +43,33 @@ export class ErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: "12px", fontFamily: "monospace", fontSize: "12px", color: "var(--vscode-errorForeground, #f44)" }}>
+        <div
+          style={{
+            padding: "12px",
+            fontFamily: "monospace",
+            fontSize: "12px",
+            color: "var(--vscode-errorForeground, #f44)",
+          }}
+        >
           <strong>FlightPath encountered an error.</strong>
-          <pre style={{ whiteSpace: "pre-wrap", marginTop: "8px", fontSize: "11px", opacity: 0.8 }}>
+          <pre
+            style={{
+              whiteSpace: "pre-wrap",
+              marginTop: "8px",
+              fontSize: "11px",
+              opacity: 0.8,
+            }}
+          >
             {this.state.error?.message}
           </pre>
-          <pre style={{ whiteSpace: "pre-wrap", marginTop: "8px", fontSize: "10px", opacity: 0.6 }}>
+          <pre
+            style={{
+              whiteSpace: "pre-wrap",
+              marginTop: "8px",
+              fontSize: "10px",
+              opacity: 0.6,
+            }}
+          >
             {this.state.componentStack}
           </pre>
         </div>

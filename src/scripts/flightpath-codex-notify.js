@@ -25,10 +25,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const {
-  getDebugLogPath,
-  createLogger,
-} = require("./flightpath-hook-utils");
+const { getDebugLogPath, createLogger } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-codex-notify";
 let debugLog = createLogger(null); // Will be re-initialized after parsing notification

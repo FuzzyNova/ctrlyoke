@@ -38,7 +38,10 @@ import { CLI_EVENT_TYPES } from "../types/cliEvents";
  * Finds or creates the isStreaming buffer at attemptIndex 0 and appends events
  * using mergeStreamingEvents so consecutive text/thinking deltas are coalesced.
  */
-function applyStreamingEventsToOutputs(outputs: CliOutput[], events: any[]): CliOutput[] {
+function applyStreamingEventsToOutputs(
+  outputs: CliOutput[],
+  events: any[]
+): CliOutput[] {
   const streamingIdx = outputs.findIndex(
     (o) => o.isStreaming && (o.attemptIndex ?? 0) === 0
   );
@@ -251,9 +254,15 @@ interface WorkflowActions {
   }) => void;
   resetWorkflow: () => void;
   clearAllRuntimeState: () => void;
-  setWorkspaceSnapshot: (target: UndoExecutionTarget, snapshot: WorkspaceSnapshot) => void;
+  setWorkspaceSnapshot: (
+    target: UndoExecutionTarget,
+    snapshot: WorkspaceSnapshot
+  ) => void;
   setUndoRecord: (target: UndoExecutionTarget, record: UndoRecord) => void;
-  updateHistoryStepUndoRecord: (target: UndoExecutionTarget, undoRecord: UndoRecord) => void;
+  updateHistoryStepUndoRecord: (
+    target: UndoExecutionTarget,
+    undoRecord: UndoRecord
+  ) => void;
   setUndoResult: (requestId: string, result: UndoResult) => void;
   clearUndoResult: (requestId: string) => void;
 }
@@ -343,9 +352,11 @@ export const useWorkflowStore = create<
         }));
       },
 
-      setExecutionState: (executionState) => withUndoPause(() => set({ executionState })),
+      setExecutionState: (executionState) =>
+        withUndoPause(() => set({ executionState })),
 
-      setCurrentStep: (currentStep) => withUndoPause(() => set({ currentStep })),
+      setCurrentStep: (currentStep) =>
+        withUndoPause(() => set({ currentStep })),
 
       setTotalSteps: (totalSteps) => withUndoPause(() => set({ totalSteps })),
 
@@ -365,277 +376,308 @@ export const useWorkflowStore = create<
         })),
 
       setFinalPromptStatus: (status, loopCount, phase) =>
-        withUndoPause(() => set({
-          finalPromptStatus: status,
-          finalPromptLoopCount: loopCount,
-          finalPromptPhase: phase,
-        })),
+        withUndoPause(() =>
+          set({
+            finalPromptStatus: status,
+            finalPromptLoopCount: loopCount,
+            finalPromptPhase: phase,
+          })
+        ),
 
       // ============================================================================
       // CLI OUTPUT MANAGEMENT
       // ============================================================================
 
-      addCliOutput: (stepIndex, output) => withUndoPause(() =>
-        set((state) => {
-          const outputs = state.cliOutputs[stepIndex] || [];
-          const attemptIndex = output.attemptIndex ?? 0;
-          let newOutputs: CliOutput[];
+      addCliOutput: (stepIndex, output) =>
+        withUndoPause(() =>
+          set((state) => {
+            const outputs = state.cliOutputs[stepIndex] || [];
+            const attemptIndex = output.attemptIndex ?? 0;
+            let newOutputs: CliOutput[];
 
-          // Guard: If no retry state exists for this step, reject phantom retries.
-          // Only end conditions can trigger retries, so attemptIndex > 0 without
-          // retry state means something is wrong (e.g. undisposed event listener).
-          const retryState = state.retryStates[stepIndex];
-          if (attemptIndex === 0 && !retryState) {
-            // Initial attempt with no retry state: find and replace existing entry
-            // for attemptIndex 0 (handles streaming→final replacement and any
-            // accidental double-writes).
-            const existingIdx = outputs.findIndex(
-              (o) => (o.attemptIndex ?? 0) === 0
-            );
+            // Guard: If no retry state exists for this step, reject phantom retries.
+            // Only end conditions can trigger retries, so attemptIndex > 0 without
+            // retry state means something is wrong (e.g. undisposed event listener).
+            const retryState = state.retryStates[stepIndex];
+            if (attemptIndex === 0 && !retryState) {
+              // Initial attempt with no retry state: find and replace existing entry
+              // for attemptIndex 0 (handles streaming→final replacement and any
+              // accidental double-writes).
+              const existingIdx = outputs.findIndex(
+                (o) => (o.attemptIndex ?? 0) === 0
+              );
 
-            if (existingIdx >= 0) {
-              const existing = outputs[existingIdx];
+              if (existingIdx >= 0) {
+                const existing = outputs[existingIdx];
 
-              // Preserve streamed response if final output lacks structured data
-              if (
-                existing.isStreaming &&
-                existing.response &&
-                existing.response.length > 0 &&
-                !(
-                  output.structured &&
-                  (output.structured as any).events &&
-                  (output.structured as any).events.length > 0
-                )
-              ) {
-                newOutputs = [
-                  ...outputs.slice(0, existingIdx),
-                  { ...output, response: existing.response },
-                  ...outputs.slice(existingIdx + 1),
-                ];
+                // Preserve streamed response if final output lacks structured data
+                if (
+                  existing.isStreaming &&
+                  existing.response &&
+                  existing.response.length > 0 &&
+                  !(
+                    output.structured &&
+                    (output.structured as any).events &&
+                    (output.structured as any).events.length > 0
+                  )
+                ) {
+                  newOutputs = [
+                    ...outputs.slice(0, existingIdx),
+                    { ...output, response: existing.response },
+                    ...outputs.slice(existingIdx + 1),
+                  ];
+                } else {
+                  newOutputs = [
+                    ...outputs.slice(0, existingIdx),
+                    output,
+                    ...outputs.slice(existingIdx + 1),
+                  ];
+                }
               } else {
-                newOutputs = [
-                  ...outputs.slice(0, existingIdx),
-                  output,
-                  ...outputs.slice(existingIdx + 1),
-                ];
+                // No existing entry for attempt 0 — first write
+                newOutputs = [...outputs, output];
               }
+            } else if (attemptIndex > 0 && !retryState) {
+              // Bug: retry output without retry state — replace attempt 0 and warn.
+              // This should no longer happen after the captureOutputInit fix, but
+              // keep the guard for safety and add verbose logging.
+              WebviewLog.warn(
+                `[WorkflowStore] Received attemptIndex=${attemptIndex} for step ${stepIndex} but no retry state exists. ` +
+                  `Existing outputs: ${outputs.length} (attempts: ${outputs.map((o) => o.attemptIndex ?? 0).join(",")}). ` +
+                  `Replacing initial output (likely a bug — retryState should have been sent first).`
+              );
+              newOutputs = [output];
             } else {
-              // No existing entry for attempt 0 — first write
-              newOutputs = [...outputs, output];
+              // Retry with valid retry state: place at the correct index
+              // Find existing entry for this attemptIndex and replace, or append
+              const existingIdx = outputs.findIndex(
+                (o) => (o.attemptIndex ?? 0) === attemptIndex
+              );
+
+              if (existingIdx >= 0) {
+                const existing = outputs[existingIdx];
+
+                // Preserve streamed response if applicable
+                if (
+                  existing.isStreaming &&
+                  existing.response &&
+                  existing.response.length > 0 &&
+                  !(
+                    output.structured &&
+                    (output.structured as any).events &&
+                    (output.structured as any).events.length > 0
+                  )
+                ) {
+                  newOutputs = [
+                    ...outputs.slice(0, existingIdx),
+                    { ...output, response: existing.response },
+                    ...outputs.slice(existingIdx + 1),
+                  ];
+                } else {
+                  newOutputs = [
+                    ...outputs.slice(0, existingIdx),
+                    output,
+                    ...outputs.slice(existingIdx + 1),
+                  ];
+                }
+                WebviewLog.debug(
+                  `[WorkflowStore] addCliOutput: replaced attempt ${attemptIndex} for step ${stepIndex} (${existingIdx}/${outputs.length})`
+                );
+              } else {
+                // New retry attempt — append
+                newOutputs = [...outputs, output];
+                WebviewLog.debug(
+                  `[WorkflowStore] addCliOutput: appended attempt ${attemptIndex} for step ${stepIndex} (total: ${newOutputs.length}, retryState: ${retryState?.currentRetry}/${retryState?.maxRetries})`
+                );
+              }
             }
-          } else if (attemptIndex > 0 && !retryState) {
-            // Bug: retry output without retry state — replace attempt 0 and warn.
-            // This should no longer happen after the captureOutputInit fix, but
-            // keep the guard for safety and add verbose logging.
-            WebviewLog.warn(
-              `[WorkflowStore] Received attemptIndex=${attemptIndex} for step ${stepIndex} but no retry state exists. ` +
-                `Existing outputs: ${outputs.length} (attempts: ${outputs.map((o) => o.attemptIndex ?? 0).join(",")}). ` +
-                `Replacing initial output (likely a bug — retryState should have been sent first).`
-            );
-            newOutputs = [output];
-          } else {
-            // Retry with valid retry state: place at the correct index
-            // Find existing entry for this attemptIndex and replace, or append
+
+            return {
+              cliOutputs: {
+                ...state.cliOutputs,
+                [stepIndex]: newOutputs,
+              },
+              // Clear streaming chunk when final output arrives
+              streamingChunks: {
+                ...state.streamingChunks,
+                [stepIndex]: "",
+              },
+            };
+          })
+        ),
+
+      addFinalPromptOutput: (loopIndex, output) =>
+        withUndoPause(() =>
+          set((state) => {
+            const outputs = state.finalPromptOutputs[loopIndex] || [];
+            const attemptIndex = output.attemptIndex ?? 0;
             const existingIdx = outputs.findIndex(
               (o) => (o.attemptIndex ?? 0) === attemptIndex
             );
 
-            if (existingIdx >= 0) {
-              const existing = outputs[existingIdx];
+            const newOutputs =
+              existingIdx >= 0
+                ? [
+                    ...outputs.slice(0, existingIdx),
+                    output,
+                    ...outputs.slice(existingIdx + 1),
+                  ]
+                : [...outputs, output];
 
-              // Preserve streamed response if applicable
-              if (
-                existing.isStreaming &&
-                existing.response &&
-                existing.response.length > 0 &&
-                !(
-                  output.structured &&
-                  (output.structured as any).events &&
-                  (output.structured as any).events.length > 0
-                )
-              ) {
-                newOutputs = [
-                  ...outputs.slice(0, existingIdx),
-                  { ...output, response: existing.response },
-                  ...outputs.slice(existingIdx + 1),
-                ];
-              } else {
-                newOutputs = [
-                  ...outputs.slice(0, existingIdx),
-                  output,
-                  ...outputs.slice(existingIdx + 1),
-                ];
-              }
-              WebviewLog.debug(
-                `[WorkflowStore] addCliOutput: replaced attempt ${attemptIndex} for step ${stepIndex} (${existingIdx}/${outputs.length})`
-              );
-            } else {
-              // New retry attempt — append
-              newOutputs = [...outputs, output];
-              WebviewLog.debug(
-                `[WorkflowStore] addCliOutput: appended attempt ${attemptIndex} for step ${stepIndex} (total: ${newOutputs.length}, retryState: ${retryState?.currentRetry}/${retryState?.maxRetries})`
-              );
-            }
-          }
+            return {
+              finalPromptOutputs: {
+                ...state.finalPromptOutputs,
+                [loopIndex]: newOutputs,
+              },
+            };
+          })
+        ),
 
-          return {
-            cliOutputs: {
-              ...state.cliOutputs,
-              [stepIndex]: newOutputs,
+      clearCliOutputs: (stepIndex) =>
+        withUndoPause(() =>
+          set((state) => {
+            const { [stepIndex]: _, ...rest } = state.cliOutputs;
+            return { cliOutputs: rest };
+          })
+        ),
+
+      appendStreamingChunk: (stepIndex, chunk) =>
+        withUndoPause(() =>
+          set((state) => ({
+            streamingChunks: {
+              ...state.streamingChunks,
+              [stepIndex]: (state.streamingChunks[stepIndex] || "") + chunk,
             },
-            // Clear streaming chunk when final output arrives
+          }))
+        ),
+
+      clearStreamingChunk: (stepIndex) =>
+        withUndoPause(() =>
+          set((state) => ({
             streamingChunks: {
               ...state.streamingChunks,
               [stepIndex]: "",
             },
-          };
-        })
-      ),
+          }))
+        ),
 
-      addFinalPromptOutput: (loopIndex, output) => withUndoPause(() =>
-        set((state) => {
-          const outputs = state.finalPromptOutputs[loopIndex] || [];
-          const attemptIndex = output.attemptIndex ?? 0;
-          const existingIdx = outputs.findIndex(
-            (o) => (o.attemptIndex ?? 0) === attemptIndex
-          );
+      appendStreamingEvents: (stepIndex, events) =>
+        withUndoPause(() =>
+          set((state) => ({
+            cliOutputs: {
+              ...state.cliOutputs,
+              [stepIndex]: applyStreamingEventsToOutputs(
+                state.cliOutputs[stepIndex] || [],
+                events
+              ),
+            },
+          }))
+        ),
 
-          const newOutputs =
-            existingIdx >= 0
-              ? [
-                  ...outputs.slice(0, existingIdx),
-                  output,
-                  ...outputs.slice(existingIdx + 1),
-                ]
-              : [...outputs, output];
+      appendFinalPromptStreamingChunk: (loopIndex, chunk) =>
+        withUndoPause(() =>
+          set((state) => ({
+            finalPromptStreamingChunks: {
+              ...state.finalPromptStreamingChunks,
+              [loopIndex]:
+                (state.finalPromptStreamingChunks[loopIndex] || "") + chunk,
+            },
+          }))
+        ),
 
-          return {
+      appendFinalPromptStreamingEvents: (loopIndex, events) =>
+        withUndoPause(() =>
+          set((state) => ({
             finalPromptOutputs: {
               ...state.finalPromptOutputs,
-              [loopIndex]: newOutputs,
+              [loopIndex]: applyStreamingEventsToOutputs(
+                state.finalPromptOutputs[loopIndex] || [],
+                events
+              ),
             },
-          };
-        })
-      ),
-
-      clearCliOutputs: (stepIndex) => withUndoPause(() =>
-        set((state) => {
-          const { [stepIndex]: _, ...rest } = state.cliOutputs;
-          return { cliOutputs: rest };
-        })
-      ),
-
-      appendStreamingChunk: (stepIndex, chunk) => withUndoPause(() =>
-        set((state) => ({
-          streamingChunks: {
-            ...state.streamingChunks,
-            [stepIndex]: (state.streamingChunks[stepIndex] || "") + chunk,
-          },
-        }))
-      ),
-
-      clearStreamingChunk: (stepIndex) => withUndoPause(() =>
-        set((state) => ({
-          streamingChunks: {
-            ...state.streamingChunks,
-            [stepIndex]: "",
-          },
-        }))
-      ),
-
-      appendStreamingEvents: (stepIndex, events) => withUndoPause(() =>
-        set((state) => ({
-          cliOutputs: {
-            ...state.cliOutputs,
-            [stepIndex]: applyStreamingEventsToOutputs(state.cliOutputs[stepIndex] || [], events),
-          },
-        }))
-      ),
-
-      appendFinalPromptStreamingChunk: (loopIndex, chunk) => withUndoPause(() =>
-        set((state) => ({
-          finalPromptStreamingChunks: {
-            ...state.finalPromptStreamingChunks,
-            [loopIndex]: (state.finalPromptStreamingChunks[loopIndex] || "") + chunk,
-          },
-        }))
-      ),
-
-      appendFinalPromptStreamingEvents: (loopIndex, events) => withUndoPause(() =>
-        set((state) => ({
-          finalPromptOutputs: {
-            ...state.finalPromptOutputs,
-            [loopIndex]: applyStreamingEventsToOutputs(state.finalPromptOutputs[loopIndex] || [], events),
-          },
-        }))
-      ),
+          }))
+        ),
 
       // ============================================================================
       // RETRY MANAGEMENT
       // ============================================================================
 
-      setRetryState: (stepIndex, currentRetry, maxRetries) => withUndoPause(() =>
-        set((state) => ({
-          retryStates: {
-            ...state.retryStates,
-            [stepIndex]: { currentRetry, maxRetries },
-          },
-        }))
-      ),
+      setRetryState: (stepIndex, currentRetry, maxRetries) =>
+        withUndoPause(() =>
+          set((state) => ({
+            retryStates: {
+              ...state.retryStates,
+              [stepIndex]: { currentRetry, maxRetries },
+            },
+          }))
+        ),
 
-      clearRetryState: (stepIndex) => withUndoPause(() =>
-        set((state) => {
-          const { [stepIndex]: _, ...rest } = state.retryStates;
-          return { retryStates: rest };
-        })
-      ),
+      clearRetryState: (stepIndex) =>
+        withUndoPause(() =>
+          set((state) => {
+            const { [stepIndex]: _, ...rest } = state.retryStates;
+            return { retryStates: rest };
+          })
+        ),
 
       // ============================================================================
       // STATUS MESSAGE MANAGEMENT
       // ============================================================================
 
-      addStatusMessage: (stepIndex, message, severity: StatusMessageSeverity = "info") => withUndoPause(() =>
-        set((state) => ({
-          statusMessages: {
-            ...state.statusMessages,
-            [stepIndex]: [
-              ...(state.statusMessages[stepIndex] || []),
-              { message, severity, timestamp: Date.now() },
-            ],
-          },
-        }))
-      ),
+      addStatusMessage: (
+        stepIndex,
+        message,
+        severity: StatusMessageSeverity = "info"
+      ) =>
+        withUndoPause(() =>
+          set((state) => ({
+            statusMessages: {
+              ...state.statusMessages,
+              [stepIndex]: [
+                ...(state.statusMessages[stepIndex] || []),
+                { message, severity, timestamp: Date.now() },
+              ],
+            },
+          }))
+        ),
 
-      addFinalPromptStatusMessage: (loopIndex, message, severity: StatusMessageSeverity = "info") => withUndoPause(() =>
-        set((state) => ({
-          finalPromptStatusMessages: {
-            ...state.finalPromptStatusMessages,
-            [loopIndex]: [
-              ...(state.finalPromptStatusMessages[loopIndex] || []),
-              { message, severity, timestamp: Date.now() },
-            ],
-          },
-        }))
-      ),
+      addFinalPromptStatusMessage: (
+        loopIndex,
+        message,
+        severity: StatusMessageSeverity = "info"
+      ) =>
+        withUndoPause(() =>
+          set((state) => ({
+            finalPromptStatusMessages: {
+              ...state.finalPromptStatusMessages,
+              [loopIndex]: [
+                ...(state.finalPromptStatusMessages[loopIndex] || []),
+                { message, severity, timestamp: Date.now() },
+              ],
+            },
+          }))
+        ),
 
-      clearStatusMessages: (stepIndex) => withUndoPause(() =>
-        set((state) => {
-          const { [stepIndex]: _, ...rest } = state.statusMessages;
-          return { statusMessages: rest };
-        })
-      ),
+      clearStatusMessages: (stepIndex) =>
+        withUndoPause(() =>
+          set((state) => {
+            const { [stepIndex]: _, ...rest } = state.statusMessages;
+            return { statusMessages: rest };
+          })
+        ),
 
       // ============================================================================
       // STEP STATUS MANAGEMENT
       // ============================================================================
 
-      setStepStatus: (stepIndex, status) => withUndoPause(() =>
-        set((state) => ({
-          prompts: state.prompts.map((p, i) =>
-            i === stepIndex ? { ...p, status } : p
-          ),
-        }))
-      ),
+      setStepStatus: (stepIndex, status) =>
+        withUndoPause(() =>
+          set((state) => ({
+            prompts: state.prompts.map((p, i) =>
+              i === stepIndex ? { ...p, status } : p
+            ),
+          }))
+        ),
 
       // ============================================================================
       // BULK OPERATIONS
@@ -659,26 +701,28 @@ export const useWorkflowStore = create<
           status: (results[index]?.status as StepStatus) || STEP_STATUS.PENDING,
         }));
 
-        withUndoPause(() => set({
-          fileName,
-          workflowName: workflowName ?? null,
-          prompts: promptsWithStatus,
-          executionState,
-          currentStep,
-          totalSteps: prompts.length,
-          finalPrompt,
-          finalPromptStatus,
-          finalPromptLoopCount,
-          finalPromptPhase,
-          // Clear runtime state on new workflow
-          cliOutputs: {},
-          finalPromptOutputs: {},
-          retryStates: {},
-          statusMessages: {},
-          finalPromptStatusMessages: {},
-          streamingChunks: {},
-          finalPromptStreamingChunks: {},
-        }));
+        withUndoPause(() =>
+          set({
+            fileName,
+            workflowName: workflowName ?? null,
+            prompts: promptsWithStatus,
+            executionState,
+            currentStep,
+            totalSteps: prompts.length,
+            finalPrompt,
+            finalPromptStatus,
+            finalPromptLoopCount,
+            finalPromptPhase,
+            // Clear runtime state on new workflow
+            cliOutputs: {},
+            finalPromptOutputs: {},
+            retryStates: {},
+            statusMessages: {},
+            finalPromptStatusMessages: {},
+            streamingChunks: {},
+            finalPromptStreamingChunks: {},
+          })
+        );
         useWorkflowStore.temporal.getState().clear();
       },
 
@@ -687,34 +731,37 @@ export const useWorkflowStore = create<
       // ============================================================================
 
       loadHistoryRun: (history, availableRuns, runIndex) =>
-        withUndoPause(() => set(() => {
-          // Update uiStore for history view state
-          useUiStore.getState().setHistoryView(runIndex, availableRuns);
+        withUndoPause(() =>
+          set(() => {
+            // Update uiStore for history view state
+            useUiStore.getState().setHistoryView(runIndex, availableRuns);
 
-          // Populate self-contained history snapshot.
-          // Clear live-store undo records and snapshots so stale state from
-          // a previous run or a different history selection doesn't bleed into
-          // this run's view. History data in historyOutputs is the sole source
-          // of truth for undo state while in history mode.
-          return {
-            historyOutputs: {
-              stepCount: history.runStepCount,
-              steps: history.promptOutputs,
-              finalPromptOutputs: history.finalPromptOutputs,
-              runMetadata: {
-                runId: history.runId,
-                startedAt: history.startedAt,
-                completedAt: history.completedAt,
-                executionState: history.executionState,
+            // Populate self-contained history snapshot.
+            // Clear live-store undo records and snapshots so stale state from
+            // a previous run or a different history selection doesn't bleed into
+            // this run's view. History data in historyOutputs is the sole source
+            // of truth for undo state while in history mode.
+            return {
+              historyOutputs: {
+                stepCount: history.runStepCount,
+                steps: history.promptOutputs,
+                finalPromptOutputs: history.finalPromptOutputs,
+                runMetadata: {
+                  runId: history.runId,
+                  startedAt: history.startedAt,
+                  completedAt: history.completedAt,
+                  executionState: history.executionState,
+                },
               },
-            },
-            undoRecords: {},
-            workspaceSnapshots: {},
-            finalPromptWorkspaceSnapshots: {},
-          };
-        })),
+              undoRecords: {},
+              workspaceSnapshots: {},
+              finalPromptWorkspaceSnapshots: {},
+            };
+          })
+        ),
 
-      clearHistoryOutputs: () => withUndoPause(() => set(() => ({ historyOutputs: null }))),
+      clearHistoryOutputs: () =>
+        withUndoPause(() => set(() => ({ historyOutputs: null }))),
 
       resetExecutionState: (prompts) => {
         // Not wrapped in pause/resume — this is a user-initiated action.
@@ -734,48 +781,49 @@ export const useWorkflowStore = create<
         }));
       },
 
-      clearRuntimeStateFromStep: (startStep) => withUndoPause(() =>
-        set((state) => {
-          const newCliOutputs = { ...state.cliOutputs };
-          const newRetryStates = { ...state.retryStates };
-          const newStatusMessages = { ...state.statusMessages };
-          const newStreamingChunks = { ...state.streamingChunks };
+      clearRuntimeStateFromStep: (startStep) =>
+        withUndoPause(() =>
+          set((state) => {
+            const newCliOutputs = { ...state.cliOutputs };
+            const newRetryStates = { ...state.retryStates };
+            const newStatusMessages = { ...state.statusMessages };
+            const newStreamingChunks = { ...state.streamingChunks };
 
-          Object.keys(newCliOutputs).forEach((key) => {
-            if (Number(key) >= startStep) {
-              delete newCliOutputs[Number(key)];
-            }
-          });
-          Object.keys(newRetryStates).forEach((key) => {
-            if (Number(key) >= startStep) {
-              delete newRetryStates[Number(key)];
-            }
-          });
-          Object.keys(newStatusMessages).forEach((key) => {
-            if (Number(key) >= startStep) {
-              delete newStatusMessages[Number(key)];
-            }
-          });
-          Object.keys(newStreamingChunks).forEach((key) => {
-            if (Number(key) >= startStep) {
-              delete newStreamingChunks[Number(key)];
-            }
-          });
+            Object.keys(newCliOutputs).forEach((key) => {
+              if (Number(key) >= startStep) {
+                delete newCliOutputs[Number(key)];
+              }
+            });
+            Object.keys(newRetryStates).forEach((key) => {
+              if (Number(key) >= startStep) {
+                delete newRetryStates[Number(key)];
+              }
+            });
+            Object.keys(newStatusMessages).forEach((key) => {
+              if (Number(key) >= startStep) {
+                delete newStatusMessages[Number(key)];
+              }
+            });
+            Object.keys(newStreamingChunks).forEach((key) => {
+              if (Number(key) >= startStep) {
+                delete newStreamingChunks[Number(key)];
+              }
+            });
 
-          return {
-            cliOutputs: newCliOutputs,
-            retryStates: newRetryStates,
-            statusMessages: newStatusMessages,
-            streamingChunks: newStreamingChunks,
-            finalPromptOutputs: {},
-            finalPromptStreamingChunks: {},
-            finalPromptStatusMessages: {},
-            finalPromptStatus: null,
-            finalPromptLoopCount: 0,
-            finalPromptPhase: null,
-          };
-        })
-      ),
+            return {
+              cliOutputs: newCliOutputs,
+              retryStates: newRetryStates,
+              statusMessages: newStatusMessages,
+              streamingChunks: newStreamingChunks,
+              finalPromptOutputs: {},
+              finalPromptStreamingChunks: {},
+              finalPromptStatusMessages: {},
+              finalPromptStatus: null,
+              finalPromptLoopCount: 0,
+              finalPromptPhase: null,
+            };
+          })
+        ),
 
       applyStartPositionChange: (prompts, newCurrentStep) => {
         // Not wrapped in pause/resume — this is a user-initiated action.
@@ -790,128 +838,149 @@ export const useWorkflowStore = create<
         }));
       },
 
-      promoteHistoryToLive: (stepCount) => withUndoPause(() =>
-        set((state) => {
-          if (!state.historyOutputs) {
-            WebviewLog.debug(
-              `[WorkflowStore] promoteHistoryToLive(${stepCount}): no historyOutputs, nothing to promote`
-            );
-            return {};
-          }
+      promoteHistoryToLive: (stepCount) =>
+        withUndoPause(() =>
+          set((state) => {
+            if (!state.historyOutputs) {
+              WebviewLog.debug(
+                `[WorkflowStore] promoteHistoryToLive(${stepCount}): no historyOutputs, nothing to promote`
+              );
+              return {};
+            }
 
-          const newCliOutputs = { ...state.cliOutputs };
-          const newStatusMessages = { ...state.statusMessages };
-          let promoted = 0;
+            const newCliOutputs = { ...state.cliOutputs };
+            const newStatusMessages = { ...state.statusMessages };
+            let promoted = 0;
 
-          for (let i = 0; i < stepCount; i++) {
-            const stepData = state.historyOutputs.steps[i];
-            if (stepData) {
-              // Only populate if live data is missing for this step
-              if (!newCliOutputs[i] || newCliOutputs[i].length === 0) {
-                newCliOutputs[i] = stepData.cliOutputs;
-                promoted++;
-              }
-              if (!newStatusMessages[i] || newStatusMessages[i].length === 0) {
-                newStatusMessages[i] = stepData.statusMessages;
+            for (let i = 0; i < stepCount; i++) {
+              const stepData = state.historyOutputs.steps[i];
+              if (stepData) {
+                // Only populate if live data is missing for this step
+                if (!newCliOutputs[i] || newCliOutputs[i].length === 0) {
+                  newCliOutputs[i] = stepData.cliOutputs;
+                  promoted++;
+                }
+                if (
+                  !newStatusMessages[i] ||
+                  newStatusMessages[i].length === 0
+                ) {
+                  newStatusMessages[i] = stepData.statusMessages;
+                }
               }
             }
-          }
 
-          WebviewLog.debug(
-            `[WorkflowStore] promoteHistoryToLive(${stepCount}): promoted ${promoted} step(s) from history into live cliOutputs`
-          );
-          return {
-            cliOutputs: newCliOutputs,
-            statusMessages: newStatusMessages,
-          };
-        })
-      ),
+            WebviewLog.debug(
+              `[WorkflowStore] promoteHistoryToLive(${stepCount}): promoted ${promoted} step(s) from history into live cliOutputs`
+            );
+            return {
+              cliOutputs: newCliOutputs,
+              statusMessages: newStatusMessages,
+            };
+          })
+        ),
 
       resetWorkflow: () => {
         withUndoPause(() => set(initialState));
         useWorkflowStore.temporal.getState().clear();
       },
 
-      clearAllRuntimeState: () => withUndoPause(() => set({
-        cliOutputs: {},
-        finalPromptOutputs: {},
-        retryStates: {},
-        statusMessages: {},
-        finalPromptStatusMessages: {},
-        streamingChunks: {},
-        finalPromptStreamingChunks: {},
-        finalPromptStatus: null,
-        finalPromptLoopCount: 0,
-        finalPromptPhase: null,
-        workspaceSnapshots: {},
-        finalPromptWorkspaceSnapshots: {},
-        undoResults: {},
-        undoRecords: {},
-      })),
+      clearAllRuntimeState: () =>
+        withUndoPause(() =>
+          set({
+            cliOutputs: {},
+            finalPromptOutputs: {},
+            retryStates: {},
+            statusMessages: {},
+            finalPromptStatusMessages: {},
+            streamingChunks: {},
+            finalPromptStreamingChunks: {},
+            finalPromptStatus: null,
+            finalPromptLoopCount: 0,
+            finalPromptPhase: null,
+            workspaceSnapshots: {},
+            finalPromptWorkspaceSnapshots: {},
+            undoResults: {},
+            undoRecords: {},
+          })
+        ),
 
-      setWorkspaceSnapshot: (target, snapshot) => withUndoPause(() => {
-        if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
-          set((state) => ({
-            workspaceSnapshots: { ...state.workspaceSnapshots, [target.stepIndex]: snapshot },
-          }));
-        } else {
-          set((state) => ({
-            finalPromptWorkspaceSnapshots: { ...state.finalPromptWorkspaceSnapshots, [target.loopIndex]: snapshot },
-          }));
-        }
-      }),
+      setWorkspaceSnapshot: (target, snapshot) =>
+        withUndoPause(() => {
+          if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+            set((state) => ({
+              workspaceSnapshots: {
+                ...state.workspaceSnapshots,
+                [target.stepIndex]: snapshot,
+              },
+            }));
+          } else {
+            set((state) => ({
+              finalPromptWorkspaceSnapshots: {
+                ...state.finalPromptWorkspaceSnapshots,
+                [target.loopIndex]: snapshot,
+              },
+            }));
+          }
+        }),
 
       setUndoRecord: (target, record) => {
-        const key = target.kind === FINAL_PROMPT_PHASES.QUEUE
-          ? `queue-${target.stepIndex}`
-          : `finalPrompt-${target.loopIndex}`;
-        withUndoPause(() => set((s) => ({ undoRecords: { ...s.undoRecords, [key]: record } })));
+        const key =
+          target.kind === FINAL_PROMPT_PHASES.QUEUE
+            ? `queue-${target.stepIndex}`
+            : `finalPrompt-${target.loopIndex}`;
+        withUndoPause(() =>
+          set((s) => ({ undoRecords: { ...s.undoRecords, [key]: record } }))
+        );
       },
 
-      updateHistoryStepUndoRecord: (target, undoRecord) => withUndoPause(() =>
-        set((state) => {
-          if (!state.historyOutputs) return {};
-          if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
-            const step = state.historyOutputs.steps[target.stepIndex];
-            if (!step) return {};
-            return {
-              historyOutputs: {
-                ...state.historyOutputs,
-                steps: {
-                  ...state.historyOutputs.steps,
-                  [target.stepIndex]: { ...step, undoRecord },
+      updateHistoryStepUndoRecord: (target, undoRecord) =>
+        withUndoPause(() =>
+          set((state) => {
+            if (!state.historyOutputs) return {};
+            if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+              const step = state.historyOutputs.steps[target.stepIndex];
+              if (!step) return {};
+              return {
+                historyOutputs: {
+                  ...state.historyOutputs,
+                  steps: {
+                    ...state.historyOutputs.steps,
+                    [target.stepIndex]: { ...step, undoRecord },
+                  },
                 },
-              },
-            };
-          } else {
-            if (!state.historyOutputs.finalPromptOutputs) return {};
-            const step = state.historyOutputs.finalPromptOutputs[target.loopIndex];
-            if (!step) return {};
-            return {
-              historyOutputs: {
-                ...state.historyOutputs,
-                finalPromptOutputs: {
-                  ...state.historyOutputs.finalPromptOutputs,
-                  [target.loopIndex]: { ...step, undoRecord },
+              };
+            } else {
+              if (!state.historyOutputs.finalPromptOutputs) return {};
+              const step =
+                state.historyOutputs.finalPromptOutputs[target.loopIndex];
+              if (!step) return {};
+              return {
+                historyOutputs: {
+                  ...state.historyOutputs,
+                  finalPromptOutputs: {
+                    ...state.historyOutputs.finalPromptOutputs,
+                    [target.loopIndex]: { ...step, undoRecord },
+                  },
                 },
-              },
-            };
-          }
-        })
-      ),
+              };
+            }
+          })
+        ),
 
-      setUndoResult: (requestId, result) => withUndoPause(() =>
-        set((state) => ({
-          undoResults: { ...state.undoResults, [requestId]: result },
-        }))
-      ),
+      setUndoResult: (requestId, result) =>
+        withUndoPause(() =>
+          set((state) => ({
+            undoResults: { ...state.undoResults, [requestId]: result },
+          }))
+        ),
 
-      clearUndoResult: (requestId) => withUndoPause(() =>
-        set((state) => {
-          const { [requestId]: _, ...rest } = state.undoResults;
-          return { undoResults: rest };
-        })
-      ),
+      clearUndoResult: (requestId) =>
+        withUndoPause(() =>
+          set((state) => {
+            const { [requestId]: _, ...rest } = state.undoResults;
+            return { undoResults: rest };
+          })
+        ),
 
       // ============================================================================
       // COMPUTED SELECTORS

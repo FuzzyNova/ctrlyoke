@@ -3,7 +3,10 @@ import * as path from "path";
 import * as fs from "fs/promises";
 import * as yaml from "js-yaml";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../types/DashboardConstants";
-import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import { readJsonFile } from "../utils/FileSystemUtils";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -65,7 +68,11 @@ export class WorkflowSerializer {
 
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     const workflowsDir = workspaceFolder
-      ? path.join(workspaceFolder.uri.fsPath, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.WORKFLOWS_DIR)
+      ? path.join(
+          workspaceFolder.uri.fsPath,
+          PATH_CONSTANTS.FLIGHTPATH_DIR,
+          PATH_CONSTANTS.WORKFLOWS_DIR
+        )
       : path.join(PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.WORKFLOWS_DIR);
 
     try {
@@ -268,7 +275,11 @@ export class WorkflowSerializer {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     let defaultUri: vscode.Uri;
     if (workspaceRoot) {
-      const outputDir = path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR, "output");
+      const outputDir = path.join(
+        workspaceRoot,
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        "output"
+      );
       await fs.mkdir(outputDir, { recursive: true });
       defaultUri = vscode.Uri.file(path.join(outputDir, baseName));
     } else {
@@ -297,7 +308,10 @@ export class WorkflowSerializer {
   async handleNewWorkflow(): Promise<void> {
     try {
       const templates = await this.templateManager.getAvailableTemplates();
-      const workflowsDir = path.join(PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.WORKFLOWS_DIR);
+      const workflowsDir = path.join(
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.WORKFLOWS_DIR
+      );
       const defaultTemplateId = ConfigurationUtils.getDefaultWorkflowTemplate();
 
       this.postMessage({
@@ -344,7 +358,8 @@ export class WorkflowSerializer {
   }
 
   async handleCreateWorkflow(message: any): Promise<void> {
-    const { templateId, variables, filename, workflowsDir, runAfter, format } = message;
+    const { templateId, variables, filename, workflowsDir, runAfter, format } =
+      message;
 
     try {
       const filePath = await this.templateManager.createWorkflow(
@@ -381,7 +396,10 @@ export class WorkflowSerializer {
     vscode.commands.executeCommand("flightpath.createNewTemplate");
   }
 
-  async handleBrowseTemplateFile(variable: string, fileFilter?: string[]): Promise<void> {
+  async handleBrowseTemplateFile(
+    variable: string,
+    fileFilter?: string[]
+  ): Promise<void> {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     const filters: Record<string, string[]> = {};
 
@@ -460,7 +478,11 @@ export class WorkflowSerializer {
         return;
       }
 
-      const queueDir = path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.QUEUE_DIR);
+      const queueDir = path.join(
+        workspaceRoot,
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.QUEUE_DIR
+      );
 
       try {
         await fs.access(queueDir);
@@ -587,8 +609,16 @@ export class WorkflowSerializer {
         return false;
       }
 
-      const queueDir = path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.QUEUE_DIR);
-      const historyDir = path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.HISTORY_DIR);
+      const queueDir = path.join(
+        workspaceRoot,
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.QUEUE_DIR
+      );
+      const historyDir = path.join(
+        workspaceRoot,
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.HISTORY_DIR
+      );
 
       try {
         const files = await fs.readdir(queueDir);
@@ -638,8 +668,16 @@ export class WorkflowSerializer {
         return;
       }
 
-      const queueDir = path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.QUEUE_DIR);
-      const historyBaseDir = path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.HISTORY_DIR);
+      const queueDir = path.join(
+        workspaceRoot,
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.QUEUE_DIR
+      );
+      const historyBaseDir = path.join(
+        workspaceRoot,
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.HISTORY_DIR
+      );
 
       const stem = path
         .basename(filePath)
@@ -739,7 +777,6 @@ export class WorkflowSerializer {
         runTimestamps,
         runStates,
       });
-
     } catch (error) {
       Log.error("Failed to load run history:", error);
     }

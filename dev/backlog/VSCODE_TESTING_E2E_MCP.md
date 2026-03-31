@@ -25,6 +25,7 @@ ExTester (`vscode-extension-tester`, maintained by Red Hat) is the closest thing
 ### Why it's attractive for FlightPath
 
 The FlightPath dashboard (sidebar webview) is the primary UI surface. ExTester could:
+
 - Verify the webview renders after a workflow file is loaded
 - Assert button states (Run enabled/disabled, Undo enabled/disabled)
 - Simulate adding a prompt and verifying the list updates
@@ -56,11 +57,12 @@ Revisit if there are regression bugs that unit tests consistently miss due to th
 
 Build a VS Code extension (or add to the existing FlightPath extension) that exposes an MCP server. An AI agent (Claude Code) connects to it and can issue commands, inspect extension state, and exercise the message protocol — without needing DOM access.
 
-This is the "message contract testing" approach: instead of asserting on rendered pixels, assert on what the extension *does* when the webview sends it a specific message.
+This is the "message contract testing" approach: instead of asserting on rendered pixels, assert on what the extension _does_ when the webview sends it a specific message.
 
 ### What exists today
 
 **Nothing purpose-built.** As of March 2026:
+
 - The Playwright MCP server (`@playwright/mcp`) automates web browsers only — no Electron or VS Code support
 - The Claude Code VS Code extension exposes `mcp__ide__executeCode` and `mcp__ide__getDiagnostics` but not webview interaction or command-level VS Code control
 - vscode-extension-tester is Selenium-based, not MCP-based
@@ -70,23 +72,29 @@ This is the "message contract testing" approach: instead of asserting on rendere
 FlightPath already has `@modelcontextprotocol/sdk` as a dependency (it runs a stdio MCP server for queue management). The extension already knows how to run an MCP server. The missing pieces for UI automation are:
 
 **Command execution** — straightforward:
+
 ```typescript
 vscode.commands.executeCommand("flightpath.run");
 vscode.commands.executeCommand("workbench.action.openSettings", "flightpath");
 ```
+
 Expose via MCP tool: `execute_vscode_command(command: string, args?: unknown[])`.
 
 **Extension state inspection** — straightforward:
+
 ```typescript
 // Read WorkflowOrchestrator state
-orchestrator.getActiveInstance()?.promptQueue.getState()
+orchestrator.getActiveInstance()?.promptQueue.getState();
 ```
+
 Expose via MCP tool: `get_queue_state() → { status, prompts, currentIndex, ... }`.
 
 **Sending messages to the webview** — already exists:
+
 ```typescript
 webviewProvider.postMessage({ type: "PROMPTS_EXTENDED", prompts: [...] })
 ```
+
 Expose via MCP tool: `send_webview_message(type: string, payload: object)`.
 
 **Reading DOM state from the webview** — this is the hard part. VS Code provides no API to query webview DOM from the extension host. The webview runs in a sandboxed iframe and only communicates via `postMessage`. To make webview DOM state observable from an MCP tool, the webview itself must be modified to report its state back.
@@ -108,7 +116,7 @@ useEffect(() => {
         canRedo: temporal.futureStates.length > 0,
         undoDepth: temporal.pastStates.length,
         headerButtons: { runEnabled: canRun, undoEnabled: canUndo },
-      }
+      },
     });
   }, 100);
   return () => clearInterval(interval);
@@ -134,11 +142,13 @@ No DOM access required. No iframe timing fragility. No ChromeDriver.
 ### Scope and effort estimate
 
 **Minimal viable version (1-2 days):**
+
 - Add 3 MCP tools to the existing FlightPath MCP server (or a new dev-only server): `execute_vscode_command`, `get_queue_state`, `send_webview_message`
 - Add `get_webview_state` by wiring a simple state-reporter into the webview (behind a dev flag)
 - Write a handful of "scenario scripts" that Claude Code can run via these tools
 
 **Full version (1 week):**
+
 - Proper MCP server in a separate VS Code extension (doesn't require FlightPath-specific code)
 - Richer webview state snapshot (accessibility tree excerpt, visible element list)
 - Documented protocol so any Claude Code session can pick up and run test scenarios
@@ -157,6 +167,7 @@ No DOM access required. No iframe timing fragility. No ChromeDriver.
 ### Relationship to FlightPath's existing MCP server
 
 FlightPath already ships `src/mcp-server.ts` (a stdio server for queue management). The automation MCP server would be separate — either:
+
 - A second server in the same extension (different stdio process)
 - A standalone VS Code extension that any project can use
 - A dev-only server registered in `DevCommands.ts` (stripped from production builds)

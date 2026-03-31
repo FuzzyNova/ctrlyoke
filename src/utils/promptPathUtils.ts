@@ -37,7 +37,11 @@ export function looksLikeFilePath(promptValue: string): boolean {
   const startsWithDriveLetter = /^[a-zA-Z]:[/\\]/.test(trimmed);
   const startsWithUnixAbsolute = trimmed.startsWith("/");
 
-  if (!startsWithRelative && !startsWithDriveLetter && !startsWithUnixAbsolute) {
+  if (
+    !startsWithRelative &&
+    !startsWithDriveLetter &&
+    !startsWithUnixAbsolute
+  ) {
     return false;
   }
 

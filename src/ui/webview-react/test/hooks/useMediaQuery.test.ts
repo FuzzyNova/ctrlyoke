@@ -100,10 +100,9 @@ describe("useMediaQuery", () => {
 
   it("re-subscribes when query changes", () => {
     const { mql } = mockMatchMedia(false);
-    const { rerender } = renderHook(
-      ({ query }) => useMediaQuery(query),
-      { initialProps: { query: "(max-width: 639px)" } }
-    );
+    const { rerender } = renderHook(({ query }) => useMediaQuery(query), {
+      initialProps: { query: "(max-width: 639px)" },
+    });
 
     const initialRemoveCalls = mql.removeEventListener.mock.calls.length;
 

@@ -24,6 +24,7 @@ Use bullet points if there are multiple distinct changes.
 **Types:** `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `style`, `perf`
 
 **Title rules:**
+
 - Imperative mood ("add feature", not "added feature")
 - No period at the end
 - Lowercase after the colon

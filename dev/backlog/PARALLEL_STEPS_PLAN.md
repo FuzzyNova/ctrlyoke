@@ -3,7 +3,7 @@
 ## Is This Worth Building?
 
 **Yes, with scope constraints.** The use case is real and distinct from the existing
-parallel *workflows* feature. A user who has 5 independent research prompts followed by a
+parallel _workflows_ feature. A user who has 5 independent research prompts followed by a
 synthesis step should not have to split them into 6 separate workflow files and orchestrate
 them externally just to get parallelism. The schema design is clean, the architecture
 reuses existing infrastructure, and the complexity is manageable if we start with simple
@@ -13,13 +13,13 @@ parallel groups (not a full DAG).
 
 ## Distinction from Existing Parallel Workflows
 
-| Feature | Existing | This Plan |
-|---------|----------|-----------|
-| Multiple workflows running at once | Yes — separate `.flightpath.yaml` files | — |
-| Multiple prompts running at once within one file | No | Yes |
-| Shared workflow context (vars, harness, model) | No — each file is independent | Yes |
-| Synthesis step after parallel group completes | Manual external orchestration | Native |
-| Dashboard view | One tab per workflow | One workflow, grouped output |
+| Feature                                          | Existing                                | This Plan                    |
+| ------------------------------------------------ | --------------------------------------- | ---------------------------- |
+| Multiple workflows running at once               | Yes — separate `.flightpath.yaml` files | —                            |
+| Multiple prompts running at once within one file | No                                      | Yes                          |
+| Shared workflow context (vars, harness, model)   | No — each file is independent           | Yes                          |
+| Synthesis step after parallel group completes    | Manual external orchestration           | Native                       |
+| Dashboard view                                   | One tab per workflow                    | One workflow, grouped output |
 
 ---
 
@@ -38,12 +38,12 @@ prompts:
 
   # Parallel group: all run concurrently, next step waits for all
   - parallel:
-    - name: research-auth
-      prompt: Research best practices for authentication in this codebase.
-    - name: research-db
-      prompt: Research the database schema and suggest normalizations.
-    - name: research-perf
-      prompt: Profile the hot paths and identify performance bottlenecks.
+      - name: research-auth
+        prompt: Research best practices for authentication in this codebase.
+      - name: research-db
+        prompt: Research the database schema and suggest normalizations.
+      - name: research-perf
+        prompt: Profile the hot paths and identify performance bottlenecks.
 
   # Resumes after ALL three parallel steps complete
   - name: synthesize
@@ -52,6 +52,7 @@ prompts:
 ```
 
 **Why this syntax:**
+
 - `parallel:` is a sibling key to `id:` — clearly not a regular step
 - Array under `parallel:` contains normal `PromptItem` objects — no new step-level fields
 - The position in the `prompts:` array defines the execution order: everything before
@@ -134,6 +135,7 @@ for each item in prompts:
 ```
 
 Each sub-executor in the parallel group:
+
 - Gets its own harness integration instance (via `IntegrationFactory`)
 - Runs as a completely independent execution — its own session, its own temp files
 - Reports output back to the parent workflow's output state (tagged with step ID)
@@ -164,7 +166,7 @@ interface ParallelGroup {
   kind: "parallel";
   steps: PromptItem[];
   status: "pending" | "running" | "completed" | "failed";
-  stepStatuses: Map<string, StepStatus>;  // stepId → status
+  stepStatuses: Map<string, StepStatus>; // stepId → status
 }
 ```
 
@@ -276,19 +278,19 @@ Add `ParallelGroup` as a valid item in the `prompts` array alongside `PromptItem
 
 ## Files Changed
 
-| File | Change |
-|------|--------|
-| `schemas/prompt-schema.json` | Add `ParallelGroup` to `prompts` items |
-| `src/types/FlightPathTypes.ts` | Add `ParallelGroup` type, update `QueueItem` union |
-| `src/flightpath/PromptFileParser.ts` | Parse `parallel:` array into `ParallelGroup` |
-| `src/flightpath/PromptQueue.ts` | State machine handles `ParallelGroup` as a unit |
-| `src/flightpath/WorkflowExecutor.ts` | Fan-out logic for parallel groups |
-| `src/flightpath/IntegrationFactory.ts` | Support creating N harness instances for a group |
-| `src/ui/webview-react/components/layout/OutputSection.tsx` | Group header dividers |
-| `src/ui/webview-react/components/output/OutputMinimap.tsx` | Parallel group cluster display |
-| `src/ui/webview-react/components/prompts/PromptsPanel.tsx` | Indented cluster in prompt list |
-| `src/test/promptFileParser.test.ts` | Parallel group parsing tests |
-| `src/test/workflowExecutor.test.ts` | Parallel execution + failure handling tests |
+| File                                                       | Change                                             |
+| ---------------------------------------------------------- | -------------------------------------------------- |
+| `schemas/prompt-schema.json`                               | Add `ParallelGroup` to `prompts` items             |
+| `src/types/FlightPathTypes.ts`                             | Add `ParallelGroup` type, update `QueueItem` union |
+| `src/flightpath/PromptFileParser.ts`                       | Parse `parallel:` array into `ParallelGroup`       |
+| `src/flightpath/PromptQueue.ts`                            | State machine handles `ParallelGroup` as a unit    |
+| `src/flightpath/WorkflowExecutor.ts`                       | Fan-out logic for parallel groups                  |
+| `src/flightpath/IntegrationFactory.ts`                     | Support creating N harness instances for a group   |
+| `src/ui/webview-react/components/layout/OutputSection.tsx` | Group header dividers                              |
+| `src/ui/webview-react/components/output/OutputMinimap.tsx` | Parallel group cluster display                     |
+| `src/ui/webview-react/components/prompts/PromptsPanel.tsx` | Indented cluster in prompt list                    |
+| `src/test/promptFileParser.test.ts`                        | Parallel group parsing tests                       |
+| `src/test/workflowExecutor.test.ts`                        | Parallel execution + failure handling tests        |
 
 ---
 

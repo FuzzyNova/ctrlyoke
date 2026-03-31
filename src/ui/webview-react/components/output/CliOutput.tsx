@@ -874,7 +874,13 @@ export const CliOutput = memo<CliOutputProps>(
         alreadyUndone
       );
       setDialogState({ mode: "undo", input, requestId: crypto.randomUUID() });
-    }, [allStepOutputs, effectiveSnapshot, effectiveUndoRecord, target, output.workingDirectory]);
+    }, [
+      allStepOutputs,
+      effectiveSnapshot,
+      effectiveUndoRecord,
+      target,
+      output.workingDirectory,
+    ]);
 
     const handlePromptRedo = useCallback(() => {
       if (!effectiveUndoRecord?.redoInstructions?.length) return;
@@ -955,9 +961,7 @@ export const CliOutput = memo<CliOutputProps>(
           <div
             className={`${OUTPUT_BLOCK_BASE} border-l-severity-error text-error-fg`}
           >
-            {timestamp && (
-              <span className="opacity-70">[{timestamp}] </span>
-            )}
+            {timestamp && <span className="opacity-70">[{timestamp}] </span>}
             Error: {output.errorMessage}
           </div>
         )}

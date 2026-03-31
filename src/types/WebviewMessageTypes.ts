@@ -24,7 +24,11 @@ import {
   STATUS_MESSAGE_SEVERITY,
   EXECUTION_MODES,
 } from "./DashboardConstants";
-import type { WorkflowSummary, McpServerConfig, UserHookConfig } from "./FlightPathTypes";
+import type {
+  WorkflowSummary,
+  McpServerConfig,
+  UserHookConfig,
+} from "./FlightPathTypes";
 import type {
   CliEvent as CliOutputEvent,
   UniversalCliOutput,

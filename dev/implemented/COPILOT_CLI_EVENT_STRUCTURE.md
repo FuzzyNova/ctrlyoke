@@ -263,8 +263,6 @@ All events share this base structure:
 
 ---
 
-
-
 #### user.message
 
 **Description:** Records user input to the assistant.
@@ -953,13 +951,13 @@ function getToolErrors(events: Event[]): string[] {
 
 ## Version History
 
-| Version | Changes                                                                          |
-| ------- | -------------------------------------------------------------------------------- |
-| 0.0.353 | Earliest version observed, basic event structure                                 |
-| 0.0.365 | Added `session.info` with MCP connection details                                 |
-| 0.0.367 | Extended thinking with `assistant.reasoning`                                     |
-| 0.0.384 | New log layout: `<session-id>/events.jsonl` subdirectory (old: flat `.jsonl`)    |
-| Latest  | `assistant.message` now includes inline `reasoningText` field for reasoning      |
+| Version | Changes                                                                       |
+| ------- | ----------------------------------------------------------------------------- |
+| 0.0.353 | Earliest version observed, basic event structure                              |
+| 0.0.365 | Added `session.info` with MCP connection details                              |
+| 0.0.367 | Extended thinking with `assistant.reasoning`                                  |
+| 0.0.384 | New log layout: `<session-id>/events.jsonl` subdirectory (old: flat `.jsonl`) |
+| Latest  | `assistant.message` now includes inline `reasoningText` field for reasoning   |
 
 ---
 

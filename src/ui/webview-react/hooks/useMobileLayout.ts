@@ -7,7 +7,10 @@
  * transitions.
  */
 import { useEffect, useLayoutEffect, useRef } from "react";
-import type { PanelImperativeHandle, GroupImperativeHandle } from "react-resizable-panels";
+import type {
+  PanelImperativeHandle,
+  GroupImperativeHandle,
+} from "react-resizable-panels";
 import { WebviewLog } from "@utils/logger";
 import { useUiStore } from "@store/uiStore";
 
@@ -162,7 +165,13 @@ export function useMobileLayout({
         WebviewLog.warn(
           "[MOBILE][SYNC] editor still not collapsed after imperative collapse(); applying fallback setLayout",
           {
-            before: { promptsSize, outputSize, editorSize, settingsSize, collapsedReference },
+            before: {
+              promptsSize,
+              outputSize,
+              editorSize,
+              settingsSize,
+              collapsedReference,
+            },
             fallbackLayout,
           }
         );
@@ -195,7 +204,10 @@ export function useMobileLayout({
         const available = Math.max(1, 100 - reserved);
 
         const minOpenSize = 10;
-        const desiredEditorSize = Math.max(minOpenSize, lastMobileSizes.current.editor);
+        const desiredEditorSize = Math.max(
+          minOpenSize,
+          lastMobileSizes.current.editor
+        );
         const targetEditorSize = Math.min(desiredEditorSize, available - 1);
         const targetOutputSize = Math.max(1, available - targetEditorSize);
 
@@ -243,9 +255,19 @@ export function useMobileLayout({
     if (!uiLayoutReady) return;
     if (!isMobile) return;
     const allCollapsed =
-      promptsCollapsed && outputCollapsed && editorCollapsed && settingsCollapsed;
+      promptsCollapsed &&
+      outputCollapsed &&
+      editorCollapsed &&
+      settingsCollapsed;
     mobileInitializedRef.current = !allCollapsed;
-  }, [uiLayoutReady, isMobile, promptsCollapsed, outputCollapsed, editorCollapsed, settingsCollapsed]);
+  }, [
+    uiLayoutReady,
+    isMobile,
+    promptsCollapsed,
+    outputCollapsed,
+    editorCollapsed,
+    settingsCollapsed,
+  ]);
 
   return {
     // Panel / group refs

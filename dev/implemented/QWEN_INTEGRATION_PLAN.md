@@ -3,7 +3,7 @@
 **Date:** March 13, 2026  
 **Status:** Ready for Implementation  
 **Qwen Code Version:** 0.12.3  
-**Target FlightPath Version:** 1.2.0  
+**Target FlightPath Version:** 1.2.0
 
 ---
 
@@ -43,6 +43,7 @@ This plan outlines the implementation of **Qwen Code CLI** as a first-class harn
 **Goal:** Headless mode with `stream-json` output, process-exit completion detection
 
 **Deliverables:**
+
 - ✅ 5 provider files in `src/flightpath/harness/qwen/`
 - ✅ Stream-JSON parser for real-time output
 - ✅ Session ID extraction from stdout
@@ -51,6 +52,7 @@ This plan outlines the implementation of **Qwen Code CLI** as a first-class harn
 - ✅ Basic log parser for session discovery
 
 **Excluded:**
+
 - ❌ Interactive mode (Phase 2)
 - ❌ Hook-based completion (not stable)
 - ❌ Advanced tool approval workflows
@@ -62,12 +64,14 @@ This plan outlines the implementation of **Qwen Code CLI** as a first-class harn
 **Goal:** TUI support with log file monitoring for completion detection
 
 **Deliverables:**
+
 - ✅ Log file monitor with inactivity timeout
 - ✅ Session discovery via log file matching
 - ✅ TUI stream processor for terminal UI
 - ✅ Fallback completion detection (timeout-based)
 
 **Excluded:**
+
 - ❌ Hook-based features (waiting for stable API)
 
 ---
@@ -77,11 +81,13 @@ This plan outlines the implementation of **Qwen Code CLI** as a first-class harn
 **Goal:** Hook support, advanced tool workflows (when Qwen stabilizes hooks)
 
 **Deliverables:**
+
 - ⏳ PreToolUse/PostToolUse hook integration
 - ⏳ SessionStart/Stop hook completion detection
 - ⏳ Custom hook script execution
 
 **Blockers:**
+
 - ⚠️ Qwen Code hook API stabilization
 - ⚠️ Official documentation publication
 
@@ -109,12 +115,13 @@ src/flightpath/harness/qwen/
 **Purpose:** Aggregate all Qwen-specific components into a single provider descriptor
 
 **Key Fields:**
+
 ```typescript
 export class QwenCliProvider implements ICliProvider {
   readonly name = 'Qwen Code';
   readonly harnessId = Harness.QWEN_CLI;
   readonly cliCommand = 'qwen';
-  
+
   // Stream-JSON mode for real-time output
   readonly config = {
     supportsHeadless: true,
@@ -123,7 +130,7 @@ export class QwenCliProvider implements ICliProvider {
     streamOutputFormat: 'stream-json',
     chromePatterns: [...], // TUI output patterns to filter
   };
-  
+
   // Aggregates parser, monitor, mapper, logParser
   getResponseParser() { ... }
   getNotificationMonitor() { ... }
@@ -133,6 +140,7 @@ export class QwenCliProvider implements ICliProvider {
 ```
 
 **Implementation:**
+
 - [ ] Create class implementing `ICliProvider`
 - [ ] Define `cliCommand = 'qwen'`
 - [ ] Set `harnessId = Harness.QWEN_CLI` (add to `Harness` enum)
@@ -149,26 +157,28 @@ export class QwenCliProvider implements ICliProvider {
 **Purpose:** Parse stream-JSON output, extract session IDs, tokens, tool calls
 
 **Key Methods:**
+
 ```typescript
 export class QwenResponseParser implements IResponseParser {
   // Parse line-delimited JSON (NDJSON)
   parseStreamChunk(chunk: string): ParsedEvent[];
-  
+
   // Extract session ID from system/init event
   extractSessionId(stdout: string): string | null;
-  
+
   // Extract final response text from assistant events
   extractFinalResponse(stdout: string): string;
-  
+
   // Extract tool calls from assistant events
   extractToolCalls(stdout: string): ToolCall[];
-  
+
   // Extract usage statistics from result event
   extractUsageStats(stdout: string): UsageStats;
 }
 ```
 
 **Stream-JSON Event Types:**
+
 ```json
 // 1. System init event (contains session_id)
 {"type":"system","subtype":"init","session_id":"uuid-123",...}
@@ -184,6 +194,7 @@ export class QwenResponseParser implements IResponseParser {
 ```
 
 **Implementation:**
+
 - [ ] Implement NDJSON parser (split by newline, parse each line)
 - [ ] Extract `session_id` from first `system` event
 - [ ] Accumulate `assistant.message.content` for full response
@@ -207,7 +218,7 @@ export class QwenNotificationMonitor implements INotificationMonitor {
   // Headless: process exit = completion
   async startMonitoring(options: MonitoringOptions): Promise<void> {
     const process = options.process; // ChildProcess
-    
+
     // Wait for process exit
     process.on('exit', (code) => {
       if (code === 0) {
@@ -217,13 +228,14 @@ export class QwenNotificationMonitor implements INotificationMonitor {
       }
     });
   }
-  
+
   // Interactive: NOT implemented in Phase 1 (Phase 2: log file monitoring)
   stopMonitoring(): void { ... }
 }
 ```
 
 **Implementation:**
+
 - [ ] Implement `startMonitoring()` for headless mode
 - [ ] Listen for `exit` event on child process
 - [ ] Call `onComplete()` callback on successful exit
@@ -242,38 +254,39 @@ export class QwenNotificationMonitor implements INotificationMonitor {
 
 **Key Difference:** Qwen uses **mode-based** permissions, not pattern-based like Claude/Copilot.
 
-| FlightPath Setting | Qwen Mapping |
-|-------------------|--------------|
-| `cliExecutionMode: 'headless'` | No flag (default) |
-| `cliExecutionMode: 'interactive'` | Terminal TUI (handled by CliIntegration) |
-| `cliToolPermissions: 'dangerouslyAllowAll'` | `-y` (YOLO mode) |
-| `cliToolPermissions: 'allowAll'` | `--approval-mode auto-edit` |
-| `cliToolPermissions: 'custom'` | `--approval-mode default` + tool lists |
-| `cliAllowedTools: [...]` | `--allowed-tools [...]` |
-| `cliDeniedTools: [...]` | `--exclude-tools [...]` |
+| FlightPath Setting                          | Qwen Mapping                             |
+| ------------------------------------------- | ---------------------------------------- |
+| `cliExecutionMode: 'headless'`              | No flag (default)                        |
+| `cliExecutionMode: 'interactive'`           | Terminal TUI (handled by CliIntegration) |
+| `cliToolPermissions: 'dangerouslyAllowAll'` | `-y` (YOLO mode)                         |
+| `cliToolPermissions: 'allowAll'`            | `--approval-mode auto-edit`              |
+| `cliToolPermissions: 'custom'`              | `--approval-mode default` + tool lists   |
+| `cliAllowedTools: [...]`                    | `--allowed-tools [...]`                  |
+| `cliDeniedTools: [...]`                     | `--exclude-tools [...]`                  |
 
 **Implementation:**
+
 ```typescript
 export class QwenToolPermissionMapper implements IToolPermissionMapper {
   mapToCliArgs(settings: ToolPermissionSettings): string[] {
     const args: string[] = [];
-    
-    if (settings.permissions === 'dangerouslyAllowAll') {
-      args.push('-y'); // YOLO mode
-    } else if (settings.permissions === 'allowAll') {
-      args.push('--approval-mode', 'auto-edit');
-    } else if (settings.permissions === 'custom') {
-      args.push('--approval-mode', 'default');
-      
+
+    if (settings.permissions === "dangerouslyAllowAll") {
+      args.push("-y"); // YOLO mode
+    } else if (settings.permissions === "allowAll") {
+      args.push("--approval-mode", "auto-edit");
+    } else if (settings.permissions === "custom") {
+      args.push("--approval-mode", "default");
+
       if (settings.allowedTools?.length > 0) {
-        args.push('--allowed-tools', settings.allowedTools.join(','));
+        args.push("--allowed-tools", settings.allowedTools.join(","));
       }
-      
+
       if (settings.deniedTools?.length > 0) {
-        args.push('--exclude-tools', settings.deniedTools.join(','));
+        args.push("--exclude-tools", settings.deniedTools.join(","));
       }
     }
-    
+
     return args;
   }
 }
@@ -288,23 +301,26 @@ export class QwenToolPermissionMapper implements IToolPermissionMapper {
 **Purpose:** Parse JSONL log files for session discovery (fallback when session ID not in stdout)
 
 **Log File Location:**
+
 ```
 ~/.qwen/projects/<sanitized-cwd>/chats/<session-id>.jsonl
 ```
 
 **Sanitization:**
+
 - `C:\dev\FlightPath` → `c--dev-flightpath`
 - Backslashes → dashes
 
 **Event Types to Parse:**
+
 ```typescript
 interface QwenLogEvent {
   uuid: string;
   sessionId: string;
   timestamp: string;
-  type: 'user' | 'assistant' | 'system' | 'tool_result';
+  type: "user" | "assistant" | "system" | "tool_result";
   message?: {
-    role: 'user' | 'model';
+    role: "user" | "model";
     parts: Array<{
       text?: string;
       functionCall?: { name: string; args: any };
@@ -315,49 +331,54 @@ interface QwenLogEvent {
 ```
 
 **Implementation:**
+
 ```typescript
 export class QwenLogParser extends BaseLogParser implements ILogParser {
   // Find session ID by matching prompt text in log file
-  async findSessionIdByPrompt(logFile: string, prompt: string): Promise<string | null> {
+  async findSessionIdByPrompt(
+    logFile: string,
+    prompt: string
+  ): Promise<string | null> {
     const events = await this.readJsonlFile(logFile);
-    
+
     // Find first user event with matching prompt
-    const userEvent = events.find(e => 
-      e.type === 'user' && 
-      e.message?.parts?.[0]?.text?.startsWith(prompt.slice(0, 100))
+    const userEvent = events.find(
+      (e) =>
+        e.type === "user" &&
+        e.message?.parts?.[0]?.text?.startsWith(prompt.slice(0, 100))
     );
-    
+
     return userEvent?.sessionId ?? null;
   }
-  
+
   // Extract session ID from log file (first event)
   async extractSessionId(logFile: string): Promise<string | null> {
     const events = await this.readJsonlFile(logFile);
     return events[0]?.sessionId ?? null;
   }
-  
+
   // Parse tool calls from log events
   async extractToolCalls(logFile: string): Promise<ToolCall[]> {
     const events = await this.readJsonlFile(logFile);
-    
+
     return events
-      .filter(e => e.type === 'assistant')
-      .flatMap(e => e.message?.parts ?? [])
-      .filter(p => p.functionCall)
-      .map(p => ({
+      .filter((e) => e.type === "assistant")
+      .flatMap((e) => e.message?.parts ?? [])
+      .filter((p) => p.functionCall)
+      .map((p) => ({
         name: p.functionCall!.name,
         args: p.functionCall!.args,
         id: p.functionCall!.id,
       }));
   }
-  
+
   // Helper: read JSONL file (one JSON per line)
   private async readJsonlFile(filePath: string): Promise<QwenLogEvent[]> {
-    const content = await fs.promises.readFile(filePath, 'utf-8');
+    const content = await fs.promises.readFile(filePath, "utf-8");
     return content
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => JSON.parse(line));
+      .split("\n")
+      .filter((line) => line.trim())
+      .map((line) => JSON.parse(line));
   }
 }
 ```
@@ -372,12 +393,12 @@ export class QwenLogParser extends BaseLogParser implements ILogParser {
 
 ```typescript
 export enum Harness {
-  COPILOT_CLI = 'copilot-cli',
-  COPILOT_CHAT = 'copilot-chat',
-  CLAUDE_CLI = 'claude-cli',
-  CODEX_CLI = 'codex-cli',
-  OPENCODE_CLI = 'opencode-cli',
-  QWEN_CLI = 'qwen-cli', // ADD THIS
+  COPILOT_CLI = "copilot-cli",
+  COPILOT_CHAT = "copilot-chat",
+  CLAUDE_CLI = "claude-cli",
+  CODEX_CLI = "codex-cli",
+  OPENCODE_CLI = "opencode-cli",
+  QWEN_CLI = "qwen-cli", // ADD THIS
 }
 ```
 
@@ -385,12 +406,12 @@ export enum Harness {
 
 ```typescript
 export const HARNESS_IDS = {
-  COPILOT_CLI: 'copilot-cli',
-  COPILOT_CHAT: 'copilot-chat',
-  CLAUDE_CLI: 'claude-cli',
-  CODEX_CLI: 'codex-cli',
-  OPENCODE_CLI: 'opencode-cli',
-  QWEN_CLI: 'qwen-cli', // ADD THIS
+  COPILOT_CLI: "copilot-cli",
+  COPILOT_CHAT: "copilot-chat",
+  CLAUDE_CLI: "claude-cli",
+  CODEX_CLI: "codex-cli",
+  OPENCODE_CLI: "opencode-cli",
+  QWEN_CLI: "qwen-cli", // ADD THIS
 } as const;
 ```
 
@@ -402,13 +423,13 @@ export const HARNESS_IDS = {
 
 ```typescript
 export const QWEN_CLI_MODEL_LABELS: Record<string, string> = {
-  'coder-model': 'Qwen Coder',
-  'qwen-3-coder': 'Qwen 3 Coder',
-  'qwen-3-max': 'Qwen 3 Max',
-  'qwen-3-max-thinking': 'Qwen 3 Max Thinking',
+  "coder-model": "Qwen Coder",
+  "qwen-3-coder": "Qwen 3 Coder",
+  "qwen-3-max": "Qwen 3 Max",
+  "qwen-3-max-thinking": "Qwen 3 Max Thinking",
 } as const;
 
-export const QWEN_CLI_DEFAULT_MODEL = 'coder-model';
+export const QWEN_CLI_DEFAULT_MODEL = "coder-model";
 ```
 
 **File:** `package.json` (settings)
@@ -429,7 +450,7 @@ export const QWEN_CLI_DEFAULT_MODEL = 'coder-model';
 **File:** `src/flightpath/IntegrationFactory.ts`
 
 ```typescript
-import { QwenCliProvider } from './harness/qwen/QwenCliProvider';
+import { QwenCliProvider } from "./harness/qwen/QwenCliProvider";
 
 export class IntegrationFactory {
   static createQwenIntegration(context: ExtensionContext): CliIntegration {
@@ -445,12 +466,12 @@ import { IntegrationFactory } from './IntegrationFactory';
 
 export class WorkflowOrchestrator {
   private qwenIntegration: CliIntegration;
-  
+
   constructor(...) {
     this.qwenIntegration = IntegrationFactory.createQwenIntegration(context);
     this.allIntegrations.push(this.qwenIntegration);
   }
-  
+
   protected resolveDetectorIntegration(harnessId: string): HarnessIntegration {
     switch (harnessId) {
       case HARNESS_IDS.QWEN_CLI:
@@ -472,7 +493,12 @@ export class WorkflowOrchestrator {
   "flightpath.qwenCliModel": {
     "type": "string",
     "default": "coder-model",
-    "enum": ["coder-model", "qwen-3-coder", "qwen-3-max", "qwen-3-max-thinking"],
+    "enum": [
+      "coder-model",
+      "qwen-3-coder",
+      "qwen-3-max",
+      "qwen-3-max-thinking"
+    ],
     "description": "Default model for Qwen Code CLI",
     "order": 4
   },
@@ -491,6 +517,7 @@ export class WorkflowOrchestrator {
 ### 2.3 Phase 1 Testing Checklist
 
 **Headless Mode:**
+
 - [ ] `qwen -p "just say hi" --output-format stream-json` completes successfully
 - [ ] Session ID extracted from stdout
 - [ ] Final response text parsed correctly
@@ -498,15 +525,18 @@ export class WorkflowOrchestrator {
 - [ ] Process exit triggers completion callback
 
 **Tool Calls:**
+
 - [ ] `qwen -p "create a file" --output-format stream-json` parses tool_use events
 - [ ] `functionCall` format mapped to FlightPath `ToolCall` interface
 - [ ] Permission denials captured from result event
 
 **Session Resumption:**
+
 - [ ] `qwen --continue -p "continue..."` resumes previous session
 - [ ] Session ID passed via `--session-id` flag
 
 **Settings:**
+
 - [ ] `flightpath.qwenCliModel` setting respected
 - [ ] `flightpath.qwenCliApprovalMode` setting mapped to CLI args
 - [ ] YOLO mode (`-y`) applied for `dangerouslyAllowAll`
@@ -524,32 +554,32 @@ export class WorkflowOrchestrator {
 ```typescript
 export class QwenNotificationMonitor implements INotificationMonitor {
   private pollTimer?: NodeJS.Timeout;
-  
+
   async startMonitoring(options: MonitoringOptions): Promise<void> {
-    if (options.mode === 'headless') {
+    if (options.mode === "headless") {
       // Phase 1: process exit
       return this.monitorProcessExit(options.process);
     }
-    
+
     // Interactive: poll log file
     const logFilePath = await this.discoverLogFile(options.sessionId);
-    
+
     let lastEventTime = Date.now();
     const timeout = 30000; // 30 second inactivity timeout
-    
+
     this.pollTimer = setInterval(async () => {
       const events = await this.readRecentEvents(logFilePath, lastEventTime);
-      
+
       if (events.length > 0) {
         lastEventTime = Date.now();
-        
+
         // Check for result event
-        if (events.some(e => e.type === 'result')) {
+        if (events.some((e) => e.type === "result")) {
           options.onComplete();
           this.stopMonitoring();
         }
       }
-      
+
       // Timeout-based completion
       if (Date.now() - lastEventTime > timeout) {
         options.onComplete(); // Treat timeout as success (configurable)
@@ -561,6 +591,7 @@ export class QwenNotificationMonitor implements INotificationMonitor {
 ```
 
 **Testing:**
+
 - [ ] Log file discovered by session ID
 - [ ] Recent events read without re-reading entire file
 - [ ] Result event triggers completion
@@ -574,43 +605,47 @@ export class QwenNotificationMonitor implements INotificationMonitor {
 
 ```typescript
 export class QwenLogParser {
-  async discoverRecentSession(cwd: string, prompt: string): Promise<string | null> {
-    const projectsDir = path.join(os.homedir(), '.qwen', 'projects');
+  async discoverRecentSession(
+    cwd: string,
+    prompt: string
+  ): Promise<string | null> {
+    const projectsDir = path.join(os.homedir(), ".qwen", "projects");
     const sanitizedCwd = this.sanitizePath(cwd);
-    const chatsDir = path.join(projectsDir, sanitizedCwd, 'chats');
-    
+    const chatsDir = path.join(projectsDir, sanitizedCwd, "chats");
+
     // Find recently modified .jsonl files
     const files = await fs.promises.readdir(chatsDir);
-    const jsonlFiles = files.filter(f => f.endsWith('.jsonl'));
-    
+    const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
+
     // Sort by modification time
     const sorted = await Promise.all(
-      jsonlFiles.map(async f => ({
+      jsonlFiles.map(async (f) => ({
         file: path.join(chatsDir, f),
         mtime: (await fs.promises.stat(path.join(chatsDir, f))).mtimeMs,
       }))
     );
     sorted.sort((a, b) => b.mtime - a.mtime);
-    
+
     // Match prompt text in most recent files
     for (const { file } of sorted.slice(0, 5)) {
       const sessionId = await this.matchPromptInFile(file, prompt);
       if (sessionId) return sessionId;
     }
-    
+
     return null;
   }
-  
+
   private sanitizePath(cwd: string): string {
     return cwd
       .toLowerCase()
-      .replace(/[:\\]/g, '-')
-      .replace(/[^a-z0-9-]/g, '');
+      .replace(/[:\\]/g, "-")
+      .replace(/[^a-z0-9-]/g, "");
   }
 }
 ```
 
 **Testing:**
+
 - [ ] Recent session discovered by prompt matching
 - [ ] Path sanitization matches Qwen's format
 - [ ] Fallback to most recent session if no match
@@ -632,11 +667,11 @@ export class QwenTuiStreamProcessor extends TuiStreamProcessor {
     /║.*║/g,
     /╚.*╝/g,
   ];
-  
+
   filterChunk(chunk: string): string {
     let filtered = chunk;
     for (const pattern of this.chromePatterns) {
-      filtered = filtered.replace(pattern, '');
+      filtered = filtered.replace(pattern, "");
     }
     return filtered;
   }
@@ -644,6 +679,7 @@ export class QwenTuiStreamProcessor extends TuiStreamProcessor {
 ```
 
 **Testing:**
+
 - [ ] TUI artifacts filtered from output
 - [ ] JSON lines preserved intact
 - [ ] No data loss in filtering
@@ -653,12 +689,14 @@ export class QwenTuiStreamProcessor extends TuiStreamProcessor {
 ### 3.2 Phase 2 Testing Checklist
 
 **Interactive Mode:**
+
 - [ ] Log file monitoring starts on session launch
 - [ ] Completion detected via result event
 - [ ] Completion detected via inactivity timeout
 - [ ] Session discovery finds correct log file
 
 **TUI Filtering:**
+
 - [ ] Box drawing characters filtered
 - [ ] Cursor movement codes filtered
 - [ ] JSON output preserved
@@ -685,22 +723,26 @@ Hooks are **IMPLEMENTED** - 10 core lifecycle events (per arxiv paper 2603.05344
 10. `SessionEnd` - Session cleanup
 
 **Configuration:**
+
 - Location: `~/.qwen/settings.json` (global) or `<project>/.qwen/settings.json` (project)
 - Format: JSON (similar to Claude Code)
 - Hooks receive event context on stdin as JSON
 
 **Capabilities:**
+
 - **Blocking**: Exit code 2 prevents operation
 - **Mutation**: Stdout JSON with `tool_input` modifies tool arguments
 - **Override**: Can override approval decisions
 
 **Blockers:**
+
 - ⚠️ No official documentation for exact JSON schema
 - ⚠️ Notification file mechanism unconfirmed (Claude uses `{sessionId}-start.json`, `{sessionId}-stop.json`)
 - ⚠️ No working example configurations published
 - ⚠️ Stdin payload schema not documented per hook type
 
 **Implementation Plan:**
+
 1. Test Qwen Code hooks with manual configuration in `~/.qwen/settings.json`
 2. Reverse-engineer stdin payload by logging hook input during test runs
 3. Determine if notification files are used (monitor `~/.qwen/` for new files during session lifecycle)
@@ -713,6 +755,7 @@ Hooks are **IMPLEMENTED** - 10 core lifecycle events (per arxiv paper 2603.05344
 ### 4.2 Tool Approval Workflows
 
 **Future Enhancement:**
+
 - PreToolUse hook → custom approval UI
 - PostToolUse hook → validation scripts
 - Modify hook → auto-fix tool arguments
@@ -724,11 +767,13 @@ Hooks are **IMPLEMENTED** - 10 core lifecycle events (per arxiv paper 2603.05344
 ### 5.1 Unit Tests
 
 **Files:**
+
 - `src/flightpath/harness/qwen/QwenResponseParser.test.ts`
 - `src/flightpath/harness/qwen/QwenLogParser.test.ts`
 - `src/flightpath/harness/qwen/QwenToolPermissionMapper.test.ts`
 
 **Test Fixtures:**
+
 - Sample stream-JSON output (simple prompt)
 - Sample stream-JSON output (with tool calls)
 - Sample JSONL log file
@@ -739,6 +784,7 @@ Hooks are **IMPLEMENTED** - 10 core lifecycle events (per arxiv paper 2603.05344
 ### 5.2 Integration Tests
 
 **Manual Test Workflows:**
+
 ```yaml
 # test-qwen-simple.flightpath.yaml
 harness: qwen-cli
@@ -767,6 +813,7 @@ prompts:
 ### 5.3 Performance Benchmarks
 
 **Metrics:**
+
 - Time to first token (streaming)
 - Total execution time (headless vs interactive)
 - Log file polling overhead
@@ -779,6 +826,7 @@ prompts:
 ### 6.1 For Existing FlightPath Users
 
 **No Breaking Changes:**
+
 - Qwen harness added alongside existing harnesses
 - No changes to Copilot/Claude/Codex integrations
 - Opt-in via `flightpath.harness: qwen-cli` setting
@@ -786,6 +834,7 @@ prompts:
 ### 6.2 For Qwen Code Users
 
 **Benefits:**
+
 - Unified prompt editor with spell check and completions
 - Sequential workflow execution
 - End condition validation scripts
@@ -825,16 +874,16 @@ prompts:
 
 ## Appendix A: Comparison to Existing Harnesses
 
-| Feature | Qwen Code | Claude Code | Copilot CLI |
-|---------|-----------|-------------|-------------|
-| **Session ID in stdout** | ✅ | ✅ | ❌ |
-| **Stream-json mode** | ✅ | ✅ | ❌ |
-| **Session hooks** | ❌ (experimental) | ✅ | ✅ |
-| **Tool call format** | `functionCall` | `tool_use` | `toolRequests` |
-| **Permission model** | Mode-based | Pattern-based | Pattern-based |
-| **Log file format** | JSONL | JSONL | Plain text |
+| Feature                  | Qwen Code                  | Claude Code       | Copilot CLI       |
+| ------------------------ | -------------------------- | ----------------- | ----------------- |
+| **Session ID in stdout** | ✅                         | ✅                | ❌                |
+| **Stream-json mode**     | ✅                         | ✅                | ❌                |
+| **Session hooks**        | ❌ (experimental)          | ✅                | ✅                |
+| **Tool call format**     | `functionCall`             | `tool_use`        | `toolRequests`    |
+| **Permission model**     | Mode-based                 | Pattern-based     | Pattern-based     |
+| **Log file format**      | JSONL                      | JSONL             | Plain text        |
 | **Completion detection** | Process exit / Log polling | Hook notification | Hook notification |
-| **Session resumption** | `--continue` / `--resume` | `--resume` | `--resume` |
+| **Session resumption**   | `--continue` / `--resume`  | `--resume`        | `--resume`        |
 
 ---
 
@@ -846,38 +895,38 @@ prompts:
 // QwenResponseParser.ts
 export class QwenResponseParser implements IResponseParser {
   parseStreamChunk(chunk: string): ParsedEvent[] {
-    const lines = chunk.split('\n').filter(line => line.trim());
+    const lines = chunk.split("\n").filter((line) => line.trim());
     const events: ParsedEvent[] = [];
-    
+
     for (const line of lines) {
       try {
         const event = JSON.parse(line);
-        
-        if (event.type === 'system' && event.subtype === 'init') {
+
+        if (event.type === "system" && event.subtype === "init") {
           events.push({
-            type: 'session_start',
+            type: "session_start",
             sessionId: event.session_id,
             model: event.model,
           });
-        } else if (event.type === 'assistant') {
+        } else if (event.type === "assistant") {
           const textContent = event.message?.content
-            .filter((c: any) => c.type === 'text')
+            .filter((c: any) => c.type === "text")
             .map((c: any) => c.text)
-            .join('');
-          
+            .join("");
+
           const thinkingContent = event.message?.content
-            .filter((c: any) => c.type === 'thinking')
+            .filter((c: any) => c.type === "thinking")
             .map((c: any) => c.thinking)
-            .join('');
-          
+            .join("");
+
           events.push({
-            type: 'response_chunk',
+            type: "response_chunk",
             text: textContent,
             thinking: thinkingContent,
           });
-        } else if (event.type === 'result') {
+        } else if (event.type === "result") {
           events.push({
-            type: 'response_complete',
+            type: "response_complete",
             result: event.result,
             usage: event.usage,
             permissionDenials: event.permission_denials,
@@ -887,7 +936,7 @@ export class QwenResponseParser implements IResponseParser {
         // Skip malformed JSON lines
       }
     }
-    
+
     return events;
   }
 }
@@ -901,30 +950,33 @@ export class QwenResponseParser implements IResponseParser {
 // QwenNotificationMonitor.ts
 export class QwenNotificationMonitor implements INotificationMonitor {
   private lastReadPosition = 0;
-  
-  async pollLogFile(logFilePath: string, onComplete: () => void): Promise<void> {
+
+  async pollLogFile(
+    logFilePath: string,
+    onComplete: () => void
+  ): Promise<void> {
     const stats = await fs.promises.stat(logFilePath);
     const newSize = stats.size;
-    
+
     if (newSize > this.lastReadPosition) {
       const buffer = Buffer.alloc(newSize - this.lastReadPosition);
-      const fd = await fs.promises.open(logFilePath, 'r');
-      
+      const fd = await fs.promises.open(logFilePath, "r");
+
       try {
         await fd.read(buffer, 0, buffer.length, this.lastReadPosition);
-        const newContent = buffer.toString('utf-8');
-        
-        for (const line of newContent.split('\n')) {
+        const newContent = buffer.toString("utf-8");
+
+        for (const line of newContent.split("\n")) {
           if (line.trim()) {
             const event = JSON.parse(line);
-            
-            if (event.type === 'result') {
+
+            if (event.type === "result") {
               onComplete();
               return;
             }
           }
         }
-        
+
         this.lastReadPosition = newSize;
       } finally {
         await fd.close();

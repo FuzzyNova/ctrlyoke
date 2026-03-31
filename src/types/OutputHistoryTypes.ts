@@ -1,5 +1,9 @@
 import { ExecutionState, FINAL_PROMPT_PHASES } from "./DashboardConstants";
-import { CliOutput, StatusMessage, UndoFileInstruction } from "./WebviewMessageTypes";
+import {
+  CliOutput,
+  StatusMessage,
+  UndoFileInstruction,
+} from "./WebviewMessageTypes";
 import type { UnifiedDiffHunk } from "./CliOutputTypes";
 
 export type OutputExecutionTarget =
@@ -145,7 +149,7 @@ export interface SnapshotFileChange {
    * Used by reverse-patch undo to restore the correct line endings
    * without needing to store the full file content.
    */
-  lineEnding?: 'crlf';
+  lineEnding?: "crlf";
 }
 
 export interface WorkspaceSnapshot {

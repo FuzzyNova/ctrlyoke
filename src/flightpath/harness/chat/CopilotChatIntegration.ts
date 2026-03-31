@@ -8,7 +8,10 @@ import { ChatSessionMonitor } from "./ChatSessionMonitor";
 import { ChatSessionParser } from "./ChatSessionParser";
 import { NativeAttachmentHandler } from "./NativeAttachmentHandler";
 import { Log } from "../../../utils/Log";
-import { PromptFileSplitter, type SplitConfig } from "../../../utils/PromptFileSplitter";
+import {
+  PromptFileSplitter,
+  type SplitConfig,
+} from "../../../utils/PromptFileSplitter";
 import { TempFileManager } from "../../../utils/TempFileManager";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { AgentExpander } from "../../../utils/AgentExpander";
@@ -874,10 +877,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       return;
     }
     const tempMgr = new TempFileManager(workspaceRoot);
-    const filePath = await tempMgr.createCategoryFile(
-      skillContent,
-      "skills"
-    );
+    const filePath = await tempMgr.createCategoryFile(skillContent, "skills");
     this.pendingTempFiles.push(filePath);
     await this.attachFileToChat(filePath);
   }
@@ -1081,9 +1081,12 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
     // Non-native path: categorized typed temp files (agent, skills, excerpts, prompt)
     const omitAgentsAndSkills =
-      isResumedSession && ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume();
+      isResumedSession &&
+      ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume();
     if (omitAgentsAndSkills) {
-      Log.debug("⏭️ Omitting agent and skill blocks (resuming existing session)");
+      Log.debug(
+        "⏭️ Omitting agent and skill blocks (resuming existing session)"
+      );
     }
 
     const resolvedAgent = omitAgentsAndSkills

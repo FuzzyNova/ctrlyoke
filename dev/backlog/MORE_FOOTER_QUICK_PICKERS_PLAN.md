@@ -27,13 +27,14 @@ Straightforward — same pattern as `AgentQuickPicker`.
 
 **`valueLabel`** (shown in wide mode next to icon):
 
-| State | Label |
-|---|---|
-| Default | Resolved permission mode name (grayed) |
-| Override = null (NONE) | "None" (colored) |
+| State                  | Label                                  |
+| ---------------------- | -------------------------------------- |
+| Default                | Resolved permission mode name (grayed) |
+| Override = null (NONE) | "None" (colored)                       |
 | Override with mode set | Mode label, e.g. "Allow All" (colored) |
 
 **Popup:** A single `CustomSelect` with options:
+
 ```
 Default (resolved-label)    ← buildPermissionsDefaultLabel(workflowProperties.toolPermissions)
 Dangerously Allow All
@@ -41,6 +42,7 @@ Allow All
 Custom
 None
 ```
+
 - Uses the existing `PERMISSION_MODE_OPTIONS` array from `shared/permissionUtils`
 - `onChange` mirrors the PropertiesDrawer logic: `"default"` → `setProperty("toolPermissions", undefined)`, otherwise spreads current override and sets `mode`
 - Close picker after selection (`setFooterOpenPicker(null)`)
@@ -56,6 +58,7 @@ None
 ### Architecture Decision: Combined (not separate)
 
 Keep Resume Session and Prior Context in **one** "Context" picker for these reasons:
+
 - The footer is already 6 items wide (Properties + 4 pickers + this adds 2 more); one combined picker saves space
 - The PropertiesDrawer already groups them together on the "Context" tab — the mental model carries over
 - The footer indicator can cleanly summarize both with a short composite label
@@ -70,17 +73,20 @@ Keep Resume Session and Prior Context in **one** "Context" picker for these reas
 
 Build from two components, combining as needed:
 
-*Resume part:*
+_Resume part:_
+
 - Source: `properties.resumeSession` if overriding, otherwise resolved `workflowProperties.resumeSession ?? globalSettings.resumeSession`
 - Active (override or resolved = true): `"resume"` (or `"final"` if sessionId = FINAL_PROMPT sentinel)
 - Not resuming: `""` (omit — no useful information to show)
 
-*Prior context part:*
+_Prior context part:_
+
 - Source: `properties.priorContext` if overriding, otherwise resolved `workflowProperties.priorContext ?? globalSettings.priorContext`
 - Active (override or resolved ≠ undefined/none): `"+ctx"`
 - Inactive: `""` (omit)
 
-*Combined label:*
+_Combined label:_
+
 - Both active: `"resume +ctx"`
 - Resume only: `"resume"` (or `"final"`)
 - Prior context only: `"+ctx"`
@@ -102,12 +108,13 @@ Build from two components, combining as needed:
 └──────────────────────────────────┘
 ```
 
-The popup should **not** close automatically after selection (user may want to change both settings).  Include a small "×" close button in the top-right corner, or rely on click-outside behavior (already handled by `FooterQuickPicker`).
+The popup should **not** close automatically after selection (user may want to change both settings). Include a small "×" close button in the top-right corner, or rely on click-outside behavior (already handled by `FooterQuickPicker`).
 
 **Session ID input rules** (identical to PropertiesDrawer):
+
 - Visible always; grayed out (`opacity-50 pointer-events-none`) when not applicable
 - Active when `properties.resumeSession === true && properties.sessionId !== SESSION_ID_SENTINELS.FINAL_PROMPT`
-- Placeholder: `"Session ID (e.g. 1)"` 
+- Placeholder: `"Session ID (e.g. 1)"`
 
 **`popupMinWidth`:** `"260px"`
 
@@ -126,7 +133,13 @@ Change the union type in both the state interface and the `setFooterOpenPicker` 
 footerOpenPicker: "harness" | "model" | "agent" | "skills" | null;
 
 // After:
-footerOpenPicker: "harness" | "model" | "agent" | "skills" | "permissions" | "context" | null;
+footerOpenPicker: "harness" |
+  "model" |
+  "agent" |
+  "skills" |
+  "permissions" |
+  "context" |
+  null;
 ```
 
 Two locations to update: the `UiState` interface (line ~199) and the `UiActions` `setFooterOpenPicker` signature (line ~326).
@@ -136,6 +149,7 @@ Two locations to update: the `UiState` interface (line ~199) and the `UiActions`
 **File:** `src/ui/webview-react/components/editor/PermissionsQuickPicker.tsx`
 
 Imports needed:
+
 - `useEditorStore`, `useSettingsStore`, `useUiStore`
 - `FooterQuickPicker`
 - `CustomSelect` from `../shared`
@@ -144,21 +158,29 @@ Imports needed:
 - `ToolPermissionsOverride`, `ToolPermissionMode` from `../../types/messages`
 
 Key logic (mirrors PropertiesDrawer Permissions page onChange):
+
 ```ts
 const isOverride = properties.toolPermissions !== undefined;
 
 const resolvedModeLabel = (() => {
   const wf = workflowProperties.toolPermissions;
   if (wf === undefined || wf === null) return "None";
-  return PERMISSION_MODE_OPTIONS.find(o => o.value === wf.mode)?.label ?? wf.mode ?? "None";
+  return (
+    PERMISSION_MODE_OPTIONS.find((o) => o.value === wf.mode)?.label ??
+    wf.mode ??
+    "None"
+  );
 })();
 
 const valueLabel = !isOverride
   ? resolvedModeLabel
   : properties.toolPermissions === null
     ? "None"
-    : PERMISSION_MODE_OPTIONS.find(o => o.value === (properties.toolPermissions as ToolPermissionsOverride).mode)?.label
-      ?? "Allow All";
+    : (PERMISSION_MODE_OPTIONS.find(
+        (o) =>
+          o.value ===
+          (properties.toolPermissions as ToolPermissionsOverride).mode
+      )?.label ?? "Allow All");
 ```
 
 ### 3. Create `ContextQuickPicker.tsx`
@@ -166,6 +188,7 @@ const valueLabel = !isOverride
 **File:** `src/ui/webview-react/components/editor/ContextQuickPicker.tsx`
 
 Imports needed:
+
 - `useEditorStore`, `useSettingsStore`, `useUiStore`
 - `FooterQuickPicker`
 - `CustomSelect`, `PriorContextSelect`, `PRIOR_CONTEXT_KEYWORD_LABELS` from `../shared`
@@ -177,23 +200,30 @@ Popup internals use `useState` for the session ID field editing.
 Resume Session `onChange` handler is identical to the PropertiesDrawer version — copy it.
 
 `valueLabel` builder:
+
 ```ts
 // Determine effective resume state
-const effectiveResume = properties.resumeSession !== undefined
-  ? properties.resumeSession
-  : (workflowProperties.resumeSession ?? globalSettings.resumeSession);
-const effectiveIsFinal = (properties.resumeSession !== undefined
-  ? properties.sessionId
-  : workflowProperties.sessionId) === SESSION_ID_SENTINELS.FINAL_PROMPT;
+const effectiveResume =
+  properties.resumeSession !== undefined
+    ? properties.resumeSession
+    : (workflowProperties.resumeSession ?? globalSettings.resumeSession);
+const effectiveIsFinal =
+  (properties.resumeSession !== undefined
+    ? properties.sessionId
+    : workflowProperties.sessionId) === SESSION_ID_SENTINELS.FINAL_PROMPT;
 
 // Determine effective prior context
-const effectivePriorContext = properties.priorContext !== undefined
-  ? properties.priorContext
-  : (workflowProperties.priorContext ?? globalSettings.priorContext);
-const hasPriorContext = effectivePriorContext !== undefined && effectivePriorContext !== "none";
+const effectivePriorContext =
+  properties.priorContext !== undefined
+    ? properties.priorContext
+    : (workflowProperties.priorContext ?? globalSettings.priorContext);
+const hasPriorContext =
+  effectivePriorContext !== undefined && effectivePriorContext !== "none";
 
 const resumePart = effectiveResume
-  ? (effectiveIsFinal ? "final" : "resume")
+  ? effectiveIsFinal
+    ? "final"
+    : "resume"
   : "";
 const ctxPart = hasPriorContext ? "+ctx" : "";
 const valueLabel = [resumePart, ctxPart].filter(Boolean).join(" ") || "none";
@@ -220,6 +250,6 @@ export { ContextQuickPicker } from "./ContextQuickPicker";
 ## Open Questions / Notes
 
 - **Footer density:** Adding two more pickers brings the left bar to 7 items (Properties button + 6 pickers). The footer uses `isNarrow` (threshold 768px) to collapse labels; at very narrow widths it becomes icon-only so this should be fine. If it feels crowded, consider raising the narrow threshold slightly.
-- **Permissions "Custom" mode:** The quick picker only sets the *mode* to Custom — it does not expose the allowed/denied tool lists. Those remain in PropertiesDrawer Permissions tab. This is intentional and consistent with the principle that quick pickers handle the most common quick actions.
+- **Permissions "Custom" mode:** The quick picker only sets the _mode_ to Custom — it does not expose the allowed/denied tool lists. Those remain in PropertiesDrawer Permissions tab. This is intentional and consistent with the principle that quick pickers handle the most common quick actions.
 - **ContextQuickPicker popup closing:** Since users may want to tweak both Resume and Prior Context in one session, the popup does **not** auto-close after each interaction. Click-outside (already in `FooterQuickPicker`) closes it.
 - **Prior Context inline mode:** `PriorContextSelect` already has an `inline` prop for embedding in popups — use `inline={true}` with `dropdownMaxHeight="250px"`.

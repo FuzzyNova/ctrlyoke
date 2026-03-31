@@ -428,7 +428,13 @@
       "properties": {
         "event": {
           "type": "string",
-          "enum": ["stop", "sessionStart", "preToolUse", "postToolUse", "userPromptSubmit"],
+          "enum": [
+            "stop",
+            "sessionStart",
+            "preToolUse",
+            "postToolUse",
+            "userPromptSubmit"
+          ],
           "description": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen), sessionEnd (Copilot), AfterAgent (Gemini), notify (Codex)."
         },
         "command": {

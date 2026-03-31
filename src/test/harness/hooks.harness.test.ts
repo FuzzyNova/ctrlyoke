@@ -138,10 +138,7 @@ interface HarnessRunResult {
  * by the harness. The prompt forces bash tool use so preToolUse/postToolUse
  * hooks have a chance to fire on harnesses that support them.
  */
-function buildWorkflow(
-  harness: HarnessId,
-  recorderScript: string
-): PromptFile {
+function buildWorkflow(harness: HarnessId, recorderScript: string): PromptFile {
   // Use {{outputFile}} via --var so the path doesn't need escaping in the
   // hook command string (the CLI handles the substitution before passing to
   // the harness config system).
@@ -205,7 +202,12 @@ function runHarness(
 
   // Exit code 3 = harness not installed
   if (result.status === 3) {
-    return { skipped: true, exitCode: 3, stderr: result.stderr ?? "", records: [] };
+    return {
+      skipped: true,
+      exitCode: 3,
+      stderr: result.stderr ?? "",
+      records: [],
+    };
   }
 
   // Parse hook records
@@ -285,7 +287,9 @@ suite("Harness Hook Tests", function () {
       // Log session/tool hooks that were expected but missed (non-fatal warnings)
       const sessionMissed = SESSION_HOOKS[h].filter((e) => !firedEvents.has(e));
       if (sessionMissed.length > 0) {
-        console.log(`  ↳ session hooks not fired (may be normal): ${sessionMissed.join(", ")}`);
+        console.log(
+          `  ↳ session hooks not fired (may be normal): ${sessionMissed.join(", ")}`
+        );
       }
 
       const toolMissed = TOOL_HOOKS[h].filter((e) => !firedEvents.has(e));

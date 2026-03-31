@@ -16,7 +16,8 @@ vi.mock("@utils/hljsUtils", () => ({
 
 // Mock openFile so clicking file links doesn't try to post to vscode
 vi.mock("@hooks/useMessageHandler", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@hooks/useMessageHandler")>();
+  const original =
+    await importOriginal<typeof import("@hooks/useMessageHandler")>();
   return { ...original, openFile: vi.fn() };
 });
 
@@ -55,7 +56,10 @@ describe("MarkdownText", () => {
   it("renders a link for external URLs", async () => {
     render(<MarkdownText>[click here](https://example.com)</MarkdownText>);
     const link = await screen.findByRole("link", { name: "click here" });
-    expect(link).toHaveAttribute("href", expect.stringContaining("example.com"));
+    expect(link).toHaveAttribute(
+      "href",
+      expect.stringContaining("example.com")
+    );
     expect(link).toHaveAttribute("target", "_blank");
   });
 

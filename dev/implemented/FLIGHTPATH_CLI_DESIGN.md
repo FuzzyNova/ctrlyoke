@@ -282,6 +282,7 @@ The `PlatformAdapter` pattern is a **wrapping** pattern, not a replacement:
 - All `vscode.window.show*Message()`, `vscode.workspace.getConfiguration()`, `vscode.workspace.workspaceFolders`, terminal creation — all preserved in `VsCodeAdapter` with identical behavior
 
 The refactoring is strictly additive. Every `vscode.*` call that exists today either:
+
 1. Moves into `VsCodeAdapter` where it continues to be called identically, or
 2. Stays in VS Code-only files (`WorkflowOrchestrator`, `ui/`, `chat/`) that the CLI build never touches
 
@@ -408,7 +409,10 @@ export interface PlatformAdapter {
 
   // User prompts (replaces vscode.window.showWarningMessage with buttons)
   // Returns the chosen option or undefined if dismissed
-  showChoice(message: string, ...options: string[]): Promise<string | undefined>;
+  showChoice(
+    message: string,
+    ...options: string[]
+  ): Promise<string | undefined>;
 
   // Interactive terminal for tool approvals
   // VS Code: creates a vscode.Terminal with shell integration
@@ -457,7 +461,7 @@ export class CliAdapter implements PlatformAdapter {
   constructor(private config: ResolvedCliConfig) {}
 
   getConfig<T>(key: string, defaultValue: T): T {
-    return (this.config as Record<string, unknown>)[key] as T ?? defaultValue;
+    return ((this.config as Record<string, unknown>)[key] as T) ?? defaultValue;
   }
 
   getWorkspaceRoot(): string {
@@ -477,6 +481,7 @@ export class CliAdapter implements PlatformAdapter {
 ```
 
 **What does NOT need abstraction** (already platform-agnostic):
+
 - `fs/promises` — used identically in both contexts
 - `child_process.spawn` — used identically in both contexts
 
@@ -551,6 +556,7 @@ constructor(private readonly context: vscode.ExtensionContext) {}
 **Impact**: Low. Once CliIntegration accepts PlatformAdapter, factory takes PlatformAdapter instead. CopilotChat is VS Code-only and goes in a separate `VsCodeIntegrationFactory`.
 
 **Strategy**:
+
 - `IntegrationFactory` becomes platform-agnostic, takes `PlatformAdapter`
 - Split into `IntegrationFactory` (CLI harnesses only) and a VS Code subclass/variant that adds CopilotChat
 - Or: keep `IntegrationFactory` but have CLI build use a separate factory that excludes CopilotChat
@@ -573,6 +579,7 @@ constructor(
 **Impact**: High. This is the key class the CLI must instantiate.
 
 **Strategy**:
+
 - Replace `vscode.ExtensionContext` with `PlatformAdapter` — WorkflowInstance passes it to sub-classes
 - Replace `FlightPathWebviewProvider | undefined` with a `IDashboardSink | undefined` interface:
   ```typescript
@@ -666,7 +673,8 @@ const factory = new IntegrationFactory(adapter);
 const instance = new WorkflowInstance({
   platform: adapter,
   integrationFactory: factory,
-  getDetectorIntegration: (harness?) => factory.createForExecution(harness ?? defaultHarness),
+  getDetectorIntegration: (harness?) =>
+    factory.createForExecution(harness ?? defaultHarness),
   // No dashboardProvider — no UI
   // No onWorkflowNameChange — no tab management
   // No onStatusBarUpdate — no status bar
@@ -675,7 +683,9 @@ const instance = new WorkflowInstance({
 await instance.loadPromptFile(filePath);
 await instance.execute();
 
-process.exit(instance.promptQueue.getState().status === EXECUTION_STATES.COMPLETED ? 0 : 1);
+process.exit(
+  instance.promptQueue.getState().status === EXECUTION_STATES.COMPLETED ? 0 : 1
+);
 ```
 
 ---
@@ -807,11 +817,11 @@ function getExecutionMode(options: CliOptions): "interactive" | "headless" {
 
 All three harnesses already implement `INotificationMonitor` in the extension — they write JSON notification files to `.flightpath/temp/` when a prompt completes, and FlightPath polls for those files in parallel with the running process. This mechanism works identically in the standalone CLI since it only requires filesystem access, not VS Code APIs.
 
-| Harness | Hook event | Notification file |
-|---------|-----------|-------------------|
-| Claude CLI | `Stop` hook | `{sessionId}-stop.json` |
+| Harness     | Hook event        | Notification file             |
+| ----------- | ----------------- | ----------------------------- |
+| Claude CLI  | `Stop` hook       | `{sessionId}-stop.json`       |
 | Copilot CLI | `sessionEnd` hook | `sessionEnd-{timestamp}.json` |
-| Codex CLI | `Notify` hook | `{threadId}.json` |
+| Codex CLI   | `Notify` hook     | `{threadId}.json`             |
 
 FlightPath runs `INotificationMonitor.monitorForCompletion()` in a parallel Promise alongside the spawned AI CLI process. When the hook fires and the notification file appears, FlightPath knows the AI has finished responding to the current prompt and can advance.
 
@@ -819,10 +829,10 @@ FlightPath runs `INotificationMonitor.monitorForCompletion()` in a parallel Prom
 
 The CLI supports two modes based on `stdio` configuration:
 
-| Mode | `stdio` | User can type | Session ends | Output |
-|------|---------|---------------|--------------|--------|
-| **interactive** (default in TTY) | `'inherit'` | ✅ Yes | Manually (user exits) | Raw AI CLI passthrough |
-| **headless** (default in CI/CD) | `['pipe','pipe','pipe']` | ❌ No | Auto when process exits | Chalk-formatted events |
+| Mode                             | `stdio`                  | User can type | Session ends            | Output                 |
+| -------------------------------- | ------------------------ | ------------- | ----------------------- | ---------------------- |
+| **interactive** (default in TTY) | `'inherit'`              | ✅ Yes        | Manually (user exits)   | Raw AI CLI passthrough |
+| **headless** (default in CI/CD)  | `['pipe','pipe','pipe']` | ❌ No         | Auto when process exits | Chalk-formatted events |
 
 > **Future (v2)**: Watch mode (`--close-on-completion`) — `stdio: ['pipe', 'inherit', 'inherit']` — user sees output but cannot type; FlightPath auto-advances when the hook fires. Deferred because it requires per-harness exit command handling (`/exit\n` for Claude, EOF for Copilot/Codex).
 
@@ -841,7 +851,7 @@ The hook still fires when the AI finishes responding — FlightPath can use it t
 // Full-interactive: user has complete control, hook used for status only
 const child = spawn(command, args, { stdio: "inherit" });
 await Promise.race([
-  new Promise<void>(resolve => child.on("close", resolve)),  // user exits
+  new Promise<void>((resolve) => child.on("close", resolve)), // user exits
   // hook notification used for status display only, not to close session
 ]);
 ```
@@ -996,12 +1006,14 @@ User                 CLI                 PromptQueue         Provider
 The two execution modes have fundamentally different output stories:
 
 **Interactive mode** (`stdio: 'inherit'`, default in TTY):
+
 - The AI CLI (claude, gh copilot) runs directly in the user's terminal
 - The AI CLI produces its own rich output: colors, diffs, tool call formatting, etc.
 - FlightPath only adds workflow-level framing (prompt headers, completion status)
 - **No chalk rendering of events needed** — the raw CLI output is already beautiful
 
 **Headless mode** (`stdio: 'pipe'`, default in CI/CD):
+
 - The AI CLI output is captured and parsed into `CliEvent[]` by our log parsers
 - FlightPath is solely responsible for rendering output to the terminal
 - Requires a chalk-based `CliTerminalFormatter` to render events readably
@@ -1098,6 +1110,7 @@ TOOL_RESULT event:
 ```
 
 Stats footer per prompt (matching `CliOutput.tsx` renderStats):
+
 ```
 chalk.dim("Session: " + sessionId.slice(0,8) + " | Model: " + model + " | " + tokens + " | " + elapsed + "s")
 ```
@@ -1293,6 +1306,7 @@ Work is done in order of dependency (each step does not break the prior):
     postMessage(type: string, payload: unknown): void;
   }
   ```
+
   - `VsCodeAdapter` implements `IDashboardSink` by delegating to `FlightPathWebviewProvider`
   - CLI passes `undefined`
 - All dashboard `postMessage` calls become `this.dashboardSink?.postMessage(...)`
@@ -1319,7 +1333,7 @@ export class CliAdapter implements PlatformAdapter {
   constructor(private config: ResolvedCliConfig) {}
 
   getConfig<T>(key: string, defaultValue: T): T {
-    return (this.config as Record<string, unknown>)[key] as T ?? defaultValue;
+    return ((this.config as Record<string, unknown>)[key] as T) ?? defaultValue;
   }
 
   getWorkspaceRoot(): string {
@@ -1342,7 +1356,10 @@ export class CliAdapter implements PlatformAdapter {
     if (!this.config.quiet) process.stdout.write(`  ${message}\r`);
   }
 
-  async showChoice(message: string, ...options: string[]): Promise<string | undefined> {
+  async showChoice(
+    message: string,
+    ...options: string[]
+  ): Promise<string | undefined> {
     // For headless mode: return first option (or undefined)
     // For interactive mode: could prompt with readline
     return options[0];
@@ -1375,14 +1392,28 @@ program
 program
   .command("run <file>")
   .description("Execute a prompt or workflow file")
-  .option("-H, --harness <harness>", "AI harness: copilot-cli, claude-cli, codex-cli", "copilot-cli")
+  .option(
+    "-H, --harness <harness>",
+    "AI harness: copilot-cli, claude-cli, codex-cli",
+    "copilot-cli"
+  )
   .option("-m, --model <model>", "Model to use")
   .option("-d, --cwd <path>", "Working directory")
   .option("--headless", "Force headless mode")
   .option("--interactive", "Force interactive mode")
   .option("--allow-all-tools", "Allow all tools without prompting")
-  .option("--allow-tool <pattern>", "Allow specific tool pattern (repeatable)", collect, [])
-  .option("--deny-tool <pattern>", "Deny specific tool pattern (repeatable)", collect, [])
+  .option(
+    "--allow-tool <pattern>",
+    "Allow specific tool pattern (repeatable)",
+    collect,
+    []
+  )
+  .option(
+    "--deny-tool <pattern>",
+    "Deny specific tool pattern (repeatable)",
+    collect,
+    []
+  )
   .option("-q, --quiet", "Only show errors")
   .option("--verbose", "Show debug output")
   .option("--json", "Output results as JSON")
@@ -1394,7 +1425,8 @@ program
     const instance = new WorkflowInstance({
       platform: adapter,
       integrationFactory: factory,
-      getDetectorIntegration: (harness?) => factory.createForExecution(harness ?? config.harness),
+      getDetectorIntegration: (harness?) =>
+        factory.createForExecution(harness ?? config.harness),
       onWorkflowNameChange: () => {},
       onStatusBarUpdate: () => {},
     });
@@ -1461,26 +1493,26 @@ Add `"flightpath": "./out/cli.js"` to the `bin` section.
 
 ### Files to Create / Modify
 
-| File | Action | Phase | Effort |
-|------|--------|-------|--------|
-| `src/platform/PlatformAdapter.ts` | CREATE | 2.3 | Low |
-| `src/platform/VsCodeAdapter.ts` | CREATE | 2.3 | Low |
-| `src/platform/CliAdapter.ts` | CREATE | 3.2 | Medium |
-| `src/cli.ts` | CREATE | 3.3 | Medium |
-| `src/flightpath/VsCodeIntegrationFactory.ts` | CREATE | 2.8 | Low |
-| `src/flightpath/cli/shared/CliTerminalFormatter.ts` | CREATE | 3.3 | Medium |
-| `src/flightpath/HarnessIntegration.ts` | MODIFY | 2.1 | Medium |
-| `src/flightpath/PromptQueue.ts` | MODIFY | 2.2 | Low |
-| `src/flightpath/PromptFileParser.ts` | MODIFY | 2.4 | Low |
-| `src/flightpath/orchestration/WorkspaceSessionManager.ts` | MODIFY | 2.5 | Low |
-| `src/flightpath/WorkflowExecutor.ts` | MODIFY | 2.6 | Low |
-| `src/flightpath/cli/CliIntegration.ts` | MODIFY | 2.7 | Medium |
-| `src/flightpath/IntegrationFactory.ts` | MODIFY | 2.8 | Low |
-| `src/flightpath/WorkflowInstance.ts` | MODIFY | 2.9 | Medium |
-| `src/extension.ts` | MODIFY | 2.9 | Low |
-| `src/flightpath/WorkflowOrchestrator.ts` | MODIFY | 2.9 | Low |
-| `esbuild.js` | MODIFY | 3.4 | Low |
-| `package.json` | MODIFY | 3.5 | Low |
+| File                                                      | Action | Phase | Effort |
+| --------------------------------------------------------- | ------ | ----- | ------ |
+| `src/platform/PlatformAdapter.ts`                         | CREATE | 2.3   | Low    |
+| `src/platform/VsCodeAdapter.ts`                           | CREATE | 2.3   | Low    |
+| `src/platform/CliAdapter.ts`                              | CREATE | 3.2   | Medium |
+| `src/cli.ts`                                              | CREATE | 3.3   | Medium |
+| `src/flightpath/VsCodeIntegrationFactory.ts`              | CREATE | 2.8   | Low    |
+| `src/flightpath/cli/shared/CliTerminalFormatter.ts`       | CREATE | 3.3   | Medium |
+| `src/flightpath/HarnessIntegration.ts`                    | MODIFY | 2.1   | Medium |
+| `src/flightpath/PromptQueue.ts`                           | MODIFY | 2.2   | Low    |
+| `src/flightpath/PromptFileParser.ts`                      | MODIFY | 2.4   | Low    |
+| `src/flightpath/orchestration/WorkspaceSessionManager.ts` | MODIFY | 2.5   | Low    |
+| `src/flightpath/WorkflowExecutor.ts`                      | MODIFY | 2.6   | Low    |
+| `src/flightpath/cli/CliIntegration.ts`                    | MODIFY | 2.7   | Medium |
+| `src/flightpath/IntegrationFactory.ts`                    | MODIFY | 2.8   | Low    |
+| `src/flightpath/WorkflowInstance.ts`                      | MODIFY | 2.9   | Medium |
+| `src/extension.ts`                                        | MODIFY | 2.9   | Low    |
+| `src/flightpath/WorkflowOrchestrator.ts`                  | MODIFY | 2.9   | Low    |
+| `esbuild.js`                                              | MODIFY | 3.4   | Low    |
+| `package.json`                                            | MODIFY | 3.5   | Low    |
 
 **Not modified**: `CopilotChatIntegration.ts` (VS Code-only, untouched), all provider implementations, all types, all utilities.
 
@@ -1541,15 +1573,15 @@ These are already in the extension and will be shared:
 
 ## Comparison with Similar Tools
 
-| Feature               | FlightPath CLI              | Aider | Claude CLI | Copilot CLI |
-| --------------------- | --------------------------- | ----- | ---------- | ----------- |
-| Workflow Files        | ✅ YAML/JSON/MD             | ❌    | ❌         | ❌          |
-| Multi-Prompt          | ✅ Sequential               | ❌    | ❌         | ❌          |
-| End Conditions        | ✅ Scripts                  | ❌    | ❌         | ❌          |
-| Multiple Harnesses    | ✅ Copilot+Claude+Codex CLI | ❌    | ❌         | ❌          |
-| Session Resume        | ✅                          | ✅    | ✅         | ✅          |
-| CI/CD Ready           | ✅ JSON output              | ⚠️    | ⚠️         | ⚠️          |
-| Dynamic Queue         | ✅ (shared with extension)  | ❌    | ❌         | ❌          |
+| Feature            | FlightPath CLI              | Aider | Claude CLI | Copilot CLI |
+| ------------------ | --------------------------- | ----- | ---------- | ----------- |
+| Workflow Files     | ✅ YAML/JSON/MD             | ❌    | ❌         | ❌          |
+| Multi-Prompt       | ✅ Sequential               | ❌    | ❌         | ❌          |
+| End Conditions     | ✅ Scripts                  | ❌    | ❌         | ❌          |
+| Multiple Harnesses | ✅ Copilot+Claude+Codex CLI | ❌    | ❌         | ❌          |
+| Session Resume     | ✅                          | ✅    | ✅         | ✅          |
+| CI/CD Ready        | ✅ JSON output              | ⚠️    | ⚠️         | ⚠️          |
+| Dynamic Queue      | ✅ (shared with extension)  | ❌    | ❌         | ❌          |
 
 ---
 
@@ -1569,7 +1601,7 @@ FlightPath CLI brings structured AI workflow automation to any terminal environm
 ### MVP Deliverables
 
 1. **Platform Abstraction Layer** - `PlatformAdapter` interface + implementations (primary remaining work)
-2. **vscode Decoupling** - Replace EventEmitters + remove vscode.* from 7 shared files
+2. **vscode Decoupling** - Replace EventEmitters + remove vscode.\* from 7 shared files
 3. **CLI Entry Point** - `src/cli.ts` with Commander.js
 4. **Interactive + Headless Modes** - TTY detection, permission flags
 5. **Streaming Output** - Real-time CLI output with colors

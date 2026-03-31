@@ -245,18 +245,25 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
 
     while (Date.now() - startTime.getTime() < config.timeoutMs) {
       if (onCancel?.()) {
-        Log.debug("⏹️ Stop hook monitoring stopped (cancelled or already completed)");
+        Log.debug(
+          "⏹️ Stop hook monitoring stopped (cancelled or already completed)"
+        );
         return { completed: false, error: "Execution cancelled" };
       }
 
       try {
         if (sessionId) {
-          const stopFile = path.join(config.directory, `${sessionId}-stop.json`);
+          const stopFile = path.join(
+            config.directory,
+            `${sessionId}-stop.json`
+          );
           if (await this.isFileNewerThan(stopFile, startTime)) {
             const data = await this.readNotificationFile(stopFile);
 
             if (data?.hookEvent === "Stop" && data?.status === "completed") {
-              Log.info(`✅ Completion detected via Stop hook (session: ${sessionId})`);
+              Log.info(
+                `✅ Completion detected via Stop hook (session: ${sessionId})`
+              );
               try {
                 fs.unlinkSync(stopFile);
                 Log.debug("🗑️ Cleaned up Stop notification file");
@@ -277,7 +284,9 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
               const data = await this.readNotificationFile(file);
 
               if (data?.hookEvent === "Stop" && data?.status === "completed") {
-                Log.info(`✅ Completion detected via Stop hook (file: ${file})`);
+                Log.info(
+                  `✅ Completion detected via Stop hook (file: ${file})`
+                );
                 try {
                   fs.unlinkSync(file);
                   Log.debug("🗑️ Cleaned up Stop notification file");
@@ -337,14 +346,19 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
         if (await this.isFileNewerThan(file, startTime)) {
           const data = await this.readNotificationFile(file);
 
-          if (this.getStartHookEvents().includes(data?.hookEvent) && data?.sessionId) {
+          if (
+            this.getStartHookEvents().includes(data?.hookEvent) &&
+            data?.sessionId
+          ) {
             Log.debug(
               `[NotificationMonitorBase] Found session-start notification (${data.hookEvent}): ${data.sessionId}`
             );
             // Delete immediately — this file belongs exclusively to this run
             try {
               fs.unlinkSync(file);
-              Log.debug("🗑️ Cleaned up run-scoped SessionStart notification file");
+              Log.debug(
+                "🗑️ Cleaned up run-scoped SessionStart notification file"
+              );
             } catch (error) {
               Log.debug(`Failed to cleanup SessionStart file: ${error}`);
             }
@@ -364,7 +378,10 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
           if (await this.isFileNewerThan(file, startTime)) {
             const data = await this.readNotificationFile(file);
 
-            if (this.getStartHookEvents().includes(data?.hookEvent) && data?.sessionId) {
+            if (
+              this.getStartHookEvents().includes(data?.hookEvent) &&
+              data?.sessionId
+            ) {
               Log.debug(
                 `[NotificationMonitorBase] Found session-start notification (${data.hookEvent}): ${data.sessionId}`
               );

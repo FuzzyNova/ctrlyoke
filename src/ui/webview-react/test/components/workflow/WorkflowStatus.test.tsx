@@ -20,7 +20,9 @@ beforeEach(() => {
   useWorkflowStore.temporal.getState().clear();
   useUiStore.getState().resetUi();
   useSettingsStore.getState().resetSettings();
-  (window.vscodeApi as unknown as { postMessage: ReturnType<typeof vi.fn> }).postMessage = postMessageSpy;
+  (
+    window.vscodeApi as unknown as { postMessage: ReturnType<typeof vi.fn> }
+  ).postMessage = postMessageSpy;
   postMessageSpy.mockClear();
 });
 
@@ -108,9 +110,15 @@ describe("WorkflowStatus — loaded state", () => {
   it("dropdown toggle sends GET_RECENT_WORKFLOWS and GET_WORKFLOWS_LIST", async () => {
     const user = userEvent.setup();
     render(<WorkflowStatus />);
-    await user.click(screen.getByRole("button", { name: /Show recent workflows/i }));
-    expect(postMessageSpy).toHaveBeenCalledWith({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
-    expect(postMessageSpy).toHaveBeenCalledWith({ type: MESSAGE_TYPES.GET_WORKFLOWS_LIST });
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS,
+    });
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.GET_WORKFLOWS_LIST,
+    });
   });
 
   it("populates recent workflows list on RECENT_WORKFLOWS message", async () => {
@@ -121,14 +129,20 @@ describe("WorkflowStatus — loaded state", () => {
         data: {
           type: MESSAGE_TYPES.RECENT_WORKFLOWS,
           workflows: [
-            { workflowName: "Workflow A", filePath: "/path/a.yaml", executionState: "idle" },
+            {
+              workflowName: "Workflow A",
+              filePath: "/path/a.yaml",
+              executionState: "idle",
+            },
           ],
         },
       })
     );
     // Open the dropdown
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /Show recent workflows/i }));
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
     await waitFor(() => {
       // Count badge or workflow name should appear
       expect(screen.getByText("1")).toBeInTheDocument();

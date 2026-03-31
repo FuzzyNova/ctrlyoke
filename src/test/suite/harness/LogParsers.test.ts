@@ -1486,7 +1486,10 @@ suite("OpenCodeLogParser", () => {
       };
     }
 
-    function callExtractNewEvents(p: OpenCodeLogParser, exportData: object): BaseCliEvent[] {
+    function callExtractNewEvents(
+      p: OpenCodeLogParser,
+      exportData: object
+    ): BaseCliEvent[] {
       return (p as any).extractNewEventsFromExport(exportData);
     }
 
@@ -1505,7 +1508,11 @@ suite("OpenCodeLogParser", () => {
 
       const events = callExtractNewEvents(parser, exportData);
 
-      assert.strictEqual(events.length, 0, "pending tool should not emit an event");
+      assert.strictEqual(
+        events.length,
+        0,
+        "pending tool should not emit an event"
+      );
       assert.ok(
         !(parser as any).seenPartIds.has("prt_pending_tool"),
         "pending tool ID should NOT be in seenPartIds"
@@ -1532,7 +1539,11 @@ suite("OpenCodeLogParser", () => {
 
       const events = callExtractNewEvents(parser, exportData);
 
-      assert.strictEqual(events.length, 1, "completed tool should emit an event");
+      assert.strictEqual(
+        events.length,
+        1,
+        "completed tool should emit an event"
+      );
       assert.strictEqual(events[0].type, "tool_use");
       assert.ok(
         (parser as any).seenPartIds.has("prt_completed_tool"),
@@ -1573,7 +1584,11 @@ suite("OpenCodeLogParser", () => {
       assert.strictEqual(firstPoll.length, 0, "pending: no event emitted");
 
       const secondPoll = callExtractNewEvents(parser, completedExport);
-      assert.strictEqual(secondPoll.length, 1, "completed: event emitted on next poll");
+      assert.strictEqual(
+        secondPoll.length,
+        1,
+        "completed: event emitted on next poll"
+      );
       assert.strictEqual(secondPoll[0].type, "tool_use");
     });
 
@@ -1600,12 +1615,19 @@ suite("OpenCodeLogParser", () => {
       ]);
 
       const firstPoll = callExtractNewEvents(parser, inProgressExport);
-      assert.strictEqual(firstPoll.length, 0, "in-progress text: no event emitted");
+      assert.strictEqual(
+        firstPoll.length,
+        0,
+        "in-progress text: no event emitted"
+      );
 
       const secondPoll = callExtractNewEvents(parser, finalExport);
       assert.strictEqual(secondPoll.length, 1, "finalized text: event emitted");
       assert.strictEqual(secondPoll[0].type, "text");
-      assert.strictEqual((secondPoll[0] as any).part?.text, "Full response text.");
+      assert.strictEqual(
+        (secondPoll[0] as any).part?.text,
+        "Full response text."
+      );
     });
 
     test("should skip reasoning parts without time.end and emit once time.end is present", () => {
@@ -1631,12 +1653,23 @@ suite("OpenCodeLogParser", () => {
       ]);
 
       const firstPoll = callExtractNewEvents(parser, inProgressExport);
-      assert.strictEqual(firstPoll.length, 0, "in-progress reasoning: no event emitted");
+      assert.strictEqual(
+        firstPoll.length,
+        0,
+        "in-progress reasoning: no event emitted"
+      );
 
       const secondPoll = callExtractNewEvents(parser, finalExport);
-      assert.strictEqual(secondPoll.length, 1, "finalized reasoning: event emitted");
+      assert.strictEqual(
+        secondPoll.length,
+        1,
+        "finalized reasoning: event emitted"
+      );
       assert.strictEqual(secondPoll[0].type, "thinking");
-      assert.strictEqual((secondPoll[0] as any).part?.text, "I should read the file first.");
+      assert.strictEqual(
+        (secondPoll[0] as any).part?.text,
+        "I should read the file first."
+      );
     });
   });
 
@@ -1662,7 +1695,10 @@ suite("OpenCodeLogParser", () => {
       const textEvents = result.events.filter((e) => e.type === "text");
 
       assert.strictEqual(thinkingEvents.length, 1);
-      assert.strictEqual((thinkingEvents[0].data as any).text, "I need to analyze the file.");
+      assert.strictEqual(
+        (thinkingEvents[0].data as any).text,
+        "I need to analyze the file."
+      );
       assert.strictEqual(textEvents.length, 1);
     });
   });

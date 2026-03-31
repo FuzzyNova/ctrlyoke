@@ -56,7 +56,10 @@ export class CopilotToolPermissionMapper
     const filteredTools: string[] = [];
 
     // Add allow mode first
-    if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL || config.mode === PERMISSION_MODES.ALLOW_ALL) {
+    if (
+      config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
+      config.mode === PERMISSION_MODES.ALLOW_ALL
+    ) {
       args.push("--allow-all-tools");
     } else {
       // Custom mode - convert and add specific allow patterns
@@ -121,7 +124,8 @@ export class CopilotToolPermissionMapper
   hasFullPermissions(config: ToolPermissionConfig): boolean {
     // Full permissions only if allowAll mode and no deny patterns
     return (
-      (config.mode === PERMISSION_MODES.ALLOW_ALL || config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) &&
+      (config.mode === PERMISSION_MODES.ALLOW_ALL ||
+        config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) &&
       config.deniedTools.length === 0
     );
   }

@@ -10,7 +10,11 @@ import {
 
 export { PROMPT_PROPERTIES };
 
-export type EndConditionCompareSource = "auto" | "stdout" | "stderr" | "exitCode";
+export type EndConditionCompareSource =
+  | "auto"
+  | "stdout"
+  | "stderr"
+  | "exitCode";
 
 /**
  * End condition configuration

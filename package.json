@@ -1079,14 +1079,27 @@
           "description": "[Hooks] Default user hooks to run alongside FlightPath's completion-detection hooks. Used to pre-populate new workflow files.",
           "items": {
             "type": "object",
-            "required": ["event", "command"],
+            "required": [
+              "event",
+              "command"
+            ],
             "properties": {
               "event": {
                 "type": "string",
-                "enum": ["stop", "sessionStart", "preToolUse", "postToolUse", "userPromptSubmit"]
+                "enum": [
+                  "stop",
+                  "sessionStart",
+                  "preToolUse",
+                  "postToolUse",
+                  "userPromptSubmit"
+                ]
               },
-              "command": { "type": "string" },
-              "timeoutSec": { "type": "number" }
+              "command": {
+                "type": "string"
+              },
+              "timeoutSec": {
+                "type": "number"
+              }
             }
           }
         },

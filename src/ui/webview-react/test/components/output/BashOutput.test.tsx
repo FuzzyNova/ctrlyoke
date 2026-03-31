@@ -44,7 +44,9 @@ describe("BashOutput", () => {
   });
 
   it("shows running status badge when initiated", () => {
-    render(<BashOutput command="sleep 10" status={OPERATION_STATUS.INITIATED} />);
+    render(
+      <BashOutput command="sleep 10" status={OPERATION_STATUS.INITIATED} />
+    );
     expect(screen.getByText("running")).toBeInTheDocument();
   });
 
@@ -61,11 +63,7 @@ describe("BashOutput", () => {
 
   it("shows exit code badge on failure", () => {
     render(
-      <BashOutput
-        command="bad"
-        exitCode={1}
-        status={OPERATION_STATUS.FAILED}
-      />
+      <BashOutput command="bad" exitCode={1} status={OPERATION_STATUS.FAILED} />
     );
     expect(screen.getByText(/exit: 1/)).toBeInTheDocument();
   });

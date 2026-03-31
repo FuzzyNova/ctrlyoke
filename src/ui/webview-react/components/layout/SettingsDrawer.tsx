@@ -283,7 +283,11 @@ export const SettingsPanel: React.FC<{
             | WorkflowProperties["toolPermissions"]
             | GlobalSettings["toolPermissions"]
         ) => {
-          if (v === null || v === undefined || v.mode === PERMISSION_MODES.NONE) {
+          if (
+            v === null ||
+            v === undefined ||
+            v.mode === PERMISSION_MODES.NONE
+          ) {
             return {
               mode: PERMISSION_MODES.NONE,
               allowedTools: [] as string[],
@@ -699,7 +703,9 @@ export const SettingsPanel: React.FC<{
   // Permissions page derived values
   const toolPerms = workflowProperties.toolPermissions;
   const permMode =
-    toolPerms === null ? PERMISSION_MODES.NONE : (toolPerms?.mode ?? PERMISSION_MODES.ALLOW_ALL);
+    toolPerms === null
+      ? PERMISSION_MODES.NONE
+      : (toolPerms?.mode ?? PERMISSION_MODES.ALLOW_ALL);
   // Fall back to global settings when workflow doesn't have lists yet
   const effectiveAllowedTools =
     toolPerms?.allowedTools ?? globalSettings.toolPermissions.allowedTools;
@@ -1313,11 +1319,13 @@ export const SettingsPanel: React.FC<{
                         });
                       }}
                       disabled={
-                        harnessSupport === "mode-only" || permMode !== PERMISSION_MODES.CUSTOM
+                        harnessSupport === "mode-only" ||
+                        permMode !== PERMISSION_MODES.CUSTOM
                       }
                       placeholder={"read\nglob\ngrep"}
                       className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none font-mono${
-                        harnessSupport === "mode-only" || permMode !== PERMISSION_MODES.CUSTOM
+                        harnessSupport === "mode-only" ||
+                        permMode !== PERMISSION_MODES.CUSTOM
                           ? " opacity-50 cursor-not-allowed"
                           : ""
                       }`}
@@ -1370,10 +1378,7 @@ export const SettingsPanel: React.FC<{
                     property="hooks"
                     show={isDifferentFromGlobal("hooks")}
                     onSetDefault={() =>
-                      handleSetAsDefault(
-                        "hooks",
-                        workflowProperties.hooks
-                      )
+                      handleSetAsDefault("hooks", workflowProperties.hooks)
                     }
                   />
                 }

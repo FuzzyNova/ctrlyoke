@@ -3,7 +3,7 @@
 **Date:** March 19, 2026  
 **Status:** Ready for Implementation  
 **Cline CLI Version:** 3.74.0  
-**Target FlightPath Version:** 1.2.0  
+**Target FlightPath Version:** 1.2.0
 
 ---
 
@@ -80,18 +80,18 @@ cline --acp                       # Agent Client Protocol mode
 
 ### 1.2 Key Features
 
-| Feature | Supported | Notes |
-|---------|-----------|-------|
-| JSON output | ✅ | `--json` flag produces JSONL |
-| Session resumption | ✅ | `--taskId <id>` or `--continue` |
-| Model selection | ✅ | `-m provider/model` format |
-| MCP integration | ✅ | `cline mcp add` command |
-| Auto-approve | ✅ | `--yolo` or `--auto-approve-all` |
-| Timeout | ✅ | `-t <seconds>` |
-| Working directory | ✅ | `-c <path>` |
-| Extended thinking | ✅ | `--thinking [tokens]` |
-| Hooks | ✅ | `--hooks-dir <path>` |
-| ACP mode | ✅ | `--acp` for editor integration |
+| Feature            | Supported | Notes                            |
+| ------------------ | --------- | -------------------------------- |
+| JSON output        | ✅        | `--json` flag produces JSONL     |
+| Session resumption | ✅        | `--taskId <id>` or `--continue`  |
+| Model selection    | ✅        | `-m provider/model` format       |
+| MCP integration    | ✅        | `cline mcp add` command          |
+| Auto-approve       | ✅        | `--yolo` or `--auto-approve-all` |
+| Timeout            | ✅        | `-t <seconds>`                   |
+| Working directory  | ✅        | `-c <path>`                      |
+| Extended thinking  | ✅        | `--thinking [tokens]`            |
+| Hooks              | ✅        | `--hooks-dir <path>`             |
+| ACP mode           | ✅        | `--acp` for editor integration   |
 
 ---
 
@@ -111,15 +111,15 @@ Cline's `--json` mode produces JSONL (one JSON object per line):
 
 ### 2.2 Event Structure
 
-| Event Type | `say` Field | Purpose | Key Fields |
-|------------|-------------|---------|------------|
-| `task_started` | — | Task initialization | `taskId` |
-| `say` | `task` | User prompt echo | `text`, `modelInfo` |
-| `say` | `api_req_started` | API request initiated | `text` (JSON string with request details) |
-| `say` | `reasoning` | AI thinking/reasoning | `text`, `partial` |
-| `say` | `completion_result` | Final AI response | `text` |
-| `say` | `tool_use` | Tool execution | `text`, `tool` |
-| `say` | `tool_result` | Tool result | `text`, `tool` |
+| Event Type     | `say` Field         | Purpose               | Key Fields                                |
+| -------------- | ------------------- | --------------------- | ----------------------------------------- |
+| `task_started` | —                   | Task initialization   | `taskId`                                  |
+| `say`          | `task`              | User prompt echo      | `text`, `modelInfo`                       |
+| `say`          | `api_req_started`   | API request initiated | `text` (JSON string with request details) |
+| `say`          | `reasoning`         | AI thinking/reasoning | `text`, `partial`                         |
+| `say`          | `completion_result` | Final AI response     | `text`                                    |
+| `say`          | `tool_use`          | Tool execution        | `text`, `tool`                            |
+| `say`          | `tool_result`       | Tool result           | `text`, `tool`                            |
 
 ### 2.3 Token Usage
 
@@ -162,6 +162,7 @@ Token usage is available in the final streaming chunk's `usage` field:
 **Location:** `~/.cline/data/tasks/<taskId>/`
 
 **Structure:**
+
 ```
 ~/.cline/data/tasks/1773930847934/
 ├── api_conversation_history.json
@@ -171,6 +172,7 @@ Token usage is available in the final streaming chunk's `usage` field:
 ```
 
 **Task Metadata:**
+
 ```json
 {
   "files_in_context": [],
@@ -202,6 +204,7 @@ Token usage is available in the final streaming chunk's `usage` field:
 **Example:** `1773930847934`
 
 **Availability:**
+
 - ✅ Included in `task_started` event (JSON output)
 - ✅ Available in task storage directory name
 - ✅ Can be passed via `--taskId` flag for resumption
@@ -219,11 +222,13 @@ cline --continue "Pick up where we left off"
 ### 3.4 Task Discovery
 
 **Method 1: Task ID from stdout (Headless)**
+
 ```json
-{"type":"task_started","taskId":"1773930847934"}
+{ "type": "task_started", "taskId": "1773930847934" }
 ```
 
 **Method 2: Task storage matching (Interactive)**
+
 1. List files in `~/.cline/data/tasks/`
 2. Sort by modification time (most recent first)
 3. Read `task_metadata.json` from each candidate
@@ -231,6 +236,7 @@ cline --continue "Pick up where we left off"
 5. Extract task ID from matching directory name
 
 **Method 3: Workspace state matching**
+
 ```json
 // ~/.cline/data/workspaces/<hash>/workspaceState.json
 {
@@ -248,6 +254,7 @@ cline --continue "Pick up where we left off"
 **Goal:** Headless mode with `--json` output, process-exit completion detection.
 
 **Deliverables:**
+
 - ✅ 5 provider files in `src/flightpath/harness/cline/`
 - ✅ JSONL parser for real-time output
 - ✅ Task ID extraction from stdout
@@ -262,6 +269,7 @@ cline --continue "Pick up where we left off"
 **Goal:** TUI support with task storage monitoring for completion detection.
 
 **Deliverables:**
+
 - ✅ Task storage monitor with inactivity timeout
 - ✅ Session discovery via task metadata matching
 - ✅ TUI stream processor for terminal UI
@@ -288,6 +296,7 @@ src/flightpath/harness/cline/
 **Purpose:** Aggregate all Cline-specific components into a single provider descriptor
 
 **Key Fields:**
+
 ```typescript
 export class ClineCliProvider implements ICliProvider {
   readonly config: HarnessConfig = {
@@ -307,6 +316,7 @@ export class ClineCliProvider implements ICliProvider {
 ```
 
 **Implementation:**
+
 - [ ] Create class implementing `ICliProvider`
 - [ ] Define `config` with `name: "cline"`, `displayName: "Cline CLI"`
 - [ ] Set `shouldStreamHeadlessOutput: true`
@@ -326,6 +336,7 @@ export class ClineCliProvider implements ICliProvider {
 **Purpose:** Parse JSONL output, extract task IDs, tokens, tool calls
 
 **Key Methods:**
+
 ```typescript
 export class ClineResponseParser extends ResponseParserBase {
   parse(stdout: string, stderr: string, exitCode: number): UniversalCliOutput {
@@ -333,46 +344,46 @@ export class ClineResponseParser extends ResponseParserBase {
     let taskId: string | undefined;
     let modelInfo: ModelInfo | undefined;
 
-    for (const line of stdout.split('\n')) {
+    for (const line of stdout.split("\n")) {
       if (!line.trim()) continue;
       const event = JSON.parse(line);
 
-      if (event.type === 'task_started') {
+      if (event.type === "task_started") {
         taskId = event.taskId;
-      } else if (event.type === 'say') {
+      } else if (event.type === "say") {
         switch (event.say) {
-          case 'task':
+          case "task":
             // User prompt echo
             break;
-          case 'reasoning':
+          case "reasoning":
             events.push({
               type: CLI_EVENT_TYPES.THINKING,
-              data: { text: event.text }
+              data: { text: event.text },
             });
             break;
-          case 'completion_result':
+          case "completion_result":
             events.push({
               type: CLI_EVENT_TYPES.TEXT,
-              data: { text: event.text }
+              data: { text: event.text },
             });
             break;
-          case 'tool_use':
+          case "tool_use":
             events.push({
               type: CLI_EVENT_TYPES.TOOL_CALL,
               data: {
                 toolCallId: event.tool?.id,
                 name: event.tool?.name,
-                parameters: event.tool?.input
-              }
+                parameters: event.tool?.input,
+              },
             });
             break;
-          case 'tool_result':
+          case "tool_result":
             events.push({
               type: CLI_EVENT_TYPES.TOOL_RESULT,
               data: {
                 toolCallId: event.tool?.id,
-                result: event.text
-              }
+                result: event.text,
+              },
             });
             break;
         }
@@ -384,21 +395,23 @@ export class ClineResponseParser extends ResponseParserBase {
       metadata: {
         sessionId: taskId,
         model: modelInfo?.modelId,
-        usage: this.extractUsageFromFinalChunk(stdout)
-      }
+        usage: this.extractUsageFromFinalChunk(stdout),
+      },
     };
   }
 
-  parseTokenCounts(output: string): { prompt: number; completion: number } | undefined {
+  parseTokenCounts(
+    output: string
+  ): { prompt: number; completion: number } | undefined {
     // Extract from final chunk's usage field
-    const lines = output.split('\n').reverse();
+    const lines = output.split("\n").reverse();
     for (const line of lines) {
       try {
         const event = JSON.parse(line);
         if (event.usage?.prompt_tokens) {
           return {
             prompt: event.usage.prompt_tokens,
-            completion: event.usage.completion_tokens
+            completion: event.usage.completion_tokens,
           };
         }
       } catch {}
@@ -409,6 +422,7 @@ export class ClineResponseParser extends ResponseParserBase {
 ```
 
 **Implementation:**
+
 - [ ] Implement NDJSON parser (split by newline, parse each line)
 - [ ] Extract `taskId` from `task_started` event
 - [ ] Extract `reasoning` events as thinking blocks
@@ -428,6 +442,7 @@ export class ClineResponseParser extends ResponseParserBase {
 **Purpose:** Detect completion via process exit (headless mode)
 
 **Implementation:**
+
 ```typescript
 export class ClineNotificationMonitor implements INotificationMonitor {
   readonly supportsSessionIdInFilename = false;
@@ -454,12 +469,18 @@ export class ClineNotificationMonitor implements INotificationMonitor {
   }
 
   getNotificationDirectory(workspaceRoot: string): string {
-    return path.join(workspaceRoot, ".flightpath", "temp", "cline-notifications");
+    return path.join(
+      workspaceRoot,
+      ".flightpath",
+      "temp",
+      "cline-notifications"
+    );
   }
 }
 ```
 
 **Implementation:**
+
 - [ ] Implement `monitorForCompletion()` for headless mode (process exit)
 - [ ] Implement `buildHookConfig()` returning `{ type: "none" }`
 - [ ] Implement `getNotificationDirectory()`
@@ -475,13 +496,14 @@ export class ClineNotificationMonitor implements INotificationMonitor {
 
 **Mapping Table:**
 
-| FlightPath Setting | Cline Mapping |
-|-------------------|---------------|
-| `dangerouslyAllowAll` | `--yolo` |
-| `allowAll` | `--auto-approve-all` |
-| `custom` | No flag (interactive approval) |
+| FlightPath Setting    | Cline Mapping                  |
+| --------------------- | ------------------------------ |
+| `dangerouslyAllowAll` | `--yolo`                       |
+| `allowAll`            | `--auto-approve-all`           |
+| `custom`              | No flag (interactive approval) |
 
 **Implementation:**
+
 ```typescript
 export class ClineToolPermissionMapper extends ToolPermissionMapperBase {
   buildArgs(config: ToolPermissionConfig): string[] {
@@ -510,6 +532,7 @@ export class ClineToolPermissionMapper extends ToolPermissionMapperBase {
 ```
 
 **Implementation:**
+
 - [ ] Implement `buildArgs()` mapping permission modes to CLI flags
 - [ ] Implement `hasFullPermissions()` for headless mode safety check
 - [ ] Handle `custom` mode (no CLI flag, interactive approval)
@@ -523,6 +546,7 @@ export class ClineToolPermissionMapper extends ToolPermissionMapperBase {
 **Purpose:** Parse task storage for session discovery (fallback when task ID not in stdout)
 
 **Task Storage Location:**
+
 ```
 ~/.cline/data/tasks/<taskId>/
 ├── task_metadata.json
@@ -531,6 +555,7 @@ export class ClineToolPermissionMapper extends ToolPermissionMapperBase {
 ```
 
 **Implementation:**
+
 ```typescript
 export class ClineLogParser implements ILogParser {
   async discoverSessionLog(
@@ -550,11 +575,12 @@ export class ClineLogParser implements ILogParser {
     }
 
     // Fallback: find recently modified task directories
-    const dirs = fs.readdirSync(tasksDir)
-      .map(d => ({
+    const dirs = fs
+      .readdirSync(tasksDir)
+      .map((d) => ({
         name: d,
         path: path.join(tasksDir, d),
-        mtime: fs.statSync(path.join(tasksDir, d)).mtimeMs
+        mtime: fs.statSync(path.join(tasksDir, d)).mtimeMs,
       }))
       .sort((a, b) => b.mtime - a.mtime)
       .slice(0, 10);
@@ -611,6 +637,7 @@ export class ClineLogParser implements ILogParser {
 ```
 
 **Implementation:**
+
 - [ ] Implement `discoverSessionLog()` with task ID matching
 - [ ] Implement `extractSessionId()` from `task_started` events
 - [ ] Implement `extractContentFromEvent()` for streaming
@@ -721,6 +748,7 @@ export const CLINE_CLI_MODELS = [
 ### 5.3 Phase 1 Testing Checklist
 
 **Headless Mode:**
+
 - [ ] `cline task "say hello" --json --timeout 10` completes successfully
 - [ ] Task ID extracted from `task_started` event
 - [ ] Final response text parsed from `completion_result` events
@@ -729,15 +757,18 @@ export const CLINE_CLI_MODELS = [
 - [ ] Process exit triggers completion callback
 
 **Tool Calls:**
+
 - [ ] `cline task "create a file" --json --yolo` parses tool_use events
 - [ ] Tool calls mapped to FlightPath `CliEvent` interface
 - [ ] Tool results captured correctly
 
 **Session Resumption:**
+
 - [ ] `cline --taskId <id> "continue..."` resumes previous task
 - [ ] Task ID passed via `--taskId` flag
 
 **Settings:**
+
 - [ ] `flightpath.clineCliModel` setting respected
 - [ ] YOLO mode (`--yolo`) applied for `dangerouslyAllowAll`
 - [ ] Auto-approve mode (`--auto-approve-all`) applied for `allowAll`
@@ -808,6 +839,7 @@ export class ClineNotificationMonitor implements INotificationMonitor {
 ```
 
 **Testing:**
+
 - [ ] Task storage discovered by task ID
 - [ ] Recent task directories read without re-reading entire storage
 - [ ] Inactivity timeout triggers completion
@@ -821,15 +853,19 @@ export class ClineNotificationMonitor implements INotificationMonitor {
 
 ```typescript
 export class ClineLogParser {
-  async discoverRecentTask(cwd: string, prompt: string): Promise<string | null> {
+  async discoverRecentTask(
+    cwd: string,
+    prompt: string
+  ): Promise<string | null> {
     const tasksDir = path.join(os.homedir(), ".cline", "data", "tasks");
 
     // Find recently modified task directories
-    const dirs = fs.readdirSync(tasksDir)
-      .map(d => ({
+    const dirs = fs
+      .readdirSync(tasksDir)
+      .map((d) => ({
         name: d,
         path: path.join(tasksDir, d),
-        mtime: fs.statSync(path.join(tasksDir, d)).mtimeMs
+        mtime: fs.statSync(path.join(tasksDir, d)).mtimeMs,
       }))
       .sort((a, b) => b.mtime - a.mtime)
       .slice(0, 10);
@@ -852,7 +888,12 @@ export class ClineLogParser {
   }
 
   private getWorkspaceState(cwd: string): any {
-    const workspacesDir = path.join(os.homedir(), ".cline", "data", "workspaces");
+    const workspacesDir = path.join(
+      os.homedir(),
+      ".cline",
+      "data",
+      "workspaces"
+    );
     const dirs = fs.readdirSync(workspacesDir);
 
     for (const dir of dirs) {
@@ -871,6 +912,7 @@ export class ClineLogParser {
 ```
 
 **Testing:**
+
 - [ ] Recent task discovered by workspace matching
 - [ ] Workspace state lookup works correctly
 - [ ] Fallback to most recent task if no match
@@ -896,7 +938,7 @@ export class ClineTuiStreamProcessor extends TuiStreamProcessor {
   filterChunk(chunk: string): string {
     let filtered = chunk;
     for (const pattern of this.chromePatterns) {
-      filtered = filtered.replace(pattern, '');
+      filtered = filtered.replace(pattern, "");
     }
     return filtered;
   }
@@ -904,6 +946,7 @@ export class ClineTuiStreamProcessor extends TuiStreamProcessor {
 ```
 
 **Testing:**
+
 - [ ] TUI artifacts filtered from output
 - [ ] JSON output preserved intact
 - [ ] No data loss in filtering
@@ -913,11 +956,13 @@ export class ClineTuiStreamProcessor extends TuiStreamProcessor {
 ### 6.2 Phase 2 Testing Checklist
 
 **Interactive Mode:**
+
 - [ ] Task storage monitoring starts on session launch
 - [ ] Completion detected via inactivity timeout
 - [ ] Session discovery finds correct task
 
 **TUI Filtering:**
+
 - [ ] Box drawing characters filtered
 - [ ] Cursor movement codes filtered
 - [ ] Spinner characters filtered
@@ -930,11 +975,13 @@ export class ClineTuiStreamProcessor extends TuiStreamProcessor {
 ### 7.1 Unit Tests
 
 **Files:**
+
 - `src/flightpath/harness/cline/ClineResponseParser.test.ts`
 - `src/flightpath/harness/cline/ClineLogParser.test.ts`
 - `src/flightpath/harness/cline/ClineToolPermissionMapper.test.ts`
 
 **Test Fixtures:**
+
 - Sample JSONL output (simple prompt)
 - Sample JSONL output (with tool calls)
 - Sample task metadata JSON
@@ -945,6 +992,7 @@ export class ClineTuiStreamProcessor extends TuiStreamProcessor {
 ### 7.2 Integration Tests
 
 **Manual Test Workflows:**
+
 ```yaml
 # test-cline-simple.flightpath.yaml
 harness: cline-cli
@@ -983,6 +1031,7 @@ prompts:
 ### 7.3 Performance Benchmarks
 
 **Metrics:**
+
 - Time to first token (streaming)
 - Total execution time (headless vs interactive)
 - Task storage polling overhead
@@ -993,11 +1042,13 @@ prompts:
 ## Appendix A: Event Format Reference
 
 ### A.1 Task Started Event
+
 ```json
-{"type":"task_started","taskId":"1773930847934"}
+{ "type": "task_started", "taskId": "1773930847934" }
 ```
 
 ### A.2 Say Event (Task)
+
 ```json
 {
   "ts": 1773930847940,
@@ -1014,6 +1065,7 @@ prompts:
 ```
 
 ### A.3 Say Event (Reasoning)
+
 ```json
 {
   "ts": 1773930854006,
@@ -1027,6 +1079,7 @@ prompts:
 ```
 
 ### A.4 Say Event (Completion Result)
+
 ```json
 {
   "ts": 1773930855667,
@@ -1039,6 +1092,7 @@ prompts:
 ```
 
 ### A.5 API Request Started Event
+
 ```json
 {
   "ts": 1773930851676,
@@ -1054,22 +1108,23 @@ prompts:
 
 ## Appendix B: Comparison to Existing Harnesses
 
-| Feature | Cline CLI | Claude Code | Codex CLI | Copilot CLI |
-|---------|-----------|-------------|-----------|-------------|
-| JSON output | ✅ `--json` | ✅ `--output-format stream-json` | ✅ `--format json` | ❌ |
-| Session ID in stdout | ✅ `task_started` | ✅ `system.init` | ✅ `session_id` | ❌ |
-| Session resumption | ✅ `--taskId` | ✅ `--resume` | ✅ `--resume` | ✅ `--resume` |
-| Tool permission model | Mode-based (`--yolo`) | Pattern-based | Pattern-based | Pattern-based |
-| Task storage | `~/.cline/data/tasks/` | `~/.claude/projects/` | `~/.codex/sessions/` | `~/.copilot/` |
-| MCP support | ✅ `cline mcp add` | ✅ `--mcp-config` | ✅ `--mcp-config` | ✅ `--mcp-config` |
-| Completion detection | Process exit | Stop hook | Notify hook | SessionEnd hook |
-| Thinking/reasoning | ✅ `reasoning` events | ✅ `thinking` blocks | ✅ `thinking` blocks | ✅ `reasoning` events |
-| Cost tracking | ✅ `usage.cost` | ✅ `usage` | ✅ `usage` | ❌ |
-| Extended thinking | ✅ `--thinking` | ✅ `thinking` budget | ✅ `reasoning.effort` | ❌ |
+| Feature               | Cline CLI              | Claude Code                      | Codex CLI             | Copilot CLI           |
+| --------------------- | ---------------------- | -------------------------------- | --------------------- | --------------------- |
+| JSON output           | ✅ `--json`            | ✅ `--output-format stream-json` | ✅ `--format json`    | ❌                    |
+| Session ID in stdout  | ✅ `task_started`      | ✅ `system.init`                 | ✅ `session_id`       | ❌                    |
+| Session resumption    | ✅ `--taskId`          | ✅ `--resume`                    | ✅ `--resume`         | ✅ `--resume`         |
+| Tool permission model | Mode-based (`--yolo`)  | Pattern-based                    | Pattern-based         | Pattern-based         |
+| Task storage          | `~/.cline/data/tasks/` | `~/.claude/projects/`            | `~/.codex/sessions/`  | `~/.copilot/`         |
+| MCP support           | ✅ `cline mcp add`     | ✅ `--mcp-config`                | ✅ `--mcp-config`     | ✅ `--mcp-config`     |
+| Completion detection  | Process exit           | Stop hook                        | Notify hook           | SessionEnd hook       |
+| Thinking/reasoning    | ✅ `reasoning` events  | ✅ `thinking` blocks             | ✅ `thinking` blocks  | ✅ `reasoning` events |
+| Cost tracking         | ✅ `usage.cost`        | ✅ `usage`                       | ✅ `usage`            | ❌                    |
+| Extended thinking     | ✅ `--thinking`        | ✅ `thinking` budget             | ✅ `reasoning.effort` | ❌                    |
 
 ### B.1 Key Differences
 
 **Cline Advantages:**
+
 - ✅ Task ID in `task_started` event (easy extraction)
 - ✅ Rich cost tracking with detailed breakdowns
 - ✅ Native MCP integration (`cline mcp add`)
@@ -1078,6 +1133,7 @@ prompts:
 - ✅ Simple permission model (mode-based)
 
 **Cline Disadvantages:**
+
 - ❌ No hook-based completion detection (process exit only in Phase 1)
 - ❌ No granular tool permissions (mode-based only)
 - ❌ Task ID is numeric timestamp (not UUID)
@@ -1085,13 +1141,13 @@ prompts:
 
 ### B.2 Integration Complexity
 
-| Component | Cline CLI | Claude Code | Copilot CLI |
-|-----------|-----------|-------------|-------------|
-| CLI Provider | Medium | Medium | Medium |
-| Response Parser | Medium (JSONL events) | Medium (stream-json) | Medium (JSONL events) |
-| Notification Monitor | Simple (process exit) | Complex (Stop hook) | Complex (SessionEnd hook) |
-| Log Parser | Medium (task storage) | Medium (session logs) | Complex (session logs) |
-| Tool Permission Mapper | Simple (mode-based) | Complex (pattern-based) | Complex (pattern-based) |
+| Component              | Cline CLI             | Claude Code             | Copilot CLI               |
+| ---------------------- | --------------------- | ----------------------- | ------------------------- |
+| CLI Provider           | Medium                | Medium                  | Medium                    |
+| Response Parser        | Medium (JSONL events) | Medium (stream-json)    | Medium (JSONL events)     |
+| Notification Monitor   | Simple (process exit) | Complex (Stop hook)     | Complex (SessionEnd hook) |
+| Log Parser             | Medium (task storage) | Medium (session logs)   | Complex (session logs)    |
+| Tool Permission Mapper | Simple (mode-based)   | Complex (pattern-based) | Complex (pattern-based)   |
 
 ---
 
@@ -1107,48 +1163,48 @@ export class ClineResponseParser extends ResponseParserBase {
     let taskId: string | undefined;
     let modelId: string | undefined;
 
-    for (const line of stdout.split('\n')) {
+    for (const line of stdout.split("\n")) {
       if (!line.trim()) continue;
 
       try {
         const event = JSON.parse(line);
 
-        if (event.type === 'task_started') {
+        if (event.type === "task_started") {
           taskId = event.taskId;
-        } else if (event.type === 'say') {
+        } else if (event.type === "say") {
           switch (event.say) {
-            case 'task':
+            case "task":
               modelId = event.modelInfo?.modelId;
               break;
-            case 'reasoning':
+            case "reasoning":
               events.push({
                 type: CLI_EVENT_TYPES.THINKING,
-                data: { text: event.text }
+                data: { text: event.text },
               });
               break;
-            case 'completion_result':
+            case "completion_result":
               events.push({
                 type: CLI_EVENT_TYPES.TEXT,
-                data: { text: event.text }
+                data: { text: event.text },
               });
               break;
-            case 'tool_use':
+            case "tool_use":
               events.push({
                 type: CLI_EVENT_TYPES.TOOL_CALL,
                 data: {
                   toolCallId: event.tool?.id,
                   name: event.tool?.name,
-                  parameters: event.tool?.input
-                }
+                  parameters: event.tool?.input,
+                },
               });
               break;
-            case 'tool_result':
+            case "tool_result":
               events.push({
                 type: CLI_EVENT_TYPES.TOOL_RESULT,
                 data: {
                   toolCallId: event.tool?.id,
-                  result: event.text
-                }
+                  result: event.text,
+                },
               });
               break;
           }
@@ -1163,13 +1219,13 @@ export class ClineResponseParser extends ResponseParserBase {
       metadata: {
         sessionId: taskId,
         model: modelId,
-        usage: this.extractUsageFromFinalChunk(stdout)
-      }
+        usage: this.extractUsageFromFinalChunk(stdout),
+      },
     };
   }
 
   private extractUsageFromFinalChunk(stdout: string): any {
-    const lines = stdout.split('\n').reverse();
+    const lines = stdout.split("\n").reverse();
     for (const line of lines) {
       try {
         const event = JSON.parse(line);
@@ -1177,7 +1233,7 @@ export class ClineResponseParser extends ResponseParserBase {
           return {
             inputTokens: event.usage.prompt_tokens || 0,
             outputTokens: event.usage.completion_tokens || 0,
-            totalTokens: event.usage.total_tokens || 0
+            totalTokens: event.usage.total_tokens || 0,
           };
         }
       } catch {}
@@ -1210,11 +1266,12 @@ export class ClineLogParser implements ILogParser {
     }
 
     // Find recently modified task directories
-    const dirs = fs.readdirSync(tasksDir)
-      .map(d => ({
+    const dirs = fs
+      .readdirSync(tasksDir)
+      .map((d) => ({
         name: d,
         path: path.join(tasksDir, d),
-        mtime: fs.statSync(path.join(tasksDir, d)).mtimeMs
+        mtime: fs.statSync(path.join(tasksDir, d)).mtimeMs,
       }))
       .sort((a, b) => b.mtime - a.mtime)
       .slice(0, 10);
@@ -1237,15 +1294,17 @@ export class ClineLogParser implements ILogParser {
 
   async readNewLines(filePath: string): Promise<BaseCliEvent[]> {
     const content = fs.readFileSync(filePath, "utf-8");
-    const lines = content.split('\n').filter(l => l.trim());
+    const lines = content.split("\n").filter((l) => l.trim());
 
-    return lines.map(line => {
-      try {
-        return JSON.parse(line);
-      } catch {
-        return null;
-      }
-    }).filter(Boolean) as BaseCliEvent[];
+    return lines
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean) as BaseCliEvent[];
   }
 }
 ```

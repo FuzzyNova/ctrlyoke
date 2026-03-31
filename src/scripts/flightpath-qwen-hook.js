@@ -44,9 +44,7 @@ function main() {
   // Unconditional invocation log — written before any flag checks so we can confirm
   // the hook script is being called at all, regardless of diagnostic settings.
   try {
-    const logsDir = notifyDir
-      ? path.join(notifyDir, "..", "..", "logs")
-      : null;
+    const logsDir = notifyDir ? path.join(notifyDir, "..", "..", "logs") : null;
     const logFile = logsDir
       ? path.join(logsDir, `${SCRIPT_NAME}-debug.log`)
       : path.join(os.tmpdir(), `${SCRIPT_NAME}-invocations.log`);
@@ -89,7 +87,11 @@ function main() {
       allFields: Object.keys(hookInput),
     });
 
-    if (hookEvent !== "SessionStart" && hookEvent !== "UserPromptSubmit" && hookEvent !== "Stop") {
+    if (
+      hookEvent !== "SessionStart" &&
+      hookEvent !== "UserPromptSubmit" &&
+      hookEvent !== "Stop"
+    ) {
       debugLog("⏭️ Ignoring unhandled hook event", { hookEvent });
       process.exit(0);
     }
@@ -110,7 +112,8 @@ function main() {
     }
 
     const safeSessionId = path.basename(sessionId);
-    const isStartEvent = hookEvent === "SessionStart" || hookEvent === "UserPromptSubmit";
+    const isStartEvent =
+      hookEvent === "SessionStart" || hookEvent === "UserPromptSubmit";
     // For start events, use FLIGHTPATH_RUN_ID as the file prefix when set.
     // This gives each parallel workflow its own uniquely-named start file so
     // waitForSessionStart can do a direct lookup instead of a wildcard scan.

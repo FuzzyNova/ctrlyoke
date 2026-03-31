@@ -41,7 +41,8 @@ function formatToolResultForMarkdown(result: {
   error?: string;
 }): string {
   const prefix = "  ⎿  ";
-  if (!result.success && result.error) return prefix + truncate(result.error, 200);
+  if (!result.success && result.error)
+    return prefix + truncate(result.error, 200);
   if (result.output) return prefix + truncate(result.output, 100);
   return prefix + (result.success ? "Success" : "Failed");
 }
@@ -89,7 +90,8 @@ function formatDiffForMarkdown(
       line.type === "added"
         ? String(line.newLineNum ?? "").padStart(4)
         : String(line.oldLineNum ?? "").padStart(4);
-    const prefix = line.type === "added" ? "+" : line.type === "removed" ? "-" : " ";
+    const prefix =
+      line.type === "added" ? "+" : line.type === "removed" ? "-" : " ";
     return `${prefix}${num} | ${line.content}`;
   });
 }
@@ -183,7 +185,9 @@ function renderStructuredEventsToMarkdown(
           lines.push(`● Write failed: ${data.path}`);
           if (data.error) lines.push(`  Error: ${data.error}`);
         } else {
-          lines.push(`● Wrote ${data.path}${data.content ? ` (${data.content.length} bytes)` : ""}`);
+          lines.push(
+            `● Wrote ${data.path}${data.content ? ` (${data.content.length} bytes)` : ""}`
+          );
         }
         lines.push("");
         break;
@@ -323,7 +327,9 @@ export function generateMarkdownExport(
       };
 
       const attemptLabel =
-        item.attemptIndex === 0 ? "Initial Attempt" : `Retry ${item.attemptIndex}`;
+        item.attemptIndex === 0
+          ? "Initial Attempt"
+          : `Retry ${item.attemptIndex}`;
 
       lines.push(`## Prompt ${item.stepIndex + 1} - ${attemptLabel}`);
       lines.push("");
@@ -367,12 +373,18 @@ export function generateMarkdownExport(
       const sessionId = output.structured?.metadata?.sessionId;
       const harnessId = output.structured?.metadata?.harness;
       const harnessName = harnessId
-        ? (HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO]?.name ?? harnessId)
+        ? (HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO]?.name ??
+          harnessId)
         : undefined;
 
       if (output.tokens) {
-        const { prompt, completion, cached, contextWindowUsed, contextWindowSize } =
-          output.tokens;
+        const {
+          prompt,
+          completion,
+          cached,
+          contextWindowUsed,
+          contextWindowSize,
+        } = output.tokens;
         if (contextWindowUsed !== undefined && contextWindowSize) {
           const fmt = (n: number) =>
             n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
@@ -388,7 +400,9 @@ export function generateMarkdownExport(
         );
       }
       if (sessionId) {
-        stats.push(`Session${harnessName ? ` (${harnessName})` : ""}: ${sessionId}`);
+        stats.push(
+          `Session${harnessName ? ` (${harnessName})` : ""}: ${sessionId}`
+        );
       }
       if (output.elapsed !== undefined) {
         stats.push(`${output.elapsed}s`);

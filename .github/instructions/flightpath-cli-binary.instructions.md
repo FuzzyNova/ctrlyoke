@@ -37,15 +37,15 @@ The FlightPath CLI adds only: argument parsing (Commander.js), TTY detection, `C
 
 **`src/platform/CliAdapter.ts`** — Implements `PlatformAdapter`. Maps CLI flags to config keys that `ConfigurationUtils.get()` reads inside harness providers. Key mappings:
 
-| Config key | Source |
-|---|---|
-| `cliToolPermissions` | `"dangerouslyAllowAll"` / `"custom"` / `"allowAll"` from allow/deny flags |
-| `cliAllowedTools` | `--allow-tool` flag values |
-| `cliDeniedTools` | `--deny-tool` flag values |
-| `copilotCliAllowedDirs` | `--add-dir` flag values |
-| `cliExecutionMode` | `"interactive"` or `"headless"` (TTY-detected or forced) |
-| `copilotCliModel` / `claudeCliModel` / `codexCliModel` | `--model` flag |
-| `scriptTimeout` / `maxPromptExecutionTime` | `--script-timeout` / `--timeout` (converted back to seconds) |
+| Config key                                             | Source                                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `cliToolPermissions`                                   | `"dangerouslyAllowAll"` / `"custom"` / `"allowAll"` from allow/deny flags |
+| `cliAllowedTools`                                      | `--allow-tool` flag values                                                |
+| `cliDeniedTools`                                       | `--deny-tool` flag values                                                 |
+| `copilotCliAllowedDirs`                                | `--add-dir` flag values                                                   |
+| `cliExecutionMode`                                     | `"interactive"` or `"headless"` (TTY-detected or forced)                  |
+| `copilotCliModel` / `claudeCliModel` / `codexCliModel` | `--model` flag                                                            |
+| `scriptTimeout` / `maxPromptExecutionTime`             | `--script-timeout` / `--timeout` (converted back to seconds)              |
 
 VS Code-only features (`focusDashboard`) are not implemented.
 

@@ -547,7 +547,10 @@ suite("PropertyResolver Tests", () => {
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
       assert.ok(resolved.toolPermissions);
-      assert.strictEqual(resolved.toolPermissions.mode, PERMISSION_MODES.ALLOW_ALL);
+      assert.strictEqual(
+        resolved.toolPermissions.mode,
+        PERMISSION_MODES.ALLOW_ALL
+      );
       assert.deepStrictEqual(resolved.toolPermissions.allowedTools, ["write"]);
     });
 
@@ -562,7 +565,10 @@ suite("PropertyResolver Tests", () => {
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
       assert.ok(resolved.toolPermissions);
-      assert.strictEqual(resolved.toolPermissions.mode, PERMISSION_MODES.CUSTOM);
+      assert.strictEqual(
+        resolved.toolPermissions.mode,
+        PERMISSION_MODES.CUSTOM
+      );
       assert.deepStrictEqual(resolved.toolPermissions.allowedTools, []);
       assert.deepStrictEqual(resolved.toolPermissions.deniedTools, []);
     });

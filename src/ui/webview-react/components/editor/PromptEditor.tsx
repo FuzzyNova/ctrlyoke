@@ -73,7 +73,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const [fileRefExists, setFileRefExists] = useState<boolean | null>(null);
 
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
-  const isFinalPrompt = selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT;
+  const isFinalPrompt =
+    selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT;
   const isFileRef = looksLikeFilePath(promptText.trim());
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const selectedPromptStatus =
@@ -543,7 +544,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         <CodeMirrorEditor
           value={promptText}
           onChange={handleTextChange}
-          placeholder={isFinalPrompt ? EDITOR_PLACEHOLDER_TEXT.FINAL_PROMPT : undefined}
+          placeholder={
+            isFinalPrompt ? EDITOR_PLACEHOLDER_TEXT.FINAL_PROMPT : undefined
+          }
           affUri={affUri}
           dicUri={dicUri}
           readOnly={isCLIManaged}
@@ -578,7 +581,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
                 className="codicon codicon-warning"
                 style={{ fontSize: "11px" }}
               />
-              <span>File not found — will be sent as literal text at execution</span>
+              <span>
+                File not found — will be sent as literal text at execution
+              </span>
             </>
           ) : (
             <>
@@ -586,7 +591,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
                 className="codicon codicon-file"
                 style={{ fontSize: "11px" }}
               />
-              <span>File reference — prompt will be read from this path at execution</span>
+              <span>
+                File reference — prompt will be read from this path at execution
+              </span>
             </>
           )}
         </div>
@@ -595,7 +602,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       {/* Editor Footer with actions (outside wrapper, not covered by drawer) */}
       <EditorFooter
         isEditMode={isEditMode}
-        isFinalPromptMode={selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT}
+        isFinalPromptMode={
+          selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
+        }
         isPromptCompleted={isPromptCompleted}
         isPromptBeingSent={isPromptBeingSent}
         isPromptActivelyRunning={isPromptActivelyRunning}

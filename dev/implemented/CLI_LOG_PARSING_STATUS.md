@@ -49,17 +49,17 @@ All three CLI providers successfully parse their respective log formats and conv
 ```typescript
 // From DashboardConstants.ts CLI_EVENT_TYPES
 export const CLI_EVENT_TYPES = {
-  TEXT: "text",               // AI response text
-  THINKING: "thinking",       // Reasoning/planning blocks
-  BASH_COMMAND: "bashCommand",// Shell command execution
-  FILE_READ: "fileRead",      // File read operations
-  FILE_WRITE: "fileWrite",    // File creation
-  FILE_EDIT: "fileEdit",      // File modification (with optional diff)
-  FILE_DELETE: "fileDelete",  // File deletion
+  TEXT: "text", // AI response text
+  THINKING: "thinking", // Reasoning/planning blocks
+  BASH_COMMAND: "bashCommand", // Shell command execution
+  FILE_READ: "fileRead", // File read operations
+  FILE_WRITE: "fileWrite", // File creation
+  FILE_EDIT: "fileEdit", // File modification (with optional diff)
+  FILE_DELETE: "fileDelete", // File deletion
   MCP_TOOL_CALL: "mcpToolCall", // MCP server tool calls
-  WEB_SEARCH: "webSearch",    // Web search operations
-  TOOL_CALL: "toolCall",      // Generic/normalized tool invocations
-  TOOL_RESULT: "toolResult",  // Tool execution results
+  WEB_SEARCH: "webSearch", // Web search operations
+  TOOL_CALL: "toolCall", // Generic/normalized tool invocations
+  TOOL_RESULT: "toolResult", // Tool execution results
 } as const;
 ```
 

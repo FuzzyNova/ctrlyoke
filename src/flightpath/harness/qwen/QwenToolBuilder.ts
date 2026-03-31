@@ -45,12 +45,10 @@ export class QwenToolBuilder {
   ): CliEvent {
     const classification = CliEventMapper.classifyTool(toolName);
     // Resolve file path across all Qwen parameter name variants (most specific first)
-    const filePath = (
-      toolInput.absolute_path ??
+    const filePath = (toolInput.absolute_path ??
       toolInput.file_path ??
       toolInput.path ??
-      toolInput.pattern
-    ) as string | undefined;
+      toolInput.pattern) as string | undefined;
 
     switch (classification.type) {
       case CLI_EVENT_TYPES.BASH_COMMAND:
@@ -85,27 +83,24 @@ export class QwenToolBuilder {
           data: {
             path: filePath || "unknown",
             content:
-              ((toolInput.content ?? toolInput.file_text) as string | undefined) ||
-              "",
+              ((toolInput.content ?? toolInput.file_text) as
+                | string
+                | undefined) || "",
             status: OPERATION_STATUS.INITIATED,
           } as FileWriteData,
         };
 
       case CLI_EVENT_TYPES.FILE_EDIT: {
-        const oldContent = (
-          toolInput.oldString ??
+        const oldContent = (toolInput.oldString ??
           toolInput.old_string ??
           toolInput.oldContent ??
           toolInput.old_content ??
-          toolInput.old_str
-        ) as string | undefined;
-        const newContent = (
-          toolInput.newString ??
+          toolInput.old_str) as string | undefined;
+        const newContent = (toolInput.newString ??
           toolInput.new_string ??
           toolInput.newContent ??
           toolInput.new_content ??
-          toolInput.new_str
-        ) as string | undefined;
+          toolInput.new_str) as string | undefined;
         return {
           type: CLI_EVENT_TYPES.FILE_EDIT,
           timestamp,

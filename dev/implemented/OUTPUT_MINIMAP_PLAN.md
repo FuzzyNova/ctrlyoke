@@ -10,6 +10,7 @@ Replace the current dual prompt-level undo buttons (one in the header, one in th
 - Click-to-scroll navigation on any marker
 
 This solves two problems simultaneously:
+
 1. Consecutive undo buttons from adjacent prompts no longer collide ("end of prompt 1 → start of prompt 2" adjacency confusion)
 2. Historical runs become navigable at a glance — users can jump to any prompt even when the sidebar prompt list no longer matches the output positions
 
@@ -41,17 +42,17 @@ The outer `<section>` already uses `flex flex-col`. The content row becomes `fle
 
 ### New Files
 
-| File | Purpose |
-|------|---------|
+| File                                  | Purpose                    |
+| ------------------------------------- | -------------------------- |
 | `components/output/OutputMinimap.tsx` | The minimap rail component |
 
 ### Modified Files
 
-| File | Change |
-|------|--------|
+| File                                  | Change                                                                                                                                                                                  |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `components/layout/OutputSection.tsx` | Wrap output content + minimap in a row; pass required props to `OutputMinimap`; move scroll tracking into shared state; remove `promptUndoAction` rendering from `CliOutput` props path |
-| `components/output/CliOutput.tsx` | Remove the two prompt-level undo button renders (header button + stats-row button) — replaced by the minimap |
-| `store/uiStore.ts` | Add `minimapScrollTop: number` + `setMinimapScrollTop()` (or use a ref passed down) |
+| `components/output/CliOutput.tsx`     | Remove the two prompt-level undo button renders (header button + stats-row button) — replaced by the minimap                                                                            |
+| `store/uiStore.ts`                    | Add `minimapScrollTop: number` + `setMinimapScrollTop()` (or use a ref passed down)                                                                                                     |
 
 ---
 
@@ -63,12 +64,16 @@ The outer `<section>` already uses `flex flex-col`. The content row becomes `fle
 interface OutputMinimapProps {
   /** Array of steps in display order, with their first-message index in allMessages */
   steps: Array<{
-    key: string;           // e.g. "queue:0", "finalPrompt:1"
+    key: string; // e.g. "queue:0", "finalPrompt:1"
     kind: "queue" | "finalPrompt";
     stepIndex: number;
     firstMessageIndex: number;
     /** Undo/redo action for this step, or null if not available */
-    undoAction: { label: string; isRedo: boolean; onTrigger: () => void } | null;
+    undoAction: {
+      label: string;
+      isRedo: boolean;
+      onTrigger: () => void;
+    } | null;
   }>;
   totalMessages: number;
   /** Ref to the scrollable output container */
@@ -91,8 +96,12 @@ Markers are `position: absolute; top: {markerTop%}%` inside a `position: relativ
 ### Click-to-Scroll
 
 Clicking a marker calls:
+
 ```ts
-scrollContainer.scrollTo({ top: markerFraction * scrollContainer.scrollHeight, behavior: "smooth" });
+scrollContainer.scrollTo({
+  top: markerFraction * scrollContainer.scrollHeight,
+  behavior: "smooth",
+});
 ```
 
 Clicking an undo button triggers the same `handlePromptUndo` logic currently in `CliOutput`, lifted up to `OutputSection`.
@@ -114,6 +123,7 @@ Currently, the prompt-level undo dialog is owned by `CliOutput`. When migrating 
 The `UndoChangesDialog` can remain rendered in `OutputSection` (one instance, shared) rather than per-`CliOutput`. `OutputSection` manages `dialogState`.
 
 Data already available in `OutputSection` for undo:
+
 - `stepOutputsMap` — all CLI outputs per step
 - `lastCliIndexPerStep` — identifies the last attempt per step (only last gets undo)
 - `allowUndoActions` — gates on execution state
@@ -142,14 +152,14 @@ This state is passed to `OutputMinimap` as `scrollTop`. The minimap re-renders o
 
 Use VS Code CSS variables for theme compatibility:
 
-| Element | CSS Variable |
-|---------|-------------|
-| Rail background | `var(--vscode-scrollbarSlider-background)` at 20% opacity |
-| Viewport indicator | `var(--vscode-scrollbarSlider-background)` |
-| Marker dot (no undo) | `var(--vscode-descriptionForeground)` |
-| Marker dot (has undo) | `var(--vscode-textLink-foreground)` |
-| Marker dot (has redo) | `var(--vscode-terminal-ansiGreen)` |
-| Undo button hover | `var(--vscode-button-background)` |
+| Element               | CSS Variable                                              |
+| --------------------- | --------------------------------------------------------- |
+| Rail background       | `var(--vscode-scrollbarSlider-background)` at 20% opacity |
+| Viewport indicator    | `var(--vscode-scrollbarSlider-background)`                |
+| Marker dot (no undo)  | `var(--vscode-descriptionForeground)`                     |
+| Marker dot (has undo) | `var(--vscode-textLink-foreground)`                       |
+| Marker dot (has redo) | `var(--vscode-terminal-ansiGreen)`                        |
+| Undo button hover     | `var(--vscode-button-background)`                         |
 
 The rail width is `14px` (narrower than a standard scrollbar so it does not feel like one). The actual scrollbar of `#output-content` remains visible.
 

@@ -1101,9 +1101,7 @@ export const McpServersEditor: React.FC<{
                     <button
                       key={tab}
                       type="button"
-                      onClick={() =>
-                        setForm((f) => ({ ...f, activeTab: tab }))
-                      }
+                      onClick={() => setForm((f) => ({ ...f, activeTab: tab }))}
                       className={`px-2 py-0.5 text-[11px] rounded border transition-colors ${
                         form.activeTab === tab
                           ? "bg-btn-bg text-btn-fg border-btn-bg"

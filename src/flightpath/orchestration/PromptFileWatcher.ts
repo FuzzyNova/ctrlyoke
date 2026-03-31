@@ -21,8 +21,7 @@ export class PromptFileWatcher {
 
   constructor(
     private promptQueue: PromptQueue,
-    private getDashboard: () => IDashboardProvider | undefined = () =>
-      undefined
+    private getDashboard: () => IDashboardProvider | undefined = () => undefined
   ) {}
 
   /**

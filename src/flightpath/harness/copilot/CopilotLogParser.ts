@@ -14,7 +14,10 @@ import {
   TextData,
   ToolResultData,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  HARNESS_IDS,
+} from "../../../types/DashboardConstants";
 
 // ============================================================================
 // Copilot Log Event Type Definitions
@@ -165,7 +168,8 @@ export class CopilotLogParser extends BaseLogParser {
       // postTruncationTokensInMessages = tokens actually sent to the model this turn (grows each turn).
       // Always take the latest value — use it to track context window fill across the session.
       if (event.type === "session.truncation" && event.data) {
-        contextWindowUsedTokens = event.data.postTruncationTokensInMessages || 0;
+        contextWindowUsedTokens =
+          event.data.postTruncationTokensInMessages || 0;
         contextWindowSize = event.data.tokenLimit;
 
         // Also surface it as a visible event when messages were actually dropped
@@ -300,13 +304,14 @@ export class CopilotLogParser extends BaseLogParser {
           } as ToolResultData,
         });
       }
-
     }
 
     // Prefer context window data from session.truncation (fires every turn, most accurate source).
     // Fall back to legacy metadata.usage accumulation (not seen in practice, kept for safety).
-    const effectiveInputTokens = contextWindowUsedTokens > 0 ? contextWindowUsedTokens : inputTokens;
-    const effectiveContextWindowSize = contextWindowSize ?? COPILOT_CLI_CONTEXT_WINDOW_SIZE;
+    const effectiveInputTokens =
+      contextWindowUsedTokens > 0 ? contextWindowUsedTokens : inputTokens;
+    const effectiveContextWindowSize =
+      contextWindowSize ?? COPILOT_CLI_CONTEXT_WINDOW_SIZE;
 
     return {
       events: outputEvents,
@@ -819,7 +824,9 @@ export class CopilotLogParser extends BaseLogParser {
    */
   static async extractTruncationDataFromLog(
     sessionId: string
-  ): Promise<{ postTruncationTokensInMessages: number; tokenLimit: number } | undefined> {
+  ): Promise<
+    { postTruncationTokensInMessages: number; tokenLimit: number } | undefined
+  > {
     const logPath = await CopilotLogParser.getLogPath(sessionId);
     if (!logPath) {
       return undefined;
@@ -827,7 +834,9 @@ export class CopilotLogParser extends BaseLogParser {
 
     try {
       const content = fs.readFileSync(logPath, "utf-8");
-      let last: { postTruncationTokensInMessages: number; tokenLimit: number } | undefined;
+      let last:
+        | { postTruncationTokensInMessages: number; tokenLimit: number }
+        | undefined;
 
       for (const line of content.split("\n")) {
         const trimmed = line.trim();
@@ -840,7 +849,8 @@ export class CopilotLogParser extends BaseLogParser {
             typeof event.data?.tokenLimit === "number"
           ) {
             last = {
-              postTruncationTokensInMessages: event.data.postTruncationTokensInMessages,
+              postTruncationTokensInMessages:
+                event.data.postTruncationTokensInMessages,
               tokenLimit: event.data.tokenLimit,
             };
           }

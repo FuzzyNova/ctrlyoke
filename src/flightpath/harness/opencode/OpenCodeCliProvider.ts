@@ -20,7 +20,10 @@ import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
-import type { PromptItem, UserHookConfig } from "../../../types/FlightPathTypes";
+import type {
+  PromptItem,
+  UserHookConfig,
+} from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { OpenCodePluginGenerator } from "./OpenCodePluginGenerator";
 
@@ -183,7 +186,11 @@ export class OpenCodeCliProvider implements ICliProvider {
     // Interactive mode: deploy the completion detection plugin
     if (isInteractive && workspaceRoot) {
       const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
-      await this.deployCompletionPlugin(workspaceRoot, extensionPath, userHooks);
+      await this.deployCompletionPlugin(
+        workspaceRoot,
+        extensionPath,
+        userHooks
+      );
     }
 
     // Extra CLI flags from additionalArgs (appended before prompt positional arg)
@@ -317,7 +324,10 @@ export class OpenCodeCliProvider implements ICliProvider {
         for (const server of userServers) {
           const entry: Record<string, unknown> = server.url
             ? { type: "remote", url: server.url }
-            : { type: "local", command: [server.command ?? "", ...(server.args ?? [])] };
+            : {
+                type: "local",
+                command: [server.command ?? "", ...(server.args ?? [])],
+              };
           if (!server.url && server.env) {
             entry["environment"] = server.env;
           }

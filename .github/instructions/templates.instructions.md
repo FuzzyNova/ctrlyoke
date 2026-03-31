@@ -21,6 +21,7 @@ Copied to `out/templates/` during build.
 `.agent.md` files with YAML frontmatter (`name`, `description`, optional: `tools`, `model`).
 
 Two structural styles in use:
+
 - **XML structure** (`spec-orchestrator`): `<purpose>`, `<guidelines>`, `<criticalRules>` tags
 - **Markdown headings** (`flightpath-orchestrator`): standard `##` sections
 
@@ -56,11 +57,11 @@ Templates support `{variableName}` placeholder substitution:
 
 **Typed placeholder syntax:**
 
-| Syntax | Type | Modal UI |
-|--------|------|----------|
-| `{varName}` | text (default) | plain text input |
-| `{text:varName}` | text (explicit) | plain text input |
-| `{file:varName}` | file | text input + Browse button (workspace-relative file picker) |
+| Syntax           | Type            | Modal UI                                                    |
+| ---------------- | --------------- | ----------------------------------------------------------- |
+| `{varName}`      | text (default)  | plain text input                                            |
+| `{text:varName}` | text (explicit) | plain text input                                            |
+| `{file:varName}` | file            | text input + Browse button (workspace-relative file picker) |
 
 `extractVariables()` parses the type prefix. `replaceVariables()` substitutes all three forms.
 
@@ -74,13 +75,13 @@ _templateMeta:
     specFile:
       type: file
       fileFilter: ["**/*.md", "**/*.txt"]
-      autoFillFilename: true  # auto-fills workflow filename from selected file's basename
+      autoFillFilename: true # auto-fills workflow filename from selected file's basename
 ```
 
 - `fileFilter` — glob patterns for the file picker
 - `autoFillFilename: true` — only the first variable with this wins; others are ignored with a warning
 - `_templateMeta` is stripped from the workflow file on creation (it's authoring metadata only)
-</templateVariables>
+  </templateVariables>
 
 <workflowFields>
 Built-in templates use YAML (`.flightpath.yaml`). Custom templates use JSON (`.flightpath.json`).

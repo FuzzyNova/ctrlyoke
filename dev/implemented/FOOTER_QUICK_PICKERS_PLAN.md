@@ -16,11 +16,11 @@ Narrow (icon-only):
 
 ### Three width tiers (via two `useElementNarrow` thresholds)
 
-| Tier | Footer width | Picker button content |
-|------|-------------|----------------------|
-| Wide | ≥ 560 px | `[icon] [selected-value-text] [chevron]` |
-| Medium | 380–560 px | `[icon] [chevron]` (no value text, no label) |
-| Narrow | < 380 px | `[icon]` only (existing narrow behaviour) |
+| Tier   | Footer width | Picker button content                        |
+| ------ | ------------ | -------------------------------------------- |
+| Wide   | ≥ 560 px     | `[icon] [selected-value-text] [chevron]`     |
+| Medium | 380–560 px   | `[icon] [chevron]` (no value text, no label) |
+| Narrow | < 380 px     | `[icon]` only (existing narrow behaviour)    |
 
 The selected-value text is the most expensive to show, so it hides at 560px.
 All other text (static labels like "Queue") already hides at the existing 380px threshold.
@@ -31,20 +31,20 @@ All other text (static labels like "Queue") already hides at the existing 380px 
 
 ### New files
 
-| File | Purpose |
-|------|---------|
-| `components/editor/FooterQuickPicker.tsx` | Generic reusable button + upward popup shell |
-| `components/editor/HarnessQuickPicker.tsx` | Harness-specific picker using `HarnessDropdown` internals |
-| `components/editor/ModelQuickPicker.tsx` | Model-specific picker using `CustomSelect` internals |
-| `components/editor/AgentQuickPicker.tsx` | Agent-specific picker using `CustomSelect` internals |
-| `components/editor/SkillsQuickPicker.tsx` | Skills-specific picker (thin wrapper around existing `SkillsSelect`) |
+| File                                       | Purpose                                                              |
+| ------------------------------------------ | -------------------------------------------------------------------- |
+| `components/editor/FooterQuickPicker.tsx`  | Generic reusable button + upward popup shell                         |
+| `components/editor/HarnessQuickPicker.tsx` | Harness-specific picker using `HarnessDropdown` internals            |
+| `components/editor/ModelQuickPicker.tsx`   | Model-specific picker using `CustomSelect` internals                 |
+| `components/editor/AgentQuickPicker.tsx`   | Agent-specific picker using `CustomSelect` internals                 |
+| `components/editor/SkillsQuickPicker.tsx`  | Skills-specific picker (thin wrapper around existing `SkillsSelect`) |
 
 ### Modified files
 
-| File | Change |
-|------|--------|
+| File               | Change                                                                                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `EditorFooter.tsx` | Add four pickers between Properties button and token count (left side) and between token count and Queue button (right side); add second narrow threshold |
-| `uiStore.ts` | Add `footerOpenPicker: "harness" \| "model" \| "agent" \| "skills" \| null` + `setFooterOpenPicker()` action |
+| `uiStore.ts`       | Add `footerOpenPicker: "harness" \| "model" \| "agent" \| "skills" \| null` + `setFooterOpenPicker()` action                                              |
 
 No changes to `PropertiesDrawer.tsx`, `SettingsDrawer.tsx`, or any stores beyond `uiStore`.
 
@@ -82,6 +82,7 @@ interface FooterQuickPickerProps {
 ```
 
 Responsibilities:
+
 - Renders the trigger button with correct styling (active state when `isOverride`)
 - Renders an upward-opening popup panel (`position: absolute; bottom: 100%; left: 0`)
 - Handles click-outside close via `mousedown` listener (same pattern as `SkillsSelect`)
@@ -90,6 +91,7 @@ Responsibilities:
 ### Individual pickers
 
 Each picker is a thin wrapper around `FooterQuickPicker` that:
+
 1. Reads the current value and resolved effective value from `editorStore` + `settingsStore`
 2. Derives `valueLabel` (what to show in wide mode) and `isOverride` (whether to highlight)
 3. Renders the appropriate selection UI as `children`
@@ -171,30 +173,36 @@ None — the footer reads from `useEditorStore` and `useSettingsStore` directly 
 ### Width thresholds
 
 ```typescript
-const [footerRef, isNarrow] = useElementNarrow(380);    // existing: hide all text labels
-const [, isWide] = useElementNarrow(560);               // new: hide value text in pickers
+const [footerRef, isNarrow] = useElementNarrow(380); // existing: hide all text labels
+const [, isWide] = useElementNarrow(560); // new: hide value text in pickers
 // Note: isWide is actually "is NOT wide" (true = below threshold)
-const showPickerValues = !isWide;                       // show value text only when wide enough
+const showPickerValues = !isWide; // show value text only when wide enough
 ```
 
 ### New layout structure
 
 ```tsx
-{/* Left side */}
+{
+  /* Left side */
+}
 <div className="editor-footer-left flex items-center gap-1">
   {/* existing Properties button */}
   <HarnessQuickPicker isNarrow={isNarrow} showLabel={showPickerValues} />
-  <ModelQuickPicker  isNarrow={isNarrow} showLabel={showPickerValues} />
-</div>
+  <ModelQuickPicker isNarrow={isNarrow} showLabel={showPickerValues} />
+</div>;
 
-{/* Center: Token count (unchanged) */}
+{
+  /* Center: Token count (unchanged) */
+}
 
-{/* Right side */}
+{
+  /* Right side */
+}
 <div className="editor-actions flex items-center gap-1">
-  <AgentQuickPicker  isNarrow={isNarrow} showLabel={showPickerValues} />
+  <AgentQuickPicker isNarrow={isNarrow} showLabel={showPickerValues} />
   <SkillsQuickPicker isNarrow={isNarrow} showLabel={showPickerValues} />
   {/* Queue / Run / Update / Delete / Cancel buttons (unchanged) */}
-</div>
+</div>;
 ```
 
 ---
@@ -205,13 +213,13 @@ Follow existing footer button pattern:
 
 ```tsx
 // Default (no override):
-"px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors hover:bg-list-hover-bg text-foreground"
+"px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors hover:bg-list-hover-bg text-foreground";
 
 // Override active (value is set at prompt level, same as Properties button when open):
-"px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors bg-btn-secondary-bg text-btn-secondary-fg"
+"px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors bg-btn-secondary-bg text-btn-secondary-fg";
 
 // Popup panel:
-"absolute bottom-full left-0 mb-1 bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[200]"
+"absolute bottom-full left-0 mb-1 bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[200]";
 ```
 
 A colored dot or subtle badge on the button icon could also indicate an active override in narrow mode — but keep it simple for first pass (just icon, no badge).
@@ -224,13 +232,15 @@ For display in wide mode, each picker should compute the **effective resolved va
 
 ```typescript
 // Example for harness:
-const effectiveHarness = properties.harness          // prompt level
-  ?? workflowProperties.harness                       // workflow level
-  ?? globalSettings.harness;                          // global settings
+const effectiveHarness =
+  properties.harness ?? // prompt level
+  workflowProperties.harness ?? // workflow level
+  globalSettings.harness; // global settings
 
 const harnessLabel = properties.harness
-  ? HARNESS_DISPLAY_NAMES[properties.harness as HarnessId] ?? properties.harness
-  : "Default";  // show "Default" when not overridden at prompt level
+  ? (HARNESS_DISPLAY_NAMES[properties.harness as HarnessId] ??
+    properties.harness)
+  : "Default"; // show "Default" when not overridden at prompt level
 ```
 
 The label shows the **override value** (or "Default"), not the resolved fallback. This is intentional — the user needs to know what's set at the prompt level, not what the final computed value is. The tooltip on hover can show the resolved effective value for clarity.
@@ -250,15 +260,15 @@ The label shows the **override value** (or "Default"), not the resolved fallback
 
 ## Edge Cases
 
-| Case | Behaviour |
-|------|-----------|
-| No agents available | Agent picker still shows "Default" and "None" options only |
-| No skills available | Skills picker shows "Default" and "None" options, skills section hidden |
-| `isCLIManaged = true` | All four pickers disabled (grayed out, no click), same as action buttons |
-| Properties drawer open | Pickers remain functional; both can be open simultaneously |
-| Properties drawer closes a picker | No special interaction needed — they're independent |
-| Model list not yet loaded | Model picker shows "Loading models…" disabled option (mirrors PropertiesDrawer behaviour) |
-| Value text overflows | `max-w-[80px] truncate` on the value label span in wide mode |
+| Case                              | Behaviour                                                                                 |
+| --------------------------------- | ----------------------------------------------------------------------------------------- |
+| No agents available               | Agent picker still shows "Default" and "None" options only                                |
+| No skills available               | Skills picker shows "Default" and "None" options, skills section hidden                   |
+| `isCLIManaged = true`             | All four pickers disabled (grayed out, no click), same as action buttons                  |
+| Properties drawer open            | Pickers remain functional; both can be open simultaneously                                |
+| Properties drawer closes a picker | No special interaction needed — they're independent                                       |
+| Model list not yet loaded         | Model picker shows "Loading models…" disabled option (mirrors PropertiesDrawer behaviour) |
+| Value text overflows              | `max-w-[80px] truncate` on the value label span in wide mode                              |
 
 ---
 

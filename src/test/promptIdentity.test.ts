@@ -79,5 +79,4 @@ suite("PromptIdentity Tests", () => {
       assert.strictEqual(prompt._runtime?.completedAt !== undefined, false);
     });
   });
-
 });

@@ -13,7 +13,10 @@ import {
   TextData,
   ToolResultData,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  HARNESS_IDS,
+} from "../../../types/DashboardConstants";
 import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
 
 /**
@@ -252,7 +255,11 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       }
 
       // Process system events for turn duration
-      if (event.type === "system" && event.subtype === "turn_duration" && typeof event.durationMs === "number") {
+      if (
+        event.type === "system" &&
+        event.subtype === "turn_duration" &&
+        typeof event.durationMs === "number"
+      ) {
         elapsed = event.durationMs;
       }
     }
@@ -638,7 +645,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           events.push({
             type: CLI_EVENT_TYPES.THINKING,
             timestamp,
-            data: { text: block.thinking, label: "Extended Thinking" } as ThinkingBlock,
+            data: {
+              text: block.thinking,
+              label: "Extended Thinking",
+            } as ThinkingBlock,
           });
         }
 
@@ -661,7 +671,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     if (e.type === "user" && Array.isArray(e.message?.content)) {
       for (const block of e.message.content) {
         if (block.type === "tool_result") {
-          const outputText = ClaudeToolBuilder.extractToolResultText(block.content);
+          const outputText = ClaudeToolBuilder.extractToolResultText(
+            block.content
+          );
           events.push({
             type: CLI_EVENT_TYPES.TOOL_RESULT,
             timestamp,

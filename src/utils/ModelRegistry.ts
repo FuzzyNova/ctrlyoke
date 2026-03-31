@@ -218,7 +218,9 @@ async function queryOpenCodeModels(): Promise<void> {
   try {
     // Check availability before querying models to avoid a noisy error when OpenCode is not installed
     try {
-      await execAsync("opencode --version", { timeout: CLI_VERSION_CHECK_TIMEOUT_MS });
+      await execAsync("opencode --version", {
+        timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
+      });
     } catch {
       Log.debug(
         "OpenCode CLI not available, skipping model query — using fallback list"

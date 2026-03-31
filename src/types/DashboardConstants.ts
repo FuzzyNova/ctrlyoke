@@ -198,14 +198,14 @@ export const MESSAGE_TYPES = {
   REDO_WORKFLOW_CHANGES: "redoWorkflowChanges",
 
   // Terminal I/O — bidirectional between extension/server and webview
-  TERMINAL_OUTPUT:        "terminalOutput",       // extension → webview: { workflowId, sessionId, data }
-  TERMINAL_INPUT:         "terminalInput",        // webview → extension: { workflowId, sessionId, data }
-  TERMINAL_RESIZE:        "terminalResize",       // webview → extension: { workflowId, sessionId, cols, rows }
-  TERMINAL_STARTED:       "terminalStarted",      // extension → webview: { workflowId, sessionId, stepName, kind }
-  TERMINAL_ENDED:         "terminalEnded",        // extension → webview: { workflowId, sessionId, kind, exitCode }
-  TERMINAL_SPAWN_SHELL:   "terminalSpawnShell",   // webview → extension: { workflowId, cwd }
+  TERMINAL_OUTPUT: "terminalOutput", // extension → webview: { workflowId, sessionId, data }
+  TERMINAL_INPUT: "terminalInput", // webview → extension: { workflowId, sessionId, data }
+  TERMINAL_RESIZE: "terminalResize", // webview → extension: { workflowId, sessionId, cols, rows }
+  TERMINAL_STARTED: "terminalStarted", // extension → webview: { workflowId, sessionId, stepName, kind }
+  TERMINAL_ENDED: "terminalEnded", // extension → webview: { workflowId, sessionId, kind, exitCode }
+  TERMINAL_SPAWN_SHELL: "terminalSpawnShell", // webview → extension: { workflowId, cwd }
   TERMINAL_RESTART_SHELL: "terminalRestartShell", // webview → extension: { workflowId, sessionId }
-  TERMINAL_CLOSE_SHELL:   "terminalCloseShell",   // webview → extension: { workflowId, sessionId }
+  TERMINAL_CLOSE_SHELL: "terminalCloseShell", // webview → extension: { workflowId, sessionId }
 } as const;
 
 // ============================================================================
@@ -308,7 +308,8 @@ export const EXECUTION_MODES = {
   HEADLESS: "headless",
 } as const;
 
-export type ExecutionMode = (typeof EXECUTION_MODES)[keyof typeof EXECUTION_MODES];
+export type ExecutionMode =
+  (typeof EXECUTION_MODES)[keyof typeof EXECUTION_MODES];
 
 // ============================================================================
 // DEFAULT MODELS - Default model per harness
@@ -363,7 +364,10 @@ export const GEMINI_CLI_MODELS = [
   { value: "none", label: "None" },
   { value: "gemini-3-pro-preview", label: "Gemini 3 Pro (Preview)" },
   { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (Preview)" },
-  { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite (Preview)" },
+  {
+    value: "gemini-3.1-flash-lite-preview",
+    label: "Gemini 3.1 Flash Lite (Preview)",
+  },
   { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
   { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite" },
@@ -408,7 +412,8 @@ export const EDITOR_TARGET_KINDS = {
 // ============================================================================
 export const EDITOR_PLACEHOLDER_TEXT = {
   /** Base hint shown in all prompt editors */
-  DEFAULT: "Use @ for files/folders, # for selections/symbols, ~ for git changes",
+  DEFAULT:
+    "Use @ for files/folders, # for selections/symbols, ~ for git changes",
   /** Extended hint for the Final Prompt editor, explaining its loop-back behavior */
   FINAL_PROMPT:
     "Use @ for files/folders, # for selections/symbols, ~ for git changes\n\nNote: The Final Prompt runs after all other prompts complete. If it appends new prompts, it will run again once those finish.",
@@ -519,7 +524,8 @@ export const PERMISSION_MODES = {
   NONE: "none",
 } as const;
 
-export type PermissionMode = (typeof PERMISSION_MODES)[keyof typeof PERMISSION_MODES];
+export type PermissionMode =
+  (typeof PERMISSION_MODES)[keyof typeof PERMISSION_MODES];
 
 // ============================================================================
 // LOCK STATUS - Status values returned by WorkflowLockManager.checkLock()
@@ -581,6 +587,8 @@ export type HarnessStatusString =
 export type WebviewLogLevel = (typeof LOG_LEVELS)[keyof typeof LOG_LEVELS];
 export type RunnerId = (typeof RUNNER_IDS)[keyof typeof RUNNER_IDS];
 export type LockStatus = (typeof LOCK_STATUS)[keyof typeof LOCK_STATUS];
-export type EditorTargetKind = (typeof EDITOR_TARGET_KINDS)[keyof typeof EDITOR_TARGET_KINDS];
-export type TerminalSessionStatus = (typeof TERMINAL_SESSION_STATUS)[keyof typeof TERMINAL_SESSION_STATUS];
+export type EditorTargetKind =
+  (typeof EDITOR_TARGET_KINDS)[keyof typeof EDITOR_TARGET_KINDS];
+export type TerminalSessionStatus =
+  (typeof TERMINAL_SESSION_STATUS)[keyof typeof TERMINAL_SESSION_STATUS];
 export type SessionKind = (typeof SESSION_KINDS)[keyof typeof SESSION_KINDS];

@@ -54,7 +54,11 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
 }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const [popupPos, setPopupPos] = useState<{ bottom: number; left: number; maxHeight: number } | null>(null);
+  const [popupPos, setPopupPos] = useState<{
+    bottom: number;
+    left: number;
+    maxHeight: number;
+  } | null>(null);
 
   const updatePosition = useCallback(() => {
     if (buttonRef.current) {
@@ -96,7 +100,8 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
     };
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [isOpen, onClose]);
 
@@ -118,7 +123,9 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
         {!isNarrow && showLabel && (
           <span
             className={`max-w-[80px] truncate ${
-              isOverride ? "text-focus-border font-medium" : "text-description-fg"
+              isOverride
+                ? "text-focus-border font-medium"
+                : "text-description-fg"
             }`}
           >
             {valueLabel}
@@ -126,7 +133,9 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
         )}
       </button>
 
-      {isOpen && !disabled && popupPos &&
+      {isOpen &&
+        !disabled &&
+        popupPos &&
         createPortal(
           <div
             ref={popupRef}

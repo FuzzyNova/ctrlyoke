@@ -258,14 +258,18 @@ describe("hideDropdownOption / unhideDropdownOption", () => {
     expect(store().hiddenDropdownOptions["harness"]).toContain("copilot-chat");
 
     store().unhideDropdownOption("harness", "copilot-chat");
-    expect(store().hiddenDropdownOptions["harness"]).not.toContain("copilot-chat");
+    expect(store().hiddenDropdownOptions["harness"]).not.toContain(
+      "copilot-chat"
+    );
   });
 
   it("does not duplicate hidden options", () => {
     store().hideDropdownOption("harness", "copilot-chat");
     store().hideDropdownOption("harness", "copilot-chat");
     expect(
-      store().hiddenDropdownOptions["harness"].filter((v) => v === "copilot-chat")
+      store().hiddenDropdownOptions["harness"].filter(
+        (v) => v === "copilot-chat"
+      )
     ).toHaveLength(1);
   });
 });

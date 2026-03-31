@@ -29,6 +29,7 @@ A real PTY (via `node-pty`) supports full bidirectional I/O. The xterm.js `Termi
   stdin via `pty.write(input)`. The AI CLI receives them as if the user typed in a real terminal.
 
 This means the user can:
+
 - Watch the AI CLI's TUI render in the FlightPath sidebar
 - Type responses to AI prompts (e.g., `y` to approve a file change)
 - Send Ctrl+C to interrupt
@@ -47,10 +48,10 @@ that power undo/redo and diff views. **This continues unchanged.**
 
 During interactive execution there are therefore two live views of the same session:
 
-| View | What it shows | When it is useful |
-|------|--------------|-------------------|
-| **Output tab** | Structured output: diffs, tool calls, undo buttons | Reviewing what changed, navigating steps |
-| **Terminal tab** | Raw TUI output, ANSI-accurate, bidirectional input | Watching the AI work, typing responses |
+| View             | What it shows                                      | When it is useful                        |
+| ---------------- | -------------------------------------------------- | ---------------------------------------- |
+| **Output tab**   | Structured output: diffs, tool calls, undo buttons | Reviewing what changed, navigating steps |
+| **Terminal tab** | Raw TUI output, ANSI-accurate, bidirectional input | Watching the AI work, typing responses   |
 
 **Collapsed output panel:** If the user collapses the Output section or the FlightPath
 sidebar, the embedded terminal is no longer visible. This is intentional — the user chose
@@ -64,10 +65,10 @@ with its scrollback when the user re-expands.
 The Terminal tab hosts two distinct kinds of PTY sessions, both managed by `CliProcessManager`
 and displayed in the same session rail:
 
-| Kind | Spawned by | Lifetime | On exit |
-|------|-----------|----------|---------|
+| Kind     | Spawned by                    | Lifetime                | On exit                       |
+| -------- | ----------------------------- | ----------------------- | ----------------------------- |
 | `ai-cli` | FlightPath (`CliIntegration`) | Tied to harness process | Freeze (read-only scrollback) |
-| `shell` | User (via "+" button) | User-owned | Show "Restart" in rail |
+| `shell`  | User (via "+" button)         | User-owned              | Show "Restart" in rail        |
 
 **AI CLI sessions** are created automatically when a workflow step runs in interactive mode.
 When the PTY process exits — whether the AI CLI finishes naturally, the user types `exit`,
@@ -123,15 +124,16 @@ server context, shell sessions become first-class terminals for general dev work
 
 **Tab visibility rules:**
 
-| State | Output tab | Terminal tab |
-|-------|-----------|-------------|
-| Idle, no session | Shown, active (single label, no tab styling) | Hidden |
-| Interactive mode running | Tab styling appears | Shown + live badge |
-| Interactive mode complete | Shown | Shown (frozen scrollback preserved until next run) |
-| Headless mode (any state) | Shown, active | Hidden |
-| User shell session exists | Shown | Shown (shell sessions survive run boundaries) |
+| State                     | Output tab                                   | Terminal tab                                       |
+| ------------------------- | -------------------------------------------- | -------------------------------------------------- |
+| Idle, no session          | Shown, active (single label, no tab styling) | Hidden                                             |
+| Interactive mode running  | Tab styling appears                          | Shown + live badge                                 |
+| Interactive mode complete | Shown                                        | Shown (frozen scrollback preserved until next run) |
+| Headless mode (any state) | Shown, active                                | Hidden                                             |
+| User shell session exists | Shown                                        | Shown (shell sessions survive run boundaries)      |
 
 **Auto-switch behavior:**
+
 - When interactive mode begins → automatically switch to Terminal tab
 - When interactive mode completes → automatically switch back to Output tab
 - User can manually switch between tabs at any time during execution
@@ -159,6 +161,7 @@ matches VS Code's own terminal panel behavior where the terminal list is always 
 ```
 
 **Rail anatomy:**
+
 - Rail width: fixed at ~140px; terminal canvas takes remaining flex width
 - Each entry: kind indicator (● running / ✓ done / ✗ failed / dim frozen) + step name
 - Frozen AI CLI entries: dim text, no active indicator
@@ -172,6 +175,7 @@ with it (panel separator drag, window resize, adjacent panel collapse/expand). S
 Terminal Sizing section below.
 
 **Empty state** (no sessions yet):
+
 ```
 ┌──────────────────────────────────────────────────────┐
 │ [ v terminal ] [ OUTPUT | TERMINAL ]                  │
@@ -303,6 +307,7 @@ CliProcessManager.resizeSession(sessionId, cols, rows) → pty.resize(cols, rows
 **Session exit handling:**
 
 When `pty.onExit` fires (any exit cause: natural completion, `exit` command, Ctrl+C):
+
 - Extension posts `TERMINAL_ENDED` with `{ workflowId, sessionId, kind, exitCode }`
 - `kind: 'ai-cli'`: webview freezes the xterm (unregisters `onData`), shows "Process exited" overlay
 - `kind: 'shell'`: webview marks session as ended, shows "↺" restart button in rail entry
@@ -423,6 +428,7 @@ export const terminalRegistry = {
 ```
 
 **Two distinct switching scenarios:**
+
 - **Within-workflow (rail switching):** all `TerminalInstance` components remain mounted;
   `isVisible` prop toggles `display: none`. No `attach`/`detach` calls.
 - **Across-workflow (workflow tab switching):** `TerminalView` and children unmount →
@@ -510,35 +516,40 @@ setTerminalSessionActive: (workflowId: string, active: boolean) => void
 Tracks session metadata and pre-mount output buffers. Does NOT store xterm.js objects.
 
 ```typescript
-type SessionKind = 'ai-cli' | 'shell';
+type SessionKind = "ai-cli" | "shell";
 
 interface TerminalSession {
   id: string;
   workflowId: string;
   stepName: string;
   kind: SessionKind;
-  status: 'running' | 'completed' | 'failed';
-  pendingOutput: string[];   // chunks buffered before TerminalInstance mounts
+  status: "running" | "completed" | "failed";
+  pendingOutput: string[]; // chunks buffered before TerminalInstance mounts
 }
 
 interface TerminalStore {
-  sessions: Record<string, TerminalSession[]>        // workflowId → sessions
-  activeSessionIds: Record<string, string | null>    // workflowId → active sessionId
+  sessions: Record<string, TerminalSession[]>; // workflowId → sessions
+  activeSessionIds: Record<string, string | null>; // workflowId → active sessionId
 
-  addSession: (session: TerminalSession) => void
-  endSession: (workflowId: string, sessionId: string, exitCode: number) => void
-  setActiveSession: (workflowId: string, sessionId: string) => void
-  removeSession: (workflowId: string, sessionId: string) => void  // explicit close
+  addSession: (session: TerminalSession) => void;
+  endSession: (workflowId: string, sessionId: string, exitCode: number) => void;
+  setActiveSession: (workflowId: string, sessionId: string) => void;
+  removeSession: (workflowId: string, sessionId: string) => void; // explicit close
 
-  pushPendingOutput: (workflowId: string, sessionId: string, chunk: string) => void
-  clearPendingOutput: (workflowId: string, sessionId: string) => void
+  pushPendingOutput: (
+    workflowId: string,
+    sessionId: string,
+    chunk: string
+  ) => void;
+  clearPendingOutput: (workflowId: string, sessionId: string) => void;
 
   // Clears only ai-cli sessions; shell sessions survive run boundaries
-  clearAiCliSessions: (workflowId: string) => void
+  clearAiCliSessions: (workflowId: string) => void;
 }
 ```
 
 **Output routing in `useMessageHandler`:**
+
 - `TERMINAL_OUTPUT`: if `terminalRegistry.get(workflowId, sessionId)` exists →
   `entry.term.write(chunk)` directly (no Zustand, no re-renders).
   If not yet created → `terminalStore.pushPendingOutput()`.
@@ -620,7 +631,9 @@ Per-workflow container. Always shows the session rail.
 ### `OutputSection.tsx` header changes
 
 ```tsx
-{/* Collapse trigger — chevron + icon only */}
+{
+  /* Collapse trigger — chevron + icon only */
+}
 <div
   className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground"
   onClick={toggleOutputCollapse}
@@ -631,46 +644,58 @@ Per-workflow container. Always shows the session rail.
 >
   <i className="codicon codicon-chevron-right text-[12px] rotate-90" />
   <i className="codicon codicon-terminal text-[14px]" />
-</div>
+</div>;
 
-{/* Tab buttons — shown when any terminal session exists for this workflow */}
-{showTerminalTab ? (
-  <div className="flex items-center">
-    <button
-      className={`text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5
-        ${activeOutputTab === 'output'
-          ? 'text-foreground border-b border-foreground'
-          : 'text-description-fg hover:text-foreground'}`}
-      onClick={() => setActiveOutputTab(workflowId, 'output')}
-    >
-      Output
-    </button>
-    <button
-      className={`text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5
+{
+  /* Tab buttons — shown when any terminal session exists for this workflow */
+}
+{
+  showTerminalTab ? (
+    <div className="flex items-center">
+      <button
+        className={`text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5
+        ${
+          activeOutputTab === "output"
+            ? "text-foreground border-b border-foreground"
+            : "text-description-fg hover:text-foreground"
+        }`}
+        onClick={() => setActiveOutputTab(workflowId, "output")}
+      >
+        Output
+      </button>
+      <button
+        className={`text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5
         flex items-center gap-1
-        ${activeOutputTab === 'terminal'
-          ? 'text-foreground border-b border-foreground'
-          : 'text-description-fg hover:text-foreground'}`}
-      onClick={() => setActiveOutputTab(workflowId, 'terminal')}
-    >
-      Terminal
-      {terminalSessionActive && (
-        <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-      )}
-    </button>
-  </div>
-) : (
-  <span className="text-[11px] font-semibold uppercase tracking-wide text-description-fg">
-    Output
-  </span>
-)}
+        ${
+          activeOutputTab === "terminal"
+            ? "text-foreground border-b border-foreground"
+            : "text-description-fg hover:text-foreground"
+        }`}
+        onClick={() => setActiveOutputTab(workflowId, "terminal")}
+      >
+        Terminal
+        {terminalSessionActive && (
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+        )}
+      </button>
+    </div>
+  ) : (
+    <span className="text-[11px] font-semibold uppercase tracking-wide text-description-fg">
+      Output
+    </span>
+  );
+}
 
-{/* Font size stepper — Output tab only */}
-{activeOutputTab === 'output' && (
-  <div className="flex items-center ml-3">
-    {/* ... existing font size buttons unchanged ... */}
-  </div>
-)}
+{
+  /* Font size stepper — Output tab only */
+}
+{
+  activeOutputTab === "output" && (
+    <div className="flex items-center ml-3">
+      {/* ... existing font size buttons unchanged ... */}
+    </div>
+  );
+}
 ```
 
 The output body renders either the existing output list (Output tab) or
@@ -682,21 +707,21 @@ so the content fills the Output panel height. Minimap rail and right-side contro
 
 ## Files Changed
 
-| File | Change |
-|------|--------|
-| `src/types/DashboardConstants.ts` | Add 8 new `MESSAGE_TYPES` constants |
-| `src/ui/webview-react/stores/uiStore.ts` | Add `activeOutputTabs` (Record, default `'output'`), `terminalActiveWorkflows` |
-| `src/ui/webview-react/stores/terminalStore.ts` | New store: session metadata + `pendingOutput` + `clearAiCliSessions` |
-| `src/ui/webview-react/terminalRegistry.ts` | New module: xterm instances, DOM elements, `freeze()`, `clearAiCliSessions()`, `clearSession()` |
-| `src/ui/webview-react/components/output/TerminalInstance.tsx` | New component: mount-point manager, frozen overlay |
-| `src/ui/webview-react/components/output/TerminalView.tsx` | New component: always-visible rail, ai-cli + shell sections, "+" button |
-| `src/ui/webview-react/components/layout/OutputSection.tsx` | Split collapse target, tab buttons, conditional body, `min-h-0` on body |
-| `src/flightpath/harness/CliIntegration.ts` | Replace `vscode.Terminal` with `CliProcessManager.spawnPty()`; remove `terminal.show()` |
-| `src/flightpath/harness/CliProcessManager.ts` | node-pty backend: `spawnPty`, `spawnShell`, `writeToSession`, `resizeSession`, `killSession`, `restartShellSession`, `dispose()` |
-| `src/ui/WebviewMessageRouter.ts` | Handle `TERMINAL_INPUT`, `TERMINAL_RESIZE`, `TERMINAL_SPAWN_SHELL`, `TERMINAL_RESTART_SHELL`, `TERMINAL_CLOSE_SHELL` |
-| `src/ui/FlightPathWebviewProvider.ts` | Forward `TERMINAL_OUTPUT/STARTED/ENDED`; on `READY` resend active sessions + reconnect buffer |
-| `src/extension.ts` | Register `CliProcessManager` with `context.subscriptions` |
-| `package.json` | Add `node-pty`, `@xterm/xterm`, `@xterm/addon-fit` |
+| File                                                          | Change                                                                                                                           |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `src/types/DashboardConstants.ts`                             | Add 8 new `MESSAGE_TYPES` constants                                                                                              |
+| `src/ui/webview-react/stores/uiStore.ts`                      | Add `activeOutputTabs` (Record, default `'output'`), `terminalActiveWorkflows`                                                   |
+| `src/ui/webview-react/stores/terminalStore.ts`                | New store: session metadata + `pendingOutput` + `clearAiCliSessions`                                                             |
+| `src/ui/webview-react/terminalRegistry.ts`                    | New module: xterm instances, DOM elements, `freeze()`, `clearAiCliSessions()`, `clearSession()`                                  |
+| `src/ui/webview-react/components/output/TerminalInstance.tsx` | New component: mount-point manager, frozen overlay                                                                               |
+| `src/ui/webview-react/components/output/TerminalView.tsx`     | New component: always-visible rail, ai-cli + shell sections, "+" button                                                          |
+| `src/ui/webview-react/components/layout/OutputSection.tsx`    | Split collapse target, tab buttons, conditional body, `min-h-0` on body                                                          |
+| `src/flightpath/harness/CliIntegration.ts`                    | Replace `vscode.Terminal` with `CliProcessManager.spawnPty()`; remove `terminal.show()`                                          |
+| `src/flightpath/harness/CliProcessManager.ts`                 | node-pty backend: `spawnPty`, `spawnShell`, `writeToSession`, `resizeSession`, `killSession`, `restartShellSession`, `dispose()` |
+| `src/ui/WebviewMessageRouter.ts`                              | Handle `TERMINAL_INPUT`, `TERMINAL_RESIZE`, `TERMINAL_SPAWN_SHELL`, `TERMINAL_RESTART_SHELL`, `TERMINAL_CLOSE_SHELL`             |
+| `src/ui/FlightPathWebviewProvider.ts`                         | Forward `TERMINAL_OUTPUT/STARTED/ENDED`; on `READY` resend active sessions + reconnect buffer                                    |
+| `src/extension.ts`                                            | Register `CliProcessManager` with `context.subscriptions`                                                                        |
+| `package.json`                                                | Add `node-pty`, `@xterm/xterm`, `@xterm/addon-fit`                                                                               |
 
 **Not changed:** All log-processing code, `CliOutput`, `OutputMinimap`, `UndoChangesDialog`,
 `workflowStore` — entirely unaffected.
@@ -813,11 +838,11 @@ so the content fills the Output panel height. Minimap rail and right-side contro
 
 ## Dependencies to Add
 
-| Package | Purpose |
-|---------|---------|
-| `@xterm/xterm` | Terminal emulator (webview) |
-| `@xterm/addon-fit` | Auto-resize terminal canvas to container dimensions |
-| `node-pty` | Real PTY for spawning AI CLI processes and user shells (extension host) |
+| Package            | Purpose                                                                 |
+| ------------------ | ----------------------------------------------------------------------- |
+| `@xterm/xterm`     | Terminal emulator (webview)                                             |
+| `@xterm/addon-fit` | Auto-resize terminal canvas to container dimensions                     |
+| `node-pty`         | Real PTY for spawning AI CLI processes and user shells (extension host) |
 
 `@xterm/addon-attach` is NOT needed — FlightPath has a structured message protocol;
 raw PTY chunks are carried inside `TERMINAL_OUTPUT` payloads and written via `term.write()`.

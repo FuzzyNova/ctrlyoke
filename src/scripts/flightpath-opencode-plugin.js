@@ -29,7 +29,9 @@ const mainSessions = new Set();
 
 // Derive the logs directory from the notification directory path.
 // NOTIFY_DIR = <workspace>/.flightpath/temp/opencode-notifications — go up 2 levels.
-const _logsDir = NOTIFY_DIR ? path.resolve(NOTIFY_DIR, "..", "..", "logs") : null;
+const _logsDir = NOTIFY_DIR
+  ? path.resolve(NOTIFY_DIR, "..", "..", "logs")
+  : null;
 
 let _logPath = null;
 try {

@@ -6,7 +6,11 @@
  * This module is the single source of truth for that mapping logic.
  */
 import * as Diff from "diff";
-import { type CliEvent, type UnifiedDiffHunk, type TokenUsage } from "../../../types/CliOutputTypes";
+import {
+  type CliEvent,
+  type UnifiedDiffHunk,
+  type TokenUsage,
+} from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 
 /**
@@ -18,7 +22,15 @@ export function computeStructuredPatch(
   before: string,
   after: string
 ): UnifiedDiffHunk[] | undefined {
-  const result = Diff.structuredPatch(filePath, filePath, before, after, "", "", { context: 3 });
+  const result = Diff.structuredPatch(
+    filePath,
+    filePath,
+    before,
+    after,
+    "",
+    "",
+    { context: 3 }
+  );
   if (!result.hunks.length) return undefined;
   return result.hunks.map((h) => ({
     oldStart: h.oldStart,
@@ -43,11 +55,13 @@ export function accumulateOpenCodeStepTokens(
   tokenUsage: TokenUsage
 ): number | undefined {
   tokenUsage.inputTokens = (tokenUsage.inputTokens ?? 0) + (tokens.input ?? 0);
-  tokenUsage.outputTokens = (tokenUsage.outputTokens ?? 0) + (tokens.output ?? 0);
+  tokenUsage.outputTokens =
+    (tokenUsage.outputTokens ?? 0) + (tokens.output ?? 0);
   tokenUsage.totalTokens =
     (tokenUsage.totalTokens ?? 0) + (tokens.input ?? 0) + (tokens.output ?? 0);
   if (tokens.cache?.read) {
-    tokenUsage.cachedInputTokens = (tokenUsage.cachedInputTokens ?? 0) + tokens.cache.read;
+    tokenUsage.cachedInputTokens =
+      (tokenUsage.cachedInputTokens ?? 0) + tokens.cache.read;
   }
   return typeof tokens.total === "number" ? tokens.total : undefined;
 }
@@ -136,7 +150,8 @@ export function mapOpenCodeToolPartToCliEvent(
           result: isCompleted
             ? {
                 success: true,
-                output: typeof output === "string" ? output : JSON.stringify(output),
+                output:
+                  typeof output === "string" ? output : JSON.stringify(output),
               }
             : undefined,
         },

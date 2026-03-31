@@ -60,7 +60,11 @@ interface StatusMessageEntry {
 export interface OutputCaptureCallbacks {
   onPromptStart: (data: PromptStartData) => void;
   onPromptComplete: (data: PromptCompleteData) => void;
-  onStatusMessage: (stepIndex: number, message: string, severity: string) => void;
+  onStatusMessage: (
+    stepIndex: number,
+    message: string,
+    severity: string
+  ) => void;
   getPromptItem: (stepIndex: number) => PromptItem | undefined;
   getTotalSteps: () => number;
 }

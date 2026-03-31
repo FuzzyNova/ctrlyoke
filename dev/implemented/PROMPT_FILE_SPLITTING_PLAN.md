@@ -18,12 +18,14 @@ Three complementary changes:
 For `@path/to/file` and `#file:path` references (full file content), instead of embedding as an `<attachment>` block, emit a direct `@path/to/file` reference. All current harnesses auto-read `@` references.
 
 **What still gets embedded** (no real file path to reference at the right granularity):
+
 - `#selection:path:N-N` — line range excerpt
 - `#sym:path:Symbol:line` — symbol context
 - `~diff`, `~staged`, `~stash:N`, `~commit:<hash>` — git diffs
 - `@path/to/dir/` — directory listing (synthetic)
 
 **Benefits:**
+
 - Line numbers are always correct (harness reads the real file)
 - Read-before-edit constraint satisfied trivially
 - Attachment file is much smaller (only excerpts and diffs)
@@ -47,12 +49,12 @@ Absent categories are omitted. When only a prompt exists: `Follow instructions i
 
 **New file naming scheme:**
 
-| Category | Format | Example |
-|---|---|---|
-| Agent instructions | `<ts>-<name>-<step>.agent.<part>.prompt.md` | `1234-myflow-1.agent.1.prompt.md` |
-| Skills | `<ts>-<name>-<step>.skills.prompt.md` | `1234-myflow-1.skills.prompt.md` |
+| Category                         | Format                                         | Example                              |
+| -------------------------------- | ---------------------------------------------- | ------------------------------------ |
+| Agent instructions               | `<ts>-<name>-<step>.agent.<part>.prompt.md`    | `1234-myflow-1.agent.1.prompt.md`    |
+| Skills                           | `<ts>-<name>-<step>.skills.prompt.md`          | `1234-myflow-1.skills.prompt.md`     |
 | Excerpts (selection/sym/git/dir) | `<ts>-<name>-<step>.excerpts.<part>.prompt.md` | `1234-myflow-1.excerpts.1.prompt.md` |
-| Prompt | `<ts>-<name>-<step>.prompt.md` | `1234-myflow-1.prompt.md` |
+| Prompt                           | `<ts>-<name>-<step>.prompt.md`                 | `1234-myflow-1.prompt.md`            |
 
 Full-file `@path` references appear inline in the instruction string. Skills and the prompt are almost never large enough to need splitting.
 
@@ -67,6 +69,7 @@ Git diffs already carry their own line number format. Directory listings don't n
 `CopilotChatIntegration` has two distinct paths controlled by `chatUseNativeAttachments`:
 
 **`useNativeAttachments = false` (default)**:
+
 1. Calls `super.buildPromptText()` to get the fully assembled blob (skills → agent → attachments → prompt)
 2. Detects whether context was prepended before the raw prompt text
 3. If yes: writes context to temp files using the smaller chat split config (`maxTokensPerFile: 8000, maxLinesPerFile: 600`), and writes the prompt to its own dedicated file — this prevents Copilot's auto-summarizer from stripping the prompt
@@ -74,6 +77,7 @@ Git diffs already carry their own line number format. Directory listings don't n
 5. Returns `"Follow instructions in ..."` as the typed chat message
 
 **`useNativeAttachments = true` (opt-in)**:
+
 1. Uses `NativeAttachmentHandler.processAttachments()` to attach files/selections via VS Code native commands
 2. Agent is handled by `openAgentSpecificChat()` which opens the agent-specific chat window
 3. Returns the raw prompt text as the typed chat message
@@ -96,6 +100,7 @@ The chat-specific split config (`maxTokensPerFile: 8000, maxLinesPerFile: 600`) 
 The skills bug can be fixed by writing a skills `.prompt.md` file and attaching it via `attachFile`, which is the same mechanism used for everything else in this mode. This is the right approach because there is no native skill API — a prompt file is the best available option.
 
 The direct file references and selection/excerpt handling can also be improved using the new `ContextExpander.expandContextSplit()` output:
+
 - Full-file refs → attach actual workspace files via `attachFile` (already what `NativeAttachmentHandler` does)
 - Selection/sym/git excerpts → write to a `.excerpts.prompt.md` file and attach via `attachFile`
 
@@ -144,6 +149,7 @@ Add `createCategorizedPromptFiles(sections, context?)` and `formatCategorizedRef
 ### `CopilotChatIntegration` — replace `buildTempFilePrompt` and `wrapInTempFilePrompt`
 
 Replace the current context/prompt split logic with the categorized approach. Both `useNativeAttachments` paths call `buildPromptSections()` first, then diverge only on how files are delivered:
+
 - `false`: create categorized temp files → attach all via `attachFile` → return structured instruction string as typed message
 - `true`: attach actual workspace files for direct refs → write excerpts/skills to temp files → attach via `attachFile` → return raw prompt as typed message
 
@@ -153,17 +159,17 @@ For `buildFileAttachment` (selection/symbol): prefix each content line with its 
 
 ## Files to Change
 
-| File | Change |
-|---|---|
-| `src/utils/PromptFileSplitter.ts` | Default `maxTokensPerFile`: 15000 → 10000 ✅ done |
-| `src/utils/ContextExpander.ts` | Add `expandContextSplit()` |
-| `src/utils/AttachmentBuilders.ts` | Add line numbers to selection/symbol content |
-| `src/utils/TempFileManager.ts` | Add `createCategoryFile` / `createCategorySplitFiles` |
-| `src/flightpath/HarnessIntegration.ts` | Add `buildPromptSections()`, keep `buildPromptText()` |
-| `src/flightpath/harness/CliIntegration.ts` | Add `createCategorizedPromptFiles`, `formatCategorizedReferences`, opt-in flag |
+| File                                                    | Change                                                                                                                     |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `src/utils/PromptFileSplitter.ts`                       | Default `maxTokensPerFile`: 15000 → 10000 ✅ done                                                                          |
+| `src/utils/ContextExpander.ts`                          | Add `expandContextSplit()`                                                                                                 |
+| `src/utils/AttachmentBuilders.ts`                       | Add line numbers to selection/symbol content                                                                               |
+| `src/utils/TempFileManager.ts`                          | Add `createCategoryFile` / `createCategorySplitFiles`                                                                      |
+| `src/flightpath/HarnessIntegration.ts`                  | Add `buildPromptSections()`, keep `buildPromptText()`                                                                      |
+| `src/flightpath/harness/CliIntegration.ts`              | Add `createCategorizedPromptFiles`, `formatCategorizedReferences`, opt-in flag                                             |
 | `src/flightpath/harness/chat/CopilotChatIntegration.ts` | Replace `buildTempFilePrompt`/`wrapInTempFilePrompt` with categorized approach; fix skills bug for native attachments mode |
-| `src/test/promptFileSplitter.test.ts` | Update token limit tests |
-| `src/test/contextExpander.test.ts` | Add tests for `expandContextSplit()` |
+| `src/test/promptFileSplitter.test.ts`                   | Update token limit tests                                                                                                   |
+| `src/test/contextExpander.test.ts`                      | Add tests for `expandContextSplit()`                                                                                       |
 
 ## Implementation Notes
 
@@ -172,6 +178,7 @@ For `buildFileAttachment` (selection/symbol): prefix each content line with its 
 When emitting `@path/to/file` references for direct file attachments, paths containing spaces must be quoted: `@"path/with spaces/file.ts"`. Previously this wasn't an issue because all temp files land in `.flightpath/temp/` which never has spaces. Direct file references can point anywhere in the workspace — including directories like `src/my module/foo.ts`.
 
 The quoting logic already exists in `src/completions/CompletionHelpers.ts:358`:
+
 ```typescript
 const insertPath = relativePath.includes(" ")
   ? `"${relativePath}"`

@@ -166,9 +166,15 @@ export class GeminiCliProvider implements ICliProvider {
     } else {
       // Interactive mode: write AfterAgent hook to .gemini/settings.json
       if (workspaceRoot) {
-        const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
+        const userHooks =
+          workflowContext?.resolvedProperties?.hooks ?? undefined;
         const workflowKey = workflowContext?.workingFilePath ?? workspaceRoot;
-        await this.buildInteractiveHookSettings(extensionPath, workspaceRoot, workflowKey, userHooks);
+        await this.buildInteractiveHookSettings(
+          extensionPath,
+          workspaceRoot,
+          workflowKey,
+          userHooks
+        );
         Log.debug(
           `🔔 Configured AfterAgent hook for Gemini completion detection`
         );
@@ -236,7 +242,8 @@ export class GeminiCliProvider implements ICliProvider {
       for (const uh of userHooks) {
         const nativeEvent = geminiEventMap[uh.event];
         if (!nativeEvent) continue;
-        if (!workflowUserHooks[nativeEvent]) workflowUserHooks[nativeEvent] = [];
+        if (!workflowUserHooks[nativeEvent])
+          workflowUserHooks[nativeEvent] = [];
         workflowUserHooks[nativeEvent].push({
           hooks: [{ type: "command", command: uh.command }],
         });

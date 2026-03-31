@@ -16,7 +16,10 @@ suite("ErrorUtils", () => {
     });
 
     test("returns string directly when thrown as string", () => {
-      assert.strictEqual(getErrorMessage("raw string error"), "raw string error");
+      assert.strictEqual(
+        getErrorMessage("raw string error"),
+        "raw string error"
+      );
     });
 
     test("converts number to string", () => {

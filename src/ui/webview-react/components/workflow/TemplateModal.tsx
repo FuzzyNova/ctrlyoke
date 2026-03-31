@@ -44,7 +44,9 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const setCurrentTemplate = useUiStore((s) => s.setCurrentTemplate);
   const setDefaultTemplateId = useUiStore((s) => s.setDefaultTemplateId);
   const templateFileSelection = useUiStore((s) => s.templateFileSelection);
-  const setTemplateFileSelection = useUiStore((s) => s.setTemplateFileSelection);
+  const setTemplateFileSelection = useUiStore(
+    (s) => s.setTemplateFileSelection
+  );
 
   // Local form state
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
@@ -102,7 +104,12 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
 
     // Clear so the effect doesn't re-fire
     setTemplateFileSelection(null);
-  }, [templateFileSelection, currentTemplate, filename, setTemplateFileSelection]);
+  }, [
+    templateFileSelection,
+    currentTemplate,
+    filename,
+    setTemplateFileSelection,
+  ]);
 
   // Handle template selection change
   const handleTemplateChange = useCallback(
@@ -209,7 +216,15 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         runAfter,
       });
     },
-    [vscode, selectedTemplateId, variables, filename, workflowsDir, format, validateFilename]
+    [
+      vscode,
+      selectedTemplateId,
+      variables,
+      filename,
+      workflowsDir,
+      format,
+      validateFilename,
+    ]
   );
 
   // Keyboard handling
@@ -245,7 +260,9 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       footer={
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">
-            {selectedTemplateId && selectedTemplateId !== "__create_new__" && selectedTemplateId !== defaultTemplateId ? (
+            {selectedTemplateId &&
+            selectedTemplateId !== "__create_new__" &&
+            selectedTemplateId !== defaultTemplateId ? (
               <button
                 type="button"
                 onClick={handleSetDefault}
@@ -254,8 +271,11 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
               >
                 Set as Default
               </button>
-            ) : selectedTemplateId === defaultTemplateId && selectedTemplateId !== "__create_new__" ? (
-              <span className="text-sm text-description-fg">Default template</span>
+            ) : selectedTemplateId === defaultTemplateId &&
+              selectedTemplateId !== "__create_new__" ? (
+              <span className="text-sm text-description-fg">
+                Default template
+              </span>
             ) : null}
             {defaultConfirmation && (
               <span className="text-xs text-notification-info-fg animate-pulse">
@@ -351,7 +371,9 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                   >
                     {variable.name}
                     {isFile && (
-                      <span className="ml-1 text-xs text-description-fg">(file path)</span>
+                      <span className="ml-1 text-xs text-description-fg">
+                        (file path)
+                      </span>
                     )}
                   </label>
                   <div className={isFile ? "flex gap-1.5" : undefined}>
@@ -359,14 +381,20 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                       type="text"
                       id={`var-${variable.name}`}
                       value={variables[variable.name] || ""}
-                      onChange={(e) => handleVariableChange(variable.name, e.target.value)}
-                      placeholder={isFile ? "path/to/spec.md" : `Enter ${variable.name}`}
+                      onChange={(e) =>
+                        handleVariableChange(variable.name, e.target.value)
+                      }
+                      placeholder={
+                        isFile ? "path/to/spec.md" : `Enter ${variable.name}`
+                      }
                       className="flex-1 px-2 py-1.5 rounded bg-input-bg text-input-fg border border-input-border focus:outline-none focus:border-focus-border font-mono text-xs"
                     />
                     {isFile && (
                       <Button
                         variant="secondary"
-                        onClick={() => handleBrowseFile(variable.name, variable)}
+                        onClick={() =>
+                          handleBrowseFile(variable.name, variable)
+                        }
                         title="Browse for file"
                       >
                         Browse…
@@ -412,7 +440,10 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           </label>
           <div className="flex gap-3">
             {(["yaml", "json"] as const).map((f) => (
-              <label key={f} className="flex items-center gap-1.5 cursor-pointer text-sm text-foreground">
+              <label
+                key={f}
+                className="flex items-center gap-1.5 cursor-pointer text-sm text-foreground"
+              >
                 <input
                   type="radio"
                   name="workflow-format"

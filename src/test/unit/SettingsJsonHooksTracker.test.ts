@@ -161,14 +161,8 @@ suite("SettingsJsonHooksTracker", () => {
     // Order should be: FlightPath first, user hooks middle, baseline last
     const settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
     assert.strictEqual(settings.hooks.Stop.length, 3);
-    assert.strictEqual(
-      settings.hooks.Stop[0].hooks[0].command,
-      "node fp.js"
-    );
-    assert.strictEqual(
-      settings.hooks.Stop[1].hooks[0].command,
-      "npm test"
-    );
+    assert.strictEqual(settings.hooks.Stop[0].hooks[0].command, "node fp.js");
+    assert.strictEqual(settings.hooks.Stop[1].hooks[0].command, "npm test");
     assert.strictEqual(
       settings.hooks.Stop[2].hooks[0].command,
       "echo baseline"

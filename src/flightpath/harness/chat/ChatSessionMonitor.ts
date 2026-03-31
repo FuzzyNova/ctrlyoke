@@ -65,8 +65,7 @@ export class ChatSessionMonitor {
   private dirCache: DirectoryCache | null = null;
   private static readonly DIR_CACHE_TTL_MS = 2000; // Re-scan directories every 2s max
 
-  constructor(_context: vscode.ExtensionContext) {
-  }
+  constructor(_context: vscode.ExtensionContext) {}
 
   /**
    * Get the cached session file path
@@ -121,11 +120,7 @@ export class ChatSessionMonitor {
     const userProfile = process.env.USERPROFILE;
     if (userProfile) {
       const normalizedProfile = userProfile.replace(/\\/g, "/");
-      const appData = path.join(
-        normalizedProfile,
-        "AppData",
-        "Roaming"
-      );
+      const appData = path.join(normalizedProfile, "AppData", "Roaming");
       paths.push(path.join(appData, variant, "User", "workspaceStorage"));
       if (variant !== "Code") {
         paths.push(path.join(appData, "Code", "User", "workspaceStorage"));
@@ -300,10 +295,7 @@ export class ChatSessionMonitor {
         );
         continue;
       }
-      Log.debug(
-        `   ✓ Scanning: ${workspaceStorageRoot}`,
-        "ChatSessionMonitor"
-      );
+      Log.debug(`   ✓ Scanning: ${workspaceStorageRoot}`, "ChatSessionMonitor");
 
       try {
         const workspaceHashes = await fs.promises.readdir(workspaceStorageRoot);
@@ -422,7 +414,6 @@ export class ChatSessionMonitor {
 
     return sessionFiles;
   }
-
 
   /**
    * Find session file containing our specific prompt text

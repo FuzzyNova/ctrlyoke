@@ -35,7 +35,6 @@ export interface McpUserServerHarnessConfig {
   tools?: string[];
 }
 
-
 export interface McpConfigOptions {
   /** Path to MCP server script (e.g., out/mcp-server.js) */
   serverPath: string;
@@ -169,12 +168,21 @@ export class CliMcpConfigGenerator {
   ): string {
     // Parse the base config with the flightpath server
     const baseConfig = JSON.parse(
-      this.generateJsonConfig(serverPath, workspaceRoot, serverConfig, workingFilePath, additionalEnv)
+      this.generateJsonConfig(
+        serverPath,
+        workspaceRoot,
+        serverConfig,
+        workingFilePath,
+        additionalEnv
+      )
     );
 
     // Merge user-defined servers
     for (const server of userServers) {
-      baseConfig.mcpServers[server.id] = this.buildUserServerEntry(server, userServerConfig);
+      baseConfig.mcpServers[server.id] = this.buildUserServerEntry(
+        server,
+        userServerConfig
+      );
     }
 
     return JSON.stringify(baseConfig, null, 2);
@@ -196,7 +204,10 @@ export class CliMcpConfigGenerator {
   ): string {
     const mcpServers: any = {};
     for (const server of userServers) {
-      mcpServers[server.id] = this.buildUserServerEntry(server, userServerConfig);
+      mcpServers[server.id] = this.buildUserServerEntry(
+        server,
+        userServerConfig
+      );
     }
     return JSON.stringify({ mcpServers }, null, 2);
   }
@@ -216,7 +227,8 @@ export class CliMcpConfigGenerator {
       // Remote server
       entry.url = server.url;
       const rawTransport = server.transport ?? "streamable-http";
-      entry.type = userServerConfig?.remoteTypeMap?.[rawTransport] ?? rawTransport;
+      entry.type =
+        userServerConfig?.remoteTypeMap?.[rawTransport] ?? rawTransport;
       if (server.headers) entry.headers = server.headers;
     } else {
       // stdio server

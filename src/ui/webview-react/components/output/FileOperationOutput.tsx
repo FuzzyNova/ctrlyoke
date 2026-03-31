@@ -6,10 +6,7 @@
  */
 import React, { memo } from "react";
 import { DiffView } from "./DiffView";
-import {
-  TOOL_CALL_TERMINAL,
-  TOOL_CALL_LINE,
-} from "./outputStyles";
+import { TOOL_CALL_TERMINAL, TOOL_CALL_LINE } from "./outputStyles";
 import { openFile } from "@hooks/useMessageHandler";
 import { getLanguageFromPath } from "@utils/hljsUtils";
 import { useUiStore } from "@store/uiStore";
@@ -118,18 +115,23 @@ export const FileEditOutput = memo<FileEditOutputProps>(
       ((structuredPatch && structuredPatch.length > 0) ||
         (oldContent && newContent));
 
-    const undoButton = onUndoFile &&
+    const undoButton =
+      onUndoFile &&
       status !== OPERATION_STATUS.INITIATED &&
       status !== OPERATION_STATUS.FAILED ? (
-      <button
-        type="button"
-        className="text-[length:var(--fp-output-font-size-xs)] font-bold uppercase text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
-        title={fileUndoMode === "redo" ? `Redo changes to ${path}` : `Undo changes to ${path}`}
-        onClick={() => onUndoFile(path, attemptIndex)}
-      >
-        {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
-      </button>
-    ) : null;
+        <button
+          type="button"
+          className="text-[length:var(--fp-output-font-size-xs)] font-bold uppercase text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
+          title={
+            fileUndoMode === "redo"
+              ? `Redo changes to ${path}`
+              : `Undo changes to ${path}`
+          }
+          onClick={() => onUndoFile(path, attemptIndex)}
+        >
+          {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
+        </button>
+      ) : null;
 
     return (
       <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
@@ -150,8 +152,8 @@ export const FileEditOutput = memo<FileEditOutputProps>(
             globallyCollapsed={diffsCollapsed}
             actionSlot={undoButton}
           />
-        ) : undoButton && (
-          <div className="ml-6 mt-1">{undoButton}</div>
+        ) : (
+          undoButton && <div className="ml-6 mt-1">{undoButton}</div>
         )}
       </div>
     );
@@ -206,7 +208,11 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
           <button
             type="button"
             className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
-            title={fileUndoMode === "redo" ? `Redo changes to ${path}` : `Undo changes to ${path}`}
+            title={
+              fileUndoMode === "redo"
+                ? `Redo changes to ${path}`
+                : `Undo changes to ${path}`
+            }
             onClick={() => onUndoFile(path, attemptIndex)}
           >
             {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
@@ -294,7 +300,11 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
           <button
             type="button"
             className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
-            title={fileUndoMode === "redo" ? `Redo deletion of ${path}` : `Undo deletion of ${path}`}
+            title={
+              fileUndoMode === "redo"
+                ? `Redo deletion of ${path}`
+                : `Undo deletion of ${path}`
+            }
             onClick={() => onUndoFile(path, attemptIndex)}
           >
             {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}

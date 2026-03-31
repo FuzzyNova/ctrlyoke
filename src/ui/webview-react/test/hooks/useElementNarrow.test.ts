@@ -16,15 +16,17 @@ let mockObserveInstance: {
   disconnect: ReturnType<typeof vi.fn>;
 };
 
-const MockResizeObserver = vi.fn().mockImplementation((cb: ResizeObserverCallback) => {
-  observerCallback = cb;
-  mockObserveInstance = {
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  };
-  return mockObserveInstance;
-});
+const MockResizeObserver = vi
+  .fn()
+  .mockImplementation((cb: ResizeObserverCallback) => {
+    observerCallback = cb;
+    mockObserveInstance = {
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+      disconnect: vi.fn(),
+    };
+    return mockObserveInstance;
+  });
 
 // ---------------------------------------------------------------------------
 // Setup / teardown

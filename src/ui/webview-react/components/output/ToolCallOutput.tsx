@@ -162,7 +162,13 @@ export const ToolCallOutput: React.FC<ToolCallOutputProps> = ({
         status?: import("../../types/cliEvents").FileOperationStatus;
         oldContent?: string;
         newContent?: string;
-        structuredPatch?: Array<{ oldStart: number; oldLines: number; newStart: number; newLines: number; lines: string[] }>;
+        structuredPatch?: Array<{
+          oldStart: number;
+          oldLines: number;
+          newStart: number;
+          newLines: number;
+          lines: string[];
+        }>;
         error?: string;
       };
       return (
@@ -229,7 +235,11 @@ export const ToolCallOutput: React.FC<ToolCallOutputProps> = ({
     }
 
     case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
-      const mcpData = data as { server: string; tool: string; result?: ToolResult };
+      const mcpData = data as {
+        server: string;
+        tool: string;
+        result?: ToolResult;
+      };
       return (
         <McpToolCallOutput
           server={mcpData.server}

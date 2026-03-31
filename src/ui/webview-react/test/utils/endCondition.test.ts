@@ -13,11 +13,23 @@ import {
 
 describe("getEndConditionValue", () => {
   it("returns the property value when present", () => {
-    expect(getEndConditionValue({ script: "npm test", returns: "true" }, "script", "")).toBe("npm test");
+    expect(
+      getEndConditionValue(
+        { script: "npm test", returns: "true" },
+        "script",
+        ""
+      )
+    ).toBe("npm test");
   });
 
   it("returns defaultValue when property is absent", () => {
-    expect(getEndConditionValue({ script: "npm test", returns: "true" }, "timeout", 30000)).toBe(30000);
+    expect(
+      getEndConditionValue(
+        { script: "npm test", returns: "true" },
+        "timeout",
+        30000
+      )
+    ).toBe(30000);
   });
 
   it("returns defaultValue when endCondition is null", () => {
@@ -25,7 +37,9 @@ describe("getEndConditionValue", () => {
   });
 
   it("returns defaultValue when endCondition is undefined", () => {
-    expect(getEndConditionValue(undefined, "script", "default")).toBe("default");
+    expect(getEndConditionValue(undefined, "script", "default")).toBe(
+      "default"
+    );
   });
 });
 
@@ -91,8 +105,12 @@ describe("endConditionToFormValues", () => {
   it("uses defaults for absent optional fields", () => {
     const form = endConditionToFormValues({ script: "ls", returns: "true" });
     expect(form.timeout).toBe(DEFAULT_END_CONDITION_VALUES.END_TIMEOUT_STRING);
-    expect(form.maxRetries).toBe(DEFAULT_END_CONDITION_VALUES.END_RETRIES_STRING);
-    expect(form.retryPrompt).toBe(DEFAULT_END_CONDITION_VALUES.END_RETRY_PROMPT);
+    expect(form.maxRetries).toBe(
+      DEFAULT_END_CONDITION_VALUES.END_RETRIES_STRING
+    );
+    expect(form.retryPrompt).toBe(
+      DEFAULT_END_CONDITION_VALUES.END_RETRY_PROMPT
+    );
   });
 });
 
@@ -110,15 +128,21 @@ describe("buildEndConditionFromValues", () => {
   };
 
   it("returns undefined when enabled is false (inherit from workflow)", () => {
-    expect(buildEndConditionFromValues({ ...base, enabled: false })).toBeUndefined();
+    expect(
+      buildEndConditionFromValues({ ...base, enabled: false })
+    ).toBeUndefined();
   });
 
   it("returns null when enabled but script is empty (explicitly disabled)", () => {
-    expect(buildEndConditionFromValues({ ...base, enabled: true, script: "" })).toBeNull();
+    expect(
+      buildEndConditionFromValues({ ...base, enabled: true, script: "" })
+    ).toBeNull();
   });
 
   it("returns null when enabled but returns is empty", () => {
-    expect(buildEndConditionFromValues({ ...base, enabled: true, returns: "" })).toBeNull();
+    expect(
+      buildEndConditionFromValues({ ...base, enabled: true, returns: "" })
+    ).toBeNull();
   });
 
   it("returns an end condition object when enabled with script+returns", () => {
@@ -127,7 +151,10 @@ describe("buildEndConditionFromValues", () => {
   });
 
   it("omits timeout when equal to default", () => {
-    const result = buildEndConditionFromValues({ ...base, enabled: true }) as unknown as Record<string, unknown>;
+    const result = buildEndConditionFromValues({
+      ...base,
+      enabled: true,
+    }) as unknown as Record<string, unknown>;
     expect(result?.timeout).toBeUndefined();
   });
 
@@ -159,9 +186,18 @@ describe("buildEndConditionFromValues", () => {
   });
 
   it("round-trips: toFormValues → buildFromValues returns equivalent object", () => {
-    const original = { script: "pytest", returns: "0", maxRetries: 2, retryPrompt: "Retry" };
+    const original = {
+      script: "pytest",
+      returns: "0",
+      maxRetries: 2,
+      retryPrompt: "Retry",
+    };
     const form = endConditionToFormValues(original);
     const rebuilt = buildEndConditionFromValues(form);
-    expect(rebuilt).toMatchObject({ script: "pytest", returns: "0", maxRetries: 2 });
+    expect(rebuilt).toMatchObject({
+      script: "pytest",
+      returns: "0",
+      maxRetries: 2,
+    });
   });
 });

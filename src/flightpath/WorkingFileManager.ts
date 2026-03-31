@@ -110,9 +110,7 @@ export class WorkingFileManager {
       const parsed = JSON.parse(content) as WorkingFile;
       return parsed;
     } catch (error) {
-      throw new Error(
-        `Failed to read working file: ${getErrorMessage(error)}`
-      );
+      throw new Error(`Failed to read working file: ${getErrorMessage(error)}`);
     }
   }
 

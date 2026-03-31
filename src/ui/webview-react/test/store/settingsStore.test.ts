@@ -68,14 +68,12 @@ describe("getModelsForHarness", () => {
 
 describe("setAvailableAgents", () => {
   it("updates the agents list", () => {
-    useSettingsStore
-      .getState()
-      .setAvailableAgents([
-        {
-          name: "my-agent",
-          path: "/workspace/.flightpath/agents/my-agent.agent.md",
-        },
-      ]);
+    useSettingsStore.getState().setAvailableAgents([
+      {
+        name: "my-agent",
+        path: "/workspace/.flightpath/agents/my-agent.agent.md",
+      },
+    ]);
     expect(useSettingsStore.getState().availableAgents).toHaveLength(1);
     expect(useSettingsStore.getState().availableAgents[0].name).toBe(
       "my-agent"

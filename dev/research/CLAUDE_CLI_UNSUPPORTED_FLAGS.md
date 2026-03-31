@@ -14,22 +14,22 @@ FlightPath already handles the core automation flags well. Of the ~45 flags the 
 
 ## Flags FlightPath Already Handles
 
-| Flag | How FlightPath Uses It |
-|---|---|
-| `--mcp-config <file>` | Written to temp file; passed when dynamic queue enabled |
-| `--allowed-tools mcp__flightpath` | Auto-appended after MCP config block |
-| `--model <model>` | From resolved properties (prompt > workflow > settings) |
-| `--add-dir <dir>` | All workspace dirs, via `CliProviderUtils.getWorkspaceDirs()` |
-| `-r <sessionId>` | Session resumption when explicit session ID known |
-| `--allowedTools <pattern...>` | Custom tool permission mode (headless only) |
-| `--disallowedTools <pattern...>` | Deny list for all non-dangerouslyAllowAll modes (headless only) |
-| `--dangerously-skip-permissions` | When `dangerouslyAllowAll` permission mode set |
-| `--tools "default"` | When `allowAll` permission mode set |
-| `--permission-mode bypassPermissions` | Paired with `--tools`/`--allowedTools` in headless |
-| `--settings <file>` | Stop hook for interactive completion detection |
-| `-p` | Headless (print) mode |
-| `--output-format stream-json` | Headless streaming output |
-| `--verbose` | Headless mode always |
+| Flag                                  | How FlightPath Uses It                                          |
+| ------------------------------------- | --------------------------------------------------------------- |
+| `--mcp-config <file>`                 | Written to temp file; passed when dynamic queue enabled         |
+| `--allowed-tools mcp__flightpath`     | Auto-appended after MCP config block                            |
+| `--model <model>`                     | From resolved properties (prompt > workflow > settings)         |
+| `--add-dir <dir>`                     | All workspace dirs, via `CliProviderUtils.getWorkspaceDirs()`   |
+| `-r <sessionId>`                      | Session resumption when explicit session ID known               |
+| `--allowedTools <pattern...>`         | Custom tool permission mode (headless only)                     |
+| `--disallowedTools <pattern...>`      | Deny list for all non-dangerouslyAllowAll modes (headless only) |
+| `--dangerously-skip-permissions`      | When `dangerouslyAllowAll` permission mode set                  |
+| `--tools "default"`                   | When `allowAll` permission mode set                             |
+| `--permission-mode bypassPermissions` | Paired with `--tools`/`--allowedTools` in headless              |
+| `--settings <file>`                   | Stop hook for interactive completion detection                  |
+| `-p`                                  | Headless (print) mode                                           |
+| `--output-format stream-json`         | Headless streaming output                                       |
+| `--verbose`                           | Headless mode always                                            |
 
 ---
 
@@ -44,13 +44,15 @@ FlightPath already handles the core automation flags well. Of the ~45 flags the 
 **What it does:** Appends custom text to the END of Claude's default system prompt, leaving all of Claude Code's built-in instructions intact. The companion `--append-system-prompt-file <path>` loads the text from a file.
 
 **Automation value:** This is the primary mechanism for injecting workflow-specific behavioral rules without destroying Claude's default coding assistant capabilities. Use cases:
+
 - Enforce a coding standard for a specific workflow ("Always use async/await, never callbacks")
 - Inject project-specific context that should persist across all prompts in a workflow
 - Add output format constraints for downstream parsing
 
-**Contrast with `--system-prompt`:** The `--system-prompt` flag *replaces* the entire default system prompt, which removes Claude Code's built-in tool usage instructions and code editing behaviors. `--append-system-prompt` is safer for automation.
+**Contrast with `--system-prompt`:** The `--system-prompt` flag _replaces_ the entire default system prompt, which removes Claude Code's built-in tool usage instructions and code editing behaviors. `--append-system-prompt` is safer for automation.
 
 **FlightPath integration points:**
+
 - Should be a `systemPrompt` / `appendSystemPrompt` field on `ExecutionProperties` (prompt-level and workflow-level, following three-tier precedence)
 - `--append-system-prompt-file` variant would pair well with FlightPath's existing file-reference pattern (similar to how `agent` references `.agent.md` files)
 - No conflict with existing args
@@ -68,6 +70,7 @@ FlightPath already handles the core automation flags well. Of the ~45 flags the 
 **Automation value:** Critical safety guard for headless workflows. Without it, a single misbehaving prompt can run indefinitely (or until the API budget is exhausted), consuming tokens and blocking the queue from advancing. Setting a per-prompt turn ceiling gives predictable maximum execution time and cost.
 
 **FlightPath integration points:**
+
 - Should be an optional field on `ExecutionProperties` (e.g., `maxTurns?: number`), applied as `--max-turns <n>` in headless mode only
 - Complements the existing `maxPromptExecutionTime` timeout — turn limits bound token consumption while time limits bound wall-clock duration
 
@@ -84,6 +87,7 @@ FlightPath already handles the core automation flags well. Of the ~45 flags the 
 **Automation value:** Workflow steps vary dramatically in cognitive complexity. A prompt that renames a variable needs `low`; an architectural design prompt benefits from `high`. Exposing effort at the prompt level lets workflow authors balance quality vs. cost/latency explicitly rather than always defaulting to the same effort level.
 
 **FlightPath integration points:**
+
 - Add `effort?: "low" | "medium" | "high"` to `ExecutionProperties` with three-tier precedence
 - Map directly to `--effort <level>` in `ClaudeCliProvider.buildCliArgs()`
 - Should apply in both interactive and headless modes (flag works in both)
@@ -101,6 +105,7 @@ FlightPath already handles the core automation flags well. Of the ~45 flags the 
 **Automation value:** Long-running unattended workflows should not fail because of transient API overload. Without a fallback, a headless workflow gets an error and FlightPath has to handle retries at the workflow level. With `--fallback-model`, the CLI itself handles model-level fallback transparently.
 
 **FlightPath integration points:**
+
 - Add `fallbackModel?: string` to `ExecutionProperties`
 - Apply as `--fallback-model <model>` in headless (print) mode only
 - Could also be a global setting (`flightpath.claudeCliFallbackModel`)
@@ -136,6 +141,7 @@ FlightPath already handles the core automation flags well. Of the ~45 flags the 
 **Automation value:** For workflows that intentionally start a fresh context on every prompt (i.e., no `resumeSession` ever), session persistence is overhead. More importantly, in high-volume parallel workflows this prevents session files from accumulating in `~/.claude/`. Useful for ephemeral CI/CD automation.
 
 **FlightPath integration points:**
+
 - Could be a workflow-level flag (e.g., `ephemeral: true`) or a global setting
 - When set, FlightPath should also not attempt session ID tracking for that workflow
 
@@ -152,6 +158,7 @@ FlightPath already handles the core automation flags well. Of the ~45 flags the 
 **Automation value:** FlightPath already passes `--mcp-config` for the FlightPath MCP server. Without `--strict-mcp-config`, the user's personal MCP servers (e.g., a filesystem server, a GitHub server) also load for every FlightPath session. This is usually fine but can cause unexpected tool availability or permission prompts in unattended headless runs.
 
 **FlightPath integration points:**
+
 - Add an optional `flightpath.claudeCliStrictMcp` global setting (boolean, default `false`)
 - When enabled, append `--strict-mcp-config` alongside every `--mcp-config` invocation
 
@@ -168,6 +175,7 @@ FlightPath already handles the core automation flags well. Of the ~45 flags the 
 **Automation value:** Hard cost ceiling per prompt in headless workflows. Complements `--max-turns` (which bounds turns, not spend). Useful when running against the Anthropic API directly (API key users) rather than through a subscription.
 
 **FlightPath integration points:**
+
 - Add `maxBudgetUsd?: number` to `ExecutionProperties`
 - Apply in headless mode only
 
@@ -184,6 +192,7 @@ FlightPath already handles the core automation flags well. Of the ~45 flags the 
 **Automation value:** FlightPath tracks session IDs for resumption. Currently it discovers the session ID post-hoc by parsing Claude's JSON output. If FlightPath pre-generated and passed the UUID, it would know the session ID before the prompt even starts — simplifying session tracking and enabling more reliable parallel workflow session isolation.
 
 **FlightPath integration points:**
+
 - `FlightPathManager` or `WorkflowExecutor` could generate a UUID (via Node's `crypto.randomUUID()`) and pass it as `--session-id`
 - The session ID would then be immediately available for the working file without waiting for output parsing
 - Must be a valid UUID — crypto.randomUUID() guarantees this
@@ -308,47 +317,47 @@ FlightPath already handles the core automation flags well. Of the ~45 flags the 
 
 These flags are interactive-only or infrastructure-specific and should not be exposed by FlightPath:
 
-| Flag | Reason to Exclude |
-|---|---|
-| `--continue` / `-c` | FlightPath deliberately avoids `-c` (global scope, wrong project risk) |
-| `--chrome` / `--no-chrome` | Browser automation — unrelated to FlightPath workflows |
-| `--ide` | VS Code IDE integration — already the host environment |
-| `--tmux` | Terminal multiplexer — irrelevant in VS Code terminal |
-| `--from-pr` | GitHub PR session resume — not a workflow automation concept |
-| `--remote` | Cloud session creation — out of scope |
-| `--teleport` | Cloud-to-local session bridge — out of scope |
-| `--teammate-mode` | Agent team display mode — interactive UI concern |
-| `--replay-user-messages` | stream-json input acknowledgment — internal protocol |
-| `--json-schema` | Structured output validation — could be useful but niche |
-| `--input-format stream-json` | FlightPath uses text input, not stream-json input |
-| `--init` / `--init-only` / `--maintenance` | Lifecycle hooks, not workflow execution |
-| `--allow-dangerously-skip-permissions` | FlightPath uses `--dangerously-skip-permissions` directly |
-| `--mcp-debug` | Deprecated; use `--debug` instead |
+| Flag                                       | Reason to Exclude                                                      |
+| ------------------------------------------ | ---------------------------------------------------------------------- |
+| `--continue` / `-c`                        | FlightPath deliberately avoids `-c` (global scope, wrong project risk) |
+| `--chrome` / `--no-chrome`                 | Browser automation — unrelated to FlightPath workflows                 |
+| `--ide`                                    | VS Code IDE integration — already the host environment                 |
+| `--tmux`                                   | Terminal multiplexer — irrelevant in VS Code terminal                  |
+| `--from-pr`                                | GitHub PR session resume — not a workflow automation concept           |
+| `--remote`                                 | Cloud session creation — out of scope                                  |
+| `--teleport`                               | Cloud-to-local session bridge — out of scope                           |
+| `--teammate-mode`                          | Agent team display mode — interactive UI concern                       |
+| `--replay-user-messages`                   | stream-json input acknowledgment — internal protocol                   |
+| `--json-schema`                            | Structured output validation — could be useful but niche               |
+| `--input-format stream-json`               | FlightPath uses text input, not stream-json input                      |
+| `--init` / `--init-only` / `--maintenance` | Lifecycle hooks, not workflow execution                                |
+| `--allow-dangerously-skip-permissions`     | FlightPath uses `--dangerously-skip-permissions` directly              |
+| `--mcp-debug`                              | Deprecated; use `--debug` instead                                      |
 
 ---
 
 ## Summary Table
 
-| Flag | Priority | Mode | Notes |
-|---|---|---|---|
-| `--append-system-prompt` / `--append-system-prompt-file` | HIGH | Both | Add to `ExecutionProperties`; file variant pairs with agent file pattern |
-| `--max-turns <n>` | HIGH | Headless only | Safety guard; add to `ExecutionProperties` |
-| `--effort <level>` | HIGH | Both | Cost/quality tuning per prompt; add to `ExecutionProperties` |
-| `--fallback-model <model>` | HIGH | Headless only | API reliability; global setting or `ExecutionProperties` |
-| `--system-prompt` / `--system-prompt-file` | MEDIUM | Both | Power-user; implement after append variants |
-| `--no-session-persistence` | MEDIUM | Headless only | CI/ephemeral workflows |
-| `--strict-mcp-config` | MEDIUM | Both | Reproducible/isolated MCP environments |
-| `--max-budget-usd <amount>` | MEDIUM | Headless only | API-key users; add to `ExecutionProperties` |
-| `--session-id <uuid>` | MEDIUM | Both | Pre-assign UUID to simplify session tracking |
-| `--permission-prompt-tool <tool>` | MEDIUM | Headless only | Dynamic permissions via FlightPath MCP server |
-| `--agents <json>` | LOW | Both | Non-deterministic; poor fit for structured workflows |
-| `--betas <beta...>` | LOW | Both | API-key only; niche |
-| `--fork-session` | LOW | Both | Future branching feature |
-| `--include-partial-messages` | LOW | Headless only | Parser complexity not justified |
-| `--debug` / `--debug-file` | LOW | Both | Troubleshooting only |
-| `--disable-slash-commands` | LOW | Both | No-op in headless |
-| `--plugin-dir` | LOW | Both | Escape hatch covers this |
-| `--setting-sources` | LOW | Both | CI-specific edge case |
+| Flag                                                     | Priority | Mode          | Notes                                                                    |
+| -------------------------------------------------------- | -------- | ------------- | ------------------------------------------------------------------------ |
+| `--append-system-prompt` / `--append-system-prompt-file` | HIGH     | Both          | Add to `ExecutionProperties`; file variant pairs with agent file pattern |
+| `--max-turns <n>`                                        | HIGH     | Headless only | Safety guard; add to `ExecutionProperties`                               |
+| `--effort <level>`                                       | HIGH     | Both          | Cost/quality tuning per prompt; add to `ExecutionProperties`             |
+| `--fallback-model <model>`                               | HIGH     | Headless only | API reliability; global setting or `ExecutionProperties`                 |
+| `--system-prompt` / `--system-prompt-file`               | MEDIUM   | Both          | Power-user; implement after append variants                              |
+| `--no-session-persistence`                               | MEDIUM   | Headless only | CI/ephemeral workflows                                                   |
+| `--strict-mcp-config`                                    | MEDIUM   | Both          | Reproducible/isolated MCP environments                                   |
+| `--max-budget-usd <amount>`                              | MEDIUM   | Headless only | API-key users; add to `ExecutionProperties`                              |
+| `--session-id <uuid>`                                    | MEDIUM   | Both          | Pre-assign UUID to simplify session tracking                             |
+| `--permission-prompt-tool <tool>`                        | MEDIUM   | Headless only | Dynamic permissions via FlightPath MCP server                            |
+| `--agents <json>`                                        | LOW      | Both          | Non-deterministic; poor fit for structured workflows                     |
+| `--betas <beta...>`                                      | LOW      | Both          | API-key only; niche                                                      |
+| `--fork-session`                                         | LOW      | Both          | Future branching feature                                                 |
+| `--include-partial-messages`                             | LOW      | Headless only | Parser complexity not justified                                          |
+| `--debug` / `--debug-file`                               | LOW      | Both          | Troubleshooting only                                                     |
+| `--disable-slash-commands`                               | LOW      | Both          | No-op in headless                                                        |
+| `--plugin-dir`                                           | LOW      | Both          | Escape hatch covers this                                                 |
+| `--setting-sources`                                      | LOW      | Both          | CI-specific edge case                                                    |
 
 ---
 
@@ -387,6 +396,7 @@ FlightPath's `buildHeadlessArgs()` currently constructs:
 For an escape hatch, user-supplied extra args should be appended to `baseArgs` before `buildHeadlessArgs()` is called, so they land after the FlightPath structured args but before the prompt string (which is always first in headless mode). Actually, because the prompt is positional first, user args should be appended to `baseArgs` directly — they will end up in the `...baseArgs` spread position, which is after `--verbose` and after all FlightPath structured args.
 
 The one flag that should be **blocked** from the escape hatch (or at minimum warned against):
+
 - `-p` / `--print` — FlightPath adds this itself; duplicating would cause double-print behavior
 - `--output-format` — FlightPath requires `stream-json`; overriding would break `ClaudeResponseParser`
 - `--verbose` — Harmless duplicate but unnecessary

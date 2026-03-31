@@ -277,9 +277,7 @@
         {
           "type": "patch",
           "hash": "5863e039041482a4f7d4d9c189c75f480b4138bf",
-          "files": [
-            "C:/dev/FlightPath/manual-test/temp.txt"
-          ],
+          "files": ["C:/dev/FlightPath/manual-test/temp.txt"],
           "id": "prt_cbfcdd41e001WzDOHJ8S6ASVmZ",
           "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
           "messageID": "msg_cbfcdc05e001rlUJHRRzCtTwXi"
@@ -408,9 +406,7 @@
         {
           "type": "patch",
           "hash": "ab915558e2e2e2237026278ad90444fb3d03eed9",
-          "files": [
-            "C:/dev/FlightPath/manual-test/temp.txt"
-          ],
+          "files": ["C:/dev/FlightPath/manual-test/temp.txt"],
           "id": "prt_cbfcde4b1001zdegUR5mzWM6fw",
           "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
           "messageID": "msg_cbfcdd428001UmfNKZx7dXhNT8"
@@ -528,9 +524,7 @@
         {
           "type": "patch",
           "hash": "d6aa6ed82a22862d8503bff3575cf72af79834ea",
-          "files": [
-            "C:/dev/FlightPath/manual-test/temp.txt"
-          ],
+          "files": ["C:/dev/FlightPath/manual-test/temp.txt"],
           "id": "prt_cbfcdefe9001txN5xeO5QrWs15",
           "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
           "messageID": "msg_cbfcde4ba0018nkWnJHaLLe86G"
@@ -766,9 +760,7 @@
         {
           "type": "patch",
           "hash": "67b12e6f6a9b089a642afe9dad227d5701c30955",
-          "files": [
-            "C:/dev/FlightPath/manual-test/temp.txt"
-          ],
+          "files": ["C:/dev/FlightPath/manual-test/temp.txt"],
           "id": "prt_cbfce04ce00126fDipL9LW0L5p",
           "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
           "messageID": "msg_cbfcdfa1f001omclJbzT1ojdKd"

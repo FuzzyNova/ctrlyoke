@@ -91,10 +91,9 @@ suite("VarSubstitutor Tests", () => {
   suite("applyToPromptText", () => {
     test("substitutes in prompt text", () => {
       assert.strictEqual(
-        VarSubstitutor.applyToPromptText(
-          "Scan the repo at {{repoPath}}",
-          { repoPath: "/home/user/myrepo" }
-        ),
+        VarSubstitutor.applyToPromptText("Scan the repo at {{repoPath}}", {
+          repoPath: "/home/user/myrepo",
+        }),
         "Scan the repo at /home/user/myrepo"
       );
     });
@@ -145,13 +144,22 @@ suite("VarSubstitutor Tests", () => {
         makeProps({
           hooks: [
             { event: "stop", command: "node record.js stop {{harness}}" },
-            { event: "sessionStart", command: "node record.js start {{harness}}" },
+            {
+              event: "sessionStart",
+              command: "node record.js start {{harness}}",
+            },
           ],
         }),
         { harness: "claude-cli" }
       );
-      assert.strictEqual(result.hooks![0].command, "node record.js stop claude-cli");
-      assert.strictEqual(result.hooks![1].command, "node record.js start claude-cli");
+      assert.strictEqual(
+        result.hooks![0].command,
+        "node record.js stop claude-cli"
+      );
+      assert.strictEqual(
+        result.hooks![1].command,
+        "node record.js start claude-cli"
+      );
     });
 
     test("substitutes endCondition script path", () => {

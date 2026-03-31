@@ -177,11 +177,11 @@ Inject `additionalArgs` before the prompt. OpenCode's yargs parser accepts flags
 
 ### What FlightPath Always Injects (Even With `customArgs`)
 
-| Category                   | Component                                                                                                         | Why non-negotiable                                                                                       |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Completion detection hooks | Copilot: sessionEnd hook file; Claude: `--settings <file>`; Codex: `--config <toml>`; OpenCode: plugin file write | Without these, the workflow stalls indefinitely                                                          |
-| Headless output format     | Claude: `-p --output-format stream-json --verbose`; Codex: `exec --json`; OpenCode: `run --format json`           | FlightPath's response parsers require specific formats                                                   |
-| MCP orchestration          | `--mcp-config` (or equivalent) + tool approval                                                                    | Only when `mcpServers` is non-empty; suppress by setting `mcpServers: null`                              |
+| Category                   | Component                                                                                                         | Why non-negotiable                                                          |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Completion detection hooks | Copilot: sessionEnd hook file; Claude: `--settings <file>`; Codex: `--config <toml>`; OpenCode: plugin file write | Without these, the workflow stalls indefinitely                             |
+| Headless output format     | Claude: `-p --output-format stream-json --verbose`; Codex: `exec --json`; OpenCode: `run --format json`           | FlightPath's response parsers require specific formats                      |
+| MCP orchestration          | `--mcp-config` (or equivalent) + tool approval                                                                    | Only when `mcpServers` is non-empty; suppress by setting `mcpServers: null` |
 
 ### What Gets Skipped When `customArgs` Is Set
 

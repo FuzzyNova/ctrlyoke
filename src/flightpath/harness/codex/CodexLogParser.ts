@@ -13,7 +13,10 @@ import {
   TextData,
   ToolResultData,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  HARNESS_IDS,
+} from "../../../types/DashboardConstants";
 import { CODEX_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
 
 // ============================================================================
@@ -39,7 +42,6 @@ interface CodexSessionMetaPayload {
     repository_url: string;
   };
 }
-
 
 /**
  * Codex CLI log parser
@@ -132,8 +134,10 @@ export class CodexLogParser extends BaseLogParser {
    * Parallel to toolCallMap but exclusively used by extractStructuredEventsFromEvent
    * so that streaming state never contaminates extractResponse()'s toolCallMap.
    */
-  private pendingStreamingCalls: Map<string, { type: string; toolName: string }> =
-    new Map();
+  private pendingStreamingCalls: Map<
+    string,
+    { type: string; toolName: string }
+  > = new Map();
 
   /**
    * Extract complete response from Codex log events
@@ -922,8 +926,14 @@ export class CodexLogParser extends BaseLogParser {
               callId,
               timestamp
             );
-            if (callId && CodexToolBuilder.needsCompletionTracking(toolEvent.type)) {
-              this.pendingStreamingCalls.set(callId, { type: toolEvent.type, toolName });
+            if (
+              callId &&
+              CodexToolBuilder.needsCompletionTracking(toolEvent.type)
+            ) {
+              this.pendingStreamingCalls.set(callId, {
+                type: toolEvent.type,
+                toolName,
+              });
             }
             results.push(toolEvent);
           }
@@ -1009,10 +1019,7 @@ export class CodexLogParser extends BaseLogParser {
     }
 
     // response_item:custom_tool_call → INITIATED
-    if (
-      e.type === "response_item" &&
-      e.payload?.type === "custom_tool_call"
-    ) {
+    if (e.type === "response_item" && e.payload?.type === "custom_tool_call") {
       const toolName = e.payload.name?.toLowerCase() || "";
       const input = e.payload.input;
       let params: Record<string, unknown> =
@@ -1034,7 +1041,10 @@ export class CodexLogParser extends BaseLogParser {
         timestamp
       );
       if (callId && CodexToolBuilder.needsCompletionTracking(toolEvent.type)) {
-        this.pendingStreamingCalls.set(callId, { type: toolEvent.type, toolName });
+        this.pendingStreamingCalls.set(callId, {
+          type: toolEvent.type,
+          toolName,
+        });
       }
       results.push(toolEvent);
       return results;

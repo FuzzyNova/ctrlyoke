@@ -104,19 +104,29 @@ describe("formatRelativeTimeVerbose", () => {
 
   it("returns singular/plural minutes", () => {
     expect(formatRelativeTimeVerbose(Date.now() - 60_000)).toBe("1 minute ago");
-    expect(formatRelativeTimeVerbose(Date.now() - 120_000)).toBe("2 minutes ago");
+    expect(formatRelativeTimeVerbose(Date.now() - 120_000)).toBe(
+      "2 minutes ago"
+    );
   });
 
   it("returns singular/plural hours", () => {
-    expect(formatRelativeTimeVerbose(Date.now() - 3_600_000)).toBe("1 hour ago");
-    expect(formatRelativeTimeVerbose(Date.now() - 7_200_000)).toBe("2 hours ago");
+    expect(formatRelativeTimeVerbose(Date.now() - 3_600_000)).toBe(
+      "1 hour ago"
+    );
+    expect(formatRelativeTimeVerbose(Date.now() - 7_200_000)).toBe(
+      "2 hours ago"
+    );
   });
 
   it('returns "Yesterday" for 1 day ago', () => {
-    expect(formatRelativeTimeVerbose(Date.now() - 86_400_000)).toBe("Yesterday");
+    expect(formatRelativeTimeVerbose(Date.now() - 86_400_000)).toBe(
+      "Yesterday"
+    );
   });
 
   it("returns plural days for > 1 day ago", () => {
-    expect(formatRelativeTimeVerbose(Date.now() - 172_800_000)).toBe("2 days ago");
+    expect(formatRelativeTimeVerbose(Date.now() - 172_800_000)).toBe(
+      "2 days ago"
+    );
   });
 });

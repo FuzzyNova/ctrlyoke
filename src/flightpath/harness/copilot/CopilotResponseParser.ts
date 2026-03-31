@@ -7,7 +7,10 @@ import {
   CliEvent,
   TokenUsage,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  HARNESS_IDS,
+} from "../../../types/DashboardConstants";
 import { COPILOT_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
 import { CliResponseParser } from "../shared/CliResponseParser";
 import { CopilotToolBuilder } from "./CopilotToolBuilder";
@@ -151,7 +154,9 @@ export class CopilotResponseParser
           if (toolCallId) {
             const pending = pendingToolCalls.get(toolCallId);
             if (pending) {
-              events.push(...this.buildToolCompletionEvents(json.data, pending));
+              events.push(
+                ...this.buildToolCompletionEvents(json.data, pending)
+              );
               pendingToolCalls.delete(toolCallId);
             }
           }
@@ -370,7 +375,9 @@ export class CopilotResponseParser
               | undefined;
             const pending = pendingCalls?.get(toolCallId);
             if (pending) {
-              events.push(...this.buildToolCompletionEvents(json.data, pending));
+              events.push(
+                ...this.buildToolCompletionEvents(json.data, pending)
+              );
               pendingCalls!.delete(toolCallId);
             }
           }

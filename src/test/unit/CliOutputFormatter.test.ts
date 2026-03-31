@@ -1,7 +1,5 @@
 import * as assert from "assert";
-import {
-  CliOutputFormatter,
-} from "../../flightpath/harness/shared/CliOutputFormatter";
+import { CliOutputFormatter } from "../../flightpath/harness/shared/CliOutputFormatter";
 import {
   UniversalCliOutput,
   ToolCall,

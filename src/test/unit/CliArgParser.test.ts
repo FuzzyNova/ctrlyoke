@@ -29,16 +29,14 @@ suite("CliArgParser", () => {
     });
 
     test("preserves single-quoted string as single token", () => {
-      assert.deepStrictEqual(
-        parseArgString("--config '{\"key\":\"val\"}'"),
-        ["--config", '{"key":"val"}']
-      );
+      assert.deepStrictEqual(parseArgString('--config \'{"key":"val"}\''), [
+        "--config",
+        '{"key":"val"}',
+      ]);
     });
 
     test("handles escaped quotes inside double-quoted strings", () => {
-      assert.deepStrictEqual(parseArgString('"foo \\"bar\\""'), [
-        'foo "bar"',
-      ]);
+      assert.deepStrictEqual(parseArgString('"foo \\"bar\\""'), ['foo "bar"']);
     });
 
     test("handles single argument with no spaces", () => {
@@ -66,10 +64,12 @@ suite("CliArgParser", () => {
     });
 
     test("handles mixed quoted and unquoted args", () => {
-      assert.deepStrictEqual(
-        parseArgString("--name \"John Doe\" --age 30"),
-        ["--name", "John Doe", "--age", "30"]
-      );
+      assert.deepStrictEqual(parseArgString('--name "John Doe" --age 30'), [
+        "--name",
+        "John Doe",
+        "--age",
+        "30",
+      ]);
     });
 
     test("handles adjacent quoted and unquoted text", () => {

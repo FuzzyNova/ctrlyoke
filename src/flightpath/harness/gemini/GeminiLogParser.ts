@@ -224,7 +224,9 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
       // Gemini stores timestamps as ISO strings (BaseCliEvent expects number, but index
       // signature carries the actual string value through at runtime)
       const isoTimestamp = event.timestamp as unknown as string | undefined;
-      const timestamp = isoTimestamp ? new Date(isoTimestamp).getTime() : Date.now();
+      const timestamp = isoTimestamp
+        ? new Date(isoTimestamp).getTime()
+        : Date.now();
 
       if (event.type === "gemini") {
         // THINKING — thoughts[] blocks before the response text
@@ -242,7 +244,11 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
         }
 
         // TEXT — the main response content (string, not array)
-        if (event.content && typeof event.content === "string" && event.content.trim()) {
+        if (
+          event.content &&
+          typeof event.content === "string" &&
+          event.content.trim()
+        ) {
           outputEvents.push({
             type: CLI_EVENT_TYPES.TEXT,
             timestamp,
@@ -266,7 +272,8 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
             // Emit TOOL_RESULT event from embedded result
             const funcResponse = tc.result?.[0]?.functionResponse;
             if (funcResponse) {
-              const isError = !!funcResponse.response?.error || tc.status === "error";
+              const isError =
+                !!funcResponse.response?.error || tc.status === "error";
               outputEvents.push({
                 type: CLI_EVENT_TYPES.TOOL_RESULT,
                 timestamp,
@@ -275,7 +282,10 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
                   result: {
                     success: !isError,
                     output: funcResponse.response?.output,
-                    error: isError ? (funcResponse.response?.error ?? funcResponse.response?.output) : undefined,
+                    error: isError
+                      ? (funcResponse.response?.error ??
+                        funcResponse.response?.output)
+                      : undefined,
                   },
                 },
               });
@@ -315,7 +325,8 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
             inputTokens: totalInputTokens,
             outputTokens: totalOutputTokens,
             totalTokens: totalInputTokens + totalOutputTokens,
-            cachedInputTokens: totalCachedTokens > 0 ? totalCachedTokens : undefined,
+            cachedInputTokens:
+              totalCachedTokens > 0 ? totalCachedTokens : undefined,
             contextWindowUsedTokens,
             contextWindowSize: getGeminiContextWindowSize(model ?? ""),
           }
@@ -414,22 +425,27 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
         );
 
         if (result) {
-          Log.debug(`[GeminiLogParser] Found session log via session ID: ${result}`);
+          Log.debug(
+            `[GeminiLogParser] Found session log via session ID: ${result}`
+          );
           return result;
         }
       }
 
       // FALLBACK: scan recently modified files and match by prompt text prefix
-      const candidates = this.findModifiedSessionLogs(chatsDir, startTime).filter(
-        (p) => p.endsWith(".json")
-      );
+      const candidates = this.findModifiedSessionLogs(
+        chatsDir,
+        startTime
+      ).filter((p) => p.endsWith(".json"));
 
       if (candidates.length === 0) {
         Log.debug("[GeminiLogParser] No candidate log files found");
         return null;
       }
 
-      Log.debug(`[GeminiLogParser] Found ${candidates.length} candidate log files`);
+      Log.debug(
+        `[GeminiLogParser] Found ${candidates.length} candidate log files`
+      );
 
       const promptPrefix = this.normalizePromptForMatching(
         promptText.substring(0, 100)
@@ -511,7 +527,9 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
     }
 
     const isoTimestamp = msg.timestamp as unknown as string | undefined;
-    const timestamp = isoTimestamp ? new Date(isoTimestamp).getTime() : Date.now();
+    const timestamp = isoTimestamp
+      ? new Date(isoTimestamp).getTime()
+      : Date.now();
 
     if (msg.thoughts) {
       for (const thought of msg.thoughts) {
@@ -537,12 +555,18 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
     if (msg.toolCalls) {
       for (const tc of msg.toolCalls) {
         cliEvents.push(
-          GeminiToolBuilder.buildInitiatedEvent(tc.name, tc.args || {}, tc.id, timestamp)
+          GeminiToolBuilder.buildInitiatedEvent(
+            tc.name,
+            tc.args || {},
+            tc.id,
+            timestamp
+          )
         );
 
         const funcResponse = tc.result?.[0]?.functionResponse;
         if (funcResponse) {
-          const isError = !!funcResponse.response?.error || tc.status === "error";
+          const isError =
+            !!funcResponse.response?.error || tc.status === "error";
           cliEvents.push({
             type: CLI_EVENT_TYPES.TOOL_RESULT,
             timestamp,
@@ -552,7 +576,8 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
                 success: !isError,
                 output: funcResponse.response?.output,
                 error: isError
-                  ? (funcResponse.response?.error ?? funcResponse.response?.output)
+                  ? (funcResponse.response?.error ??
+                    funcResponse.response?.output)
                   : undefined,
               },
             },
@@ -625,7 +650,10 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
 
     const rd = tc.resultDisplay as Record<string, any>;
     const succeeded = tc.status === "success";
-    const fullPath = (rd.filePath ?? rd.fileName ?? tc.args?.file_path ?? "unknown") as string;
+    const fullPath = (rd.filePath ??
+      rd.fileName ??
+      tc.args?.file_path ??
+      "unknown") as string;
 
     if (rd.fileDiff) {
       outputEvents.push({
@@ -727,7 +755,13 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
   private getGeminiChatsDirectory(): string | null {
     const workspacePath = this.workspaceRoot ?? process.cwd();
     const projectName = path.basename(workspacePath);
-    const chatsDir = path.join(os.homedir(), ".gemini", "tmp", projectName, "chats");
+    const chatsDir = path.join(
+      os.homedir(),
+      ".gemini",
+      "tmp",
+      projectName,
+      "chats"
+    );
     return fs.existsSync(chatsDir) ? chatsDir : null;
   }
 }

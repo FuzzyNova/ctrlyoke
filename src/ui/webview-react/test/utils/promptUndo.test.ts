@@ -17,7 +17,10 @@ import {
 } from "@utils/promptUndo";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
 import type { CliOutput } from "@/types/cliEvents";
-import type { WorkspaceSnapshot, SnapshotFileChange } from "@root/types/OutputHistoryTypes";
+import type {
+  WorkspaceSnapshot,
+  SnapshotFileChange,
+} from "@root/types/OutputHistoryTypes";
 import type { UnifiedDiffHunk } from "@/types/cliEvents";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -34,13 +37,16 @@ const PATCH: UnifiedDiffHunk[] = [
   },
 ];
 
-function makeFileEditEvent(path: string, opts: {
-  oldContent?: string;
-  newContent?: string;
-  structuredPatch?: UnifiedDiffHunk[];
-  status?: string;
-  success?: boolean;
-} = {}) {
+function makeFileEditEvent(
+  path: string,
+  opts: {
+    oldContent?: string;
+    newContent?: string;
+    structuredPatch?: UnifiedDiffHunk[];
+    status?: string;
+    success?: boolean;
+  } = {}
+) {
   return {
     type: CLI_EVENT_TYPES.FILE_EDIT,
     data: {
@@ -70,7 +76,10 @@ function makeFileDeleteEvent(path: string) {
 
 function makeCliOutput(events: unknown[]): CliOutput {
   return {
-    structured: { events: events as NonNullable<CliOutput["structured"]>["events"], metadata: {} },
+    structured: {
+      events: events as NonNullable<CliOutput["structured"]>["events"],
+      metadata: {},
+    },
   } as unknown as CliOutput;
 }
 
@@ -205,7 +214,9 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
 
   it("FILE_DELETE with snapshot contentToRestore → restore-content instruction", () => {
     const output = makeCliOutput([makeFileDeleteEvent("src/gone.ts")]);
-    const snapshot = makeSnapshot([makeDeletedSnap("src/gone.ts", "original content")]);
+    const snapshot = makeSnapshot([
+      makeDeletedSnap("src/gone.ts", "original content"),
+    ]);
     const candidates = buildUndoCandidatesForOutputs([output], snapshot);
 
     expect(candidates).toHaveLength(1);
@@ -217,7 +228,9 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
   it("FILE_DELETE without snapshot contentToRestore → null instruction (non-undoable)", () => {
     const output = makeCliOutput([makeFileDeleteEvent("src/gone.ts")]);
     // Snapshot has no contentToRestore
-    const snapshot = makeSnapshot([{ path: "src/gone.ts", changeType: "deleted" }]);
+    const snapshot = makeSnapshot([
+      { path: "src/gone.ts", changeType: "deleted" },
+    ]);
     const candidates = buildUndoCandidatesForOutputs([output], snapshot);
 
     expect(candidates[0].instruction).toBeNull();
@@ -259,8 +272,16 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
 
   it("multiple edits to same file: first oldContent kept, last newContent wins", () => {
     const output = makeCliOutput([
-      makeFileEditEvent("src/a.ts", { oldContent: "v1", newContent: "v2", structuredPatch: [] }),
-      makeFileEditEvent("src/a.ts", { oldContent: "v2", newContent: "v3", structuredPatch: [] }),
+      makeFileEditEvent("src/a.ts", {
+        oldContent: "v1",
+        newContent: "v2",
+        structuredPatch: [],
+      }),
+      makeFileEditEvent("src/a.ts", {
+        oldContent: "v2",
+        newContent: "v3",
+        structuredPatch: [],
+      }),
     ]);
     const candidates = buildUndoCandidatesForOutputs([output], undefined);
 
@@ -296,12 +317,20 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
 
   it("uses snapshot structuredPatch over per-event patches for display", () => {
     const snapPatch: UnifiedDiffHunk[] = [
-      { oldStart: 10, oldLines: 1, newStart: 10, newLines: 1, lines: ["-snap old", "+snap new"] },
+      {
+        oldStart: 10,
+        oldLines: 1,
+        newStart: 10,
+        newLines: 1,
+        lines: ["-snap old", "+snap new"],
+      },
     ];
     const output = makeCliOutput([
       makeFileEditEvent("src/a.ts", { structuredPatch: PATCH }),
     ]);
-    const snapshot = makeSnapshot([{ ...makeModifiedSnap("src/a.ts"), structuredPatch: snapPatch }]);
+    const snapshot = makeSnapshot([
+      { ...makeModifiedSnap("src/a.ts"), structuredPatch: snapPatch },
+    ]);
     const candidates = buildUndoCandidatesForOutputs([output], snapshot);
 
     // Snapshot patch wins for display
@@ -367,8 +396,18 @@ describe("getPromptUndoSummary", () => {
 
   it("counts only candidates with a non-null instruction", () => {
     const candidates = [
-      { tier: "tier1" as const, instruction: { path: "a.ts", action: "delete" as const }, path: "a.ts", changeType: "created" as const },
-      { tier: "tier1" as const, instruction: null, path: "b.ts", changeType: "modified" as const },
+      {
+        tier: "tier1" as const,
+        instruction: { path: "a.ts", action: "delete" as const },
+        path: "a.ts",
+        changeType: "created" as const,
+      },
+      {
+        tier: "tier1" as const,
+        instruction: null,
+        path: "b.ts",
+        changeType: "modified" as const,
+      },
     ];
     const s = getPromptUndoSummary(candidates);
     expect(s.undoableCount).toBe(1);
@@ -377,7 +416,12 @@ describe("getPromptUndoSummary", () => {
 
   it("reports hasTier2 when any candidate is tier2", () => {
     const candidates = [
-      { tier: "tier2" as const, instruction: null, path: "b.ts", changeType: "modified" as const },
+      {
+        tier: "tier2" as const,
+        instruction: null,
+        path: "b.ts",
+        changeType: "modified" as const,
+      },
     ];
     expect(getPromptUndoSummary(candidates).hasTier2).toBe(true);
   });
@@ -389,7 +433,12 @@ describe("getPromptUndoSummary", () => {
 
 describe("buildUndoDialogInputForPrompt", () => {
   it("sets scope to prompt mode with the correct target", () => {
-    const result = buildUndoDialogInputForPrompt(TARGET, [], undefined, "/workspace");
+    const result = buildUndoDialogInputForPrompt(
+      TARGET,
+      [],
+      undefined,
+      "/workspace"
+    );
     expect(result.scope.mode).toBe("prompt");
     expect(result.scope.target).toEqual(TARGET);
   });
@@ -400,7 +449,12 @@ describe("buildUndoDialogInputForPrompt", () => {
       makeModifiedSnap("src/a.ts"),
       makeModifiedSnap("src/b.ts"), // tier2
     ]);
-    const result = buildUndoDialogInputForPrompt(TARGET, [output], snapshot, "/workspace");
+    const result = buildUndoDialogInputForPrompt(
+      TARGET,
+      [output],
+      snapshot,
+      "/workspace"
+    );
 
     expect(result.eventAttributedFiles).toHaveLength(1);
     expect(result.eventAttributedFiles[0].path).toBe("src/a.ts");
@@ -409,7 +463,12 @@ describe("buildUndoDialogInputForPrompt", () => {
   });
 
   it("includes workspacePath", () => {
-    const result = buildUndoDialogInputForPrompt(TARGET, [], undefined, "/my/workspace");
+    const result = buildUndoDialogInputForPrompt(
+      TARGET,
+      [],
+      undefined,
+      "/my/workspace"
+    );
     expect(result.workspacePath).toBe("/my/workspace");
   });
 });
@@ -422,7 +481,12 @@ describe("buildUndoDialogInputForSpecificEvent", () => {
   it("sets scope to singleFile mode", () => {
     const events = [makeFileEditEvent("src/a.ts")];
     const result = buildUndoDialogInputForSpecificEvent(
-      TARGET, 0, "src/a.ts", events as never, undefined, "/workspace"
+      TARGET,
+      0,
+      "src/a.ts",
+      events as never,
+      undefined,
+      "/workspace"
     );
     expect(result.scope.mode).toBe("singleFile");
     expect((result.scope as { path: string }).path).toBe("src/a.ts");
@@ -431,15 +495,27 @@ describe("buildUndoDialogInputForSpecificEvent", () => {
   it("FILE_EDIT with structuredPatch → reverse-patch instruction", () => {
     const events = [makeFileEditEvent("src/a.ts", { structuredPatch: PATCH })];
     const result = buildUndoDialogInputForSpecificEvent(
-      TARGET, 0, "src/a.ts", events as never, undefined, "/workspace"
+      TARGET,
+      0,
+      "src/a.ts",
+      events as never,
+      undefined,
+      "/workspace"
     );
-    expect(result.eventAttributedFiles[0].instruction?.action).toBe("reverse-patch");
+    expect(result.eventAttributedFiles[0].instruction?.action).toBe(
+      "reverse-patch"
+    );
   });
 
   it("FILE_EDIT without structuredPatch → null instruction (can't undo specific edit)", () => {
     const events = [makeFileEditEvent("src/a.ts", { structuredPatch: [] })];
     const result = buildUndoDialogInputForSpecificEvent(
-      TARGET, 0, "src/a.ts", events as never, undefined, "/workspace"
+      TARGET,
+      0,
+      "src/a.ts",
+      events as never,
+      undefined,
+      "/workspace"
     );
     expect(result.eventAttributedFiles[0].instruction).toBeNull();
   });
@@ -447,7 +523,12 @@ describe("buildUndoDialogInputForSpecificEvent", () => {
   it("FILE_WRITE → delete instruction", () => {
     const events = [makeFileWriteEvent("src/new.ts")];
     const result = buildUndoDialogInputForSpecificEvent(
-      TARGET, 0, "src/new.ts", events as never, undefined, "/workspace"
+      TARGET,
+      0,
+      "src/new.ts",
+      events as never,
+      undefined,
+      "/workspace"
     );
     expect(result.eventAttributedFiles[0].instruction?.action).toBe("delete");
   });
@@ -456,15 +537,27 @@ describe("buildUndoDialogInputForSpecificEvent", () => {
     const events = [makeFileDeleteEvent("src/gone.ts")];
     const snapshot = makeSnapshot([makeDeletedSnap("src/gone.ts", "original")]);
     const result = buildUndoDialogInputForSpecificEvent(
-      TARGET, 0, "src/gone.ts", events as never, snapshot, "/workspace"
+      TARGET,
+      0,
+      "src/gone.ts",
+      events as never,
+      snapshot,
+      "/workspace"
     );
-    expect(result.eventAttributedFiles[0].instruction?.action).toBe("restore-content");
+    expect(result.eventAttributedFiles[0].instruction?.action).toBe(
+      "restore-content"
+    );
   });
 
   it("FILE_DELETE without snapshot → null instruction", () => {
     const events = [makeFileDeleteEvent("src/gone.ts")];
     const result = buildUndoDialogInputForSpecificEvent(
-      TARGET, 0, "src/gone.ts", events as never, undefined, "/workspace"
+      TARGET,
+      0,
+      "src/gone.ts",
+      events as never,
+      undefined,
+      "/workspace"
     );
     expect(result.eventAttributedFiles[0].instruction).toBeNull();
   });
@@ -472,7 +565,12 @@ describe("buildUndoDialogInputForSpecificEvent", () => {
   it("invalid event index → empty candidates", () => {
     const events = [makeFileEditEvent("src/a.ts")];
     const result = buildUndoDialogInputForSpecificEvent(
-      TARGET, 99, "src/a.ts", events as never, undefined, "/workspace"
+      TARGET,
+      99,
+      "src/a.ts",
+      events as never,
+      undefined,
+      "/workspace"
     );
     expect(result.eventAttributedFiles).toHaveLength(0);
     expect(result.snapshotOnlyFiles).toHaveLength(0);
@@ -481,7 +579,12 @@ describe("buildUndoDialogInputForSpecificEvent", () => {
   it("non-file event type → empty candidates", () => {
     const events = [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "hello" } }];
     const result = buildUndoDialogInputForSpecificEvent(
-      TARGET, 0, "src/a.ts", events as never, undefined, "/workspace"
+      TARGET,
+      0,
+      "src/a.ts",
+      events as never,
+      undefined,
+      "/workspace"
     );
     expect(result.eventAttributedFiles).toHaveLength(0);
   });

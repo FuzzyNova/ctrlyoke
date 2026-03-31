@@ -18,11 +18,19 @@ function makeCallbacks(overrides?: Partial<OutputCaptureCallbacks>): {
   callbacks: OutputCaptureCallbacks;
   promptStarts: PromptStartData[];
   promptCompletes: PromptCompleteData[];
-  statusMessages: Array<{ stepIndex: number; message: string; severity: string }>;
+  statusMessages: Array<{
+    stepIndex: number;
+    message: string;
+    severity: string;
+  }>;
 } {
   const promptStarts: PromptStartData[] = [];
   const promptCompletes: PromptCompleteData[] = [];
-  const statusMessages: Array<{ stepIndex: number; message: string; severity: string }> = [];
+  const statusMessages: Array<{
+    stepIndex: number;
+    message: string;
+    severity: string;
+  }> = [];
 
   const callbacks: OutputCaptureCallbacks = {
     onPromptStart: (data) => promptStarts.push(data),
@@ -38,7 +46,13 @@ function makeCallbacks(overrides?: Partial<OutputCaptureCallbacks>): {
 
 /** Minimal mock dashboard sink that records calls. */
 function makeDashboardSink(): {
-  sink: IDashboardSink & { updateStatusMessage: (stepIndex: number, message: string, severity?: string) => void };
+  sink: IDashboardSink & {
+    updateStatusMessage: (
+      stepIndex: number,
+      message: string,
+      severity?: string
+    ) => void;
+  };
   calls: Array<{ method: string; args: any[] }>;
 } {
   const calls: Array<{ method: string; args: any[] }> = [];
@@ -72,7 +86,15 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks, promptStarts } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureOutputInit(0, "Do something", "copilot --prompt", "/ws", 1000, 0, false);
+      buffer.captureOutputInit(
+        0,
+        "Do something",
+        "copilot --prompt",
+        "/ws",
+        1000,
+        0,
+        false
+      );
 
       assert.strictEqual(buffer.stepBufferSize, 1);
       assert.strictEqual(promptStarts.length, 1);
@@ -92,7 +114,15 @@ suite("OutputCaptureBuffer", () => {
       // Accumulate some data
       buffer.captureChunk(0, "partial response");
       // Second init (cliCommand populated)
-      buffer.captureOutputInit(0, "prompt", "copilot --prompt foo", "/ws", 1000, 0, false);
+      buffer.captureOutputInit(
+        0,
+        "prompt",
+        "copilot --prompt foo",
+        "/ws",
+        1000,
+        0,
+        false
+      );
 
       // Verify accumulated text was preserved
       const { sink, calls } = makeDashboardSink();
@@ -103,11 +133,19 @@ suite("OutputCaptureBuffer", () => {
         "tag"
       );
       const streamingOutput = calls.find(
-        (c) => c.method === "updateCliOutput" && c.args[0] === 0 && c.args[1]?.isStreaming
+        (c) =>
+          c.method === "updateCliOutput" &&
+          c.args[0] === 0 &&
+          c.args[1]?.isStreaming
       );
       assert.ok(streamingOutput, "should have streaming output");
-      assert.strictEqual(streamingOutput!.args[1].cliCommand, "copilot --prompt foo");
-      const chunkCall = calls.find((c) => c.method === "updateCliStreamingChunk");
+      assert.strictEqual(
+        streamingOutput!.args[1].cliCommand,
+        "copilot --prompt foo"
+      );
+      const chunkCall = calls.find(
+        (c) => c.method === "updateCliStreamingChunk"
+      );
       assert.ok(chunkCall);
       assert.strictEqual(chunkCall!.args[1], "partial response");
     });
@@ -117,7 +155,15 @@ suite("OutputCaptureBuffer", () => {
         getTotalSteps: () => 7,
       });
       const buffer = new OutputCaptureBuffer("tag", callbacks);
-      buffer.captureOutputInit(2, "step 3", undefined, undefined, 500, 0, undefined);
+      buffer.captureOutputInit(
+        2,
+        "step 3",
+        undefined,
+        undefined,
+        500,
+        0,
+        undefined
+      );
       assert.strictEqual(promptStarts[0].totalSteps, 7);
     });
   });
@@ -127,7 +173,15 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureOutputInit(0, "prompt", undefined, undefined, 100, 0, false);
+      buffer.captureOutputInit(
+        0,
+        "prompt",
+        undefined,
+        undefined,
+        100,
+        0,
+        false
+      );
       buffer.captureChunk(0, "hello ");
       buffer.captureChunk(0, "world");
 
@@ -138,7 +192,9 @@ suite("OutputCaptureBuffer", () => {
         null,
         "tag"
       );
-      const chunkCall = calls.find((c) => c.method === "updateCliStreamingChunk");
+      const chunkCall = calls.find(
+        (c) => c.method === "updateCliStreamingChunk"
+      );
       assert.ok(chunkCall);
       assert.strictEqual(chunkCall!.args[1], "hello world");
     });
@@ -158,9 +214,20 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureOutputInit(0, "prompt", undefined, undefined, 100, 0, false);
+      buffer.captureOutputInit(
+        0,
+        "prompt",
+        undefined,
+        undefined,
+        100,
+        0,
+        false
+      );
       const event1 = { type: "tool_call", name: "bash" } as unknown as CliEvent;
-      const event2 = { type: "tool_result", name: "bash" } as unknown as CliEvent;
+      const event2 = {
+        type: "tool_result",
+        name: "bash",
+      } as unknown as CliEvent;
       buffer.captureEvents(0, [event1]);
       buffer.captureEvents(0, [event2]);
 
@@ -171,7 +238,9 @@ suite("OutputCaptureBuffer", () => {
         null,
         "tag"
       );
-      const eventsCall = calls.find((c) => c.method === "updateCliStreamingEvents");
+      const eventsCall = calls.find(
+        (c) => c.method === "updateCliStreamingEvents"
+      );
       assert.ok(eventsCall);
       assert.strictEqual(eventsCall!.args[1].length, 2);
     });
@@ -189,15 +258,29 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks, promptCompletes } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureOutputInit(0, "prompt", undefined, undefined, 100, 0, false);
+      buffer.captureOutputInit(
+        0,
+        "prompt",
+        undefined,
+        undefined,
+        100,
+        0,
+        false
+      );
       buffer.captureCompletedOutput(0, {
         response: "done",
         tokens: { prompt: 100, completion: 50 },
         elapsed: 2.5,
-        structured: { metadata: { sessionId: "sess-1", harness: "copilot-cli" } },
+        structured: {
+          metadata: { sessionId: "sess-1", harness: "copilot-cli" },
+        },
       });
 
-      assert.strictEqual(buffer.stepBufferSize, 0, "streaming buffer should be cleared");
+      assert.strictEqual(
+        buffer.stepBufferSize,
+        0,
+        "streaming buffer should be cleared"
+      );
       assert.strictEqual(promptCompletes.length, 1);
       assert.strictEqual(promptCompletes[0].stepIndex, 0);
       assert.strictEqual(promptCompletes[0].tokens?.prompt, 100);
@@ -210,8 +293,14 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureCompletedOutput(0, { response: "attempt 0", attemptIndex: 0 });
-      buffer.captureCompletedOutput(0, { response: "attempt 1", attemptIndex: 1 });
+      buffer.captureCompletedOutput(0, {
+        response: "attempt 0",
+        attemptIndex: 0,
+      });
+      buffer.captureCompletedOutput(0, {
+        response: "attempt 1",
+        attemptIndex: 1,
+      });
 
       const { sink, calls } = makeDashboardSink();
       buffer.replayTo(
@@ -266,7 +355,15 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureFinalPromptOutputInit(0, "final q", "cmd", "/ws", 999, 0, false);
+      buffer.captureFinalPromptOutputInit(
+        0,
+        "final q",
+        "cmd",
+        "/ws",
+        999,
+        0,
+        false
+      );
       buffer.captureFinalPromptChunk(0, "response chunk");
 
       assert.strictEqual(buffer.finalPromptBufferSize, 1);
@@ -276,9 +373,21 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureFinalPromptOutputInit(0, "q", undefined, undefined, 100, 0, false);
-      buffer.captureFinalPromptEvents(0, [{ type: "tool_call" } as unknown as CliEvent]);
-      buffer.captureFinalPromptEvents(0, [{ type: "tool_result" } as unknown as CliEvent]);
+      buffer.captureFinalPromptOutputInit(
+        0,
+        "q",
+        undefined,
+        undefined,
+        100,
+        0,
+        false
+      );
+      buffer.captureFinalPromptEvents(0, [
+        { type: "tool_call" } as unknown as CliEvent,
+      ]);
+      buffer.captureFinalPromptEvents(0, [
+        { type: "tool_result" } as unknown as CliEvent,
+      ]);
 
       assert.strictEqual(buffer.finalPromptBufferSize, 1);
     });
@@ -287,11 +396,23 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureFinalPromptOutputInit(0, "q", undefined, undefined, 100, 0, false);
+      buffer.captureFinalPromptOutputInit(
+        0,
+        "q",
+        undefined,
+        undefined,
+        100,
+        0,
+        false
+      );
       assert.strictEqual(buffer.finalPromptBufferSize, 1);
 
       buffer.captureFinalPromptCompletedOutput(0, { response: "final done" });
-      assert.strictEqual(buffer.finalPromptBufferSize, 0, "streaming buffer should be cleared");
+      assert.strictEqual(
+        buffer.finalPromptBufferSize,
+        0,
+        "streaming buffer should be cleared"
+      );
     });
 
     test("should accumulate multiple loop completed outputs", () => {
@@ -308,7 +429,9 @@ suite("OutputCaptureBuffer", () => {
         null,
         "tag"
       );
-      const fpCalls = calls.filter((c) => c.method === "updateFinalPromptOutput");
+      const fpCalls = calls.filter(
+        (c) => c.method === "updateFinalPromptOutput"
+      );
       assert.strictEqual(fpCalls.length, 2);
     });
   });
@@ -388,7 +511,15 @@ suite("OutputCaptureBuffer", () => {
 
       buffer.captureOutputInit(0, "p", undefined, undefined, 100, 0, false);
       buffer.captureCompletedOutput(0, { response: "done" });
-      buffer.captureFinalPromptOutputInit(0, "fp", undefined, undefined, 100, 0, false);
+      buffer.captureFinalPromptOutputInit(
+        0,
+        "fp",
+        undefined,
+        undefined,
+        100,
+        0,
+        false
+      );
 
       buffer.clear();
 
@@ -404,7 +535,11 @@ suite("OutputCaptureBuffer", () => {
         "tag"
       );
       const outputCalls = calls.filter((c) => c.method === "updateCliOutput");
-      assert.strictEqual(outputCalls.length, 0, "no completed outputs after clear");
+      assert.strictEqual(
+        outputCalls.length,
+        0,
+        "no completed outputs after clear"
+      );
     });
   });
 
@@ -448,7 +583,15 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureOutputInit(2, "streaming prompt", "cmd", "/ws", 500, 0, true);
+      buffer.captureOutputInit(
+        2,
+        "streaming prompt",
+        "cmd",
+        "/ws",
+        500,
+        0,
+        true
+      );
       buffer.captureChunk(2, "partial ");
       buffer.captureChunk(2, "data");
 
@@ -467,7 +610,9 @@ suite("OutputCaptureBuffer", () => {
       assert.strictEqual(outputCall!.args[1].prompt, "streaming prompt");
       assert.strictEqual(outputCall!.args[1].rawTextOutput, true);
 
-      const chunkCall = calls.find((c) => c.method === "updateCliStreamingChunk");
+      const chunkCall = calls.find(
+        (c) => c.method === "updateCliStreamingChunk"
+      );
       assert.ok(chunkCall, "should replay accumulated text");
       assert.strictEqual(chunkCall!.args[1], "partial data");
     });
@@ -497,9 +642,19 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureFinalPromptOutputInit(0, "final q", "cmd", "/ws", 999, 0, false);
+      buffer.captureFinalPromptOutputInit(
+        0,
+        "final q",
+        "cmd",
+        "/ws",
+        999,
+        0,
+        false
+      );
       buffer.captureFinalPromptChunk(0, "fp response");
-      buffer.captureFinalPromptEvents(0, [{ type: "tool_call" } as unknown as CliEvent]);
+      buffer.captureFinalPromptEvents(0, [
+        { type: "tool_call" } as unknown as CliEvent,
+      ]);
 
       const { sink, calls } = makeDashboardSink();
       buffer.replayTo(
@@ -531,7 +686,9 @@ suite("OutputCaptureBuffer", () => {
         "tag"
       );
 
-      const statusCalls = calls.filter((c) => c.method === "updateStatusMessage");
+      const statusCalls = calls.filter(
+        (c) => c.method === "updateStatusMessage"
+      );
       assert.strictEqual(statusCalls.length, 1);
       assert.strictEqual(statusCalls[0].args[0], -1); // legacy index for loop 0
       assert.strictEqual(statusCalls[0].args[1], "status msg");

@@ -218,7 +218,9 @@ export const PromptsPanel: React.FC<{
 
     // mcpServers — show whenever explicitly set
     if (prompt.mcpServers !== undefined) {
-      const hasFlightpath = Array.isArray(prompt.mcpServers) && prompt.mcpServers.includes("flightpath");
+      const hasFlightpath =
+        Array.isArray(prompt.mcpServers) &&
+        prompt.mcpServers.includes("flightpath");
       result.push({
         label: hasFlightpath ? "dynamic ext" : "no dynamic ext",
       });
@@ -447,7 +449,10 @@ export const PromptsPanel: React.FC<{
     // synchronously, but the step-level status update is a separate postMessage
     // that lands in a later render cycle — without this, the play icon persists
     // until that second message arrives (or never clears if it was never sent).
-    if (executionState === EXECUTION_STATES.CANCELLING && index === currentStep) {
+    if (
+      executionState === EXECUTION_STATES.CANCELLING &&
+      index === currentStep
+    ) {
       return STEP_STATUS.CANCELLED;
     }
     if (executionState === EXECUTION_STATES.ERROR && index === currentStep) {

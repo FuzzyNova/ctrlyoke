@@ -291,8 +291,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       if (afterTrigger.includes(" ") && !isInsideQuotedPath) return null;
 
       // For # and ~: validate character class (neither supports quoted paths)
-      if (trigger === "#" && !/^[a-zA-Z0-9_/:.-]*$/.test(afterTrigger)) return null;
-      if (trigger === "~" && !/^[a-zA-Z0-9:_]*$/.test(afterTrigger)) return null;
+      if (trigger === "#" && !/^[a-zA-Z0-9_/:.-]*$/.test(afterTrigger))
+        return null;
+      if (trigger === "~" && !/^[a-zA-Z0-9:_]*$/.test(afterTrigger))
+        return null;
 
       const from = lineObj.from + maxIndex; // absolute position of trigger char
 
@@ -715,11 +717,7 @@ function createSpellCheckExtension(
                       .slice(0, 5)
                       .map((suggestion: string) => ({
                         name: `Change to "${suggestion}"`,
-                        apply: (
-                          view: EditorView,
-                          from: number,
-                          to: number
-                        ) => {
+                        apply: (view: EditorView, from: number, to: number) => {
                           view.dispatch({
                             changes: { from, to, insert: suggestion },
                           });
@@ -1003,8 +1001,8 @@ function createLinkDecorationExtension() {
           const gitMatches: any[] = [];
 
           const gitPatterns = {
-            gitFixed:  /~(diff|staged)/g,
-            gitStash:  /~(stash:\d+)/g,
+            gitFixed: /~(diff|staged)/g,
+            gitStash: /~(stash:\d+)/g,
             gitCommit: /~([0-9a-f]{7,40})/gi,
           };
 

@@ -8,7 +8,13 @@ import type { ResolvedCliConfig } from "./platform/CliAdapter";
 import { registerCliAdapter } from "./platform/vscode-shim";
 import { IntegrationFactory } from "./flightpath/IntegrationFactory";
 import { WorkflowInstance } from "./flightpath/WorkflowInstance";
-import { EXECUTION_STATES, STEP_STATUS, HARNESS_IDS, EXECUTION_MODES, RUNNER_IDS } from "./types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  STEP_STATUS,
+  HARNESS_IDS,
+  EXECUTION_MODES,
+  RUNNER_IDS,
+} from "./types/DashboardConstants";
 import type { ExecutionMode } from "./types/DashboardConstants";
 import { Harness } from "./types/FlightPathTypes";
 import type { QueueState, WorkflowRunnerLock } from "./types/FlightPathTypes";
@@ -179,17 +185,24 @@ function resolveHarness(harnessStr: string): Harness {
 
 // ---- Commands ----
 
-async function runCommand(file: string | undefined, options: RunOptions): Promise<void> {
+async function runCommand(
+  file: string | undefined,
+  options: RunOptions
+): Promise<void> {
   if (options.color === false) {
     process.env.NO_COLOR = "1";
   }
 
   if (!file && !options.prompt) {
-    console.error(chalk.red("Error: Provide a file argument or --prompt <text>"));
+    console.error(
+      chalk.red("Error: Provide a file argument or --prompt <text>")
+    );
     process.exit(2);
   }
   if (file && options.prompt) {
-    console.error(chalk.red("Error: --prompt cannot be used together with a file argument"));
+    console.error(
+      chalk.red("Error: --prompt cannot be used together with a file argument")
+    );
     process.exit(2);
   }
 
@@ -210,7 +223,8 @@ async function runCommand(file: string | undefined, options: RunOptions): Promis
     (options.allowTool && options.allowTool.length > 0) ||
     (options.denyTool && options.denyTool.length > 0);
   const allowAllTools =
-    options.allowAllTools ?? (executionMode === EXECUTION_MODES.HEADLESS && !hasCustomTools);
+    options.allowAllTools ??
+    (executionMode === EXECUTION_MODES.HEADLESS && !hasCustomTools);
 
   const config: ResolvedCliConfig = {
     harness: options.harness || HARNESS_IDS.COPILOT_CLI,
@@ -275,7 +289,9 @@ async function runCommand(file: string | undefined, options: RunOptions): Promis
       console.log(chalk.bold(`FlightPath CLI v${version}`));
       console.log(chalk.dim("━".repeat(52)));
       console.log();
-      console.log(`Running: ${chalk.cyan(resolvedFile ? path.basename(resolvedFile) : "<inline prompt>")}`);
+      console.log(
+        `Running: ${chalk.cyan(resolvedFile ? path.basename(resolvedFile) : "<inline prompt>")}`
+      );
       console.log(
         `Harness: ${chalk.yellow(config.harness)}${config.model ? chalk.dim(" (" + config.model + ")") : ""}`
       );
@@ -300,7 +316,11 @@ async function runCommand(file: string | undefined, options: RunOptions): Promis
   // Subscriptions go on the instance (not detectorIntegration) because WorkflowInstance
   // creates a fresh execution integration via the factory and forwards events from it.
   // Interactive mode passes the AI CLI's stdout straight through — no subscription needed.
-  if (executionMode === EXECUTION_MODES.HEADLESS && !options.quiet && !options.json) {
+  if (
+    executionMode === EXECUTION_MODES.HEADLESS &&
+    !options.quiet &&
+    !options.json
+  ) {
     instance.onPromptStart((data) => {
       CliTerminalFormatter.renderPromptHeader(data);
     });

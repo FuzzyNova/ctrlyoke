@@ -4,11 +4,7 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { type HarnessId } from "../../types/messages";
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
-import {
-  HarnessDropdown,
-  HarnessIcon,
-  HARNESS_DISPLAY_NAMES,
-} from "../shared";
+import { HarnessDropdown, HarnessIcon, HARNESS_DISPLAY_NAMES } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
 
 interface HarnessQuickPickerProps {
@@ -23,17 +19,25 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
   disabled = false,
 }) => {
   const { properties, setProperty } = useEditorStore();
-  const { globalSettings, workflowProperties, harnessStatus } = useSettingsStore();
-  const { footerOpenPicker, setFooterOpenPicker, hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
-    useUiStore();
+  const { globalSettings, workflowProperties, harnessStatus } =
+    useSettingsStore();
+  const {
+    footerOpenPicker,
+    setFooterOpenPicker,
+    hiddenDropdownOptions,
+    hideDropdownOption,
+    unhideDropdownOption,
+  } = useUiStore();
 
   const isOpen = footerOpenPicker === "harness";
 
-  const resolvedHarness = (workflowProperties.harness ?? globalSettings.harness) as HarnessId;
+  const resolvedHarness = (workflowProperties.harness ??
+    globalSettings.harness) as HarnessId;
   const defaultHarnessLabel = `Default (${HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness})`;
 
   const valueLabel = properties.harness
-    ? (HARNESS_DISPLAY_NAMES[properties.harness as HarnessId] ?? properties.harness)
+    ? (HARNESS_DISPLAY_NAMES[properties.harness as HarnessId] ??
+      properties.harness)
     : (HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness);
 
   const handleHarnessChange = (newHarness: string) => {
@@ -49,7 +53,13 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
     <FooterQuickPicker
       isNarrow={isNarrow}
       showLabel={showLabel}
-      icon={<HarnessIcon harnessId={activeHarnessId} size={14} dimmed={!isOverride} />}
+      icon={
+        <HarnessIcon
+          harnessId={activeHarnessId}
+          size={14}
+          dimmed={!isOverride}
+        />
+      }
       valueLabel={valueLabel}
       isOverride={isOverride}
       isOpen={isOpen}
@@ -68,7 +78,9 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
         harnessStatus={harnessStatus}
         hiddenValues={hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? []}
         onHideOption={(v) => hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)}
-        onUnhideOption={(v) => unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)}
+        onUnhideOption={(v) =>
+          unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
+        }
         dropdownMaxHeight="300px"
         inline={true}
       />

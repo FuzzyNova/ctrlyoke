@@ -99,11 +99,11 @@ prompts:
 
 **`passthrough` vs `null` at a glance:**
 
-| `toolPermissions` value | Resolver behavior | Flags injected? |
-|---|---|---|
-| `undefined` | Inherit from next tier | Depends on tier |
-| `null` | Stop falling; use global VS Code settings | Yes (global mode) |
-| `{ mode: "passthrough" }` | Stop falling; inject nothing | No — harness uses its own local config |
+| `toolPermissions` value   | Resolver behavior                         | Flags injected?                        |
+| ------------------------- | ----------------------------------------- | -------------------------------------- |
+| `undefined`               | Inherit from next tier                    | Depends on tier                        |
+| `null`                    | Stop falling; use global VS Code settings | Yes (global mode)                      |
+| `{ mode: "passthrough" }` | Stop falling; inject nothing              | No — harness uses its own local config |
 
 ---
 
@@ -149,7 +149,11 @@ function resolveToolPermissions(
   const effective = promptLevel !== undefined ? promptLevel : workflowLevel;
 
   // null, undefined, or { mode: "passthrough" } → inject no flags
-  if (effective === null || effective === undefined || effective.mode === "passthrough") {
+  if (
+    effective === null ||
+    effective === undefined ||
+    effective.mode === "passthrough"
+  ) {
     return null; // providers: if (config === null) return [];
   }
 
@@ -220,15 +224,15 @@ Less clean — avoids param threading but couples harness state to individual pr
 
 Not all harnesses support `allowedTools`/`deniedTools` patterns. This affects both runtime behavior and what the UI should show.
 
-| Harness          | Mode support                   | `allowedTools` patterns | `deniedTools` patterns | Notes                                                                                                                                                                                |
-| ---------------- | ------------------------------ | ----------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Copilot CLI**  | ✅ All 4 (incl. passthrough)   | ✅ Yes                  | ✅ Yes                 | Most reliable; `--allow-tool` / `--deny-tool`                                                                                                                                        |
-| **Claude CLI**   | ✅ All 4 (incl. passthrough)   | ✅ Yes                  | ✅ Yes                 | `--allowedTools` / `--disallowedTools`; passthrough falls back to `~/.claude/settings.json`                                                                                          |
-| **Codex CLI**    | ✅ All 4 (incl. passthrough)   | ❌ Ignored              | ❌ Ignored             | Mode-only; `dangerouslyAllowAll`→bypass, `allowAll`→`--full-auto`, `custom`→sandbox+approval flags. Has its own `codexSandboxMode`/`codexApprovalPolicy`/`codexAllowedDirs` settings |
-| **OpenCode CLI** | ✅ All 4 (incl. passthrough)   | ❌ Ignored              | ❌ Ignored             | Permission model is config-file driven (`.opencode/opencode.json`), not CLI flags. `buildArgs()` returns `[]`                                                                        |
-| **Qwen CLI**     | ✅ All 4 (incl. passthrough)   | ✅ Yes                  | ✅ Yes                 | `--allowed-tools` / `--exclude-tools` (comma-separated); `shell`→`Bash`, `write`→`Write`, etc.                                                                                       |
-| **Gemini CLI**   | ✅ All 4 (incl. passthrough)   | ❌ Ignored (Phase 1)    | ❌ Ignored (Phase 1)   | Phase 1: approval-mode flags only (`--approval-mode yolo/auto_edit/default`). Phase 2 (future): policy engine TOML — see Gemini Policy Engine section below.                        |
-| **Copilot Chat** | ❌ N/A                         | ❌ N/A                  | ❌ N/A                 | Chat harness; `toolPermissions` stored but has no effect at runtime                                                                                                                  |
+| Harness          | Mode support                 | `allowedTools` patterns | `deniedTools` patterns | Notes                                                                                                                                                                                |
+| ---------------- | ---------------------------- | ----------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Copilot CLI**  | ✅ All 4 (incl. passthrough) | ✅ Yes                  | ✅ Yes                 | Most reliable; `--allow-tool` / `--deny-tool`                                                                                                                                        |
+| **Claude CLI**   | ✅ All 4 (incl. passthrough) | ✅ Yes                  | ✅ Yes                 | `--allowedTools` / `--disallowedTools`; passthrough falls back to `~/.claude/settings.json`                                                                                          |
+| **Codex CLI**    | ✅ All 4 (incl. passthrough) | ❌ Ignored              | ❌ Ignored             | Mode-only; `dangerouslyAllowAll`→bypass, `allowAll`→`--full-auto`, `custom`→sandbox+approval flags. Has its own `codexSandboxMode`/`codexApprovalPolicy`/`codexAllowedDirs` settings |
+| **OpenCode CLI** | ✅ All 4 (incl. passthrough) | ❌ Ignored              | ❌ Ignored             | Permission model is config-file driven (`.opencode/opencode.json`), not CLI flags. `buildArgs()` returns `[]`                                                                        |
+| **Qwen CLI**     | ✅ All 4 (incl. passthrough) | ✅ Yes                  | ✅ Yes                 | `--allowed-tools` / `--exclude-tools` (comma-separated); `shell`→`Bash`, `write`→`Write`, etc.                                                                                       |
+| **Gemini CLI**   | ✅ All 4 (incl. passthrough) | ❌ Ignored (Phase 1)    | ❌ Ignored (Phase 1)   | Phase 1: approval-mode flags only (`--approval-mode yolo/auto_edit/default`). Phase 2 (future): policy engine TOML — see Gemini Policy Engine section below.                         |
+| **Copilot Chat** | ❌ N/A                       | ❌ N/A                  | ❌ N/A                 | Chat harness; `toolPermissions` stored but has no effect at runtime                                                                                                                  |
 
 ### `passthrough` mode behavior (all harnesses)
 
@@ -345,9 +349,9 @@ Create a small helper for classifying warning type:
 
 ```typescript
 type PermissionHarnessSupport =
-  | "full"       // Copilot CLI, Claude CLI, Qwen CLI — mode + patterns both work
-  | "mode-only"  // Codex CLI, OpenCode CLI, Gemini CLI — patterns ignored
-  | "n/a";       // Copilot Chat
+  | "full" // Copilot CLI, Claude CLI, Qwen CLI — mode + patterns both work
+  | "mode-only" // Codex CLI, OpenCode CLI, Gemini CLI — patterns ignored
+  | "n/a"; // Copilot Chat
 
 function getPermissionHarnessSupport(
   harnessId: HarnessId
@@ -479,9 +483,11 @@ if (property === "toolPermissions") {
   return (
     (workflowValue.mode !== undefined && workflowValue.mode !== vs.mode) ||
     (workflowValue.allowedTools !== undefined &&
-      JSON.stringify(workflowValue.allowedTools) !== JSON.stringify(vs.allowedTools)) ||
+      JSON.stringify(workflowValue.allowedTools) !==
+        JSON.stringify(vs.allowedTools)) ||
     (workflowValue.deniedTools !== undefined &&
-      JSON.stringify(workflowValue.deniedTools) !== JSON.stringify(vs.deniedTools))
+      JSON.stringify(workflowValue.deniedTools) !==
+        JSON.stringify(vs.deniedTools))
   );
 }
 ```

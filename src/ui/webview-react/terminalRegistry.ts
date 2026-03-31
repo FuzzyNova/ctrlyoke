@@ -178,7 +178,11 @@ export const terminalRegistry = {
    * Safe to call multiple times — opens the terminal on first call, moves DOM on subsequent calls.
    * On first open, loads the WebGL addon for gap-free box-drawing and better TUI color fidelity.
    */
-  async attach(workflowId: string, sessionId: string, container: HTMLElement): Promise<void> {
+  async attach(
+    workflowId: string,
+    sessionId: string,
+    container: HTMLElement
+  ): Promise<void> {
     const entry = registry.get(makeKey(workflowId, sessionId));
     if (!entry) return;
     if (!entry.term.element) {
@@ -192,9 +196,13 @@ export const terminalRegistry = {
         // Canvas 2D rather than xterm's slow DOM renderer.
         webgl.onContextLoss(() => {
           webgl.dispose();
-          import("@xterm/addon-canvas").then(({ CanvasAddon }) => {
-            entry.term.loadAddon(new CanvasAddon());
-          }).catch(() => { /* Canvas addon unavailable — xterm stays on DOM renderer */ });
+          import("@xterm/addon-canvas")
+            .then(({ CanvasAddon }) => {
+              entry.term.loadAddon(new CanvasAddon());
+            })
+            .catch(() => {
+              /* Canvas addon unavailable — xterm stays on DOM renderer */
+            });
         });
         entry.term.loadAddon(webgl);
       } catch {

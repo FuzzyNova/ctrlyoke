@@ -66,7 +66,9 @@ function main() {
     });
 
     if (hookEvent !== "SessionStart" && hookEvent !== "AfterAgent") {
-      debugLog("⏭️ Ignoring non-SessionStart/AfterAgent hook event", { hookEvent });
+      debugLog("⏭️ Ignoring non-SessionStart/AfterAgent hook event", {
+        hookEvent,
+      });
       process.exit(0);
     }
 
@@ -95,9 +97,7 @@ function main() {
     const startPrefix = runId || safeSessionId;
     const notifyFile = path.join(
       notifyDir,
-      isCompletion
-        ? `${safeSessionId}-stop.json`
-        : `${startPrefix}-start.json`
+      isCompletion ? `${safeSessionId}-stop.json` : `${startPrefix}-start.json`
     );
 
     const notifyData = {

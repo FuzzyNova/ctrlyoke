@@ -92,20 +92,16 @@ export class ClaudeToolBuilder {
         };
 
       case CLI_EVENT_TYPES.FILE_EDIT: {
-        const oldContent = (
-          input.oldString ??
+        const oldContent = (input.oldString ??
           input.old_string ??
           input.oldContent ??
           input.old_content ??
-          input.old_str
-        ) as string | undefined;
-        const newContent = (
-          input.newString ??
+          input.old_str) as string | undefined;
+        const newContent = (input.newString ??
           input.new_string ??
           input.newContent ??
           input.new_content ??
-          input.new_str
-        ) as string | undefined;
+          input.new_str) as string | undefined;
         return {
           type: CLI_EVENT_TYPES.FILE_EDIT,
           timestamp,
@@ -336,7 +332,9 @@ export class ClaudeToolBuilder {
           output: toolUseResult.stdout || toolUseResult.output,
           error: toolUseResult.stderr || toolUseResult.error,
           status:
-            exitCode === 0 ? OPERATION_STATUS.COMPLETED : OPERATION_STATUS.FAILED,
+            exitCode === 0
+              ? OPERATION_STATUS.COMPLETED
+              : OPERATION_STATUS.FAILED,
         } as BashCommandData,
       });
       return;

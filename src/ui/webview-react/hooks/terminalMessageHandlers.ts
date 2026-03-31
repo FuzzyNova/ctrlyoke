@@ -5,7 +5,11 @@
  * and tab switching. Isolated here because terminal handlers have a unique
  * dependency on terminalRegistry that no other handler group shares.
  */
-import { MESSAGE_TYPES, TERMINAL_SESSION_STATUS, SESSION_KINDS } from "../types/messages";
+import {
+  MESSAGE_TYPES,
+  TERMINAL_SESSION_STATUS,
+  SESSION_KINDS,
+} from "../types/messages";
 import { WebviewLog } from "@utils/logger";
 import { useTerminalStore } from "../store/terminalStore";
 import { useUiStore } from "../store/uiStore";
@@ -29,7 +33,9 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       entry.term.write(data as string);
     } else {
       // Terminal not yet mounted — buffer until TerminalInstance mounts
-      useTerminalStore.getState().pushPendingOutput(workflowId, sessionId, data as string);
+      useTerminalStore
+        .getState()
+        .pushPendingOutput(workflowId, sessionId, data as string);
     }
   };
 
@@ -104,7 +110,9 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
 
       // Auto-switch back to Output tab when all ai-cli sessions are done,
       // but only if no shell sessions remain open
-      const hasShellSessions = sessions.some((s) => s.kind === SESSION_KINDS.SHELL);
+      const hasShellSessions = sessions.some(
+        (s) => s.kind === SESSION_KINDS.SHELL
+      );
       if (!hasShellSessions) {
         useUiStore.getState().setActiveOutputTab(workflowId, "output");
       }

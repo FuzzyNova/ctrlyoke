@@ -939,7 +939,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       ? "default"
                       : properties.toolPermissions === null
                         ? PERMISSION_MODES.NONE
-                        : (properties.toolPermissions.mode ?? PERMISSION_MODES.ALLOW_ALL)
+                        : (properties.toolPermissions.mode ??
+                          PERMISSION_MODES.ALLOW_ALL)
                   }
                   onChange={(v) => {
                     if (v === "default") {
@@ -970,10 +971,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   properties.toolPermissions === undefined
                     ? workflowProperties.toolPermissions === null
                       ? PERMISSION_MODES.NONE
-                      : (workflowProperties.toolPermissions?.mode ?? PERMISSION_MODES.ALLOW_ALL)
+                      : (workflowProperties.toolPermissions?.mode ??
+                        PERMISSION_MODES.ALLOW_ALL)
                     : properties.toolPermissions === null
                       ? PERMISSION_MODES.NONE
-                      : (properties.toolPermissions.mode ?? PERMISSION_MODES.ALLOW_ALL);
+                      : (properties.toolPermissions.mode ??
+                        PERMISSION_MODES.ALLOW_ALL);
                 const isInheriting = properties.toolPermissions === undefined;
                 const allowedDisabled =
                   isInheriting ||
@@ -982,7 +985,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 const deniedDisabled =
                   isInheriting ||
                   permHarnessSupport === "mode-only" ||
-                  effectivePermMode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
+                  effectivePermMode ===
+                    PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
                   effectivePermMode === PERMISSION_MODES.NONE;
 
                 return (

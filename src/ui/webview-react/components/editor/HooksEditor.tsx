@@ -41,9 +41,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
   showDefault = true,
 }) => {
   const mode = getMode(value);
-  const hooks: HookEntry[] = Array.isArray(value)
-    ? (value as HookEntry[])
-    : [];
+  const hooks: HookEntry[] = Array.isArray(value) ? (value as HookEntry[]) : [];
 
   const inherited: HookEntry[] = Array.isArray(inheritedValue)
     ? (inheritedValue as HookEntry[])
@@ -151,9 +149,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
           <div key={index} className="flex gap-1 items-start">
             <select
               value={hook.event}
-              onChange={(e) =>
-                handleUpdateHook(index, "event", e.target.value)
-              }
+              onChange={(e) => handleUpdateHook(index, "event", e.target.value)}
               className="bg-input-bg text-input-fg border border-input-border rounded px-1 py-0.5 text-[11px] min-w-[120px]"
             >
               {HOOK_EVENTS.map((ev) => (

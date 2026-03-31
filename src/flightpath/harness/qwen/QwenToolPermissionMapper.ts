@@ -143,15 +143,27 @@ export class QwenToolPermissionMapper
       // Map FlightPath tool names to Qwen equivalents
       if (normalizedToolName === "shell" || normalizedToolName === "bash") {
         qwenTools.push("Bash");
-      } else if (normalizedToolName === "write" || normalizedToolName === "create") {
+      } else if (
+        normalizedToolName === "write" ||
+        normalizedToolName === "create"
+      ) {
         qwenTools.push("Write");
       } else if (normalizedToolName === "read") {
         qwenTools.push("Read");
-      } else if (normalizedToolName === "edit" || normalizedToolName === "str_replace") {
+      } else if (
+        normalizedToolName === "edit" ||
+        normalizedToolName === "str_replace"
+      ) {
         qwenTools.push("Edit");
-      } else if (normalizedToolName === "delete" || normalizedToolName === "remove") {
+      } else if (
+        normalizedToolName === "delete" ||
+        normalizedToolName === "remove"
+      ) {
         qwenTools.push("Delete");
-      } else if (normalizedToolName === "web_search" || normalizedToolName === "search") {
+      } else if (
+        normalizedToolName === "web_search" ||
+        normalizedToolName === "search"
+      ) {
         qwenTools.push("WebSearch");
       } else if (normalizedToolName === "mcp") {
         // MCP tools: preserve full pattern for server matching

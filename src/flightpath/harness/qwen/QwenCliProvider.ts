@@ -223,9 +223,15 @@ export class QwenCliProvider implements ICliProvider {
       // Interactive mode: enable experimental hooks and write Stop hook to .qwen/settings.json
       args.push("--experimental-hooks");
       if (workspaceRoot) {
-        const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
+        const userHooks =
+          workflowContext?.resolvedProperties?.hooks ?? undefined;
         const workflowKey = workflowContext?.workingFilePath ?? workspaceRoot;
-        await this.buildInteractiveHookSettings(extensionPath, workspaceRoot, workflowKey, userHooks);
+        await this.buildInteractiveHookSettings(
+          extensionPath,
+          workspaceRoot,
+          workflowKey,
+          userHooks
+        );
         Log.debug(`🔔 Configured Stop hook for Qwen completion detection`);
       }
     }
@@ -296,7 +302,8 @@ export class QwenCliProvider implements ICliProvider {
       for (const uh of userHooks) {
         const nativeEvent = qwenEventMap[uh.event];
         if (!nativeEvent) continue;
-        if (!workflowUserHooks[nativeEvent]) workflowUserHooks[nativeEvent] = [];
+        if (!workflowUserHooks[nativeEvent])
+          workflowUserHooks[nativeEvent] = [];
         workflowUserHooks[nativeEvent].push({
           hooks: [{ type: "command", command: uh.command }],
         });

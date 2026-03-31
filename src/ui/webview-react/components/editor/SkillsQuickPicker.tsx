@@ -17,7 +17,8 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
   disabled = false,
 }) => {
   const { properties, setProperty } = useEditorStore();
-  const { globalSettings, workflowProperties, availableSkills } = useSettingsStore();
+  const { globalSettings, workflowProperties, availableSkills } =
+    useSettingsStore();
   const { footerOpenPicker, setFooterOpenPicker } = useUiStore();
 
   const isOpen = footerOpenPicker === "skills";
@@ -59,7 +60,11 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
     <FooterQuickPicker
       isNarrow={isNarrow}
       showLabel={showLabel}
-      icon={<i className={`codicon codicon-tools transition-opacity ${skillsValue !== undefined ? "text-focus-border" : "opacity-40"}`} />}
+      icon={
+        <i
+          className={`codicon codicon-tools transition-opacity ${skillsValue !== undefined ? "text-focus-border" : "opacity-40"}`}
+        />
+      }
       valueLabel={valueLabel}
       isOverride={skillsValue !== undefined}
       isOpen={isOpen}

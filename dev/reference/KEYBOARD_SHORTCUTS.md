@@ -53,11 +53,11 @@ VS Code resolves conflicts by **specificity** — a more specific `when` clause 
 
 ### Known VS Code built-in conflicts to watch
 
-| Key | Built-in use | Our `when` clause avoids it? |
-|---|---|---|
-| `Ctrl+Shift+N` | New window (global) | Yes — our `focusedView` clause wins in context |
-| `Ctrl+Enter` | Copilot Chat send (`inChatInput`) | Yes — non-overlapping `when` clauses |
-| `Ctrl+Shift+T` | Reopen closed tab (global) | Yes — our `focusedView` clause wins in context |
+| Key            | Built-in use                      | Our `when` clause avoids it?                   |
+| -------------- | --------------------------------- | ---------------------------------------------- |
+| `Ctrl+Shift+N` | New window (global)               | Yes — our `focusedView` clause wins in context |
+| `Ctrl+Enter`   | Copilot Chat send (`inChatInput`) | Yes — non-overlapping `when` clauses           |
+| `Ctrl+Shift+T` | Reopen closed tab (global)        | Yes — our `focusedView` clause wins in context |
 
 ### Key combos with low VS Code occupancy (safe to use)
 
@@ -112,21 +112,21 @@ context.subscriptions.push(
 
 ### `when` clause options for the FlightPath dashboard
 
-| `when` clause | Fires when |
-|---|---|
-| `focusedView == 'flightpath.dashboard'` | FlightPath sidebar panel has keyboard focus (regardless of whether webview content has focus) |
-| `activeWebviewPanelId == 'flightpath.dashboard'` | A FlightPath webview panel is the active editor (not sidebar) |
+| `when` clause                                    | Fires when                                                                                    |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `focusedView == 'flightpath.dashboard'`          | FlightPath sidebar panel has keyboard focus (regardless of whether webview content has focus) |
+| `activeWebviewPanelId == 'flightpath.dashboard'` | A FlightPath webview panel is the active editor (not sidebar)                                 |
 
 **Note:** Both clauses require VS Code to have the focus — neither fires while focus is inside the webview iframe.
 
 ### Existing VS Code keybindings
 
-| Key (Win/Linux) | Key (Mac) | Command | Action |
-|---|---|---|---|
-| `Ctrl+Shift+N` | `Cmd+Shift+N` | `flightpath.clearWorkflow` | Clear workflow state |
-| `Ctrl+Shift+T` | `Cmd+Shift+T` | `flightpath.newWorkflow` | New workflow |
-| `Ctrl+Shift+L` | `Cmd+Shift+L` | `flightpath.selectPromptFile` | Select prompt file |
-| `Ctrl+Shift+Q` | `Cmd+Shift+Q` | `flightpath.appendFromDashboard` | Append from dashboard |
+| Key (Win/Linux) | Key (Mac)     | Command                          | Action                |
+| --------------- | ------------- | -------------------------------- | --------------------- |
+| `Ctrl+Shift+N`  | `Cmd+Shift+N` | `flightpath.clearWorkflow`       | Clear workflow state  |
+| `Ctrl+Shift+T`  | `Cmd+Shift+T` | `flightpath.newWorkflow`         | New workflow          |
+| `Ctrl+Shift+L`  | `Cmd+Shift+L` | `flightpath.selectPromptFile`    | Select prompt file    |
+| `Ctrl+Shift+Q`  | `Cmd+Shift+Q` | `flightpath.appendFromDashboard` | Append from dashboard |
 
 ---
 
@@ -183,14 +183,14 @@ keymap.of([
   ...searchKeymap,
   ...completionKeymap,
   {
-    key: "Ctrl-Enter",    // CodeMirror uses hyphen, not plus
+    key: "Ctrl-Enter", // CodeMirror uses hyphen, not plus
     mac: "Cmd-Enter",
     run: (view) => {
-      onSubmit();         // Callback prop from parent
-      return true;        // true = event consumed, don't propagate
+      onSubmit(); // Callback prop from parent
+      return true; // true = event consumed, don't propagate
     },
   },
-])
+]);
 ```
 
 **CodeMirror key format:** Uses hyphens (`Ctrl-Enter`), not plus signs (`Ctrl+Enter`). Modifier order: `Ctrl-Alt-Shift-Meta-Key`.
@@ -226,7 +226,7 @@ This is the planned implementation. Here is the correct approach end-to-end:
 // CodeMirrorEditor.tsx
 interface CodeMirrorEditorProps {
   // ... existing props
-  onSubmit?: () => void;  // Called when Ctrl+Enter is pressed
+  onSubmit?: () => void; // Called when Ctrl+Enter is pressed
 }
 ```
 
@@ -246,7 +246,7 @@ keymap.of([
       return true;
     },
   },
-])
+]);
 ```
 
 Use a ref for `onSubmit` (like `onChangeRef`) to avoid recreating the editor on prop changes.
@@ -272,29 +272,29 @@ run: () => {
 
 ## Existing Keyboard Shortcut Inventory (Webview)
 
-| Key | Location | Effect |
-|---|---|---|
-| `Escape` | PromptEditor (document) | Close properties drawer |
-| `Escape` | Modal (document) | Close modal |
-| `Escape` | RunSelector | Close dropdown |
-| `Escape` | SplitButton | Close dropdown, restore focus |
-| `Enter` | SplitButton | Select focused menu item |
-| `Enter` / `Space` | SplitButton | Open dropdown or navigate |
-| `ArrowDown` / `ArrowUp` | SplitButton | Navigate menu items |
-| `Tab` | SplitButton | Close dropdown |
-| `Enter` | SaveWorkflowDialog | Save workflow |
-| `Enter` | WorkflowStatus | Confirm workflow name edit |
-| `Escape` | WorkflowStatus | Cancel workflow name edit |
-| `Enter` | TemplateModal | Confirm template selection |
-| `Enter` / `Space` | FinalPromptFooter | Select final prompt item |
-| `Enter` / `Space` | PromptItem | Select prompt |
-| `Enter` | RecentWorkflows | Select workflow |
-| `Enter` | RunningWorkflowItem | Click action |
-| `Enter` | OutputSection | Toggle collapse |
-| `Enter` | EditorSection | Toggle collapse |
-| `Enter` | PromptsPanel | Toggle collapse |
-| `Enter` | SettingsDrawer | Close / toggle collapse |
-| `Enter` | PanelBar | Activate button |
+| Key                     | Location                | Effect                        |
+| ----------------------- | ----------------------- | ----------------------------- |
+| `Escape`                | PromptEditor (document) | Close properties drawer       |
+| `Escape`                | Modal (document)        | Close modal                   |
+| `Escape`                | RunSelector             | Close dropdown                |
+| `Escape`                | SplitButton             | Close dropdown, restore focus |
+| `Enter`                 | SplitButton             | Select focused menu item      |
+| `Enter` / `Space`       | SplitButton             | Open dropdown or navigate     |
+| `ArrowDown` / `ArrowUp` | SplitButton             | Navigate menu items           |
+| `Tab`                   | SplitButton             | Close dropdown                |
+| `Enter`                 | SaveWorkflowDialog      | Save workflow                 |
+| `Enter`                 | WorkflowStatus          | Confirm workflow name edit    |
+| `Escape`                | WorkflowStatus          | Cancel workflow name edit     |
+| `Enter`                 | TemplateModal           | Confirm template selection    |
+| `Enter` / `Space`       | FinalPromptFooter       | Select final prompt item      |
+| `Enter` / `Space`       | PromptItem              | Select prompt                 |
+| `Enter`                 | RecentWorkflows         | Select workflow               |
+| `Enter`                 | RunningWorkflowItem     | Click action                  |
+| `Enter`                 | OutputSection           | Toggle collapse               |
+| `Enter`                 | EditorSection           | Toggle collapse               |
+| `Enter`                 | PromptsPanel            | Toggle collapse               |
+| `Enter`                 | SettingsDrawer          | Close / toggle collapse       |
+| `Enter`                 | PanelBar                | Activate button               |
 
 ---
 
@@ -322,11 +322,11 @@ Always handle both `Enter` and `Space` for `role="button"` elements per ARIA spe
 
 ## Key Formatting Cheat Sheet
 
-| Context | Format | Example |
-|---|---|---|
-| `package.json` keybindings | `ctrl+key` lowercase | `"ctrl+shift+enter"` |
-| `package.json` mac variant | `cmd+key` lowercase | `"cmd+shift+enter"` |
-| CodeMirror `keymap.of` | `Ctrl-Key` PascalCase with hyphen | `"Ctrl-Enter"` |
-| CodeMirror mac variant | `Cmd-Key` | `"Cmd-Enter"` |
-| React `onKeyDown` | `e.key` values | `"Enter"`, `"Escape"`, `"ArrowDown"` |
-| VS Code `when` clause | exact view ID string | `"focusedView == 'flightpath.dashboard'"` |
+| Context                    | Format                            | Example                                   |
+| -------------------------- | --------------------------------- | ----------------------------------------- |
+| `package.json` keybindings | `ctrl+key` lowercase              | `"ctrl+shift+enter"`                      |
+| `package.json` mac variant | `cmd+key` lowercase               | `"cmd+shift+enter"`                       |
+| CodeMirror `keymap.of`     | `Ctrl-Key` PascalCase with hyphen | `"Ctrl-Enter"`                            |
+| CodeMirror mac variant     | `Cmd-Key`                         | `"Cmd-Enter"`                             |
+| React `onKeyDown`          | `e.key` values                    | `"Enter"`, `"Escape"`, `"ArrowDown"`      |
+| VS Code `when` clause      | exact view ID string              | `"focusedView == 'flightpath.dashboard'"` |

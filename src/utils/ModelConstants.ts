@@ -212,9 +212,7 @@ export const OPENCODE_CLI_FALLBACK_MODELS = [
 // QWEN CLI MODELS
 // Qwen Code CLI supported models (from Qwen documentation)
 // ============================================================================
-export const QWEN_CLI_MODELS = [
-  "coder-model",
-] as const;
+export const QWEN_CLI_MODELS = ["coder-model"] as const;
 
 /**
  * Qwen CLI model display names

@@ -58,7 +58,8 @@ export function resolveWorkspaceFolder(
   }
   if (workspaceRoot) {
     return (
-      folders.find((folder) => folder.uri.fsPath === workspaceRoot) ?? folders[0]
+      folders.find((folder) => folder.uri.fsPath === workspaceRoot) ??
+      folders[0]
     );
   }
   return folders[0];

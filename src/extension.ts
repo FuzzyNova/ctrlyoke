@@ -16,7 +16,11 @@ import {
   getStagedDiff,
   getStashDiff,
 } from "./utils/GitUtils";
-import { getQueueStatus, appendToQueue, readQueueOutput } from "./flightpath/QueueOperations";
+import {
+  getQueueStatus,
+  appendToQueue,
+  readQueueOutput,
+} from "./flightpath/QueueOperations";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
@@ -47,7 +51,10 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
           invocationMessage: "Getting FlightPath queue status...",
         };
       },
-      invoke: async (_parameters: unknown, _token: vscode.CancellationToken) => {
+      invoke: async (
+        _parameters: unknown,
+        _token: vscode.CancellationToken
+      ) => {
         try {
           const promptQueue = workflowOrchestrator.getActivePromptQueue();
 
@@ -62,8 +69,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
             new vscode.LanguageModelTextPart(JSON.stringify(status, null, 2)),
           ]);
         } catch (error) {
-          const errorMsg =
-            getErrorMessage(error);
+          const errorMsg = getErrorMessage(error);
           return new vscode.LanguageModelToolResult([
             new vscode.LanguageModelTextPart(`Error: ${errorMsg}`),
           ]);
@@ -147,57 +153,52 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
     });
 
     // Tool 3: flightpath_capabilities (read harness/model availability)
-    const capabilitiesTool = vscode.lm.registerTool(
-      "flightpath_capabilities",
-      {
-        prepareInvocation: async (
-          _parameters: unknown,
-          _token: vscode.CancellationToken
-        ) => {
-          return {
-            invocationMessage: "Getting FlightPath capabilities...",
-          };
-        },
-        invoke: async (
-          _parameters: unknown,
-          _token: vscode.CancellationToken
-        ) => {
-          try {
-            const settingsSync = webviewProvider.getSettingsSync();
-            const modelOptions = settingsSync.buildModelOptions();
-            const harnessStatus = settingsSync.getHarnessStatus();
+    const capabilitiesTool = vscode.lm.registerTool("flightpath_capabilities", {
+      prepareInvocation: async (
+        _parameters: unknown,
+        _token: vscode.CancellationToken
+      ) => {
+        return {
+          invocationMessage: "Getting FlightPath capabilities...",
+        };
+      },
+      invoke: async (
+        _parameters: unknown,
+        _token: vscode.CancellationToken
+      ) => {
+        try {
+          const settingsSync = webviewProvider.getSettingsSync();
+          const modelOptions = settingsSync.buildModelOptions();
+          const harnessStatus = settingsSync.getHarnessStatus();
 
-            const harnesses = Object.keys(harnessStatus)
-              .filter((id) => harnessStatus[id].available)
-              .map((id) => {
-                const options = modelOptions[id] ?? [];
-                return {
-                  id,
-                  available: true,
-                  models: options
-                    .filter((m: { value: string; label: string }) => m.value !== "none")
-                    .map((m: { value: string; label: string }) => m.value),
-                };
-              });
+          const harnesses = Object.keys(harnessStatus)
+            .filter((id) => harnessStatus[id].available)
+            .map((id) => {
+              const options = modelOptions[id] ?? [];
+              return {
+                id,
+                available: true,
+                models: options
+                  .filter(
+                    (m: { value: string; label: string }) => m.value !== "none"
+                  )
+                  .map((m: { value: string; label: string }) => m.value),
+              };
+            });
 
-            return new vscode.LanguageModelToolResult([
-              new vscode.LanguageModelTextPart(
-                JSON.stringify(
-                  { generatedAt: Date.now(), harnesses },
-                  null,
-                  2
-                )
-              ),
-            ]);
-          } catch (error) {
-            const errorMsg = getErrorMessage(error);
-            return new vscode.LanguageModelToolResult([
-              new vscode.LanguageModelTextPart(`Error: ${errorMsg}`),
-            ]);
-          }
-        },
-      }
-    );
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(
+              JSON.stringify({ generatedAt: Date.now(), harnesses }, null, 2)
+            ),
+          ]);
+        } catch (error) {
+          const errorMsg = getErrorMessage(error);
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(`Error: ${errorMsg}`),
+          ]);
+        }
+      },
+    });
 
     // Tool 4: flightpath_read_output (read AI response from completed prompts)
     const readOutputTool = vscode.lm.registerTool("flightpath_read_output", {
@@ -322,7 +323,9 @@ export async function activate(context: vscode.ExtensionContext) {
     Log.debug("FlightPath: React webview provider registered");
 
     // Initialize PTY process manager (must be after webviewProvider is created)
-    const ptyManager = initPtyProcessManager((msg) => webviewProvider.postMessagePublic(msg));
+    const ptyManager = initPtyProcessManager((msg) =>
+      webviewProvider.postMessagePublic(msg)
+    );
     context.subscriptions.push(ptyManager);
     Log.debug("FlightPath: PTY process manager initialized");
 

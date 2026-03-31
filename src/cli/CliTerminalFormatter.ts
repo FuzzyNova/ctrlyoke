@@ -187,10 +187,14 @@ export class CliTerminalFormatter {
         if (!s || s.type !== CLI_EVENT_TYPES.TEXT) {
           // End any prior THINKING block, then start streaming TEXT
           CliTerminalFormatter.flushStreamingBuffer();
-          CliTerminalFormatter._streaming = { type: CLI_EVENT_TYPES.TEXT, endsWithNewline: false };
+          CliTerminalFormatter._streaming = {
+            type: CLI_EVENT_TYPES.TEXT,
+            endsWithNewline: false,
+          };
         }
         process.stdout.write(data.text);
-        CliTerminalFormatter._streaming!.endsWithNewline = data.text.endsWith("\n");
+        CliTerminalFormatter._streaming!.endsWithNewline =
+          data.text.endsWith("\n");
         break;
       }
 
@@ -199,15 +203,24 @@ export class CliTerminalFormatter {
         if (!data.text) break;
         const label = data.label ?? "Thinking";
         const s = CliTerminalFormatter._streaming;
-        if (!s || s.type !== CLI_EVENT_TYPES.THINKING || (s.label ?? "Thinking") !== label) {
+        if (
+          !s ||
+          s.type !== CLI_EVENT_TYPES.THINKING ||
+          (s.label ?? "Thinking") !== label
+        ) {
           // End any prior block, print header once, then start streaming this THINKING block
           CliTerminalFormatter.flushStreamingBuffer();
           process.stdout.write(chalk.dim(`● ${label}\n  `));
-          CliTerminalFormatter._streaming = { type: CLI_EVENT_TYPES.THINKING, label, endsWithNewline: false };
+          CliTerminalFormatter._streaming = {
+            type: CLI_EVENT_TYPES.THINKING,
+            label,
+            endsWithNewline: false,
+          };
         }
         // Indent newlines within the chunk to keep thinking text aligned under the header
         process.stdout.write(chalk.dim(data.text.replace(/\n/g, "\n  ")));
-        CliTerminalFormatter._streaming!.endsWithNewline = data.text.endsWith("\n");
+        CliTerminalFormatter._streaming!.endsWithNewline =
+          data.text.endsWith("\n");
         break;
       }
 

@@ -17,19 +17,19 @@ FlightPath's `CodexCliProvider` already covers the most critical flags for headl
 
 Cross-referencing `CodexCliProvider.buildCliArgs()` and `ConfigurationUtils`:
 
-| Flag / Behavior | FlightPath Setting | Notes |
-|---|---|---|
-| `-c mcp_servers.flightpath={...}` | Dynamic queue enabled | MCP TOML inline block |
-| `exec` subcommand | Headless mode | Injected before `--json` |
-| `--json` | Headless mode | Always on in headless |
-| `--model` / `-m` | `codexCliModel` | With validation + fallback |
-| `--add-dir` | Workspace root + `codexAllowedDirs` | Multi-value, applied correctly |
-| `--full-auto` | `cliToolPermissions = allowAll` | Maps to safe automation preset |
-| `--dangerously-bypass-approvals-and-sandbox` | `cliToolPermissions = dangerouslyAllowAll` | Also `--yolo` alias |
-| `-s` / `--sandbox` | `codexSandboxMode` (custom mode) | Values: read-only, workspace-write, danger-full-access |
-| `-a` / `--ask-for-approval` | `codexApprovalPolicy` (custom mode) | Values: untrusted, on-request, never |
-| `--config` (notify TOML) | Interactive mode notify hook | `notify=['node','path']` inline string |
-| `resume <SESSION_ID>` | `resumeSession: true` + session ID | Subcommand appended after other flags |
+| Flag / Behavior                              | FlightPath Setting                         | Notes                                                  |
+| -------------------------------------------- | ------------------------------------------ | ------------------------------------------------------ |
+| `-c mcp_servers.flightpath={...}`            | Dynamic queue enabled                      | MCP TOML inline block                                  |
+| `exec` subcommand                            | Headless mode                              | Injected before `--json`                               |
+| `--json`                                     | Headless mode                              | Always on in headless                                  |
+| `--model` / `-m`                             | `codexCliModel`                            | With validation + fallback                             |
+| `--add-dir`                                  | Workspace root + `codexAllowedDirs`        | Multi-value, applied correctly                         |
+| `--full-auto`                                | `cliToolPermissions = allowAll`            | Maps to safe automation preset                         |
+| `--dangerously-bypass-approvals-and-sandbox` | `cliToolPermissions = dangerouslyAllowAll` | Also `--yolo` alias                                    |
+| `-s` / `--sandbox`                           | `codexSandboxMode` (custom mode)           | Values: read-only, workspace-write, danger-full-access |
+| `-a` / `--ask-for-approval`                  | `codexApprovalPolicy` (custom mode)        | Values: untrusted, on-request, never                   |
+| `--config` (notify TOML)                     | Interactive mode notify hook               | `notify=['node','path']` inline string                 |
+| `resume <SESSION_ID>`                        | `resumeSession: true` + session ID         | Subcommand appended after other flags                  |
 
 **Important:** The `--ask-for-approval` flag is listed in the CLI reference as `-a`. The source code uses `-a` in `CodexToolPermissionMapper.buildCodexSpecificArgs()`. This aligns correctly with the CLI.
 
@@ -46,6 +46,7 @@ Cross-referencing `CodexCliProvider.buildCliArgs()` and `ConfigurationUtils`:
 **What it does:** Writes the assistant's final message (the last agent turn) to a file at the given path after `codex exec` completes.
 
 **Automation value:** Extremely high. FlightPath currently parses output from the JSONL stream, but capturing the final answer as a clean file enables:
+
 - Post-processing by end condition scripts (read the file, validate content)
 - Passing structured output between workflow steps without stream parsing
 - Logging the final answer independently of the full JSONL transcript
@@ -109,6 +110,7 @@ Cross-referencing `CodexCliProvider.buildCliArgs()` and `ConfigurationUtils`:
 **What it does:** Prevents Codex from writing session rollout files to disk. The session still executes normally and produces JSONL output, but no transcript or session state is persisted locally.
 
 **Automation value:** Medium. Useful for:
+
 - Privacy-sensitive workflows where transcripts must not be stored
 - Clean CI environments where disk usage must be minimized
 - Parallel multi-instance runs where session files would collide
@@ -207,12 +209,12 @@ These settings can be passed via `-c key=value` inline overrides but FlightPath 
 
 ### Model Reasoning Settings (HIGH value for power users)
 
-| TOML Key | Values | Description |
-|---|---|---|
-| `model_reasoning_effort` | minimal, low, medium, high, xhigh | Controls how much compute the model spends reasoning before responding. `xhigh` for deep analysis tasks, `minimal` for fast CI runs. |
-| `model_reasoning_summary` | auto, concise, detailed, none | How much reasoning trace appears in output. `none` suppresses reasoning output for cleaner JSONL. |
-| `model_verbosity` | low, medium, high | Controls response verbosity (GPT-5 Responses API). `low` produces terser output suitable for automation. |
-| `model_context_window` | integer | Override the detected context window size. Rarely needed but useful for constrained environments. |
+| TOML Key                  | Values                            | Description                                                                                                                          |
+| ------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `model_reasoning_effort`  | minimal, low, medium, high, xhigh | Controls how much compute the model spends reasoning before responding. `xhigh` for deep analysis tasks, `minimal` for fast CI runs. |
+| `model_reasoning_summary` | auto, concise, detailed, none     | How much reasoning trace appears in output. `none` suppresses reasoning output for cleaner JSONL.                                    |
+| `model_verbosity`         | low, medium, high                 | Controls response verbosity (GPT-5 Responses API). `low` produces terser output suitable for automation.                             |
+| `model_context_window`    | integer                           | Override the detected context window size. Rarely needed but useful for constrained environments.                                    |
 
 **Implementation path:** These could be exposed as Codex-specific settings or as per-prompt `-c` overrides. For example: `flightpath.codexReasoningEffort` with values `minimal | low | medium | high | xhigh`.
 
@@ -296,10 +298,12 @@ codex [global-flags] exec [exec-flags] [resume <SESSION_ID>] [PROMPT]
 The `exec` subcommand is positional — it must appear before any exec-specific flags like `--json`, `--ephemeral`, `--output-last-message`, and `--skip-git-repo-check`. Global flags like `--model`, `--add-dir`, `--full-auto`, and `--profile` may appear before or after `exec` (they are parsed globally).
 
 **Safe injection points for custom args:**
+
 - Before `exec`: Global flags only (`--profile`, `--oss`, `--model`, `--add-dir`, custom `-c` overrides)
 - After `exec --json`: Exec-specific flags (`--ephemeral`, `--output-last-message`, `--skip-git-repo-check`, `--color`, `--image`)
 
 FlightPath currently builds the array in this order:
+
 ```
 [-c MCP] [exec] [--json] [--model M] [--add-dir D] [permission-flags] [--config notify] [resume SESSION] ["PROMPT"]
 ```
@@ -307,6 +311,7 @@ FlightPath currently builds the array in this order:
 If a single custom-args list is appended at the end (before `PROMPT`), it would be placed after `resume SESSION`. That position works for flags that are not exec-specific (i.e., global flags), but exec-specific flags must come before `resume`. A single append point after `resume` is therefore not safe for all flag categories.
 
 **Recommended approach:** Two injection points:
+
 - `codexExtraGlobalArgs`: injected after `-c MCP` and before `exec`
 - `codexExtraExecArgs`: injected after `--json` and before `--model`
 
@@ -337,26 +342,26 @@ Yes, with the following guidance:
 
 ## Section 5: Priority Summary Table
 
-| Flag / Setting | Category | Priority | Implementation Complexity |
-|---|---|---|---|
-| `--output-last-message` / `-o` | Exec flag | HIGH | Low — append after `--json`, expose path setting or auto-generate |
-| `--skip-git-repo-check` | Exec flag | HIGH | Low — boolean setting, append when enabled |
-| `--profile` / `-p` | Global flag | HIGH | Low — string setting, inject before `exec` |
-| `--image` / `-i` | Global flag | MEDIUM | Medium — add `images[]` to PromptItem schema, path resolution |
-| `--ephemeral` | Exec flag | MEDIUM | Low — boolean setting, document incompatibility with resumeSession |
-| `--color never` | Exec flag | MEDIUM | None — hardcode in headless mode (not user-facing) |
-| `--search` | Global flag | MEDIUM | Low — add `codexWebSearch` setting |
-| `--cd` / `-C` | Global flag | MEDIUM | Low-medium — per-prompt override, path validation needed |
-| `model_reasoning_effort` (TOML) | `-c` override | HIGH | Low — string enum setting, appended as `-c` flag |
-| `model_reasoning_summary` (TOML) | `-c` override | MEDIUM | Low — string enum setting |
-| `model_verbosity` (TOML) | `-c` override | LOW | Low |
-| `shell_environment_policy` (TOML) | `-c` override | MEDIUM | Medium — structured setting |
-| `history.persistence` (TOML) | `-c` override | LOW | Low — overlaps with `--ephemeral` |
-| `hide_agent_reasoning` (TOML) | `-c` override | MEDIUM | Low — boolean, hardcode in headless or expose as setting |
-| `--oss` | Global flag | LOW | Low — boolean, but breaks model validation |
-| `--enable` / `--disable` | Global flag | LOW | Medium — string array settings |
-| `--no-alt-screen` | Global flag | LOW | None — not applicable to exec mode |
-| Custom args escape hatch | Meta | MEDIUM | Medium — two injection points needed |
+| Flag / Setting                    | Category      | Priority | Implementation Complexity                                          |
+| --------------------------------- | ------------- | -------- | ------------------------------------------------------------------ |
+| `--output-last-message` / `-o`    | Exec flag     | HIGH     | Low — append after `--json`, expose path setting or auto-generate  |
+| `--skip-git-repo-check`           | Exec flag     | HIGH     | Low — boolean setting, append when enabled                         |
+| `--profile` / `-p`                | Global flag   | HIGH     | Low — string setting, inject before `exec`                         |
+| `--image` / `-i`                  | Global flag   | MEDIUM   | Medium — add `images[]` to PromptItem schema, path resolution      |
+| `--ephemeral`                     | Exec flag     | MEDIUM   | Low — boolean setting, document incompatibility with resumeSession |
+| `--color never`                   | Exec flag     | MEDIUM   | None — hardcode in headless mode (not user-facing)                 |
+| `--search`                        | Global flag   | MEDIUM   | Low — add `codexWebSearch` setting                                 |
+| `--cd` / `-C`                     | Global flag   | MEDIUM   | Low-medium — per-prompt override, path validation needed           |
+| `model_reasoning_effort` (TOML)   | `-c` override | HIGH     | Low — string enum setting, appended as `-c` flag                   |
+| `model_reasoning_summary` (TOML)  | `-c` override | MEDIUM   | Low — string enum setting                                          |
+| `model_verbosity` (TOML)          | `-c` override | LOW      | Low                                                                |
+| `shell_environment_policy` (TOML) | `-c` override | MEDIUM   | Medium — structured setting                                        |
+| `history.persistence` (TOML)      | `-c` override | LOW      | Low — overlaps with `--ephemeral`                                  |
+| `hide_agent_reasoning` (TOML)     | `-c` override | MEDIUM   | Low — boolean, hardcode in headless or expose as setting           |
+| `--oss`                           | Global flag   | LOW      | Low — boolean, but breaks model validation                         |
+| `--enable` / `--disable`          | Global flag   | LOW      | Medium — string array settings                                     |
+| `--no-alt-screen`                 | Global flag   | LOW      | None — not applicable to exec mode                                 |
+| Custom args escape hatch          | Meta          | MEDIUM   | Medium — two injection points needed                               |
 
 ---
 

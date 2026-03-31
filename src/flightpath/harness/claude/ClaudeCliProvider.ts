@@ -22,7 +22,10 @@ import { getClaudeModelName, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
-import type { PromptItem, UserHookConfig } from "../../../types/FlightPathTypes";
+import type {
+  PromptItem,
+  UserHookConfig,
+} from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 const execAsync = promisify(exec);
@@ -130,7 +133,8 @@ export class ClaudeCliProvider implements ICliProvider {
       args.push(...mcpArgs);
       // Auto-approve FlightPath MCP tools only when the FlightPath server is included
       // Claude uses mcp__servername pattern to match all tools from a server
-      const mcpServersResolved = workflowContext?.resolvedProperties?.mcpServers ?? [];
+      const mcpServersResolved =
+        workflowContext?.resolvedProperties?.mcpServers ?? [];
       if (mcpServersResolved.includes("flightpath")) {
         args.push("--allowed-tools", "mcp__flightpath");
         Log.debug("🔧 FlightPath MCP tools auto-approved");
@@ -241,7 +245,8 @@ export class ClaudeCliProvider implements ICliProvider {
     } else {
       // Interactive mode: Configure stop hook for completion detection
       if (workspaceRoot) {
-        const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
+        const userHooks =
+          workflowContext?.resolvedProperties?.hooks ?? undefined;
         const hookSettingsPath = await this.buildStopHookSettings(
           extensionPath,
           workspaceRoot,
@@ -334,7 +339,10 @@ export class ClaudeCliProvider implements ICliProvider {
       PATH_CONSTANTS.TEMP_DIR
     );
     await fs.mkdir(tempDir, { recursive: true });
-    const hookFileName = ClaudeCliProvider.buildHookSettingsFileName(promptIndex, workingFilePath);
+    const hookFileName = ClaudeCliProvider.buildHookSettingsFileName(
+      promptIndex,
+      workingFilePath
+    );
     const settingsPath = path.join(tempDir, hookFileName);
     this.interactiveHookSettingsPaths.push(settingsPath);
     await fs.writeFile(settingsPath, hookConfig.config, "utf-8");
@@ -454,7 +462,8 @@ export class ClaudeCliProvider implements ICliProvider {
         );
       } else if (userServers && userServers.length > 0) {
         // User-defined servers only (no FlightPath server)
-        configJson = CliMcpConfigGenerator.generateUserServersOnlyConfig(userServers);
+        configJson =
+          CliMcpConfigGenerator.generateUserServersOnlyConfig(userServers);
       } else {
         return null;
       }

@@ -73,8 +73,7 @@ suite("CliResponseParser", () => {
 
     test("returns empty results for input with no JSON", () => {
       const data = "no json here at all";
-      const { objects } =
-        CliResponseParser.extractJsonObjectsFromStream(data);
+      const { objects } = CliResponseParser.extractJsonObjectsFromStream(data);
       assert.strictEqual(objects.length, 0);
     });
   });

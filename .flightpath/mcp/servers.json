@@ -2,9 +2,7 @@
   {
     "id": "test-mcp",
     "command": "node",
-    "args": [
-      "manual-test/mcp/test-mcp-server.js"
-    ],
+    "args": ["manual-test/mcp/test-mcp-server.js"],
     "autoApprove": true
   },
   {

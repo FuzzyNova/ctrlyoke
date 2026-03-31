@@ -86,7 +86,7 @@ export class CodexNotificationMonitor
     // Convert to forward slashes (works on Windows and avoids escaping issues)
     const normalizedPath = scriptPath.replace(/\\/g, "/");
 
-    const stopHooks = (userHooks ?? []).filter(h => h.event === "stop");
+    const stopHooks = (userHooks ?? []).filter((h) => h.event === "stop");
 
     if (stopHooks.length === 0) {
       // No user hooks — original behavior
@@ -111,7 +111,7 @@ const { execSync } = require("child_process");
 require(${JSON.stringify(normalizedPath)});
 
 // Run user hooks
-${stopHooks.map(h => `try { execSync(${JSON.stringify(h.command)}, { stdio: "inherit" }); } catch (e) { /* user hook failure is non-fatal */ }`).join("\n")}
+${stopHooks.map((h) => `try { execSync(${JSON.stringify(h.command)}, { stdio: "inherit" }); } catch (e) { /* user hook failure is non-fatal */ }`).join("\n")}
 `;
 
     // Write the chain script synchronously (called during arg building)

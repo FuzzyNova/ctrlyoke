@@ -26,10 +26,11 @@ Orchestration, parsing, queue, validation, and template management. Top-level `s
 - `createForExecution(harness)` — creates an isolated per-run integration (`registerWithContext=false`, calls `markAsReady()`)
 
 **`VsCodeIntegrationFactory.ts`** — extends `IntegrationFactory` with VS Code-only support.
+
 - Adds `createCopilotChat()` (requires `vscode.ExtensionContext`)
 - Overrides `createForHarness()` and `createForExecution()` to handle `Harness.CopilotChat`
 - `WorkflowOrchestrator` always uses `VsCodeIntegrationFactory`; CLI-only code uses base `IntegrationFactory`
-</integrationFactory>
+  </integrationFactory>
 
 <workflowOrchestrator>
 **Registry role:** Manages the map of `WorkflowInstance` objects; owns cross-cutting resources.
@@ -134,6 +135,7 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 - `WorkspaceInitializer` — Workspace setup and initialization helpers
 
 **Root `flightpath/` classes (not in orchestration/):**
+
 - `WorkflowOrchestrator` — Registry + cross-cutting concerns
 - `WorkflowInstance` — Single workflow execution lifecycle
 - `WorkflowExecutor` — Execution loop
@@ -142,7 +144,7 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 - `PromptQueue` + `WorkingFileManager` — Queue state + file persistence
 - `OutputCaptureBuffer` — Output replay for background/parallel workflows
 - `IntegrationFactory` / `VsCodeIntegrationFactory` — Harness integration factories
-</orchestrationClasses>
+  </orchestrationClasses>
 
 <keyPatterns>
 **PropertyResolver:** Three-tier precedence (prompt > workflow > global settings) for harness/model/agent/sessionId

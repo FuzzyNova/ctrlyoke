@@ -78,10 +78,7 @@ suite("ModelConstants", () => {
     });
 
     test("maps Copilot-style name to alias", () => {
-      assert.strictEqual(
-        getClaudeModelName("claude-sonnet-4.5"),
-        "sonnet"
-      );
+      assert.strictEqual(getClaudeModelName("claude-sonnet-4.5"), "sonnet");
     });
 
     test("maps Copilot-style opus name to alias", () => {
@@ -121,17 +118,11 @@ suite("ModelConstants", () => {
     });
 
     test("returns 1M for [1m] variant", () => {
-      assert.strictEqual(
-        getClaudeContextWindowSize("sonnet[1m]"),
-        1_000_000
-      );
+      assert.strictEqual(getClaudeContextWindowSize("sonnet[1m]"), 1_000_000);
     });
 
     test("returns 1M for model containing '1m' substring", () => {
-      assert.strictEqual(
-        getClaudeContextWindowSize("opus[1m]"),
-        1_000_000
-      );
+      assert.strictEqual(getClaudeContextWindowSize("opus[1m]"), 1_000_000);
     });
 
     test("returns 200k for haiku", () => {
@@ -168,10 +159,7 @@ suite("ModelConstants", () => {
     });
 
     test("returns arbitrary model string as-is", () => {
-      assert.strictEqual(
-        getGeminiModelName("gemini-custom"),
-        "gemini-custom"
-      );
+      assert.strictEqual(getGeminiModelName("gemini-custom"), "gemini-custom");
     });
 
     test("returns undefined for empty string", () => {

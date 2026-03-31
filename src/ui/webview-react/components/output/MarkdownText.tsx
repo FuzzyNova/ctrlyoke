@@ -35,13 +35,18 @@ const FILE_EXTENSIONS =
 const SEP = "[/\\\\]{1,2}"; // matches /  \  //  \\  (1–2 of either)
 const FILE_PATH_SOURCE =
   "(?:" +
-  "[A-Za-z]:" + SEP + // 1. Windows absolute  C:\  or  C:/  or  C:\\
+  "[A-Za-z]:" +
+  SEP + // 1. Windows absolute  C:\  or  C:/  or  C:\\
   "|" +
-  "\\.{1,2}" + SEP + // 2. Relative prefix   ./   or  ../
+  "\\.{1,2}" +
+  SEP + // 2. Relative prefix   ./   or  ../
   "|" +
-  "[a-z][\\w-]*" + SEP + // 3. Bare relative      src/  lib/  …
+  "[a-z][\\w-]*" +
+  SEP + // 3. Bare relative      src/  lib/  …
   ")" +
-  "(?:[\\w.\\-]+" + SEP + ")*" + // Zero or more inner directory segments
+  "(?:[\\w.\\-]+" +
+  SEP +
+  ")*" + // Zero or more inner directory segments
   "[\\w.\\-]+" + // Final filename base
   "\\.(?:" +
   FILE_EXTENSIONS +
@@ -143,7 +148,10 @@ function FileRefButton({
 
 // Module-level stable array so Streamdown's memo doesn't see a new reference.
 // Spread streamdown's defaults (remarkGfm) first, then add our file-link plugin.
-const REMARK_PLUGINS = [...Object.values(defaultRemarkPlugins), remarkFileLinks];
+const REMARK_PLUGINS = [
+  ...Object.values(defaultRemarkPlugins),
+  remarkFileLinks,
+];
 
 // Extends rehype-sanitize's allowlist so it keeps <file-ref path="…"> nodes
 // produced by remarkFileLinks. Only "path" is needed as an allowed attribute.

@@ -12,11 +12,13 @@ with an `endCondition` that always passes.
 ## Use Cases
 
 **Script steps** (`type: script`) — a queue item that IS a script, not an AI interaction:
+
 - Gate workflow progression on test/build results (`npm test`, `pytest`, etc.)
 - Run a script at a specific point in the queue with its own output block and step number
 - Have the `finalPrompt` be a script (e.g., post-workflow cleanup or CI trigger)
 
 **`postScript`** — a hook that runs after every AI prompt's end condition passes:
+
 - Run a formatter after every AI step (`npm run format`, `prettier --write .`)
 - Send a notification after every prompt completes
 - Any side-effect that should happen consistently without being a queue gate
@@ -122,6 +124,7 @@ It follows the existing 3-tier precedence model — same as `harness`, `model`, 
 ```
 
 **Key properties:**
+
 - Added to `ExecutionProperties` — inherits at workflow level, overridable per prompt
 - `postScript: null` at prompt level disables an inherited workflow-level `postScript` (same pattern as `endCondition: null`)
 - Always non-blocking — failure is a warning, never a workflow stop (unlike `type: script` which is blocking by default)
@@ -150,7 +153,7 @@ export interface ExecutionProperties {
 
 /** Existing PromptItem (AI prompt) — `type` defaults to "prompt" */
 export interface PromptItem extends ExecutionProperties {
-  type?: "prompt";          // optional, absence = "prompt"
+  type?: "prompt"; // optional, absence = "prompt"
   name?: string;
   prompt: string;
   sessionId?: string | number;
@@ -165,7 +168,7 @@ export interface ScriptStep {
   timeout?: number;
   /** When true, non-zero exit is a warning only — workflow continues regardless. */
   continueOnFailure?: boolean;
-  _runtime?: PromptRuntimeMetadata;  // reuse for startedAt/completedAt
+  _runtime?: PromptRuntimeMetadata; // reuse for startedAt/completedAt
 }
 
 /** Union: either an AI prompt step or a script step */
@@ -192,7 +195,7 @@ export function isScriptStep(step: WorkflowStep): step is ScriptStep {
 if (isScriptStep(step)) {
   return this.executeScriptStep(step, stepIndex);
 } else {
-  return this.executeAiPrompt(step, stepIndex);  // existing path
+  return this.executeAiPrompt(step, stepIndex); // existing path
 }
 ```
 
@@ -217,13 +220,17 @@ No harness involvement. Directly uses `EndConditionEvaluator`:
 After the AI prompt completes and its end condition passes (or immediately on completion if no end condition), `WorkflowExecutor` checks for a resolved `postScript`:
 
 ```typescript
-const resolvedPostScript = PropertyResolver.resolve(step, workflowFile).postScript;
+const resolvedPostScript = PropertyResolver.resolve(
+  step,
+  workflowFile
+).postScript;
 if (resolvedPostScript != null) {
   await this.runPostScript(resolvedPostScript, step.timeout);
 }
 ```
 
 `runPostScript(script, timeout)`:
+
 1. Calls `EndConditionEvaluator.evaluate({ script, returns: "0", timeout })` — reuses same infrastructure as script steps
 2. On failure: emits a `STATUS_MESSAGE` with `severity: "warning"` (e.g., "postScript exited with code 1") — does NOT fail the step or stop the workflow
 3. Output is appended to the current step's output block (not a new step)
@@ -264,12 +271,14 @@ Step Type:  [ AI Prompt ▼ ]   or   [ Script ▼ ]
 ```
 
 When "Script" is selected:
+
 - The CodeMirror prompt textarea is replaced with a single-line (or multi-line) script
   command input
 - All AI-specific settings (harness, model, agent, skills, resumeSession, etc.) are hidden
 - Script-specific settings appear: Script command, Timeout, Continue on failure (checkbox)
 
 When "AI Prompt" is selected:
+
 - Normal prompt editor with all AI settings (current behavior)
 
 ### `finalPrompt` footer
@@ -320,7 +329,7 @@ prompts:
   - name: Format code
     type: script
     script: npm run format
-    continueOnFailure: true   # formatter failure is non-blocking
+    continueOnFailure: true # formatter failure is non-blocking
 
   - name: Verify coverage
     type: script
@@ -331,7 +340,7 @@ prompts:
 
 ```yaml
 harness: claude-cli
-postScript: npm run format   # runs after every prompt's end condition passes
+postScript: npm run format # runs after every prompt's end condition passes
 
 prompts:
   - name: Implement feature
@@ -341,18 +350,18 @@ prompts:
   - name: Add tests
     prompt: |
       Write tests for the feature.
-    postScript: npm run format && npm run lint   # override: different script for this step
+    postScript: npm run format && npm run lint # override: different script for this step
 
   - name: Final cleanup
     prompt: |
       Review and clean up the implementation.
-    postScript: null   # disable inherited postScript for this step
+    postScript: null # disable inherited postScript for this step
 ```
 
 ### `postScript` + `type: script` together
 
 ```yaml
-postScript: npm run format   # side-effect after every AI step
+postScript: npm run format # side-effect after every AI step
 
 prompts:
   - prompt: Implement the feature
@@ -383,6 +392,7 @@ finalPrompt:
 ### No-op prompt replacement
 
 The current workaround:
+
 ```yaml
 # BEFORE (workaround)
 - prompt: just say hi
@@ -392,6 +402,7 @@ The current workaround:
 ```
 
 Becomes:
+
 ```yaml
 # AFTER (clean)
 - type: script
@@ -403,6 +414,7 @@ Becomes:
 ## IntelliSense (`src/completions/`)
 
 The YAML/JSON completion providers need to:
+
 - Offer `type: script` as an option when inside a prompt item
 - When `type: script` is detected, suppress AI-only completions (`harness`, `model`, `agent`,
   `skills`, `resumeSession`, `sessionId`, `allowDynamicExtension`, `endCondition`, `prompt`)
@@ -414,6 +426,7 @@ The YAML/JSON completion providers need to:
 
 Script step output is stored identically to AI prompt output via `OutputHistoryManager`.
 The synthetic `DashboardOutput` carries:
+
 - `source: "script"` (new field, optional, for display differentiation)
 - `rawTextOutput: true` (script stdout/stderr as plain text)
 - No structured events (no file edits, tool calls, etc.)
@@ -425,42 +438,42 @@ thinking blocks. Just stdout/stderr text with an exit code summary line.
 
 ## File Change Summary
 
-| File | Change |
-|---|---|
-| `schemas/prompt-schema.json` | Add `scriptStep` definition; `promptItem` becomes `oneOf`; add `postScript` to `executionProperties` |
-| `src/types/FlightPathTypes.ts` | Add `postScript?: string \| null` to `ExecutionProperties`; add `ScriptStep`, `WorkflowStep` union, `isScriptStep()` guard; update `PromptFile`, `QueueState`, `WorkflowContext` |
-| `src/types/DashboardConstants.ts` | Add `STEP_TYPES`, `StepType`; add `STEP_TYPE`, `SCRIPT`, `CONTINUE_ON_FAILURE`, `POST_SCRIPT` to `PROMPT_PROPERTIES` |
-| `src/flightpath/WorkflowExecutor.ts` | Route `isScriptStep` to `executeScriptStep()`; add `runPostScript()` call in `executeAiPrompt()` after end condition passes |
-| `src/flightpath/PromptFileParser.ts` | Validate `scriptStep` via AJV; type narrowing after parse |
-| `src/flightpath/PromptQueue.ts` | `prompts` array typed as `WorkflowStep[]` |
-| `src/flightpath/PropertyResolver.ts` | Skip resolution for script steps; resolve `postScript` for AI prompts |
-| `src/flightpath/EndConditionHandler.ts` | Extract reusable `evaluateScript()` helper (shared by `endCondition`, script steps, and `postScript`) |
-| `src/ui/webview-react/components/prompts/PromptItem.tsx` | Render script step variant (terminal icon, Script badge, command preview); show `postScript` indicator on AI prompt items that have one |
-| `src/ui/webview-react/components/prompts/PromptEditor.tsx` | Add Step Type selector; swap editor UI based on type; add `postScript` field to AI prompt settings |
-| `src/ui/webview-react/components/prompts/FinalPromptFooter.tsx` | Handle `isScriptStep(finalPrompt)` → show Script badge |
-| `src/ui/webview-react/components/output/CliOutput.tsx` | Handle `source: "script"` for simplified rendering |
-| `src/completions/` | Suppress/replace AI completions when `type: script` detected; offer `postScript` for AI prompt items |
+| File                                                            | Change                                                                                                                                                                           |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schemas/prompt-schema.json`                                    | Add `scriptStep` definition; `promptItem` becomes `oneOf`; add `postScript` to `executionProperties`                                                                             |
+| `src/types/FlightPathTypes.ts`                                  | Add `postScript?: string \| null` to `ExecutionProperties`; add `ScriptStep`, `WorkflowStep` union, `isScriptStep()` guard; update `PromptFile`, `QueueState`, `WorkflowContext` |
+| `src/types/DashboardConstants.ts`                               | Add `STEP_TYPES`, `StepType`; add `STEP_TYPE`, `SCRIPT`, `CONTINUE_ON_FAILURE`, `POST_SCRIPT` to `PROMPT_PROPERTIES`                                                             |
+| `src/flightpath/WorkflowExecutor.ts`                            | Route `isScriptStep` to `executeScriptStep()`; add `runPostScript()` call in `executeAiPrompt()` after end condition passes                                                      |
+| `src/flightpath/PromptFileParser.ts`                            | Validate `scriptStep` via AJV; type narrowing after parse                                                                                                                        |
+| `src/flightpath/PromptQueue.ts`                                 | `prompts` array typed as `WorkflowStep[]`                                                                                                                                        |
+| `src/flightpath/PropertyResolver.ts`                            | Skip resolution for script steps; resolve `postScript` for AI prompts                                                                                                            |
+| `src/flightpath/EndConditionHandler.ts`                         | Extract reusable `evaluateScript()` helper (shared by `endCondition`, script steps, and `postScript`)                                                                            |
+| `src/ui/webview-react/components/prompts/PromptItem.tsx`        | Render script step variant (terminal icon, Script badge, command preview); show `postScript` indicator on AI prompt items that have one                                          |
+| `src/ui/webview-react/components/prompts/PromptEditor.tsx`      | Add Step Type selector; swap editor UI based on type; add `postScript` field to AI prompt settings                                                                               |
+| `src/ui/webview-react/components/prompts/FinalPromptFooter.tsx` | Handle `isScriptStep(finalPrompt)` → show Script badge                                                                                                                           |
+| `src/ui/webview-react/components/output/CliOutput.tsx`          | Handle `source: "script"` for simplified rendering                                                                                                                               |
+| `src/completions/`                                              | Suppress/replace AI completions when `type: script` detected; offer `postScript` for AI prompt items                                                                             |
 
 ---
 
 ## Edge Cases
 
-| Scenario | Handling |
-|---|---|
-| `type: script` with `harness`, `model`, etc. | Schema validation error (additionalProperties: false on `scriptStep`) |
-| `type: script` with no `script` field | Schema validation error (required) |
-| Script step as only item in queue | Executes normally; no AI harness spun up |
-| Script step mid-queue with `resumeSession` next | `resumeSession` applies to the *AI* prompt only; script step has no session |
-| Script exits non-zero, `continueOnFailure: false` (default) | Step fails, workflow stops |
-| Script exits non-zero, `continueOnFailure: true` | Step completes with warning badge, workflow continues |
-| Script step as `finalPrompt` | `WorkflowExecutor.executeFinalPrompt()` routes through `executeScriptStep` |
-| `postScript` on a `type: script` step | Schema error — `additionalProperties: false` on `scriptStep` rejects it |
-| `postScript` fails | Warning status message emitted; step still marked `completed`; workflow continues |
-| `postScript: null` at prompt level | Disables inherited workflow-level `postScript` for that step (mirrors `endCondition: null`) |
-| `postScript` + `endCondition` together | End condition runs first (with retries); `postScript` runs only after end condition passes |
-| `postScript` when no end condition | Runs immediately after AI prompt completes |
-| Undo changes for script step | Script steps are not AI-driven; no file events. Workspace snapshot still captures any filesystem mutations. Undo dialog works via Tier 2 snapshot only. |
-| Undo changes after `postScript` ran | `postScript` filesystem changes captured in Tier 2 snapshot, attributed to the enclosing AI prompt step |
+| Scenario                                                    | Handling                                                                                                                                                |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type: script` with `harness`, `model`, etc.                | Schema validation error (additionalProperties: false on `scriptStep`)                                                                                   |
+| `type: script` with no `script` field                       | Schema validation error (required)                                                                                                                      |
+| Script step as only item in queue                           | Executes normally; no AI harness spun up                                                                                                                |
+| Script step mid-queue with `resumeSession` next             | `resumeSession` applies to the _AI_ prompt only; script step has no session                                                                             |
+| Script exits non-zero, `continueOnFailure: false` (default) | Step fails, workflow stops                                                                                                                              |
+| Script exits non-zero, `continueOnFailure: true`            | Step completes with warning badge, workflow continues                                                                                                   |
+| Script step as `finalPrompt`                                | `WorkflowExecutor.executeFinalPrompt()` routes through `executeScriptStep`                                                                              |
+| `postScript` on a `type: script` step                       | Schema error — `additionalProperties: false` on `scriptStep` rejects it                                                                                 |
+| `postScript` fails                                          | Warning status message emitted; step still marked `completed`; workflow continues                                                                       |
+| `postScript: null` at prompt level                          | Disables inherited workflow-level `postScript` for that step (mirrors `endCondition: null`)                                                             |
+| `postScript` + `endCondition` together                      | End condition runs first (with retries); `postScript` runs only after end condition passes                                                              |
+| `postScript` when no end condition                          | Runs immediately after AI prompt completes                                                                                                              |
+| Undo changes for script step                                | Script steps are not AI-driven; no file events. Workspace snapshot still captures any filesystem mutations. Undo dialog works via Tier 2 snapshot only. |
+| Undo changes after `postScript` ran                         | `postScript` filesystem changes captured in Tier 2 snapshot, attributed to the enclosing AI prompt step                                                 |
 
 ---
 

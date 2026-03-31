@@ -42,7 +42,9 @@ export function useUndoRedoKeyHandler() {
       const isRunning = useWorkflowStore.getState().isWorkflowRunning();
       const isPaused = useWorkflowStore.getState().isWorkflowPaused();
       if (isRunning || isPaused) {
-        WebviewLog.debug(`[UndoRedo] blocked — workflow isRunning=${isRunning} isPaused=${isPaused}`);
+        WebviewLog.debug(
+          `[UndoRedo] blocked — workflow isRunning=${isRunning} isPaused=${isPaused}`
+        );
         return;
       }
 

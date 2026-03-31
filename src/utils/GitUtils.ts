@@ -5,16 +5,16 @@ const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
 
 export interface CommitInfo {
-  hash: string;         // full 40-char SHA
-  shortHash: string;    // 7-char abbreviated SHA
-  subject: string;      // first line of commit message
-  author: string;       // author name
+  hash: string; // full 40-char SHA
+  shortHash: string; // 7-char abbreviated SHA
+  subject: string; // first line of commit message
+  author: string; // author name
   relativeDate: string; // e.g. "2 days ago"
 }
 
 export interface StashInfo {
-  index: number;        // stash@{0}, stash@{1}, …
-  subject: string;      // stash description
+  index: number; // stash@{0}, stash@{1}, …
+  subject: string; // stash description
   relativeDate: string;
 }
 
@@ -27,12 +27,18 @@ export async function getRecentCommits(
   workspaceRoot: string,
   limit: number = 30
 ): Promise<CommitInfo[]> {
-  const { stdout } = await execFileAsync("git", [
-    "-C", workspaceRoot,
-    "log",
-    `--format=%H%x00%h%x00%s%x00%an%x00%ar`,
-    `-n`, String(limit),
-  ], { timeout: GIT_TIMEOUT_MS });
+  const { stdout } = await execFileAsync(
+    "git",
+    [
+      "-C",
+      workspaceRoot,
+      "log",
+      `--format=%H%x00%h%x00%s%x00%an%x00%ar`,
+      `-n`,
+      String(limit),
+    ],
+    { timeout: GIT_TIMEOUT_MS }
+  );
 
   return stdout
     .trim()
@@ -52,33 +58,32 @@ export async function getCommitDiff(
   workspaceRoot: string,
   hash: string
 ): Promise<string> {
-  const { stdout } = await execFileAsync("git", [
-    "-C", workspaceRoot,
-    "show",
-    "--stat",
-    "-p",
-    hash,
-  ], { timeout: GIT_TIMEOUT_MS });
+  const { stdout } = await execFileAsync(
+    "git",
+    ["-C", workspaceRoot, "show", "--stat", "-p", hash],
+    { timeout: GIT_TIMEOUT_MS }
+  );
   return stdout;
 }
 
 /**
  * Returns working tree diff (unstaged changes + untracked file summary).
  */
-export async function getWorkingTreeDiff(workspaceRoot: string): Promise<string> {
-  const { stdout: diffOutput } = await execFileAsync("git", [
-    "-C", workspaceRoot,
-    "diff",
-    "--stat",
-    "-p",
-  ], { timeout: GIT_TIMEOUT_MS });
+export async function getWorkingTreeDiff(
+  workspaceRoot: string
+): Promise<string> {
+  const { stdout: diffOutput } = await execFileAsync(
+    "git",
+    ["-C", workspaceRoot, "diff", "--stat", "-p"],
+    { timeout: GIT_TIMEOUT_MS }
+  );
 
   // Append untracked file list from git status --short
-  const { stdout: statusOutput } = await execFileAsync("git", [
-    "-C", workspaceRoot,
-    "status",
-    "--short",
-  ], { timeout: GIT_TIMEOUT_MS });
+  const { stdout: statusOutput } = await execFileAsync(
+    "git",
+    ["-C", workspaceRoot, "status", "--short"],
+    { timeout: GIT_TIMEOUT_MS }
+  );
 
   const untrackedLines = statusOutput
     .split("\n")
@@ -97,26 +102,25 @@ export async function getWorkingTreeDiff(workspaceRoot: string): Promise<string>
  * Returns staged diff only (git diff --cached).
  */
 export async function getStagedDiff(workspaceRoot: string): Promise<string> {
-  const { stdout } = await execFileAsync("git", [
-    "-C", workspaceRoot,
-    "diff",
-    "--cached",
-    "--stat",
-    "-p",
-  ], { timeout: GIT_TIMEOUT_MS });
+  const { stdout } = await execFileAsync(
+    "git",
+    ["-C", workspaceRoot, "diff", "--cached", "--stat", "-p"],
+    { timeout: GIT_TIMEOUT_MS }
+  );
   return stdout;
 }
 
 /**
  * Returns list of stash entries, most recent first.
  */
-export async function getStashList(workspaceRoot: string): Promise<StashInfo[]> {
-  const { stdout } = await execFileAsync("git", [
-    "-C", workspaceRoot,
-    "stash",
-    "list",
-    "--format=%s%x00%ar",
-  ], { timeout: GIT_TIMEOUT_MS });
+export async function getStashList(
+  workspaceRoot: string
+): Promise<StashInfo[]> {
+  const { stdout } = await execFileAsync(
+    "git",
+    ["-C", workspaceRoot, "stash", "list", "--format=%s%x00%ar"],
+    { timeout: GIT_TIMEOUT_MS }
+  );
 
   return stdout
     .trim()
@@ -137,13 +141,11 @@ export async function getStashDiff(
   workspaceRoot: string,
   index: number
 ): Promise<string> {
-  const { stdout } = await execFileAsync("git", [
-    "-C", workspaceRoot,
-    "stash",
-    "show",
-    "-p",
-    `stash@{${index}}`,
-  ], { timeout: GIT_TIMEOUT_MS });
+  const { stdout } = await execFileAsync(
+    "git",
+    ["-C", workspaceRoot, "stash", "show", "-p", `stash@{${index}}`],
+    { timeout: GIT_TIMEOUT_MS }
+  );
   return stdout;
 }
 
@@ -156,14 +158,20 @@ export async function searchCommitsBySubject(
   query: string,
   limit: number = 200
 ): Promise<CommitInfo[]> {
-  const { stdout } = await execFileAsync("git", [
-    "-C", workspaceRoot,
-    "log",
-    `--format=%H%x00%h%x00%s%x00%an%x00%ar`,
-    `--grep=${query}`,
-    "--regexp-ignore-case",
-    `-n`, String(limit),
-  ], { timeout: GIT_TIMEOUT_MS });
+  const { stdout } = await execFileAsync(
+    "git",
+    [
+      "-C",
+      workspaceRoot,
+      "log",
+      `--format=%H%x00%h%x00%s%x00%an%x00%ar`,
+      `--grep=${query}`,
+      "--regexp-ignore-case",
+      `-n`,
+      String(limit),
+    ],
+    { timeout: GIT_TIMEOUT_MS }
+  );
 
   return stdout
     .trim()

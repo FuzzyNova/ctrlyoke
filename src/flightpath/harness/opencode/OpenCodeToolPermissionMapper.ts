@@ -52,6 +52,9 @@ export class OpenCodeToolPermissionMapper
    * @returns True for dangerouslyAllowAll and allowAll modes
    */
   hasFullPermissions(config: ToolPermissionConfig): boolean {
-    return config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL || config.mode === PERMISSION_MODES.ALLOW_ALL;
+    return (
+      config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
+      config.mode === PERMISSION_MODES.ALLOW_ALL
+    );
   }
 }

@@ -402,7 +402,11 @@ class FlightPathMCPServer {
       source = "MCP Tool",
     } = args as {
       prompts: Array<
-        PromptItem & { resumeSession?: boolean; sessionId?: number; harness?: string }
+        PromptItem & {
+          resumeSession?: boolean;
+          sessionId?: number;
+          harness?: string;
+        }
       >;
       position: QueuePosition;
       source?: string;

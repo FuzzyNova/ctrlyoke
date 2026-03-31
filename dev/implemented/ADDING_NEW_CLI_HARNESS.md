@@ -52,6 +52,7 @@ src/flightpath/harness/gemini/
 ### ICliProvider (`GeminiCliProvider.ts`)
 
 Key responsibilities:
+
 - `config: ProviderConfig` — name, displayName, installHint, `useLogFileMonitoring`, `shouldStreamHeadlessOutput`
 - `buildHeadlessArgs(baseArgs, prompt)` — construct the full args array for headless execution
 - `buildInteractiveTuiCommand(baseArgs)` — construct the TUI command string
@@ -70,6 +71,7 @@ Completion detection approaches (pick one):
 3. **Exit-based**: Return immediately — `CliIntegration` detects process exit.
 
 `buildHookConfig()` returns one of these formats depending on your CLI's hook mechanism:
+
 - `{ type: "none" }` — no hook support
 - `{ type: "json", config: {...} }` — JSON hook config (Copilot style)
 - `{ type: "json-string", config: "..." }` — JSON string hook arg (Claude style)
@@ -95,7 +97,11 @@ export class GeminiLogParser extends BaseLogParser {
   }
 
   parseLogLine(line: string): any | null {
-    try { return JSON.parse(line); } catch { return null; }
+    try {
+      return JSON.parse(line);
+    } catch {
+      return null;
+    }
   }
 
   isCompletionEvent(event: any): boolean {
@@ -170,10 +176,10 @@ Add to the `Harness` enum:
 ```typescript
 export enum Harness {
   CopilotCli = "copilot-cli",
-  ClaudeCli  = "claude-cli",
-  CodexCli   = "codex-cli",
-  QwenCli    = "qwen-cli",
-  GeminiCli  = "gemini-cli",   // ADD THIS
+  ClaudeCli = "claude-cli",
+  CodexCli = "codex-cli",
+  QwenCli = "qwen-cli",
+  GeminiCli = "gemini-cli", // ADD THIS
   CopilotChat = "copilot-chat",
 }
 ```
@@ -203,9 +209,9 @@ export const HARNESS_DEFAULT_MODELS = {
 
 // 4. Add a model list constant (used by the webview store)
 export const GEMINI_CLI_MODELS = [
-  { value: "none",          label: "None (skip --model flag)" },
+  { value: "none", label: "None (skip --model flag)" },
   { value: "auto-gemini-3", label: "Auto Gemini 3" },
-  { value: "gemini-3-pro",  label: "Gemini 3 Pro" },
+  { value: "gemini-3-pro", label: "Gemini 3 Pro" },
   { value: "gemini-3-flash", label: "Gemini 3 Flash" },
 ] as const;
 ```
@@ -308,7 +314,7 @@ export const GEMINI_CLI_MODELS = [
 ] as const;
 
 export const GEMINI_CLI_MODEL_LABELS: Record<string, string> = {
-  "gemini-3-pro":  "Gemini 3 Pro",
+  "gemini-3-pro": "Gemini 3 Pro",
   "gemini-3-flash": "Gemini 3 Flash",
   "auto-gemini-3": "Auto Gemini 3",
 };
@@ -396,7 +402,7 @@ export const CLI_HARNESSES: HarnessId[] = [
   HARNESS_IDS.CLAUDE_CLI,
   HARNESS_IDS.CODEX_CLI,
   HARNESS_IDS.QWEN_CLI,
-  HARNESS_IDS.GEMINI_CLI,  // ADD
+  HARNESS_IDS.GEMINI_CLI, // ADD
 ];
 ```
 
@@ -546,6 +552,7 @@ src/scripts/flightpath-gemini-hook.js  — hook script
 ```
 
 For hook-config-via-workspace-file patterns (backup/restore), also see:
+
 ```
 src/flightpath/harness/qwen/QwenNotificationMonitor.ts
 src/flightpath/harness/qwen/QwenCliProvider.ts

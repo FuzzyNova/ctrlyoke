@@ -77,7 +77,11 @@ describe("promptItemToRaw", () => {
   });
 
   it("omits undefined optional properties", () => {
-    const item = makeItem({ text: "Hello", harness: undefined, model: undefined });
+    const item = makeItem({
+      text: "Hello",
+      harness: undefined,
+      model: undefined,
+    });
     const raw = promptItemToRaw(item);
     expect("harness" in raw).toBe(false);
     expect("model" in raw).toBe(false);
@@ -114,22 +118,32 @@ describe("promptItemToRaw", () => {
 
 describe("isPromptExecuted", () => {
   it("is true when completed", () => {
-    expect(isPromptExecuted(makeItem({ status: STEP_STATUS.COMPLETED }))).toBe(true);
+    expect(isPromptExecuted(makeItem({ status: STEP_STATUS.COMPLETED }))).toBe(
+      true
+    );
   });
 
   it("is true when failed", () => {
-    expect(isPromptExecuted(makeItem({ status: STEP_STATUS.FAILED }))).toBe(true);
+    expect(isPromptExecuted(makeItem({ status: STEP_STATUS.FAILED }))).toBe(
+      true
+    );
   });
 
   it("is false when pending or running", () => {
-    expect(isPromptExecuted(makeItem({ status: STEP_STATUS.PENDING }))).toBe(false);
-    expect(isPromptExecuted(makeItem({ status: STEP_STATUS.RUNNING }))).toBe(false);
+    expect(isPromptExecuted(makeItem({ status: STEP_STATUS.PENDING }))).toBe(
+      false
+    );
+    expect(isPromptExecuted(makeItem({ status: STEP_STATUS.RUNNING }))).toBe(
+      false
+    );
   });
 });
 
 describe("isPromptRunning", () => {
   it("is true when running", () => {
-    expect(isPromptRunning(makeItem({ status: STEP_STATUS.RUNNING }))).toBe(true);
+    expect(isPromptRunning(makeItem({ status: STEP_STATUS.RUNNING }))).toBe(
+      true
+    );
   });
 
   it("is true when sent", () => {
@@ -137,16 +151,26 @@ describe("isPromptRunning", () => {
   });
 
   it("is false for completed, pending, failed", () => {
-    expect(isPromptRunning(makeItem({ status: STEP_STATUS.COMPLETED }))).toBe(false);
-    expect(isPromptRunning(makeItem({ status: STEP_STATUS.PENDING }))).toBe(false);
-    expect(isPromptRunning(makeItem({ status: STEP_STATUS.FAILED }))).toBe(false);
+    expect(isPromptRunning(makeItem({ status: STEP_STATUS.COMPLETED }))).toBe(
+      false
+    );
+    expect(isPromptRunning(makeItem({ status: STEP_STATUS.PENDING }))).toBe(
+      false
+    );
+    expect(isPromptRunning(makeItem({ status: STEP_STATUS.FAILED }))).toBe(
+      false
+    );
   });
 });
 
 describe("isPromptPending", () => {
   it("is true only when pending", () => {
-    expect(isPromptPending(makeItem({ status: STEP_STATUS.PENDING }))).toBe(true);
-    expect(isPromptPending(makeItem({ status: STEP_STATUS.RUNNING }))).toBe(false);
+    expect(isPromptPending(makeItem({ status: STEP_STATUS.PENDING }))).toBe(
+      true
+    );
+    expect(isPromptPending(makeItem({ status: STEP_STATUS.RUNNING }))).toBe(
+      false
+    );
   });
 });
 

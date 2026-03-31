@@ -15,6 +15,7 @@ Streamdown follows **shadcn/ui naming conventions** for color tokens. If your Ta
 ## Step 1 — Scan Streamdown's Dist for Class Names
 
 ### Tailwind v3 (`tailwind.config.js`)
+
 ```js
 content: [
   // ... your app files ...
@@ -23,6 +24,7 @@ content: [
 ```
 
 ### Tailwind v4 (`globals.css`)
+
 ```css
 @source "../node_modules/streamdown/dist/*.js";
 ```
@@ -49,6 +51,7 @@ Streamdown's table controls use these shadcn/ui token names. Map each to your th
 ```
 
 **For VS Code webviews specifically:**
+
 ```js
 "background":  "var(--vscode-editor-background)",
 "sidebar":     "var(--vscode-sideBar-background)",
@@ -62,6 +65,7 @@ Streamdown's table controls use these shadcn/ui token names. Map each to your th
 ```
 
 This causes Tailwind to generate:
+
 - `bg-background` → editor/content area background
 - `bg-sidebar` → table wrapper card background
 - `border-border` → table and dropdown border color
@@ -90,13 +94,37 @@ Streamdown's `styles.css` provides animation keyframes for the streaming caret a
 Streamdown renders semantic HTML (`<h1>`–`<h6>`, `<ul>`, `<table>`, `<blockquote>`, etc.) with no base styles. Scope prose styles using the className you pass to `<Streamdown className="markdown-text">`:
 
 ```css
-.markdown-text { color: var(--vscode-editor-foreground); font-size: 12px; line-height: 1.6; }
-.markdown-text h1, .markdown-text h2, .markdown-text h3 { font-weight: 600; margin-top: 1em; }
-.markdown-text p  { margin: 0.5em 0; }
-.markdown-text ul, .markdown-text ol { padding-left: 1.4em; margin: 0.5em 0; }
-.markdown-text blockquote { border-left: 3px solid var(--vscode-textBlockQuote-border, #007acc); }
-.markdown-text table { border-collapse: collapse; width: 100%; }
-.markdown-text th, .markdown-text td { border: 1px solid var(--vscode-panel-border); padding: 4px 8px; }
+.markdown-text {
+  color: var(--vscode-editor-foreground);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.markdown-text h1,
+.markdown-text h2,
+.markdown-text h3 {
+  font-weight: 600;
+  margin-top: 1em;
+}
+.markdown-text p {
+  margin: 0.5em 0;
+}
+.markdown-text ul,
+.markdown-text ol {
+  padding-left: 1.4em;
+  margin: 0.5em 0;
+}
+.markdown-text blockquote {
+  border-left: 3px solid var(--vscode-textBlockQuote-border, #007acc);
+}
+.markdown-text table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.markdown-text th,
+.markdown-text td {
+  border: 1px solid var(--vscode-panel-border);
+  padding: 4px 8px;
+}
 ```
 
 Alternatively use `[data-streamdown="..."]` attribute selectors (see Step 5) for scoping without an extra className.
@@ -132,7 +160,10 @@ Streamdown uses `bg-background` for both the table area and dropdown panels, but
    are the full-width format buttons (CSV, TSV, Markdown).
    :has() requires Chromium 105+, supported in all modern VS Code versions. */
 [data-streamdown="table-wrapper"] div:has(> button[class*="w-full"]) {
-  background-color: var(--vscode-dropdown-background, var(--vscode-editor-background));
+  background-color: var(
+    --vscode-dropdown-background,
+    var(--vscode-editor-background)
+  );
   border-color: var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
 }
 ```
@@ -148,8 +179,13 @@ Tailwind v3 opacity modifiers (e.g. `bg-muted/40`) **do not work** when the colo
 }
 
 /* Dropdown item hover — replaces the non-functional bg-muted/40 */
-[data-streamdown="table-wrapper"] div:has(> button[class*="w-full"]) button:hover {
-  background-color: var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.15));
+[data-streamdown="table-wrapper"]
+  div:has(> button[class*="w-full"])
+  button:hover {
+  background-color: var(
+    --vscode-list-hoverBackground,
+    rgba(127, 127, 127, 0.15)
+  );
   color: var(--vscode-list-hoverForeground, var(--vscode-foreground));
 }
 ```
@@ -160,16 +196,16 @@ Tailwind v3 opacity modifiers (e.g. `bg-muted/40`) **do not work** when the colo
 
 ## Quick Reference: What Each Token Controls
 
-| Streamdown class | Token needed | Controls |
-|---|---|---|
-| `bg-sidebar` | `sidebar` | Outer table wrapper card background |
-| `bg-background` | `background` | Inner table area + dropdown panel background |
-| `border-border` | `border` | Table wrapper border, inner table border, dropdown border |
-| `text-muted-foreground` | `muted.foreground` | Copy/Download icon button default color |
-| `hover:text-foreground` | `foreground` | Copy/Download icon button hover color |
-| `bg-muted` | `muted.DEFAULT` | Hover background base (opacity modifier broken — see Step 6) |
-| `ring-ring` | `ring` | Focus rings |
-| `shadow-lg` | (built-in) | Dropdown panel drop shadow |
+| Streamdown class        | Token needed       | Controls                                                     |
+| ----------------------- | ------------------ | ------------------------------------------------------------ |
+| `bg-sidebar`            | `sidebar`          | Outer table wrapper card background                          |
+| `bg-background`         | `background`       | Inner table area + dropdown panel background                 |
+| `border-border`         | `border`           | Table wrapper border, inner table border, dropdown border    |
+| `text-muted-foreground` | `muted.foreground` | Copy/Download icon button default color                      |
+| `hover:text-foreground` | `foreground`       | Copy/Download icon button hover color                        |
+| `bg-muted`              | `muted.DEFAULT`    | Hover background base (opacity modifier broken — see Step 6) |
+| `ring-ring`             | `ring`             | Focus rings                                                  |
+| `shadow-lg`             | (built-in)         | Dropdown panel drop shadow                                   |
 
 ---
 
@@ -213,6 +249,9 @@ The Shiki syntax-highlighting plugin (`@streamdown/code`) uses WebAssembly and l
 
 ```css
 [data-streamdown="caret"] {
-  background-color: var(--vscode-editorCursor-foreground, var(--vscode-foreground));
+  background-color: var(
+    --vscode-editorCursor-foreground,
+    var(--vscode-foreground)
+  );
 }
 ```

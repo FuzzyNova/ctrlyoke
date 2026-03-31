@@ -47,20 +47,22 @@ describe("truncate", () => {
 });
 
 describe("getWorkflowName", () => {
-  it('returns DEFAULT_WORKFLOW_NAME for null', () => {
+  it("returns DEFAULT_WORKFLOW_NAME for null", () => {
     expect(getWorkflowName(null)).toBe(DEFAULT_WORKFLOW_NAME);
   });
 
-  it('returns DEFAULT_WORKFLOW_NAME for undefined', () => {
+  it("returns DEFAULT_WORKFLOW_NAME for undefined", () => {
     expect(getWorkflowName(undefined)).toBe(DEFAULT_WORKFLOW_NAME);
   });
 
-  it('returns DEFAULT_WORKFLOW_NAME for empty string', () => {
+  it("returns DEFAULT_WORKFLOW_NAME for empty string", () => {
     expect(getWorkflowName("")).toBe(DEFAULT_WORKFLOW_NAME);
   });
 
   it("strips .flightpath.yaml extension", () => {
-    expect(getWorkflowName("/path/to/my-workflow.flightpath.yaml")).toBe("my-workflow");
+    expect(getWorkflowName("/path/to/my-workflow.flightpath.yaml")).toBe(
+      "my-workflow"
+    );
   });
 
   it("strips .flightpath.json extension", () => {
@@ -76,7 +78,9 @@ describe("getWorkflowName", () => {
   });
 
   it("handles Windows backslash separators", () => {
-    expect(getWorkflowName("C:\\Users\\dev\\feature.flightpath.json")).toBe("feature");
+    expect(getWorkflowName("C:\\Users\\dev\\feature.flightpath.json")).toBe(
+      "feature"
+    );
   });
 });
 

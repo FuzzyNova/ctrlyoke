@@ -12,7 +12,10 @@ import {
   TokenUsage,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
-import { mapOpenCodeToolPartToCliEvent, accumulateOpenCodeStepTokens } from "./OpenCodeEventMapper";
+import {
+  mapOpenCodeToolPartToCliEvent,
+  accumulateOpenCodeStepTokens,
+} from "./OpenCodeEventMapper";
 import { Log } from "../../../utils/Log";
 
 const execAsync = promisify(exec);
@@ -500,5 +503,4 @@ export class OpenCodeLogParser extends BaseLogParser {
         return null;
     }
   }
-
 }

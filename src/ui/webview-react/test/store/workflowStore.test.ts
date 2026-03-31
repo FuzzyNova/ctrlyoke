@@ -49,7 +49,10 @@ describe("loadWorkflow", () => {
     store().loadWorkflow({
       fileName: "test.flightpath.yaml",
       workflowName: "My Workflow",
-      prompts: [makePrompt({ prompt: "Step 1" }), makePrompt({ prompt: "Step 2" })],
+      prompts: [
+        makePrompt({ prompt: "Step 1" }),
+        makePrompt({ prompt: "Step 2" }),
+      ],
     });
 
     expect(store().fileName).toBe("test.flightpath.yaml");
@@ -144,7 +147,10 @@ describe("addCliOutput", () => {
   it("replaces output for attemptIndex 0 (no retry state)", () => {
     store().loadWorkflow({ fileName: "wf.yaml", prompts: [makePrompt()] });
     store().addCliOutput(0, makeOutput({ response: "first", attemptIndex: 0 }));
-    store().addCliOutput(0, makeOutput({ response: "second", attemptIndex: 0 }));
+    store().addCliOutput(
+      0,
+      makeOutput({ response: "second", attemptIndex: 0 })
+    );
     // Second write replaces first
     expect(store().getStepOutputs(0)).toHaveLength(1);
     expect(store().getStepOutputs(0)[0].response).toBe("second");
@@ -254,7 +260,10 @@ describe("getCurrentPrompt", () => {
   it("returns the prompt at currentStep", () => {
     store().loadWorkflow({
       fileName: "wf.yaml",
-      prompts: [makePrompt({ prompt: "first" }), makePrompt({ prompt: "second" })],
+      prompts: [
+        makePrompt({ prompt: "first" }),
+        makePrompt({ prompt: "second" }),
+      ],
     });
     store().setCurrentStep(1);
     expect(store().getCurrentPrompt()?.prompt).toBe("second");

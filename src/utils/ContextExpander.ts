@@ -1,6 +1,10 @@
 import * as path from "path";
 import * as fs from "fs/promises";
-import { FileReference, parseAllFileReferences, parseGitChangeReferences } from "./FileReferenceParser";
+import {
+  FileReference,
+  parseAllFileReferences,
+  parseGitChangeReferences,
+} from "./FileReferenceParser";
 import {
   resolveSymbol,
   buildDirectoryAttachmentXml,
@@ -14,7 +18,6 @@ import {
   getStashList,
 } from "./GitUtils";
 import { ATTACHMENT_PREFIXES } from "../types/DashboardConstants";
-
 
 /**
  * Result of context splitting — separates direct file references from embedded excerpts.
@@ -254,7 +257,9 @@ export class ContextExpander {
       }
 
       if (this.attachmentIds.has(attachmentId)) {
-        Log.debug(`[ContextExpander] Skipping duplicate git attachment: ${attachmentId}`);
+        Log.debug(
+          `[ContextExpander] Skipping duplicate git attachment: ${attachmentId}`
+        );
         continue;
       }
       this.attachmentIds.add(attachmentId);
@@ -278,7 +283,9 @@ export class ContextExpander {
         } else if (ref.kind === "stash") {
           const stashes = await getStashList(this.workspaceRoot);
           const stash = stashes[ref.stashIndex!];
-          const stashLabel = stash ? stash.subject : `stash@{${ref.stashIndex}}`;
+          const stashLabel = stash
+            ? stash.subject
+            : `stash@{${ref.stashIndex}}`;
           content = await getStashDiff(this.workspaceRoot, ref.stashIndex!);
           title = `Stash entry ${ref.stashIndex}: ${stashLabel}`;
         } else {
@@ -292,7 +299,10 @@ export class ContextExpander {
           `<attachment id="${attachmentId}">\n${title}\n\n\`\`\`diff\n${content}\n\`\`\`\n</attachment>`
         );
       } catch (err) {
-        Log.warn(`[ContextExpander] Failed to expand git attachment ${attachmentId}:`, err);
+        Log.warn(
+          `[ContextExpander] Failed to expand git attachment ${attachmentId}:`,
+          err
+        );
         // Skip on error — never throw
       }
     }
@@ -435,7 +445,8 @@ export class ContextExpander {
     symbolName?: string
   ): Promise<string> {
     const absolutePath = this.resolveWorkspacePath(filePath);
-    const language = path.extname(filePath).toLowerCase().slice(1) || "plaintext";
+    const language =
+      path.extname(filePath).toLowerCase().slice(1) || "plaintext";
 
     const t0 = Date.now();
     const rawContent = await fs.readFile(absolutePath, "utf8");

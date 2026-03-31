@@ -7,7 +7,10 @@ import {
   CliEvent,
   TokenUsage,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, HARNESS_IDS } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  HARNESS_IDS,
+} from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { getClaudeContextWindowSize } from "../../../utils/ModelConstants";
@@ -341,7 +344,11 @@ export class ClaudeResponseParser
 
     // Process structured tool_use_result metadata to create semantic events
     if (toolUseResult) {
-      ClaudeToolBuilder.processToolUseResultMetadata(toolUseResult, Date.now(), events);
+      ClaudeToolBuilder.processToolUseResultMetadata(
+        toolUseResult,
+        Date.now(),
+        events
+      );
     }
   }
 

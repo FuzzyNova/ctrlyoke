@@ -97,7 +97,9 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
           {/* Phase badge */}
           {phase && (
             <div className="mt-0.5text-[10px] opacity-75">
-              {phase === FINAL_PROMPT_PHASES.FINAL_PROMPT ? "Final Prompt" : "Queue"}
+              {phase === FINAL_PROMPT_PHASES.FINAL_PROMPT
+                ? "Final Prompt"
+                : "Queue"}
             </div>
           )}
 

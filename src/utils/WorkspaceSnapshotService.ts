@@ -28,10 +28,28 @@ const BINARY_CHECK_SIZE = 8 * 1024; // 8 KB
 
 /** Artifact directories/files to always exclude in filesystem strategy */
 const EXCLUDED_DIRS = new Set([
-  "node_modules", "dist", "out", "build", ".next", ".nuxt", ".svelte-kit",
-  ".turbo", "coverage", ".nyc_output", ".cache", ".parcel-cache",
-  "__pycache__", ".pytest_cache", ".venv", "venv", "target", "vendor",
-  ".gradle", ".idea", PATH_CONSTANTS.FLIGHTPATH_DIR, ".git",
+  "node_modules",
+  "dist",
+  "out",
+  "build",
+  ".next",
+  ".nuxt",
+  ".svelte-kit",
+  ".turbo",
+  "coverage",
+  ".nyc_output",
+  ".cache",
+  ".parcel-cache",
+  "__pycache__",
+  ".pytest_cache",
+  ".venv",
+  "venv",
+  "target",
+  "vendor",
+  ".gradle",
+  ".idea",
+  PATH_CONSTANTS.FLIGHTPATH_DIR,
+  ".git",
 ]);
 
 const EXCLUDED_EXTENSIONS = new Set([".pyc", ".class", ".o", ".obj"]);
@@ -113,7 +131,9 @@ function buildGitignoreMatcher(
       dirPatterns.push(line.slice(0, -1));
     } else if (line.includes("*")) {
       // Simple glob: match filename only
-      const escaped = line.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*");
+      const escaped = line
+        .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+        .replace(/\*/g, "[^/]*");
       try {
         globPatterns.push(new RegExp(`^${escaped}$`));
       } catch {
@@ -262,11 +282,9 @@ export class WorkspaceSnapshotService {
       if (strategy === "git") {
         let stdout = "";
         try {
-          const result = await execFileAsync(
-            "git",
-            ["status", "--porcelain"],
-            { cwd: workspacePath }
-          );
+          const result = await execFileAsync("git", ["status", "--porcelain"], {
+            cwd: workspacePath,
+          });
           stdout = result.stdout;
         } catch (err) {
           Log.warn(`WorkspaceSnapshotService: git status failed: ${err}`);
@@ -306,7 +324,12 @@ export class WorkspaceSnapshotService {
         // filesystem strategy
         const gitignorePath = path.join(workspacePath, ".gitignore");
         const gitignoreMatcher = buildGitignoreMatcher(gitignorePath);
-        await walkDirectory(workspacePath, workspacePath, gitignoreMatcher, files);
+        await walkDirectory(
+          workspacePath,
+          workspacePath,
+          gitignoreMatcher,
+          files
+        );
       }
     } catch (err) {
       Log.warn(`WorkspaceSnapshotService: captureWorkspaceState error: ${err}`);
@@ -343,11 +366,17 @@ export class WorkspaceSnapshotService {
           };
           try {
             const { stdout: headContent } = await execFileAsync(
-              "git", ["show", `HEAD:${filePath}`],
+              "git",
+              ["show", `HEAD:${filePath}`],
               { cwd: workspacePath }
             );
             if (afterState.content !== undefined) {
-              const patchResult = Diff.structuredPatch("", "", normalizeLf(headContent), normalizeLf(afterState.content));
+              const patchResult = Diff.structuredPatch(
+                "",
+                "",
+                normalizeLf(headContent),
+                normalizeLf(afterState.content)
+              );
               if (patchResult.hunks.length > 0) {
                 change.structuredPatch = patchResult.hunks as UnifiedDiffHunk[];
               }
@@ -380,8 +409,16 @@ export class WorkspaceSnapshotService {
           changeType: "modified" as PromptChangeType,
           afterHash: afterState.contentHash,
         };
-        if (beforeState.content !== undefined && afterState.content !== undefined) {
-          const patchResult = Diff.structuredPatch("", "", normalizeLf(beforeState.content), normalizeLf(afterState.content));
+        if (
+          beforeState.content !== undefined &&
+          afterState.content !== undefined
+        ) {
+          const patchResult = Diff.structuredPatch(
+            "",
+            "",
+            normalizeLf(beforeState.content),
+            normalizeLf(afterState.content)
+          );
           if (patchResult.hunks.length > 0) {
             change.structuredPatch = patchResult.hunks as UnifiedDiffHunk[];
           }
@@ -436,7 +473,9 @@ export class WorkspaceSnapshotService {
       const isWindows = process.platform === "win32";
       const normalize = (p: string) => (isWindows ? p.toLowerCase() : p);
       if (
-        !normalize(absPath).startsWith(normalize(resolvedWorkspace + path.sep)) &&
+        !normalize(absPath).startsWith(
+          normalize(resolvedWorkspace + path.sep)
+        ) &&
         normalize(absPath) !== normalize(resolvedWorkspace)
       ) {
         failedFiles.push({
@@ -466,7 +505,11 @@ export class WorkspaceSnapshotService {
           }
           restoredFiles.push(instruction.path);
           if (currentContent !== undefined) {
-            redoInstructions.push({ path: instruction.path, action: "restore-content", contentToRestore: currentContent });
+            redoInstructions.push({
+              path: instruction.path,
+              action: "restore-content",
+              contentToRestore: currentContent,
+            });
           }
         } else if (instruction.action === "restore-content") {
           const content = instruction.contentToRestore ?? "";
@@ -475,43 +518,77 @@ export class WorkspaceSnapshotService {
           restoredFiles.push(instruction.path);
           if (currentContent !== undefined) {
             // Compute forward patch (pre-AI → AI-modified) for diff display in redo dialog
-            const fwdPatch = Diff.structuredPatch("", "", normalizeLf(instruction.contentToRestore ?? ""), normalizeLf(currentContent));
-            const structuredPatch = fwdPatch.hunks.length > 0 ? (fwdPatch.hunks as UnifiedDiffHunk[]) : undefined;
-            redoInstructions.push({ path: instruction.path, action: "restore-content", contentToRestore: currentContent, structuredPatch });
+            const fwdPatch = Diff.structuredPatch(
+              "",
+              "",
+              normalizeLf(instruction.contentToRestore ?? ""),
+              normalizeLf(currentContent)
+            );
+            const structuredPatch =
+              fwdPatch.hunks.length > 0
+                ? (fwdPatch.hunks as UnifiedDiffHunk[])
+                : undefined;
+            redoInstructions.push({
+              path: instruction.path,
+              action: "restore-content",
+              contentToRestore: currentContent,
+              structuredPatch,
+            });
           } else {
             // File didn't exist before the AI created it — redo should delete it
             redoInstructions.push({ path: instruction.path, action: "delete" });
           }
         } else if (instruction.action === "reverse-patch") {
-          if (!instruction.structuredPatch || instruction.structuredPatch.length === 0) {
-            failedFiles.push({ path: instruction.path, error: "No patch data for reverse-patch" });
+          if (
+            !instruction.structuredPatch ||
+            instruction.structuredPatch.length === 0
+          ) {
+            failedFiles.push({
+              path: instruction.path,
+              error: "No patch data for reverse-patch",
+            });
             continue;
           }
           if (currentContent === undefined) {
-            failedFiles.push({ path: instruction.path, error: "File not found" });
+            failedFiles.push({
+              path: instruction.path,
+              error: "File not found",
+            });
             continue;
           }
-          const reversePatchStr = buildReversePatchString(instruction.structuredPatch);
+          const reversePatchStr = buildReversePatchString(
+            instruction.structuredPatch
+          );
           // Normalize to LF before applying — the patch was computed from LF-normalized
           // content, so context lines are LF. Normalizing ensures applyPatch matches
           // even if the file currently has CRLF endings.
-          const patched = Diff.applyPatch(normalizeLf(currentContent), reversePatchStr);
+          const patched = Diff.applyPatch(
+            normalizeLf(currentContent),
+            reversePatchStr
+          );
           if (patched === false) {
             failedFiles.push({
               path: instruction.path,
-              error: "Patch did not apply cleanly — the file may have changed since this edit was made",
+              error:
+                "Patch did not apply cleanly — the file may have changed since this edit was made",
             });
             continue;
           }
           // Re-apply the original line endings if the file was CRLF before the prompt ran.
-          const restoredContent = instruction.lineEnding === "crlf"
-            ? patched.replace(/\r?\n/g, "\r\n")
-            : patched;
+          const restoredContent =
+            instruction.lineEnding === "crlf"
+              ? patched.replace(/\r?\n/g, "\r\n")
+              : patched;
           await fs.promises.writeFile(absPath, restoredContent, "utf8");
           restoredFiles.push(instruction.path);
           // Redo: restore the pre-undo state (what was in the file before we reversed the patch).
           // The forward structuredPatch (before→after AI change) is the original instruction patch.
-          redoInstructions.push({ path: instruction.path, action: "restore-content", contentToRestore: currentContent, structuredPatch: instruction.structuredPatch });
+          redoInstructions.push({
+            path: instruction.path,
+            action: "restore-content",
+            contentToRestore: currentContent,
+            structuredPatch: instruction.structuredPatch,
+          });
         }
       } catch (err) {
         failedFiles.push({

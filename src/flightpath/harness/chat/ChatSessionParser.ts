@@ -9,7 +9,11 @@ import {
   BashCommandData,
   FileDeleteData,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, HARNESS_IDS, STEP_STATUS } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  HARNESS_IDS,
+  STEP_STATUS,
+} from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 
 /**

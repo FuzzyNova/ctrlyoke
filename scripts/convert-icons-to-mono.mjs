@@ -22,7 +22,8 @@ function convertGemini(svgContent) {
   const pathMatch = svgContent.match(
     /<mask id="maskme"[^>]*>[\s\S]*?<path\s+d="([^"]+)"/
   );
-  if (!pathMatch) throw new Error("google-gemini.svg: could not find star path in mask");
+  if (!pathMatch)
+    throw new Error("google-gemini.svg: could not find star path in mask");
 
   const starPath = pathMatch[1];
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 65 65"><path d="${starPath}" fill="black"/></svg>`;
@@ -42,8 +43,11 @@ function convertOpenCode(svgContent) {
   //
   // The outer frame path creates the negative-space effect (frame with hole).
   // We want BOTH paths so the icon looks like a frame/bracket.
-  const pathMatches = [...svgContent.matchAll(/<path\s+d="([^"]+)"\s+fill='([^']+)'/g)];
-  if (pathMatches.length === 0) throw new Error("opencode-dark.svg: no paths found");
+  const pathMatches = [
+    ...svgContent.matchAll(/<path\s+d="([^"]+)"\s+fill='([^']+)'/g),
+  ];
+  if (pathMatches.length === 0)
+    throw new Error("opencode-dark.svg: no paths found");
 
   // Use the even-odd rule so the inner square punches a hole in the outer frame.
   const paths = pathMatches

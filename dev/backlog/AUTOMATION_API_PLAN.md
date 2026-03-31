@@ -86,6 +86,7 @@ prompts:
 ```
 
 **Implementation:**
+
 - `PropertyResolver` already handles three-tier precedence. A fourth tier — CLI vars —
   sits at the top (highest precedence).
 - Substitution runs on the resolved prompt text before sending to the AI CLI.
@@ -95,9 +96,10 @@ prompts:
 - Missing vars with no default: fail fast with a clear error message.
 
 **Schema addition (optional):**
+
 ```yaml
 vars:
-  repoPath: "."          # workflow-level defaults; overridden by --var at runtime
+  repoPath: "." # workflow-level defaults; overridden by --var at runtime
   reportDir: "./reports"
 ```
 
@@ -122,14 +124,15 @@ needs to branch and inspect:
       "attempts": 1,
       "sessionId": "abc-123",
       "filesChanged": ["src/auth.ts", "src/db.ts"],
-      "endCondition": { "passed": true, "script": "npm test", "output": "..." }
-    }
+      "endCondition": { "passed": true, "script": "npm test", "output": "..." },
+    },
   ],
-  "error": null    // or { "step": "scan", "message": "...", "attempt": 2 }
+  "error": null, // or { "step": "scan", "message": "...", "attempt": 2 }
 }
 ```
 
 **In scripts:**
+
 ```python
 import subprocess, json, sys
 
@@ -191,6 +194,7 @@ automation API — they can tell their AI to append steps to a running FlightPat
 inspect its state.
 
 Enhancements worth adding to the MCP server:
+
 - `flightpath_run_workflow` — trigger a full workflow run and return structured results
 - `flightpath_get_step_output` — retrieve the output of a specific completed step
 - `flightpath_set_var` — set a runtime variable on a running workflow
@@ -199,14 +203,14 @@ Enhancements worth adding to the MCP server:
 
 ## Recommendation
 
-| Enhancement | Priority | Complexity |
-|------------|---------|-----------|
-| `--var key=value` CLI substitution | **High** | Low — PropertyResolver extension |
-| Richer `--json` output schema | **High** | Low — output is already collected |
-| Workflow-level `vars:` defaults | Medium | Low — schema + PropertyResolver |
-| Python/JS SDK | Low | Medium — build after standalone server |
-| MCP server `flightpath_run_workflow` | Medium | Low — wraps existing CLI logic |
-| YAML `if/when/loop` constructs | **Do not build** | — |
+| Enhancement                          | Priority         | Complexity                             |
+| ------------------------------------ | ---------------- | -------------------------------------- |
+| `--var key=value` CLI substitution   | **High**         | Low — PropertyResolver extension       |
+| Richer `--json` output schema        | **High**         | Low — output is already collected      |
+| Workflow-level `vars:` defaults      | Medium           | Low — schema + PropertyResolver        |
+| Python/JS SDK                        | Low              | Medium — build after standalone server |
+| MCP server `flightpath_run_workflow` | Medium           | Low — wraps existing CLI logic         |
+| YAML `if/when/loop` constructs       | **Do not build** | —                                      |
 
 The two high-priority items together give power users everything they need for the
 multi-repo batch, CI/CD, and conditional chaining use cases, with tools they already know.
