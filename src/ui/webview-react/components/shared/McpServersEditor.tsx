@@ -160,10 +160,10 @@ const McpServersReadOnly: React.FC<{ value: McpServersValue }> = ({
         </div>
       </div>
 
-      {/* Custom servers */}
+      {/* Installed Servers */}
       <div className="flex flex-col gap-1">
         <div className="text-[10px] font-semibold uppercase text-description-fg tracking-wide">
-          Custom Servers
+          Installed Servers
         </div>
         {isEmpty || servers.length === 0 ? (
           <div className="text-[11px] text-description-fg italic px-1">
@@ -256,7 +256,11 @@ export const McpServersEditor: React.FC<{
   /** Called when user requests a local config file scan */
   onRequestLocalServers?: () => void;
   /** Called when user submits a registry search or changes sort mode */
-  onSearchRegistry?: (query: string, cursor?: string, updatedSince?: string) => void;
+  onSearchRegistry?: (
+    query: string,
+    cursor?: string,
+    updatedSince?: string
+  ) => void;
   /** Results from the most recent local scan */
   localServers?: LocalMcpServerEntry[];
   /** Whether a local scan is in progress */
@@ -340,7 +344,9 @@ export const McpServersEditor: React.FC<{
 
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
-      updateShouldFill(entry?.contentRect.height ?? node.getBoundingClientRect().height);
+      updateShouldFill(
+        entry?.contentRect.height ?? node.getBoundingClientRect().height
+      );
     });
 
     observer.observe(node);
@@ -357,7 +363,9 @@ export const McpServersEditor: React.FC<{
         (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")
       );
     }
-    const sorted = [...registryServers].sort((a, b) => a.name.localeCompare(b.name));
+    const sorted = [...registryServers].sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
     return registrySort === "z-a" ? sorted.reverse() : sorted;
   }, [registryServers, registrySort]);
 
@@ -428,7 +436,8 @@ export const McpServersEditor: React.FC<{
       registryServers === undefined &&
       !isLoadingRegistry
     ) {
-      const updatedSince = registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
+      const updatedSince =
+        registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
       onSearchRegistry?.(registryQuery, undefined, updatedSince);
     }
   }, [mode, showDiscovery, discoveryTab]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -477,7 +486,11 @@ export const McpServersEditor: React.FC<{
   };
 
   const handleSaveEdit = () => {
-    if (!editForm.id.trim() || (!editForm.command.trim() && !editForm.url.trim())) return;
+    if (
+      !editForm.id.trim() ||
+      (!editForm.command.trim() && !editForm.url.trim())
+    )
+      return;
     const updatedServer = formToServer(editForm);
     const oldId = editingId!;
 
@@ -537,14 +550,19 @@ export const McpServersEditor: React.FC<{
     if (entry.remoteUrl) {
       // Remote HTTP/SSE server — use URL-based config
       server = { id, url: entry.remoteUrl };
-      if (entry.remoteTransport && entry.remoteTransport !== "streamable-http") {
+      if (
+        entry.remoteTransport &&
+        entry.remoteTransport !== "streamable-http"
+      ) {
         server.transport = entry.remoteTransport;
       }
       // Add empty-string placeholders for required auth headers so the user
       // knows which keys need to be filled in before the server will work.
       const requiredHeaders = entry.remoteHeaders?.filter((h) => h.isRequired);
       if (requiredHeaders && requiredHeaders.length > 0) {
-        server.headers = Object.fromEntries(requiredHeaders.map((h) => [h.name, ""]));
+        server.headers = Object.fromEntries(
+          requiredHeaders.map((h) => [h.name, ""])
+        );
       }
     } else if (entry.installCommand) {
       // stdio server — installCommand encodes the correct runtime (npx vs uvx) and flags
@@ -576,7 +594,8 @@ export const McpServersEditor: React.FC<{
       !isLoadingRegistry
     ) {
       resetMcpRegistryPages();
-      const updatedSince = registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
+      const updatedSince =
+        registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
       onSearchRegistry?.(registryQuery, undefined, updatedSince);
     }
   };
@@ -591,7 +610,8 @@ export const McpServersEditor: React.FC<{
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => {
       resetMcpRegistryPages();
-      const updatedSince = registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
+      const updatedSince =
+        registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
       onSearchRegistry(query, undefined, updatedSince);
     }, 500);
   };
@@ -609,7 +629,10 @@ export const McpServersEditor: React.FC<{
     if (newSort === "recently-updated" && prevSort !== "recently-updated") {
       resetMcpRegistryPages();
       onSearchRegistry(registryQuery, undefined, oneYearAgoISO());
-    } else if (newSort !== "recently-updated" && prevSort === "recently-updated") {
+    } else if (
+      newSort !== "recently-updated" &&
+      prevSort === "recently-updated"
+    ) {
       resetMcpRegistryPages();
       onSearchRegistry(registryQuery);
     }
@@ -623,14 +646,16 @@ export const McpServersEditor: React.FC<{
   const handleRegistryNextPage = () => {
     if (!hasNextPage || isLoadingRegistry) return;
     const cursor = mcpRegistryGoNextPage();
-    const updatedSince = registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
+    const updatedSince =
+      registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
     if (cursor) onSearchRegistry?.(registryQuery, cursor, updatedSince);
   };
 
   const handleRegistryPrevPage = () => {
     if (!hasPrevPage || isLoadingRegistry) return;
     const cursor = mcpRegistryGoPrevPage();
-    const updatedSince = registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
+    const updatedSince =
+      registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
     onSearchRegistry?.(registryQuery, cursor, updatedSince);
   };
 
@@ -653,7 +678,9 @@ export const McpServersEditor: React.FC<{
       : userServers.some((s) => s.id === id);
 
   return (
-    <div className={`flex flex-col gap-2${canFillDiscovery ? " flex-1 min-h-0" : ""}`}>
+    <div
+      className={`flex flex-col gap-2${canFillDiscovery ? " flex-1 min-h-0" : ""}`}
+    >
       {/* Mode selector (prompt level only) */}
       {showDefault && (
         <div className="flex gap-1">
@@ -686,7 +713,9 @@ export const McpServersEditor: React.FC<{
 
       {/* Custom / always-editable mode */}
       {mode === "custom" && (
-        <div className={`flex flex-col gap-2${canFillDiscovery ? " flex-1 min-h-0" : ""}`}>
+        <div
+          className={`flex flex-col gap-2${canFillDiscovery ? " flex-1 min-h-0" : ""}`}
+        >
           {/* FlightPath built-in */}
           <div className="flex flex-col gap-1">
             <div className="text-[10px] font-semibold uppercase text-description-fg tracking-wide">
@@ -720,10 +749,12 @@ export const McpServersEditor: React.FC<{
             </button>
           </div>
 
-          {/* Custom servers */}
-          <div className={`flex flex-col gap-1${canFillDiscovery ? " flex-1 min-h-0" : ""}`}>
+          {/* Installed servers */}
+          <div
+            className={`flex flex-col gap-1${canFillDiscovery ? " flex-1 min-h-0" : ""}`}
+          >
             <div className="text-[10px] font-semibold uppercase text-description-fg tracking-wide">
-              Custom Servers
+              Installed Servers
             </div>
 
             {isLoadingWorkspaceServers && (
@@ -812,12 +843,16 @@ export const McpServersEditor: React.FC<{
                           onChange={(e) =>
                             setEditForm((f) => ({
                               ...f,
-                              transport: e.target.value as "streamable-http" | "sse",
+                              transport: e.target.value as
+                                | "streamable-http"
+                                | "sse",
                             }))
                           }
                           className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                         >
-                          <option value="streamable-http">streamable-http</option>
+                          <option value="streamable-http">
+                            streamable-http
+                          </option>
                           <option value="sse">sse</option>
                         </select>
                       )}
@@ -940,39 +975,53 @@ export const McpServersEditor: React.FC<{
                       {server.url ? (
                         <>
                           <div className="text-[11px] text-description-fg">
-                            <span className="font-mono text-foreground">url:</span>{" "}
+                            <span className="font-mono text-foreground">
+                              url:
+                            </span>{" "}
                             {server.url}
                           </div>
-                          {server.transport && server.transport !== "streamable-http" && (
-                            <div className="text-[11px] text-description-fg">
-                              <span className="font-mono text-foreground">transport:</span>{" "}
-                              {server.transport}
-                            </div>
-                          )}
-                          {server.headers && Object.keys(server.headers).length > 0 && (
-                            <div className="text-[11px] text-description-fg">
-                              <span className="font-mono text-foreground">headers:</span>{" "}
-                              {Object.keys(server.headers).join(", ")}
-                            </div>
-                          )}
+                          {server.transport &&
+                            server.transport !== "streamable-http" && (
+                              <div className="text-[11px] text-description-fg">
+                                <span className="font-mono text-foreground">
+                                  transport:
+                                </span>{" "}
+                                {server.transport}
+                              </div>
+                            )}
+                          {server.headers &&
+                            Object.keys(server.headers).length > 0 && (
+                              <div className="text-[11px] text-description-fg">
+                                <span className="font-mono text-foreground">
+                                  headers:
+                                </span>{" "}
+                                {Object.keys(server.headers).join(", ")}
+                              </div>
+                            )}
                         </>
                       ) : (
                         <>
                           {server.command && (
                             <div className="text-[11px] text-description-fg">
-                              <span className="font-mono text-foreground">command:</span>{" "}
+                              <span className="font-mono text-foreground">
+                                command:
+                              </span>{" "}
                               {server.command}
                             </div>
                           )}
                           {server.args && (
                             <div className="text-[11px] text-description-fg">
-                              <span className="font-mono text-foreground">args:</span>{" "}
+                              <span className="font-mono text-foreground">
+                                args:
+                              </span>{" "}
                               {server.args.join(" ")}
                             </div>
                           )}
                           {server.env && Object.keys(server.env).length > 0 && (
                             <div className="text-[11px] text-description-fg">
-                              <span className="font-mono text-foreground">env:</span>{" "}
+                              <span className="font-mono text-foreground">
+                                env:
+                              </span>{" "}
                               {Object.keys(server.env).join(", ")}
                             </div>
                           )}
@@ -980,7 +1029,9 @@ export const McpServersEditor: React.FC<{
                       )}
                       {server.autoApprove !== undefined && (
                         <div className="text-[11px] text-description-fg">
-                          <span className="font-mono text-foreground">autoApprove:</span>{" "}
+                          <span className="font-mono text-foreground">
+                            autoApprove:
+                          </span>{" "}
                           {typeof server.autoApprove === "boolean"
                             ? String(server.autoApprove)
                             : server.autoApprove.join(", ")}
@@ -1055,7 +1106,9 @@ export const McpServersEditor: React.FC<{
                       onChange={(e) =>
                         setForm((f) => ({
                           ...f,
-                          transport: e.target.value as "streamable-http" | "sse",
+                          transport: e.target.value as
+                            | "streamable-http"
+                            | "sse",
                         }))
                       }
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
@@ -1085,7 +1138,10 @@ export const McpServersEditor: React.FC<{
                   <button
                     type="button"
                     onClick={handleAddServer}
-                    disabled={!form.id.trim() || (!form.command.trim() && !form.url.trim())}
+                    disabled={
+                      !form.id.trim() ||
+                      (!form.command.trim() && !form.url.trim())
+                    }
                     className="px-2 py-0.5 text-[11px] bg-btn-bg text-btn-fg rounded hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Add
@@ -1231,7 +1287,9 @@ export const McpServersEditor: React.FC<{
                       type="text"
                       placeholder="Search servers…"
                       value={registryQuery}
-                      onChange={(e) => handleRegistrySearchChange(e.target.value)}
+                      onChange={(e) =>
+                        handleRegistrySearchChange(e.target.value)
+                      }
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                       autoFocus
                     />
@@ -1313,18 +1371,24 @@ export const McpServersEditor: React.FC<{
                                   )}
                                   {!entry.installCommand && entry.remoteUrl && (
                                     <span className="text-[10px] text-description-fg font-mono mt-0.5 truncate">
-                                      {entry.remoteTransport ?? "streamable-http"}:{" "}
-                                      {entry.remoteUrl}
+                                      {entry.remoteTransport ??
+                                        "streamable-http"}
+                                      : {entry.remoteUrl}
                                     </span>
                                   )}
-                                  {entry.envVars && entry.envVars.length > 0 && (
-                                    <span className="text-[10px] text-description-fg mt-0.5">
-                                      Requires env:{" "}
-                                      {entry.envVars.map((e) => e.name).join(", ")}
-                                    </span>
-                                  )}
+                                  {entry.envVars &&
+                                    entry.envVars.length > 0 && (
+                                      <span className="text-[10px] text-description-fg mt-0.5">
+                                        Requires env:{" "}
+                                        {entry.envVars
+                                          .map((e) => e.name)
+                                          .join(", ")}
+                                      </span>
+                                    )}
                                   {entry.remoteHeaders &&
-                                    entry.remoteHeaders.filter((h) => h.isRequired).length > 0 && (
+                                    entry.remoteHeaders.filter(
+                                      (h) => h.isRequired
+                                    ).length > 0 && (
                                       <span className="text-[10px] text-description-fg mt-0.5">
                                         Requires header:{" "}
                                         {entry.remoteHeaders
