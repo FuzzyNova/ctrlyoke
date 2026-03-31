@@ -16,7 +16,7 @@ FlightPath uses **composition over inheritance** for harness integrations:
 - **Interface-driven design** (TypeScript guides implementation)
 - **Testable components** (no mocking needed, pure logic)
 
-**Adding a harness requires changes across multiple layers** — harness directory, types, wiring, settings, and UI. See `docs/ADDING_NEW_CLI_HARNESS.md` for the complete guide.
+**Adding a harness requires changes across multiple layers** — harness directory, types, wiring, settings, and UI. See `dev/implemented/ADDING_NEW_CLI_HARNESS.md` for the complete guide.
 </architectureOverview>
 
 <coreComponents>
@@ -65,7 +65,7 @@ FlightPath uses **composition over inheritance** for harness integrations:
 - `cleanupWorkspaceArtifacts(workspaceRoot, workingFilePath)` — restores workspace files modified during interactive hook/MCP setup (backup-and-restore pattern for `.gemini/settings.json`, `.qwen/settings.json`)
 - `getInteractiveSpawnEnv()` — environment overrides for interactive spawning (e.g., unset `CLAUDECODE` to allow nested Claude CLI)
 - `HarnessConfig` fields: `name`, `displayName`, `terminalName`, `installHint`, `shouldStreamHeadlessOutput`, `usesInteractiveNotificationMonitor`, `rawTextOutput`
-</coreComponents>
+  </coreComponents>
 
 <providerStructure>
 Each provider is self-contained in its own directory with 6 required files:
@@ -291,11 +291,11 @@ Key settings (see package.json for full list):
 <factoryPattern>
 **WorkflowOrchestrator** instantiates ALL integrations eagerly at startup via `IntegrationFactory`, then routes execution to the active harness. All seven integrations (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, gemini-cli, copilot-chat) are created at startup. Availability is checked for all; the active one is selected via the `flightpath.harness` setting using `HARNESS_IDS` constants.
 
-See: `docs/ADDING_NEW_CLI_HARNESS.md` for the complete guide to adding a new harness.
+See: `dev/implemented/ADDING_NEW_CLI_HARNESS.md` for the complete guide to adding a new harness.
 </factoryPattern>
 
 <addingNewHarnesses>
-**To add a new CLI harness** — see `docs/ADDING_NEW_CLI_HARNESS.md` for the full guide.
+**To add a new CLI harness** — see `dev/implemented/ADDING_NEW_CLI_HARNESS.md` for the full guide.
 
 Summary of required layers:
 
@@ -305,7 +305,7 @@ Summary of required layers:
 4. **Wiring layer** — factory method in `IntegrationFactory.ts`, integration field/lifecycle in `WorkflowOrchestrator.ts`
 5. **Settings layer** — model/args getters in `ConfigurationUtils.ts`, model arrays in `ModelConstants.ts`, settings in `package.json`
 6. **UI layer** — availability state and model options in `WebviewSettingsSync.ts`, display name and group in `HarnessDropdown.tsx`, initial state in `settingsStore.ts`
-</addingNewHarnesses>
+   </addingNewHarnesses>
 
 <testingProviders>
 **Provider Testing Checklist**:
@@ -586,6 +586,7 @@ Summary of required layers:
 - index.ts: Barrel export for all interfaces
 
 **INotificationMonitor key types**:
+
 - `HookConfig`: Union type — `{ type: "json"; config: object }` (Copilot) | `{ type: "json-string"; config: string }` (Claude) | `{ type: "toml-inline"; config: string }` (Codex) | `{ type: "none" }` (OpenCode)
 - `buildHookConfig(scriptPath, notifyDir, workspaceRoot, userHooks?)` — builds hook config with optional user-defined hooks merged alongside FlightPath completion-detection hooks
 - `waitForSessionStart?(config, startTime, runId?, onCancel?)` — optional method for providers that support session start detection
@@ -613,11 +614,12 @@ Summary of required layers:
 **Pre-trust mechanisms** (Gemini, Qwen): Both auto-approve FlightPath hook commands by writing entries to `~/.{tool}/trusted_hooks.json` with colon-prefixed key format (`:${command}`). Prevents interactive approval prompts during automated workflow execution.
 
 **Event mapping**: Each provider maps generic hook events to CLI-native event names:
+
 - `stop` → Copilot: `sessionEnd`, Claude: `Stop`, Gemini: `AfterAgent`, Qwen: `Stop`
 - `sessionStart` → all: respective native `SessionStart` / `sessionStart`
 - Claude/Qwen additionally support: `preToolUse`, `postToolUse`
 - Qwen additionally supports: `userPromptSubmit`
-</userDefinedHooks>
+  </userDefinedHooks>
 
 <importantNotes>
 1. **Composition over inheritance**: Providers use "has-a" not "is-a" relationships

@@ -60,6 +60,7 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 `FlightPathWebviewProvider` satisfies this interface structurally — no `implements` declaration required.
 
 **Key methods:**
+
 - `updateFileSelected(fileName, prompts, workflowName?, finalPrompt?, finalPromptRuntime?)` — initial load
 - `updateSessionRestored(fileName, prompts, results, executionState, currentIndex, ...)` — restore paused/stopped session
 - `updateExecutionStarted(workflowId, fileName, totalSteps, isContinuation?, preserveStepCount?)` — run begins
@@ -71,7 +72,7 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 - `updateFinalPromptStreamingChunk(loopIndex, chunk)` / `updateFinalPromptStreamingEvents(loopIndex, events)`
 - `updateWorkflowName(name)`
 - `notifyRunHistoryUpdated(runCount, runTimestamps?, runStates?)` / `notifyWorkflowStateReset(prompts)` / `notifyStartPositionSet(prompts, currentIndex)` / `notifyPromptsReordered(prompts)` / `notifyUndoRedoSynced()`
-</iDashboardSink>
+  </iDashboardSink>
 
 <cliOutputTypes>
 **File: CliOutputTypes.ts**
@@ -91,7 +92,7 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 - `UnifiedDiffHunk` — `oldStart`, `oldLines`, `newStart`, `newLines`, `lines: string[]` (git diff format with +/-/space prefixes)
 - `FileEditData` — supports both full-content (`oldContent`/`newContent`) and diff-based (`structuredPatch?: UnifiedDiffHunk[]`) edits
 - `CliResult` — generic result for all CLI harnesses: `success`, `response`, `statistics`, `error?`, `exitCode?`, `sessionId?`, `codeChanges?`, `modelUsage?`
-</cliOutputTypes>
+  </cliOutputTypes>
 
 <webviewMessageTypes>
 **File: WebviewMessageTypes.ts**
@@ -161,7 +162,7 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 - `OutputExecutionTarget = { kind: "queue"; stepIndex } | { kind: "finalPrompt"; loopIndex }`
 - `UndoExecutionTarget` — alias for `OutputExecutionTarget`
 - `UndoDialogScope = { mode: "prompt"; target } | { mode: "singleFile"; target; attemptIndex; path }`
-</outputHistoryTypes>
+  </outputHistoryTypes>
 
 <workflowContextTypes>
 **File: WorkflowContextTypes.ts**
@@ -236,14 +237,20 @@ function setPhase(phase: FinalPromptPhase) { ... }
 **ExecutionProperties with three-tier precedence:**
 
 ```typescript
-const harness = prompt.harness || workflow.harness || ConfigurationUtils.getHarness();
+const harness =
+  prompt.harness || workflow.harness || ConfigurationUtils.getHarness();
 const model = prompt.model || workflow.model || ConfigurationUtils.getModel();
 const agent = prompt.agent ?? workflow.agent ?? undefined; // null = explicitly disabled
 const skills = prompt.skills ?? workflow.skills ?? undefined; // null = explicitly disabled
-const additionalArgs = prompt.additionalArgs ?? workflow.additionalArgs ?? undefined; // null = explicitly disabled
+const additionalArgs =
+  prompt.additionalArgs ?? workflow.additionalArgs ?? undefined; // null = explicitly disabled
 const hooks = prompt.hooks ?? workflow.hooks ?? undefined; // null or [] = explicitly no hooks
-const toolPermissions = prompt.toolPermissions ?? workflow.toolPermissions ?? undefined; // null = passthrough to harness config
-const resumeSession = prompt.resumeSession ?? workflow.resumeSession ?? ConfigurationUtils.getResumeSession();
+const toolPermissions =
+  prompt.toolPermissions ?? workflow.toolPermissions ?? undefined; // null = passthrough to harness config
+const resumeSession =
+  prompt.resumeSession ??
+  workflow.resumeSession ??
+  ConfigurationUtils.getResumeSession();
 ```
 
 **Null-disableable field semantics (`agent`, `skills`, `additionalArgs`, `hooks`, `toolPermissions`, `mcpServers`, `endCondition`):** `null` explicitly disables the inherited value; `undefined` inherits from the next tier. Always use `??` (not `||`) when checking these fields.
@@ -270,8 +277,8 @@ const resumeSession = prompt.resumeSession ?? workflow.resumeSession ?? Configur
 
 **Documentation:**
 
-- `docs/SESSION_MANAGEMENT.md` - Session resumption and working file system
-- `docs/WORKFLOW_PROPERTIES.md` - ExecutionProperties and three-tier precedence
+- `dev/implemented/SESSION_MANAGEMENT.md` - Session resumption and working file system
+- `dev/implemented/WORKFLOW_PROPERTIES.md` - ExecutionProperties and three-tier precedence
   </relatedFiles>
 
 <criticalRules>

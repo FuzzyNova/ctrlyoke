@@ -23,15 +23,15 @@ Automate AI coding assistants (GitHub Copilot, Claude Code, Codex, OpenCode, Qwe
 
 FlightPath supports seven **harnesses** (execution strategies for AI interactions):
 
-| Harness ID     | Description                                                                    |
-| -------------- | ------------------------------------------------------------------------------ |
-| `copilot-cli`  | GitHub Copilot CLI (default) — log file monitoring, session resumption         |
-| `claude-cli`   | Anthropic Claude Code CLI — JSON streaming, hook-based completion              |
-| `codex-cli`    | OpenAI Codex CLI — JSONL events, notify hook                                   |
-| `opencode-cli` | OpenCode CLI — JSONL events, plugin-based completion, config-file permissions  |
-| `qwen-cli`     | Qwen Code CLI — JSONL events, log-based session discovery, hook completion     |
-| `gemini-cli`   | Google Gemini CLI — JSON streaming, hook-based completion, MCP config support  |
-| `copilot-chat` | Copilot Chat window — session file monitoring, UI automation fallback          |
+| Harness ID     | Description                                                                   |
+| -------------- | ----------------------------------------------------------------------------- |
+| `copilot-cli`  | GitHub Copilot CLI (default) — log file monitoring, session resumption        |
+| `claude-cli`   | Anthropic Claude Code CLI — JSON streaming, hook-based completion             |
+| `codex-cli`    | OpenAI Codex CLI — JSONL events, notify hook                                  |
+| `opencode-cli` | OpenCode CLI — JSONL events, plugin-based completion, config-file permissions |
+| `qwen-cli`     | Qwen Code CLI — JSONL events, log-based session discovery, hook completion    |
+| `gemini-cli`   | Google Gemini CLI — JSON streaming, hook-based completion, MCP config support |
+| `copilot-chat` | Copilot Chat window — session file monitoring, UI automation fallback         |
 
 > **Critical terminology:** Always say **harness** (not "provider"). The term "provider" is reserved for VS Code API class names (`CompletionItemProvider`, `WebviewViewProvider`).
 
@@ -70,7 +70,7 @@ src/flightpath/harness/
 └── gemini/                    ← GeminiCliProvider + 5 supporting classes
 ```
 
-Adding a new harness requires changes across multiple layers (harness directory, types, wiring, settings, UI). See `docs/ADDING_NEW_CLI_HARNESS.md` for the complete guide.
+Adding a new harness requires changes across multiple layers (harness directory, types, wiring, settings, UI). See `dev/implemented/ADDING_NEW_CLI_HARNESS.md` for the complete guide.
 
 ## Key Subsystems
 
@@ -106,13 +106,13 @@ Adding a new harness requires changes across multiple layers (harness directory,
 | `src/cli.ts`                              | Standalone CLI binary entry point (`flightpath`)                               |
 | `src/platform/PlatformAdapter.ts`         | Abstract interface for VS Code / CLI platform abstraction                      |
 | `src/flightpath/WorkflowOrchestrator.ts`  | Singleton registry — harness lifecycle, cross-cutting resources                |
-| `src/flightpath/WorkflowInstance.ts`      | Per-workflow execution state (queue, executor, history, output buffer)          |
+| `src/flightpath/WorkflowInstance.ts`      | Per-workflow execution state (queue, executor, history, output buffer)         |
 | `src/flightpath/HarnessIntegration.ts`    | Abstract base class for all harnesses                                          |
 | `src/flightpath/PromptQueue.ts`           | State machine for prompt execution                                             |
 | `src/flightpath/WorkflowExecutor.ts`      | Sequential execution loop (two-phase: queue → finalPrompt)                     |
 | `src/flightpath/PromptFileParser.ts`      | YAML/JSON parsing with AJV validation                                          |
 | `src/flightpath/EndConditionEvaluator.ts` | Script validation in isolated child process                                    |
-| `src/flightpath/IntegrationFactory.ts`    | Factory for creating harness-specific CliIntegration instances                  |
+| `src/flightpath/IntegrationFactory.ts`    | Factory for creating harness-specific CliIntegration instances                 |
 | `src/types/DashboardConstants.ts`         | **Single source of truth** for all shared constants (100+ message types)       |
 | `src/types/FlightPathTypes.ts`            | Core workflow types (PromptItem, Harness enum, ExecutionProperties, etc.)      |
 | `src/utils/ConfigurationUtils.ts`         | All VS Code settings access centralized here                                   |
@@ -300,26 +300,26 @@ prompts:
 
 All settings accessed via `src/utils/ConfigurationUtils.ts`. Prefix: `flightpath`.
 
-| Setting                     | Default             | Description                                                              |
-| --------------------------- | ------------------- | ------------------------------------------------------------------------ |
+| Setting                     | Default             | Description                                                                                                        |
+| --------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `harness`                   | `copilot-cli`       | Active harness: `copilot-cli`, `copilot-chat`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `gemini-cli` |
-| `cliExecutionMode`          | `interactive`       | `interactive` (terminal) or `headless` (background process)              |
-| `copilotCliModel`           | `claude-sonnet-4.5` | Default model for Copilot CLI                                            |
-| `claudeCliModel`            | `sonnet`            | Default model for Claude CLI                                             |
-| `codexCliModel`             | `gpt-5.2-codex`     | Default model for Codex CLI                                              |
-| `openCodeCliModel`          | (provider default)  | Default model for OpenCode CLI (provider/model format)                   |
-| `qwenCliModel`              | `coder-model`       | Default model for Qwen Code CLI                                          |
-| `geminiCliModel`            | `gemini-2.5-pro`    | Default model for Gemini CLI                                             |
-| `cliToolPermissions`        | `allowAll`          | `dangerouslyAllowAll`, `allowAll`, or `custom`                           |
-| `cliAllowedTools`           | `[]`                | Tool allow patterns (Copilot format, auto-converted for Claude/Codex)    |
-| `cliDeniedTools`            | `[]`                | Tool deny patterns (takes precedence over allow)                         |
-| `promptsDirectory`          | `.flightpath`       | Base directory for workflows and scripts                                 |
-| `scriptTimeout`             | `30`                | End condition script timeout in seconds                                  |
-| `autoAttachFiles`           | `true`              | Auto-expand `#selection:` references to inline content                   |
-| `enableDynamicQueue`        | `false`             | Allow AI to extend the workflow queue                                    |
-| `showCliOutput`             | `true`              | Show CLI output in the Output panel                                      |
-| `chatInactivityTimeout`     | `300`               | Seconds before chat timeout (Chat harness only)                          |
-| `treatChatTimeoutAsSuccess` | `true`              | Treat chat inactivity timeout as completion                              |
+| `cliExecutionMode`          | `interactive`       | `interactive` (terminal) or `headless` (background process)                                                        |
+| `copilotCliModel`           | `claude-sonnet-4.5` | Default model for Copilot CLI                                                                                      |
+| `claudeCliModel`            | `sonnet`            | Default model for Claude CLI                                                                                       |
+| `codexCliModel`             | `gpt-5.2-codex`     | Default model for Codex CLI                                                                                        |
+| `openCodeCliModel`          | (provider default)  | Default model for OpenCode CLI (provider/model format)                                                             |
+| `qwenCliModel`              | `coder-model`       | Default model for Qwen Code CLI                                                                                    |
+| `geminiCliModel`            | `gemini-2.5-pro`    | Default model for Gemini CLI                                                                                       |
+| `cliToolPermissions`        | `allowAll`          | `dangerouslyAllowAll`, `allowAll`, or `custom`                                                                     |
+| `cliAllowedTools`           | `[]`                | Tool allow patterns (Copilot format, auto-converted for Claude/Codex)                                              |
+| `cliDeniedTools`            | `[]`                | Tool deny patterns (takes precedence over allow)                                                                   |
+| `promptsDirectory`          | `.flightpath`       | Base directory for workflows and scripts                                                                           |
+| `scriptTimeout`             | `30`                | End condition script timeout in seconds                                                                            |
+| `autoAttachFiles`           | `true`              | Auto-expand `#selection:` references to inline content                                                             |
+| `enableDynamicQueue`        | `false`             | Allow AI to extend the workflow queue                                                                              |
+| `showCliOutput`             | `true`              | Show CLI output in the Output panel                                                                                |
+| `chatInactivityTimeout`     | `300`               | Seconds before chat timeout (Chat harness only)                                                                    |
+| `treatChatTimeoutAsSuccess` | `true`              | Treat chat inactivity timeout as completion                                                                        |
 
 **Adding new settings:** Add to `package.json` → `contributes.configuration.properties`, then read via `ConfigurationUtils.get<T>("settingName", defaultValue)`. Use `enum` + `enumDescriptions` for dropdowns.
 
@@ -356,7 +356,7 @@ npm test                 # Run Mocha test suite
 
 ### Adding a New CLI Harness
 
-See `docs/ADDING_NEW_CLI_HARNESS.md`. Creates files in `src/flightpath/harness/<name>/` plus required changes to types, wiring, settings, and UI layers.
+See `dev/implemented/ADDING_NEW_CLI_HARNESS.md`. Creates files in `src/flightpath/harness/<name>/` plus required changes to types, wiring, settings, and UI layers.
 
 ### Adding a New Prompt Property
 
@@ -403,21 +403,21 @@ See `docs/ADDING_NEW_CLI_HARNESS.md`. Creates files in `src/flightpath/harness/<
 
 The `.github/instructions/` directory contains detailed implementation guidelines scoped by file pattern. Read the relevant instruction file(s) before editing files in that area.
 
-| File Pattern                           | Instruction File                        | Covers                                                                   |
-| -------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------ |
+| File Pattern                           | Instruction File                        | Covers                                                                                                  |
+| -------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `src/flightpath/*.ts` (top-level only) | `flightpath-core.instructions.md`       | WorkflowOrchestrator, WorkflowInstance, PromptQueue, WorkflowExecutor, EndCondition, IntegrationFactory |
-| `src/flightpath/harness/**`            | `harness-integrations.instructions.md`  | CliIntegration, all 6 CLI providers, shared utilities, PtyProcessManager |
-| `src/flightpath/harness/chat/**`       | `flightpath-chat.instructions.md`       | CopilotChatIntegration (UI automation fallback)                          |
-| `src/platform/**`                      | `platform.instructions.md`              | PlatformAdapter, VsCodeAdapter, CliAdapter, vscode-shim                  |
-| `src/cli.ts`, `src/cli/**`             | `flightpath-cli-binary.instructions.md` | FlightPath CLI binary, CliAdapter, CliTerminalFormatter                  |
-| `src/ui/**` (excl. webview-react)      | `ui.instructions.md`                    | WebviewProvider, StatusBar, McpServerProvider, message routing           |
-| `src/ui/webview-react/**`              | `webview-react.instructions.md`         | React dashboard, 5 Zustand stores, CodeMirror editor, xterm.js terminal |
-| `src/types/**`                         | `types.instructions.md`                 | 7 type files: FlightPathTypes, DashboardConstants, CliOutputTypes, etc.  |
-| `src/utils/**`                         | `utils.instructions.md`                 | 26+ utilities: ConfigurationUtils, McpDiscoveryUtils, GitUtils, etc.     |
-| `src/completions/**`                   | `completions.instructions.md`           | IntelliSense providers and document link navigation                      |
-| `src/scripts/**`                       | `scripts.instructions.md`              | 7 hook/notify scripts (6 stdin-based + 1 OpenCode plugin)               |
-| `src/templates/**`                     | `templates.instructions.md`             | End condition script templates                                           |
-| `src/test/**`                          | `test.instructions.md`                  | 40 test files, testing patterns and conventions                          |
-| `src/dev/**`                           | `dev.instructions.md`                   | Dev-only commands (stripped in production)                                |
+| `src/flightpath/harness/**`            | `harness-integrations.instructions.md`  | CliIntegration, all 6 CLI providers, shared utilities, PtyProcessManager                                |
+| `src/flightpath/harness/chat/**`       | `flightpath-chat.instructions.md`       | CopilotChatIntegration (UI automation fallback)                                                         |
+| `src/platform/**`                      | `platform.instructions.md`              | PlatformAdapter, VsCodeAdapter, CliAdapter, vscode-shim                                                 |
+| `src/cli.ts`, `src/cli/**`             | `flightpath-cli-binary.instructions.md` | FlightPath CLI binary, CliAdapter, CliTerminalFormatter                                                 |
+| `src/ui/**` (excl. webview-react)      | `ui.instructions.md`                    | WebviewProvider, StatusBar, McpServerProvider, message routing                                          |
+| `src/ui/webview-react/**`              | `webview-react.instructions.md`         | React dashboard, 5 Zustand stores, CodeMirror editor, xterm.js terminal                                 |
+| `src/types/**`                         | `types.instructions.md`                 | 7 type files: FlightPathTypes, DashboardConstants, CliOutputTypes, etc.                                 |
+| `src/utils/**`                         | `utils.instructions.md`                 | 26+ utilities: ConfigurationUtils, McpDiscoveryUtils, GitUtils, etc.                                    |
+| `src/completions/**`                   | `completions.instructions.md`           | IntelliSense providers and document link navigation                                                     |
+| `src/scripts/**`                       | `scripts.instructions.md`               | 7 hook/notify scripts (6 stdin-based + 1 OpenCode plugin)                                               |
+| `src/templates/**`                     | `templates.instructions.md`             | End condition script templates                                                                          |
+| `src/test/**`                          | `test.instructions.md`                  | 40 test files, testing patterns and conventions                                                         |
+| `src/dev/**`                           | `dev.instructions.md`                   | Dev-only commands (stripped in production)                                                              |
 
 </instructionFiles>
