@@ -130,8 +130,8 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
     );
   }
 
-  // None mode
-  if (mode === "none") {
+  // None mode (only block when mode selector is visible so user can switch back)
+  if (mode === "none" && showDefault) {
     return (
       <div>
         {modeSelector}
