@@ -1,7 +1,8 @@
 # FlightPath Documentation Strategy Plan
 
-> **Status:** Planning / Pre-implementation  
+> **Status:** Active — Infrastructure ready, content pending  
 > **Date:** March 2026  
+> **Updated:** March 2026 — `docs/` cleaned and empty; `dev/` folder convention established  
 > **Scope:** Public-facing documentation for the FlightPath VS Code extension, companion CLI binaries (`flightpath-mcp`, `flightpath`), and YAML/JSON workflow file format.
 
 ---
@@ -27,7 +28,7 @@
 
 ### Project Context
 
-FlightPath is a VS Code extension (publisher: `nhickster`) that automates AI coding assistants — GitHub Copilot, Claude Code, Codex — through structured YAML/JSON workflow files. The product surface area includes:
+FlightPath is a VS Code extension (publisher: `nhickster`) that automates AI coding assistants — GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Gemini — through structured YAML/JSON workflow files. The product surface area includes:
 
 | Surface                                                | Notes                                            |
 | ------------------------------------------------------ | ------------------------------------------------ |
@@ -438,9 +439,11 @@ If FlightPath eventually needs versioned docs (maintaining docs for v0.x and v1.
 
 ### Repository Layout
 
+**Current state as of March 2026:** `docs/` is empty and ready for VitePress. Internal developer docs have been moved to `dev/` following the backlog → active → implemented → research → reference convention.
+
 ```
 flightpath/
-├── docs/                          # VitePress root
+├── docs/                          # VitePress root (currently empty — ready to scaffold)
 │   ├── .vitepress/
 │   │   ├── config.ts              # Nav, sidebar, theme config
 │   │   └── theme/                 # Optional: custom theme overrides
@@ -457,11 +460,13 @@ flightpath/
 │   │
 │   ├── harnesses/                 # Per-harness documentation
 │   │   ├── index.md               # Harness overview + comparison table
-│   │   ├── copilot-cli.md
-│   │   ├── claude-cli.md
-│   │   ├── codex-cli.md
-│   │   ├── opencode.md
-│   │   └── copilot-chat.md
+│   │   ├── copilot-cli.md         # Default harness
+│   │   ├── claude-cli.md          # Anthropic Claude Code CLI
+│   │   ├── codex-cli.md           # OpenAI Codex CLI
+│   │   ├── opencode-cli.md        # OpenCode multi-provider CLI
+│   │   ├── qwen-cli.md            # Qwen Code CLI
+│   │   ├── gemini-cli.md          # Google Gemini CLI
+│   │   └── copilot-chat.md        # Copilot Chat window (UI automation)
 │   │
 │   ├── workflows/                 # Workflow authoring guide
 │   │   ├── index.md               # Workflow file overview
@@ -469,20 +474,21 @@ flightpath/
 │   │   ├── json-format.md         # JSON alternative
 │   │   ├── prompt-md-format.md    # Simple .prompt.md format
 │   │   ├── session-management.md  # resumeSession, sessionId
-│   │   ├── context-files.md       # #file: and @path references
+│   │   ├── context-files.md       # @path and #selection: references
 │   │   ├── end-conditions.md      # Script validation, retries
-│   │   └── dynamic-queue.md       # allowDynamicExtension
+│   │   ├── agents-and-skills.md   # agent, skills, defaultAgent, defaultSkills
+│   │   └── dynamic-queue.md       # enableDynamicQueue, MCP queue extension
 │   │
 │   ├── reference/                 # Schema + API reference
-│   │   ├── workflow-schema.md     # Auto-generated or manual full property list
+│   │   ├── workflow-schema.md     # Full property list (hand-maintained initially)
 │   │   ├── settings.md            # All VS Code settings documented
 │   │   ├── commands.md            # All command palette commands
 │   │   └── mcp-tools.md           # flightpath_queue_status, flightpath_append_queue
 │   │
 │   ├── cli/                       # CLI binary documentation
 │   │   ├── index.md               # CLI overview
-│   │   ├── flightpath-mcp.md      # MCP server usage
-│   │   └── flightpath.md          # flightpath CLI commands
+│   │   ├── flightpath.md          # flightpath run + flightpath validate commands
+│   │   └── flightpath-mcp.md      # MCP server usage
 │   │
 │   ├── examples/                  # Example workflows
 │   │   ├── index.md
@@ -495,6 +501,13 @@ flightpath/
 │       ├── index.md
 │       ├── common-errors.md
 │       └── faq.md
+│
+├── dev/                           # Internal developer docs (NOT deployed)
+│   ├── active/                    # Plans currently in-flight
+│   ├── backlog/                   # Unimplemented feature plans
+│   ├── implemented/               # Post-implementation design docs + ADRs
+│   ├── research/                  # Investigations and CLI flag research
+│   └── reference/                 # Internal quick-reference sheets, schemas, data files
 │
 ├── .github/
 │   └── workflows/
@@ -528,6 +541,7 @@ sidebar: [
       { text: "YAML Format", link: "/workflows/yaml-format" },
       { text: "Session Management", link: "/workflows/session-management" },
       { text: "Context & Files", link: "/workflows/context-files" },
+      { text: "Agents & Skills", link: "/workflows/agents-and-skills" },
       { text: "End Conditions", link: "/workflows/end-conditions" },
       { text: "Dynamic Queue", link: "/workflows/dynamic-queue" },
     ],
@@ -539,6 +553,9 @@ sidebar: [
       { text: "Copilot CLI", link: "/harnesses/copilot-cli" },
       { text: "Claude CLI", link: "/harnesses/claude-cli" },
       { text: "Codex CLI", link: "/harnesses/codex-cli" },
+      { text: "OpenCode CLI", link: "/harnesses/opencode-cli" },
+      { text: "Qwen Code CLI", link: "/harnesses/qwen-cli" },
+      { text: "Gemini CLI", link: "/harnesses/gemini-cli" },
       { text: "Copilot Chat", link: "/harnesses/copilot-chat" },
     ],
   },
@@ -583,8 +600,8 @@ The `README.md` shown on the VS Code Marketplace is a **first impression**, not 
 ```markdown
 # FlightPath — AI Workflow Automation for VS Code
 
-> Automate GitHub Copilot, Claude Code, and Codex with structured
-> prompting workflows. Run multi-step AI tasks sequentially, validate
+> Automate GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Gemini
+> with structured prompting workflows. Run multi-step AI tasks sequentially, validate
 > results with scripts, and pick up where you left off.
 
 [Hero GIF showing a workflow running end-to-end]
@@ -699,20 +716,42 @@ Include a prominent note in the docs page: "This page reflects schema version X.
 ```
 flightpath run <workflow-file>
 
-  Execute a FlightPath workflow file.
+  Execute a prompt or workflow file.
 
   Arguments:
     workflow-file   Path to a .flightpath.yaml, .flightpath.json, or .prompt.md file
 
   Options:
-    --harness <id>      Override the harness (copilot-cli, claude-cli, codex-cli)
-    --model <name>      Override the AI model
-    --dry-run           Validate and preview without executing
-    -h, --help          Show this help message
+    -H, --harness <id>      AI harness: copilot-cli (default), claude-cli, codex-cli,
+                            opencode-cli, qwen-cli, gemini-cli, copilot-chat
+    -m, --model <name>      Override the AI model
+    --headless              Force headless mode (CI/CD, no user interaction)
+    --interactive           Force interactive mode (TUI passthrough)
+    --allow-tool <pattern>  Allow specific tool pattern (repeatable)
+    --deny-tool <pattern>   Deny specific tool pattern (repeatable)
+    --allow-all-tools       Dangerously allow all tools without approval
+    -p, --prompt <text>     Inline prompt string (alternative to file)
+    --resume <session-id>   Resume an existing session by ID
+    -t, --timeout <s>       Global timeout in seconds (default: 3600)
+    --json                  Output results as JSON
+    -q, --quiet             Suppress all output except errors
+    --verbose               Show debug information
+    -h, --help              Show this help message
 
   Examples:
     flightpath run .flightpath/workflows/refactor.flightpath.yaml
     flightpath run my-prompt.prompt.md --harness claude-cli
+    flightpath run workflow.yaml --headless --json
+
+  Documentation: https://docs.yoursite.com/cli/flightpath
+```
+
+The CLI also exposes a `validate` command:
+
+```
+flightpath validate <file>
+
+  Validate a prompt file without executing it.
 
   Documentation: https://docs.yoursite.com/cli/flightpath
 ```
@@ -738,9 +777,11 @@ Each CLI page should include:
 
 ## 11. Implementation Steps
 
-### Phase 1 — Foundation (Week 1)
+### Phase 1 — Foundation
 
 **Goal:** Get a basic VitePress site live at GitHub Pages.
+
+**Current status:** `docs/` is already empty and ready — internal docs have been moved to `dev/`. Steps 1–3 below are the remaining work.
 
 1. **Install VitePress:**
 
@@ -775,7 +816,7 @@ Each CLI page should include:
 
 ---
 
-### Phase 2 — Core Content (Weeks 2–3)
+### Phase 2 — Core Content
 
 **Goal:** Cover the must-have docs so the extension is publishable with real documentation.
 
@@ -785,13 +826,21 @@ Priority order:
 2. `guide/quick-start.md` — First workflow in 5 minutes
 3. `guide/concepts.md` — Harnesses, prompts, end conditions explained in plain language
 4. `guide/your-first-workflow.md` — Step-by-step tutorial with a realistic example
-5. `harnesses/index.md` — Comparison table, choose the right harness
+5. `harnesses/index.md` — Comparison table, choose the right harness (all 7 covered)
 6. `harnesses/copilot-cli.md` + `harnesses/claude-cli.md` — The two most common harnesses
-7. `reference/settings.md` — All 15+ settings documented
+7. `reference/settings.md` — All 30+ settings documented with defaults
 8. `reference/workflow-schema.md` — All YAML properties documented with types, defaults, examples
 9. `troubleshooting/common-errors.md` — The top 5–10 errors new users hit
 
-**Estimated effort:** 4–8 hours of writing depending on how much existing content can be adapted from DEVELOPMENT.md, docs/\*.md, and QUICK_START.md.
+**Source material:** `QUICK_START.md`, `README.md`, and the following `dev/` docs are the primary inputs:
+
+- `dev/implemented/PROMPT_SYNTAX.md` — YAML format, context refs, schema properties
+- `dev/implemented/SESSION_MANAGEMENT.md` — resumeSession, sessionId
+- `dev/implemented/END_CONDITIONS.md` — script validation, retries
+- `dev/implemented/WORKFLOW_PROPERTIES.md` — all prompt + workflow properties
+- `dev/implemented/QUEUE_APPEND_FEATURE.md` — dynamic queue / MCP extension
+- `dev/implemented/GLOBAL_AGENT_INCLUSION.md` — agents and skills system
+- `dev/implemented/COPILOT_CLI_DESIGN.md`, `CLAUDE_CLI_DESIGN.md`, `OPENCODE_HARNESS.md`, `GEMINI_INTEGRATION_PLAN.md`, `QWEN_INTEGRATION_PLAN.md` — per-harness pages
 
 ---
 
@@ -860,19 +909,17 @@ Watch for these doc rot patterns:
 
 ### Migration from Existing Docs Content
 
-The `docs/` folder already contains ~50 internal design documents. These should **not** be published as user-facing documentation — they are implementation notes, design decisions, and research. The hosted doc site (`VitePress /docs/`) is a separate namespace from `docs/*.md` (internal).
+**Done.** As of March 2026, the internal developer docs have been moved out of `docs/` into `dev/` using the following convention:
 
-**Proposed structure to avoid confusion:**
+| Folder             | Contents                                                        |
+| ------------------ | --------------------------------------------------------------- |
+| `dev/active/`      | Plans currently being executed (including this file)            |
+| `dev/backlog/`     | Unimplemented feature plans and proposals                       |
+| `dev/implemented/` | Post-implementation design docs and decision records            |
+| `dev/research/`    | Investigations, CLI flag research, external tool analyses       |
+| `dev/reference/`   | Internal quick-reference sheets, log format schemas, data files |
 
-- `/docs/` → Keep existing internal design docs here (for contributors)
-- `/docs/site/` → VitePress user-facing docs root
-
-Or alternatively rename the internal docs:
-
-- `/docs/internal/` → Design docs (not deployed)
-- `/docs/` → VitePress site (deployed)
-
-The cleaner approach is the second: move internal docs to `/docs/internal/` and use `/docs/` as the VitePress root. This matches VitePress's expected directory convention.
+`docs/` is now empty and reserved exclusively for the VitePress user-facing documentation.
 
 ---
 
@@ -890,6 +937,6 @@ The cleaner approach is the second: move internal docs to `/docs/internal/` and 
 | **GitBook**            | Skip                                                                             |
 | **ReadTheDocs**        | Skip (Python-centric, ads on free)                                               |
 | **Mintlify**           | Viable fallback if visual polish is critical and author stays solo               |
-| **Internal docs**      | Move to `/docs/internal/` to avoid mixing with user-facing content               |
+| **Internal docs**      | ✅ Done — moved to `dev/` (backlog/active/implemented/research/reference)        |
 
 The total infrastructure cost of this approach for the lifetime of the project is **$0**, the build pipeline is under 50 lines of YAML, and every doc page is a Markdown file that lives next to the code it documents.

@@ -1,284 +1,406 @@
-# FlightPath 🚀
+# FlightPath
 
-**One extension. Every AI harness. Fully automated.**
+FlightPath is a VS Code extension that automates AI coding assistants through structured YAML/JSON/Markdown workflows. Define multi-step prompt sequences, execute them against any supported harness, and let the AI continue working unattended.
 
-FlightPath is a VS Code extension that lets you automate AI coding assistants — GitHub Copilot CLI, Claude Code, Codex CLI, and Copilot Chat — through structured YAML/JSON/Markdown workflows. Define your prompts once, run them against any harness, and let the AI keep working while you focus on something else.
+---
 
-## 🎯 What Problems Does FlightPath Solve?
+## What it does
 
-### Automate AI harnesses through structured workflows
+- **Sequential prompt execution** — define prompts in a YAML or JSON workflow file; FlightPath sends them one at a time, waits for each to finish, and advances automatically
+- **Script-based validation** — attach an end condition script to any prompt; if the script returns the expected value the step passes, otherwise the AI retries with a configurable retry prompt
+- **Harness-agnostic** — switch between seven AI harnesses with one setting; the workflow format, permissions, agent/skill injection, and the output dashboard stay the same
+- **Dynamic queue extension** — include `"flightpath"` in `mcpServers` to give the AI MCP tools (`flightpath_append_queue`, `flightpath_queue_status`) so it can extend the workflow queue autonomously
+- **User-defined hooks** — attach shell commands to harness lifecycle events (`stop`, `sessionStart`, `preToolUse`, `postToolUse`) per prompt, per workflow, or globally in settings
+- **Universal agents and skills** — define agent instruction files once; FlightPath discovers them from standard locations (`.github/agents/`, `.claude/agents/`, `.flightpath/agents/`) and injects content into prompts regardless of harness
+- **Dashboard with embedded terminal** — a bottom-panel UI with a CodeMirror prompt editor, live xterm.js terminal running the AI CLI directly, streaming output with tool-call visualization, file diff views, undo/redo for workspace changes, and per-run output history
 
-Rather than manually typing prompts and waiting for responses, FlightPath lets you define multi-step workflows in YAML, JSON, or Markdown. Each prompt runs automatically, waits for the AI to finish, optionally validates the output with a script, and then moves to the next step — all without interaction.
+---
+
+## Requirements
+
+- VS Code 1.85.0 or higher
+- Node.js 18 or higher
+- At least one supported harness installed and authenticated
+
+---
+
+## Supported Harnesses
+
+| Harness ID      | Description                                                                    |
+| --------------- | ------------------------------------------------------------------------------ |
+| `copilot-cli`   | GitHub Copilot CLI — log file monitoring, session resumption (default)         |
+| `claude-cli`    | Anthropic Claude Code CLI — JSON streaming, hook-based completion              |
+| `codex-cli`     | OpenAI Codex CLI — JSONL events, notify hook                                   |
+| `opencode-cli`  | OpenCode CLI — JSONL events, config-file permissions                           |
+| `qwen-cli`      | Qwen Code CLI — JSONL events, log-based session discovery                      |
+| `gemini-cli`    | Google Gemini CLI — JSON streaming, hook-based completion, MCP config support  |
+| `copilot-chat`  | GitHub Copilot Chat — UI automation via VS Code commands and session monitoring |
+
+Set the active harness:
+
+```json
+{ "flightpath.harness": "claude-cli" }
+```
+
+CLI harnesses run in **interactive** mode (VS Code terminal with live output) or **headless** mode (background process). Set with `flightpath.cliExecutionMode`.
+
+---
+
+## Getting Started
+
+### 1. Open the panel
+
+```
+Command Palette → FlightPath: Open FlightPath Panel
+```
+
+The panel opens in the bottom tab area of VS Code.
+
+### 2. Create a workflow
+
+**From a template:**
+
+```
+Panel → New Workflow from Template
+```
+
+**Manually** — create a `.flightpath.yaml` file in your workspace.
+
+**Simple single prompt** — create a `.prompt.md` file:
+
+```markdown
+Analyze @src/auth/login.ts for security issues.
+Focus on input validation and authentication logic.
+```
+
+### 3. Run
+
+- **Panel** — load a workflow file and click Run
+- **Context menu** — right-click any prompt file → Run with FlightPath
+- **Context menu** — right-click → Queue with FlightPath to append to a running workflow
+
+---
+
+## Workflow File Formats
+
+All three formats validate against the same JSON Schema with full IntelliSense in VS Code.
+
+| Format   | Extension                              | Best for                            |
+| -------- | -------------------------------------- | ----------------------------------- |
+| YAML     | `.flightpath.yaml` / `.flightpath.yml` | Multi-step workflows, human editing |
+| JSON     | `.flightpath.json`                     | Programmatic generation, CI/CD      |
+| Markdown | `.prompt.md`                           | Single prompts                      |
+
+### Multi-step YAML workflow
 
 ```yaml
+# Workflow-level defaults — overridden per prompt (three-tier: prompt > workflow > settings)
+harness: claude-cli
+model: claude-sonnet-4.5
+endCondition:
+  script: npm test
+  returns: "0"
+  compareSource: exitCode
+
 prompts:
   - name: analyze
     prompt: |
       Analyze @workspace for security vulnerabilities.
       Focus on input validation and authentication.
 
-  - name: fix
-    prompt: |
-      Fix the issues identified in the analysis.
-    endCondition:
-      script: npm test
-      returns: "true"
-```
-
-### Let AI extend its own workflow
-
-FlightPath supports **dynamic queue extension** — the running AI harness can append new prompts to the queue via MCP tools, allowing it to autonomously plan and continue working on complex tasks without human involvement. Enable it per workflow or globally, with configurable size limits and notifications.
-
-📖 **[Queue Extension Docs](./docs/QUEUE_APPEND_FEATURE.md)**
-
-### Single-source your agents and skills across all harnesses
-
-FlightPath provides a **universal agent and skills system**. Define your agent instructions and skill files once, and FlightPath automatically discovers them from standard locations (`.github/agents/`, `.claude/agents/`, `.flightpath/agents/`, user-level directories). Reference them by name in any workflow — no paths needed.
-
-```yaml
-agent: senior-dev
-skills:
-  - testing-patterns
-  - code-review
-
-prompts:
-  - prompt: "Refactor the authentication module"
-```
-
-FlightPath injects the agent and skill content into each prompt regardless of which harness is running — no harness-specific flags or configuration required.
-
-Use `flightpath.defaultAgent` and `flightpath.defaultSkills` settings to attach agents and skills to every new workflow automatically.
-
-### A unified interface for all AI harnesses
-
-FlightPath is a single mental model for all your AI tools. Switch between harnesses in one setting — everything else (workflow format, permission config, agent/skill attachment, output dashboard) stays the same. No learning a new interface for each tool, no duplicating configurations.
-
-**Supported harnesses:**
-
-| Harness        | Description               |
-| -------------- | ------------------------- |
-| `copilot-cli`  | GitHub Copilot CLI        |
-| `claude-cli`   | Anthropic Claude Code CLI |
-| `codex-cli`    | OpenAI Codex CLI          |
-| `copilot-chat` | Copilot Chat UI (VS Code) |
-
-All harnesses are first-class citizens — there is no default or fallback hierarchy. Pick the one that fits your workflow.
-
-### Interactive or headless CLI execution
-
-CLI harnesses (`copilot-cli`, `claude-cli`, `codex-cli`) can run in two modes:
-
-- **Interactive** (`cliExecutionMode: interactive`): Opens a VS Code terminal with the live TUI output. You can watch the AI work in real time and abort with Ctrl+C.
-- **Headless** (`cliExecutionMode: headless`): Runs silently in the background. Ideal for fully automated pipelines where you don't need to watch output.
-
-Switch modes per-run or set a default in settings.
-
-### Harness-agnostic permission configuration
-
-Every AI harness has its own tool permission syntax. FlightPath unifies this into a single allow/deny list that is automatically converted to the correct format for whichever harness is running. Configure once, works everywhere.
-
-```json
-{
-  "flightpath.cliToolPermissions": "custom",
-  "flightpath.cliAllowedTools": ["read_file", "edit_file", "run_command"],
-  "flightpath.cliDeniedTools": ["web_search"]
-}
-```
-
-### Dashboard with live output and a prompt editor built for large codebases
-
-The FlightPath sidebar panel gives you:
-
-- **Live output streaming** — see CLI output as it arrives, step-by-step progress, and run history
-- **Prompt editor** — a full CodeMirror-based editor with syntax highlighting, spell check, and intelligent autocomplete for `#file:` paths and `@` references optimized for large codebases
-- **Workflow controls** — pause, resume, stop, and re-run workflows without leaving the panel
-
----
-
-## 📋 Requirements
-
-- **VS Code**: 1.85.0 or higher
-- **Node.js**: 18+ (for end condition scripts and the MCP server)
-- **At least one AI harness** installed and authenticated (see below)
-
-### Harness Installation
-
-**GitHub Copilot CLI**: `npm install -g @github/copilot-cli` — requires a GitHub Copilot subscription
-
-**Claude Code CLI**: Follow the [Claude Code installation guide](https://github.com/anthropics/claude-code) — requires an Anthropic API key
-
-**Codex CLI**: Follow the [Codex CLI installation guide](https://github.com/openai/codex-cli) — requires an OpenAI API key
-
-**Copilot Chat**: Install the GitHub Copilot extension in VS Code — requires a GitHub Copilot subscription
-
----
-
-## 🚀 Getting Started
-
-### 1. Open the FlightPath Panel
-
-```
-Command Palette → FlightPath: Open FlightPath Panel
-```
-
-Or click the FlightPath icon in the Activity Bar.
-
-### 2. Create a workflow
-
-**Option A** — Use the panel to create a new workflow from a template:
-
-```
-Panel → New Workflow from Template
-```
-
-**Option B** — Create a `.flightpath.yaml` file manually in your workspace.
-
-**Option C** — Create a simple `.prompt.md` file for a single prompt:
-
-```markdown
-Analyze #file:src/extension.ts for potential improvements.
-
-Focus on:
-
-- Code organization
-- Type safety
-- Error handling
-```
-
-### 3. Configure your harness
-
-Set your preferred harness in VS Code settings:
-
-```json
-{
-  "flightpath.harness": "claude-cli"
-}
-```
-
-### 4. Run
-
-- **Via the panel**: Load a workflow file into the dashboard and click **Run**
-- **Via context menu**: Right-click any prompt file → **Run with FlightPath**
-- **Via context menu**: Right-click to **Queue with FlightPath** to append to a running workflow
-
----
-
-## 📝 Workflow File Formats
-
-FlightPath supports three formats, all validated against the same JSON schema with full IntelliSense in VS Code:
-
-| Format   | Extension                              | Best For                            |
-| -------- | -------------------------------------- | ----------------------------------- |
-| YAML     | `.flightpath.yaml` / `.flightpath.yml` | Multi-step workflows, human editing |
-| JSON     | `.flightpath.json`                     | Programmatic generation, CI/CD      |
-| Markdown | `.prompt.md`                           | Single prompts (simplest)           |
-
-### Multi-step YAML workflow
-
-```yaml
-# Workflow-level defaults (overridable per prompt)
-harness: copilot-cli
-model: claude-sonnet-4.5
-agent: .flightpath/agents/my-agent.agent.md
-endCondition:
-  script: npm test
-  returns: "true"
-
-prompts:
-  - name: analyze
-    prompt: |
-      Analyze @workspace for security vulnerabilities.
-
   - name: implement
     prompt: |
-      Fix the identified issues.
-    resumeSession: true # Continue conversation from previous prompt
+      Fix the issues identified in the analysis.
+    resumeSession: true
 
   - name: verify
     prompt: |
-      Verify the fixes are complete and tests pass.
+      Verify the fixes are complete and all tests pass.
     endCondition:
-      script: .flightpath/scripts/verify.js
-      returns: "true"
+      script: npm test
+      returns: "0"
+      compareSource: exitCode
       maxRetries: 3
-      retryPrompt: "Tests still failing: {error}. Please fix."
+      retryPrompt: |
+        Tests still failing (attempt {retryCount}/{maxRetries}):
+        {scriptOutput}
+        Please fix the remaining issues.
 ```
 
-### Session management
+---
 
-Control which prompts share conversation context:
+## Prompt Properties
+
+Properties follow a three-tier precedence: **prompt-level → workflow-level → VS Code settings**.
+
+| Property          | Type                                    | Description                                                                       |
+| ----------------- | --------------------------------------- | --------------------------------------------------------------------------------- |
+| `prompt`          | `string`                                | Prompt text, or path to a `.prompt.md` / `.txt` file                             |
+| `name`            | `string`                                | Display label for this step                                                       |
+| `harness`         | harness ID                              | Override the active harness for this prompt                                       |
+| `model`           | `string`                                | Model to use (harness-specific format)                                            |
+| `agent`           | `string`                                | Path to a `.agent.md` file; content injected into the prompt                     |
+| `skills`          | `string[]`                              | Skill file names; content injected into the prompt                                |
+| `resumeSession`   | `boolean`                               | Continue the previous prompt's conversation session                               |
+| `sessionId`       | `string \| number`                      | Resume a session by ID or by prior prompt index                                   |
+| `mcpServers`      | `(string \| McpServerConfig)[] \| null` | MCP servers to inject; `"flightpath"` enables dynamic queue extension             |
+| `hooks`           | `UserHookConfig[]`                      | Shell commands to run at harness lifecycle events                                 |
+| `endCondition`    | `EndCondition`                          | Validation script with retry configuration                                        |
+| `priorContext`    | `string \| number[]`                    | Inject prior prompt outputs: `none`, `previous`, `all`, or index array           |
+| `additionalArgs`  | `string`                                | Extra flags appended to the CLI invocation                                        |
+| `toolPermissions` | `ToolPermissionsOverride`               | Per-prompt override: `dangerouslyAllowAll`, `allowAll`, `custom`, `passthrough`   |
+
+### End condition
+
+```yaml
+endCondition:
+  script: ./scripts/verify.js   # file path or shell command
+  returns: "true"               # expected value
+  compareSource: stdout         # stdout (default), stderr, exitCode, or auto
+  timeout: 60000                # ms
+  maxRetries: 3                 # -1 = unlimited
+  retryPrompt: |
+    Validation failed: {error}
+    Please fix the issues.
+```
+
+### MCP servers
+
+```yaml
+# Enable dynamic queue extension (AI can append prompts via MCP tools)
+mcpServers:
+  - flightpath
+
+# User-defined MCP server alongside the built-in one
+mcpServers:
+  - flightpath
+  - id: my-database
+    command: node
+    args: [/path/to/db-mcp-server.js]
+    env:
+      DB_URL: "postgres://localhost/mydb"
+    autoApprove: true   # or a list of tool name patterns
+
+# Disable all MCP injection
+mcpServers: null
+```
+
+The `"flightpath"` shorthand injects the built-in FlightPath MCP server, giving the AI access to `flightpath_append_queue` and `flightpath_queue_status`. Include it on the last prompt (or as `finalPrompt`) to allow autonomous workflow extension.
+
+### Final prompt
+
+`finalPrompt` is a special prompt that runs after all queued prompts complete. If the AI appended new prompts during the final prompt loop and `"flightpath"` is in `mcpServers`, the executor re-runs the queue then `finalPrompt` again until no new prompts are added.
+
+```yaml
+prompts:
+  - prompt: "Implement the feature"
+
+finalPrompt:
+  prompt: "Review the work and append follow-up tasks if needed."
+  mcpServers:
+    - flightpath
+```
+
+### Hooks
+
+```yaml
+hooks:
+  - event: stop
+    command: node ./scripts/post-run-notify.js
+  - event: sessionStart
+    command: node ./scripts/setup.js
+```
+
+Supported events: `stop`, `sessionStart`, `preToolUse`, `postToolUse`, `userPromptSubmit` (support varies by harness). Hooks defined here are merged with any hooks already in the harness settings file — existing hooks are preserved.
+
+### Session management
 
 ```yaml
 prompts:
   - name: research
     prompt: "Research the problem"
-    # Starts new session
 
   - name: implement
     prompt: "Implement the solution"
-    sessionId: 1 # Resume session from prompt 1 (numeric reference)
+    resumeSession: true   # continue conversation from the previous prompt
 
   - name: review
     prompt: "Review for edge cases"
-    newChatSession: true # Start completely fresh
+    sessionId: 1          # resume the session from prompt index 1
 ```
 
-📖 **[Session Management Guide](./dev/implemented/SESSION_MANAGEMENT.md)**
+See `dev/implemented/SESSION_MANAGEMENT.md` for full details.
 
-### Context variables
+### Context references in prompts
 
-```yaml
-prompt: |
-  Review the changes in #file:src/auth/login.ts lines 45-120
-  and check against #file:docs/auth-spec.md
+The prompt editor provides IntelliSense completions triggered by three characters:
 
-  The current selection shows: #selection
-```
+| Trigger | Purpose                         | Example                        |
+| ------- | ------------------------------- | ------------------------------ |
+| `@`     | File or directory reference     | `@src/utils/auth.ts`           |
+| `#`     | Current editor selection or workspace symbol | `#MyClass`, `#selection:path:10-20` |
+| `~`     | Git-changed file reference      | `~src/main.ts`                 |
 
-Supported: `@workspace`, `#file:path`, `#file:path:start-end`, `#selection`, slash commands (`/fix`, `/explain`, `/tests`)
-
----
-
-## 📋 Available Commands
-
-| Command                                   | Description                                             |
-| ----------------------------------------- | ------------------------------------------------------- |
-| `FlightPath: Open FlightPath Panel`       | Open the sidebar dashboard                              |
-| `FlightPath: New Workflow from Template`  | Create a workflow from a built-in or custom template    |
-| `FlightPath: New Blank Workflow`          | Start with an empty workflow                            |
-| `FlightPath: New Draft Prompt`            | Create a draft `.prompt.md` file                        |
-| `FlightPath: Create Prompt File`          | Create a new prompt file                                |
-| `FlightPath: Run with FlightPath`         | Run a prompt file (context menu)                        |
-| `FlightPath: Load in FlightPath`          | Load a prompt file without running (context menu)       |
-| `FlightPath: Queue with FlightPath`       | Append a prompt file to the active queue (context menu) |
-| `FlightPath: Pause Execution`             | Pause a running workflow                                |
-| `FlightPath: Resume Execution`            | Resume a paused workflow                                |
-| `FlightPath: Stop Execution`              | Stop and reset the workflow                             |
-| `FlightPath: Resume Session`              | Resume from a saved session                             |
-| `FlightPath: Import FlightPath Agents`    | Import agent files into the workspace                   |
-| `FlightPath: Import Workflow Templates`   | Import workflow templates                               |
-| `FlightPath: Create End Condition Script` | Scaffold a validation script                            |
+Completions respect `.gitignore` by default (`flightpath.respectGitignoreForCompletions`). They work inside YAML `prompt:` values, JSON `"prompt"` strings, and `.prompt.md` files.
 
 ---
 
-## 🔧 Key Settings
+## Dashboard
 
-| Setting                         | Default       | Description                                                              |
-| ------------------------------- | ------------- | ------------------------------------------------------------------------ |
-| `flightpath.harness`            | `copilot-cli` | Active harness: `copilot-cli`, `claude-cli`, `codex-cli`, `copilot-chat` |
-| `flightpath.cliExecutionMode`   | `interactive` | `interactive` (terminal) or `headless` (background)                      |
-| `flightpath.cliToolPermissions` | `allowAll`    | `dangerouslyAllowAll`, `allowAll`, or `custom`                           |
-| `flightpath.cliAllowedTools`    | `[]`          | Tool allow patterns (converted per harness automatically)                |
-| `flightpath.cliDeniedTools`     | `[]`          | Tool deny patterns (take precedence over allow)                          |
-| `flightpath.defaultAgent`       | —             | Default agent file attached to every workflow                            |
-| `flightpath.defaultSkills`      | `[]`          | Default skill files attached to every workflow                           |
-| `flightpath.enableDynamicQueue` | `false`       | Allow the AI to extend the workflow queue via MCP                        |
-| `flightpath.scriptTimeout`      | `30`          | End condition script timeout in seconds                                  |
-| `flightpath.promptsDirectory`   | `.flightpath` | Base directory for workflows and scripts                                 |
+The FlightPath panel opens in the VS Code bottom panel area and contains:
+
+**Prompts panel** — draggable prompt list with numbered slots, status indicators, and a prompt counter. Select any prompt to open it in the editor.
+
+**Output panel** — chronological display of CLI output as it streams in, with:
+- Tool call visualization (file edits, bash commands, web search, MCP tool calls)
+- Inline file diff views for edits the AI makes
+- Undo/redo for workspace file changes made during a workflow run
+- Per-run output history with replay; re-run any previous workflow run
+- Export to markdown
+
+**Embedded terminal** — the AI CLI process runs directly in an xterm.js terminal inside the panel. You watch the AI work in real time. Multiple terminal sessions (AI CLI and shell) are managed with a tab rail.
+
+**Prompt editor** — CodeMirror-based editor with:
+- Syntax highlighting and spell check
+- `@` / `#` / `~` IntelliSense completions
+- Quick pickers for harness, model, agent, and skills
+- Properties drawer for workflow-level and prompt-level configuration
 
 ---
 
-📚 **[Quick Start Guide](./QUICK_START.md)** | 📖 **[Session Management](./dev/implemented/SESSION_MANAGEMENT.md)** | 🔧 **[Adding a New Harness](./dev/implemented/ADDING_NEW_CLI_HARNESS.md)**
+## Commands
+
+| Command                                      | Description                                                      |
+| -------------------------------------------- | ---------------------------------------------------------------- |
+| `FlightPath: Open FlightPath Panel`          | Open the dashboard in the bottom panel                           |
+| `FlightPath: New Workflow from Template`     | Create a workflow from a built-in or custom template             |
+| `FlightPath: New Blank Workflow`             | Clear the dashboard and start with an empty workflow             |
+| `FlightPath: New Draft Prompt`               | Create a draft `.prompt.md` file                                 |
+| `FlightPath: Create Prompt File`             | Create a new prompt file in a folder                             |
+| `FlightPath: Run with FlightPath`            | Run a prompt file (Explorer / editor context menu)               |
+| `FlightPath: Load in FlightPath`             | Load a prompt file into the dashboard without running            |
+| `FlightPath: Queue with FlightPath`          | Append prompts to the end of the active queue                    |
+| `FlightPath: Queue Next with FlightPath`     | Insert prompts immediately after the current position            |
+| `FlightPath: Pause Execution`                | Pause a running workflow                                         |
+| `FlightPath: Resume Execution`               | Resume a paused workflow                                         |
+| `FlightPath: Stop Execution`                 | Stop and reset the workflow                                      |
+| `FlightPath: Resume Session`                 | Resume from a saved session                                      |
+| `FlightPath: Initialize Workspace`           | Set up `.flightpath/` directory structure                        |
+| `FlightPath: Import FlightPath Agents`       | Import agent files into the workspace                            |
+| `FlightPath: Import Workflow Templates`      | Import example workflow templates                                |
+| `FlightPath: Create End Condition Script`    | Scaffold a validation script                                     |
+| `FlightPath: Create New Custom Template`     | Save the current workflow as a reusable template                 |
+| `FlightPath: Show Output Panel`              | Show the CLI output panel                                        |
+
+---
+
+## Settings
+
+All settings use the `flightpath.` prefix.
+
+### Core
+
+| Setting                    | Default       | Description                                                                 |
+| -------------------------- | ------------- | --------------------------------------------------------------------------- |
+| `harness`                  | `copilot-cli` | Active harness                                                              |
+| `cliExecutionMode`         | `interactive` | `interactive` (terminal) or `headless` (background process)                |
+| `scriptTimeout`            | `30`          | End condition script timeout in seconds (range: 5–300)                     |
+| `promptsDirectory`         | `.flightpath` | Base directory for workflows and scripts                                    |
+| `maxPromptExecutionTime`   | `10800`       | Max seconds per prompt; -1 = unlimited                                      |
+| `maxWorkflowExecutionTime` | `86400`       | Max seconds per workflow; -1 = unlimited                                    |
+
+### Models
+
+| Setting            | Default                       | Harness      |
+| ------------------ | ----------------------------- | ------------ |
+| `copilotCliModel`  | `claude-sonnet-4.5`           | Copilot CLI  |
+| `claudeCliModel`   | `sonnet`                      | Claude CLI   |
+| `codexCliModel`    | `gpt-5.1-codex`               | Codex CLI    |
+| `openCodeCliModel` | `anthropic/claude-sonnet-4-6` | OpenCode CLI |
+| `qwenCliModel`     | `coder-model`                 | Qwen CLI     |
+| `geminiCliModel`   | `gemini-2.5-pro`              | Gemini CLI   |
+| `copilotChatModel` | `claude-sonnet-4.5`           | Copilot Chat |
+
+### Tool permissions
+
+| Setting              | Default    | Description                                                              |
+| -------------------- | ---------- | ------------------------------------------------------------------------ |
+| `cliToolPermissions` | `allowAll` | `dangerouslyAllowAll`, `allowAll`, or `custom`                           |
+| `cliAllowedTools`    | *(common git, npm, node patterns)* | Tool allow patterns in `custom` mode — converted per harness |
+| `cliDeniedTools`     | *(rm, del, sudo, git push/reset, etc.)* | Deny patterns — take precedence over allow              |
+
+### Agents and skills
+
+| Setting                       | Default | Description                                                      |
+| ----------------------------- | ------- | ---------------------------------------------------------------- |
+| `defaultAgent`                | `""`    | Default agent file attached to every new workflow                |
+| `defaultSkills`               | `[]`    | Default skill files attached to every new workflow               |
+| `omitAgentsAndSkillsOnResume` | `true`  | Skip agent/skill injection when resuming an existing session     |
+
+### MCP and dynamic queue
+
+| Setting                  | Default | Description                                                                        |
+| ------------------------ | ------- | ---------------------------------------------------------------------------------- |
+| `mcpServers`             | `[]`    | Default MCP servers for workflow prompts. Include `"flightpath"` to enable dynamic queue extension by default |
+| `maxQueueSize`           | `100`   | Maximum prompts allowed in the dynamic queue (range: 1–1000)                      |
+| `unlimitedMode`          | `false` | Remove queue size and execution time limits                                        |
+| `notifyOnQueueExtension` | `true`  | Show a notification when the AI appends prompts to the queue                       |
+
+### Hooks
+
+| Setting | Default | Description                                                                           |
+| ------- | ------- | ------------------------------------------------------------------------------------- |
+| `hooks` | `[]`    | Default hooks applied to every workflow (`event`, `command`, optional `timeoutSec`)   |
+
+### Retry and validation
+
+| Setting               | Default | Description                                                |
+| --------------------- | ------- | ---------------------------------------------------------- |
+| `defaultMaxRetries`   | `3`     | Default retry count for end conditions (-1 = unlimited)    |
+| `defaultRetryPrompt`  | *(template)* | Default retry message template with placeholders      |
+
+### Session and context
+
+| Setting                 | Default    | Description                                                            |
+| ----------------------- | ---------- | ---------------------------------------------------------------------- |
+| `priorContext`          | `none`     | Inject prior outputs: `none`, `previous`, `all`, index array          |
+| `resumeExistingSession` | `false`    | Resume existing chat session for each prompt                           |
+| `autoLoadRecentSession` | `true`     | Auto-load the most recent workflow on VS Code startup                  |
+
+### Output and history
+
+| Setting                | Default | Description                                              |
+| ---------------------- | ------- | -------------------------------------------------------- |
+| `showCliOutput`        | `true`  | Show CLI output in the Output panel                      |
+| `showCliCommand`       | `false` | Show the full CLI invocation in the dashboard            |
+| `saveOutputHistory`    | `true`  | Save per-run output history in `.flightpath/.history/`   |
+| `maxHistoryRuns`       | `-1`    | Max history entries per workflow (-1 = keep all)         |
+| `enableDiagnosticLogs` | `false` | Write diagnostic logs to `.flightpath/logs/`             |
+
+### Copilot Chat harness
+
+| Setting                     | Default      | Description                                               |
+| --------------------------- | ------------ | --------------------------------------------------------- |
+| `chatInactivityTimeout`     | `300`        | Seconds of inactivity before treating chat as complete    |
+| `treatChatTimeoutAsSuccess` | `true`       | Count inactivity timeout as a successful completion       |
+| `chatWindowLocation`        | `chatPanel`  | `chatPanel`, `newTab`, or `newWindow`                     |
+| `forceAgentModeForChat`     | `false`      | Force Agent mode before sending each prompt               |
+
+---
+
+## Further Reading
+
+Design documents and implementation notes are in `dev/implemented/`.
+
+| Document                                       | Topic                                                       |
+| ---------------------------------------------- | ----------------------------------------------------------- |
+| `dev/implemented/WORKFLOW_PROPERTIES.md`       | Full prompt property reference                              |
+| `dev/implemented/QUEUE_APPEND_FEATURE.md`      | Dynamic queue extension and `finalPrompt` loop behavior     |
+| `dev/implemented/SESSION_MANAGEMENT.md`        | Session resumption across prompts and harnesses             |
+| `dev/implemented/HOOKS_EXPOSURE_PLAN.md`       | User-defined hooks: events, merge behavior, harness support |
+| `dev/implemented/MCP_SERVERS_PROPERTY_PLAN.md` | `mcpServers` property design and per-harness behavior       |
+| `dev/implemented/ADDING_NEW_CLI_HARNESS.md`    | Guide for adding a new CLI harness                          |
+| `QUICK_START.md`                               | Five-minute setup walkthrough                               |
 
 ---
 
