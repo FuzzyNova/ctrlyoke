@@ -114,12 +114,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   }, [vscode, setMcpLocalServersLoading]);
 
   const handleSearchRegistry = useCallback(
-    (query: string, cursor?: string) => {
+    (query: string, cursor?: string, updatedSince?: string) => {
       setMcpRegistryLoading(true);
       vscode.postMessage({
         type: MESSAGE_TYPES.REQUEST_MCP_REGISTRY,
         query,
         cursor,
+        updatedSince,
       });
     },
     [vscode, setMcpRegistryLoading]

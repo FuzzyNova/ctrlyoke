@@ -924,6 +924,8 @@ export interface RequestMcpRegistryMessage {
   type: typeof MESSAGE_TYPES.REQUEST_MCP_REGISTRY;
   query?: string;
   cursor?: string;
+  /** ISO 8601 timestamp — when set, fetches only servers updated since this date */
+  updatedSince?: string;
 }
 
 export interface McpRegistryResultMessage {

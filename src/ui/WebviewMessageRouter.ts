@@ -277,6 +277,8 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.REQUEST_MCP_REGISTRY, async (message) => {
       const result = await safeFetchMcpRegistry({
         cursor: message.cursor,
+        search: message.query || undefined,
+        updatedSince: message.updatedSince,
       });
       this.postMessage({
         type: MESSAGE_TYPES.MCP_REGISTRY_RESULT,

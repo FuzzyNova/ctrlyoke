@@ -261,30 +261,32 @@ interface McpIoRegistryItem {
   };
 }
 
-const MCP_REGISTRY_URL = "https://registry.modelcontextprotocol.io/v0/servers";
+const MCP_REGISTRY_URL = "https://registry.modelcontextprotocol.io/v0.1/servers";
 
 /**
  * Fetches MCP servers from the official MCP registry (registry.modelcontextprotocol.io).
  * No authentication required.
  *
  * The registry returns results in alphabetical order by default.
- * Client-side filtering is used in the webview for filter-as-you-type UX.
- *
  * Pagination is cursor-based: pass the `nextCursor` from a previous response
  * to fetch the next page.
  *
  * Only entries with `isLatest: true` are included to avoid showing stale
  * duplicate entries for servers that have multiple published versions.
  *
- * @param options.limit Maximum results per page (default 100)
- * @param options.cursor Cursor from a previous response's `nextCursor`
+ * @param options.limit    Results per page (default 50, max 100)
+ * @param options.cursor   Pagination cursor from a previous response's `nextCursor`
+ * @param options.search   Server-side substring search on server name
+ * @param options.updatedSince  Filter to servers updated since this ISO 8601 timestamp
  */
 export async function fetchMcpRegistry(
-  options: { limit?: number; cursor?: string } = {}
+  options: { limit?: number; cursor?: string; search?: string; updatedSince?: string } = {}
 ): Promise<{ servers: RegistryMcpEntry[]; nextCursor?: string }> {
-  const { limit = 100, cursor } = options;
+  const { limit = 50, cursor, search, updatedSince } = options;
   const params = new URLSearchParams({ limit: String(limit) });
   if (cursor) params.set("cursor", cursor);
+  if (search) params.set("search", search);
+  if (updatedSince) params.set("updated_since", updatedSince);
 
   const url = `${MCP_REGISTRY_URL}?${params}`;
 
@@ -400,17 +402,21 @@ export async function safeDiscoverLocalMcpServers(
 
 /**
  * Safely fetches the MCP registry and returns an empty result on error.
- * Supports cursor-based pagination.
+ * Supports cursor-based pagination, server-side search, and updated_since filtering.
  */
 export async function safeFetchMcpRegistry(
-  options: { cursor?: string } = {}
+  options: { cursor?: string; search?: string; updatedSince?: string } = {}
 ): Promise<{
   servers: RegistryMcpEntry[];
   nextCursor?: string;
   error?: string;
 }> {
   try {
-    const result = await fetchMcpRegistry(options);
+    const result = await fetchMcpRegistry({
+      cursor: options.cursor,
+      search: options.search,
+      updatedSince: options.updatedSince,
+    });
     return result;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

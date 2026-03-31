@@ -212,6 +212,13 @@ const McpServersReadOnly: React.FC<{ value: McpServersValue }> = ({
  */
 type RegistrySort = "a-z" | "z-a" | "recently-updated";
 
+/** Returns an ISO 8601 timestamp for one year ago — used for "recently updated" registry queries. */
+function oneYearAgoISO(): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 1);
+  return d.toISOString();
+}
+
 /** Derive a human-readable kebab-case id from a registry entry's display name. */
 function registryEntryToSlug(entry: RegistryMcpEntry): string {
   const source = entry.name || entry.id;
@@ -244,8 +251,8 @@ export const McpServersEditor: React.FC<{
   // ── Discovery props (optional) ─────────────────────────────────────────────
   /** Called when user requests a local config file scan */
   onRequestLocalServers?: () => void;
-  /** Called when user submits a registry search */
-  onSearchRegistry?: (query: string, cursor?: string) => void;
+  /** Called when user submits a registry search or changes sort mode */
+  onSearchRegistry?: (query: string, cursor?: string, updatedSince?: string) => void;
   /** Results from the most recent local scan */
   localServers?: LocalMcpServerEntry[];
   /** Whether a local scan is in progress */
@@ -304,29 +311,27 @@ export const McpServersEditor: React.FC<{
   const [registryQuery, setRegistryQuery] = useState("");
   const [registrySort, setRegistrySort] = useState<RegistrySort>("a-z");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shouldFill = fillHeight && discoveryTab === "registry";
 
-  // Client-side filter + sort
+  // Client-side sort only — filtering is server-side via the `search` query param
   const filteredRegistryServers = useMemo(() => {
     if (!registryServers) return undefined;
-    const filtered = registryQuery.trim()
-      ? registryServers.filter((s) => {
-          const q = registryQuery.toLowerCase();
-          return (
-            s.name.toLowerCase().includes(q) ||
-            s.description.toLowerCase().includes(q) ||
-            (s.packageName ?? "").toLowerCase().includes(q)
-          );
-        })
-      : registryServers;
     if (registrySort === "recently-updated") {
-      return [...filtered].sort((a, b) =>
+      return [...registryServers].sort((a, b) =>
         (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")
       );
     }
-    const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+    const sorted = [...registryServers].sort((a, b) => a.name.localeCompare(b.name));
     return registrySort === "z-a" ? sorted.reverse() : sorted;
-  }, [registryServers, registryQuery, registrySort]);
+  }, [registryServers, registrySort]);
+
+  // Cancel pending search on unmount
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
 
   // mode: "default" only when showDefault=true and value is undefined
   const mode: "default" | "custom" =
@@ -388,7 +393,8 @@ export const McpServersEditor: React.FC<{
       registryServers === undefined &&
       !isLoadingRegistry
     ) {
-      onSearchRegistry?.("");
+      const updatedSince = registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
+      onSearchRegistry?.(registryQuery, undefined, updatedSince);
     }
   }, [mode, showDiscovery, discoveryTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -535,8 +541,44 @@ export const McpServersEditor: React.FC<{
       !isLoadingRegistry
     ) {
       resetMcpRegistryPages();
-      onSearchRegistry?.("");
+      const updatedSince = registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
+      onSearchRegistry?.(registryQuery, undefined, updatedSince);
     }
+  };
+
+  /**
+   * Debounced handler for the search input — triggers a server-side search after
+   * the user stops typing for 500 ms. Resets pagination on each new search.
+   */
+  const handleRegistrySearchChange = (query: string) => {
+    setRegistryQuery(query);
+    if (!onSearchRegistry || discoveryTab !== "registry") return;
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      resetMcpRegistryPages();
+      const updatedSince = registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
+      onSearchRegistry(query, undefined, updatedSince);
+    }, 500);
+  };
+
+  /**
+   * Sort change handler. "a-z"/"z-a" are presentation-only (re-sort current page).
+   * Switching to/from "recently-updated" triggers a new server-side fetch with/without
+   * the updated_since filter.
+   */
+  const handleSortChange = (newSort: RegistrySort) => {
+    const prevSort = registrySort;
+    setRegistrySort(newSort);
+    if (!onSearchRegistry) return;
+
+    if (newSort === "recently-updated" && prevSort !== "recently-updated") {
+      resetMcpRegistryPages();
+      onSearchRegistry(registryQuery, undefined, oneYearAgoISO());
+    } else if (newSort !== "recently-updated" && prevSort === "recently-updated") {
+      resetMcpRegistryPages();
+      onSearchRegistry(registryQuery);
+    }
+    // a-z <-> z-a: just re-sort, no new fetch
   };
 
   const registryPageNumber = mcpRegistryPageCursors.length;
@@ -546,13 +588,15 @@ export const McpServersEditor: React.FC<{
   const handleRegistryNextPage = () => {
     if (!hasNextPage || isLoadingRegistry) return;
     const cursor = mcpRegistryGoNextPage();
-    if (cursor) onSearchRegistry?.("", cursor);
+    const updatedSince = registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
+    if (cursor) onSearchRegistry?.(registryQuery, cursor, updatedSince);
   };
 
   const handleRegistryPrevPage = () => {
     if (!hasPrevPage || isLoadingRegistry) return;
     const cursor = mcpRegistryGoPrevPage();
-    onSearchRegistry?.("", cursor);
+    const updatedSince = registrySort === "recently-updated" ? oneYearAgoISO() : undefined;
+    onSearchRegistry?.(registryQuery, cursor, updatedSince);
   };
 
   const handleAddServer = () => {
@@ -1139,13 +1183,13 @@ export const McpServersEditor: React.FC<{
                 {/* Registry panel */}
                 {discoveryTab === "registry" && (
                   <div className={`flex flex-col gap-1.5 p-2 rounded border border-panel-border bg-editor-bg${shouldFill ? " flex-1 min-h-0" : ""}`}>
-                    {/* Filter input — client-side search (Anthropic registry has no server-side search) */}
+                    {/* Search input — server-side substring match on server name */}
                     <input
                       ref={searchInputRef}
                       type="text"
-                      placeholder="Filter servers…"
+                      placeholder="Search servers…"
                       value={registryQuery}
-                      onChange={(e) => setRegistryQuery(e.target.value)}
+                      onChange={(e) => handleRegistrySearchChange(e.target.value)}
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                       autoFocus
                     />
@@ -1173,7 +1217,7 @@ export const McpServersEditor: React.FC<{
                             <button
                               key={s}
                               type="button"
-                              onClick={() => setRegistrySort(s)}
+                              onClick={() => handleSortChange(s)}
                               className={`px-1.5 py-0 text-[10px] rounded border transition-colors ${
                                 registrySort === s
                                   ? "bg-btn-bg text-btn-fg border-btn-bg"
