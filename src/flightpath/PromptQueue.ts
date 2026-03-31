@@ -19,6 +19,7 @@ import { hashPromptContent } from "../utils/PromptIdentity";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { WorkingFileManager } from "./WorkingFileManager";
 import type { IWorkingFileQueueAccess } from "./WorkingFileManager";
+import { WorkflowStateMachine } from "./WorkflowStateMachine";
 
 /**
  * Get effective maxRetries value with smart defaults
@@ -83,6 +84,13 @@ export class PromptQueue {
   private onStateChanged = new TypedEmitter<QueueState>();
   private currentRetryCount: number = 0; // Track retry attempts for current prompt
   private readonly workingFileManager: WorkingFileManager;
+
+  /**
+   * Authoritative owner of execution status transitions.
+   * All status mutations go through this object; this.state fields are kept
+   * in sync via syncFromStateMachine() / syncToStateMachine().
+   */
+  private readonly stateMachine = new WorkflowStateMachine();
 
   // Public event for state changes
   public readonly onDidChangeState = this.onStateChanged.event;
@@ -167,6 +175,7 @@ export class PromptQueue {
 
     this.workflowFile = undefined; // Clear workflow file reference
     this.finalPromptRuntime = undefined;
+    this.syncToStateMachine();
 
     this.emitStateChange();
     Log.info("Queue cleared - ready for new workflow");
@@ -211,6 +220,7 @@ export class PromptQueue {
     // Store complete workflow file for property resolution
     this.workflowFile = promptFile;
     this.finalPromptRuntime = undefined;
+    this.syncToStateMachine();
 
     this.emitStateChange();
     Log.info(`Loaded ${prompts.length} prompts into queue`);
@@ -308,6 +318,7 @@ export class PromptQueue {
 
       // Store complete workflow file for property resolution
       this.workflowFile = workingFile;
+      this.syncToStateMachine();
 
       // Rebuild results array with proper status based on completion state
       this.state.results = prompts.map((prompt, index) => {
@@ -388,8 +399,8 @@ export class PromptQueue {
       return;
     }
 
-    this.state.status = EXECUTION_STATES.RUNNING;
-    this.state.stopped = false; // Clear stopped flag when starting
+    this.stateMachine.startExecution();
+    this.syncFromStateMachine();
     this.emitStateChange();
 
     Log.debug("Queue state set to running");
@@ -406,9 +417,8 @@ export class PromptQueue {
       return;
     }
 
-    this.state.status = EXECUTION_STATES.PAUSED;
-    this.state.pausedTime = Date.now(); // Record when paused
-
+    this.stateMachine.pause();
+    this.syncFromStateMachine();
     this.emitStateChange();
     Log.info("Queue execution paused");
 
@@ -435,18 +445,8 @@ export class PromptQueue {
 
     const previousState = this.state.status;
 
-    // Handle PAUSED state - calculate paused duration
-    if (
-      this.state.status === EXECUTION_STATES.PAUSED &&
-      this.state.pausedTime
-    ) {
-      const pauseDuration = Date.now() - this.state.pausedTime;
-      this.state.totalPausedDuration += pauseDuration;
-      this.state.pausedTime = undefined;
-    }
-
-    this.state.stopped = false; // Clear stopped flag when resuming
-    this.state.status = EXECUTION_STATES.RUNNING;
+    this.stateMachine.resume();
+    this.syncFromStateMachine();
     this.emitStateChange();
 
     Log.info(`Queue state set to running (resumed from ${previousState})`);
@@ -460,8 +460,8 @@ export class PromptQueue {
    * Sets state to CANCELLING - call confirmedStopped() once process actually exits
    */
   stop(): void {
-    this.state.status = EXECUTION_STATES.CANCELLING; // Cancelling, not stopped yet
-    this.state.stopped = true; // Set stopped flag for executor loop
+    this.stateMachine.requestStop();
+    this.syncFromStateMachine();
 
     // Mark the active step as CANCELLED. Covers both SENT and PENDING because
     // updateDashboardForPromptStart (which sets the UI to RUNNING) fires before
@@ -512,8 +512,8 @@ export class PromptQueue {
         advancedPastQueuePrompt = true;
       }
 
-      this.state.status = EXECUTION_STATES.STOPPED;
-
+      this.stateMachine.confirmStopped();
+      this.syncFromStateMachine();
       this.emitStateChange();
       if (advancedPastQueuePrompt) {
         Log.info(
@@ -533,9 +533,9 @@ export class PromptQueue {
    * Updates working file to clear completedPrompts array
    */
   async restart(): Promise<void> {
+    this.stateMachine.reset();
+    this.syncFromStateMachine();
     this.state.currentIndex = 0;
-    this.state.status = EXECUTION_STATES.IDLE;
-    this.state.stopped = false;
     this.currentRetryCount = 0;
 
     // Reset all results to pending
@@ -549,8 +549,6 @@ export class PromptQueue {
     this.state.completedIndices = new Set<string>();
     this.state.totalExecutionTime = 0;
     this.state.queueExtensions = 0;
-    this.state.totalPausedDuration = 0;
-    this.state.pausedTime = undefined;
     this.finalPromptRuntime = undefined;
 
     // Clear per-prompt _runtime data (sessionId, harness, model, etc.)
@@ -702,7 +700,8 @@ export class PromptQueue {
     this.state.completedIndices.add(String(index));
     this.state.currentIndex++;
 
-    this.state.status = EXECUTION_STATES.ERROR;
+    this.stateMachine.fail();
+    this.syncFromStateMachine();
     this.emitStateChange();
 
     // Update working file with failed status
@@ -843,7 +842,8 @@ export class PromptQueue {
    * Mark workflow as completed (called by WorkflowOrchestrator)
    */
   async markCompleted(): Promise<void> {
-    this.state.status = EXECUTION_STATES.COMPLETED;
+    this.stateMachine.complete();
+    this.syncFromStateMachine();
     this.emitStateChange();
 
     // Update working file with completed status
@@ -882,7 +882,8 @@ export class PromptQueue {
       }
     }
 
-    this.state.status = EXECUTION_STATES.ERROR;
+    this.stateMachine.fail();
+    this.syncFromStateMachine();
     this.emitStateChange();
 
     // Update working file with error status
@@ -893,20 +894,15 @@ export class PromptQueue {
    * Start execution time tracking
    */
   startExecutionTimer(): void {
-    this.state.startTime = Date.now();
-    this.state.totalPausedDuration = 0;
+    this.stateMachine.startExecutionTimer();
+    this.syncFromStateMachine();
   }
 
   /**
    * Get active execution time (excluding paused duration)
    */
   getActiveExecutionTime(): number {
-    if (!this.state.startTime) {
-      return 0;
-    }
-
-    const elapsed = Date.now() - this.state.startTime;
-    return elapsed - this.state.totalPausedDuration;
+    return this.stateMachine.getActiveExecutionTime();
   }
 
   /**
@@ -1275,8 +1271,9 @@ export class PromptQueue {
         Log.info(
           `appendPrompts: Setting to STOPPED (appended to COMPLETED queue, ${this.state.completedIndices.size} prompts previously completed, user can Resume)`
         );
-        this.state.status = EXECUTION_STATES.STOPPED;
-        this.state.stopped = true; // Mark as stopped so Resume will work
+        this.stateMachine.setStatus(EXECUTION_STATES.STOPPED);
+        this.stateMachine.setStopped(true);
+        this.syncFromStateMachine();
       } else {
         Log.info(
           `appendPrompts: NOT changing state (current: ${previousStatus}, willRunImmediately: ${willRunImmediately}, completed count: ${this.state.completedIndices.size})`
@@ -1443,6 +1440,31 @@ export class PromptQueue {
   }
 
   /**
+   * Copy status-related fields from the state machine into this.state.
+   * Call after every named state machine transition so this.state stays current.
+   */
+  private syncFromStateMachine(): void {
+    this.state.status = this.stateMachine.status;
+    this.state.stopped = this.stateMachine.stopped;
+    this.state.startTime = this.stateMachine.startTime;
+    this.state.pausedTime = this.stateMachine.pausedTime;
+    this.state.totalPausedDuration = this.stateMachine.totalPausedDuration;
+  }
+
+  /**
+   * Copy status-related fields from this.state into the state machine.
+   * Call after full state resets (clearQueue, loadPrompts, restoreFromWorkingFile)
+   * so the state machine reflects the reconstructed state.
+   */
+  private syncToStateMachine(): void {
+    this.stateMachine.restore(
+      this.state.status,
+      this.state.stopped,
+      this.state.totalPausedDuration
+    );
+  }
+
+  /**
    * Update an existing prompt in the queue
    * @param index - Prompt index (0-based)
    * @param updates - Partial PromptItem updates to apply
@@ -1576,8 +1598,8 @@ export class PromptQueue {
     }
 
     this.state.currentIndex = toIndex;
-    this.state.status = EXECUTION_STATES.IDLE;
-    this.state.stopped = false;
+    this.stateMachine.reset();
+    this.syncFromStateMachine();
     this.state.completedIndices = new Set<string>(
       Array.from({ length: toIndex }, (_, i) => String(i))
     );
