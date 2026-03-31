@@ -32,6 +32,10 @@ const EMPTY_FORM: AddServerForm = {
   transport: "streamable-http",
 };
 
+// Keep the registry in "fill available space" mode only while there is enough
+// room to preserve a comfortably scrollable result list plus the surrounding UI.
+const REGISTRY_FILL_BREAKPOINT = 280;
+
 function envObjectToString(env: Record<string, string> | undefined): string {
   if (!env) return "";
   return Object.entries(env)
@@ -312,7 +316,38 @@ export const McpServersEditor: React.FC<{
   const [registrySort, setRegistrySort] = useState<RegistrySort>("a-z");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const shouldFill = fillHeight && discoveryTab === "registry";
+  const discoveryPanelRef = useRef<HTMLDivElement | null>(null);
+  const canFillDiscovery = fillHeight && discoveryTab === "registry";
+  const [shouldFill, setShouldFill] = useState(canFillDiscovery);
+
+  useEffect(() => {
+    if (!canFillDiscovery) {
+      setShouldFill(false);
+      return;
+    }
+
+    const node = discoveryPanelRef.current;
+    if (!node) {
+      setShouldFill(true);
+      return;
+    }
+
+    const updateShouldFill = (height: number) => {
+      setShouldFill(height >= REGISTRY_FILL_BREAKPOINT);
+    };
+
+    updateShouldFill(node.getBoundingClientRect().height);
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      updateShouldFill(entry?.contentRect.height ?? node.getBoundingClientRect().height);
+    });
+
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+    };
+  }, [canFillDiscovery]);
 
   // Client-side sort only — filtering is server-side via the `search` query param
   const filteredRegistryServers = useMemo(() => {
@@ -618,7 +653,7 @@ export const McpServersEditor: React.FC<{
       : userServers.some((s) => s.id === id);
 
   return (
-    <div className={`flex flex-col gap-2${shouldFill ? " flex-1 min-h-0" : ""}`}>
+    <div className={`flex flex-col gap-2${canFillDiscovery ? " flex-1 min-h-0" : ""}`}>
       {/* Mode selector (prompt level only) */}
       {showDefault && (
         <div className="flex gap-1">
@@ -651,7 +686,7 @@ export const McpServersEditor: React.FC<{
 
       {/* Custom / always-editable mode */}
       {mode === "custom" && (
-        <div className={`flex flex-col gap-2${shouldFill ? " flex-1 min-h-0" : ""}`}>
+        <div className={`flex flex-col gap-2${canFillDiscovery ? " flex-1 min-h-0" : ""}`}>
           {/* FlightPath built-in */}
           <div className="flex flex-col gap-1">
             <div className="text-[10px] font-semibold uppercase text-description-fg tracking-wide">
@@ -686,7 +721,7 @@ export const McpServersEditor: React.FC<{
           </div>
 
           {/* Custom servers */}
-          <div className={`flex flex-col gap-1${shouldFill ? " flex-1 min-h-0" : ""}`}>
+          <div className={`flex flex-col gap-1${canFillDiscovery ? " flex-1 min-h-0" : ""}`}>
             <div className="text-[10px] font-semibold uppercase text-description-fg tracking-wide">
               Custom Servers
             </div>
@@ -1083,7 +1118,10 @@ export const McpServersEditor: React.FC<{
 
             {/* Discovery shortcuts */}
             {showDiscovery && (
-              <div className={`flex flex-col gap-1 mt-1${shouldFill ? " flex-1 min-h-0" : ""}`}>
+              <div
+                ref={discoveryPanelRef}
+                className={`flex flex-col gap-1 mt-1${canFillDiscovery ? " flex-1 min-h-0" : ""}`}
+              >
                 <div className="flex gap-1">
                   {onRequestLocalServers && (
                     <button
@@ -1182,7 +1220,11 @@ export const McpServersEditor: React.FC<{
 
                 {/* Registry panel */}
                 {discoveryTab === "registry" && (
-                  <div className={`flex flex-col gap-1.5 p-2 rounded border border-panel-border bg-editor-bg${shouldFill ? " flex-1 min-h-0" : ""}`}>
+                  <div
+                    className={`flex flex-col gap-1.5 p-2 rounded border border-panel-border bg-editor-bg${
+                      shouldFill ? " flex-1 min-h-0" : " shrink-0"
+                    }`}
+                  >
                     {/* Search input — server-side substring match on server name */}
                     <input
                       ref={searchInputRef}
@@ -1232,7 +1274,13 @@ export const McpServersEditor: React.FC<{
                             </button>
                           ))}
                         </div>
-                        <div className={`flex flex-col gap-1 overflow-y-auto${shouldFill ? " flex-1 min-h-[120px]" : " max-h-48"}`}>
+                        <div
+                          className={`flex flex-col gap-1 overflow-y-auto${
+                            shouldFill
+                              ? " flex-1 min-h-[160px]"
+                              : " flex-none max-h-[160px]"
+                          }`}
+                        >
                           {filteredRegistryServers.map((entry) => {
                             const id = registryEntryToSlug(entry);
                             const alreadyAdded = isInWorkspace(id);
@@ -1331,8 +1379,21 @@ export const McpServersEditor: React.FC<{
                         )}
                       </>
                     ) : filteredRegistryServers !== undefined ? (
-                      <div className="text-[11px] text-description-fg italic">
-                        No matches
+                      <div className="flex flex-col gap-1.5">
+                        <div className="text-[11px] text-description-fg italic">
+                          {hasPrevPage ? "No more results" : "No matches"}
+                        </div>
+                        {hasPrevPage && (
+                          <button
+                            type="button"
+                            disabled={isLoadingRegistry}
+                            onClick={handleRegistryPrevPage}
+                            className="flex items-center gap-1 px-2 py-0.5 text-[11px] rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-30 disabled:cursor-not-allowed transition-colors self-start"
+                          >
+                            <i className="codicon codicon-chevron-left text-[10px]" />
+                            Back to browse
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <div className="text-[10px] text-description-fg italic">
