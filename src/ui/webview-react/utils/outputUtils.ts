@@ -16,9 +16,6 @@ export {
   generateDiffLines,
 } from "./diffUtils";
 
-const PROCESS_EXIT_STATUS_PREFIX =
-  "Process exited unexpectedly — workflow stopped";
-
 /**
  * Shorten a file path for display (shows "...parent/file.ext" when too long).
  */
@@ -98,36 +95,4 @@ export function extractKeyParameters(
   return keys
     .map((k) => `${k}: ${truncate(String(parameters[k]), 30)}`)
     .join(", ");
-}
-
-/**
- * Preserve the original live ordering for early process-exit history entries.
- * Older history files saved the final CLI output with an end-of-step timestamp,
- * which can place the process-exit status message above the prompt on reload.
- */
-export function getStatusMessageSortTimestamp(
-  statusMessage: { message: string; timestamp?: number },
-  index: number,
-  executionIndex: number,
-  stepOutputs: Array<{ timestampMs?: number; attemptIndex?: number }>
-): number {
-  const fallbackTimestamp =
-    statusMessage.timestamp || executionIndex * 10000 + index;
-
-  if (
-    !statusMessage.message.startsWith(PROCESS_EXIT_STATUS_PREFIX) ||
-    stepOutputs.length === 0
-  ) {
-    return fallbackTimestamp;
-  }
-
-  const latestOutputTimestamp = Math.max(
-    ...stepOutputs.map(
-      (output, outputIndex) =>
-        output.timestampMs ??
-        executionIndex * 10000 + 100 + (output.attemptIndex ?? outputIndex)
-    )
-  );
-
-  return Math.max(fallbackTimestamp, latestOutputTimestamp + 1);
 }

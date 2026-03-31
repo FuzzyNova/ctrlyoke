@@ -3,7 +3,6 @@ import {
   shortenPath,
   formatTimeHMS,
   extractKeyParameters,
-  getStatusMessageSortTimestamp,
   parseUnifiedDiff,
   generateDiffLines,
 } from "@utils/outputUtils";
@@ -121,41 +120,6 @@ describe("extractKeyParameters", () => {
     });
     expect(result).toContain("alpha:");
     expect(result).toContain("beta:");
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// getStatusMessageSortTimestamp
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe("getStatusMessageSortTimestamp", () => {
-  it("keeps process-exit status after older saved CLI output timestamps", () => {
-    const result = getStatusMessageSortTimestamp(
-      {
-        message:
-          "Process exited unexpectedly — workflow stopped. CLI process exited unexpectedly while waiting for SessionStart hook (exit code 0)",
-        timestamp: 2000,
-      },
-      0,
-      0,
-      [{ timestampMs: 2500, attemptIndex: 0 }]
-    );
-
-    expect(result).toBe(2501);
-  });
-
-  it("leaves non-process-exit status timestamps unchanged", () => {
-    const result = getStatusMessageSortTimestamp(
-      {
-        message: "End condition Passed - Output: true",
-        timestamp: 2000,
-      },
-      0,
-      0,
-      [{ timestampMs: 2500, attemptIndex: 0 }]
-    );
-
-    expect(result).toBe(2000);
   });
 });
 

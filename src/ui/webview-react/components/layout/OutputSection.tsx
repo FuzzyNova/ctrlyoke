@@ -11,11 +11,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { CliOutput, StatusMessage } from "../output";
 import { PanelBar, RunSelector } from "../shared";
-import {
-  formatTime,
-  generateDiffLines,
-  getStatusMessageSortTimestamp,
-} from "@utils/outputUtils";
+import { formatTime, generateDiffLines } from "@utils/outputUtils";
 import { generateMarkdownExport } from "@utils/markdownExport";
 import type {
   CliOutput as CliOutputType,
@@ -282,15 +278,12 @@ export const OutputSection: React.FC = () => {
       // Add status messages
       const stepStatusMessages = step.statusMessages || [];
       stepStatusMessages.forEach((statusMsg, index) => {
+        const statusTimestamp =
+          statusMsg.timestamp ?? executionIndex * 10000 + index;
         messages.push({
           type: "status",
           target,
-          timestamp: getStatusMessageSortTimestamp(
-            statusMsg,
-            index,
-            executionIndex,
-            step.cliOutputs || []
-          ),
+          timestamp: statusTimestamp,
           data: {
             message: statusMsg.message,
             severity: statusMsg.severity,
