@@ -34,8 +34,8 @@ Add `toolPermissions` to the `executionProperties` definition:
       "properties": {
         "mode": {
           "type": "string",
-          "enum": ["dangerouslyAllowAll", "allowAll", "custom", "passthrough"],
-          "description": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools only. 'passthrough' omits all FlightPath permission flags — the harness uses whatever permissions the user has configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config)."
+          "enum": ["dangerouslyAllowAll", "allowAll", "custom", "none"],
+          "description": "Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll' auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools only. 'none' omits all FlightPath permission flags — the harness uses whatever permissions the user has configured in its own local settings (e.g. ~/.claude/settings.json, Copilot CLI config)."
         },
         "allowedTools": {
           "type": "array",
@@ -52,7 +52,7 @@ Add `toolPermissions` to the `executionProperties` definition:
     },
     { "type": "null" }
   ],
-  "description": "Tool permission overrides for this prompt/workflow. Use null to explicitly disable inherited overrides and fall back to global VS Code settings. Set mode to 'passthrough' to omit all FlightPath permission flags and rely entirely on the harness's own local configuration."
+  "description": "Tool permission overrides for this prompt/workflow. Use null to explicitly disable inherited overrides and fall back to global VS Code settings. Set mode to 'none' to omit all FlightPath permission flags and rely entirely on the harness's own local configuration."
 }
 ```
 
@@ -90,20 +90,20 @@ prompts:
   - prompt: Run the test suite however you usually would.
     # Let the harness use its own configured defaults — no FlightPath flags injected
     toolPermissions:
-      mode: passthrough
+      mode: none
 
   - prompt: Generate a report.
     # Explicitly bypass workflow-level override — fall back to global VS Code settings
     toolPermissions: null
 ```
 
-**`passthrough` vs `null` at a glance:**
+**`none` vs `null` at a glance:**
 
-| `toolPermissions` value   | Resolver behavior                         | Flags injected?                        |
-| ------------------------- | ----------------------------------------- | -------------------------------------- |
-| `undefined`               | Inherit from next tier                    | Depends on tier                        |
-| `null`                    | Stop falling; use global VS Code settings | Yes (global mode)                      |
-| `{ mode: "passthrough" }` | Stop falling; inject nothing              | No — harness uses its own local config |
+| `toolPermissions` value | Resolver behavior                         | Flags injected?                        |
+| ----------------------- | ----------------------------------------- | -------------------------------------- |
+| `undefined`             | Inherit from next tier                    | Depends on tier                        |
+| `null`                  | Stop falling; use global VS Code settings | Yes (global mode)                      |
+| `{ mode: "none" }`      | Stop falling; inject nothing              | No — harness uses its own local config |
 
 ---
 
@@ -122,7 +122,7 @@ export interface ToolPermissionsOverride {
 toolPermissions?: ToolPermissionsOverride | null;
 ```
 
-Note: `ToolPermissionMode` is already defined in `src/flightpath/harness/shared/interfaces/IToolPermissionMapper.ts` — import from there to stay DRY. Add `"passthrough"` to that union type; update all harness `buildArgs()` implementations to return `[]` when `mode === "passthrough"` and `hasFullPermissions()` to return `false`.
+Note: `ToolPermissionMode` is already defined in `src/flightpath/harness/shared/interfaces/IToolPermissionMapper.ts` — import from there to stay DRY. Add `"none"` to that union type; update all harness `buildArgs()` implementations to return `[]` when `mode === "none"` and `hasFullPermissions()` to return `false`.
 
 ---
 
@@ -134,11 +134,11 @@ Note: `ToolPermissionMode` is already defined in `src/flightpath/harness/shared/
 
 This is the right behavior because permissions are a user preference that applies consistently across workflows — unlike `endCondition` or `sessionId` which are inherently workflow-specific and have no meaningful global default.
 
-**`PropertyResolver` is still two-tier at runtime:** No `ConfigurationUtils` calls inside `resolveToolPermissions`. If both prompt and workflow are `undefined` (edge case: no workspace folder, or manual file without seeding), the resolver returns `null` (passthrough).
+**`PropertyResolver` is still two-tier at runtime:** No `ConfigurationUtils` calls inside `resolveToolPermissions`. If both prompt and workflow are `undefined` (edge case: no workspace folder, or manual file without seeding), the resolver returns `null` (none).
 
-**Priority order:** prompt-level `toolPermissions` → workflow-level `toolPermissions` → no flags (passthrough)
+**Priority order:** prompt-level `toolPermissions` → workflow-level `toolPermissions` → no flags (none)
 
-`null`, `undefined`, and `{ mode: "passthrough" }` all resolve the same way at runtime: inject no permission flags and let the harness use whatever it has configured locally.
+`null`, `undefined`, and `{ mode: "none" }` all resolve the same way at runtime: inject no permission flags and let the harness use whatever it has configured locally.
 
 ```typescript
 function resolveToolPermissions(
@@ -148,11 +148,11 @@ function resolveToolPermissions(
   // Prompt takes precedence; use explicit undefined check — null is meaningful ("no flags")
   const effective = promptLevel !== undefined ? promptLevel : workflowLevel;
 
-  // null, undefined, or { mode: "passthrough" } → inject no flags
+  // null, undefined, or { mode: "none" } → inject no flags
   if (
     effective === null ||
     effective === undefined ||
-    effective.mode === "passthrough"
+    effective.mode === "none"
   ) {
     return null; // providers: if (config === null) return [];
   }
@@ -167,7 +167,7 @@ function resolveToolPermissions(
 
 **No `ConfigurationUtils` calls inside `resolveToolPermissions`.** The resolver is self-contained; there is no third tier.
 
-This function lives in `src/utils/PropertyResolver.ts` as a `private static resolveToolPermissions()` method. The `ResolvedProperties` interface gains a `toolPermissions: ToolPermissionConfig | null` field (`null` = passthrough). `PropertyResolver.resolve()` calls it alongside the other resolvers.
+This function lives in `src/utils/PropertyResolver.ts` as a `private static resolveToolPermissions()` method. The `ResolvedProperties` interface gains a `toolPermissions: ToolPermissionConfig | null` field (`null` = none). `PropertyResolver.resolve()` calls it alongside the other resolvers.
 
 ---
 
@@ -203,7 +203,7 @@ const options: CliExecutionOptions = {
 
 ```typescript
 // CopilotCliProvider.buildArgs() becomes:
-const permissionConfig = options.toolPermissions; // null = passthrough
+const permissionConfig = options.toolPermissions; // null = none
 if (permissionConfig === null) {
   return []; // No flags — harness uses its own local config
 }
@@ -224,21 +224,21 @@ Less clean — avoids param threading but couples harness state to individual pr
 
 Not all harnesses support `allowedTools`/`deniedTools` patterns. This affects both runtime behavior and what the UI should show.
 
-| Harness          | Mode support                 | `allowedTools` patterns | `deniedTools` patterns | Notes                                                                                                                                                                                |
-| ---------------- | ---------------------------- | ----------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Copilot CLI**  | ✅ All 4 (incl. passthrough) | ✅ Yes                  | ✅ Yes                 | Most reliable; `--allow-tool` / `--deny-tool`                                                                                                                                        |
-| **Claude CLI**   | ✅ All 4 (incl. passthrough) | ✅ Yes                  | ✅ Yes                 | `--allowedTools` / `--disallowedTools`; passthrough falls back to `~/.claude/settings.json`                                                                                          |
-| **Codex CLI**    | ✅ All 4 (incl. passthrough) | ❌ Ignored              | ❌ Ignored             | Mode-only; `dangerouslyAllowAll`→bypass, `allowAll`→`--full-auto`, `custom`→sandbox+approval flags. Has its own `codexSandboxMode`/`codexApprovalPolicy`/`codexAllowedDirs` settings |
-| **OpenCode CLI** | ✅ All 4 (incl. passthrough) | ❌ Ignored              | ❌ Ignored             | Permission model is config-file driven (`.opencode/opencode.json`), not CLI flags. `buildArgs()` returns `[]`                                                                        |
-| **Qwen CLI**     | ✅ All 4 (incl. passthrough) | ✅ Yes                  | ✅ Yes                 | `--allowed-tools` / `--exclude-tools` (comma-separated); `shell`→`Bash`, `write`→`Write`, etc.                                                                                       |
-| **Gemini CLI**   | ✅ All 4 (incl. passthrough) | ❌ Ignored (Phase 1)    | ❌ Ignored (Phase 1)   | Phase 1: approval-mode flags only (`--approval-mode yolo/auto_edit/default`). Phase 2 (future): policy engine TOML — see Gemini Policy Engine section below.                         |
-| **Copilot Chat** | ❌ N/A                       | ❌ N/A                  | ❌ N/A                 | Chat harness; `toolPermissions` stored but has no effect at runtime                                                                                                                  |
+| Harness          | Mode support          | `allowedTools` patterns | `deniedTools` patterns | Notes                                                                                                                                                                                |
+| ---------------- | --------------------- | ----------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Copilot CLI**  | ✅ All 4 (incl. none) | ✅ Yes                  | ✅ Yes                 | Most reliable; `--allow-tool` / `--deny-tool`                                                                                                                                        |
+| **Claude CLI**   | ✅ All 4 (incl. none) | ✅ Yes                  | ✅ Yes                 | `--allowedTools` / `--disallowedTools`; none falls back to `~/.claude/settings.json`                                                                                                 |
+| **Codex CLI**    | ✅ All 4 (incl. none) | ❌ Ignored              | ❌ Ignored             | Mode-only; `dangerouslyAllowAll`→bypass, `allowAll`→`--full-auto`, `custom`→sandbox+approval flags. Has its own `codexSandboxMode`/`codexApprovalPolicy`/`codexAllowedDirs` settings |
+| **OpenCode CLI** | ✅ All 4 (incl. none) | ❌ Ignored              | ❌ Ignored             | Permission model is config-file driven (`.opencode/opencode.json`), not CLI flags. `buildArgs()` returns `[]`                                                                        |
+| **Qwen CLI**     | ✅ All 4 (incl. none) | ✅ Yes                  | ✅ Yes                 | `--allowed-tools` / `--exclude-tools` (comma-separated); `shell`→`Bash`, `write`→`Write`, etc.                                                                                       |
+| **Gemini CLI**   | ✅ All 4 (incl. none) | ❌ Ignored (Phase 1)    | ❌ Ignored (Phase 1)   | Phase 1: approval-mode flags only (`--approval-mode yolo/auto_edit/default`). Phase 2 (future): policy engine TOML — see Gemini Policy Engine section below.                         |
+| **Copilot Chat** | ❌ N/A                | ❌ N/A                  | ❌ N/A                 | Chat harness; `toolPermissions` stored but has no effect at runtime                                                                                                                  |
 
-### `passthrough` mode behavior (all harnesses)
+### `none` mode behavior (all harnesses)
 
-When `mode === "passthrough"`, every harness's `buildArgs()` returns `[]` immediately — no permission flags are appended to the CLI invocation. The harness process starts with whatever permission configuration the user has set up outside of FlightPath (e.g., `~/.claude/settings.json` for Claude, the user's Copilot CLI defaults, etc.).
+When `mode === "none"`, every harness's `buildArgs()` returns `[]` immediately — no permission flags are appended to the CLI invocation. The harness process starts with whatever permission configuration the user has set up outside of FlightPath (e.g., `~/.claude/settings.json` for Claude, the user's Copilot CLI defaults, etc.).
 
-`hasFullPermissions()` returns `false` for passthrough since FlightPath cannot know what the harness's local config allows. This means the pre-flight headless-without-permissions warning is suppressed (the user is explicitly opting in to harness-managed permissions).
+`hasFullPermissions()` returns `false` for none since FlightPath cannot know what the harness's local config allows. This means the pre-flight headless-without-permissions warning is suppressed (the user is explicitly opting in to harness-managed permissions).
 
 ### Harness groupings for UX purposes
 
@@ -248,7 +248,7 @@ When `mode === "passthrough"`, every harness's `buildArgs()` returns `[]` immedi
 
 **Not applicable**: Copilot Chat
 
-> `passthrough` is available on all harnesses and is always treated as "full support" since it produces no flags.
+> `none` is available on all harnesses and is always treated as "full support" since it produces no flags.
 
 ### Codex-specific settings are NOT part of `toolPermissions`
 
@@ -293,7 +293,7 @@ dangerouslyAllowAll / allowAll / custom
   - `dangerouslyAllowAll` — bypass all restrictions (YOLO/dangerous)
   - `allowAll` — auto-approve all tools (respects deny list)
   - `custom` — use `allowedTools` + `deniedTools` lists
-  - `passthrough` — omit all permission flags; use harness local settings (e.g. `~/.claude/settings.json`)
+  - `none` — omit all permission flags; use harness local settings (e.g. `~/.claude/settings.json`)
 - **Allowed/Denied Tools textareas** — appear only when `mode === "custom"` (animated `max-h` transition matching the session ID pattern). Full width, stacked vertically (not two-column).
 - Each textarea stores newline-separated patterns, parsed to/from `string[]` on change and blur.
 - **Set as Default** — a single `SetAsDefaultButton` for the entire `toolPermissions` object (same approach as `mcpServers`). Appears when `isDifferentFromGlobal("toolPermissions")` is true. Clicking it calls `handleSetAsDefault("toolPermissions", workflowProperties.toolPermissions)`.
@@ -384,7 +384,7 @@ The PropertiesDrawer shows per-prompt override controls with `Default (X)` label
 
 ```
 [Permission Mode ▼]
-Default (allowAll) / dangerouslyAllowAll / allowAll / custom / passthrough / None (use global)
+Default (allowAll) / dangerouslyAllowAll / allowAll / custom / none / None (use global)
 
 -- shown only when mode is explicitly "custom" (not Default, not None) --
 
@@ -405,13 +405,13 @@ Add a `buildPermissionsDefaultLabel(resolved: ToolPermissionsOverride | null | u
 function buildPermissionsDefaultLabel(
   workflowValue: ToolPermissionsOverride | null | undefined
 ): string {
-  // null, undefined, or passthrough mode all mean "no flags"
+  // null, undefined, or none mode all mean "no flags"
   if (
     workflowValue === null ||
     workflowValue === undefined ||
-    workflowValue.mode === "passthrough"
+    workflowValue.mode === "none"
   ) {
-    return "Default (none / passthrough)";
+    return "Default (none / none)";
   }
   if (workflowValue.mode === "dangerouslyAllowAll")
     return "Default (dangerouslyAllowAll)";
@@ -423,15 +423,15 @@ function buildPermissionsDefaultLabel(
 }
 ```
 
-The input to this helper is `workflowProperties.toolPermissions` only — no global fallback. If the workflow hasn't configured permissions, the label reads "Default (none / passthrough)".
+The input to this helper is `workflowProperties.toolPermissions` only — no global fallback. If the workflow hasn't configured permissions, the label reads "Default (none / none)".
 
 #### `null` vs `undefined` semantics for PropertiesDrawer
 
 - `undefined` — inherit from workflow (the "Default (X)" option)
-- object — per-prompt override (including `{ mode: "passthrough" }`)
-- `null` — passthrough: inject no permission flags for this prompt, regardless of what the workflow specifies
+- object — per-prompt override (including `{ mode: "none" }`)
+- `null` — none: inject no permission flags for this prompt, regardless of what the workflow specifies
 
-The dropdown includes a **"None (passthrough)"** option that sets `toolPermissions = null`. This lets a prompt explicitly opt out of the workflow's permission config — the harness runs that prompt with its own local defaults. `null` and `{ mode: "passthrough" }` are runtime-equivalent; `null` is the idiomatic way to express it at the prompt level.
+The dropdown includes a **"None (none)"** option that sets `toolPermissions = null`. This lets a prompt explicitly opt out of the workflow's permission config — the harness runs that prompt with its own local defaults. `null` and `{ mode: "none" }` are runtime-equivalent; `null` is the idiomatic way to express it at the prompt level.
 
 #### Harness-aware inline warnings
 
@@ -460,7 +460,7 @@ toolPermissions?: {
   mode?: ToolPermissionMode;
   allowedTools?: string[];
   deniedTools?: string[];
-} | null; // null = passthrough (no flags)
+} | null; // null = none (no flags)
 ```
 
 `GlobalSettings` does **not** get a `toolPermissions` field. The VS Code settings (`cliToolPermissions`, `cliAllowedTools`, `cliDeniedTools`) are read directly from `ConfigurationUtils` only when creating a new workflow (to pre-populate the SettingsDrawer fields) and when the user clicks "Set as Default".
@@ -476,9 +476,9 @@ if (property === "toolPermissions") {
     allowedTools: ConfigurationUtils.getCliAllowedTools(),
     deniedTools: ConfigurationUtils.getCliDeniedTools(),
   };
-  // null/undefined workflow value means "passthrough"; compare passthrough against VS Code default
-  if (!workflowValue || workflowValue.mode === "passthrough") {
-    return vs.mode !== "passthrough"; // different if VS Code default is not also passthrough
+  // null/undefined workflow value means "none"; compare none against VS Code default
+  if (!workflowValue || workflowValue.mode === "none") {
+    return vs.mode !== "none"; // different if VS Code default is not also none
   }
   return (
     (workflowValue.mode !== undefined && workflowValue.mode !== vs.mode) ||
@@ -499,7 +499,7 @@ Returns the workflow value as-is (no global fallback). Used by the PropertiesDra
 ```typescript
 getEffectiveToolPermissions: () => {
   const { workflowProperties } = get();
-  return workflowProperties.toolPermissions; // null or undefined = passthrough/no flags
+  return workflowProperties.toolPermissions; // null or undefined = none/no flags
 };
 ```
 
@@ -509,7 +509,7 @@ Add `toolPermissions` to the `PropertyValues` interface and `PROPERTY_DEFAULTS`:
 
 ```typescript
 // PropertyValues
-toolPermissions: Disableable<ToolPermissionsOverride>; // undefined = inherit workflow, null = passthrough, object = override
+toolPermissions: Disableable<ToolPermissionsOverride>; // undefined = inherit workflow, null = none, object = override
 
 // PROPERTY_DEFAULTS
 toolPermissions: undefined,
@@ -543,11 +543,11 @@ The `SET_AS_DEFAULT` handler in `WebviewSettingsSync.handleSetAsDefault()` requi
 // In WebviewSettingsSync.handleSetAsDefault() — add alongside the mcpServers branch:
 } else if (property === "toolPermissions") {
   // value is ToolPermissionsOverride | null — split into 3 individual VS Code settings
-  // null/passthrough → reset VS Code settings to their default (allowAll, [], [])
+  // null/none → reset VS Code settings to their default (allowAll, [], [])
   const override = value as ToolPermissionsOverride | null;
   await ConfigurationUtils.updateSetting(
     "cliToolPermissions",
-    override?.mode && override.mode !== "passthrough" ? override.mode : "allowAll"
+    override?.mode && override.mode !== "none" ? override.mode : "allowAll"
   );
   await ConfigurationUtils.updateSetting("cliAllowedTools", override?.allowedTools ?? []);
   await ConfigurationUtils.updateSetting("cliDeniedTools", override?.deniedTools ?? []);
@@ -578,7 +578,7 @@ In Phase 1, Gemini treats `toolPermissions` as mode-only:
 - `dangerouslyAllowAll` → `--approval-mode yolo`
 - `allowAll` → `--approval-mode auto_edit`
 - `custom` → `--approval-mode default` (patterns ignored; mode falls back to `default`)
-- `passthrough` → no flags (Gemini uses its own local policy/settings)
+- `none` → no flags (Gemini uses its own local policy/settings)
 
 The UI shows the "mode-only" warning when the effective harness is Gemini and `mode === "custom"`, identical to Codex and OpenCode.
 
@@ -598,9 +598,9 @@ The policy file path and merge strategy should be researched against the Gemini 
 
 1. **Schema** — Add `toolPermissions` to `executionProperties` in `schemas/prompt-schema.json`. Run `npm run compile` (which includes schema generation).
 
-2. **Types (`FlightPathTypes.ts` + `IToolPermissionMapper.ts`)** — Add `"passthrough"` to the `ToolPermissionMode` union in `IToolPermissionMapper.ts`. Add `ToolPermissionsOverride` interface to `FlightPathTypes.ts` and import `ToolPermissionMode` from `IToolPermissionMapper.ts`. Add `toolPermissions?: ToolPermissionsOverride | null` to `ExecutionProperties`.
+2. **Types (`FlightPathTypes.ts` + `IToolPermissionMapper.ts`)** — Add `"none"` to the `ToolPermissionMode` union in `IToolPermissionMapper.ts`. Add `ToolPermissionsOverride` interface to `FlightPathTypes.ts` and import `ToolPermissionMode` from `IToolPermissionMapper.ts`. Add `toolPermissions?: ToolPermissionsOverride | null` to `ExecutionProperties`.
 
-3. **Resolver (`PropertyResolver.ts`)** — Add `private static resolveToolPermissions(prompt, workflow)` as a **two-tier resolver** (no `ConfigurationUtils` calls — no VS Code fallback at runtime). Add `toolPermissions: ToolPermissionConfig | null` to `ResolvedProperties` (`null` = passthrough). Call it in `PropertyResolver.resolve()`. Logic: prompt wins if defined (including `null`), else workflow; `null`/`undefined`/`{ mode: "passthrough" }` all return `null`.
+3. **Resolver (`PropertyResolver.ts`)** — Add `private static resolveToolPermissions(prompt, workflow)` as a **two-tier resolver** (no `ConfigurationUtils` calls — no VS Code fallback at runtime). Add `toolPermissions: ToolPermissionConfig | null` to `ResolvedProperties` (`null` = none). Call it in `PropertyResolver.resolve()`. Logic: prompt wins if defined (including `null`), else workflow; `null`/`undefined`/`{ mode: "none" }` all return `null`.
 
 4. **WorkflowExecutor** — The resolved `toolPermissions` is available on `resolvedProperties`. Pass it as part of execution options/context into the harness.
 
@@ -618,9 +618,9 @@ The policy file path and merge strategy should be researched against the Gemini 
 
 11. **`SettingsDrawer`** — Replace the "Coming Soon" block for `DRAWER_PAGES.PERMISSIONS` with the permission mode selector, conditional textareas, and `SetAsDefaultButton`. Add `toolPermissions` case to `isDifferentFromGlobal` (compare against `ConfigurationUtils` directly, not `globalSettings`). Add `handleToolPermissionsChange` handler.
 
-12. **`PropertiesDrawer`** — Replace the "Coming Soon" block for `DRAWER_PAGES.PERMISSIONS` with the permission mode dropdown (including "Default (X)" and "None (passthrough)" options) and conditional textareas. Add `buildPermissionsDefaultLabel` helper (uses `workflowProperties.toolPermissions` only — no global fallback needed since working file is always seeded).
+12. **`PropertiesDrawer`** — Replace the "Coming Soon" block for `DRAWER_PAGES.PERMISSIONS` with the permission mode dropdown (including "Default (X)" and "None (none)" options) and conditional textareas. Add `buildPermissionsDefaultLabel` helper (uses `workflowProperties.toolPermissions` only — no global fallback needed since working file is always seeded).
 
-13. **Tests** — Update `ToolPermissionMappers.test.ts` for `passthrough` guard in `buildArgs()`. Add `PropertyResolver` tests for `resolveToolPermissions` covering: `null` at prompt = passthrough (ignores workflow), `null` at workflow = passthrough, `undefined` at both = passthrough, `{ mode: "passthrough" }` = passthrough, explicit config at prompt overrides workflow. Add `PromptFileLoader.populateSettingsDefaults` test confirming `toolPermissions` IS included in the seeded defaults. Add settingsStore tests for `getEffectiveToolPermissions` and `isDifferentFromGlobal("toolPermissions")`.
+13. **Tests** — Update `ToolPermissionMappers.test.ts` for `none` guard in `buildArgs()`. Add `PropertyResolver` tests for `resolveToolPermissions` covering: `null` at prompt = none (ignores workflow), `null` at workflow = none, `undefined` at both = none, `{ mode: "none" }` = none, explicit config at prompt overrides workflow. Add `PromptFileLoader.populateSettingsDefaults` test confirming `toolPermissions` IS included in the seeded defaults. Add settingsStore tests for `getEffectiveToolPermissions` and `isDifferentFromGlobal("toolPermissions")`.
 
 ---
 
@@ -632,5 +632,5 @@ The policy file path and merge strategy should be researched against the Gemini 
 - **OpenCode permissions** remain config-file driven. `toolPermissions` mode maps to the same no-op behavior as today; patterns are silently ignored.
 - **Gemini granular tool control** (Phase 2 — policy engine TOML) is deferred. Phase 1 supports mode-only approval flags. See the Gemini Policy Engine section above.
 - Chat harness (`copilot-chat`) ignores `toolPermissions` at execution time. The UI shows a caveat and dims the page, but values are still stored and travel with the workflow file.
-- The existing `hasFullPermissions()` / headless-without-permissions pre-flight check in `CliIntegration` continues to read from `ConfigurationUtils` as before (it is not per-prompt). When the resolved `toolPermissions` is `null` (passthrough), providers return `false` from `hasFullPermissions()` — the warning is suppressed because the user has explicitly opted in to harness-managed permissions.
+- The existing `hasFullPermissions()` / headless-without-permissions pre-flight check in `CliIntegration` continues to read from `ConfigurationUtils` as before (it is not per-prompt). When the resolved `toolPermissions` is `null` (none), providers return `false` from `hasFullPermissions()` — the warning is suppressed because the user has explicitly opted in to harness-managed permissions.
 - `QwenCliProvider` and `GeminiCliProvider` are included in the harness provider changes (they also call `ConfigurationUtils` directly today and need the same update). For Gemini and other mode-only harnesses, the mapper continues to ignore `allowedTools`/`deniedTools` — the resolver simply passes them through and the mapper discards them.
