@@ -7,6 +7,7 @@ import {
 import { useUiStore } from "../../store/uiStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
+import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
 import {
   MESSAGE_TYPES,
   EXECUTION_MODES,
@@ -714,6 +715,7 @@ export const SettingsPanel: React.FC<{
   const harnessSupport = getPermissionHarnessSupport(
     effectiveHarness as HarnessId
   );
+  const tabOverrides = useDrawerTabOverrides(workflowProperties, globalSettings);
 
   return (
     <div ref={drawerRef} className="flex flex-col h-full bg-sidebar-bg">
@@ -1400,6 +1402,7 @@ export const SettingsPanel: React.FC<{
         onTabChange={setActivePage}
         harnessId={effectiveHarness as HarnessId}
         isNarrow={isNarrow}
+        tabOverrides={tabOverrides}
       />
 
       {/* Always-visible footer with quick toggle buttons */}

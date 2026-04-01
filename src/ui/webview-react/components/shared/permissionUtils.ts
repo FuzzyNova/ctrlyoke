@@ -1,6 +1,6 @@
 import { HARNESS_IDS, type HarnessId } from "../../types/messages";
 import type { ToolPermissionsOverride } from "../../types/messages";
-import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
+import { PERMISSION_MODES } from "@root/types/DashboardConstants";
 
 /** Options for the permission mode selector (used by both SettingsDrawer and PropertiesDrawer) */
 export const PERMISSION_MODE_OPTIONS = [

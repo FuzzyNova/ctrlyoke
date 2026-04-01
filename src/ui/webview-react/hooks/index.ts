@@ -11,3 +11,4 @@ export {
 export { useMediaQuery, useIsMobile } from "./useMediaQuery";
 export { useElementNarrow } from "./useElementNarrow";
 export { useUndoRedoKeyHandler } from "./useUndoRedoKeyHandler";
+export { useDrawerTabOverrides } from "./useDrawerTabOverrides";

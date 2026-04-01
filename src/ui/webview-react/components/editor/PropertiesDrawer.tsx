@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
+import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
 import {
   useEditorStore,
   END_CONDITION_DEFAULTS,
@@ -258,6 +259,21 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     workflowProperties.harness ??
     globalSettings.harness) as HarnessId;
   const permHarnessSupport = getPermissionHarnessSupport(effectivePermHarness);
+  // Resolved permission mode (prompt → workflow fallback) used for tab icon styling
+  const resolvedPermMode =
+    properties.toolPermissions === undefined
+      ? workflowProperties.toolPermissions === null
+        ? PERMISSION_MODES.NONE
+        : (workflowProperties.toolPermissions?.mode ?? PERMISSION_MODES.ALLOW_ALL)
+      : properties.toolPermissions === null
+        ? PERMISSION_MODES.NONE
+        : (properties.toolPermissions.mode ?? PERMISSION_MODES.ALLOW_ALL);
+
+  const tabOverrides = useDrawerTabOverrides(
+    workflowProperties,
+    globalSettings,
+    properties
+  );
 
   // ── Hooks page derived values ───────────────────────────────────────────
   const resolvedHooks = useMemo(() => {
@@ -966,17 +982,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 
               {/* Allowed / Denied Tools textareas — always visible, disabled by mode */}
               {(() => {
-                // Determine the effective permission mode for this prompt
-                const effectivePermMode: string =
-                  properties.toolPermissions === undefined
-                    ? workflowProperties.toolPermissions === null
-                      ? PERMISSION_MODES.NONE
-                      : (workflowProperties.toolPermissions?.mode ??
-                        PERMISSION_MODES.ALLOW_ALL)
-                    : properties.toolPermissions === null
-                      ? PERMISSION_MODES.NONE
-                      : (properties.toolPermissions.mode ??
-                        PERMISSION_MODES.ALLOW_ALL);
+                const effectivePermMode = resolvedPermMode;
                 const isInheriting = properties.toolPermissions === undefined;
                 const allowedDisabled =
                   isInheriting ||
@@ -1105,6 +1111,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         onTabChange={setActivePage}
         harnessId={currentHarness}
         isNarrow={isNarrow}
+        tabOverrides={tabOverrides}
       />
     </div>
   );

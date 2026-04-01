@@ -40,3 +40,4 @@ export {
   buildPermissionsDefaultLabel,
   type PermissionHarnessSupport,
 } from "./permissionUtils";
+export { type TabIconOverride } from "./tabBadgeUtils";
