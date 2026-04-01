@@ -4,8 +4,10 @@ import { PERMISSION_MODES } from "@root/types/DashboardConstants";
 export interface TabIconOverride {
   /** Replace the tab's default codicon with this one */
   codicon?: string;
-  /** Tailwind text-color class to apply to the icon and label */
+  /** Tailwind text-color class to apply to the icon when inactive */
   color?: string;
+  /** Tailwind hover:text-* class to apply on hover when inactive; defaults to hover:text-foreground */
+  hoverColor?: string;
 }
 
 /**
@@ -28,38 +30,38 @@ export function getPermissionTabOverride(
   }
 }
 
-/** Yellow icon if any hooks are configured in the resolved value */
+/** Focus-border (blue) icon if any hooks are configured in the resolved value */
 export function getHooksTabOverride(
   hooks: object[] | null | undefined
 ): TabIconOverride | undefined {
   if (Array.isArray(hooks) && hooks.length > 0) {
-    return { color: "text-warning-fg" };
+    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight" };
   }
   return undefined;
 }
 
-/** Blue (focus-border) icon if any MCP servers are configured */
+/** Focus-border (blue) icon if any MCP servers are configured */
 export function getMcpTabOverride(
   mcpServers: (string | object)[] | null | undefined
 ): TabIconOverride | undefined {
   if (Array.isArray(mcpServers) && mcpServers.length > 0) {
-    return { color: "text-focus-border" };
+    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight" };
   }
   return undefined;
 }
 
-/** Green icon if an end condition with a script is configured */
+/** Focus-border (blue) icon if an end condition with a script is configured */
 export function getValidationTabOverride(
   endCondition: { script?: string } | null | undefined
 ): TabIconOverride | undefined {
   if (endCondition?.script) {
-    return { color: "text-terminal-ansiGreen" };
+    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight" };
   }
   return undefined;
 }
 
 /**
- * Blue (focus-border) icon if resume session is active or prior context is not "none".
+ * Focus-border (blue) icon if resume session is active or prior context is not "none".
  * Accepts unknown priorContext to handle both string union and number[] without importing PriorContext.
  */
 export function getContextTabOverride(
@@ -71,7 +73,7 @@ export function getContextTabOverride(
     ? priorContext.length > 0
     : typeof priorContext === "string" && priorContext !== "none";
   if (sessionActive || contextActive) {
-    return { color: "text-focus-border" };
+    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight" };
   }
   return undefined;
 }
