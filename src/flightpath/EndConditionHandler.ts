@@ -237,7 +237,7 @@ export class EndConditionHandler {
 
     while (true) {
       // Check if workflow was stopped by user
-      if (this.promptQueue.getState().stopped) {
+      if (retryContext.runtime.stopped) {
         Log.info("⚠️ Workflow stopped, aborting retry");
         return {
           shouldContinue: false,
@@ -337,7 +337,7 @@ export class EndConditionHandler {
       }
 
       // Check if workflow was stopped during retry
-      if (this.promptQueue.getState().stopped) {
+      if (retryContext.runtime.stopped) {
         Log.info("⚠️ Workflow stopped during retry");
         return {
           shouldContinue: false,

@@ -19,13 +19,29 @@ import type {
   TextData,
   ThinkingBlock,
 } from "../types/cliEvents";
+import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/cliEvents";
 import { HARNESS_INFO } from "../types/messages";
+import {
+  mapOrderedHistoryEntriesToMessages,
+} from "./outputProjection";
 import { truncate } from "./string";
 import { generateDiffLines } from "./diffUtils";
 import { extractKeyParameters } from "./outputUtils";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
+
+interface MarkdownExportItem {
+  type: "status" | "cli";
+  target: {
+    kind: "queue" | "finalPrompt";
+    index: number;
+  };
+  timestamp: number;
+  sequence?: number;
+  data: unknown;
+  attemptIndex?: number;
+}
 
 function formatToolCallForMarkdown(
   toolName: string,
@@ -265,18 +281,15 @@ function renderStructuredEventsToMarkdown(
  * Generate markdown export content from CLI outputs.
  */
 export function generateMarkdownExport(
-  outputs: Array<{
-    type: "status" | "cli";
-    stepIndex: number;
-    timestamp: number;
-    data: unknown;
-    attemptIndex?: number;
-  }>,
+  outputs: ReadonlyArray<MarkdownExportItem>,
   metadata: {
     fileName: string;
     executionState: string;
     currentStep: number;
     totalSteps: number;
+  },
+  options?: {
+    orderedEntries?: ReadonlyArray<OrderedHistoryEntry>;
   }
 ): string {
   const lines: string[] = [];
@@ -294,12 +307,19 @@ export function generateMarkdownExport(
   lines.push("---");
   lines.push("");
 
-  if (outputs.length === 0) {
+  const sortedOutputs =
+    options?.orderedEntries && options.orderedEntries.length > 0
+      ? mapOrderedHistoryEntriesToMessages(options.orderedEntries)
+      : [...outputs].sort(
+          (left, right) =>
+            left.timestamp - right.timestamp ||
+            (left.sequence ?? 0) - (right.sequence ?? 0)
+        );
+
+  if (sortedOutputs.length === 0) {
     lines.push("*No output captured*");
     return lines.join("\n");
   }
-
-  const sortedOutputs = [...outputs].sort((a, b) => a.timestamp - b.timestamp);
 
   sortedOutputs.forEach((item) => {
     if (item.type === "status") {
@@ -330,8 +350,12 @@ export function generateMarkdownExport(
         item.attemptIndex === 0
           ? "Initial Attempt"
           : `Retry ${item.attemptIndex}`;
+      const stepLabel =
+        item.target.kind === "finalPrompt"
+          ? `Final Prompt Loop ${item.target.index + 1}`
+          : `Prompt ${item.target.index + 1}`;
 
-      lines.push(`## Prompt ${item.stepIndex + 1} - ${attemptLabel}`);
+      lines.push(`## ${stepLabel} - ${attemptLabel}`);
       lines.push("");
 
       if (output.prompt) {

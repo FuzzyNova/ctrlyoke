@@ -182,6 +182,16 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.strictEqual(loaded.outputTimeline?.length, 2);
     assert.strictEqual(loaded.outputTimeline?.[0].key, "queue:0");
     assert.strictEqual(loaded.outputTimeline?.[1].key, "final:0");
+    assert.deepStrictEqual(
+      loaded.orderedEntries?.map((entry) => entry.kind),
+      ["status", "cli", "status", "cli"]
+    );
+    assert.strictEqual(loaded.orderedEntries?.[1]?.kind, "cli");
+    if (loaded.orderedEntries?.[1]?.kind !== "cli") {
+      assert.fail("expected second ordered entry to be cli output");
+    }
+    assert.strictEqual(loaded.orderedEntries[1].cliOutput.response, "final");
+    assert.strictEqual(loaded.orderedEntries[1].sequence, 3);
 
     const events = await recorder.readEvents(historyFilePath);
     assert.strictEqual(events.length, 8);
@@ -203,6 +213,139 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       ]
     );
     assert.ok(events.every((event) => typeof event.timestampMs === "number"));
+  });
+
+  test("records authoritative workflow runtime transitions without affecting history projection", async () => {
+    const historyInit = await manager.initializeRun("wf-runtime");
+    const historyFilePath = historyInit.filePath;
+
+    await manager.appendRuntimeTransition(historyFilePath, {
+      command: "pause",
+      previous: {
+        status: EXECUTION_STATES.RUNNING,
+        stopped: false,
+        startTime: 100,
+        pausedTime: undefined,
+        totalPausedDuration: 0,
+      },
+      current: {
+        status: EXECUTION_STATES.PAUSED,
+        stopped: false,
+        startTime: 100,
+        pausedTime: 150,
+        totalPausedDuration: 0,
+      },
+      timestampMs: 150,
+    });
+
+    await manager.appendStatusMessage(
+      historyFilePath,
+      { kind: "queue", stepIndex: 0 },
+      { message: "paused", severity: "info", timestamp: 151 }
+    );
+
+    const events = await recorder.readEvents(historyFilePath);
+    assert.deepStrictEqual(
+      events.map((event) => event.eventType),
+      [
+        TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED,
+        TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED,
+      ]
+    );
+    assert.strictEqual(events[0]?.timestampMs, 150);
+    if (
+      events[0]?.eventType !==
+      TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED
+    ) {
+      assert.fail("expected runtime transition event");
+    }
+    assert.deepStrictEqual(events[0].payload.transition, {
+      command: "pause",
+      previous: {
+        status: EXECUTION_STATES.RUNNING,
+        stopped: false,
+        startTime: 100,
+        totalPausedDuration: 0,
+      },
+      current: {
+        status: EXECUTION_STATES.PAUSED,
+        stopped: false,
+        startTime: 100,
+        pausedTime: 150,
+        totalPausedDuration: 0,
+      },
+    });
+
+    const loaded = await manager.loadHistory(historyFilePath);
+    assert.deepStrictEqual(loaded.promptOutputs[0]?.statusMessages, [
+      { message: "paused", severity: "info", timestamp: 151 },
+    ]);
+    assert.deepStrictEqual(
+      loaded.orderedEntries?.map((entry) => entry.kind),
+      ["runtime", "status"]
+    );
+  });
+
+  test("orders canonical history entries by timestamp and sequence", async () => {
+    const historyInit = await manager.initializeRun("wf-canonical-order");
+    const historyFilePath = historyInit.filePath;
+
+    await recorder.appendEvents(historyFilePath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED,
+        timestampMs: 100,
+        target: { kind: "queue", stepIndex: 0 },
+        payload: {
+          statusMessage: {
+            message: "before",
+            severity: "info",
+            timestamp: 100,
+          },
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 100,
+        target: { kind: "queue", stepIndex: 0 },
+        attemptIndex: 0,
+        payload: {
+          cliOutput: {
+            prompt: "queue-1",
+            response: "draft",
+            elapsed: 1,
+            isStreaming: false,
+            timestampMs: 100,
+            attemptIndex: 0,
+          },
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: 100,
+        target: { kind: "queue", stepIndex: 0 },
+        attemptIndex: 0,
+        payload: {
+          cliOutput: {
+            prompt: "queue-1",
+            response: "final",
+            elapsed: 1,
+            isStreaming: false,
+            timestampMs: 100,
+            attemptIndex: 0,
+          },
+        },
+      },
+    ]);
+
+    const loaded = await manager.loadHistory(historyFilePath);
+    assert.deepStrictEqual(
+      loaded.orderedEntries?.map((entry) =>
+        entry.kind === "cli"
+          ? `${entry.kind}:${entry.cliOutput.response}:${entry.sequence}`
+          : `${entry.kind}:${entry.sequence}`
+      ),
+      ["status:1", "cli:final:3"]
+    );
   });
 
   test("stores status messages as discrete timeline events in sequence order", async () => {
@@ -256,6 +399,54 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       { message: "queued", severity: "info", timestamp: 100 },
       { message: "complete", severity: "info", timestamp: 120 },
     ]);
+  });
+
+  test("ignores compatibility status snapshots when saving timeline cli output", async () => {
+    const historyInit = await manager.initializeRun("wf-status-canonical");
+    const historyFilePath = historyInit.filePath;
+
+    await manager.appendStatusMessage(
+      historyFilePath,
+      { kind: "queue", stepIndex: 0 },
+      { message: "queued", severity: "info", timestamp: 100 }
+    );
+
+    await manager.saveExecutionOutput(
+      historyFilePath,
+      { kind: "queue", stepIndex: 0 },
+      [
+        {
+          prompt: "queue-1",
+          response: "ok",
+          elapsed: 1,
+          isStreaming: false,
+          timestampMs: 110,
+          attemptIndex: 0,
+        },
+      ],
+      [
+        { message: "queued", severity: "info", timestamp: 100 },
+        { message: "stale-compat", severity: "warning", timestamp: 105 },
+      ]
+    );
+
+    const events = await recorder.readEvents(historyFilePath);
+    assert.deepStrictEqual(
+      events.map((event) => event.eventType),
+      [
+        TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED,
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+      ]
+    );
+
+    const loaded = await manager.loadHistory(historyFilePath);
+    assert.deepStrictEqual(loaded.promptOutputs[0]?.statusMessages, [
+      { message: "queued", severity: "info", timestamp: 100 },
+    ]);
+    assert.deepStrictEqual(
+      loaded.orderedEntries?.map((entry) => entry.kind),
+      ["status", "cli"]
+    );
   });
 
   test("projects older aggregate timeline event kinds for compatibility", async () => {
@@ -342,6 +533,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       loaded.promptOutputs[0]?.cliOutputs[0]?.response,
       "legacy-ok"
     );
+    assert.strictEqual(loaded.orderedEntries, undefined);
 
     const runs = await manager.getRunsForWorkflow(workflowId);
     assert.deepStrictEqual(runs, [path.basename(historyFilePath)]);

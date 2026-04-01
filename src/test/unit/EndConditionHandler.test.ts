@@ -294,4 +294,48 @@ suite("EndConditionHandler", () => {
       { command: "failAttempt", attemptIndex: 0 },
     ]);
   });
+
+  test("aborts retries when the runtime is stopped before queue state sync catches up", async () => {
+    const platform = new MockPlatform();
+    const runtime = new WorkflowStateMachine();
+    const queue = new PromptQueue(runtime);
+    const prompt = createPrompt(1);
+    const integration = new MockHarnessIntegration(undefined, false);
+    const evaluator = new TestEndConditionEvaluator(platform, [
+      successResult("should-not-run"),
+    ]);
+    const handler = new EndConditionHandler(
+      evaluator,
+      queue,
+      () => undefined,
+      platform
+    );
+    let retryCallbackCount = 0;
+
+    queue.loadPrompts({ prompts: [prompt] });
+    assert.strictEqual(runtime.requestStop(), true);
+
+    const result = await handler.handleEndConditionResult(
+      prompt,
+      validationFailure(),
+      {
+        integration,
+        totalPrompts: 1,
+        workspaceFolderPath: process.cwd(),
+        currentPromptFilePath: "workflow.flightpath.yaml",
+        runtime,
+        attemptTarget: { kind: "queue", stepIndex: 0 },
+        attemptIndex: 0,
+      },
+      async () => {
+        retryCallbackCount++;
+        return "fixed";
+      }
+    );
+
+    assert.strictEqual(result.shouldContinue, false);
+    assert.strictEqual(result.failureReason, "Workflow stopped by user");
+    assert.strictEqual(retryCallbackCount, 0);
+    assert.strictEqual(runtime.stopped, true);
+  });
 });

@@ -58,6 +58,8 @@ export interface IDashboardSink {
 
   updateExecutionState(state: string): void;
 
+  updateExecutionCompleted?(): void;
+
   updateStepStatus(
     stepIndex: number,
     status: {

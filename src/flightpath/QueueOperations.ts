@@ -14,6 +14,7 @@ import {
   type Harness,
 } from "../types/FlightPathTypes";
 import {
+  EXECUTION_STATES,
   QUEUE_POSITION,
   STEP_STATUS,
   type QueuePosition,
@@ -104,6 +105,7 @@ export function getQueueStatus(
   workingFilePath?: string
 ): QueueStatusResponse {
   const state = queue.getState();
+  const runtime = queue.getRuntimeStateMachine();
 
   // Get queue size limits from settings
   const queueConfig = ConfigurationUtils.getDynamicQueueConfig();
@@ -137,7 +139,7 @@ export function getQueueStatus(
       completedPrompts: state.results.filter(
         (r) => r.status === STEP_STATUS.COMPLETED
       ).length,
-      executionState: state.status,
+      executionState: runtime.status,
       maxQueueSize: unlimitedMode ? 0 : maxQueueSize, // 0 means unlimited
       remainingSlots: remainingSlots === Infinity ? 0 : remainingSlots,
       workingFile: state.workingFilePath || null,
@@ -210,6 +212,7 @@ export async function appendToQueue(
   const unlimitedMode = queueConfig.unlimitedMode;
 
   const state = queue.getState();
+  const runtime = queue.getRuntimeStateMachine();
   const currentSize = state.prompts.length;
   const newSize = currentSize + request.prompts.length;
 
@@ -236,7 +239,11 @@ export async function appendToQueue(
       ? state.currentIndex + 1
       : state.prompts.length;
 
-  // 5. Append prompts (PromptQueue.appendPrompts now supports position)
+  if (runtime.status === EXECUTION_STATES.COMPLETED) {
+    runtime.reopenForContinuation();
+  }
+
+  // 5. Append prompts (PromptQueue now owns topology only)
   await queue.appendPrompts(promptItems, request.source, request.position);
 
   // 6. Get updated state

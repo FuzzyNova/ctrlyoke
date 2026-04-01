@@ -26,6 +26,7 @@ import {
   TIMELINE_EVENT_TYPES,
   type WorkflowTimelineEventDraft,
 } from "../../types/WorkflowTimelineTypes";
+import type { WorkflowRuntimeTransition } from "../../types/FlightPathTypes";
 
 /**
  * OutputHistoryManager
@@ -139,9 +140,8 @@ export class OutputHistoryManager {
   /**
    * Save CLI outputs for a step (called after each prompt completes or retries).
    * Merges incoming CLI outputs with existing ones by attemptIndex so all retry
-   * attempts are preserved. Timeline-backed runs treat statusMessages as
-   * compatibility input only; canonical status persistence should go through
-   * appendStatusMessage().
+   * attempts are preserved. Timeline-backed runs ignore statusMessages here;
+   * canonical status persistence goes through appendStatusMessage().
    */
   async saveStepOutput(
     historyFilePath: string,
@@ -175,8 +175,7 @@ export class OutputHistoryManager {
         await this.saveTimelineExecutionOutput(
           historyFilePath,
           target,
-          cliOutputs,
-          statusMessages
+          cliOutputs
         );
         return;
       }
@@ -234,6 +233,40 @@ export class OutputHistoryManager {
       await this.writeHistory(historyFilePath, history);
     } catch (error) {
       Log.warn("Failed to append status message to history:", error);
+    }
+  }
+
+  /**
+   * Append an authoritative workflow runtime transition for timeline-backed runs.
+   * Legacy JSON history files do not persist run-level lifecycle events.
+   */
+  async appendRuntimeTransition(
+    historyFilePath: string,
+    transition: WorkflowRuntimeTransition
+  ): Promise<void> {
+    if (!historyFilePath || !this.isTimelineHistoryPath(historyFilePath)) {
+      return;
+    }
+
+    try {
+      await this.timelineRecorder.appendEvents(historyFilePath, [
+        {
+          eventType: TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED,
+          timestampMs: transition.timestampMs,
+          payload: {
+            transition: {
+              command: transition.command,
+              previous: transition.previous,
+              current: transition.current,
+            },
+          },
+        },
+      ]);
+    } catch (error) {
+      Log.warn(
+        "Failed to append workflow runtime transition to history:",
+        error
+      );
     }
   }
 
@@ -676,9 +709,12 @@ export class OutputHistoryManager {
   private async saveTimelineExecutionOutput(
     historyFilePath: string,
     target: OutputExecutionTarget,
-    cliOutputs: CliOutput[],
-    statusMessages: StatusMessage[]
+    cliOutputs: CliOutput[]
   ): Promise<void> {
+    if (cliOutputs.length === 0) {
+      return;
+    }
+
     const history = await this.timelineAdapter.loadHistory(historyFilePath);
     const existingStepOutput = this.getStepOutput(history, target);
     const eventDrafts: WorkflowTimelineEventDraft[] = [];
@@ -703,63 +739,12 @@ export class OutputHistoryManager {
       });
     }
 
-    eventDrafts.push(
-      ...this.buildStatusMessageEventDrafts(
-        target,
-        existingStepOutput?.statusMessages ?? [],
-        statusMessages,
-        cliOutputs
-      )
-    );
-
     if (eventDrafts.length === 0) {
       return;
     }
 
     eventDrafts.sort((left, right) => left.timestampMs - right.timestampMs);
     await this.timelineRecorder.appendEvents(historyFilePath, eventDrafts);
-  }
-
-  private buildStatusMessageEventDrafts(
-    target: OutputExecutionTarget,
-    existingStatusMessages: StatusMessage[],
-    statusMessages: StatusMessage[],
-    cliOutputs: CliOutput[]
-  ): WorkflowTimelineEventDraft[] {
-    if (statusMessages.length === 0) {
-      return [];
-    }
-
-    if (isDeepStrictEqual(existingStatusMessages, statusMessages)) {
-      return [];
-    }
-
-    if (
-      this.isAppendOnlyStatusMessageUpdate(
-        existingStatusMessages,
-        statusMessages
-      )
-    ) {
-      return statusMessages
-        .slice(existingStatusMessages.length)
-        .map((statusMessage) =>
-          this.createStatusMessageRecordedDraft(target, statusMessage)
-        );
-    }
-
-    return [
-      {
-        eventType: TIMELINE_EVENT_TYPES.STATUS_MESSAGES_UPDATED,
-        timestampMs:
-          statusMessages[statusMessages.length - 1]?.timestamp ??
-          cliOutputs[cliOutputs.length - 1]?.timestampMs ??
-          Date.now(),
-        target,
-        payload: {
-          statusMessages,
-        },
-      },
-    ];
   }
 
   private createStatusMessageRecordedDraft(
@@ -774,18 +759,6 @@ export class OutputHistoryManager {
         statusMessage,
       },
     };
-  }
-
-  private isAppendOnlyStatusMessageUpdate(
-    existingStatusMessages: StatusMessage[],
-    statusMessages: StatusMessage[]
-  ): boolean {
-    return (
-      statusMessages.length >= existingStatusMessages.length &&
-      existingStatusMessages.every((message, index) =>
-        isDeepStrictEqual(message, statusMessages[index])
-      )
-    );
   }
 
   private async readRunMetadata(

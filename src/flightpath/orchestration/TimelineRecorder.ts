@@ -164,19 +164,8 @@ export class TimelineRecorder {
 
     return this.runSerializedManifestOperation(manifestPath, async () =>
       withFileLock(manifestPath, async () => {
-        const [manifest, existingEvents] = await Promise.all([
-          this.readManifest(manifestPath),
-          this.readEvents(manifestPath),
-        ]);
-
-        const maxExistingSequence = existingEvents.reduce(
-          (currentMax, event) => Math.max(currentMax, event.sequence),
-          0
-        );
-        let nextSequence = Math.max(
-          manifest.nextSequence,
-          maxExistingSequence + 1
-        );
+        const manifest = await this.readManifest(manifestPath);
+        let nextSequence = manifest.nextSequence;
 
         const events: WorkflowTimelineEvent[] = drafts.map((draft) => ({
           ...draft,
@@ -194,7 +183,7 @@ export class TimelineRecorder {
         const lastEventTimestamp = events[events.length - 1].timestampMs;
         await this.writeManifestDirect(manifestPath, {
           ...manifest,
-          eventCount: existingEvents.length + events.length,
+          eventCount: manifest.eventCount + events.length,
           nextSequence,
           lastUpdatedAt: Math.max(manifest.lastUpdatedAt, lastEventTimestamp),
         });

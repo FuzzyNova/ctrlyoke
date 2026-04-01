@@ -679,6 +679,8 @@ export const SettingsPanel: React.FC<{
     });
   }, [vscode]);
 
+  const tabOverrides = useDrawerTabOverrides(workflowProperties, globalSettings);
+
   // ============================================================================
   // RENDER
   // ============================================================================
@@ -715,7 +717,6 @@ export const SettingsPanel: React.FC<{
   const harnessSupport = getPermissionHarnessSupport(
     effectiveHarness as HarnessId
   );
-  const tabOverrides = useDrawerTabOverrides(workflowProperties, globalSettings);
 
   return (
     <div ref={drawerRef} className="flex flex-col h-full bg-sidebar-bg">

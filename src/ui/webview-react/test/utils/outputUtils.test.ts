@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
   shortenPath,
   formatTimeHMS,
@@ -257,7 +258,7 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "status" as const,
-        stepIndex: 0,
+        target: { kind: "queue" as const, index: 0 },
         timestamp: 1000,
         data: { message: "Workflow started", timestamp: "10:00:00" },
       },
@@ -270,7 +271,7 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "cli" as const,
-        stepIndex: 0,
+        target: { kind: "queue" as const, index: 0 },
         timestamp: 2000,
         attemptIndex: 0,
         data: {
@@ -289,7 +290,7 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "cli" as const,
-        stepIndex: 0,
+        target: { kind: "queue" as const, index: 0 },
         timestamp: 1000,
         attemptIndex: 2,
         data: { response: "retry response" },
@@ -303,7 +304,7 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "cli" as const,
-        stepIndex: 0,
+        target: { kind: "queue" as const, index: 0 },
         timestamp: 1000,
         attemptIndex: 0,
         data: {
@@ -322,7 +323,7 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "cli" as const,
-        stepIndex: 0,
+        target: { kind: "queue" as const, index: 0 },
         timestamp: 1000,
         attemptIndex: 0,
         data: {
@@ -340,14 +341,14 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "cli" as const,
-        stepIndex: 1,
+        target: { kind: "queue" as const, index: 1 },
         timestamp: 3000,
         attemptIndex: 0,
         data: { response: "second" },
       },
       {
         type: "cli" as const,
-        stepIndex: 0,
+        target: { kind: "queue" as const, index: 0 },
         timestamp: 1000,
         attemptIndex: 0,
         data: { response: "first" },
@@ -363,7 +364,7 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "status" as const,
-        stepIndex: 0,
+        target: { kind: "queue" as const, index: 0 },
         timestamp: 2000,
         data: {
           message: "Process exited unexpectedly — workflow stopped",
@@ -372,7 +373,7 @@ describe("generateMarkdownExport", () => {
       },
       {
         type: "cli" as const,
-        stepIndex: 0,
+        target: { kind: "queue" as const, index: 0 },
         timestamp: 1000,
         attemptIndex: 0,
         data: {
@@ -388,5 +389,88 @@ describe("generateMarkdownExport", () => {
       "Process exited unexpectedly — workflow stopped"
     );
     expect(promptIdx).toBeLessThan(statusIdx);
+  });
+
+  it("orders equal-timestamp items by sequence and labels final prompt loops", () => {
+    const outputs = [
+      {
+        type: "cli" as const,
+        target: { kind: "finalPrompt" as const, index: 0 },
+        timestamp: 1000,
+        sequence: 2,
+        attemptIndex: 0,
+        data: {
+          response: "final response",
+        },
+      },
+      {
+        type: "status" as const,
+        target: { kind: "queue" as const, index: 0 },
+        timestamp: 1000,
+        sequence: 1,
+        data: {
+          message: "queued first",
+          timestamp: "10:00:00",
+        },
+      },
+    ];
+
+    const md = generateMarkdownExport(outputs, metadata);
+    expect(md.indexOf("queued first")).toBeLessThan(
+      md.indexOf("## Final Prompt Loop 1 - Initial Attempt")
+    );
+    expect(md).toContain("## Final Prompt Loop 1 - Initial Attempt");
+  });
+
+  it("prefers canonical ordered entries when provided for export", () => {
+    const outputs = [
+      {
+        type: "cli" as const,
+        target: { kind: "queue" as const, index: 1 },
+        timestamp: 3000,
+        attemptIndex: 0,
+        data: { response: "legacy queue second" },
+      },
+      {
+        type: "cli" as const,
+        target: { kind: "queue" as const, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        data: { response: "legacy queue first" },
+      },
+    ];
+    const orderedEntries: OrderedHistoryEntry[] = [
+      {
+        kind: "status",
+        target: { kind: "queue", stepIndex: 0 },
+        statusMessage: {
+          message: "canonical status",
+          severity: "info",
+          timestamp: 1000,
+        },
+        timestampMs: 1000,
+        sequence: 1,
+      },
+      {
+        kind: "cli",
+        target: { kind: "finalPrompt", loopIndex: 0 },
+        attemptIndex: 0,
+        cliOutput: {
+          prompt: "",
+          response: "canonical final",
+          elapsed: 0,
+          isStreaming: false,
+          timestampMs: 1000,
+        },
+        timestampMs: 1000,
+        sequence: 2,
+      },
+    ];
+
+    const md = generateMarkdownExport(outputs, metadata, { orderedEntries });
+    expect(md.indexOf("canonical status")).toBeLessThan(
+      md.indexOf("## Final Prompt Loop 1 - Initial Attempt")
+    );
+    expect(md).toContain("canonical final");
   });
 });

@@ -148,6 +148,9 @@ export class WorkflowInstance {
   private readonly promptFileLoader: PromptFileLoader;
   private readonly promptFileWatcher: PromptFileWatcher;
   readonly outputHistoryManager: OutputHistoryManager;
+  private activeHistoryFilePath: string = "";
+  private pendingRuntimeTransitionHistoryWrite: Promise<void> =
+    Promise.resolve();
 
   /**
    * Execution integrations created for the current/most-recent run — disposed in finally block.
@@ -356,17 +359,18 @@ export class WorkflowInstance {
       return;
     }
     const state = this.promptQueue.getState();
+    const executionState = this.getAuthoritativeExecutionState();
     const fileName = this.currentPromptFile
       ? path.basename(this.currentPromptFile.filePath)
       : state.workflowName || "Untitled";
     Log.trace(
-      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${state.status}, currentIndex=${state.currentIndex}, prompts=${state.prompts.length}, bufferSteps=${this.outputCaptureBuffer.stepBufferSize}, finalBufferLoops=${this.outputCaptureBuffer.finalPromptBufferSize}`
+      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${executionState}, currentIndex=${state.currentIndex}, prompts=${state.prompts.length}, bufferSteps=${this.outputCaptureBuffer.stepBufferSize}, finalBufferLoops=${this.outputCaptureBuffer.finalPromptBufferSize}`
     );
     this.dashboardSink.updateSessionRestored(
       fileName,
       state.prompts,
       state.results,
-      state.status,
+      executionState,
       state.currentIndex,
       state.workflowName || undefined,
       this.promptQueue.getWorkflowFile().finalPrompt ?? null,
@@ -374,7 +378,7 @@ export class WorkflowInstance {
     );
     this.outputCaptureBuffer.replayTo(
       this.dashboardSink,
-      { status: state.status, currentIndex: state.currentIndex },
+      { status: executionState, currentIndex: state.currentIndex },
       this.promptQueue.getFinalPromptRuntime(),
       `[inst:${this.id.slice(0, 8)}]`
     );
@@ -455,7 +459,7 @@ export class WorkflowInstance {
       workflowName: this.workflowName || state.workflowName || "",
       filePath: this.filePath,
       workingFilePath: state.workingFilePath || undefined,
-      executionState: state.status,
+      executionState: this.getAuthoritativeExecutionState(),
       currentStep: state.currentIndex,
       totalSteps: state.prompts.length,
       startedAt: this.startedAt || undefined,
@@ -656,7 +660,7 @@ export class WorkflowInstance {
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] executeLoadedPromptFile: currentPromptFile is null — ` +
           `workingFilePath=${queueState.workingFilePath ?? "(none)"}, ` +
-          `prompts=${queueState.prompts.length}, status=${queueState.status}`
+          `prompts=${queueState.prompts.length}, status=${this.getAuthoritativeExecutionState()}`
       );
       this.platform.warn(
         "No prompt file loaded. Use 'Change' button to select a file first."
@@ -667,12 +671,13 @@ export class WorkflowInstance {
     const { filePath } = this.currentPromptFile;
 
     const prevQueueState = this.promptQueue.getState();
+    const prevExecutionState = this.getAuthoritativeExecutionState();
     // Only COMPLETED workflows count as having "completed" steps for append-continuation.
     // Use actual per-step completion status rather than prompts.length because
     // append-and-run keeps the queue in COMPLETED long enough to add new pending
     // prompts before execution restarts.
     const prevCompletedCount =
-      prevQueueState.status === EXECUTION_STATES.COMPLETED
+      prevExecutionState === EXECUTION_STATES.COMPLETED
         ? this.promptQueue.getCompletedCount()
         : 0;
 
@@ -693,12 +698,12 @@ export class WorkflowInstance {
     const isIdleContinuation =
       !continueFromCurrent &&
       !isAppendContinuation &&
-      prevQueueState.status === EXECUTION_STATES.IDLE &&
+      prevExecutionState === EXECUTION_STATES.IDLE &&
       prevQueueState.currentIndex > 0;
 
     Log.debug(
       `[executeLoadedPromptFile] continueFromCurrent=${continueFromCurrent}, ` +
-        `prevQueueStatus=${prevQueueState.status}, prevCompletedCount=${prevCompletedCount}, ` +
+        `prevQueueStatus=${prevExecutionState}, prevCompletedCount=${prevCompletedCount}, ` +
         `filePromptCount=${filePromptCount}, isAppendContinuation=${isAppendContinuation}, ` +
         `isIdleContinuation=${isIdleContinuation}`
     );
@@ -787,16 +792,16 @@ export class WorkflowInstance {
         return;
       }
 
-      const queueState = this.promptQueue.getState();
+      const executionState = this.getAuthoritativeExecutionState();
       if (!continueFromCurrent && !isAppendContinuation) {
         if (
-          queueState.status === EXECUTION_STATES.COMPLETED ||
-          queueState.status === EXECUTION_STATES.PAUSED ||
-          queueState.status === EXECUTION_STATES.STOPPED ||
-          queueState.status === EXECUTION_STATES.ERROR
+          executionState === EXECUTION_STATES.COMPLETED ||
+          executionState === EXECUTION_STATES.PAUSED ||
+          executionState === EXECUTION_STATES.STOPPED ||
+          executionState === EXECUTION_STATES.ERROR
         ) {
           Log.debug(
-            `FlightPath: Queue in ${queueState.status} state, restarting from beginning`
+            `FlightPath: Queue in ${executionState} state, restarting from beginning`
           );
           await this.promptQueue.restart();
         }
@@ -804,7 +809,7 @@ export class WorkflowInstance {
         Log.debug(
           `FlightPath: Append continuation — skipping restart, continuing from step ${prevCompletedCount}`
         );
-        if (queueState.status === EXECUTION_STATES.IDLE) {
+        if (executionState === EXECUTION_STATES.IDLE) {
           await this.promptQueue.restoreCompletedSteps(prevCompletedCount);
         }
       } else {
@@ -953,7 +958,7 @@ export class WorkflowInstance {
       );
     } catch (error) {
       Log.error("Failed to execute prompt file:", error);
-      this.promptQueue.failCurrentPromptIfInProgress();
+      this.promptQueue.finalizeFailedInFlightPrompt();
       this.workflowRuntime.fail();
       await this.promptQueue.commitRuntimeTransition();
       // Finalize the history run if it was initialized before the error occurred
@@ -1023,7 +1028,7 @@ export class WorkflowInstance {
 
     Log.info(`⏹️ WorkflowInstance.stop() - stopping active integration`);
 
-    this.promptQueue.markCurrentPromptCancelled();
+    this.promptQueue.markInFlightPromptCancelled();
     const activeAttempt = this.workflowRuntime.getActiveAttempt();
     if (activeAttempt) {
       this.workflowRuntime.cancelAttempt(
@@ -1061,7 +1066,7 @@ export class WorkflowInstance {
 
       const stoppedIndex = this.promptQueue.getState().currentIndex;
       const advancedPastQueuePrompt =
-        this.promptQueue.advanceCancelledPromptAfterStop();
+        this.promptQueue.finalizeCancelledPromptAfterStop();
 
       await this.promptQueue.commitRuntimeTransition();
       if (advancedPastQueuePrompt) {
@@ -1108,10 +1113,10 @@ export class WorkflowInstance {
    * Clear current workflow state.
    */
   clearWorkflow(): void {
-    const state = this.promptQueue.getState();
+    const executionState = this.getAuthoritativeExecutionState();
     if (
-      state.status === EXECUTION_STATES.RUNNING ||
-      state.status === EXECUTION_STATES.PAUSED
+      executionState === EXECUTION_STATES.RUNNING ||
+      executionState === EXECUTION_STATES.PAUSED
     ) {
       Log.warn(
         `clearWorkflow called on running/paused instance inst:${this.id.slice(0, 8)} — ignoring`
@@ -1119,6 +1124,7 @@ export class WorkflowInstance {
       return;
     }
 
+    this.activeHistoryFilePath = "";
     this.currentPromptFile = undefined;
     this.promptQueue.clearQueue();
     this.lastKnownPromptCount = 0;
@@ -1197,6 +1203,7 @@ export class WorkflowInstance {
       }
 
       const source = `User append (${position}): ${path.basename(filePath)}`;
+      this.reopenRuntimeForContinuationIfNeeded(false);
       await this.promptQueue.appendPrompts(parsed.prompts, source, position);
       this.syncCurrentPromptFileFromQueue(filePath);
 
@@ -1499,13 +1506,13 @@ export class WorkflowInstance {
   }
 
   async setStartPosition(toIndex: number): Promise<void> {
-    const state = this.promptQueue.getState();
+    const executionState = this.getAuthoritativeExecutionState();
     if (
-      state.status === EXECUTION_STATES.RUNNING ||
-      state.status === EXECUTION_STATES.CANCELLING
+      executionState === EXECUTION_STATES.RUNNING ||
+      executionState === EXECUTION_STATES.CANCELLING
     ) {
       Log.warn(
-        `WorkflowInstance.setStartPosition: Cannot set start position while in state ${state.status}`
+        `WorkflowInstance.setStartPosition: Cannot set start position while in state ${executionState}`
       );
       return;
     }
@@ -1552,7 +1559,8 @@ export class WorkflowInstance {
     const currentState = this.promptQueue.getState();
     const hasWorkflow =
       currentState.prompts.length > 0 || !!currentState.workingFilePath;
-    const isCompleted = currentState.status === EXECUTION_STATES.COMPLETED;
+    const isCompleted =
+      this.getAuthoritativeExecutionState() === EXECUTION_STATES.COMPLETED;
 
     let position: QueuePosition = QUEUE_POSITION.END;
     let shouldRun = false;
@@ -1617,13 +1625,13 @@ export class WorkflowInstance {
 
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: appending to existing workflow ` +
-          `(status=${currentState.status}, prompts=${currentState.prompts.length}, shouldRun=${shouldRun}, action=${action})`
+          `(status=${this.getAuthoritativeExecutionState()}, prompts=${currentState.prompts.length}, shouldRun=${shouldRun}, action=${action})`
       );
+      this.reopenRuntimeForContinuationIfNeeded(shouldRun);
       await this.promptQueue.appendPrompts(
         [promptItem],
         "Dashboard editor",
-        position,
-        shouldRun
+        position
       );
       this.syncCurrentPromptFileFromQueue();
 
@@ -1636,7 +1644,7 @@ export class WorkflowInstance {
       }
 
       if (shouldRun) {
-        const statusNow = this.promptQueue.getState().status;
+        const statusNow = this.getAuthoritativeExecutionState();
         const isStopped = statusNow === EXECUTION_STATES.STOPPED;
         const isIdleNow = statusNow === EXECUTION_STATES.IDLE;
         Log.debug(
@@ -1848,7 +1856,7 @@ export class WorkflowInstance {
 
   private async startWorkflowExecution(
     integration?: HarnessIntegration,
-    historyFilePath = "",
+    historyFilePath = this.activeHistoryFilePath,
     workingFilePath?: string
   ): Promise<void> {
     if (this.startPending) {
@@ -1860,6 +1868,7 @@ export class WorkflowInstance {
 
     this.startPending = true;
     this.startedAt = Date.now();
+    this.activeHistoryFilePath = historyFilePath;
 
     // Close any terminals left open from the previous run. With
     // closeTerminalWhenPromptCompletes=false, dispose() only kills the process
@@ -1957,13 +1966,14 @@ export class WorkflowInstance {
       }
       this.executionIntegrations.clear();
 
+      await this.pendingRuntimeTransitionHistoryWrite;
+
       if (historyFilePath) {
-        const finalState = this.promptQueue.getState();
         const runStepCount = this.promptQueue.getProgress().total;
         await this.outputHistoryManager
           .finalizeRun(
             historyFilePath,
-            finalState.status as Parameters<
+            this.getAuthoritativeExecutionState() as Parameters<
               OutputHistoryManager["finalizeRun"]
             >[1],
             runStepCount
@@ -2030,9 +2040,48 @@ export class WorkflowInstance {
     }
   }
 
+  private getAuthoritativeExecutionState(): QueueState["status"] {
+    return this.workflowRuntime.status;
+  }
+
+  private reopenRuntimeForContinuationIfNeeded(
+    willRunImmediately: boolean
+  ): void {
+    if (willRunImmediately) {
+      return;
+    }
+
+    if (this.workflowRuntime.status !== EXECUTION_STATES.COMPLETED) {
+      return;
+    }
+
+    Log.info(
+      `appendPrompts: Setting to STOPPED (appended to COMPLETED queue, ${this.promptQueue.getCompletedCount()} prompts previously completed, user can Resume)`
+    );
+    this.workflowRuntime.reopenForContinuation();
+  }
+
   private onRuntimeTransition(transition: WorkflowRuntimeTransition): void {
     if (transition.command === "reopenForContinuation") {
       return;
+    }
+
+    if (this.activeHistoryFilePath) {
+      const historyFilePath = this.activeHistoryFilePath;
+      this.pendingRuntimeTransitionHistoryWrite =
+        this.pendingRuntimeTransitionHistoryWrite
+          .then(() =>
+            this.outputHistoryManager.appendRuntimeTransition(
+              historyFilePath,
+              transition
+            )
+          )
+          .catch((error) => {
+            Log.warn(
+              `[inst:${this.id.slice(0, 8)}] Failed to persist runtime transition history:`,
+              error
+            );
+          });
     }
 
     const state = this.promptQueue.getState();
@@ -2041,15 +2090,17 @@ export class WorkflowInstance {
         `(step ${state.currentIndex}/${state.prompts.length}, isActive=${this.isActive})`
     );
 
+    const executionState = this.getAuthoritativeExecutionState();
+
     if (this.isActive && this.dashboardSink) {
-      this.dashboardSink.updateExecutionState(transition.current.status);
+      this.dashboardSink.updateExecutionState(executionState);
+      if (transition.command === "complete") {
+        this.dashboardSink.updateExecutionCompleted?.();
+      }
       return;
     }
 
-    this.bufferExecutionStateChange(
-      transition.current.status,
-      state.currentIndex
-    );
+    this.bufferExecutionStateChange(executionState, state.currentIndex);
   }
 
   private onAttemptTransition(transition: WorkflowAttemptTransition): void {
@@ -2115,7 +2166,7 @@ export class WorkflowInstance {
   private async resumeRestoredRunningWorkflowIfNeeded(): Promise<void> {
     const state = this.promptQueue.getState();
     if (
-      state.status !== EXECUTION_STATES.RUNNING ||
+      this.getAuthoritativeExecutionState() !== EXECUTION_STATES.RUNNING ||
       this.activeIntegration ||
       this.startPending
     ) {
@@ -2129,8 +2180,9 @@ export class WorkflowInstance {
   }
 
   private onQueueStateChanged(state: QueueState): void {
+    const executionState = this.getAuthoritativeExecutionState();
     Log.debug(
-      `[inst:${this.id.slice(0, 8)}] Queue state → ${state.status} (step ${state.currentIndex}/${state.prompts.length}, isActive=${this.isActive})`
+      `[inst:${this.id.slice(0, 8)}] Queue state → ${executionState} (step ${state.currentIndex}/${state.prompts.length}, isActive=${this.isActive})`
     );
     this.onStatusBarUpdate();
 
@@ -2157,7 +2209,7 @@ export class WorkflowInstance {
         this.dashboardSink.updatePromptsExtended(
           state.prompts,
           this.promptQueue.getWorkflowFile().finalPrompt ?? null,
-          state.status
+          executionState
         );
         this.dashboardSink.updateProgress(
           state.currentIndex,

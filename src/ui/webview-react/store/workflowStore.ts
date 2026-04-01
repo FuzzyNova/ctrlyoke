@@ -16,6 +16,8 @@ import {
   type StatusMessage,
 } from "../types/messages";
 import type {
+  OrderedHistoryEntry,
+  OutputTimelineEntry,
   WorkflowOutputHistory,
   StepOutput,
   WorkspaceSnapshot,
@@ -144,6 +146,8 @@ interface WorkflowState {
     stepCount: number;
     steps: Record<number, StepOutput>;
     finalPromptOutputs?: Record<number, StepOutput>;
+    orderedEntries?: OrderedHistoryEntry[];
+    outputTimeline?: OutputTimelineEntry[];
     runMetadata: Pick<
       WorkflowOutputHistory,
       "runId" | "startedAt" | "completedAt" | "executionState"
@@ -746,6 +750,8 @@ export const useWorkflowStore = create<
                 stepCount: history.runStepCount,
                 steps: history.promptOutputs,
                 finalPromptOutputs: history.finalPromptOutputs,
+                orderedEntries: history.orderedEntries,
+                outputTimeline: history.outputTimeline,
                 runMetadata: {
                   runId: history.runId,
                   startedAt: history.startedAt,

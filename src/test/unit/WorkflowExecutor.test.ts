@@ -158,7 +158,7 @@ async function requestQueueStop(queue: PromptQueue): Promise<void> {
     return;
   }
 
-  queue.markCurrentPromptCancelled();
+  queue.markInFlightPromptCancelled();
   await queue.commitRuntimeTransition({ persist: false });
 }
 
@@ -167,7 +167,7 @@ async function confirmQueueStopped(queue: PromptQueue): Promise<void> {
     return;
   }
 
-  queue.advanceCancelledPromptAfterStop();
+  queue.finalizeCancelledPromptAfterStop();
   await queue.commitRuntimeTransition({ persist: false });
 }
 

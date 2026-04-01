@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { useWorkflowStore } from "@store/workflowStore";
 import { EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
 import type { PromptItem, CliOutput } from "@/types/messages";
+import type { WorkflowOutputHistory } from "@root/types/OutputHistoryTypes";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -249,6 +250,105 @@ describe("clearStatusMessages", () => {
     store().addStatusMessage(0, "msg2");
     store().clearStatusMessages(0);
     expect(store().statusMessages[0]).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadHistoryRun
+// ---------------------------------------------------------------------------
+
+describe("loadHistoryRun", () => {
+  it("stores canonical ordered history entries when present", () => {
+    const history: WorkflowOutputHistory = {
+      schemaVersion: "1.1.0",
+      workflowId: "wf-history",
+      runId: 3,
+      startedAt: 100,
+      completedAt: 150,
+      executionState: EXECUTION_STATES.COMPLETED,
+      runStepCount: 1,
+      promptOutputs: {
+        0: {
+          cliOutputs: [
+            makeOutput({ response: "history output", timestampMs: 120 }),
+          ],
+          statusMessages: [
+            { message: "history status", severity: "info", timestamp: 110 },
+          ],
+        },
+      },
+      orderedEntries: [
+        {
+          kind: "status",
+          target: { kind: "queue", stepIndex: 0 },
+          statusMessage: {
+            message: "history status",
+            severity: "info",
+            timestamp: 110,
+          },
+          timestampMs: 110,
+          sequence: 1,
+        },
+        {
+          kind: "cli",
+          target: { kind: "queue", stepIndex: 0 },
+          attemptIndex: 0,
+          cliOutput: makeOutput({
+            response: "history output",
+            timestampMs: 120,
+          }),
+          timestampMs: 120,
+          sequence: 2,
+        },
+      ],
+      outputTimeline: [
+        {
+          key: "queue:0",
+          target: { kind: "queue", stepIndex: 0 },
+          firstOutputAt: 110,
+        },
+      ],
+    };
+
+    store().loadHistoryRun(history, 4, 1);
+
+    expect(store().historyOutputs?.orderedEntries).toEqual(
+      history.orderedEntries
+    );
+    expect(store().historyOutputs?.outputTimeline).toEqual(
+      history.outputTimeline
+    );
+    expect(store().historyOutputs?.steps[0]?.cliOutputs[0]?.response).toBe(
+      "history output"
+    );
+  });
+
+  it("keeps legacy histories compatible when ordered entries are absent", () => {
+    const history: WorkflowOutputHistory = {
+      schemaVersion: "1.1.0",
+      workflowId: "wf-legacy-history",
+      runId: 1,
+      startedAt: 100,
+      completedAt: 140,
+      executionState: EXECUTION_STATES.COMPLETED,
+      runStepCount: 1,
+      promptOutputs: {
+        0: {
+          cliOutputs: [
+            makeOutput({ response: "legacy output", timestampMs: 120 }),
+          ],
+          statusMessages: [],
+        },
+      },
+    };
+
+    store().loadHistoryRun(history, 1, 0);
+
+    expect(store().historyOutputs?.orderedEntries).toBeUndefined();
+    expect(store().historyOutputs?.outputTimeline).toBeUndefined();
+    expect(store().historyOutputs?.steps[0]?.cliOutputs[0]?.response).toBe(
+      "legacy output"
+    );
   });
 });
 

@@ -5,14 +5,17 @@ import {
   getQueueStatus,
   appendToQueue,
 } from "../../flightpath/QueueOperations";
-import { QUEUE_POSITION } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  QUEUE_POSITION,
+} from "../../types/DashboardConstants";
 
 async function requestQueueStop(queue: PromptQueue): Promise<void> {
   if (!queue.getRuntimeStateMachine().requestStop()) {
     return;
   }
 
-  queue.markCurrentPromptCancelled();
+  queue.markInFlightPromptCancelled();
   await queue.commitRuntimeTransition({ persist: false });
 }
 
@@ -98,6 +101,26 @@ suite("QueueOperations", () => {
       });
       assert.strictEqual(response.promptsAdded, 3);
       assert.strictEqual(response.newQueueSize, 3);
+    });
+
+    test("reopens a completed workflow through the runtime before appending", async () => {
+      const queue = new PromptQueue();
+      queue.loadPrompts({ prompts: [{ prompt: "completed-step" }] });
+      queue.getRuntimeStateMachine().complete();
+      await queue.commitRuntimeTransition({ persist: false });
+
+      const response = await appendToQueue(queue, {
+        prompts: [{ prompt: "follow-up" }],
+        position: QUEUE_POSITION.END,
+        source: "test",
+      });
+
+      assert.strictEqual(response.success, true);
+      assert.strictEqual(
+        queue.getRuntimeStateMachine().status,
+        EXECUTION_STATES.STOPPED
+      );
+      assert.strictEqual(queue.getState().status, EXECUTION_STATES.STOPPED);
     });
 
     test("throws when queue is in cancelling state", async () => {

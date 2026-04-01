@@ -1,4 +1,8 @@
 import { ExecutionState, FINAL_PROMPT_PHASES } from "./DashboardConstants";
+import type {
+  WorkflowRuntimeCommand,
+  WorkflowRuntimeState,
+} from "./FlightPathTypes";
 import {
   CliOutput,
   StatusMessage,
@@ -15,6 +19,38 @@ export interface OutputTimelineEntry {
   target: OutputExecutionTarget;
   firstOutputAt: number;
 }
+
+export interface OrderedHistoryEntryBase {
+  timestampMs: number;
+  sequence: number;
+}
+
+export interface OrderedCliHistoryEntry extends OrderedHistoryEntryBase {
+  kind: "cli";
+  target: OutputExecutionTarget;
+  attemptIndex: number;
+  cliOutput: CliOutput;
+}
+
+export interface OrderedStatusHistoryEntry extends OrderedHistoryEntryBase {
+  kind: "status";
+  target: OutputExecutionTarget;
+  statusMessage: StatusMessage;
+}
+
+export interface OrderedRuntimeHistoryEntry extends OrderedHistoryEntryBase {
+  kind: "runtime";
+  transition: {
+    command: WorkflowRuntimeCommand;
+    previous: WorkflowRuntimeState;
+    current: WorkflowRuntimeState;
+  };
+}
+
+export type OrderedHistoryEntry =
+  | OrderedCliHistoryEntry
+  | OrderedStatusHistoryEntry
+  | OrderedRuntimeHistoryEntry;
 
 /**
  * Complete output history for a single workflow run.
@@ -58,9 +94,14 @@ export interface WorkflowOutputHistory {
     [loopIndex: number]: StepOutput;
   };
 
-  // Chronological metadata for rendering mixed queue/finalPrompt outputs
-  // without relying on numeric queue indices.
+  // Legacy chronological metadata for history-mode fallback rendering.
+  // Timeline-backed histories should prefer orderedEntries when present.
   outputTimeline?: OutputTimelineEntry[];
+
+  // Canonical ordered entries for timeline-backed runs. History-mode rendering
+  // should prefer this when present and only fall back to per-step reconstruction
+  // for legacy snapshots that predate ordered projection support.
+  orderedEntries?: OrderedHistoryEntry[];
 }
 
 /**

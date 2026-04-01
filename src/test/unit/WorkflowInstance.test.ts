@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { WorkflowInstance } from "../../flightpath/WorkflowInstance";
 import {
@@ -6,6 +9,7 @@ import {
   HarnessStatus,
 } from "../../flightpath/HarnessIntegration";
 import { IntegrationFactory } from "../../flightpath/IntegrationFactory";
+import { TimelineRecorder } from "../../flightpath/orchestration/TimelineRecorder";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import {
   EXECUTION_STATES,
@@ -13,6 +17,7 @@ import {
   STEP_STATUS,
 } from "../../types/DashboardConstants";
 import { Harness, PromptItem } from "../../types/FlightPathTypes";
+import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 
 class MockPlatform implements PlatformAdapter {
   getConfig<T>(_key: string, defaultValue: T): T {
@@ -298,7 +303,7 @@ suite("WorkflowInstance runtime transitions", () => {
 
     await instance.promptQueue.markCurrentAsSent();
     runtime.beginAttempt({ kind: "queue", stepIndex: 0 }, 0);
-    instance.promptQueue.markCurrentPromptCancelled();
+    instance.promptQueue.markInFlightPromptCancelled();
     assert.strictEqual(runtime.requestStop(), true);
     await instance.promptQueue.commitRuntimeTransition({ persist: false });
 
@@ -309,6 +314,241 @@ suite("WorkflowInstance runtime transitions", () => {
     assert.deepStrictEqual(stepStatuses, [
       { stepIndex: 0, state: STEP_STATUS.CANCELLED },
     ]);
+  });
+
+  test("uses runtime-owned execution state when queue growth piggybacks prompt updates", async () => {
+    const platform = new MockPlatform();
+
+    const promptsExtendedCalls: Array<{
+      promptCount: number;
+      executionState: string | undefined;
+    }> = [];
+    const executionStates: string[] = [];
+
+    const dashboardSink: any = {
+      updateFileSelected: async () => {},
+      updateSessionRestored: async () => {},
+      updateExecutionStarted: () => {},
+      notifyRunHistoryUpdated: () => {},
+      updateProgress: () => {},
+      updateExecutionState: (state: string) => {
+        executionStates.push(state);
+      },
+      updateStepStatus: () => {},
+      updateRetryAttempt: () => {},
+      updateCliOutput: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: () => {},
+      updatePromptsExtended: (
+        prompts: PromptItem[],
+        _finalPrompt: PromptItem | null,
+        executionState?: string
+      ) => {
+        promptsExtendedCalls.push({
+          promptCount: prompts.length,
+          executionState,
+        });
+      },
+      updatePromptDeleted: () => {},
+      updateFinalPrompt: () => {},
+      updateFinalPromptStatus: () => {},
+      updateFinalPromptOutput: () => {},
+      updateFinalPromptStreamingChunk: () => {},
+      updateFinalPromptStreamingEvents: () => {},
+      updateStatusMessage: () => {},
+      notifyWorkflowStateReset: () => {},
+      notifyStartPositionSet: () => {},
+      notifyPromptsReordered: () => {},
+      updateWorkflowName: () => {},
+    };
+
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    instance.setActive(true);
+    instance.promptQueue.loadPrompts({
+      prompts: [{ prompt: "queue-1" }],
+    });
+
+    const runtime = instance.promptQueue.getRuntimeStateMachine();
+    assert.strictEqual(runtime.startExecution(), true);
+    await instance.promptQueue.commitRuntimeTransition({ persist: false });
+
+    (instance as any).lastKnownPromptCount = 1;
+
+    (instance as any).onQueueStateChanged({
+      ...instance.promptQueue.getState(),
+      status: EXECUTION_STATES.IDLE,
+      prompts: [{ prompt: "queue-1" }, { prompt: "queue-2" }],
+    });
+
+    assert.deepStrictEqual(executionStates, [EXECUTION_STATES.RUNNING]);
+    assert.ok(
+      promptsExtendedCalls.some(
+        (call) =>
+          call.promptCount === 2 &&
+          call.executionState === EXECUTION_STATES.RUNNING
+      )
+    );
+  });
+
+  test("emits completion notifications from runtime transitions", async () => {
+    const platform = new MockPlatform();
+
+    const executionStates: string[] = [];
+    let completionNotifications = 0;
+
+    const dashboardSink: any = {
+      updateFileSelected: async () => {},
+      updateSessionRestored: async () => {},
+      updateExecutionStarted: () => {},
+      notifyRunHistoryUpdated: () => {},
+      updateProgress: () => {},
+      updateExecutionState: (state: string) => {
+        executionStates.push(state);
+      },
+      updateExecutionCompleted: () => {
+        completionNotifications++;
+      },
+      updateStepStatus: () => {},
+      updateRetryAttempt: () => {},
+      updateCliOutput: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: () => {},
+      updatePromptsExtended: () => {},
+      updatePromptDeleted: () => {},
+      updateFinalPrompt: () => {},
+      updateFinalPromptStatus: () => {},
+      updateFinalPromptOutput: () => {},
+      updateFinalPromptStreamingChunk: () => {},
+      updateFinalPromptStreamingEvents: () => {},
+      updateStatusMessage: () => {},
+      notifyWorkflowStateReset: () => {},
+      notifyStartPositionSet: () => {},
+      notifyPromptsReordered: () => {},
+      updateWorkflowName: () => {},
+    };
+
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    instance.setActive(true);
+    instance.promptQueue.loadPrompts({
+      prompts: [{ prompt: "queue-1" }],
+    });
+
+    const runtime = instance.promptQueue.getRuntimeStateMachine();
+    assert.strictEqual(runtime.startExecution(), true);
+    await instance.promptQueue.commitRuntimeTransition({ persist: false });
+
+    assert.strictEqual(runtime.complete(), true);
+    await instance.promptQueue.commitRuntimeTransition({ persist: false });
+
+    assert.deepStrictEqual(executionStates, [
+      EXECUTION_STATES.RUNNING,
+      EXECUTION_STATES.COMPLETED,
+    ]);
+    assert.strictEqual(completionNotifications, 1);
+  });
+
+  test("persists authoritative runtime transitions through OutputHistoryManager when a run history is active", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "fp-instance-runtime-")
+    );
+
+    try {
+      const platform = new MockPlatform();
+      const instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+
+      instance.promptQueue.loadPrompts({
+        prompts: [{ prompt: "queue-1" }],
+      });
+
+      const historyInit = await instance.outputHistoryManager.initializeRun(
+        "wf-runtime-instance"
+      );
+      const appendCalls: Array<{ historyFilePath: string; command: string }> =
+        [];
+      const originalAppendRuntimeTransition =
+        instance.outputHistoryManager.appendRuntimeTransition.bind(
+          instance.outputHistoryManager
+        );
+
+      (instance.outputHistoryManager as any).appendRuntimeTransition = async (
+        historyFilePath: string,
+        transition: { command: string }
+      ) => {
+        appendCalls.push({ historyFilePath, command: transition.command });
+        return originalAppendRuntimeTransition(
+          historyFilePath,
+          transition as any
+        );
+      };
+
+      (instance as any).activeHistoryFilePath = historyInit.filePath;
+
+      const runtimeTransitions: Array<{ timestampMs: number }> = [];
+      const runtime = instance.promptQueue.getRuntimeStateMachine();
+      runtime.onDidTransition((transition) => {
+        runtimeTransitions.push({ timestampMs: transition.timestampMs });
+      });
+
+      assert.strictEqual(runtime.startExecution(), true);
+      await instance.promptQueue.commitRuntimeTransition({ persist: false });
+
+      assert.strictEqual(runtime.pause(), true);
+      await instance.promptQueue.commitRuntimeTransition({ persist: false });
+      await (instance as any).pendingRuntimeTransitionHistoryWrite;
+
+      const recorder = new TimelineRecorder();
+      const events = await recorder.readEvents(historyInit.filePath);
+
+      assert.deepStrictEqual(appendCalls, [
+        {
+          historyFilePath: historyInit.filePath,
+          command: "startExecution",
+        },
+        {
+          historyFilePath: historyInit.filePath,
+          command: "pause",
+        },
+      ]);
+      assert.deepStrictEqual(
+        events.map((event) => event.eventType),
+        [
+          TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED,
+          TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED,
+        ]
+      );
+      assert.deepStrictEqual(
+        events.map((event) => event.timestampMs),
+        runtimeTransitions.map((transition) => transition.timestampMs)
+      );
+    } finally {
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
   });
 
   test("updates retry badges from attempt transitions and clears them after retry completion", () => {

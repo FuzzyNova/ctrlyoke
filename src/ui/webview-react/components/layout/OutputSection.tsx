@@ -11,8 +11,15 @@ import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { CliOutput, StatusMessage } from "../output";
 import { PanelBar, RunSelector } from "../shared";
-import { formatTime, generateDiffLines } from "@utils/outputUtils";
+import { generateDiffLines } from "@utils/outputUtils";
 import { generateMarkdownExport } from "@utils/markdownExport";
+import {
+  buildHistoricalProjectionSteps,
+  buildProjectedOutputMessages,
+  mapOrderedHistoryEntriesToMessages,
+  type OutputMessage,
+  type OutputProjectionStep,
+} from "@utils/outputProjection";
 import type {
   CliOutput as CliOutputType,
   CliEvent,
@@ -60,19 +67,6 @@ import type { UndoFileInstruction } from "../../types/messages";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
-
-/**
- * Combined message type for chronological sorting
- */
-interface OutputMessage {
-  type: "status" | "cli";
-  target:
-    | { kind: "queue"; index: number }
-    | { kind: "finalPrompt"; index: number };
-  timestamp: number;
-  data: OutputStatusMessage | CliOutputType;
-  attemptIndex?: number;
-}
 
 interface MinimapDialogState {
   mode: "undo" | "redo";
@@ -213,29 +207,9 @@ export const OutputSection: React.FC = () => {
   }, []);
 
   // Determine which steps data source to use: history snapshot or live outputs
-  const stepsToRender = useMemo(() => {
+  const stepsToRender = useMemo((): OutputProjectionStep[] => {
     if (isViewingHistory && historyOutputs) {
-      const queueSteps = Array.from(
-        { length: historyOutputs.stepCount },
-        (_, i) => ({
-          target: { kind: "queue" as const, index: i },
-          cliOutputs: historyOutputs.steps[i]?.cliOutputs ?? [],
-          statusMessages: historyOutputs.steps[i]?.statusMessages ?? [],
-        })
-      );
-
-      const finalOutputs = historyOutputs.finalPromptOutputs ?? {};
-      const finalSteps = Object.keys(finalOutputs)
-        .map((k) => Number(k))
-        .filter((n) => Number.isFinite(n))
-        .sort((a, b) => a - b)
-        .map((loopIndex) => ({
-          target: { kind: "finalPrompt" as const, index: loopIndex },
-          cliOutputs: finalOutputs[loopIndex]?.cliOutputs ?? [],
-          statusMessages: finalOutputs[loopIndex]?.statusMessages ?? [],
-        }));
-
-      return [...queueSteps, ...finalSteps];
+      return buildHistoricalProjectionSteps(historyOutputs);
     }
 
     const queueSteps = Array.from({ length: totalSteps }, (_, i) => ({
@@ -269,55 +243,16 @@ export const OutputSection: React.FC = () => {
   // This memo depends on stepsToRender (not streamingChunks), so it only
   // rebuilds when actual output records change — not on every streaming token.
   const allMessages = useMemo((): OutputMessage[] => {
-    const messages: OutputMessage[] = [];
-
-    for (const step of stepsToRender) {
-      const { target } = step;
-      const executionIndex = target.index;
-
-      // Add status messages
-      const stepStatusMessages = step.statusMessages || [];
-      stepStatusMessages.forEach((statusMsg, index) => {
-        const statusTimestamp =
-          statusMsg.timestamp ?? executionIndex * 10000 + index;
-        messages.push({
-          type: "status",
-          target,
-          timestamp: statusTimestamp,
-          data: {
-            message: statusMsg.message,
-            severity: statusMsg.severity,
-            timestamp: formatTime(statusMsg.timestamp),
-            timestampMs: statusMsg.timestamp,
-          },
-        });
-      });
-
-      // Add CLI outputs - use explicit attemptIndex from data, not array position
-      const stepOutputs = step.cliOutputs || [];
-      stepOutputs.forEach((output) => {
-        const cliOutput = output as CliOutputType & {
-          timestampMs?: number;
-          attemptIndex?: number;
-        };
-        const explicitAttemptIndex = cliOutput.attemptIndex ?? 0;
-        messages.push({
-          type: "cli",
-          target,
-          timestamp:
-            cliOutput.timestampMs ||
-            executionIndex * 10000 +
-              stepStatusMessages.length +
-              explicitAttemptIndex,
-          data: output as unknown as CliOutputType,
-          attemptIndex: explicitAttemptIndex,
-        });
-      });
+    if (
+      isViewingHistory &&
+      historyOutputs?.orderedEntries &&
+      historyOutputs.orderedEntries.length > 0
+    ) {
+      return mapOrderedHistoryEntriesToMessages(historyOutputs.orderedEntries);
     }
 
-    // Sort by timestamp
-    return messages.sort((a, b) => a.timestamp - b.timestamp);
-  }, [stepsToRender]);
+    return buildProjectedOutputMessages(stepsToRender);
+  }, [isViewingHistory, historyOutputs, stepsToRender]);
 
   // Smart scroll: detect user scrolling away from bottom
   const handleScroll = useCallback(() => {
@@ -437,8 +372,9 @@ export const OutputSection: React.FC = () => {
     const markdownContent = generateMarkdownExport(
       allMessages.map((msg) => ({
         type: msg.type,
-        stepIndex: msg.target.index,
+        target: msg.target,
         timestamp: msg.timestamp,
+        sequence: msg.sequence,
         data: msg.data,
         attemptIndex: msg.attemptIndex,
       })),
@@ -447,6 +383,12 @@ export const OutputSection: React.FC = () => {
         executionState,
         currentStep,
         totalSteps,
+      },
+      {
+        orderedEntries:
+          isViewingHistory && historyOutputs?.orderedEntries?.length
+            ? historyOutputs.orderedEntries
+            : undefined,
       }
     );
 
@@ -455,7 +397,15 @@ export const OutputSection: React.FC = () => {
       content: markdownContent,
       fileName,
     });
-  }, [allMessages, fileName, executionState, currentStep, totalSteps]);
+  }, [
+    allMessages,
+    currentStep,
+    executionState,
+    fileName,
+    historyOutputs,
+    isViewingHistory,
+    totalSteps,
+  ]);
 
   // Map of array index → stepIndex for the first message of each step.
   // Used to insert step anchor divs so clicking a prompt can scroll to its output.

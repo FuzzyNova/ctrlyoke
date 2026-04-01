@@ -145,6 +145,10 @@ export class WorkflowExecutor {
     private readonly platform: PlatformAdapter
   ) {}
 
+  private getRuntime() {
+    return this.promptQueue.getRuntimeStateMachine();
+  }
+
   /**
    * Execute the workflow. Supports resume from a paused or previously-stopped
    * run — the queue's `currentIndex` and `finalPromptRuntime` phase are both
@@ -271,7 +275,7 @@ export class WorkflowExecutor {
 
       runFinalPromptFirst = false;
 
-      const statusAfterQueue = this.promptQueue.getState().status;
+      const statusAfterQueue = runtime.status;
       if (statusAfterQueue !== EXECUTION_STATES.RUNNING) {
         break;
       }
@@ -289,8 +293,8 @@ export class WorkflowExecutor {
         });
       }
 
-      const runtime = this.promptQueue.getFinalPromptRuntime();
-      const loopIndex = runtime?.loopCount ?? 0;
+      const finalPromptRuntime = this.promptQueue.getFinalPromptRuntime();
+      const loopIndex = finalPromptRuntime?.loopCount ?? 0;
       const queueSizeBefore = this.promptQueue.getState().prompts.length;
 
       await this.setFinalPromptRuntime(context, {
@@ -347,7 +351,7 @@ export class WorkflowExecutor {
         break;
       }
 
-      const statusAfterFinal = this.promptQueue.getState().status;
+      const statusAfterFinal = runtime.status;
       if (statusAfterFinal !== EXECUTION_STATES.RUNNING) {
         await this.persistInterruptedFinalPromptRuntime(context);
         break;
@@ -387,7 +391,7 @@ export class WorkflowExecutor {
     }
 
     Log.info("Workflow execution complete");
-    await this.finalizeWorkflowExecution(context);
+    await this.finalizeWorkflowExecution();
     this.logWorkflowCompletion(context, this.promptQueue.getProgress().total);
   }
 
@@ -397,7 +401,8 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext
   ): Promise<boolean> {
     const state = this.promptQueue.getState();
-    const currentStatus = state.status;
+    const runtime = this.getRuntime();
+    const currentStatus = runtime.status;
 
     if (currentStatus === EXECUTION_STATES.PAUSED) {
       Log.info("Workflow paused before executing next prompt");
@@ -583,9 +588,9 @@ export class WorkflowExecutor {
 
       if (!shouldContinue) {
         Log.info("Workflow stopped due to end condition failure");
-        if (this.promptQueue.getState().status === EXECUTION_STATES.RUNNING) {
-          this.promptQueue.failCurrentPromptIfInProgress();
-          this.promptQueue.getRuntimeStateMachine().fail();
+        if (runtime.status === EXECUTION_STATES.RUNNING) {
+          this.promptQueue.finalizeFailedInFlightPrompt();
+          runtime.fail();
           await this.promptQueue.commitRuntimeTransition();
         }
         return false;
@@ -601,7 +606,7 @@ export class WorkflowExecutor {
         });
       }
     } else {
-      this.promptQueue.getRuntimeStateMachine().completeAttempt(target, 0);
+      runtime.completeAttempt(target, 0);
       if (
         target.kind === FINAL_PROMPT_PHASES.QUEUE &&
         context.dashboardProvider
@@ -621,7 +626,7 @@ export class WorkflowExecutor {
         context.dashboardProvider.updateProgress(live.current, live.total);
       }
 
-      if (this.promptQueue.getState().status === EXECUTION_STATES.PAUSED) {
+      if (runtime.status === EXECUTION_STATES.PAUSED) {
         Log.info("Workflow paused");
         return false;
       }
@@ -713,7 +718,7 @@ export class WorkflowExecutor {
       return;
     }
 
-    const executionState = this.promptQueue.getState().status;
+    const executionState = this.getRuntime().status;
     const status =
       executionState === EXECUTION_STATES.ERROR
         ? STEP_STATUS.FAILED
@@ -921,8 +926,7 @@ export class WorkflowExecutor {
           responseHandled = true;
           disposable.dispose();
 
-          const currentState = this.promptQueue.getState();
-          if (currentState.status === EXECUTION_STATES.PAUSED) {
+          if (this.getRuntime().status === EXECUTION_STATES.PAUSED) {
             this.pendingResponseResolver = resolve;
             this.pendingResponseText = responseText;
             this.isWaitingForResponse = false;
@@ -1308,7 +1312,7 @@ export class WorkflowExecutor {
       return false;
     }
 
-    const elapsedMs = this.promptQueue.getActiveExecutionTime();
+    const elapsedMs = this.getRuntime().getActiveExecutionTime();
     const elapsedSec = Math.floor(elapsedMs / 1000);
 
     if (elapsedSec >= maxTimeSec) {
@@ -1370,16 +1374,15 @@ export class WorkflowExecutor {
     legacyStepIndex: number,
     attemptIndex: number
   ): Promise<boolean> {
-    const runtime = this.promptQueue.getRuntimeStateMachine();
-    const queueState = this.promptQueue.getState();
-    if (queueState.stopped) {
+    const runtime = this.getRuntime();
+    if (runtime.stopped) {
       return false;
     }
 
     if (integration.wasLastFailureUserCancellation()) {
       const failureReason = integration.getLastFailureReason();
       runtime.cancelAttempt(target, attemptIndex, failureReason);
-      this.promptQueue.markCurrentPromptCancelled();
+      this.promptQueue.markInFlightPromptCancelled();
       if (runtime.requestStop()) {
         await this.promptQueue.commitRuntimeTransition({ persist: false });
       }
@@ -1468,12 +1471,12 @@ export class WorkflowExecutor {
           );
       }
 
-      this.promptQueue.markCurrentPromptCancelled();
+      this.promptQueue.markInFlightPromptCancelled();
       if (runtime.requestStop()) {
         await this.promptQueue.commitRuntimeTransition({ persist: false });
       }
       if (runtime.confirmStopped()) {
-        this.promptQueue.advanceCancelledPromptAfterStop();
+        this.promptQueue.finalizeCancelledPromptAfterStop();
         await this.promptQueue.commitRuntimeTransition();
       }
       return false;
@@ -1497,7 +1500,7 @@ export class WorkflowExecutor {
     }
 
     runtime.failAttempt(target, attemptIndex, failureReason);
-    this.promptQueue.failCurrentPromptIfInProgress();
+    this.promptQueue.finalizeFailedInFlightPrompt(failureReason);
     runtime.fail();
     await this.promptQueue.commitRuntimeTransition();
 
@@ -1660,21 +1663,16 @@ export class WorkflowExecutor {
     }
   }
 
-  private async finalizeWorkflowExecution(
-    context: WorkflowExecutionContext
-  ): Promise<void> {
-    const finalState = this.promptQueue.getState();
+  private async finalizeWorkflowExecution(): Promise<void> {
+    const finalState = this.getRuntime().status;
     if (
-      finalState.status !== EXECUTION_STATES.PAUSED &&
-      finalState.status !== EXECUTION_STATES.STOPPED &&
-      finalState.status !== EXECUTION_STATES.CANCELLING &&
-      finalState.status !== EXECUTION_STATES.ERROR
+      finalState !== EXECUTION_STATES.PAUSED &&
+      finalState !== EXECUTION_STATES.STOPPED &&
+      finalState !== EXECUTION_STATES.CANCELLING &&
+      finalState !== EXECUTION_STATES.ERROR
     ) {
-      this.promptQueue.getRuntimeStateMachine().complete();
+      this.getRuntime().complete();
       await this.promptQueue.commitRuntimeTransition();
-      if (context.dashboardProvider) {
-        context.dashboardProvider.updateExecutionCompleted();
-      }
     }
   }
 

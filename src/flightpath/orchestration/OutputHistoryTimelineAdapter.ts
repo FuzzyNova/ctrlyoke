@@ -1,5 +1,6 @@
 import { FINAL_PROMPT_PHASES } from "../../types/DashboardConstants";
 import type {
+  OrderedHistoryEntry,
   OutputExecutionTarget,
   OutputTimelineEntry,
   StepOutput,
@@ -41,9 +42,19 @@ export class OutputHistoryTimelineAdapter {
       promptOutputs: {},
     };
     const outputTimelineByKey = new Map<string, OutputTimelineEntry>();
+    const orderedEntries: OrderedHistoryEntry[] = [];
+    const cliEntriesByKey = new Map<string, OrderedHistoryEntry>();
 
     for (const event of [...events].sort(compareTimelineEvents)) {
       switch (event.eventType) {
+        case TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED:
+          orderedEntries.push({
+            kind: "runtime",
+            timestampMs: event.timestampMs,
+            sequence: event.sequence,
+            transition: event.payload.transition,
+          });
+          break;
         case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED: {
           const stepOutput = this.ensureStepOutput(history, event.target);
           const attemptIndex = event.attemptIndex;
@@ -62,6 +73,15 @@ export class OutputHistoryTimelineAdapter {
               (left.attemptIndex ?? 0) - (right.attemptIndex ?? 0)
           );
 
+          cliEntriesByKey.set(getCliEntryKey(event.target, attemptIndex), {
+            kind: "cli",
+            target: event.target,
+            attemptIndex,
+            cliOutput: event.payload.cliOutput,
+            timestampMs: event.timestampMs,
+            sequence: event.sequence,
+          });
+
           const firstOutputAt =
             event.payload.cliOutput.timestampMs ?? event.timestampMs;
           const key = getTimelineKey(event.target);
@@ -79,6 +99,13 @@ export class OutputHistoryTimelineAdapter {
           this.ensureStepOutput(history, event.target).statusMessages.push(
             event.payload.statusMessage
           );
+          orderedEntries.push({
+            kind: "status",
+            target: event.target,
+            statusMessage: event.payload.statusMessage,
+            timestampMs: event.timestampMs,
+            sequence: event.sequence,
+          });
           break;
         case TIMELINE_EVENT_TYPES.STATUS_MESSAGES_UPDATED:
           this.ensureStepOutput(history, event.target).statusMessages =
@@ -103,6 +130,14 @@ export class OutputHistoryTimelineAdapter {
     );
     if (outputTimeline.length > 0) {
       history.outputTimeline = outputTimeline;
+    }
+
+    const canonicalOrderedEntries = [
+      ...orderedEntries,
+      ...cliEntriesByKey.values(),
+    ].sort(compareOrderedHistoryEntries);
+    if (canonicalOrderedEntries.length > 0) {
+      history.orderedEntries = canonicalOrderedEntries;
     }
 
     if (
@@ -147,4 +182,18 @@ function getTimelineKey(target: OutputExecutionTarget): string {
   return target.kind === FINAL_PROMPT_PHASES.QUEUE
     ? `queue:${target.stepIndex}`
     : `final:${target.loopIndex}`;
+}
+
+function getCliEntryKey(
+  target: OutputExecutionTarget,
+  attemptIndex: number
+): string {
+  return `${getTimelineKey(target)}:attempt:${attemptIndex}`;
+}
+
+function compareOrderedHistoryEntries(
+  left: OrderedHistoryEntry,
+  right: OrderedHistoryEntry
+): number {
+  return left.timestampMs - right.timestampMs || left.sequence - right.sequence;
 }

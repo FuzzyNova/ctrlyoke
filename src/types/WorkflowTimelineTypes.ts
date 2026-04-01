@@ -1,5 +1,9 @@
 import type { ExecutionState } from "./DashboardConstants";
 import type {
+  WorkflowRuntimeCommand,
+  WorkflowRuntimeState,
+} from "./FlightPathTypes";
+import type {
   OutputExecutionTarget,
   WorkspaceSnapshot,
   UndoRecord,
@@ -15,13 +19,17 @@ export const TIMELINE_STORAGE_KIND = "timeline" as const;
 export const TIMELINE_SCHEMA_VERSION = "2.0.0" as const;
 
 export const TIMELINE_EVENT_TYPES = {
+  WORKFLOW_RUNTIME_TRANSITION_RECORDED: "workflowRuntimeTransitionRecorded",
   CLI_OUTPUT_RECORDED: "cliOutputRecorded",
   STATUS_MESSAGE_RECORDED: "statusMessageRecorded",
+  // Legacy aggregate event retained for read compatibility only.
   STATUS_MESSAGES_UPDATED: "statusMessagesUpdated",
   WORKSPACE_SNAPSHOT_CAPTURED: "workspaceSnapshotCaptured",
+  // Legacy aggregate event retained for read compatibility only.
   WORKSPACE_SNAPSHOT_UPDATED: "workspaceSnapshotUpdated",
   UNDO_APPLIED: "undoApplied",
   REDO_APPLIED: "redoApplied",
+  // Legacy aggregate event retained for read compatibility only.
   UNDO_RECORD_UPDATED: "undoRecordUpdated",
 } as const;
 
@@ -47,10 +55,33 @@ interface TargetedTimelineEventDraftBase {
   target: OutputExecutionTarget;
 }
 
+interface RunTimelineEventDraftBase {
+  timestampMs: number;
+}
+
 interface TargetedTimelineEventBase extends TargetedTimelineEventDraftBase {
   workflowId: string;
   runId: number;
   sequence: number;
+}
+
+interface RunTimelineEventBase extends RunTimelineEventDraftBase {
+  workflowId: string;
+  runId: number;
+  sequence: number;
+}
+
+export interface WorkflowRuntimeTransitionPayload {
+  command: WorkflowRuntimeCommand;
+  previous: WorkflowRuntimeState;
+  current: WorkflowRuntimeState;
+}
+
+export interface WorkflowRuntimeTransitionRecordedEventDraft extends RunTimelineEventDraftBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED;
+  payload: {
+    transition: WorkflowRuntimeTransitionPayload;
+  };
 }
 
 export interface CliOutputRecordedEventDraft extends TargetedTimelineEventDraftBase {
@@ -111,6 +142,7 @@ export interface UndoRecordUpdatedEventDraft extends TargetedTimelineEventDraftB
 }
 
 export type WorkflowTimelineEventDraft =
+  | WorkflowRuntimeTransitionRecordedEventDraft
   | CliOutputRecordedEventDraft
   | StatusMessageRecordedEventDraft
   | StatusMessagesUpdatedEventDraft
@@ -125,6 +157,13 @@ export interface CliOutputRecordedEvent extends TargetedTimelineEventBase {
   attemptIndex: number;
   payload: {
     cliOutput: CliOutput;
+  };
+}
+
+export interface WorkflowRuntimeTransitionRecordedEvent extends RunTimelineEventBase {
+  eventType: typeof TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED;
+  payload: {
+    transition: WorkflowRuntimeTransitionPayload;
   };
 }
 
@@ -178,6 +217,7 @@ export interface UndoRecordUpdatedEvent extends TargetedTimelineEventBase {
 }
 
 export type WorkflowTimelineEvent =
+  | WorkflowRuntimeTransitionRecordedEvent
   | CliOutputRecordedEvent
   | StatusMessageRecordedEvent
   | StatusMessagesUpdatedEvent

@@ -38,7 +38,7 @@ async function requestQueueStop(queue: PromptQueue): Promise<void> {
     return;
   }
 
-  queue.markCurrentPromptCancelled();
+  queue.markInFlightPromptCancelled();
   await queue.commitRuntimeTransition({ persist: false });
 }
 
@@ -47,7 +47,7 @@ async function confirmQueueStopped(queue: PromptQueue): Promise<void> {
     return;
   }
 
-  queue.advanceCancelledPromptAfterStop();
+  queue.finalizeCancelledPromptAfterStop();
   await queue.commitRuntimeTransition();
 }
 
@@ -57,9 +57,22 @@ async function markQueueCompleted(queue: PromptQueue): Promise<void> {
 }
 
 async function markQueueErrored(queue: PromptQueue): Promise<void> {
-  queue.failCurrentPromptIfInProgress();
+  await startQueueExecution(queue);
+  await queue.markCurrentAsSent();
+  queue.finalizeFailedInFlightPrompt("Error");
   queue.getRuntimeStateMachine().fail();
-  await queue.commitRuntimeTransition();
+  await queue.commitRuntimeTransition({ persist: false });
+}
+
+async function failCurrentPrompt(
+  queue: PromptQueue,
+  error: string = "Test error"
+): Promise<void> {
+  await startQueueExecution(queue);
+  await queue.markCurrentAsSent();
+  queue.finalizeFailedInFlightPrompt(error);
+  queue.getRuntimeStateMachine().fail();
+  await queue.commitRuntimeTransition({ persist: false });
 }
 
 suite("PromptQueue State Machine Tests", () => {
@@ -337,7 +350,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("should reset execution time tracking", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.startExecutionTimer();
+      queue.getRuntimeStateMachine().startExecutionTimer();
       await new Promise((resolve) => setTimeout(resolve, 10));
       await queue.restart();
       const state = queue.getState();
@@ -535,38 +548,38 @@ suite("PromptQueue State Machine Tests", () => {
     });
   });
 
-  suite("markCurrentAsFailed()", () => {
-    test("should mark result as FAILED", () => {
+  suite("finalizeFailedInFlightPrompt()", () => {
+    test("should mark result as FAILED", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.markCurrentAsFailed("Test error");
+      await failCurrentPrompt(queue);
       const state = queue.getState();
       assert.strictEqual(state.results[0].status, STEP_STATUS.FAILED);
     });
 
-    test("should set error message on result", () => {
+    test("should set error message on result", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.markCurrentAsFailed("Test error message");
+      await failCurrentPrompt(queue, "Test error message");
       const state = queue.getState();
       assert.strictEqual(state.results[0].error, "Test error message");
     });
 
-    test("should transition status to ERROR", () => {
+    test("should transition status to ERROR when runtime fails", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.markCurrentAsFailed("Test error");
+      await failCurrentPrompt(queue);
       const state = queue.getState();
       assert.strictEqual(state.status, EXECUTION_STATES.ERROR);
     });
 
-    test("should advance currentIndex past the failed prompt", () => {
+    test("should advance currentIndex past the failed prompt", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       assert.strictEqual(queue.getState().currentIndex, 0);
-      queue.markCurrentAsFailed("Test error");
+      await failCurrentPrompt(queue);
       assert.strictEqual(queue.getState().currentIndex, 1);
     });
 
-    test("should record terminalStatus as failed on the prompt runtime", () => {
+    test("should record terminalStatus as failed on the prompt runtime", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.markCurrentAsFailed("Test error");
+      await failCurrentPrompt(queue);
       const prompt = queue.getState().prompts[0];
       assert.strictEqual(prompt._runtime?.terminalStatus, "failed");
     });
@@ -700,9 +713,9 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(queue.getCompletedCount(), 1);
     });
 
-    test("getFailedCount() should count failed prompts", () => {
+    test("getFailedCount() should count failed prompts", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.markCurrentAsFailed("Error");
+      await failCurrentPrompt(queue, "Error");
       assert.strictEqual(queue.getFailedCount(), 1);
     });
   });
@@ -710,7 +723,7 @@ suite("PromptQueue State Machine Tests", () => {
   suite("Execution Time Tracking", () => {
     test("startExecutionTimer() should set startTime", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.startExecutionTimer();
+      queue.getRuntimeStateMachine().startExecutionTimer();
       const state = queue.getState();
       assert.ok(state.startTime);
       assert.ok(state.startTime > 0);
@@ -718,15 +731,15 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("getActiveExecutionTime() should return elapsed time", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.startExecutionTimer();
+      queue.getRuntimeStateMachine().startExecutionTimer();
       await new Promise((resolve) => setTimeout(resolve, 100));
-      const elapsed = queue.getActiveExecutionTime();
+      const elapsed = queue.getRuntimeStateMachine().getActiveExecutionTime();
       assert.ok(elapsed >= 50);
     });
 
     test("getActiveExecutionTime() should exclude paused duration", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.startExecutionTimer();
+      queue.getRuntimeStateMachine().startExecutionTimer();
       await startQueueExecution(queue);
       await new Promise((resolve) => setTimeout(resolve, 20));
       await pauseQueueExecution(queue);
@@ -734,14 +747,17 @@ suite("PromptQueue State Machine Tests", () => {
       await resumeQueueExecution(queue);
       await new Promise((resolve) => setTimeout(resolve, 20));
 
-      const active = queue.getActiveExecutionTime();
+      const active = queue.getRuntimeStateMachine().getActiveExecutionTime();
       // Should be roughly 40ms (20 + 20), not 140ms (20 + 100 + 20)
       assert.ok(active < 100, `Expected < 100ms but got ${active}ms`);
     });
 
     test("getActiveExecutionTime() should return 0 if not started", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      assert.strictEqual(queue.getActiveExecutionTime(), 0);
+      assert.strictEqual(
+        queue.getRuntimeStateMachine().getActiveExecutionTime(),
+        0
+      );
     });
   });
 
@@ -831,6 +847,19 @@ suite("PromptQueue State Machine Tests", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await markQueueErrored(queue);
       assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
+    });
+
+    test("appendPrompts() should not reopen a completed workflow on its own", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await markQueueCompleted(queue);
+
+      await queue.appendPrompts([{ prompt: "follow-up" }], "test");
+
+      assert.strictEqual(
+        queue.getRuntimeStateMachine().status,
+        EXECUTION_STATES.COMPLETED
+      );
+      assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
     });
   });
 
