@@ -21,6 +21,7 @@ suite("CliPromptPreparer", () => {
     const preparer = new CliPromptPreparer({
       shouldOmitAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async () => createSections(),
+      extractLeadingSlashCommand: () => null,
       isSimplePrompt: () => true,
       buildPriorContextXml: () => "",
       getWorkspaceRoot: () => process.cwd(),
@@ -34,6 +35,7 @@ suite("CliPromptPreparer", () => {
       formatCategorizedReferences: () => {
         throw new Error("should not build categorized refs on fast path");
       },
+      logDebug: () => {},
       logInfo: () => {},
     });
 
@@ -65,6 +67,7 @@ suite("CliPromptPreparer", () => {
         capturedSkills = skills;
         return createSections();
       },
+      extractLeadingSlashCommand: () => null,
       isSimplePrompt: () => true,
       buildPriorContextXml: () => "",
       getWorkspaceRoot: () => process.cwd(),
@@ -72,6 +75,7 @@ suite("CliPromptPreparer", () => {
       formatDirectFileRef: () => "",
       formatTempFileRef: () => "",
       formatCategorizedReferences: () => "",
+      logDebug: () => {},
       logInfo: () => {},
     });
 
@@ -95,6 +99,7 @@ suite("CliPromptPreparer", () => {
           directFileRefs: ["C:/repo/src/index.ts"],
           userPromptText: "please inspect files",
         }),
+      extractLeadingSlashCommand: () => null,
       isSimplePrompt: () => false,
       buildPriorContextXml: () =>
         "<priorContext><step>hello</step></priorContext>",
@@ -113,6 +118,7 @@ suite("CliPromptPreparer", () => {
         _excerptRefs,
         promptRefs
       ) => [...directRefs, ...contextRefs, ...promptRefs].join(" | "),
+      logDebug: () => {},
       logInfo: () => {},
     });
 
@@ -131,5 +137,115 @@ suite("CliPromptPreparer", () => {
     assert.ok(result.tempFilePaths.length >= 2);
     assert.ok(result.promptWithInstruction.includes("@C:/repo/src/index.ts"));
     assert.ok(createdFiles.length >= 2);
+  });
+
+  test("should keep pure slash commands inline and skip prompt assembly", async () => {
+    let buildSectionsCalled = false;
+
+    const preparer = new CliPromptPreparer({
+      shouldOmitAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () => {
+        buildSectionsCalled = true;
+        return createSections();
+      },
+      extractLeadingSlashCommand: () => "/handoff",
+      isSimplePrompt: () => true,
+      buildPriorContextXml: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => "",
+      formatTempFileRef: () => "",
+      formatCategorizedReferences: () => "",
+      logDebug: () => {},
+      logInfo: () => {},
+    });
+
+    const result = await preparer.preparePrompt(
+      { prompt: "/handoff" } as PromptItem,
+      undefined,
+      undefined,
+      undefined
+    );
+
+    assert.deepStrictEqual(result, {
+      promptWithInstruction: "/handoff",
+      tempFilePaths: [],
+    });
+    assert.strictEqual(buildSectionsCalled, false);
+  });
+
+  test("should not duplicate slash command prefixes on inline simple prompts", async () => {
+    const preparer = new CliPromptPreparer({
+      shouldOmitAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({ userPromptText: "/handoff summarize the session" }),
+      extractLeadingSlashCommand: () => "/handoff",
+      isSimplePrompt: () => true,
+      buildPriorContextXml: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => "",
+      formatTempFileRef: () => "",
+      formatCategorizedReferences: () => "",
+      logDebug: () => {},
+      logInfo: () => {},
+    });
+
+    const result = await preparer.preparePrompt(
+      { prompt: "/handoff summarize the session" } as PromptItem,
+      undefined,
+      undefined,
+      undefined
+    );
+
+    assert.deepStrictEqual(result, {
+      promptWithInstruction: "/handoff summarize the session",
+      tempFilePaths: [],
+    });
+  });
+
+  test("should prepend slash commands to categorized instructions once", async () => {
+    const preparer = new CliPromptPreparer({
+      shouldOmitAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({
+          directFileRefs: ["C:/repo/src/index.ts"],
+          userPromptText: "/handoff inspect repo state",
+        }),
+      extractLeadingSlashCommand: () => "/handoff",
+      isSimplePrompt: () => false,
+      buildPriorContextXml: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath: string) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath: string) => `@${absolutePath}`,
+      formatCategorizedReferences: (
+        _agentRefs,
+        _skillRefs,
+        directRefs,
+        _contextRefs,
+        _excerptRefs,
+        promptRefs
+      ) => [...directRefs, ...promptRefs].join(" | "),
+      logDebug: () => {},
+      logInfo: () => {},
+    });
+
+    const result = await preparer.preparePrompt(
+      { prompt: "/handoff inspect repo state" } as PromptItem,
+      undefined,
+      undefined,
+      undefined
+    );
+
+    assert.ok(
+      result.promptWithInstruction.startsWith(
+        "/handoff @C:/repo/src/index.ts | @"
+      )
+    );
+    assert.strictEqual(
+      result.promptWithInstruction.includes("/handoff /handoff"),
+      false
+    );
   });
 });

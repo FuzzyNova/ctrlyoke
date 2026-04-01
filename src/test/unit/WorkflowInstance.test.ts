@@ -79,6 +79,23 @@ class MockIntegrationFactory extends IntegrationFactory {
   }
 }
 
+async function startQueueExecution(instance: WorkflowInstance): Promise<void> {
+  const queue = instance.promptQueue;
+  if (queue.getState().prompts.length === 0) {
+    return;
+  }
+
+  if (queue.getRuntimeStateMachine().startExecution()) {
+    await queue.commitRuntimeTransition({ persist: false });
+  }
+}
+
+async function markQueueCompleted(instance: WorkflowInstance): Promise<void> {
+  const queue = instance.promptQueue;
+  queue.getRuntimeStateMachine().complete();
+  await queue.commitRuntimeTransition({ persist: false });
+}
+
 suite("WorkflowInstance finalPrompt replay", () => {
   test("replays finalPrompt completed output, in-flight buffer, and status messages on workflow switch", async () => {
     const platform = new MockPlatform();
@@ -142,7 +159,7 @@ suite("WorkflowInstance finalPrompt replay", () => {
       finalPrompt: { prompt: "final-loop" },
     });
 
-    await instance.promptQueue.start();
+    await startQueueExecution(instance);
     await instance.promptQueue.setFinalPromptRuntime({
       phase: FINAL_PROMPT_PHASES.FINAL_PROMPT,
       loopCount: 0,
@@ -280,6 +297,7 @@ suite("WorkflowInstance runtime transitions", () => {
     await instance.promptQueue.commitRuntimeTransition({ persist: false });
 
     await instance.promptQueue.markCurrentAsSent();
+    runtime.beginAttempt({ kind: "queue", stepIndex: 0 }, 0);
     instance.promptQueue.markCurrentPromptCancelled();
     assert.strictEqual(runtime.requestStop(), true);
     await instance.promptQueue.commitRuntimeTransition({ persist: false });
@@ -290,6 +308,80 @@ suite("WorkflowInstance runtime transitions", () => {
     ]);
     assert.deepStrictEqual(stepStatuses, [
       { stepIndex: 0, state: STEP_STATUS.CANCELLED },
+    ]);
+  });
+
+  test("updates retry badges from attempt transitions and clears them after retry completion", () => {
+    const platform = new MockPlatform();
+
+    const retryUpdates: Array<{
+      stepIndex: number;
+      currentRetry: number;
+      maxRetries: number;
+    }> = [];
+    const stepStatuses: Array<{ stepIndex: number; state: string }> = [];
+
+    const dashboardSink: any = {
+      updateFileSelected: async () => {},
+      updateSessionRestored: async () => {},
+      updateExecutionStarted: () => {},
+      notifyRunHistoryUpdated: () => {},
+      updateProgress: () => {},
+      updateExecutionState: () => {},
+      updateStepStatus: (stepIndex: number, details: { state: string }) => {
+        stepStatuses.push({ stepIndex, state: details.state });
+      },
+      updateRetryAttempt: (
+        stepIndex: number,
+        currentRetry: number,
+        maxRetries: number
+      ) => {
+        retryUpdates.push({ stepIndex, currentRetry, maxRetries });
+      },
+      updateCliOutput: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: () => {},
+      updatePromptsExtended: () => {},
+      updatePromptDeleted: () => {},
+      updateFinalPrompt: () => {},
+      updateFinalPromptStatus: () => {},
+      updateFinalPromptOutput: () => {},
+      updateFinalPromptStreamingChunk: () => {},
+      updateFinalPromptStreamingEvents: () => {},
+      updateStatusMessage: () => {},
+      notifyWorkflowStateReset: () => {},
+      notifyStartPositionSet: () => {},
+      notifyPromptsReordered: () => {},
+    };
+
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    instance.setActive(true);
+    instance.promptQueue.loadPrompts({
+      prompts: [{ prompt: "queue-1" }],
+    });
+
+    const runtime = instance.promptQueue.getRuntimeStateMachine();
+    const target = { kind: "queue" as const, stepIndex: 0 };
+
+    runtime.scheduleRetry(target, 1, 1, 2);
+    runtime.beginAttempt(target, 1);
+    runtime.completeAttempt(target, 1);
+
+    assert.deepStrictEqual(retryUpdates, [
+      { stepIndex: 0, currentRetry: 1, maxRetries: 2 },
+      { stepIndex: 0, currentRetry: 0, maxRetries: 0 },
+    ]);
+    assert.deepStrictEqual(stepStatuses, [
+      { stepIndex: 0, state: STEP_STATUS.RUNNING },
     ]);
   });
 });
@@ -406,7 +498,7 @@ suite("WorkflowInstance append-and-continue", () => {
     instance.promptQueue.loadPrompts({
       prompts: [{ prompt: "first prompt" }],
     });
-    await instance.promptQueue.markCompleted();
+    await markQueueCompleted(instance);
     (instance.promptQueue as any).state.results[0].status =
       STEP_STATUS.COMPLETED;
 
@@ -473,7 +565,7 @@ suite("WorkflowInstance append-and-continue", () => {
     instance.promptQueue.loadPrompts({
       prompts: [{ prompt: "completed prompt" }, { prompt: "appended prompt" }],
     });
-    await instance.promptQueue.markCompleted();
+    await markQueueCompleted(instance);
     (instance.promptQueue as any).state.results[0].status =
       STEP_STATUS.COMPLETED;
     (instance.promptQueue as any).state.results[1].status = STEP_STATUS.PENDING;

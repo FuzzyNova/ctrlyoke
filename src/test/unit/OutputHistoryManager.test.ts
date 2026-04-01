@@ -4,58 +4,119 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import { OutputHistoryManager } from "../../flightpath/orchestration/OutputHistoryManager";
+import { TimelineRecorder } from "../../flightpath/orchestration/TimelineRecorder";
 import { EXECUTION_STATES } from "../../types/DashboardConstants";
 import { WorkflowOutputHistory } from "../../types/OutputHistoryTypes";
+import {
+  TIMELINE_EVENT_TYPES,
+  TIMELINE_STORAGE_FILES,
+  TIMELINE_STORAGE_KIND,
+  type WorkflowRunManifest,
+} from "../../types/WorkflowTimelineTypes";
 
-suite("OutputHistoryManager execution target persistence", () => {
+suite("OutputHistoryManager timeline-backed storage", () => {
   let tempWorkspace: string;
   let manager: OutputHistoryManager;
-  let historyFilePath: string;
+  let recorder: TimelineRecorder;
 
   setup(async () => {
     tempWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-history-"));
     manager = new OutputHistoryManager(tempWorkspace);
-
-    const workflowId = "wf-test";
-    const historyDir = path.join(manager.historyBaseDir, workflowId);
-    await fs.mkdir(historyDir, { recursive: true });
-
-    historyFilePath = path.join(historyDir, "run-test.json");
-    const initial: WorkflowOutputHistory = {
-      schemaVersion: "1.1.0",
-      workflowId,
-      runId: 1,
-      startedAt: Date.now(),
-      executionState: EXECUTION_STATES.RUNNING,
-      runStepCount: 2,
-      promptOutputs: {},
-    };
-
-    await fs.writeFile(
-      historyFilePath,
-      JSON.stringify(initial, null, 2),
-      "utf-8"
-    );
+    recorder = new TimelineRecorder();
   });
 
   teardown(async () => {
     await fs.rm(tempWorkspace, { recursive: true, force: true });
   });
 
-  test("stores queue and finalPrompt outputs separately", async () => {
+  test("initializes new runs as manifest plus events.jsonl storage", async () => {
+    const historyInit = await manager.initializeRun("wf-test");
+
+    assert.strictEqual(historyInit.runCount, 1);
+    assert.strictEqual(
+      path.basename(historyInit.filePath),
+      TIMELINE_STORAGE_FILES.MANIFEST
+    );
+
+    const manifest = JSON.parse(
+      await fs.readFile(historyInit.filePath, "utf8")
+    ) as WorkflowRunManifest;
+
+    assert.strictEqual(manifest.storageKind, TIMELINE_STORAGE_KIND);
+    assert.strictEqual(manifest.workflowId, "wf-test");
+    assert.strictEqual(manifest.runId, 1);
+    assert.strictEqual(manifest.executionState, EXECUTION_STATES.RUNNING);
+    assert.strictEqual(manifest.eventCount, 0);
+    assert.strictEqual(manifest.nextSequence, 1);
+
+    const events = await recorder.readEvents(historyInit.filePath);
+    assert.deepStrictEqual(events, []);
+  });
+
+  test("projects timeline events back into the legacy WorkflowOutputHistory shape", async () => {
+    const historyInit = await manager.initializeRun("wf-test");
+    const historyFilePath = historyInit.filePath;
+
+    await manager.appendStatusMessage(
+      historyFilePath,
+      { kind: "queue", stepIndex: 0 },
+      {
+        message: "started",
+        severity: "info",
+        timestamp: 110,
+      }
+    );
+
     await manager.saveExecutionOutput(
       historyFilePath,
       { kind: "queue", stepIndex: 0 },
       [
         {
           prompt: "queue-1",
-          response: "ok",
+          response: "draft",
           elapsed: 1,
           isStreaming: false,
           timestampMs: 100,
+          attemptIndex: 0,
         },
       ],
-      []
+      [{ message: "started", severity: "info", timestamp: 110 }]
+    );
+
+    await manager.saveExecutionOutput(
+      historyFilePath,
+      { kind: "queue", stepIndex: 0 },
+      [
+        {
+          prompt: "queue-1",
+          response: "final",
+          elapsed: 1,
+          isStreaming: false,
+          timestampMs: 120,
+          attemptIndex: 0,
+        },
+      ],
+      [{ message: "started", severity: "info", timestamp: 110 }]
+    );
+
+    await manager.appendStatusMessage(
+      historyFilePath,
+      { kind: "queue", stepIndex: 0 },
+      {
+        message: "done",
+        severity: "info",
+        timestamp: 130,
+      }
+    );
+
+    await manager.saveExecutionOutput(
+      historyFilePath,
+      { kind: "queue", stepIndex: 0 },
+      [],
+      [
+        { message: "started", severity: "info", timestamp: 110 },
+        { message: "done", severity: "info", timestamp: 130 },
+      ]
     );
 
     await manager.saveExecutionOutput(
@@ -73,46 +134,216 @@ suite("OutputHistoryManager execution target persistence", () => {
       []
     );
 
+    await manager.saveSnapshotForTarget(
+      historyFilePath,
+      { kind: "queue", stepIndex: 0 },
+      {
+        capturedAt: 150,
+        strategy: "filesystem",
+        changedFiles: [],
+      }
+    );
+
+    await manager.saveUndoRecord(
+      historyFilePath,
+      { kind: "queue", stepIndex: 0 },
+      {
+        appliedAt: 160,
+        restoredFiles: ["src/file.ts"],
+        redoInstructions: [],
+      }
+    );
+
+    await manager.markUndoRecordRedone(
+      historyFilePath,
+      { kind: "queue", stepIndex: 0 },
+      170
+    );
+
+    await manager.finalizeRun(historyFilePath, EXECUTION_STATES.COMPLETED, 2);
+
     const loaded = await manager.loadHistory(historyFilePath);
     assert.strictEqual(loaded.promptOutputs[0]?.cliOutputs.length, 1);
+    assert.strictEqual(
+      loaded.promptOutputs[0]?.cliOutputs[0]?.response,
+      "final"
+    );
+    assert.strictEqual(loaded.promptOutputs[0]?.statusMessages.length, 2);
     assert.strictEqual(loaded.finalPromptOutputs?.[0]?.cliOutputs.length, 1);
+    assert.strictEqual(
+      loaded.promptOutputs[0]?.workspaceSnapshot?.capturedAt,
+      150
+    );
+    assert.strictEqual(loaded.promptOutputs[0]?.undoRecord?.isRedone, true);
+    assert.strictEqual(loaded.promptOutputs[0]?.undoRecord?.redoneAt, 170);
+    assert.strictEqual(loaded.executionState, EXECUTION_STATES.COMPLETED);
+    assert.strictEqual(loaded.runStepCount, 2);
+    assert.ok(loaded.outputTimeline);
+    assert.strictEqual(loaded.outputTimeline?.length, 2);
+    assert.strictEqual(loaded.outputTimeline?.[0].key, "queue:0");
+    assert.strictEqual(loaded.outputTimeline?.[1].key, "final:0");
+
+    const events = await recorder.readEvents(historyFilePath);
+    assert.strictEqual(events.length, 8);
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      [1, 2, 3, 4, 5, 6, 7, 8]
+    );
+    assert.deepStrictEqual(
+      events.map((event) => event.eventType),
+      [
+        TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED,
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED,
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED,
+        TIMELINE_EVENT_TYPES.UNDO_APPLIED,
+        TIMELINE_EVENT_TYPES.REDO_APPLIED,
+      ]
+    );
+    assert.ok(events.every((event) => typeof event.timestampMs === "number"));
   });
 
-  test("writes chronological outputTimeline metadata", async () => {
-    await manager.saveExecutionOutput(
+  test("stores status messages as discrete timeline events in sequence order", async () => {
+    const historyInit = await manager.initializeRun("wf-status-sequence");
+    const historyFilePath = historyInit.filePath;
+
+    await manager.appendStatusMessage(
       historyFilePath,
-      { kind: "finalPrompt", loopIndex: 0 },
-      [
-        {
-          prompt: "final",
-          response: "a",
-          elapsed: 1,
-          isStreaming: false,
-          timestampMs: 500,
-        },
-      ],
-      []
+      { kind: "queue", stepIndex: 0 },
+      { message: "queued", severity: "info", timestamp: 100 }
     );
 
     await manager.saveExecutionOutput(
       historyFilePath,
-      { kind: "queue", stepIndex: 1 },
+      { kind: "queue", stepIndex: 0 },
       [
         {
-          prompt: "queue-2",
-          response: "b",
+          prompt: "queue-1",
+          response: "ok",
           elapsed: 1,
           isStreaming: false,
-          timestampMs: 300,
+          timestampMs: 110,
+          attemptIndex: 0,
         },
       ],
-      []
+      [{ message: "queued", severity: "info", timestamp: 100 }]
+    );
+
+    await manager.appendStatusMessage(
+      historyFilePath,
+      { kind: "queue", stepIndex: 0 },
+      { message: "complete", severity: "info", timestamp: 120 }
+    );
+
+    const events = await recorder.readEvents(historyFilePath);
+    assert.deepStrictEqual(
+      events.map((event) => event.eventType),
+      [
+        TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED,
+        TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED,
+      ]
+    );
+    assert.deepStrictEqual(
+      events.map((event) => event.sequence),
+      [1, 2, 3]
     );
 
     const loaded = await manager.loadHistory(historyFilePath);
-    assert.ok(loaded.outputTimeline);
-    assert.strictEqual(loaded.outputTimeline?.length, 2);
-    assert.strictEqual(loaded.outputTimeline?.[0].key, "queue:1");
-    assert.strictEqual(loaded.outputTimeline?.[1].key, "final:0");
+    assert.deepStrictEqual(loaded.promptOutputs[0]?.statusMessages, [
+      { message: "queued", severity: "info", timestamp: 100 },
+      { message: "complete", severity: "info", timestamp: 120 },
+    ]);
+  });
+
+  test("projects older aggregate timeline event kinds for compatibility", async () => {
+    const historyInit = await manager.initializeRun("wf-compat");
+    const historyFilePath = historyInit.filePath;
+
+    await recorder.appendEvents(historyFilePath, [
+      {
+        eventType: TIMELINE_EVENT_TYPES.STATUS_MESSAGES_UPDATED,
+        timestampMs: 110,
+        target: { kind: "queue", stepIndex: 0 },
+        payload: {
+          statusMessages: [
+            { message: "legacy", severity: "warning", timestamp: 110 },
+          ],
+        },
+      },
+      {
+        eventType: TIMELINE_EVENT_TYPES.UNDO_RECORD_UPDATED,
+        timestampMs: 120,
+        target: { kind: "queue", stepIndex: 0 },
+        payload: {
+          undoRecord: {
+            appliedAt: 120,
+            restoredFiles: ["src/file.ts"],
+            redoInstructions: [],
+          },
+        },
+      },
+    ]);
+
+    const loaded = await manager.loadHistory(historyFilePath);
+    assert.deepStrictEqual(loaded.promptOutputs[0]?.statusMessages, [
+      { message: "legacy", severity: "warning", timestamp: 110 },
+    ]);
+    assert.deepStrictEqual(loaded.promptOutputs[0]?.undoRecord, {
+      appliedAt: 120,
+      restoredFiles: ["src/file.ts"],
+      redoInstructions: [],
+    });
+  });
+
+  test("loads legacy json history files without migration", async () => {
+    const workflowId = "wf-legacy";
+    const historyDir = path.join(manager.historyBaseDir, workflowId);
+    await fs.mkdir(historyDir, { recursive: true });
+
+    const historyFilePath = path.join(
+      historyDir,
+      "run-2026-03-31T10-00-00-000Z.json"
+    );
+    const legacyHistory: WorkflowOutputHistory = {
+      schemaVersion: "1.1.0",
+      workflowId,
+      runId: 1,
+      startedAt: 100,
+      completedAt: 200,
+      executionState: EXECUTION_STATES.COMPLETED,
+      runStepCount: 1,
+      promptOutputs: {
+        0: {
+          cliOutputs: [
+            {
+              prompt: "legacy",
+              response: "legacy-ok",
+              elapsed: 1,
+              isStreaming: false,
+              timestampMs: 100,
+            },
+          ],
+          statusMessages: [],
+        },
+      },
+    };
+
+    await fs.writeFile(
+      historyFilePath,
+      JSON.stringify(legacyHistory, null, 2),
+      "utf8"
+    );
+
+    const loaded = await manager.loadHistory(historyFilePath);
+    assert.strictEqual(
+      loaded.promptOutputs[0]?.cliOutputs[0]?.response,
+      "legacy-ok"
+    );
+
+    const runs = await manager.getRunsForWorkflow(workflowId);
+    assert.deepStrictEqual(runs, [path.basename(historyFilePath)]);
   });
 });

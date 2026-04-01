@@ -1119,7 +1119,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
           workflowContext.promptIndex,
           workflowContext.allPrompts,
           workflowContext.resolvedProperties?.priorContext,
-          workflowContext.promptQueue?.getFinalPromptResponseTexts()
+          workflowContext.getFinalPromptResponseTexts?.()
         )
       : "";
 

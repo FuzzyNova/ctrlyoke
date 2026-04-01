@@ -1,11 +1,11 @@
 import * as path from "path";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { SCRIPT_EXTENSIONS } from "../utils/ValidationUtils";
-import { PromptItem } from "../types/FlightPathTypes";
 import {
-  STEP_STATUS,
-  STATUS_MESSAGE_SEVERITY,
-} from "../types/DashboardConstants";
+  PromptItem,
+  type WorkflowAttemptTarget,
+} from "../types/FlightPathTypes";
+import { STATUS_MESSAGE_SEVERITY } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
 import {
   EndConditionEvaluator,
@@ -14,6 +14,7 @@ import {
 import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
 import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
+import type { WorkflowStateMachine } from "./WorkflowStateMachine";
 
 /** Dialog action labels used in error/retry dialogs (single-sourced to prevent typo drift) */
 const DIALOG_ACTIONS = {
@@ -32,6 +33,9 @@ export interface RetryContext {
   totalPrompts: number;
   workspaceFolderPath: string | undefined;
   currentPromptFilePath: string | undefined;
+  runtime: WorkflowStateMachine;
+  attemptTarget: WorkflowAttemptTarget;
+  attemptIndex: number;
 }
 
 /**
@@ -40,7 +44,8 @@ export interface RetryContext {
  */
 export type SendRetryPromptCallback = (
   retryPromptItem: PromptItem,
-  currentIndex: number
+  currentIndex: number,
+  attemptIndex: number
 ) => Promise<string | null>;
 
 /**
@@ -103,6 +108,11 @@ export class EndConditionHandler {
         currentResult.scriptOutput = evaluationResult.stdout;
       }
 
+      retryContext.runtime.completeAttempt(
+        retryContext.attemptTarget,
+        retryContext.attemptIndex
+      );
+
       return { shouldContinue: true };
     }
 
@@ -115,7 +125,11 @@ export class EndConditionHandler {
 
     if (isExecutionError) {
       // Error path - script failed to execute properly
-      return await this.handleExecutionError(prompt, evaluationResult);
+      return await this.handleExecutionError(
+        prompt,
+        evaluationResult,
+        retryContext
+      );
     } else {
       // Validation failure path - script ran but output doesn't match
       // Use iterative retry loop instead of recursion to avoid stack overflow
@@ -134,7 +148,8 @@ export class EndConditionHandler {
    */
   async handleExecutionError(
     prompt: PromptItem,
-    evaluationResult: EvaluationResult
+    evaluationResult: EvaluationResult,
+    retryContext: RetryContext
   ): Promise<EndConditionHandlerResult> {
     let errorMessage = "End condition script execution failed";
 
@@ -155,6 +170,11 @@ export class EndConditionHandler {
 
     if (action === DIALOG_ACTIONS.SKIP_CONDITION) {
       Log.info("⏭️ Skipping end condition and continuing");
+      this.promptQueue.resetRetryCount();
+      retryContext.runtime.completeAttempt(
+        retryContext.attemptTarget,
+        retryContext.attemptIndex
+      );
       return { shouldContinue: true };
     } else if (action === DIALOG_ACTIONS.OPEN_SCRIPT) {
       // Try to open the script file (only if the script looks like a file path)
@@ -182,10 +202,21 @@ export class EndConditionHandler {
           );
         }
       }
+
+      retryContext.runtime.failAttempt(
+        retryContext.attemptTarget,
+        retryContext.attemptIndex,
+        errorMessage
+      );
       return { shouldContinue: false, failureReason: errorMessage };
     }
 
     // Default: stop workflow
+    retryContext.runtime.failAttempt(
+      retryContext.attemptTarget,
+      retryContext.attemptIndex,
+      errorMessage
+    );
     return { shouldContinue: false, failureReason: errorMessage };
   }
 
@@ -202,6 +233,7 @@ export class EndConditionHandler {
   ): Promise<EndConditionHandlerResult> {
     let evaluationResult = initialEvaluationResult;
     let manualRetryRequested = false;
+    let currentAttemptIndex = retryContext.attemptIndex;
 
     while (true) {
       // Check if workflow was stopped by user
@@ -219,7 +251,9 @@ export class EndConditionHandler {
           // Max retries exhausted or no retry configured
           const exhaustedResult = await this.handleMaxRetriesExhausted(
             prompt,
-            evaluationResult
+            evaluationResult,
+            retryContext,
+            currentAttemptIndex
           );
           if (exhaustedResult.retryOnceMore) {
             // User requested one more retry — loop again without incrementing count
@@ -239,21 +273,21 @@ export class EndConditionHandler {
       const currentRetry = this.promptQueue.getCurrentRetryCount();
       const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
       const currentIndex = this.promptQueue.getState().currentIndex;
+      const nextAttemptIndex = currentAttemptIndex + 1;
+
+      retryContext.runtime.scheduleRetry(
+        retryContext.attemptTarget,
+        nextAttemptIndex,
+        currentRetry,
+        maxRetries
+      );
 
       Log.info(
         `🔄 Validation failed, retrying (attempt ${currentRetry}/${maxRetries})...`
       );
 
-      // Update dashboard with retry state
-      const dashboard = this.getDashboard();
       const hasQueueStep =
         currentIndex < this.promptQueue.getState().results.length;
-      if (dashboard && hasQueueStep) {
-        dashboard.updateRetryAttempt(currentIndex, currentRetry, maxRetries);
-        dashboard.updateStepStatus(currentIndex, {
-          state: STEP_STATUS.RUNNING,
-        });
-      }
 
       // Build retry prompt
       const retryPromptText = this.buildRetryPrompt(prompt, evaluationResult);
@@ -289,7 +323,8 @@ export class EndConditionHandler {
       // Send retry prompt and wait for response
       const retryResponseText = await sendRetryPrompt(
         retryPromptItem,
-        currentIndex
+        currentIndex,
+        nextAttemptIndex
       );
 
       if (retryResponseText === null) {
@@ -329,6 +364,11 @@ export class EndConditionHandler {
           result.scriptOutput = retryEvaluation.stdout;
         }
 
+        retryContext.runtime.completeAttempt(
+          retryContext.attemptTarget,
+          nextAttemptIndex
+        );
+
         return { shouldContinue: true };
       }
 
@@ -340,11 +380,15 @@ export class EndConditionHandler {
           retryEvaluation.exitCode !== 0);
 
       if (isExecutionError) {
-        return await this.handleExecutionError(prompt, retryEvaluation);
+        return await this.handleExecutionError(prompt, retryEvaluation, {
+          ...retryContext,
+          attemptIndex: nextAttemptIndex,
+        });
       }
 
       // Validation failure — continue the loop for another retry attempt
       evaluationResult = retryEvaluation;
+      currentAttemptIndex = nextAttemptIndex;
     }
   }
 
@@ -354,7 +398,9 @@ export class EndConditionHandler {
    */
   async handleMaxRetriesExhausted(
     prompt: PromptItem,
-    evaluationResult: EvaluationResult
+    evaluationResult: EvaluationResult,
+    retryContext: RetryContext,
+    attemptIndex: number
   ): Promise<EndConditionHandlerResult> {
     const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
     const retryCount = this.promptQueue.getCurrentRetryCount();
@@ -378,6 +424,10 @@ export class EndConditionHandler {
     if (action === DIALOG_ACTIONS.CONTINUE_ANYWAY) {
       Log.info("⏭️ Continuing despite validation failure");
       this.promptQueue.resetRetryCount();
+      retryContext.runtime.completeAttempt(
+        retryContext.attemptTarget,
+        attemptIndex
+      );
       return { shouldContinue: true };
     } else if (action === DIALOG_ACTIONS.RETRY_ONCE_MORE) {
       // Allow one more retry — signal the iterative loop to perform
@@ -388,6 +438,11 @@ export class EndConditionHandler {
 
     // Default: stop workflow
     this.promptQueue.resetRetryCount();
+    retryContext.runtime.failAttempt(
+      retryContext.attemptTarget,
+      attemptIndex,
+      message
+    );
     return { shouldContinue: false, failureReason: message };
   }
 

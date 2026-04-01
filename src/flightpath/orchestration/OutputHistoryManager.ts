@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { isDeepStrictEqual } from "util";
 import {
   PATH_CONSTANTS,
   ConfigurationUtils,
@@ -8,6 +9,7 @@ import {
   WorkflowOutputHistory,
   OutputExecutionTarget,
   OutputTimelineEntry,
+  StepOutput,
   WorkspaceSnapshot,
   UndoRecord,
 } from "../../types/OutputHistoryTypes";
@@ -18,14 +20,21 @@ import {
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
+import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
+import { TimelineRecorder } from "./TimelineRecorder";
+import {
+  TIMELINE_EVENT_TYPES,
+  type WorkflowTimelineEventDraft,
+} from "../../types/WorkflowTimelineTypes";
 
 /**
  * OutputHistoryManager
  *
  * RESPONSIBILITY: Workflow Output History Storage & Retrieval
  *
- * Manages per-run output history for workflows, storing CLI outputs and
- * status messages in separate JSON files under .flightpath/.history/<workflow-id>/.
+ * Manages per-run output history for workflows. New runs are stored as
+ * manifest.json + events.jsonl timeline data under .flightpath/.history/<workflow-id>/,
+ * while legacy json run files are still loaded without migration.
  *
  * Key design decisions:
  * - The .history/<workflow-id>/ directory is the single source of truth
@@ -36,6 +45,10 @@ import { Log } from "../../utils/Log";
 export class OutputHistoryManager {
   /** Absolute path to .flightpath/.history/ */
   readonly historyBaseDir: string;
+  private readonly timelineRecorder = new TimelineRecorder();
+  private readonly timelineAdapter = new OutputHistoryTimelineAdapter(
+    this.timelineRecorder
+  );
 
   constructor(private _workspaceFolderPath: string) {
     this.historyBaseDir = path.join(
@@ -64,7 +77,14 @@ export class OutputHistoryManager {
 
   /** Get absolute path to a history file */
   getHistoryFilePath(workflowId: string, historyFileName: string): string {
-    return path.join(this.historyBaseDir, workflowId, historyFileName);
+    const workflowHistoryPath = path.join(this.historyBaseDir, workflowId);
+    if (TimelineRecorder.isLegacyRunFile(historyFileName)) {
+      return path.join(workflowHistoryPath, historyFileName);
+    }
+
+    return TimelineRecorder.getManifestPathForRunDirectory(
+      path.join(workflowHistoryPath, historyFileName)
+    );
   }
 
   /**
@@ -94,38 +114,20 @@ export class OutputHistoryManager {
       await fs.promises.mkdir(historyDir, { recursive: true });
 
       const existingRuns = await this.getRunsForWorkflow(workflowId);
-
       const startedAt = Date.now();
-      const timestamp = new Date(startedAt).toISOString().replace(/[:.]/g, "-");
-      const fileName = `run-${timestamp}.json`;
-      const filePath = path.join(historyDir, fileName);
-
-      const initial: WorkflowOutputHistory = {
-        schemaVersion: "1.1.0",
+      const filePath = await this.timelineRecorder.initializeRun(
+        historyDir,
         workflowId,
-        runId: existingRuns.length + 1,
+        existingRuns.length + 1,
         startedAt,
-        executionState: EXECUTION_STATES.RUNNING,
-        runStepCount: 0,
-        promptOutputs: {},
-      };
-
-      await fs.promises.writeFile(
-        filePath,
-        JSON.stringify(initial, null, 2),
-        "utf-8"
+        EXECUTION_STATES.RUNNING
       );
 
       // Prune old runs if needed (disk-only operation)
       const maxRuns = ConfigurationUtils.getMaxHistoryRuns();
       await this.pruneOldRuns(workflowId, maxRuns);
 
-      // runCount = new total after pruning.
-      // maxRuns <= 0 means "keep all" (no cap), so use actual count directly.
-      const runCount =
-        maxRuns > 0
-          ? Math.min(existingRuns.length + 1, maxRuns)
-          : existingRuns.length + 1;
+      const runCount = (await this.getRunsForWorkflow(workflowId)).length;
 
       return { filePath, runCount };
     } catch (error) {
@@ -137,8 +139,9 @@ export class OutputHistoryManager {
   /**
    * Save CLI outputs for a step (called after each prompt completes or retries).
    * Merges incoming CLI outputs with existing ones by attemptIndex so all retry
-   * attempts are preserved. StatusMessages are always replaced with the full
-   * accumulated set passed in.
+   * attempts are preserved. Timeline-backed runs treat statusMessages as
+   * compatibility input only; canonical status persistence should go through
+   * appendStatusMessage().
    */
   async saveStepOutput(
     historyFilePath: string,
@@ -168,6 +171,16 @@ export class OutputHistoryManager {
     }
 
     try {
+      if (this.isTimelineHistoryPath(historyFilePath)) {
+        await this.saveTimelineExecutionOutput(
+          historyFilePath,
+          target,
+          cliOutputs,
+          statusMessages
+        );
+        return;
+      }
+
       const history = await this.readHistory(historyFilePath);
       if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
         const existing =
@@ -192,6 +205,35 @@ export class OutputHistoryManager {
       await this.writeHistory(historyFilePath, history);
     } catch (error) {
       Log.warn("Failed to save step output to history:", error);
+    }
+  }
+
+  /**
+   * Append a single status message at the moment it is emitted.
+   * This is the canonical write path for timeline-backed runs.
+   */
+  async appendStatusMessage(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    statusMessage: StatusMessage
+  ): Promise<void> {
+    if (!historyFilePath) {
+      return;
+    }
+
+    try {
+      if (this.isTimelineHistoryPath(historyFilePath)) {
+        await this.timelineRecorder.appendEvents(historyFilePath, [
+          this.createStatusMessageRecordedDraft(target, statusMessage),
+        ]);
+        return;
+      }
+
+      const history = await this.readHistory(historyFilePath);
+      this.ensureStepOutput(history, target).statusMessages.push(statusMessage);
+      await this.writeHistory(historyFilePath, history);
+    } catch (error) {
+      Log.warn("Failed to append status message to history:", error);
     }
   }
 
@@ -272,6 +314,29 @@ export class OutputHistoryManager {
       return;
     }
     try {
+      if (this.isTimelineHistoryPath(historyFilePath)) {
+        const history = await this.timelineAdapter.loadHistory(historyFilePath);
+        const stepOutput = this.getStepOutput(history, target);
+        if (!stepOutput) {
+          return;
+        }
+        if (isDeepStrictEqual(stepOutput.workspaceSnapshot, snapshot)) {
+          return;
+        }
+
+        await this.timelineRecorder.appendEvents(historyFilePath, [
+          {
+            eventType: TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED,
+            timestampMs: snapshot.capturedAt,
+            target,
+            payload: {
+              workspaceSnapshot: snapshot,
+            },
+          },
+        ]);
+        return;
+      }
+
       const history = await this.readHistory(historyFilePath);
       if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
         if (history.promptOutputs[target.stepIndex]) {
@@ -304,6 +369,21 @@ export class OutputHistoryManager {
     }
 
     try {
+      if (this.isTimelineHistoryPath(historyFilePath)) {
+        const completedAt = Date.now();
+        await this.timelineRecorder.updateManifest(
+          historyFilePath,
+          (manifest) => ({
+            ...manifest,
+            completedAt,
+            executionState,
+            runStepCount,
+            lastUpdatedAt: completedAt,
+          })
+        );
+        return;
+      }
+
       const history = await this.readHistory(historyFilePath);
       history.completedAt = Date.now();
       history.executionState = executionState;
@@ -319,6 +399,10 @@ export class OutputHistoryManager {
    * Validates required fields before returning.
    */
   async loadHistory(historyFilePath: string): Promise<WorkflowOutputHistory> {
+    if (this.isTimelineHistoryPath(historyFilePath)) {
+      return this.timelineAdapter.loadHistory(historyFilePath);
+    }
+
     const content = await fs.promises.readFile(historyFilePath, "utf-8");
     const history = JSON.parse(content) as WorkflowOutputHistory;
 
@@ -337,12 +421,17 @@ export class OutputHistoryManager {
     const historyDir = path.join(this.historyBaseDir, workflowId);
 
     try {
-      const entries = await fs.promises.readdir(historyDir);
-      // Accept both new format (run-<timestamp>.json) and old format (run-N-<timestamp>.json)
-      const runFiles = entries.filter((f) => /^run-.*\.json$/.test(f));
-      // Sort newest first by extracting the ISO timestamp from the filename
-      return runFiles.sort(
-        (a, b) => this.extractRunTimestamp(b) - this.extractRunTimestamp(a)
+      const entries = await fs.promises.readdir(historyDir, {
+        withFileTypes: true,
+      });
+      const runEntries = entries
+        .filter((entry) => TimelineRecorder.isRunEntry(entry))
+        .map((entry) => entry.name);
+
+      return runEntries.sort(
+        (a, b) =>
+          TimelineRecorder.extractRunTimestamp(b) -
+          TimelineRecorder.extractRunTimestamp(a)
       );
     } catch {
       return [];
@@ -380,8 +469,8 @@ export class OutputHistoryManager {
       runs.map(async (fileName) => {
         try {
           const filePath = this.getHistoryFilePath(workflowId, fileName);
-          const history = await this.readHistory(filePath);
-          return history.startedAt;
+          const metadata = await this.readRunMetadata(filePath);
+          return metadata.startedAt;
         } catch {
           return undefined;
         }
@@ -401,8 +490,8 @@ export class OutputHistoryManager {
       runs.map(async (fileName) => {
         try {
           const filePath = this.getHistoryFilePath(workflowId, fileName);
-          const history = await this.readHistory(filePath);
-          return history.executionState as string;
+          const metadata = await this.readRunMetadata(filePath);
+          return metadata.executionState as string;
         } catch {
           return undefined;
         }
@@ -429,9 +518,14 @@ export class OutputHistoryManager {
     // runs is newest-first; slice(maxRuns) gives the oldest entries to delete
     const toDelete = runs.slice(maxRuns);
     for (const fileName of toDelete) {
-      const filePath = this.getHistoryFilePath(workflowId, fileName);
+      const entryPath = path.join(this.historyBaseDir, workflowId, fileName);
       try {
-        await fs.promises.unlink(filePath);
+        const stats = await fs.promises.stat(entryPath);
+        if (stats.isDirectory()) {
+          await fs.promises.rm(entryPath, { recursive: true, force: true });
+        } else {
+          await fs.promises.unlink(entryPath);
+        }
       } catch (error) {
         Log.warn(`Failed to delete old history file ${fileName}:`, error);
       }
@@ -448,6 +542,29 @@ export class OutputHistoryManager {
   ): Promise<void> {
     if (!historyFilePath) return;
     try {
+      if (this.isTimelineHistoryPath(historyFilePath)) {
+        const history = await this.timelineAdapter.loadHistory(historyFilePath);
+        const stepOutput = this.getStepOutput(history, target);
+        if (!stepOutput) {
+          return;
+        }
+        if (isDeepStrictEqual(stepOutput.undoRecord, undoRecord)) {
+          return;
+        }
+
+        await this.timelineRecorder.appendEvents(historyFilePath, [
+          {
+            eventType: TIMELINE_EVENT_TYPES.UNDO_APPLIED,
+            timestampMs: undoRecord.appliedAt,
+            target,
+            payload: {
+              undoRecord,
+            },
+          },
+        ]);
+        return;
+      }
+
       const history = await this.readHistory(historyFilePath);
       const stepOutput =
         target.kind === FINAL_PROMPT_PHASES.QUEUE
@@ -472,6 +589,36 @@ export class OutputHistoryManager {
   ): Promise<void> {
     if (!historyFilePath) return;
     try {
+      if (this.isTimelineHistoryPath(historyFilePath)) {
+        const history = await this.timelineAdapter.loadHistory(historyFilePath);
+        const stepOutput = this.getStepOutput(history, target);
+        if (!stepOutput?.undoRecord) {
+          return;
+        }
+
+        const updatedUndoRecord: UndoRecord = {
+          ...stepOutput.undoRecord,
+          isRedone: true,
+          redoneAt,
+        };
+
+        if (isDeepStrictEqual(stepOutput.undoRecord, updatedUndoRecord)) {
+          return;
+        }
+
+        await this.timelineRecorder.appendEvents(historyFilePath, [
+          {
+            eventType: TIMELINE_EVENT_TYPES.REDO_APPLIED,
+            timestampMs: redoneAt,
+            target,
+            payload: {
+              undoRecord: updatedUndoRecord,
+            },
+          },
+        ]);
+        return;
+      }
+
       const history = await this.readHistory(historyFilePath);
       const stepOutput =
         target.kind === FINAL_PROMPT_PHASES.QUEUE
@@ -491,32 +638,173 @@ export class OutputHistoryManager {
   // Private helpers
   // ============================================================================
 
-  /**
-   * Extract sortable ms timestamp from a run filename.
-   *
-   * New format: "run-2026-02-13T21-33-58-927Z.json"
-   * Old format: "run-3-2024-01-21T10-30-00-000Z.json"
-   *
-   * The ISO timestamp embedded in the filename has colons and dots replaced by
-   * hyphens (safe for filenames). We restore them before parsing.
-   * Falls back to 0 (sorts to oldest) if unparseable.
-   */
-  private extractRunTimestamp(fileName: string): number {
-    // Extract the ISO-ish segment: everything after the last "run-" prefix (and
-    // optional leading "N-" in old format) up to ".json"
-    const match = fileName.match(
-      /^run-(?:\d+-)?(\d{4}-\d{2}-\d{2}T[\d-]+Z?)\.json$/
+  private isTimelineHistoryPath(historyFilePath: string): boolean {
+    return (
+      path.basename(historyFilePath) === TimelineRecorder.MANIFEST_FILE_NAME
     );
-    if (!match) {
-      return 0;
+  }
+
+  private getStepOutput(
+    history: WorkflowOutputHistory,
+    target: OutputExecutionTarget
+  ) {
+    return target.kind === FINAL_PROMPT_PHASES.QUEUE
+      ? history.promptOutputs[target.stepIndex]
+      : history.finalPromptOutputs?.[target.loopIndex];
+  }
+
+  private ensureStepOutput(
+    history: WorkflowOutputHistory,
+    target: OutputExecutionTarget
+  ): StepOutput {
+    if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+      history.promptOutputs[target.stepIndex] ??= {
+        cliOutputs: [],
+        statusMessages: [],
+      };
+      return history.promptOutputs[target.stepIndex];
     }
-    // Restore ISO format: YYYY-MM-DDThh-mm-ss-mmmZ → YYYY-MM-DDThh:mm:ss.mmmZ
-    const restored = match[1].replace(
-      /^(\d{4}-\d{2}-\d{2}T)(\d{2})-(\d{2})-(\d{2})-(\d{3}Z?)$/,
-      "$1$2:$3:$4.$5"
+
+    history.finalPromptOutputs ??= {};
+    history.finalPromptOutputs[target.loopIndex] ??= {
+      cliOutputs: [],
+      statusMessages: [],
+    };
+    return history.finalPromptOutputs[target.loopIndex];
+  }
+
+  private async saveTimelineExecutionOutput(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    cliOutputs: CliOutput[],
+    statusMessages: StatusMessage[]
+  ): Promise<void> {
+    const history = await this.timelineAdapter.loadHistory(historyFilePath);
+    const existingStepOutput = this.getStepOutput(history, target);
+    const eventDrafts: WorkflowTimelineEventDraft[] = [];
+
+    for (const cliOutput of cliOutputs) {
+      const attemptIndex = cliOutput.attemptIndex ?? 0;
+      const existingOutput = existingStepOutput?.cliOutputs.find(
+        (output) => (output.attemptIndex ?? 0) === attemptIndex
+      );
+      if (existingOutput && isDeepStrictEqual(existingOutput, cliOutput)) {
+        continue;
+      }
+
+      eventDrafts.push({
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: cliOutput.timestampMs ?? Date.now(),
+        target,
+        attemptIndex,
+        payload: {
+          cliOutput,
+        },
+      });
+    }
+
+    eventDrafts.push(
+      ...this.buildStatusMessageEventDrafts(
+        target,
+        existingStepOutput?.statusMessages ?? [],
+        statusMessages,
+        cliOutputs
+      )
     );
-    const ms = new Date(restored).getTime();
-    return isNaN(ms) ? 0 : ms;
+
+    if (eventDrafts.length === 0) {
+      return;
+    }
+
+    eventDrafts.sort((left, right) => left.timestampMs - right.timestampMs);
+    await this.timelineRecorder.appendEvents(historyFilePath, eventDrafts);
+  }
+
+  private buildStatusMessageEventDrafts(
+    target: OutputExecutionTarget,
+    existingStatusMessages: StatusMessage[],
+    statusMessages: StatusMessage[],
+    cliOutputs: CliOutput[]
+  ): WorkflowTimelineEventDraft[] {
+    if (statusMessages.length === 0) {
+      return [];
+    }
+
+    if (isDeepStrictEqual(existingStatusMessages, statusMessages)) {
+      return [];
+    }
+
+    if (
+      this.isAppendOnlyStatusMessageUpdate(
+        existingStatusMessages,
+        statusMessages
+      )
+    ) {
+      return statusMessages
+        .slice(existingStatusMessages.length)
+        .map((statusMessage) =>
+          this.createStatusMessageRecordedDraft(target, statusMessage)
+        );
+    }
+
+    return [
+      {
+        eventType: TIMELINE_EVENT_TYPES.STATUS_MESSAGES_UPDATED,
+        timestampMs:
+          statusMessages[statusMessages.length - 1]?.timestamp ??
+          cliOutputs[cliOutputs.length - 1]?.timestampMs ??
+          Date.now(),
+        target,
+        payload: {
+          statusMessages,
+        },
+      },
+    ];
+  }
+
+  private createStatusMessageRecordedDraft(
+    target: OutputExecutionTarget,
+    statusMessage: StatusMessage
+  ): WorkflowTimelineEventDraft {
+    return {
+      eventType: TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED,
+      timestampMs: statusMessage.timestamp,
+      target,
+      payload: {
+        statusMessage,
+      },
+    };
+  }
+
+  private isAppendOnlyStatusMessageUpdate(
+    existingStatusMessages: StatusMessage[],
+    statusMessages: StatusMessage[]
+  ): boolean {
+    return (
+      statusMessages.length >= existingStatusMessages.length &&
+      existingStatusMessages.every((message, index) =>
+        isDeepStrictEqual(message, statusMessages[index])
+      )
+    );
+  }
+
+  private async readRunMetadata(
+    historyFilePath: string
+  ): Promise<Pick<WorkflowOutputHistory, "startedAt" | "executionState">> {
+    if (this.isTimelineHistoryPath(historyFilePath)) {
+      const manifest =
+        await this.timelineRecorder.readManifest(historyFilePath);
+      return {
+        startedAt: manifest.startedAt,
+        executionState: manifest.executionState,
+      };
+    }
+
+    const history = await this.readHistory(historyFilePath);
+    return {
+      startedAt: history.startedAt,
+      executionState: history.executionState,
+    };
   }
 
   private async readHistory(filePath: string): Promise<WorkflowOutputHistory> {

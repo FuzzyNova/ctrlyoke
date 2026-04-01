@@ -11,6 +11,57 @@ function createPromptFile(prompts: PromptItem[]): PromptFile {
   return { prompts };
 }
 
+async function startQueueExecution(queue: PromptQueue): Promise<void> {
+  if (queue.getState().prompts.length === 0) {
+    return;
+  }
+
+  if (queue.getRuntimeStateMachine().startExecution()) {
+    await queue.commitRuntimeTransition();
+  }
+}
+
+async function pauseQueueExecution(queue: PromptQueue): Promise<void> {
+  if (queue.getRuntimeStateMachine().pause()) {
+    await queue.commitRuntimeTransition();
+  }
+}
+
+async function resumeQueueExecution(queue: PromptQueue): Promise<void> {
+  if (queue.getRuntimeStateMachine().resume()) {
+    await queue.commitRuntimeTransition();
+  }
+}
+
+async function requestQueueStop(queue: PromptQueue): Promise<void> {
+  if (!queue.getRuntimeStateMachine().requestStop()) {
+    return;
+  }
+
+  queue.markCurrentPromptCancelled();
+  await queue.commitRuntimeTransition({ persist: false });
+}
+
+async function confirmQueueStopped(queue: PromptQueue): Promise<void> {
+  if (!queue.getRuntimeStateMachine().confirmStopped()) {
+    return;
+  }
+
+  queue.advanceCancelledPromptAfterStop();
+  await queue.commitRuntimeTransition();
+}
+
+async function markQueueCompleted(queue: PromptQueue): Promise<void> {
+  queue.getRuntimeStateMachine().complete();
+  await queue.commitRuntimeTransition();
+}
+
+async function markQueueErrored(queue: PromptQueue): Promise<void> {
+  queue.failCurrentPromptIfInProgress();
+  queue.getRuntimeStateMachine().fail();
+  await queue.commitRuntimeTransition();
+}
+
 suite("PromptQueue State Machine Tests", () => {
   let queue: PromptQueue;
   const samplePrompts: PromptItem[] = [
@@ -81,87 +132,86 @@ suite("PromptQueue State Machine Tests", () => {
     });
   });
 
-  suite("State Transitions - start()", () => {
+  suite("Runtime State Projection - startExecution()", () => {
     test("should transition IDLE -> RUNNING", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       const state = queue.getState();
       assert.strictEqual(state.status, EXECUTION_STATES.RUNNING);
     });
 
     test("should not change state if already RUNNING", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
-      await queue.start(); // Call again
+      await startQueueExecution(queue);
+      await startQueueExecution(queue); // Call again
       const state = queue.getState();
       assert.strictEqual(state.status, EXECUTION_STATES.RUNNING);
     });
 
-    test("should not throw if no prompts loaded (shows warning)", async () => {
-      // This should not throw, just show a warning
-      await queue.start();
+    test("should keep queue IDLE when start is requested without prompts", async () => {
+      await startQueueExecution(queue);
       const state = queue.getState();
-      // Status should remain IDLE since there are no prompts
       assert.strictEqual(state.status, EXECUTION_STATES.IDLE);
     });
 
-    test("should clear stopped flag on start", async () => {
+    test("should clear stopped flag when restarting from STOPPED", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.stop();
+      await startQueueExecution(queue);
+      await requestQueueStop(queue);
+      await confirmQueueStopped(queue);
       assert.strictEqual(queue.getState().stopped, true);
-      await queue.start();
+      await startQueueExecution(queue);
       assert.strictEqual(queue.getState().stopped, false);
     });
   });
 
-  suite("State Transitions - pause()", () => {
+  suite("Runtime State Projection - pause()", () => {
     test("should transition RUNNING -> PAUSED", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
-      queue.pause();
+      await startQueueExecution(queue);
+      await pauseQueueExecution(queue);
       const state = queue.getState();
       assert.strictEqual(state.status, EXECUTION_STATES.PAUSED);
     });
 
     test("should record pause timestamp", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       const beforePause = Date.now();
-      queue.pause();
+      await pauseQueueExecution(queue);
       const state = queue.getState();
       assert.ok(state.pausedTime);
       assert.ok(state.pausedTime >= beforePause);
     });
 
-    test("should not change state if not RUNNING", () => {
+    test("should not change state if not RUNNING", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      // Currently IDLE, not RUNNING
-      queue.pause();
+      await pauseQueueExecution(queue);
       const state = queue.getState();
       assert.strictEqual(state.status, EXECUTION_STATES.IDLE);
     });
   });
 
-  suite("State Transitions - resume()", () => {
+  suite("Runtime State Projection - resume()", () => {
     test("should transition PAUSED -> RUNNING", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
-      queue.pause();
+      await startQueueExecution(queue);
+      await pauseQueueExecution(queue);
       assert.strictEqual(queue.getState().status, EXECUTION_STATES.PAUSED);
-      await queue.resume();
+      await resumeQueueExecution(queue);
       assert.strictEqual(queue.getState().status, EXECUTION_STATES.RUNNING);
     });
 
     test("should calculate paused duration", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
-      queue.pause();
+      await startQueueExecution(queue);
+      await pauseQueueExecution(queue);
 
       // Wait a small amount to measure pause duration
       // Use 100ms sleep with >= 50ms assertion to tolerate timer inaccuracy
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      await queue.resume();
+      await resumeQueueExecution(queue);
       const state = queue.getState();
       assert.ok(
         state.totalPausedDuration >= 50,
@@ -171,40 +221,38 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("should clear pausedTime after resume", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
-      queue.pause();
+      await startQueueExecution(queue);
+      await pauseQueueExecution(queue);
       assert.ok(queue.getState().pausedTime);
-      await queue.resume();
+      await resumeQueueExecution(queue);
       assert.strictEqual(queue.getState().pausedTime, undefined);
     });
 
     test("should not change state if not PAUSED", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
-      // Currently RUNNING, not PAUSED
-      await queue.resume();
+      await startQueueExecution(queue);
+      await resumeQueueExecution(queue);
       const state = queue.getState();
       assert.strictEqual(state.status, EXECUTION_STATES.RUNNING);
     });
   });
 
-  suite("State Transitions - stop()", () => {
+  suite("Runtime State Projection - requestStop()/confirmStopped()", () => {
     test("should transition to CANCELLING, then STOPPED after confirmedStopped", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
-      queue.stop();
+      await startQueueExecution(queue);
+      await requestQueueStop(queue);
       let state = queue.getState();
       assert.strictEqual(state.status, EXECUTION_STATES.CANCELLING);
 
-      // After confirmedStopped(), should transition to STOPPED
-      await queue.confirmedStopped();
+      await confirmQueueStopped(queue);
       state = queue.getState();
       assert.strictEqual(state.status, EXECUTION_STATES.STOPPED);
     });
 
     test("should advance currentIndex past cancelled prompt after confirmedStopped", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       // Simulate moving forward past first prompt
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
@@ -212,8 +260,8 @@ suite("PromptQueue State Machine Tests", () => {
 
       // Stop while on second prompt
       await queue.markCurrentAsSent();
-      queue.stop();
-      await queue.confirmedStopped();
+      await requestQueueStop(queue);
+      await confirmQueueStopped(queue);
 
       const state = queue.getState();
       assert.strictEqual(state.currentIndex, 2); // Advanced past cancelled prompt
@@ -225,10 +273,10 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("should mark SENT prompts as CANCELLED", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.markCurrentAsSent();
       assert.strictEqual(queue.getState().results[0].status, STEP_STATUS.SENT);
-      queue.stop();
+      await requestQueueStop(queue);
       assert.strictEqual(
         queue.getState().results[0].status,
         STEP_STATUS.CANCELLED
@@ -237,15 +285,15 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("should set stopped flag", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
-      queue.stop();
+      await startQueueExecution(queue);
+      await requestQueueStop(queue);
       assert.strictEqual(queue.getState().stopped, true);
     });
 
     test("should not mark PENDING prompts as CANCELLED", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
-      queue.stop();
+      await startQueueExecution(queue);
+      await requestQueueStop(queue);
       // First prompt was PENDING (no markCurrentAsSent called), should remain PENDING
       // Actually stop marks SENT as CANCELLED, PENDING stays PENDING
       // But currentIndex is reset, so we check result[1] which was never touched
@@ -259,7 +307,7 @@ suite("PromptQueue State Machine Tests", () => {
   suite("restart()", () => {
     test("should reset currentIndex to 0", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       await queue.restart();
@@ -268,7 +316,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("should reset all results to PENDING", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       await queue.restart();
@@ -279,7 +327,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("should clear completedIndices", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       assert.ok(queue.getState().completedIndices.size > 0);
@@ -305,7 +353,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("should reset to IDLE status", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.restart();
       assert.strictEqual(queue.getState().status, EXECUTION_STATES.IDLE);
     });
@@ -326,7 +374,7 @@ suite("PromptQueue State Machine Tests", () => {
       );
 
       // Complete some prompts
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
 
@@ -359,9 +407,9 @@ suite("PromptQueue State Machine Tests", () => {
   });
 
   suite("clear()", () => {
-    test("should call stop() and transition to CANCELLING", async () => {
+    test("should request stop and transition to CANCELLING", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       queue.clear();
       assert.strictEqual(queue.getState().status, EXECUTION_STATES.CANCELLING);
     });
@@ -387,7 +435,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("hasNext() should return false at end of queue", async () => {
       queue.loadPrompts(createPromptFile([{ prompt: "Only one" }]));
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       assert.strictEqual(queue.hasNext(), false);
@@ -406,7 +454,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("getCurrentPrompt() should return null at end of queue", async () => {
       queue.loadPrompts(createPromptFile([{ prompt: "Only one" }]));
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       assert.strictEqual(queue.getCurrentPrompt(), null);
@@ -420,7 +468,7 @@ suite("PromptQueue State Machine Tests", () => {
   suite("markCurrentAsSent()", () => {
     test("should update result status to SENT", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.markCurrentAsSent();
       const state = queue.getState();
       assert.strictEqual(state.results[0].status, STEP_STATUS.SENT);
@@ -428,7 +476,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("should update result timestamp", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       const before = new Date();
       await queue.markCurrentAsSent();
       const state = queue.getState();
@@ -437,7 +485,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("should not modify if no next prompt", async () => {
       queue.loadPrompts(createPromptFile([{ prompt: "Only one" }]));
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       // Now at end of queue
@@ -450,7 +498,7 @@ suite("PromptQueue State Machine Tests", () => {
   suite("completeCurrentAndMoveNext()", () => {
     test("should mark result as COMPLETED", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       const state = queue.getState();
@@ -459,7 +507,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("should add prompt identity to completedIndices", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       const state = queue.getState();
@@ -468,7 +516,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("should increment currentIndex", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       assert.strictEqual(queue.getState().currentIndex, 0);
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
@@ -477,7 +525,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("should reset retry count", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       queue.incrementRetryCount();
       queue.incrementRetryCount();
       assert.strictEqual(queue.getCurrentRetryCount(), 2);
@@ -621,7 +669,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("getProgress() should return correct current", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       const progress = queue.getProgress();
@@ -630,7 +678,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("getProgress() should calculate percentage correctly", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       const progress = queue.getProgress();
@@ -646,7 +694,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("getCompletedCount() should count completed prompts", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      await queue.start();
+      await startQueueExecution(queue);
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       assert.strictEqual(queue.getCompletedCount(), 1);
@@ -679,11 +727,11 @@ suite("PromptQueue State Machine Tests", () => {
     test("getActiveExecutionTime() should exclude paused duration", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       queue.startExecutionTimer();
-      await queue.start();
+      await startQueueExecution(queue);
       await new Promise((resolve) => setTimeout(resolve, 20));
-      queue.pause();
+      await pauseQueueExecution(queue);
       await new Promise((resolve) => setTimeout(resolve, 100));
-      await queue.resume();
+      await resumeQueueExecution(queue);
       await new Promise((resolve) => setTimeout(resolve, 20));
 
       const active = queue.getActiveExecutionTime();
@@ -715,26 +763,26 @@ suite("PromptQueue State Machine Tests", () => {
           done();
         }
       });
-      queue.start();
+      void startQueueExecution(queue);
     });
 
     test("should emit state change on pause", (done) => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.start().then(() => {
+      void startQueueExecution(queue).then(() => {
         const disposable = queue.onDidChangeState((state) => {
           if (state.status === EXECUTION_STATES.PAUSED) {
             disposable.dispose();
             done();
           }
         });
-        queue.pause();
+        void pauseQueueExecution(queue);
       });
     });
 
     test("should emit state change on resume", (done) => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.start().then(() => {
-        queue.pause();
+      void startQueueExecution(queue).then(() => {
+        void pauseQueueExecution(queue);
         // Wait a tick for pause event to fire
         setTimeout(() => {
           const disposable = queue.onDidChangeState((state) => {
@@ -743,21 +791,21 @@ suite("PromptQueue State Machine Tests", () => {
               done();
             }
           });
-          queue.resume();
+          void resumeQueueExecution(queue);
         }, 10);
       });
     });
 
     test("should emit state change on stop", (done) => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.start().then(() => {
+      void startQueueExecution(queue).then(() => {
         const disposable = queue.onDidChangeState((state) => {
           if (state.status === EXECUTION_STATES.CANCELLING && state.stopped) {
             disposable.dispose();
             done();
           }
         });
-        queue.stop();
+        void requestQueueStop(queue);
       });
     });
   });
@@ -772,16 +820,16 @@ suite("PromptQueue State Machine Tests", () => {
     });
   });
 
-  suite("Mark Complete/Error Methods", () => {
-    test("markCompleted() should set status to COMPLETED", () => {
+  suite("Runtime completion/error projection", () => {
+    test("markQueueCompleted() should set status to COMPLETED", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.markCompleted();
+      await markQueueCompleted(queue);
       assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
     });
 
-    test("markErrored() should set status to ERROR", () => {
+    test("markQueueErrored() should set status to ERROR", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
-      queue.markErrored();
+      await markQueueErrored(queue);
       assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
     });
   });

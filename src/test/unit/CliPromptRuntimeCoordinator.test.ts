@@ -46,7 +46,7 @@ suite("CliPromptRuntimeCoordinator", () => {
       prompt,
       executionStartTime: new Date(1234),
       extractedSessionId: "session-123",
-      promptQueue: {
+      workingFilePersistence: {
         async updateWorkingFile(): Promise<void> {
           updateCount += 1;
         },
@@ -84,7 +84,7 @@ suite("CliPromptRuntimeCoordinator", () => {
       },
       extractedSessionId: "session-456",
       parsedOutput: createParsedOutput(),
-      promptQueue: {
+      workingFilePersistence: {
         async updateWorkingFile(): Promise<void> {
           updateCount += 1;
         },

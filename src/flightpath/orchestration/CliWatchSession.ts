@@ -6,6 +6,61 @@ import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import { LOCK_STATUS } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import { TimelineRecorder } from "./TimelineRecorder";
+
+function getRunEntryNameForHistoryPath(historyFilePath: string): string {
+  const baseName = path.basename(historyFilePath);
+
+  if (
+    baseName === TimelineRecorder.MANIFEST_FILE_NAME ||
+    baseName === TimelineRecorder.EVENTS_FILE_NAME
+  ) {
+    return path.basename(path.dirname(historyFilePath));
+  }
+
+  return baseName;
+}
+
+export function getHistoryRunTimestamp(historyFilePath: string): number {
+  if (!historyFilePath) {
+    return 0;
+  }
+
+  return TimelineRecorder.extractRunTimestamp(
+    getRunEntryNameForHistoryPath(historyFilePath)
+  );
+}
+
+function compareHistoryRunPaths(
+  leftHistoryFilePath: string,
+  rightHistoryFilePath: string
+): number {
+  const timestampDifference =
+    getHistoryRunTimestamp(rightHistoryFilePath) -
+    getHistoryRunTimestamp(leftHistoryFilePath);
+  if (timestampDifference !== 0) {
+    return timestampDifference;
+  }
+
+  return rightHistoryFilePath.localeCompare(leftHistoryFilePath);
+}
+
+export function isNewerHistoryRunPath(
+  candidateHistoryFilePath: string,
+  activeHistoryFilePath: string
+): boolean {
+  if (!candidateHistoryFilePath) {
+    return false;
+  }
+
+  if (!activeHistoryFilePath) {
+    return true;
+  }
+
+  return (
+    compareHistoryRunPaths(candidateHistoryFilePath, activeHistoryFilePath) < 0
+  );
+}
 
 /**
  * CliWatchSession
@@ -204,21 +259,24 @@ export class CliWatchSession implements vscode.Disposable {
   }
 
   private findLatestHistoryFileSync(historyDir: string): string | undefined {
-    let entries: string[];
+    let entries: fs.Dirent[];
     try {
-      entries = fs.readdirSync(historyDir);
+      entries = fs.readdirSync(historyDir, { withFileTypes: true });
     } catch {
       return undefined;
     }
-    const runFiles = entries
-      .filter((f) => /^run-.*\.json$/.test(f))
-      .sort()
-      .reverse(); // lexicographic descending = newest first (ISO timestamps sort correctly)
 
-    if (runFiles.length === 0) {
-      return undefined;
-    }
-    return path.join(historyDir, runFiles[0]);
+    const historyFilePaths = entries
+      .filter((entry) => TimelineRecorder.isRunEntry(entry))
+      .map((entry) => {
+        const runEntryPath = path.join(historyDir, entry.name);
+        return entry.isDirectory()
+          ? TimelineRecorder.getManifestPathForRunDirectory(runEntryPath)
+          : runEntryPath;
+      })
+      .sort(compareHistoryRunPaths);
+
+    return historyFilePaths[0];
   }
 
   private watchHistoryFile(historyFilePath: string): void {
@@ -242,16 +300,20 @@ export class CliWatchSession implements vscode.Disposable {
   }
 
   private watchForNewRunFiles(historyDir: string): void {
-    // Watch the history directory for creation of new run-*.json files
     const historyDirRelative = path
       .relative(this.workspaceFolderPath, historyDir)
       .replace(/\\/g, "/");
 
-    const pattern = new vscode.RelativePattern(
-      this.workspaceFolderPath,
-      `${historyDirRelative}/run-*.json`
+    this.watchForNewRunPattern(`${historyDirRelative}/run-*.json`);
+    this.watchForNewRunPattern(
+      `${historyDirRelative}/run-*/${TimelineRecorder.MANIFEST_FILE_NAME}`
     );
-    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+  }
+
+  private watchForNewRunPattern(patternText: string): void {
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(this.workspaceFolderPath, patternText)
+    );
 
     this.disposables.push(
       watcher.onDidCreate((uri) => {
@@ -260,12 +322,7 @@ export class CliWatchSession implements vscode.Disposable {
           `[CliWatchSession] new history run file: ${path.basename(newFilePath)}`
         );
 
-        // If it's newer than the current active history file, switch to it
-        if (
-          !this.activeHistoryFilePath ||
-          newFilePath > this.activeHistoryFilePath
-        ) {
-          // Reset output tracking for the new run
+        if (isNewerHistoryRunPath(newFilePath, this.activeHistoryFilePath)) {
           this.lastKnownOutputByStep = {};
           this.activeHistoryFilePath = newFilePath;
           this.watchHistoryFile(newFilePath);

@@ -1191,7 +1191,7 @@ export class WorkflowOrchestrator {
       // executeWorkflow) guarantees that getWorkflowSummaries() never returns
       // an IDLE workflow and that notifyWorkflowAdded() always fires with an
       // accurate RUNNING/PAUSED state — eliminating the race condition where a
-      // GET_WORKFLOWS_LIST request processed before promptQueue.start() would
+      // GET_WORKFLOWS_LIST request processed before the runtime entered RUNNING would
       // return an IDLE summary that the webview filter drops, incorrectly
       // clearing loadedWorkflows.
       if (
@@ -1625,14 +1625,12 @@ export class WorkflowOrchestrator {
     }
 
     try {
-      const content = await fs.promises.readFile(historyFilePath, "utf8");
-      const history = JSON.parse(content) as {
-        promptOutputs: Record<string, { cliOutputs: Array<unknown> }>;
-      };
+      const history =
+        await this.getOutputHistoryManager().loadHistory(historyFilePath);
 
       for (const [stepIndexStr, stepOutput] of Object.entries(
         history.promptOutputs
-      )) {
+      ) as Array<[string, { cliOutputs: Array<unknown> }]>) {
         const stepIndex = parseInt(stepIndexStr, 10);
         const outputs = stepOutput.cliOutputs ?? [];
 
@@ -1675,16 +1673,12 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    fs.promises
-      .readFile(historyFilePath, "utf8")
-      .then((content) => {
-        const history = JSON.parse(content) as {
-          promptOutputs: Record<string, { cliOutputs: Array<unknown> }>;
-        };
-
+    this.getOutputHistoryManager()
+      .loadHistory(historyFilePath)
+      .then((history) => {
         for (const [stepIndexStr, stepOutput] of Object.entries(
           history.promptOutputs
-        )) {
+        ) as Array<[string, { cliOutputs: Array<unknown> }]>) {
           const stepIndex = parseInt(stepIndexStr, 10);
           const outputs = stepOutput.cliOutputs ?? [];
           const lastKnown = entry.session.getAndUpdateLastKnownOutputCount(
@@ -1704,7 +1698,7 @@ export class WorkflowOrchestrator {
           }
         }
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         Log.warn(
           `[WorkflowOrchestrator] handleCliWatchOutput: failed to read history file:`,
           err

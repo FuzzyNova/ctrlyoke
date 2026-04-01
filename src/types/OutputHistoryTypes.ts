@@ -18,7 +18,10 @@ export interface OutputTimelineEntry {
 
 /**
  * Complete output history for a single workflow run.
- * Stored in .flightpath/.history/<workflow-id>/run-N-<timestamp>.json
+ *
+ * Legacy runs are stored directly as .json files.
+ * Timeline-backed runs are projected into this same shape from
+ * manifest.json + events.jsonl storage so existing consumers stay stable.
  *
  * IMPORTANT: Uses CliOutput[] from WebviewMessageTypes.ts for per-step outputs.
  * Each CliOutput already contains .prompt (unexpanded prompt text) and .cliCommand,

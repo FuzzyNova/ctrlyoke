@@ -147,6 +147,36 @@ function makeExecutor(queue: PromptQueue): WorkflowExecutor {
   return new WorkflowExecutor(queue, handler, evaluator, platform);
 }
 
+async function pauseQueueExecution(queue: PromptQueue): Promise<void> {
+  if (queue.getRuntimeStateMachine().pause()) {
+    await queue.commitRuntimeTransition({ persist: false });
+  }
+}
+
+async function requestQueueStop(queue: PromptQueue): Promise<void> {
+  if (!queue.getRuntimeStateMachine().requestStop()) {
+    return;
+  }
+
+  queue.markCurrentPromptCancelled();
+  await queue.commitRuntimeTransition({ persist: false });
+}
+
+async function confirmQueueStopped(queue: PromptQueue): Promise<void> {
+  if (!queue.getRuntimeStateMachine().confirmStopped()) {
+    return;
+  }
+
+  queue.advanceCancelledPromptAfterStop();
+  await queue.commitRuntimeTransition({ persist: false });
+}
+
+async function resumeQueueExecution(queue: PromptQueue): Promise<void> {
+  if (queue.getRuntimeStateMachine().resume()) {
+    await queue.commitRuntimeTransition({ persist: false });
+  }
+}
+
 suite("WorkflowExecutor finalPrompt phase 2", () => {
   test("preserves behavior when finalPrompt is absent", async () => {
     const queue = new PromptQueue();
@@ -196,14 +226,11 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     const executor = makeExecutor(queue);
 
     let finalRuns = 0;
-    integration.onSend = async (prompt, workflowContext) => {
+    integration.onSend = async (prompt, _workflowContext) => {
       if (prompt.prompt === "final-loop") {
         finalRuns++;
         if (finalRuns === 1) {
-          await workflowContext?.promptQueue?.appendPrompts(
-            [{ prompt: "queue-appended" }],
-            "test"
-          );
+          await queue.appendPrompts([{ prompt: "queue-appended" }], "test");
         }
       }
       return { success: true, responseText: `ok:${prompt.prompt}` };
@@ -258,7 +285,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
           success: true,
           responseText: "ok",
           afterResponse: async () => {
-            await queue.pause();
+            await pauseQueueExecution(queue);
           },
         };
       }
@@ -288,7 +315,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
       if (prompt.prompt === "final-stop-error") {
         run++;
         if (run === 1) {
-          queue.stop();
+          await requestQueueStop(queue);
           return { success: false };
         }
         return { success: false };
@@ -307,7 +334,8 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     assert.strictEqual(runtimeAfterStop?.phase, "finalPrompt");
 
     // Simulate resume and force an actual error on finalPrompt send failure
-    await queue.resume();
+    await confirmQueueStopped(queue);
+    await resumeQueueExecution(queue);
     await executor.execute(integration, makeContext(integration));
 
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
@@ -457,11 +485,16 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
       message: string;
       severity: string;
     }> = [];
+    const appendedStatusMessages: Array<{
+      target: unknown;
+      statusMessage: any;
+    }> = [];
     const historySaves: Array<{
       target: unknown;
       cliOutputs: any[];
       statusMessages: any[];
     }> = [];
+    const historyCallOrder: string[] = [];
 
     integration.processExitFailure = true;
     integration.lastFailureOutput = [
@@ -484,12 +517,21 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     };
     context.historyFilePath = "history.json";
     context.outputHistoryManager = {
+      appendStatusMessage: async (
+        _historyFilePath: string,
+        target: unknown,
+        statusMessage: any
+      ) => {
+        historyCallOrder.push("status");
+        appendedStatusMessages.push({ target, statusMessage });
+      },
       saveExecutionOutput: async (
         _historyFilePath: string,
         target: unknown,
         cliOutputs: any[],
         statusMessages: any[]
       ) => {
+        historyCallOrder.push("output");
         historySaves.push({ target, cliOutputs, statusMessages });
       },
     } as any;
@@ -521,6 +563,20 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     assert.strictEqual(captureCalls[0].output.rawTextOutput, true);
 
     assert.strictEqual(historySaves.length, 1);
+    assert.strictEqual(appendedStatusMessages.length, 1);
+    assert.deepStrictEqual(appendedStatusMessages[0].target, {
+      kind: "queue",
+      stepIndex: 0,
+    });
+    assert.strictEqual(
+      appendedStatusMessages[0].statusMessage.severity,
+      "warning"
+    );
+    assert.match(
+      appendedStatusMessages[0].statusMessage.message,
+      /Process exited unexpectedly/
+    );
+    assert.deepStrictEqual(historyCallOrder, ["status", "output"]);
     assert.deepStrictEqual(historySaves[0].target, {
       kind: "queue",
       stepIndex: 0,

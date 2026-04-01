@@ -7,6 +7,7 @@ import {
   FinalPromptRuntimeState,
   EXECUTION_STATES,
   Harness,
+  type WorkflowAttemptTarget,
 } from "../types/FlightPathTypes";
 import type { FlightPathMcpServerProvider } from "../ui/FlightPathMcpServerProvider";
 import { WorkflowContext } from "../types/WorkflowContextTypes";
@@ -113,12 +114,9 @@ export interface WorkflowExecutionContext {
   mcpServerProvider?: FlightPathMcpServerProvider;
 }
 
-type ExecutionTarget =
-  | { kind: "queue"; stepIndex: number }
-  | { kind: "finalPrompt"; loopIndex: number };
+type ExecutionTarget = WorkflowAttemptTarget;
 
 type StepExecutionKey = `queue:${number}` | `final:${number}`;
-type AttemptExecutionKey = `${StepExecutionKey}:attempt:${number}`;
 
 /**
  * Drives the sequential execution loop for a FlightPath workflow.
@@ -139,7 +137,6 @@ export class WorkflowExecutor {
 
   private stepStatusMessages: Map<StepExecutionKey, StatusMessage[]> =
     new Map();
-  private attemptStartTimestamps: Map<AttemptExecutionKey, number> = new Map();
 
   constructor(
     private readonly promptQueue: PromptQueue,
@@ -160,7 +157,6 @@ export class WorkflowExecutor {
   ): Promise<void> {
     this.clearPendingState();
     this.stepStatusMessages.clear();
-    this.attemptStartTimestamps.clear();
 
     const runtime = this.promptQueue.getRuntimeStateMachine();
     if (runtime.startExecution()) {
@@ -504,7 +500,9 @@ export class WorkflowExecutor {
         workingFilePath: context.workingFilePath,
         resolvedProperties,
         workflowFile,
-        promptQueue: this.promptQueue,
+        workingFilePersistence: this.promptQueue,
+        getFinalPromptResponseTexts: () =>
+          this.promptQueue.getFinalPromptResponseTexts(),
         finalPromptSessionId: workflowFile.finalPrompt?._runtime?.sessionId as
           | string
           | undefined,
@@ -528,7 +526,8 @@ export class WorkflowExecutor {
         context,
         target,
         prompt,
-        legacyStepIndex
+        legacyStepIndex,
+        0
       );
     }
 
@@ -577,15 +576,18 @@ export class WorkflowExecutor {
         context,
         target,
         target.kind === FINAL_PROMPT_PHASES.QUEUE ? legacyStepIndex : undefined,
+        0,
         duration,
         vars && Object.keys(vars).length > 0 ? vars : undefined
       );
 
       if (!shouldContinue) {
         Log.info("Workflow stopped due to end condition failure");
-        this.promptQueue.failCurrentPromptIfInProgress();
-        this.promptQueue.getRuntimeStateMachine().fail();
-        await this.promptQueue.commitRuntimeTransition();
+        if (this.promptQueue.getState().status === EXECUTION_STATES.RUNNING) {
+          this.promptQueue.failCurrentPromptIfInProgress();
+          this.promptQueue.getRuntimeStateMachine().fail();
+          await this.promptQueue.commitRuntimeTransition();
+        }
         return false;
       }
 
@@ -597,16 +599,18 @@ export class WorkflowExecutor {
           state: STEP_STATUS.COMPLETED,
           duration,
         });
-        context.dashboardProvider.updateRetryAttempt(legacyStepIndex, 0, 0);
       }
-    } else if (
-      target.kind === FINAL_PROMPT_PHASES.QUEUE &&
-      context.dashboardProvider
-    ) {
-      context.dashboardProvider.updateStepStatus(legacyStepIndex, {
-        state: STEP_STATUS.COMPLETED,
-        duration,
-      });
+    } else {
+      this.promptQueue.getRuntimeStateMachine().completeAttempt(target, 0);
+      if (
+        target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+        context.dashboardProvider
+      ) {
+        context.dashboardProvider.updateStepStatus(legacyStepIndex, {
+          state: STEP_STATUS.COMPLETED,
+          duration,
+        });
+      }
     }
 
     if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
@@ -632,31 +636,9 @@ export class WorkflowExecutor {
       : `final:${target.loopIndex}`;
   }
 
-  private getAttemptExecutionKey(
-    target: ExecutionTarget,
-    attemptIndex: number
-  ): AttemptExecutionKey {
-    return `${this.getExecutionKey(target)}:attempt:${attemptIndex}`;
-  }
-
-  private setAttemptStartTimestamp(
-    target: ExecutionTarget,
-    attemptIndex: number,
-    timestampMs: number
-  ): void {
-    this.attemptStartTimestamps.set(
-      this.getAttemptExecutionKey(target, attemptIndex),
-      timestampMs
-    );
-  }
-
-  private getAttemptStartTimestamp(
-    target: ExecutionTarget,
-    attemptIndex: number
-  ): number | undefined {
-    return this.attemptStartTimestamps.get(
-      this.getAttemptExecutionKey(target, attemptIndex)
-    );
+  private getAttemptStartedAt(target: ExecutionTarget): number | undefined {
+    return this.promptQueue.getRuntimeStateMachine().getAttempt(target)
+      ?.startedAt;
   }
 
   private async captureAndEmitSnapshot(
@@ -689,16 +671,20 @@ export class WorkflowExecutor {
     context.onSnapshotCaptured?.(target, snapshot);
 
     if (context.historyFilePath && context.outputHistoryManager) {
-      const outputTarget: OutputExecutionTarget =
-        target.kind === FINAL_PROMPT_PHASES.QUEUE
-          ? { kind: "queue", stepIndex: target.stepIndex }
-          : { kind: "finalPrompt", loopIndex: target.loopIndex };
       await context.outputHistoryManager.saveSnapshotForTarget(
         context.historyFilePath,
-        outputTarget,
+        this.toOutputExecutionTarget(target),
         snapshot
       );
     }
+  }
+
+  private toOutputExecutionTarget(
+    target: ExecutionTarget
+  ): OutputExecutionTarget {
+    return target.kind === FINAL_PROMPT_PHASES.QUEUE
+      ? { kind: "queue", stepIndex: target.stepIndex }
+      : { kind: "finalPrompt", loopIndex: target.loopIndex };
   }
 
   /**
@@ -748,13 +734,13 @@ export class WorkflowExecutor {
     });
   }
 
-  private trackStatusMessage(
+  private async trackStatusMessage(
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
     message: string,
     severity: string = STATUS_MESSAGE_SEVERITY.INFO,
     timestampMs?: number
-  ): void {
+  ): Promise<void> {
     const key = this.getExecutionKey(target);
     const legacyStepIndex = this.getLegacyStepIndex(target);
 
@@ -774,12 +760,25 @@ export class WorkflowExecutor {
     }
 
     const messages = this.stepStatusMessages.get(key) ?? [];
-    messages.push({
+    const statusMessage = {
       message,
       severity: severity as any,
       timestamp: timestampMs ?? Date.now(),
-    });
+    };
+    messages.push(statusMessage);
     this.stepStatusMessages.set(key, messages);
+
+    if (context.historyFilePath && context.outputHistoryManager) {
+      await context.outputHistoryManager
+        .appendStatusMessage(
+          context.historyFilePath,
+          this.toOutputExecutionTarget(target),
+          statusMessage
+        )
+        .catch((err) =>
+          Log.warn("Failed to append status message to history:", err)
+        );
+    }
   }
 
   private async evaluateEndCondition(
@@ -788,6 +787,7 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
     legacyStepIndex: number | undefined,
+    attemptIndex: number,
     duration: number,
     vars?: Record<string, string>
   ): Promise<boolean> {
@@ -799,12 +799,20 @@ export class WorkflowExecutor {
       Log.error(
         `End condition for ${this.describeExecutionTarget(target)} is missing required 'script' property`
       );
-      this.trackStatusMessage(
+      await this.trackStatusMessage(
         context,
         target,
         "End condition failed: Missing script property",
         STATUS_MESSAGE_SEVERITY.ERROR
       );
+
+      this.promptQueue
+        .getRuntimeStateMachine()
+        .failAttempt(
+          target,
+          attemptIndex,
+          "End condition missing required 'script' property"
+        );
 
       if (context.dashboardProvider && legacyStepIndex !== undefined) {
         context.dashboardProvider.updateStepStatus(legacyStepIndex, {
@@ -820,7 +828,7 @@ export class WorkflowExecutor {
     const scriptName =
       prompt.endCondition.script.split(/[\\/]/).pop() ||
       prompt.endCondition.script;
-    this.trackStatusMessage(
+    await this.trackStatusMessage(
       context,
       target,
       `Evaluating end condition: Running ${scriptName}`
@@ -840,7 +848,7 @@ export class WorkflowExecutor {
       const output = evaluationResult.error
         ? evaluationResult.error
         : evaluationResult.stdout.trim();
-      this.trackStatusMessage(
+      await this.trackStatusMessage(
         context,
         target,
         `End condition ${resultStatus} - Output: ${output}`,
@@ -853,6 +861,9 @@ export class WorkflowExecutor {
       totalPrompts: this.promptQueue.getState().prompts.length,
       workspaceFolderPath: context.workspaceFolderPath,
       currentPromptFilePath: context.currentPromptFilePath,
+      runtime: this.promptQueue.getRuntimeStateMachine(),
+      attemptTarget: target,
+      attemptIndex,
     };
 
     const sendRetryPromptCallback = this.createSendRetryPromptCallback(
@@ -949,11 +960,12 @@ export class WorkflowExecutor {
     sendOptions: WorkflowContext,
     onPromptSent?: () => Promise<void>
   ): Promise<{ responseText: string; duration: number } | null> {
+    const runtime = this.promptQueue.getRuntimeStateMachine();
+    const attempt = runtime.beginAttempt(target, attemptIndex, Date.now());
     const startTime = Date.now();
 
-    const initTimestampMs = Date.now();
+    const initTimestampMs = attempt.startedAt;
     const rawTextOutput = integration.rawTextOutput || undefined;
-    this.setAttemptStartTimestamp(target, attemptIndex, initTimestampMs);
 
     if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
       if (context.dashboardProvider && legacyStepIndex !== undefined) {
@@ -1150,9 +1162,9 @@ export class WorkflowExecutor {
   ): SendRetryPromptCallback {
     return async (
       retryPromptItem: PromptItem,
-      currentIndex: number
+      currentIndex: number,
+      retryAttemptIndex: number
     ): Promise<string | null> => {
-      const retryAttemptIndex = this.promptQueue.getCurrentRetryCount();
       const state = this.promptQueue.getState();
       const workflowFile = this.promptQueue.getWorkflowFile();
       const resolvedProperties = PropertyResolver.resolve(
@@ -1176,13 +1188,23 @@ export class WorkflowExecutor {
           workingFilePath: context.workingFilePath,
           resolvedProperties: { ...resolvedProperties, resumeSession: true },
           workflowFile,
-          promptQueue: this.promptQueue,
+          workingFilePersistence: this.promptQueue,
+          getFinalPromptResponseTexts: () =>
+            this.promptQueue.getFinalPromptResponseTexts(),
           finalPromptSessionId: workflowFile.finalPrompt?._runtime
             ?.sessionId as string | undefined,
         }
       );
 
       if (!result) {
+        await this.handlePromptSendFailure(
+          integration,
+          context,
+          target,
+          retryPromptItem,
+          legacyStepIndex ?? this.getLegacyStepIndex(target),
+          retryAttemptIndex
+        );
         return null;
       }
 
@@ -1345,7 +1367,8 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
     prompt: PromptItem,
-    legacyStepIndex: number
+    legacyStepIndex: number,
+    attemptIndex: number
   ): Promise<boolean> {
     const runtime = this.promptQueue.getRuntimeStateMachine();
     const queueState = this.promptQueue.getState();
@@ -1354,6 +1377,8 @@ export class WorkflowExecutor {
     }
 
     if (integration.wasLastFailureUserCancellation()) {
+      const failureReason = integration.getLastFailureReason();
+      runtime.cancelAttempt(target, attemptIndex, failureReason);
       this.promptQueue.markCurrentPromptCancelled();
       if (runtime.requestStop()) {
         await this.promptQueue.commitRuntimeTransition({ persist: false });
@@ -1368,15 +1393,16 @@ export class WorkflowExecutor {
     if (integration.wasLastFailureProcessExit()) {
       const failureReason = integration.getLastFailureReason();
       const failureOutput = integration.getLastFailureOutput?.();
-      const attemptTimestampMs =
-        this.getAttemptStartTimestamp(target, 0) ?? Date.now();
+      const attemptTimestampMs = this.getAttemptStartedAt(target) ?? Date.now();
       const warningTimestampMs = Math.max(Date.now(), attemptTimestampMs + 1);
       const warningMessage = `Process exited unexpectedly — workflow stopped. ${failureReason}`;
       Log.warn(
         `⚠️ CLI process exited before completion — stopping workflow: ${failureReason}`
       );
 
-      this.trackStatusMessage(
+      runtime.cancelAttempt(target, attemptIndex, failureReason);
+
+      await this.trackStatusMessage(
         context,
         target,
         warningMessage,
@@ -1395,7 +1421,7 @@ export class WorkflowExecutor {
           : undefined,
         workingDirectory: context.workspaceFolderPath,
         timestampMs: attemptTimestampMs,
-        attemptIndex: 0,
+        attemptIndex,
         rawTextOutput:
           failureOutput !== undefined
             ? true
@@ -1433,9 +1459,7 @@ export class WorkflowExecutor {
         await context.outputHistoryManager
           .saveExecutionOutput(
             context.historyFilePath,
-            target.kind === FINAL_PROMPT_PHASES.QUEUE
-              ? { kind: "queue", stepIndex: target.stepIndex }
-              : { kind: "finalPrompt", loopIndex: target.loopIndex },
+            this.toOutputExecutionTarget(target),
             [processExitOutput],
             statusMessages
           )
@@ -1472,6 +1496,7 @@ export class WorkflowExecutor {
       });
     }
 
+    runtime.failAttempt(target, attemptIndex, failureReason);
     this.promptQueue.failCurrentPromptIfInProgress();
     runtime.fail();
     await this.promptQueue.commitRuntimeTransition();
@@ -1489,8 +1514,8 @@ export class WorkflowExecutor {
         ? integration.getLastCliCommand()
         : undefined,
       workingDirectory: context.workspaceFolderPath,
-      timestampMs: this.getAttemptStartTimestamp(target, 0) ?? Date.now(),
-      attemptIndex: 0,
+      timestampMs: this.getAttemptStartedAt(target) ?? Date.now(),
+      attemptIndex,
       rawTextOutput: integration.rawTextOutput || undefined,
       errorMessage: failureReason,
     };
@@ -1525,9 +1550,7 @@ export class WorkflowExecutor {
       await context.outputHistoryManager
         .saveExecutionOutput(
           context.historyFilePath,
-          target.kind === FINAL_PROMPT_PHASES.QUEUE
-            ? { kind: "queue", stepIndex: target.stepIndex }
-            : { kind: "finalPrompt", loopIndex: target.loopIndex },
+          this.toOutputExecutionTarget(target),
           [errorCliOutput],
           statusMessages
         )
@@ -1596,8 +1619,7 @@ export class WorkflowExecutor {
       isStreaming: false,
       cliCommand,
       workingDirectory: context.workspaceFolderPath,
-      timestampMs:
-        this.getAttemptStartTimestamp(target, attemptIndex) ?? Date.now(),
+      timestampMs: this.getAttemptStartedAt(target) ?? Date.now(),
       attemptIndex,
       rawTextOutput: integration.rawTextOutput || undefined,
     };
@@ -1628,9 +1650,7 @@ export class WorkflowExecutor {
       await context.outputHistoryManager
         .saveExecutionOutput(
           context.historyFilePath,
-          target.kind === FINAL_PROMPT_PHASES.QUEUE
-            ? { kind: "queue", stepIndex: target.stepIndex }
-            : { kind: "finalPrompt", loopIndex: target.loopIndex },
+          this.toOutputExecutionTarget(target),
           [cliOutputObj],
           statusMessages
         )

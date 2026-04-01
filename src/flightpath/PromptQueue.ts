@@ -473,107 +473,6 @@ export class PromptQueue {
   }
 
   /**
-   * Start queue execution
-   * Note: This only sets the queue state to running. The state change event
-   * triggers WorkflowOrchestrator.onQueueStateChanged() which starts actual execution.
-   */
-  async start(): Promise<void> {
-    if (this.stateMachine.status === EXECUTION_STATES.RUNNING) {
-      Log.debug("Queue is already running");
-      return;
-    }
-
-    if (this.state.prompts.length === 0) {
-      Log.warn("FlightPath: No prompts to execute");
-      return;
-    }
-
-    if (!this.stateMachine.startExecution()) {
-      return;
-    }
-
-    await this.commitRuntimeTransition();
-
-    Log.debug("Queue state set to running");
-  }
-
-  /**
-   * Pause queue execution
-   */
-  async pause(): Promise<void> {
-    if (!this.stateMachine.pause()) {
-      return;
-    }
-
-    await this.commitRuntimeTransition();
-    Log.info("Queue execution paused");
-  }
-
-  /**
-   * Resume queue execution
-   * Note: This only updates queue state. WorkflowOrchestrator checks the state
-   * and continues execution from where it was paused or stopped.
-   *
-   * PAUSED: Current prompt completed normally, continues to next prompt.
-   * STOPPED: Cancelled prompt was already advanced past in confirmedStopped(),
-   *          so currentIndex already points to the next prompt to run.
-   */
-  async resume(): Promise<void> {
-    const previousState = this.stateMachine.status;
-    if (!this.stateMachine.resume()) {
-      return;
-    }
-
-    await this.commitRuntimeTransition();
-
-    Log.info(`Queue state set to running (resumed from ${previousState})`);
-  }
-
-  /**
-   * Stop and reset queue
-   * Sets state to CANCELLING - call confirmedStopped() once process actually exits
-   */
-  stop(): void {
-    if (!this.stateMachine.requestStop()) {
-      return;
-    }
-
-    this.markCurrentPromptCancelled();
-
-    this.syncFromStateMachine();
-    this.emitStateChange();
-    Log.info("Queue cancellation requested (waiting for process to exit)");
-  }
-
-  /**
-   * Confirm that execution has fully stopped (process exited)
-   * Call this after the CLI process actually terminates
-   *
-   * STOP semantics: Abort current prompt and advance past it
-   * - Unlike PAUSE (which lets current prompt finish), STOP cancels immediately
-   * - Unlike RESTART (which resets to beginning), STOP preserves all progress
-   * - Current prompt is marked CANCELLED and currentIndex advances to the next prompt
-   * - Resume / Run continues from the next prompt (use setStartPosition to re-run the cancelled one)
-   */
-  async confirmedStopped(): Promise<void> {
-    if (!this.stateMachine.confirmStopped()) {
-      return;
-    }
-
-    const stoppedIndex = this.state.currentIndex;
-    const advancedPastQueuePrompt = this.advanceCancelledPromptAfterStop();
-
-    await this.commitRuntimeTransition();
-    if (advancedPastQueuePrompt) {
-      Log.info(
-        `Queue execution fully stopped - advanced past cancelled step ${stoppedIndex}`
-      );
-    } else {
-      Log.info("Queue execution fully stopped");
-    }
-  }
-
-  /**
    * Restart queue from the beginning
    * Resets index, results, and tracking state while keeping prompts loaded
    * Updates working file to clear completedPrompts array
@@ -639,7 +538,8 @@ export class PromptQueue {
    * NOTE: Only called from tests (production code uses clearQueue() instead).
    */
   clear(): void {
-    this.stop();
+    this.stateMachine.requestStop();
+    this.syncFromStateMachine();
     this.state.prompts = [];
     this.state.results = [];
     this.emitStateChange();
@@ -881,25 +781,6 @@ export class PromptQueue {
    */
   getCurrentRetryCount(): number {
     return this.currentRetryCount;
-  }
-
-  /**
-   * Mark workflow as completed (called by WorkflowOrchestrator)
-   */
-  async markCompleted(): Promise<void> {
-    this.stateMachine.complete();
-    await this.commitRuntimeTransition();
-  }
-
-  /**
-   * Mark workflow as errored (called by WorkflowExecutor).
-   * If the current prompt was actively in-progress (SENT/RUNNING), advances past it
-   * so that resume/run continues from the next prompt.
-   */
-  async markErrored(): Promise<void> {
-    this.failCurrentPromptIfInProgress();
-    this.stateMachine.fail();
-    await this.commitRuntimeTransition();
   }
 
   /**

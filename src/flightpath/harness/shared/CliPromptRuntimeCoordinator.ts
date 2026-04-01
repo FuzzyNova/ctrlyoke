@@ -1,10 +1,7 @@
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import type { Harness, PromptItem } from "../../../types/FlightPathTypes";
+import type { WorkflowWorkingFilePersistence } from "../../../types/WorkflowContextTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
-
-interface WorkingFilePersistence {
-  updateWorkingFile(): Promise<void>;
-}
 
 interface CliPromptRuntimeCoordinatorLogger {
   debug(message: string): void;
@@ -27,9 +24,9 @@ export class CliPromptRuntimeCoordinator {
     prompt: PromptItem;
     executionStartTime: Date;
     extractedSessionId?: string;
-    promptQueue?: WorkingFilePersistence;
+    workingFilePersistence?: WorkflowWorkingFilePersistence;
   }): Promise<void> {
-    if (!params.promptQueue) {
+    if (!params.workingFilePersistence) {
       return;
     }
 
@@ -45,7 +42,7 @@ export class CliPromptRuntimeCoordinator {
       params.prompt._runtime.sessionId = params.extractedSessionId;
     }
 
-    await params.promptQueue.updateWorkingFile();
+    await params.workingFilePersistence.updateWorkingFile();
     this.deps.logger.debug(
       `💾 Saved cancelled-prompt runtime to working file (sessionId: ${params.extractedSessionId || "none"})`
     );
@@ -56,7 +53,7 @@ export class CliPromptRuntimeCoordinator {
     resolvedProperties?: ResolvedProperties;
     extractedSessionId?: string;
     parsedOutput?: UniversalCliOutput;
-    promptQueue?: WorkingFilePersistence;
+    workingFilePersistence?: WorkflowWorkingFilePersistence;
   }): Promise<UniversalCliOutput | undefined> {
     const actualHarness =
       params.resolvedProperties?.harness ?? this.deps.getIntegrationHarness();
@@ -94,8 +91,8 @@ export class CliPromptRuntimeCoordinator {
 
     params.prompt._runtime.completedAt = this.now();
 
-    if (params.promptQueue) {
-      await params.promptQueue.updateWorkingFile();
+    if (params.workingFilePersistence) {
+      await params.workingFilePersistence.updateWorkingFile();
       this.deps.logger.debug(
         `💾 Saved runtime metadata to working file (sessionId: ${params.extractedSessionId || "none"})`
       );

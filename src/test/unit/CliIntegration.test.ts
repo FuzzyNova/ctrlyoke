@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import type * as vscode from "vscode";
 import { CliIntegration } from "../../flightpath/harness/CliIntegration";
@@ -6,6 +9,7 @@ import { EXECUTION_MODES } from "../../types/DashboardConstants";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
+import type { PromptItem } from "../../types/FlightPathTypes";
 
 class MockVsCodePlatform implements PlatformAdapter {
   getConfig<T>(_key: string, defaultValue: T): T {
@@ -50,7 +54,7 @@ class MockHeadlessVsCodePlatform extends MockVsCodePlatform {
   }
 }
 
-function createHeadlessIntegration(): CliIntegration {
+function createProvider(overrides?: Partial<ICliProvider>): ICliProvider {
   const provider = {
     config: {
       name: "test",
@@ -91,7 +95,36 @@ function createHeadlessIntegration(): CliIntegration {
     checkAvailability: async () => true,
   } as unknown as ICliProvider;
 
-  return new CliIntegration(provider, new MockHeadlessVsCodePlatform(), false);
+  return {
+    ...provider,
+    ...overrides,
+    config: {
+      ...provider.config,
+      ...(overrides?.config ?? {}),
+    },
+    responseParser: {
+      ...provider.responseParser,
+      ...(overrides?.responseParser ?? {}),
+    },
+    notificationMonitor: {
+      ...provider.notificationMonitor,
+      ...(overrides?.notificationMonitor ?? {}),
+    },
+    toolPermissionMapper: {
+      ...provider.toolPermissionMapper,
+      ...(overrides?.toolPermissionMapper ?? {}),
+    },
+  } as unknown as ICliProvider;
+}
+
+function createHeadlessIntegration(
+  overrides?: Partial<ICliProvider>
+): CliIntegration {
+  return new CliIntegration(
+    createProvider(overrides),
+    new MockHeadlessVsCodePlatform(),
+    false
+  );
 }
 
 suite("CliIntegration", () => {
@@ -153,5 +186,216 @@ suite("CliIntegration", () => {
       "session-from-output"
     );
     assert.strictEqual(integration.getLastCliCommand(), "test --prompt say hi");
+  });
+
+  test("should reuse resolved session IDs when the runner does not extract a new one", async () => {
+    const integration = createHeadlessIntegration();
+    const prompt: PromptItem = { prompt: "say hi" };
+
+    (integration as any).sessionResolverAdapter.resolve = () => ({
+      resolvedProperties: undefined,
+      resolvedSessionId: "session-existing",
+    });
+
+    (integration as any).executionRunner.executeHeadless = async (session: {
+      promptArgument: string;
+      recordCommandPrepared(info: {
+        promptArgument: string;
+        cliCommand: string;
+      }): void;
+      recordHeadlessResponse(response: {
+        success: boolean;
+        parsedOutput: UniversalCliOutput;
+        cliResult: {
+          success: boolean;
+          response: string;
+          statistics: string;
+        };
+      }): void;
+    }) => {
+      session.recordCommandPrepared({
+        promptArgument: session.promptArgument,
+        cliCommand: `test --prompt ${session.promptArgument}`,
+      });
+      session.recordHeadlessResponse({
+        success: true,
+        parsedOutput: {
+          events: [],
+          metadata: {},
+        },
+        cliResult: {
+          success: true,
+          response: "headless response",
+          statistics: "",
+        },
+      });
+
+      return true;
+    };
+
+    const success = await integration.sendPrompt(prompt);
+
+    assert.strictEqual(success, true);
+    assert.strictEqual(
+      integration.getLastParsedOutput()?.metadata.sessionId,
+      "session-existing"
+    );
+  });
+
+  test("should persist cancelled prompt runtime when a sendPrompt attempt is cancelled", async () => {
+    const integration = createHeadlessIntegration();
+    const prompt: PromptItem = { prompt: "say hi" };
+    let updateWorkingFileCalls = 0;
+
+    (integration as any).sessionResolverAdapter.resolve = () => ({
+      resolvedProperties: undefined,
+      resolvedSessionId: "session-existing",
+    });
+
+    (integration as any).executionRunner.executeHeadless = async () => {
+      (integration as any).isCancelling = true;
+      return false;
+    };
+
+    const success = await integration.sendPrompt(prompt, true, {
+      promptIndex: 0,
+      allPrompts: [prompt],
+      workingFilePersistence: {
+        updateWorkingFile: async () => {
+          updateWorkingFileCalls += 1;
+        },
+      },
+    } as any);
+
+    assert.strictEqual(success, false);
+    assert.strictEqual(updateWorkingFileCalls, 1);
+    assert.ok(prompt._runtime?.startedAt);
+    assert.strictEqual(prompt._runtime?.sessionId, "session-existing");
+  });
+
+  test("should use the dedicated finalPrompt response callback during prompt preparation", async () => {
+    const integration = createHeadlessIntegration();
+    const prompt: PromptItem = { prompt: "say hi" };
+    let capturedFinalPromptResponseTexts: string[] | undefined;
+
+    (integration as any).promptPreparer.preparePrompt = async (
+      promptItem: PromptItem,
+      _workflowContext: unknown,
+      _resolvedProperties: unknown,
+      _resolvedSessionId: unknown,
+      finalPromptResponseTexts?: string[]
+    ) => {
+      capturedFinalPromptResponseTexts = finalPromptResponseTexts;
+      return {
+        promptWithInstruction: promptItem.prompt,
+        tempFilePaths: [],
+      };
+    };
+
+    (integration as any).executionRunner.executeHeadless = async (session: {
+      recordHeadlessResponse(response: {
+        success: boolean;
+        parsedOutput: UniversalCliOutput;
+        cliResult: {
+          success: boolean;
+          response: string;
+          statistics: string;
+        };
+      }): void;
+    }) => {
+      session.recordHeadlessResponse({
+        success: true,
+        parsedOutput: {
+          events: [],
+          metadata: {},
+        },
+        cliResult: {
+          success: true,
+          response: "headless response",
+          statistics: "",
+        },
+      });
+
+      return true;
+    };
+
+    const success = await integration.sendPrompt(prompt, true, {
+      promptIndex: 0,
+      allPrompts: [prompt],
+      getFinalPromptResponseTexts: () => ["final loop response"],
+    } as any);
+
+    assert.strictEqual(success, true);
+    assert.deepStrictEqual(capturedFinalPromptResponseTexts, [
+      "final loop response",
+    ]);
+  });
+
+  test("should return false and expose the failure reason when execution throws", async () => {
+    const integration = createHeadlessIntegration();
+
+    (integration as any).executionRunner.executeHeadless = async (session: {
+      promptArgument: string;
+      recordCommandPrepared(info: {
+        promptArgument: string;
+        cliCommand: string;
+      }): void;
+    }) => {
+      session.recordCommandPrepared({
+        promptArgument: session.promptArgument,
+        cliCommand: `test --prompt ${session.promptArgument}`,
+      });
+      throw new Error("runner exploded");
+    };
+
+    const success = await integration.sendPrompt({ prompt: "say hi" });
+
+    assert.strictEqual(success, false);
+    assert.strictEqual(integration.getLastFailureReason(), "runner exploded");
+    assert.strictEqual(integration.getLastCliCommand(), "test --prompt say hi");
+  });
+
+  test("should clean up workflow artifacts and delegate workspace cleanup", async () => {
+    const workspaceRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "flightpath-cli-integration-")
+    );
+    const mcpConfigPath = path.join(workspaceRoot, "mcp-config.json");
+    const extraPath = path.join(workspaceRoot, "extra-artifact.json");
+    let cleanupArgs:
+      | { workspaceRoot: string; workingFilePath: string | undefined }
+      | undefined;
+
+    await fs.promises.writeFile(mcpConfigPath, "{}", "utf8");
+    await fs.promises.writeFile(extraPath, "{}", "utf8");
+
+    try {
+      const integration = createHeadlessIntegration({
+        getMcpConfigFilePath: () => mcpConfigPath,
+        getAdditionalCleanupFilePaths: () => [extraPath],
+        cleanupWorkspaceArtifacts: async (
+          actualWorkspaceRoot: string,
+          workingFilePath?: string
+        ) => {
+          cleanupArgs = {
+            workspaceRoot: actualWorkspaceRoot,
+            workingFilePath,
+          };
+        },
+      });
+
+      await integration.cleanupWorkflowArtifacts(
+        "workflow.working.json",
+        workspaceRoot
+      );
+
+      assert.strictEqual(fs.existsSync(mcpConfigPath), false);
+      assert.strictEqual(fs.existsSync(extraPath), false);
+      assert.deepStrictEqual(cleanupArgs, {
+        workspaceRoot,
+        workingFilePath: "workflow.working.json",
+      });
+    } finally {
+      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+    }
   });
 });

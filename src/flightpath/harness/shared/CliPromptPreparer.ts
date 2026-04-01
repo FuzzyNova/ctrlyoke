@@ -20,6 +20,7 @@ export interface CliPromptPreparerDeps {
     resolvedAgent?: string,
     resolvedSkills?: string[]
   ) => Promise<PromptSections>;
+  extractLeadingSlashCommand: (promptText: string) => string | null;
   isSimplePrompt: (promptText: string) => boolean;
   buildPriorContextXml: (
     resolvedPriorContext: Exclude<PriorContext, "none">,
@@ -39,6 +40,7 @@ export interface CliPromptPreparerDeps {
     excerptRefs: string[],
     promptRefs: string[]
   ) => string;
+  logDebug: (message: string) => void;
   logInfo: (message: string) => void;
 }
 
@@ -52,6 +54,22 @@ export class CliPromptPreparer {
     resolvedSessionId: string | undefined,
     finalPromptResponseTexts?: string[]
   ): Promise<PromptFileResult> {
+    const originalPromptText = prompt.prompt.trim();
+    const slashCommand =
+      this.deps.extractLeadingSlashCommand(originalPromptText);
+    const isPureSlashCommand =
+      slashCommand !== null && /^\/\w+\s*$/.test(originalPromptText);
+
+    if (isPureSlashCommand) {
+      this.deps.logDebug(
+        `⚡ Slash command detected ("${slashCommand}") — skipping instruction assembly`
+      );
+      return {
+        promptWithInstruction: originalPromptText,
+        tempFilePaths: [],
+      };
+    }
+
     const omitAgentsAndSkills =
       !!resolvedSessionId && this.deps.shouldOmitAgentsAndSkillsOnResume();
     const sections = await this.deps.buildPromptSections(
@@ -88,11 +106,20 @@ export class CliPromptPreparer {
         ) || undefined
       : undefined;
 
-    return this.createCategorizedPromptFiles(
+    const preparedPrompt = await this.createCategorizedPromptFiles(
       sections,
       workflowContext,
       contextContent
     );
+
+    if (!slashCommand) {
+      return preparedPrompt;
+    }
+
+    return {
+      ...preparedPrompt,
+      promptWithInstruction: `${slashCommand} ${preparedPrompt.promptWithInstruction.trimStart()}`,
+    };
   }
 
   private async createCategorizedPromptFiles(

@@ -62,6 +62,88 @@ suite("WorkflowStateMachine", () => {
     ]);
   });
 
+  test("emits ordered attempt transitions and preserves retry metadata", () => {
+    const runtime = new WorkflowStateMachine();
+    const transitions: Array<{
+      command: string;
+      attemptIndex: number;
+      status: string;
+      retryCount?: number;
+      maxRetries?: number;
+    }> = [];
+    const target = { kind: "queue" as const, stepIndex: 1 };
+
+    runtime.onDidAttemptTransition((transition) => {
+      transitions.push({
+        command: transition.command,
+        attemptIndex: transition.current.attemptIndex,
+        status: transition.current.status,
+        retryCount: transition.current.retryCount,
+        maxRetries: transition.current.maxRetries,
+      });
+    });
+
+    runtime.beginAttempt(target, 0, 100);
+    runtime.scheduleRetry(target, 1, 1, 2, 200);
+    runtime.beginAttempt(target, 1, 250);
+    runtime.completeAttempt(target, 1, 400);
+
+    assert.deepStrictEqual(transitions, [
+      {
+        command: "beginAttempt",
+        attemptIndex: 0,
+        status: "running",
+        retryCount: undefined,
+        maxRetries: undefined,
+      },
+      {
+        command: "scheduleRetry",
+        attemptIndex: 1,
+        status: "retrying",
+        retryCount: 1,
+        maxRetries: 2,
+      },
+      {
+        command: "beginAttempt",
+        attemptIndex: 1,
+        status: "running",
+        retryCount: 1,
+        maxRetries: 2,
+      },
+      {
+        command: "completeAttempt",
+        attemptIndex: 1,
+        status: "completed",
+        retryCount: 1,
+        maxRetries: 2,
+      },
+    ]);
+  });
+
+  test("auto-cancels the active attempt when stop is requested", () => {
+    const runtime = new WorkflowStateMachine();
+    const transitions: Array<{ command: string; status: string }> = [];
+    const target = { kind: "queue" as const, stepIndex: 0 };
+
+    runtime.onDidAttemptTransition((transition) => {
+      transitions.push({
+        command: transition.command,
+        status: transition.current.status,
+      });
+    });
+
+    runtime.startExecution();
+    runtime.beginAttempt(target, 0, 100);
+
+    assert.strictEqual(runtime.requestStop(), true);
+    assert.strictEqual(runtime.getActiveAttempt(), undefined);
+
+    assert.deepStrictEqual(transitions, [
+      { command: "beginAttempt", status: "running" },
+      { command: "cancelAttempt", status: "cancelled" },
+    ]);
+  });
+
   test("supports pause and resume only from valid runtime states", () => {
     const runtime = new WorkflowStateMachine();
 

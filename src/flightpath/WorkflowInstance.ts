@@ -15,6 +15,8 @@ import {
   McpServerConfig,
   EXECUTION_STATES,
   WorkingFile,
+  WorkflowAttemptTarget,
+  WorkflowAttemptTransition,
   WorkflowRuntimeTransition,
   WorkflowSummary,
   WorkflowRunnerLock,
@@ -24,6 +26,7 @@ import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import {
   ACTION_TYPES,
   DEFAULT_WORKFLOW_NAME,
+  FINAL_PROMPT_PHASES,
   QUEUE_POSITION,
   STEP_STATUS,
   type ActionType,
@@ -288,6 +291,9 @@ export class WorkflowInstance {
     // Subscribe to queue state changes
     this.promptQueue.onDidChangeState(this.onQueueStateChanged.bind(this));
     this.workflowRuntime.onDidTransition(this.onRuntimeTransition.bind(this));
+    this.workflowRuntime.onDidAttemptTransition(
+      this.onAttemptTransition.bind(this)
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1013,10 +1019,30 @@ export class WorkflowInstance {
    */
   async stop(): Promise<void> {
     const integration = this.activeIntegration || this.getDetectorIntegration();
+    const stopReason = "Workflow stopped by user";
 
     Log.info(`⏹️ WorkflowInstance.stop() - stopping active integration`);
 
     this.promptQueue.markCurrentPromptCancelled();
+    const activeAttempt = this.workflowRuntime.getActiveAttempt();
+    if (activeAttempt) {
+      this.workflowRuntime.cancelAttempt(
+        activeAttempt.target,
+        activeAttempt.attemptIndex,
+        stopReason
+      );
+    } else {
+      const currentTarget = this.getCurrentCancellationTarget();
+      if (currentTarget) {
+        const pendingAttempt = this.workflowRuntime.getAttempt(currentTarget);
+        this.workflowRuntime.cancelAttempt(
+          currentTarget,
+          pendingAttempt?.attemptIndex ?? 0,
+          stopReason
+        );
+      }
+    }
+
     if (this.workflowRuntime.requestStop()) {
       await this.promptQueue.commitRuntimeTransition({ persist: false });
     }
@@ -2017,16 +2043,6 @@ export class WorkflowInstance {
 
     if (this.isActive && this.dashboardSink) {
       this.dashboardSink.updateExecutionState(transition.current.status);
-
-      if (transition.current.status === EXECUTION_STATES.CANCELLING) {
-        const currentResult = state.results[state.currentIndex];
-        if (currentResult?.status === STEP_STATUS.CANCELLED) {
-          this.dashboardSink.updateStepStatus(state.currentIndex, {
-            state: STEP_STATUS.CANCELLED,
-          });
-        }
-      }
-
       return;
     }
 
@@ -2034,6 +2050,66 @@ export class WorkflowInstance {
       transition.current.status,
       state.currentIndex
     );
+  }
+
+  private onAttemptTransition(transition: WorkflowAttemptTransition): void {
+    if (!this.isActive || !this.dashboardSink) {
+      return;
+    }
+
+    const target = transition.current.target;
+    if (target.kind !== "queue") {
+      return;
+    }
+
+    switch (transition.command) {
+      case "beginAttempt":
+        if (transition.current.attemptIndex > 0) {
+          this.dashboardSink.updateStepStatus(target.stepIndex, {
+            state: STEP_STATUS.RUNNING,
+          });
+        }
+        break;
+      case "scheduleRetry":
+        this.dashboardSink.updateRetryAttempt(
+          target.stepIndex,
+          transition.current.retryCount ?? transition.current.attemptIndex,
+          transition.current.maxRetries ?? 0
+        );
+        break;
+      case "cancelAttempt":
+        this.dashboardSink.updateStepStatus(target.stepIndex, {
+          state: STEP_STATUS.CANCELLED,
+        });
+        break;
+      case "completeAttempt":
+        if (transition.current.attemptIndex > 0) {
+          this.dashboardSink.updateRetryAttempt(target.stepIndex, 0, 0);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  private getCurrentCancellationTarget(): WorkflowAttemptTarget | undefined {
+    const finalPromptRuntime = this.promptQueue.getFinalPromptRuntime();
+    if (finalPromptRuntime?.phase === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+      return {
+        kind: "finalPrompt",
+        loopIndex: finalPromptRuntime.loopCount,
+      };
+    }
+
+    const state = this.promptQueue.getState();
+    if (state.currentIndex >= state.prompts.length) {
+      return undefined;
+    }
+
+    return {
+      kind: "queue",
+      stepIndex: state.currentIndex,
+    };
   }
 
   private async resumeRestoredRunningWorkflowIfNeeded(): Promise<void> {

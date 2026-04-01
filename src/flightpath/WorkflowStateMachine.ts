@@ -1,6 +1,10 @@
 import { EXECUTION_STATES } from "../types/FlightPathTypes";
 import type { ExecutionState } from "../types/DashboardConstants";
 import type {
+  WorkflowAttemptCommand,
+  WorkflowAttemptState,
+  WorkflowAttemptTarget,
+  WorkflowAttemptTransition,
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
   WorkflowRuntimeTransition,
@@ -33,8 +37,14 @@ export class WorkflowStateMachine {
   private _totalPausedDuration: number = 0;
   private readonly onTransitionEmitter =
     new TypedEmitter<WorkflowRuntimeTransition>();
+  private readonly onAttemptTransitionEmitter =
+    new TypedEmitter<WorkflowAttemptTransition>();
+  private readonly attempts = new Map<string, WorkflowAttemptState>();
+  private activeAttemptKey: string | undefined;
 
   public readonly onDidTransition = this.onTransitionEmitter.event;
+  public readonly onDidAttemptTransition =
+    this.onAttemptTransitionEmitter.event;
 
   // ─── Getters ─────────────────────────────────────────────────────────────────
 
@@ -68,16 +78,269 @@ export class WorkflowStateMachine {
     };
   }
 
+  getAttempt(target: WorkflowAttemptTarget): WorkflowAttemptState | undefined {
+    return this.cloneAttemptState(
+      this.attempts.get(this.getAttemptKey(target))
+    );
+  }
+
+  getActiveAttempt(): WorkflowAttemptState | undefined {
+    return this.activeAttemptKey
+      ? this.cloneAttemptState(this.attempts.get(this.activeAttemptKey))
+      : undefined;
+  }
+
+  private getAttemptKey(target: WorkflowAttemptTarget): string {
+    return target.kind === "queue"
+      ? `queue:${target.stepIndex}`
+      : `final:${target.loopIndex}`;
+  }
+
+  private cloneAttemptState(
+    state: WorkflowAttemptState | undefined
+  ): WorkflowAttemptState | undefined {
+    if (!state) {
+      return undefined;
+    }
+
+    return {
+      ...state,
+      target: { ...state.target },
+    };
+  }
+
   private emitTransition(
     command: WorkflowRuntimeCommand,
-    previous: WorkflowRuntimeState
+    previous: WorkflowRuntimeState,
+    timestampMs: number = Date.now()
   ): void {
     this.onTransitionEmitter.fire({
       command,
       previous,
       current: this.getSnapshot(),
-      timestampMs: Date.now(),
+      timestampMs,
     });
+  }
+
+  private emitAttemptTransition(
+    command: WorkflowAttemptCommand,
+    current: WorkflowAttemptState,
+    previous: WorkflowAttemptState | undefined,
+    timestampMs: number
+  ): void {
+    this.onAttemptTransitionEmitter.fire({
+      command,
+      previous,
+      current,
+      timestampMs,
+    });
+  }
+
+  beginAttempt(
+    target: WorkflowAttemptTarget,
+    attemptIndex: number,
+    timestampMs: number = Date.now()
+  ): WorkflowAttemptState {
+    const key = this.getAttemptKey(target);
+    const previous = this.cloneAttemptState(this.attempts.get(key));
+    const current: WorkflowAttemptState = {
+      target: { ...target },
+      attemptIndex,
+      status: "running",
+      startedAt: timestampMs,
+      retryCount:
+        previous?.attemptIndex === attemptIndex
+          ? previous.retryCount
+          : undefined,
+      maxRetries:
+        previous?.attemptIndex === attemptIndex
+          ? previous.maxRetries
+          : undefined,
+    };
+
+    this.attempts.set(key, current);
+    this.activeAttemptKey = key;
+    this.emitAttemptTransition(
+      "beginAttempt",
+      this.cloneAttemptState(current)!,
+      previous,
+      timestampMs
+    );
+    return this.cloneAttemptState(current)!;
+  }
+
+  scheduleRetry(
+    target: WorkflowAttemptTarget,
+    attemptIndex: number,
+    retryCount: number,
+    maxRetries: number,
+    timestampMs: number = Date.now()
+  ): WorkflowAttemptState {
+    const key = this.getAttemptKey(target);
+    const previous = this.cloneAttemptState(this.attempts.get(key));
+    const current: WorkflowAttemptState = {
+      target: { ...target },
+      attemptIndex,
+      status: "retrying",
+      startedAt: timestampMs,
+      retryCount,
+      maxRetries,
+    };
+
+    this.attempts.set(key, current);
+    if (this.activeAttemptKey === key) {
+      this.activeAttemptKey = undefined;
+    }
+    this.emitAttemptTransition(
+      "scheduleRetry",
+      this.cloneAttemptState(current)!,
+      previous,
+      timestampMs
+    );
+    return this.cloneAttemptState(current)!;
+  }
+
+  completeAttempt(
+    target: WorkflowAttemptTarget,
+    attemptIndex: number,
+    timestampMs: number = Date.now()
+  ): WorkflowAttemptState {
+    const key = this.getAttemptKey(target);
+    const previous = this.cloneAttemptState(this.attempts.get(key));
+    const current: WorkflowAttemptState = {
+      target: { ...target },
+      attemptIndex,
+      status: "completed",
+      startedAt:
+        previous?.attemptIndex === attemptIndex
+          ? previous.startedAt
+          : timestampMs,
+      completedAt: timestampMs,
+      retryCount:
+        previous?.attemptIndex === attemptIndex
+          ? previous.retryCount
+          : undefined,
+      maxRetries:
+        previous?.attemptIndex === attemptIndex
+          ? previous.maxRetries
+          : undefined,
+    };
+
+    this.attempts.set(key, current);
+    if (this.activeAttemptKey === key) {
+      this.activeAttemptKey = undefined;
+    }
+    this.emitAttemptTransition(
+      "completeAttempt",
+      this.cloneAttemptState(current)!,
+      previous,
+      timestampMs
+    );
+    return this.cloneAttemptState(current)!;
+  }
+
+  failAttempt(
+    target: WorkflowAttemptTarget,
+    attemptIndex: number,
+    failureReason: string,
+    timestampMs: number = Date.now()
+  ): WorkflowAttemptState {
+    const key = this.getAttemptKey(target);
+    const previous = this.cloneAttemptState(this.attempts.get(key));
+    const current: WorkflowAttemptState = {
+      target: { ...target },
+      attemptIndex,
+      status: "failed",
+      startedAt:
+        previous?.attemptIndex === attemptIndex
+          ? previous.startedAt
+          : timestampMs,
+      completedAt: timestampMs,
+      retryCount:
+        previous?.attemptIndex === attemptIndex
+          ? previous.retryCount
+          : undefined,
+      maxRetries:
+        previous?.attemptIndex === attemptIndex
+          ? previous.maxRetries
+          : undefined,
+      failureReason,
+    };
+
+    this.attempts.set(key, current);
+    if (this.activeAttemptKey === key) {
+      this.activeAttemptKey = undefined;
+    }
+    this.emitAttemptTransition(
+      "failAttempt",
+      this.cloneAttemptState(current)!,
+      previous,
+      timestampMs
+    );
+    return this.cloneAttemptState(current)!;
+  }
+
+  cancelAttempt(
+    target: WorkflowAttemptTarget,
+    attemptIndex: number,
+    failureReason?: string,
+    timestampMs: number = Date.now()
+  ): WorkflowAttemptState {
+    const key = this.getAttemptKey(target);
+    const previous = this.cloneAttemptState(this.attempts.get(key));
+    const current: WorkflowAttemptState = {
+      target: { ...target },
+      attemptIndex,
+      status: "cancelled",
+      startedAt:
+        previous?.attemptIndex === attemptIndex
+          ? previous.startedAt
+          : timestampMs,
+      completedAt: timestampMs,
+      retryCount:
+        previous?.attemptIndex === attemptIndex
+          ? previous.retryCount
+          : undefined,
+      maxRetries:
+        previous?.attemptIndex === attemptIndex
+          ? previous.maxRetries
+          : undefined,
+      failureReason,
+    };
+
+    this.attempts.set(key, current);
+    if (this.activeAttemptKey === key) {
+      this.activeAttemptKey = undefined;
+    }
+    this.emitAttemptTransition(
+      "cancelAttempt",
+      this.cloneAttemptState(current)!,
+      previous,
+      timestampMs
+    );
+    return this.cloneAttemptState(current)!;
+  }
+
+  cancelActiveAttempt(
+    failureReason?: string,
+    timestampMs: number = Date.now()
+  ): WorkflowAttemptState | undefined {
+    if (!this.activeAttemptKey) {
+      return undefined;
+    }
+
+    const activeAttempt = this.attempts.get(this.activeAttemptKey);
+    if (!activeAttempt) {
+      this.activeAttemptKey = undefined;
+      return undefined;
+    }
+
+    return this.cancelAttempt(
+      activeAttempt.target,
+      activeAttempt.attemptIndex,
+      failureReason,
+      timestampMs
+    );
   }
 
   // ─── Named transitions ────────────────────────────────────────────────────────
@@ -156,10 +419,13 @@ export class WorkflowStateMachine {
       return false;
     }
 
+    const timestampMs = Date.now();
+    this.cancelActiveAttempt(undefined, timestampMs);
+
     const previous = this.getSnapshot();
     this._status = EXECUTION_STATES.CANCELLING;
     this._stopped = true;
-    this.emitTransition("requestStop", previous);
+    this.emitTransition("requestStop", previous, timestampMs);
     return true;
   }
 
@@ -228,6 +494,8 @@ export class WorkflowStateMachine {
     this._startTime = undefined;
     this._pausedTime = undefined;
     this._totalPausedDuration = 0;
+    this.attempts.clear();
+    this.activeAttemptKey = undefined;
     return changed;
   }
 
@@ -299,5 +567,7 @@ export class WorkflowStateMachine {
     this._startTime = snapshot.startTime;
     this._pausedTime = snapshot.pausedTime;
     this._totalPausedDuration = snapshot.totalPausedDuration;
+    this.attempts.clear();
+    this.activeAttemptKey = undefined;
   }
 }

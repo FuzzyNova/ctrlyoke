@@ -7,6 +7,15 @@ import {
 } from "../../flightpath/QueueOperations";
 import { QUEUE_POSITION } from "../../types/DashboardConstants";
 
+async function requestQueueStop(queue: PromptQueue): Promise<void> {
+  if (!queue.getRuntimeStateMachine().requestStop()) {
+    return;
+  }
+
+  queue.markCurrentPromptCancelled();
+  await queue.commitRuntimeTransition({ persist: false });
+}
+
 suite("QueueOperations", () => {
   // ──────────────────────────────────────────────────────────────────────────
   suite("getQueueStatus — workflow name extraction", () => {
@@ -93,8 +102,7 @@ suite("QueueOperations", () => {
 
     test("throws when queue is in cancelling state", async () => {
       const queue = new PromptQueue();
-      // Force the queue into an unappendable state by calling stop()
-      queue.stop();
+      await requestQueueStop(queue);
       await assert.rejects(
         () =>
           appendToQueue(queue, {

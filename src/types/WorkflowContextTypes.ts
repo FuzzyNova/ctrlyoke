@@ -1,6 +1,10 @@
 import type { PromptItem, PromptFile } from "./FlightPathTypes";
 import type { ResolvedProperties } from "../utils/PropertyResolver";
-import type { PromptQueue } from "../flightpath/PromptQueue";
+
+/** Narrow working-file persistence contract exposed to harnesses. */
+export interface WorkflowWorkingFilePersistence {
+  updateWorkingFile(skipMerge?: boolean): Promise<void>;
+}
 
 /**
  * Workflow context passed to harness sendPrompt calls.
@@ -21,7 +25,10 @@ export interface WorkflowContext {
   workingFilePath?: string;
   resolvedProperties?: ResolvedProperties;
   workflowFile?: PromptFile;
-  promptQueue?: PromptQueue;
+  /** Minimal working-file persistence hook used for prompt runtime metadata. */
+  workingFilePersistence?: WorkflowWorkingFilePersistence;
+  /** Read-only accessor for prior-context finalPrompt loop responses. */
+  getFinalPromptResponseTexts?: () => string[];
   /** Session ID from the most recent finalPrompt execution. Consumed by SessionResolver
    *  when sessionId is the "finalPrompt" sentinel on any prompt (queue or finalPrompt phase). */
   finalPromptSessionId?: string;

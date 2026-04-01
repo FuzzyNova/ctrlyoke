@@ -26,10 +26,7 @@ import {
 } from "./shared/CliExecutionSession";
 import { CliExecutionRunner } from "./shared/CliExecutionRunner";
 import { CliInteractiveStartupCoordinator } from "./shared/CliInteractiveStartupCoordinator";
-import {
-  CliPromptPreparer,
-  type PromptFileResult,
-} from "./shared/CliPromptPreparer";
+import { CliPromptPreparer } from "./shared/CliPromptPreparer";
 import { CliPromptRuntimeCoordinator } from "./shared/CliPromptRuntimeCoordinator";
 import { CliResponseCollector } from "./shared/CliResponseCollector";
 import { CliSessionResolverAdapter } from "./shared/CliSessionResolverAdapter";
@@ -54,6 +51,14 @@ export const CLI_WARNING_MESSAGES = {
   HEADLESS_WITHOUT_PERMISSIONS:
     "Headless mode without full permissions: CLI will auto-deny tool/file access. Workflow may not make progress.",
 } as const;
+
+interface CliIntegrationServices {
+  promptPreparer: CliPromptPreparer;
+  sessionResolverAdapter: CliSessionResolverAdapter;
+  promptRuntimeCoordinator: CliPromptRuntimeCoordinator;
+  transportCoordinator: CliTransportCoordinator;
+  executionRunner: CliExecutionRunner;
+}
 
 /**
  * Generic CLI integration class using composition.
@@ -172,142 +177,12 @@ export class CliIntegration extends HarnessIntegration {
       ).setWorkspaceRoot(workspaceRoot);
     }
 
-    this.promptPreparer = new CliPromptPreparer({
-      shouldOmitAgentsAndSkillsOnResume: () =>
-        ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume(),
-      buildPromptSections: (prompt, resolvedAgent, resolvedSkills) =>
-        this.buildPromptSections(prompt, resolvedAgent, resolvedSkills),
-      isSimplePrompt: (promptText) => this.isSimplePrompt(promptText),
-      buildPriorContextXml: (
-        resolvedPriorContext,
-        allPrompts,
-        promptIndex,
-        finalPromptResponseTexts
-      ) => {
-        const contextItems = this.gatherPriorContextItems(
-          resolvedPriorContext,
-          allPrompts,
-          promptIndex,
-          finalPromptResponseTexts
-        );
-        return contextItems.length > 0
-          ? this.buildPriorContextXml(contextItems)
-          : "";
-      },
-      getWorkspaceRoot: () => this.getWorkspaceRoot(),
-      getTempFileSplitConfig: () => this.getTempFileSplitConfig(),
-      formatDirectFileRef: (absolutePath) =>
-        this.formatDirectFileRef(absolutePath),
-      formatTempFileRef: (tempMgr, absolutePath) =>
-        this.formatTempFileRef(tempMgr, absolutePath),
-      formatCategorizedReferences: (
-        agentRefs,
-        skillRefs,
-        directRefs,
-        contextRefs,
-        excerptRefs,
-        promptRefs
-      ) =>
-        this.formatCategorizedReferences(
-          agentRefs,
-          skillRefs,
-          directRefs,
-          contextRefs,
-          excerptRefs,
-          promptRefs
-        ),
-      logInfo: (message) => Log.info(message),
-    });
-
-    this.sessionResolverAdapter = new CliSessionResolverAdapter({
-      getIntegrationHarness: () => this.getIntegrationMode() as Harness,
-      logger: {
-        info: (message) => Log.info(message),
-      },
-    });
-
-    this.promptRuntimeCoordinator = new CliPromptRuntimeCoordinator({
-      getIntegrationHarness: () => this.getIntegrationMode() as Harness,
-      logger: {
-        debug: (message) => Log.debug(message),
-      },
-    });
-
-    this.transportCoordinator = new CliTransportCoordinator({
-      provider: this.provider,
-      processManager: this.processManager,
-      getWorkspaceRoot: () => this.getWorkspaceRoot(),
-      getTerminalName: () => this.buildTerminalName(),
-      getWorkflowName: () => this.workflowName,
-      onBeforeInteractiveStart: (workflowContext) => {
-        if (workflowContext) {
-          this.currentPromptNumber = workflowContext.promptIndex + 1;
-          this.currentPromptTotal = workflowContext.allPrompts.length;
-        }
-      },
-      onCommandPrepared: ({ promptArgument, cliCommand }) => {
-        this.activeSession?.recordCommandPrepared({
-          promptArgument,
-          cliCommand,
-        });
-        this.promptReadyEmitter.fire({
-          fullPrompt: promptArgument,
-          cliCommand,
-        });
-      },
-      onStreamingChunk: (chunk) => this.streamingChunkEmitter.fire(chunk),
-      onStreamingEvents: (events) => this.streamingEventsEmitter.fire(events),
-      onResponseComplete: (response) =>
-        this.responseCompleteEmitter.fire(response),
-      onPtyExit: (session, exitCode) => {
-        this.failureTracker.capturePtyExit(exitCode, session.reconnectBuffer);
-        if (exitCode !== 0) {
-          Log.warn(
-            `⚠️ AI CLI PTY session ${session.id} exited with code ${exitCode} — workflow step will be stopped`
-          );
-        } else {
-          Log.info(
-            `🛑 AI CLI PTY session ${session.id} exited with code 0 before completion — workflow step will be stopped`
-          );
-        }
-      },
-      isCancelling: () => this.isCancelling,
-      cleanupTempFiles: (tempFilePaths) => this.cleanupTempFiles(tempFilePaths),
-      logger: {
-        debug: (message) => Log.debug(message),
-        info: (message) => Log.info(message),
-        warn: (message) => Log.warn(message),
-        error: (message, error) => Log.error(message, error),
-      },
-    });
-
-    this.executionRunner = new CliExecutionRunner({
-      provider: this.provider,
-      transportCoordinator: this.transportCoordinator,
-      failureTracker: this.failureTracker,
-      createInteractiveStartupCoordinator: () =>
-        this.createInteractiveStartupCoordinator(),
-      createResponseCollector: () => this.createResponseCollector(),
-      cleanupTempFiles: (tempFilePaths) => this.cleanupTempFiles(tempFilePaths),
-      getWorkspaceRoot: () => this.getWorkspaceRoot(),
-      getExtensionPath: () => this.platform.getExtensionPath(),
-      isVsCodeContext: () => this.isVsCodeContext(),
-      isCancelling: () => this.isCancelling,
-      onStreamingEvents: (events) => this.streamingEventsEmitter.fire(events),
-      onResponseComplete: (response) =>
-        this.responseCompleteEmitter.fire(response),
-      logResponse: (response, statistics) =>
-        this.logResponse(response, statistics),
-      setFailureReason: (reason) => {
-        this.lastFailureReason = reason;
-      },
-      logger: {
-        debug: (message) => Log.debug(message),
-        info: (message) => Log.info(message),
-        warn: (message) => Log.warn(message),
-        error: (message, error) => Log.error(message, error),
-      },
-    });
+    const services = this.createServices();
+    this.promptPreparer = services.promptPreparer;
+    this.sessionResolverAdapter = services.sessionResolverAdapter;
+    this.promptRuntimeCoordinator = services.promptRuntimeCoordinator;
+    this.transportCoordinator = services.transportCoordinator;
+    this.executionRunner = services.executionRunner;
   }
 
   // ============================================================
@@ -416,39 +291,6 @@ export class CliIntegration extends HarnessIntegration {
   // ============================================================
   // PROMPT PREPARATION
   // ============================================================
-
-  /**
-   * Build prompt sections and create all necessary temp files in one step.
-   * Returns the prompt argument to pass to the CLI and the paths to clean up.
-   *
-   * Fast path: if the prompt is short, shell-safe, and has no attachments,
-   * agent, skills, prior context, or critical instruction, returns the raw
-   * text directly with no temp files (no disk I/O).
-   *
-   * Otherwise: delegates to CliPromptPreparer to build sections, create any
-   * categorized temp files, and return the structured reference instruction.
-   *
-   * @param prompt Prompt item to prepare
-   * @param workflowContext Workflow execution context
-   * @param resolvedProperties Resolved execution properties (agent, skills, etc.)
-   * @param resolvedSessionId Used to determine whether to omit agent/skills on resume
-   * @param finalPromptResponseTexts Prior finalPrompt response texts for context injection
-   */
-  private async buildAndPreparePrompt(
-    prompt: PromptItem,
-    workflowContext: WorkflowContext | undefined,
-    resolvedProperties: ResolvedProperties | undefined,
-    resolvedSessionId: string | undefined,
-    finalPromptResponseTexts?: string[]
-  ): Promise<PromptFileResult> {
-    return await this.promptPreparer.preparePrompt(
-      prompt,
-      workflowContext,
-      resolvedProperties,
-      resolvedSessionId,
-      finalPromptResponseTexts
-    );
-  }
 
   /**
    * Format a workspace-relative or absolute path as a direct file reference,
@@ -585,35 +427,256 @@ export class CliIntegration extends HarnessIntegration {
     });
   }
 
-  private async prepareExecutionSessionPrompt(
+  private createServices(): CliIntegrationServices {
+    const promptPreparer = new CliPromptPreparer({
+      shouldOmitAgentsAndSkillsOnResume: () =>
+        ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume(),
+      buildPromptSections: (prompt, resolvedAgent, resolvedSkills) =>
+        this.buildPromptSections(prompt, resolvedAgent, resolvedSkills),
+      extractLeadingSlashCommand: (promptText) =>
+        this.extractLeadingSlashCommand(promptText),
+      isSimplePrompt: (promptText) => this.isSimplePrompt(promptText),
+      buildPriorContextXml: (
+        resolvedPriorContext,
+        allPrompts,
+        promptIndex,
+        finalPromptResponseTexts
+      ) => {
+        const contextItems = this.gatherPriorContextItems(
+          resolvedPriorContext,
+          allPrompts,
+          promptIndex,
+          finalPromptResponseTexts
+        );
+        return contextItems.length > 0
+          ? this.buildPriorContextXml(contextItems)
+          : "";
+      },
+      getWorkspaceRoot: () => this.getWorkspaceRoot(),
+      getTempFileSplitConfig: () => this.getTempFileSplitConfig(),
+      formatDirectFileRef: (absolutePath) =>
+        this.formatDirectFileRef(absolutePath),
+      formatTempFileRef: (tempMgr, absolutePath) =>
+        this.formatTempFileRef(tempMgr, absolutePath),
+      formatCategorizedReferences: (
+        agentRefs,
+        skillRefs,
+        directRefs,
+        contextRefs,
+        excerptRefs,
+        promptRefs
+      ) =>
+        this.formatCategorizedReferences(
+          agentRefs,
+          skillRefs,
+          directRefs,
+          contextRefs,
+          excerptRefs,
+          promptRefs
+        ),
+      logDebug: (message) => Log.debug(message),
+      logInfo: (message) => Log.info(message),
+    });
+
+    const sessionResolverAdapter = new CliSessionResolverAdapter({
+      getIntegrationHarness: () => this.getIntegrationMode() as Harness,
+      logger: {
+        info: (message) => Log.info(message),
+      },
+    });
+
+    const promptRuntimeCoordinator = new CliPromptRuntimeCoordinator({
+      getIntegrationHarness: () => this.getIntegrationMode() as Harness,
+      logger: {
+        debug: (message) => Log.debug(message),
+      },
+    });
+
+    const transportCoordinator = new CliTransportCoordinator({
+      provider: this.provider,
+      processManager: this.processManager,
+      getWorkspaceRoot: () => this.getWorkspaceRoot(),
+      getTerminalName: () => this.buildTerminalName(),
+      getWorkflowName: () => this.workflowName,
+      onBeforeInteractiveStart: (workflowContext) => {
+        if (workflowContext) {
+          this.currentPromptNumber = workflowContext.promptIndex + 1;
+          this.currentPromptTotal = workflowContext.allPrompts.length;
+        }
+      },
+      onCommandPrepared: ({ promptArgument, cliCommand }) => {
+        this.activeSession?.recordCommandPrepared({
+          promptArgument,
+          cliCommand,
+        });
+        this.promptReadyEmitter.fire({
+          fullPrompt: promptArgument,
+          cliCommand,
+        });
+      },
+      onStreamingChunk: (chunk) => this.streamingChunkEmitter.fire(chunk),
+      onStreamingEvents: (events) => this.streamingEventsEmitter.fire(events),
+      onResponseComplete: (response) =>
+        this.responseCompleteEmitter.fire(response),
+      onPtyExit: (session, exitCode) => {
+        this.failureTracker.capturePtyExit(exitCode, session.reconnectBuffer);
+        if (exitCode !== 0) {
+          Log.warn(
+            `⚠️ AI CLI PTY session ${session.id} exited with code ${exitCode} — workflow step will be stopped`
+          );
+        } else {
+          Log.info(
+            `🛑 AI CLI PTY session ${session.id} exited with code 0 before completion — workflow step will be stopped`
+          );
+        }
+      },
+      isCancelling: () => this.isCancelling,
+      cleanupTempFiles: (tempFilePaths) => this.cleanupTempFiles(tempFilePaths),
+      logger: {
+        debug: (message) => Log.debug(message),
+        info: (message) => Log.info(message),
+        warn: (message) => Log.warn(message),
+        error: (message, error) => Log.error(message, error),
+      },
+    });
+
+    const executionRunner = new CliExecutionRunner({
+      provider: this.provider,
+      transportCoordinator,
+      failureTracker: this.failureTracker,
+      createInteractiveStartupCoordinator: () =>
+        this.createInteractiveStartupCoordinator(),
+      createResponseCollector: () => this.createResponseCollector(),
+      cleanupTempFiles: (tempFilePaths) => this.cleanupTempFiles(tempFilePaths),
+      getWorkspaceRoot: () => this.getWorkspaceRoot(),
+      getExtensionPath: () => this.platform.getExtensionPath(),
+      isVsCodeContext: () => this.isVsCodeContext(),
+      isCancelling: () => this.isCancelling,
+      onStreamingEvents: (events) => this.streamingEventsEmitter.fire(events),
+      onResponseComplete: (response) =>
+        this.responseCompleteEmitter.fire(response),
+      logResponse: (response, statistics) =>
+        this.logResponse(response, statistics),
+      setFailureReason: (reason) => {
+        this.lastFailureReason = reason;
+      },
+      logger: {
+        debug: (message) => Log.debug(message),
+        info: (message) => Log.info(message),
+        warn: (message) => Log.warn(message),
+        error: (message, error) => Log.error(message, error),
+      },
+    });
+
+    return {
+      promptPreparer,
+      sessionResolverAdapter,
+      promptRuntimeCoordinator,
+      transportCoordinator,
+      executionRunner,
+    };
+  }
+
+  private async initializeExecutionSession(
     session: CliExecutionSession
   ): Promise<void> {
-    const originalPromptText = session.prompt.prompt.trim();
-    const slashCommand = this.extractLeadingSlashCommand(originalPromptText);
-    const isPureSlashCommand =
-      slashCommand !== null && /^\/\w+\s*$/.test(originalPromptText);
-
-    if (isPureSlashCommand) {
-      session.preparePrompt(originalPromptText, []);
-      Log.debug(
-        `⚡ Slash command detected ("${slashCommand}") — skipping instruction assembly`
-      );
-      return;
-    }
-
-    const prepared = await this.buildAndPreparePrompt(
+    const prepared = await this.promptPreparer.preparePrompt(
       session.prompt,
       session.workflowContext,
       session.resolvedProperties,
       session.resolvedSessionId,
-      session.workflowContext?.promptQueue?.getFinalPromptResponseTexts()
+      session.workflowContext?.getFinalPromptResponseTexts?.()
     );
 
-    const promptArgument = slashCommand
-      ? `${slashCommand} ${prepared.promptWithInstruction.trimStart()}`
-      : prepared.promptWithInstruction;
+    session.preparePrompt(
+      prepared.promptWithInstruction,
+      prepared.tempFilePaths
+    );
+  }
 
-    session.preparePrompt(promptArgument, prepared.tempFilePaths);
+  private async createPreparedExecutionSession(
+    prompt: PromptItem,
+    workflowContext?: WorkflowContext
+  ): Promise<CliExecutionSession> {
+    const { resolvedProperties, resolvedSessionId } =
+      this.sessionResolverAdapter.resolve(prompt, workflowContext);
+    const session = this.createExecutionSession(
+      prompt,
+      workflowContext,
+      resolvedProperties,
+      resolvedSessionId
+    );
+    await this.initializeExecutionSession(session);
+    return session;
+  }
+
+  private async runExecutionSession(
+    session: CliExecutionSession
+  ): Promise<boolean> {
+    const mode = this.getExecutionMode();
+    const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
+
+    const baseArgs = await this.provider.buildCliArgs(
+      session.prompt,
+      isInteractive,
+      this.platform.getExtensionPath(),
+      this.getWorkspaceRoot(),
+      session.resolvedSessionId,
+      session.workflowContext
+    );
+
+    const success = isInteractive
+      ? await this.executionRunner.executeInteractive(session, baseArgs)
+      : (() => {
+          this.warnIfHeadlessWithoutPermissions(
+            session.resolvedProperties?.toolPermissions
+          );
+          return this.executionRunner.executeHeadless(session, baseArgs);
+        })();
+
+    if (!session.effectiveSessionId && session.resolvedSessionId) {
+      session.setExtractedSessionId(session.resolvedSessionId);
+      Log.debug(
+        `📝 Reusing resolved session ID (no new ID extracted): ${session.effectiveSessionId}`
+      );
+    }
+
+    return success;
+  }
+
+  private async persistExecutionOutcome(
+    session: CliExecutionSession,
+    prompt: PromptItem,
+    workflowContext: WorkflowContext | undefined,
+    success: boolean
+  ): Promise<void> {
+    if (
+      !success &&
+      this.isCancelling &&
+      workflowContext?.workingFilePersistence
+    ) {
+      await this.promptRuntimeCoordinator.persistCancelledPromptRuntime({
+        prompt,
+        executionStartTime: session.executionStartTime,
+        extractedSessionId: session.effectiveSessionId,
+        workingFilePersistence: workflowContext.workingFilePersistence,
+      });
+      return;
+    }
+
+    if (!success) {
+      return;
+    }
+
+    const persistedOutput =
+      await this.promptRuntimeCoordinator.persistSuccessfulPromptRuntime({
+        prompt,
+        resolvedProperties: session.resolvedProperties,
+        extractedSessionId: session.effectiveSessionId,
+        parsedOutput: session.parsedOutput,
+        workingFilePersistence: workflowContext?.workingFilePersistence,
+      });
+    session.updateParsedOutput(persistedOutput);
   }
 
   /**
@@ -957,85 +1020,22 @@ export class CliIntegration extends HarnessIntegration {
       this.resetCancellationFlag();
       this.failureTracker.reset();
 
-      const { resolvedProperties, resolvedSessionId: initialSessionId } =
-        this.sessionResolverAdapter.resolve(prompt, workflowContext);
-      executionSession = this.createExecutionSession(
+      executionSession = await this.createPreparedExecutionSession(
         prompt,
-        workflowContext,
-        resolvedProperties,
-        initialSessionId
+        workflowContext
       );
       this.activeSession = executionSession;
-
-      await this.prepareExecutionSessionPrompt(executionSession);
 
       // Log prompt
       this.logPrompt(executionSession.promptArgument);
 
-      // Determine execution mode first
-      const mode = this.getExecutionMode();
-      const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
-
-      // Build CLI arguments - delegated to provider for complete control
-      const workspaceRoot = this.getWorkspaceRoot();
-      const baseArgs = await this.provider.buildCliArgs(
+      const success = await this.runExecutionSession(executionSession);
+      await this.persistExecutionOutcome(
+        executionSession,
         prompt,
-        isInteractive,
-        this.platform.getExtensionPath(),
-        workspaceRoot,
-        executionSession.resolvedSessionId,
-        workflowContext
+        workflowContext,
+        success
       );
-
-      // Execute based on mode
-      const success =
-        mode === CLI_EXECUTION_MODE.INTERACTIVE
-          ? await this.executionRunner.executeInteractive(
-              executionSession,
-              baseArgs
-            )
-          : (() => {
-              this.warnIfHeadlessWithoutPermissions(
-                executionSession.resolvedProperties?.toolPermissions
-              );
-              return this.executionRunner.executeHeadless(
-                executionSession,
-                baseArgs
-              );
-            })();
-
-      if (
-        !executionSession.effectiveSessionId &&
-        executionSession.resolvedSessionId
-      ) {
-        executionSession.setExtractedSessionId(
-          executionSession.resolvedSessionId
-        );
-        Log.debug(
-          `📝 Reusing resolved session ID (no new ID extracted): ${executionSession.effectiveSessionId}`
-        );
-      }
-
-      if (!success && this.isCancelling && workflowContext?.promptQueue) {
-        await this.promptRuntimeCoordinator.persistCancelledPromptRuntime({
-          prompt,
-          executionStartTime: executionSession.executionStartTime,
-          extractedSessionId: executionSession.effectiveSessionId,
-          promptQueue: workflowContext.promptQueue,
-        });
-      }
-
-      if (success) {
-        const persistedOutput =
-          await this.promptRuntimeCoordinator.persistSuccessfulPromptRuntime({
-            prompt,
-            resolvedProperties: executionSession.resolvedProperties,
-            extractedSessionId: executionSession.effectiveSessionId,
-            parsedOutput: executionSession.parsedOutput,
-            promptQueue: workflowContext?.promptQueue,
-          });
-        executionSession.updateParsedOutput(persistedOutput);
-      }
 
       return success;
     } catch (error) {

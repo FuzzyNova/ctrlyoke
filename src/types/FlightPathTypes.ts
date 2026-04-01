@@ -267,6 +267,42 @@ export interface WorkflowRuntimeTransition {
   timestampMs: number;
 }
 
+export type WorkflowAttemptTarget =
+  | { kind: "queue"; stepIndex: number }
+  | { kind: "finalPrompt"; loopIndex: number };
+
+export type WorkflowAttemptStatus =
+  | "running"
+  | "retrying"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface WorkflowAttemptState {
+  target: WorkflowAttemptTarget;
+  attemptIndex: number;
+  status: WorkflowAttemptStatus;
+  startedAt: number;
+  completedAt?: number;
+  retryCount?: number;
+  maxRetries?: number;
+  failureReason?: string;
+}
+
+export type WorkflowAttemptCommand =
+  | "beginAttempt"
+  | "scheduleRetry"
+  | "completeAttempt"
+  | "failAttempt"
+  | "cancelAttempt";
+
+export interface WorkflowAttemptTransition {
+  command: WorkflowAttemptCommand;
+  previous?: WorkflowAttemptState;
+  current: WorkflowAttemptState;
+  timestampMs: number;
+}
+
 /**
  * Working file format - same schema as PromptFile with optional runtime metadata
  * Stored in .flightpath/.queue/ directory
