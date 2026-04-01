@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { PromptItem, Harness } from "../../../types/FlightPathTypes";
+import * as fs from "fs/promises";
+import { PromptItem, Harness, type UserHookConfig } from "../../../types/FlightPathTypes";
 import { HarnessIntegration, HarnessStatus } from "../../HarnessIntegration";
 import { isModelAvailable } from "../../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
@@ -19,6 +20,7 @@ import { CliOutputFormatter } from "../shared/CliOutputFormatter";
 import { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type { PromptSections } from "../../HarnessIntegration";
+import { CopilotNotificationMonitor } from "../copilot/CopilotNotificationMonitor";
 
 /**
  * GitHub Copilot Chat Integration - UI automation with session file monitoring.
@@ -49,6 +51,9 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
   // Temp file paths created during prompt building (for cleanup after execution)
   private pendingTempFiles: string[] = [];
+
+  // Hook files written to .github/hooks/ for the current prompt (cleaned up after execution)
+  private hookFilePaths: string[] = [];
 
   constructor(
     context: vscode.ExtensionContext,
@@ -478,6 +483,18 @@ export class CopilotChatIntegration extends HarnessIntegration {
         needsCompletionDetection !== undefined
           ? needsCompletionDetection
           : !!prompt.endCondition?.script;
+
+      // Write user-defined hooks to .github/hooks/ before the session starts
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+      const userHooks = workflowContext?.resolvedProperties?.hooks;
+      if (userHooks && userHooks.length > 0 && workspaceRoot) {
+        await this.writeUserHookFile(
+          workspaceRoot,
+          workflowContext!.promptIndex,
+          workflowContext!.filePath,
+          userHooks
+        );
+      }
 
       // Build full prompt (what we'll type into chat)
       const chatPrompt = await this.buildCopilotChatPrompt(
@@ -1041,13 +1058,67 @@ export class CopilotChatIntegration extends HarnessIntegration {
    * Called after execution completes (success or failure).
    */
   private async cleanupTempFiles(): Promise<void> {
-    if (this.pendingTempFiles.length === 0) {
+    if (this.pendingTempFiles.length > 0) {
+      const count = this.pendingTempFiles.length;
+      await this.deleteTempFiles(this.pendingTempFiles);
+      Log.info(`🗑️ Cleaned up ${count} temp file(s)`);
+      this.pendingTempFiles = [];
+    }
+    for (const hookPath of this.hookFilePaths) {
+      try {
+        await fs.unlink(hookPath);
+      } catch {
+        // Hook file may have already been removed — ignore
+      }
+    }
+    this.hookFilePaths = [];
+  }
+
+  /**
+   * Write user-defined hooks to .github/hooks/ before sending a prompt.
+   *
+   * Copilot Chat reads the same .github/hooks/ directory as Copilot CLI —
+   * hooks fire on sessionStart, sessionEnd, preToolUse, postToolUse, and
+   * userPromptSubmitted. No FlightPath notification entries are included
+   * here because CopilotChatIntegration uses ChatSessionMonitor for
+   * completion detection, not the notification-file mechanism.
+   *
+   * Files are named with the same per-prompt pattern as CopilotCliProvider
+   * so parallel workflows don't interfere with each other.
+   */
+  private async writeUserHookFile(
+    workspaceRoot: string,
+    promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[]
+  ): Promise<void> {
+    const hookConfig = CopilotNotificationMonitor.buildUserOnlyConfig(userHooks);
+
+    // Same filename pattern as CopilotCliProvider.buildHookFileName()
+    const stem = workingFilePath
+      ? path.basename(workingFilePath).replace(/\.flightpath\.json$/i, "")
+      : String(Date.now());
+    const safeStem = stem.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-");
+    const hookFileName = `flightpath-${safeStem}-p${promptIndex}.json`;
+
+    const hookDir = path.join(workspaceRoot, ".github", "hooks");
+
+    // Security: validate hook path stays within workspace root
+    const normalizedRoot = path.resolve(workspaceRoot);
+    if (!path.resolve(hookDir).startsWith(normalizedRoot)) {
+      Log.error(`Security: Hook directory is outside workspace root "${normalizedRoot}"`);
       return;
     }
-    const count = this.pendingTempFiles.length;
-    await this.deleteTempFiles(this.pendingTempFiles);
-    Log.info(`🗑️ Cleaned up ${count} temp file(s)`);
-    this.pendingTempFiles = [];
+
+    try {
+      await fs.mkdir(hookDir, { recursive: true });
+      const hookPath = path.join(hookDir, hookFileName);
+      await fs.writeFile(hookPath, JSON.stringify(hookConfig, null, 2), "utf-8");
+      this.hookFilePaths.push(hookPath);
+      Log.debug(`📁 Created hook file: ${hookPath}`);
+    } catch (error) {
+      Log.warn(`⚠️ Failed to create hook file: ${error}`);
+    }
   }
 
   /**

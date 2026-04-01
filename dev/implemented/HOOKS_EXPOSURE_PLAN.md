@@ -111,7 +111,7 @@ Understanding each CLI's hook format informs the merge strategy.
 
 **Key:** Each event is an array of objects. Copilot loads **all** JSON files under `.github/hooks/` — FlightPath's file (`flightpath.json`) coexists with any user-created files. User hooks should NOT go in `flightpath.json`; users can create their own `my-hooks.json` in `.github/hooks/`.
 
-**Available events:** `sessionStart`, `sessionEnd`
+**Available events:** `sessionStart`, `sessionEnd`, `preToolUse`, `postToolUse`, `userPromptSubmitted`, `errorOccurred`
 
 ### Gemini CLI
 
@@ -137,7 +137,7 @@ Understanding each CLI's hook format informs the merge strategy.
 
 **Key:** Same array-of-groups format as Claude. `AfterAgent` is the completion event (not `Stop`).
 
-**Available events:** `SessionStart`, `AfterAgent` (and likely others from Gemini's documentation)
+**Available events:** `SessionStart`, `SessionEnd`, `BeforeAgent`, `AfterAgent`, `BeforeModel`, `AfterModel`, `BeforeToolSelection`, `BeforeTool`, `AfterTool`, `PreCompress`, `Notification`
 
 ### Codex CLI
 
@@ -151,7 +151,9 @@ notify=['node','/path/to/hook']
 
 ### OpenCode CLI
 
-Uses a plugin system (not hooks). Separate plugin file deployed to `.opencode/plugin/`. Not relevant for this plan — no hook conflict exists.
+Uses a plugin system (not hooks). Separate plugin file deployed to `.opencode/plugin/`. No hook conflict exists — the plugin is fully controlled by FlightPath.
+
+**Available events:** `session.created`, `session.status`, `session.deleted`, `tool.execute.before`, `tool.execute.after`, `message.updated`, `permission.asked`, and others — see https://opencode.ai/docs/plugins/#events
 
 ---
 
@@ -243,14 +245,13 @@ prompts:
 /**
  * Logical hook event names — mapped to CLI-specific event names at inject time.
  *
- * | Logical name      | Claude/Qwen      | Copilot CLI  | Gemini CLI   | Codex  | OpenCode                |
- * |-------------------|------------------|--------------|--------------|--------|-------------------------|
- * | "stop"            | Stop             | sessionEnd   | AfterAgent   | notify | session.status idle     |
- * | "sessionStart"    | SessionStart     | sessionStart | SessionStart | (none) | session.created         |
- * | "preToolUse"      | PreToolUse       | (none)       | (none)       | (none) | (unknown)               |
- * | "postToolUse"     | PostToolUse      | (none)       | (none)       | (none) | (unknown)               |
- * | "userPromptSubmit"| UserPromptSubmit | (none)       | (none)       | (none) | (none)                  |
- *   (Qwen only)
+ * | Logical name      | Claude/Qwen      | Copilot CLI         | Gemini CLI   | Codex  | OpenCode                |
+ * |-------------------|------------------|---------------------|--------------|--------|-------------------------|
+ * | "stop"            | Stop             | sessionEnd          | AfterAgent   | notify | session.status idle     |
+ * | "sessionStart"    | SessionStart     | sessionStart        | SessionStart | (none) | session.created         |
+ * | "preToolUse"      | PreToolUse       | preToolUse          | BeforeTool   | (none) | tool.execute.before     |
+ * | "postToolUse"     | PostToolUse      | postToolUse         | AfterTool    | (none) | tool.execute.after      |
+ * | "userPromptSubmit"| UserPromptSubmit | userPromptSubmitted | BeforeAgent  | (none) | (none)                  |
  */
 export type HookEvent =
   | "stop"
@@ -363,9 +364,9 @@ getUserHookEventName(event: HookEvent): string | null {
 | ------------------ | -------------- | ------------------ | -------------- | -------------- | --------- | ---------------------------------- |
 | `stop`             | `Stop`         | `Stop`             | `sessionEnd`   | `AfterAgent`   | `notify`  | `session.status idle`              |
 | `sessionStart`     | `SessionStart` | `SessionStart`     | `sessionStart` | `SessionStart` | (none)    | `session.created`                  |
-| `preToolUse`       | `PreToolUse`   | `PreToolUse` (?)   | (none)         | (none)         | (none)    | (unknown — no events observed yet) |
-| `postToolUse`      | `PostToolUse`  | `PostToolUse` (?)  | (none)         | (none)         | (none)    | (unknown — no events observed yet) |
-| `userPromptSubmit` | (none)         | `UserPromptSubmit` | (none)         | (none)         | (none)    | (none)                             |
+| `preToolUse`       | `PreToolUse`   | `PreToolUse`       | `preToolUse`   | `BeforeTool`   | (none)    | `tool.execute.before`              |
+| `postToolUse`      | `PostToolUse`  | `PostToolUse`      | `postToolUse`  | `AfterTool`    | (none)    | `tool.execute.after`               |
+| `userPromptSubmit` | `UserPromptSubmit` | `UserPromptSubmit` | `userPromptSubmitted` | `BeforeAgent` | (none) | (none)                        |
 
 ### Claude CLI
 
@@ -475,7 +476,7 @@ for (const cmd of USER_STOP_HOOKS) {
 }
 ```
 
-**Event coverage:** OpenCode's plugin system receives all events from the OpenCode process. The current plugin uses `session.created` and `session.status idle`. If OpenCode emits tool-related events (e.g., `tool.before`, `tool.after`), they would map to `preToolUse`/`postToolUse` — but these event names are unconfirmed. Until observed in the wild, `preToolUse` and `postToolUse` should be documented as unsupported for OpenCode.
+**Event coverage:** OpenCode's plugin system receives all events from the OpenCode process. The plugin handles `session.created`, `session.status idle`, `tool.execute.before`, and `tool.execute.after`. All four logical events (`stop`, `sessionStart`, `preToolUse`, `postToolUse`) are fully supported; `userPromptSubmit` has no OpenCode equivalent.
 
 **No conflict with existing OpenCode configuration:** OpenCode's MCP config (`.opencode/opencode.json`) is unaffected — it's a separate concern from the plugin. The plugin file at `.opencode/plugin/flightpath-completion-hook.js` is written and cleaned up entirely by FlightPath. No merge needed.
 

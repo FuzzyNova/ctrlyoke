@@ -24,6 +24,14 @@ export class OpenCodePluginGenerator {
       .filter((h) => h.event === "sessionStart")
       .map((h) => JSON.stringify(h.command));
 
+    const preToolCommands = (userHooks ?? [])
+      .filter((h) => h.event === "preToolUse")
+      .map((h) => JSON.stringify(h.command));
+
+    const postToolCommands = (userHooks ?? [])
+      .filter((h) => h.event === "postToolUse")
+      .map((h) => JSON.stringify(h.command));
+
     const userStopBlock =
       stopCommands.length > 0
         ? `
@@ -51,6 +59,30 @@ export class OpenCodePluginGenerator {
       } catch (e) {
         // User hook failure must not break completion detection
       }
+    }`
+        : "";
+
+    const preToolBlock =
+      preToolCommands.length > 0
+        ? `
+    const USER_PRE_TOOL_HOOKS = [${preToolCommands.join(", ")}];
+    const { execSync: execSyncPreTool } = require("child_process");
+    for (const cmd of USER_PRE_TOOL_HOOKS) {
+      try {
+        execSyncPreTool(cmd, { stdio: "inherit", cwd: workspaceRoot || process.cwd() });
+      } catch (e) {}
+    }`
+        : "";
+
+    const postToolBlock =
+      postToolCommands.length > 0
+        ? `
+    const USER_POST_TOOL_HOOKS = [${postToolCommands.join(", ")}];
+    const { execSync: execSyncPostTool } = require("child_process");
+    for (const cmd of USER_POST_TOOL_HOOKS) {
+      try {
+        execSyncPostTool(cmd, { stdio: "inherit", cwd: workspaceRoot || process.cwd() });
+      } catch (e) {}
     }`
         : "";
 
@@ -119,6 +151,10 @@ exports.FlightPathHook = function(hookContext) {
       _debugLog("Failed to write start notification", { error: String(err) });
     }
 ${userStartBlock}
+  } else if (event === "tool.execute.before") {
+${preToolBlock}
+  } else if (event === "tool.execute.after") {
+${postToolBlock}
   } else if (event === "session.deleted") {
     mainSessions.delete(data?.sessionId);
     _debugLog("Session deleted", { sessionId: data?.sessionId, mainSessionCount: mainSessions.size });
