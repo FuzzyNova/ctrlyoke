@@ -14,13 +14,15 @@ import { CodexNotificationMonitor } from "./CodexNotificationMonitor";
 import { CodexToolPermissionMapper } from "./CodexToolPermissionMapper";
 import { CodexLogParser } from "./CodexLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
+import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
+import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { CODEX_CLI_MODELS, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 import { parseArgString } from "../../../utils/CliArgParser";
-import type { PromptItem } from "../../../types/FlightPathTypes";
+import type { PromptItem, UserHookConfig } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 const execAsync = promisify(exec);
@@ -29,20 +31,20 @@ const execAsync = promisify(exec);
  * Codex CLI Harness
  *
  * Implements all Codex-specific logic using composition pattern:
- * - Log file monitoring and notify hook for completion detection
+ * - hooks.json monitoring and hooks system for completion detection
  * - JSONL output parsing with event-based streaming
  * - Mode-based permissions (no granular tool patterns)
  * - MCP server configuration with inline TOML format
  *
  * This provider aggregates four specialized components:
  * - CodexResponseParser: Parses JSONL output and statistics
- * - CodexNotificationMonitor: Monitors notify hook notifications
+ * - CodexNotificationMonitor: Monitors hook notifications
  * - CodexToolPermissionMapper: Converts permissions to CLI arguments
  * - CliMcpConfigGenerator: Generates MCP configuration (shared)
  *
  * Codex CLI-specific features:
  * - Uses JSONL output format (multiple {"type": "..."} events)
- * - Notify hook with TOML inline config: notify=['node','path']
+ * - Hook-based completion via --enable codex_hooks + .codex/hooks.json
  * - OpenAI token format in usage metadata
  * - Completion detection via {"type": "turn.completed"} events
  * - Supports --resume flag for session continuation
@@ -55,6 +57,17 @@ const execAsync = promisify(exec);
  * ```
  */
 export class CodexCliProvider implements ICliProvider {
+  /**
+   * Shared singleton tracker for parallel-safe hooks management in .codex/hooks.json.
+   * SettingsJsonMcpTracker("codex") is used solely as a mutex provider — Codex does
+   * not write MCP config to settings files, but we need a lock to serialize
+   * concurrent read-modify-write operations on hooks.json.
+   */
+  private static readonly hooksTracker =
+    SettingsJsonHooksTracker.getInstance("codex");
+  private static readonly lockProvider =
+    SettingsJsonMcpTracker.getInstance("codex");
+
   readonly config: HarnessConfig = {
     name: "codex",
     displayName: "Codex CLI",
@@ -62,7 +75,7 @@ export class CodexCliProvider implements ICliProvider {
     installHint: "Install via: npm install -g @openai/codex-cli",
     shouldStreamHeadlessOutput: true,
 
-    // Codex uses notify hook for reliable completion detection in interactive mode
+    // Codex uses hooks system for reliable completion detection in interactive mode
     usesInteractiveNotificationMonitor: true,
   };
 
@@ -83,7 +96,7 @@ export class CodexCliProvider implements ICliProvider {
    * - Workspace directories (--add-dir)
    * - Session management (resume subcommand with session ID)
    * - Tool permissions (sandbox mode, approval policy, --full-auto)
-   * - Notify hook settings (interactive mode only)
+   * - Hook settings (interactive mode only: --enable codex_hooks + .codex/hooks.json)
    *
    * @param prompt The prompt item with model/agent/session settings
    * @param isInteractive Whether this is interactive TUI or headless mode
@@ -211,28 +224,21 @@ export class CodexCliProvider implements ICliProvider {
       }
       // else: toolPermissions === null → none mode, skip permission flags entirely
     } else {
-      // Interactive mode: Configure notify hook for completion detection
+      // Interactive mode: enable hooks system and write .codex/hooks.json
+      args.push("--enable", "codex_hooks");
       if (workspaceRoot) {
-        const scriptPath = path.join(
+        const userHooks =
+          workflowContext?.resolvedProperties?.hooks ?? undefined;
+        const workflowKey = workflowContext?.workingFilePath ?? workspaceRoot;
+        await this.buildInteractiveHookSettings(
           extensionPath,
-          "out",
-          "scripts",
-          "flightpath-codex-notify.js"
+          workspaceRoot,
+          workflowKey,
+          userHooks
         );
-        const notifyDir =
-          this.notificationMonitor.getNotificationDirectory(workspaceRoot);
-
-        const hookConfig = this.notificationMonitor.buildHookConfig(
-          scriptPath,
-          notifyDir,
-          workspaceRoot
+        Log.debug(
+          `🔔 Configured SessionStart + Stop hooks for Codex completion detection`
         );
-
-        // Codex uses --config flag with TOML inline format
-        if (hookConfig.type === "toml-inline") {
-          args.push("--config", hookConfig.config);
-          Log.debug(`🔔 Configured notify hook for completion detection`);
-        }
       }
     }
 
@@ -260,6 +266,96 @@ export class CodexCliProvider implements ICliProvider {
     // handled by the execution methods (buildHeadlessArgs, etc.)
 
     return args;
+  }
+
+  /**
+   * Write FlightPath hooks into .codex/hooks.json for completion detection.
+   *
+   * Uses SettingsJsonHooksTracker for parallel-safe ref-counted hook management.
+   * Unlike Qwen/Gemini, Codex has no trusted_hooks.json — hooks run without
+   * any trust prompt when codex_hooks is enabled.
+   */
+  private async buildInteractiveHookSettings(
+    extensionPath: string,
+    workspaceRoot: string,
+    workflowKey: string,
+    userHooks?: UserHookConfig[]
+  ): Promise<void> {
+    const scriptPath = path.join(
+      extensionPath,
+      "out",
+      "scripts",
+      "flightpath-codex-notify.js"
+    );
+    const notifyDir =
+      this.notificationMonitor.getNotificationDirectory(workspaceRoot);
+
+    // Build hooks section via the notification monitor (single source of truth).
+    const hookConfig = this.notificationMonitor.buildHookConfig(
+      scriptPath,
+      notifyDir,
+      workspaceRoot
+    );
+    if (hookConfig.type !== "json") {
+      throw new Error("Unexpected hook config type for Codex CLI");
+    }
+
+    const flightpathHooksSection = (
+      hookConfig.config as Record<string, unknown>
+    )["hooks"] as Record<string, unknown[]>;
+
+    // Convert user hooks to Codex native format.
+    // Codex uses the matcher-based format: { matcher: "", hooks: [{...}] }
+    const codexEventMap: Record<string, string> = {
+      stop: "Stop",
+      sessionStart: "SessionStart",
+      preToolUse: "PreToolUse",
+      postToolUse: "PostToolUse",
+      userPromptSubmit: "UserPromptSubmit",
+    };
+
+    const workflowUserHooks: Record<string, unknown[]> = {};
+    if (userHooks) {
+      for (const uh of userHooks) {
+        const nativeEvent = codexEventMap[uh.event];
+        if (!nativeEvent) continue;
+        if (!workflowUserHooks[nativeEvent])
+          workflowUserHooks[nativeEvent] = [];
+        workflowUserHooks[nativeEvent].push({
+          matcher: "",
+          hooks: [{ type: "command", command: uh.command }],
+        });
+      }
+    }
+
+    // Register hooks via ref-counted tracker under lock
+    await CodexCliProvider.lockProvider.withLock(async () => {
+      await CodexCliProvider.hooksTracker.registerWorkflow(
+        workflowKey,
+        workspaceRoot,
+        flightpathHooksSection,
+        workflowUserHooks
+      );
+    });
+  }
+
+  /**
+   * Clean up .codex/hooks.json entries written by this workflow.
+   *
+   * Unregisters via ref-counted tracker — restores baseline only when
+   * the last active workflow unregisters.
+   */
+  async cleanupWorkspaceArtifacts(
+    workspaceRoot: string,
+    workingFilePath?: string
+  ): Promise<void> {
+    const hookKey = workingFilePath ?? workspaceRoot;
+    await CodexCliProvider.lockProvider.withLock(async () => {
+      await CodexCliProvider.hooksTracker.unregisterWorkflow(
+        hookKey,
+        workspaceRoot
+      );
+    });
   }
 
   /**
@@ -316,10 +412,8 @@ export class CodexCliProvider implements ICliProvider {
    * @returns Complete command string
    */
   buildInteractiveTuiCommand(baseArgs: string[], promptText: string): string {
-    // Quote arguments that contain special characters (brackets, quotes, etc.)
+    // Quote arguments that contain special characters (brackets, spaces, or quotes)
     const quotedArgs = baseArgs.map((arg) => {
-      // If arg contains special chars like brackets, spaces, or quotes, wrap in double quotes
-      // But escape any internal double quotes first
       if (/[\[\]\s"]/.test(arg)) {
         return `"${arg.replace(/"/g, '\\"')}"`;
       }

@@ -71,13 +71,13 @@ export interface McpServerConfig {
 /**
  * Logical hook event names — mapped to CLI-specific event names at inject time.
  *
- * | Logical name      | Claude/Qwen      | Copilot CLI  | Gemini CLI   | Codex  | OpenCode                |
- * |-------------------|------------------|--------------|--------------|--------|-------------------------|
- * | "stop"            | Stop             | sessionEnd   | AfterAgent   | notify | session.status idle     |
- * | "sessionStart"    | SessionStart     | sessionStart | SessionStart | (none) | session.created         |
- * | "preToolUse"      | PreToolUse       | (none)       | (none)       | (none) | (unknown)               |
- * | "postToolUse"     | PostToolUse      | (none)       | (none)       | (none) | (unknown)               |
- * | "userPromptSubmit"| UserPromptSubmit | (none)       | (none)       | (none) | (none)                  |
+ * | Logical name      | Claude/Qwen      | Copilot CLI        | Gemini CLI   | Codex  | OpenCode                |
+ * |-------------------|------------------|--------------------|--------------|--------|-------------------------|
+ * | "stop"            | Stop             | sessionEnd         | AfterAgent   | notify | session.status idle      |
+ * | "sessionStart"    | SessionStart     | sessionStart       | SessionStart | (none) | session.created          |
+ * | "preToolUse"      | PreToolUse       | preToolUse         | BeforeTool   | (none) | tool.execute.before      |
+ * | "postToolUse"     | PostToolUse      | postToolUse        | AfterTool    | (none) | tool.execute.after       |
+ * | "userPromptSubmit"| UserPromptSubmit | userPromptSubmitted| BeforeAgent  | (none) | (none)                   |
  */
 export type HookEvent =
   | "stop"

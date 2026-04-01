@@ -24,6 +24,37 @@ export class CopilotNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
 {
+  /** Logical → Copilot native event name mapping. Shared with CopilotChatIntegration. */
+  static readonly EVENT_MAP: Record<string, string> = {
+    stop: "sessionEnd",
+    sessionStart: "sessionStart",
+    preToolUse: "preToolUse",
+    postToolUse: "postToolUse",
+    userPromptSubmit: "userPromptSubmitted",
+  };
+
+  /**
+   * Build a user-hooks-only Copilot hook config object (no FlightPath notification entries).
+   * Used by CopilotChatIntegration, which has its own completion detection mechanism.
+   */
+  static buildUserOnlyConfig(
+    userHooks: UserHookConfig[]
+  ): Record<string, unknown> {
+    const hooks: Record<string, unknown[]> = {};
+    for (const uh of userHooks) {
+      const nativeEvent = CopilotNotificationMonitor.EVENT_MAP[uh.event];
+      if (!nativeEvent) continue;
+      if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
+      hooks[nativeEvent].push({
+        type: "command",
+        bash: uh.command,
+        powershell: uh.command,
+        timeoutSec: uh.timeoutSec ?? 10,
+      });
+    }
+    return { version: 1, hooks };
+  }
+
   /**
    * Build Copilot hook configuration
    *
@@ -58,10 +89,7 @@ export class CopilotNotificationMonitor
     const psNotifyDir = normalizedNotifyDir.replace(/\\/g, "\\\\");
 
     // Map logical event names to Copilot's native event names
-    const eventMap: Record<string, string> = {
-      stop: "sessionEnd",
-      sessionStart: "sessionStart",
-    };
+    const eventMap = CopilotNotificationMonitor.EVENT_MAP;
 
     // Start with FlightPath's entries
     const hooks: Record<string, unknown[]> = {

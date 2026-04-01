@@ -27,6 +27,7 @@ module.exports = {
         "sidebar-bg": "var(--vscode-sideBar-background)",
         "sidebar-drop-bg": "var(--vscode-sideBar-dropBackground)",
         "focus-border": "var(--vscode-focusBorder)",
+        "focus-highlight": "var(--vscode-list-focusHighlightForeground, #2aaaff)",
         "widget-border": "var(--vscode-widget-border)",
 
         // Buttons

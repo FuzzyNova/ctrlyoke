@@ -28,11 +28,20 @@ export class SettingsJsonHooksTracker {
   >();
 
   private readonly toolName: string;
-  private readonly settingsFileName: string;
+  /** Subdirectory under workspace root (e.g. ".qwen", ".gemini", ".codex") */
+  private readonly settingsDir: string;
+  /** Filename within settingsDir (e.g. "settings.json" or "hooks.json") */
+  private readonly settingsFile: string;
 
   private constructor(toolName: string) {
     this.toolName = toolName;
-    this.settingsFileName = toolName === "qwen" ? ".qwen" : ".gemini";
+    if (toolName === "codex") {
+      this.settingsDir = ".codex";
+      this.settingsFile = "hooks.json";
+    } else {
+      this.settingsDir = `.${toolName}`;
+      this.settingsFile = "settings.json";
+    }
   }
 
   static getInstance(toolName: string): SettingsJsonHooksTracker {
@@ -61,8 +70,8 @@ export class SettingsJsonHooksTracker {
   ): Promise<void> {
     const settingsPath = path.join(
       workspaceRoot,
-      this.settingsFileName,
-      "settings.json"
+      this.settingsDir,
+      this.settingsFile
     );
 
     // First registration captures the baseline
@@ -96,8 +105,8 @@ export class SettingsJsonHooksTracker {
 
     const settingsPath = path.join(
       workspaceRoot,
-      this.settingsFileName,
-      "settings.json"
+      this.settingsDir,
+      this.settingsFile
     );
 
     if (this.workflowHooks.size === 0) {
@@ -186,7 +195,7 @@ export class SettingsJsonHooksTracker {
 
     settings.hooks = mergedHooks;
 
-    await fs.mkdir(path.join(workspaceRoot, this.settingsFileName), {
+    await fs.mkdir(path.join(workspaceRoot, this.settingsDir), {
       recursive: true,
     });
     await fs.writeFile(

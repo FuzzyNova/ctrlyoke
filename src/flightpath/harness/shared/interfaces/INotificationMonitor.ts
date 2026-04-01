@@ -40,9 +40,8 @@ export interface NotificationResult {
  * - Codex: TOML inline string
  */
 export type HookConfig =
-  | { type: "json"; config: object } // Copilot: JSON object
+  | { type: "json"; config: object } // Copilot/Qwen/Gemini/Codex: JSON object
   | { type: "json-string"; config: string } // Claude: JSON string
-  | { type: "toml-inline"; config: string } // Codex: TOML inline
   | { type: "none" }; // No hook support
 
 /**

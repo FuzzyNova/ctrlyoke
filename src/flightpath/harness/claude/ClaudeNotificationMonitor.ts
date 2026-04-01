@@ -61,6 +61,7 @@ export class ClaudeNotificationMonitor
       sessionStart: "SessionStart",
       preToolUse: "PreToolUse",
       postToolUse: "PostToolUse",
+      userPromptSubmit: "UserPromptSubmit",
     };
 
     // Build hooks object starting with FlightPath's entries

@@ -35,20 +35,44 @@ export class GeminiNotificationMonitor
     scriptPath: string,
     notifyDir: string,
     _workspaceRoot: string,
-    _userHooks?: UserHookConfig[]
+    userHooks?: UserHookConfig[]
   ): HookConfig {
     const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
     const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
     const command = `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`;
 
+    const flightpathEntry = { hooks: [{ type: "command", command }] };
+
+    // Map logical event names to Gemini's native event names
+    const eventMap: Record<string, string> = {
+      stop: "AfterAgent",
+      sessionStart: "SessionStart",
+      preToolUse: "BeforeTool",
+      postToolUse: "AfterTool",
+      userPromptSubmit: "BeforeAgent",
+    };
+
+    // Build hooks object starting with FlightPath's entries
+    const hooks: Record<string, unknown[]> = {
+      SessionStart: [flightpathEntry],
+      AfterAgent: [flightpathEntry],
+    };
+
+    // Append user hooks to their respective events
+    if (userHooks) {
+      for (const uh of userHooks) {
+        const nativeEvent = eventMap[uh.event];
+        if (!nativeEvent) continue; // Skip unsupported events
+        if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
+        hooks[nativeEvent].push({
+          hooks: [{ type: "command", command: uh.command }],
+        });
+      }
+    }
+
     return {
       type: "json",
-      config: {
-        hooks: {
-          SessionStart: [{ hooks: [{ type: "command", command }] }],
-          AfterAgent: [{ hooks: [{ type: "command", command }] }],
-        },
-      },
+      config: { hooks },
     };
   }
 
