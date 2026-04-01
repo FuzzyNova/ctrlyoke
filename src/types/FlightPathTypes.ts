@@ -239,6 +239,35 @@ export interface WorkingFileRuntime {
 }
 
 /**
+ * Runtime execution fields owned by WorkflowStateMachine.
+ * PromptQueue projects these onto QueueState for consumers.
+ */
+export interface WorkflowRuntimeState {
+  status: ExecutionState;
+  stopped: boolean;
+  startTime?: number;
+  pausedTime?: number;
+  totalPausedDuration: number;
+}
+
+export type WorkflowRuntimeCommand =
+  | "startExecution"
+  | "pause"
+  | "resume"
+  | "requestStop"
+  | "confirmStopped"
+  | "complete"
+  | "fail"
+  | "reopenForContinuation";
+
+export interface WorkflowRuntimeTransition {
+  command: WorkflowRuntimeCommand;
+  previous: WorkflowRuntimeState;
+  current: WorkflowRuntimeState;
+  timestampMs: number;
+}
+
+/**
  * Working file format - same schema as PromptFile with optional runtime metadata
  * Stored in .flightpath/.queue/ directory
  */
@@ -309,19 +338,14 @@ export interface EndCondition {
   resumeSessionOnRetry?: boolean; // Resume the same session for retries (default: true). Set false to start a fresh session for each retry.
 }
 
-export interface QueueState {
+export interface QueueState extends WorkflowRuntimeState {
   currentIndex: number;
-  status: ExecutionState; // Use type from DashboardConstants
   prompts: PromptItem[];
   results: PromptResult[];
-  stopped: boolean; // True if stop() was called, reset on new execution
   completedIndices: Set<string>; // Fast-lookup cache of completed prompt indices (as strings: "0", "1", ...)
   totalExecutionTime: number; // Milliseconds of active execution time (pause-aware)
   queueExtensions: number; // How many times queue was extended
   lastReloadTime?: number; // Timestamp of last reload
-  startTime?: number; // When execution started (for time tracking)
-  pausedTime?: number; // When queue was paused (for pause duration calculation)
-  totalPausedDuration: number; // Total time spent paused (milliseconds)
   workingFilePath?: string; // Path to working file (source of truth)
   workflowName?: string; // Custom workflow name (from working file)
 }

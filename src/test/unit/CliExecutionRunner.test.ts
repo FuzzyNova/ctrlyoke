@@ -1,0 +1,209 @@
+import * as assert from "assert";
+import { suite, test } from "mocha";
+import { CliExecutionSession } from "../../flightpath/harness/shared/CliExecutionSession";
+import { CliExecutionRunner } from "../../flightpath/harness/shared/CliExecutionRunner";
+import { CliFailureTracker } from "../../flightpath/harness/shared/CliFailureTracker";
+import { CliInteractiveStartupCoordinator } from "../../flightpath/harness/shared/CliInteractiveStartupCoordinator";
+import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
+
+function createLogger() {
+  return {
+    debug(_message: string): void {},
+    info(_message: string): void {},
+    warn(_message: string): void {},
+    error(_message: string, _error?: unknown): void {},
+  };
+}
+
+function createProvider(options?: {
+  supportsSessionStart?: boolean;
+  waitForSessionStart?: (
+    onCancel?: () => boolean
+  ) => Promise<{ completed: boolean; error?: string; data?: unknown }>;
+  discoverSessionLog?: () => Promise<string | null>;
+}): ICliProvider {
+  return {
+    config: {
+      name: "test",
+      displayName: "Test CLI",
+      terminalName: "Test",
+      installHint: "",
+      shouldStreamHeadlessOutput: false,
+    },
+    responseParser: {
+      parse: () => ({ events: [], metadata: {} }),
+      parseTokenCounts: () => undefined,
+    },
+    notificationMonitor: {
+      supportsSessionIdInFilename: true,
+      supportsSessionStart: options?.supportsSessionStart ?? true,
+      monitorForCompletion: async () => ({ completed: false }),
+      buildHookConfig: () => ({ type: "none" as const }),
+      getNotificationDirectory: () => process.cwd(),
+      waitForSessionStart: async (
+        _config: unknown,
+        _startTime: Date,
+        _runId?: string,
+        onCancel?: () => boolean
+      ) => {
+        if (options?.waitForSessionStart) {
+          return options.waitForSessionStart(onCancel);
+        }
+
+        return {
+          completed: false,
+          error: onCancel?.() ? "cancelled" : "pending",
+        };
+      },
+    },
+    toolPermissionMapper: {
+      hasFullPermissions: () => true,
+    },
+    logParser: {
+      extractResponse: () => ({ events: [], metadata: {} }),
+      isComplete: () => false,
+      watchLogFile: () => ({ close() {} }) as never,
+      readNewLines: async () => [],
+      discoverSessionLog: async () => {
+        if (options?.discoverSessionLog) {
+          return options.discoverSessionLog();
+        }
+        return null;
+      },
+      extractSessionId: () => null,
+      extractStructuredEventsFromEvent: () => [],
+      extractContentFromEvent: () => undefined,
+      formatStatistics: () => "",
+      getFinalEventsOnCompletion: async () => [],
+    },
+    buildCliArgs: async () => [],
+    buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
+      ...baseArgs,
+      prompt,
+    ],
+    buildInteractiveTuiCommand: () => "test-cli",
+    checkAvailability: async () => true,
+  } as unknown as ICliProvider;
+}
+
+function createRunner(options?: {
+  supportsSessionStart?: boolean;
+  waitForSessionStart?: (
+    onCancel?: () => boolean
+  ) => Promise<{ completed: boolean; error?: string; data?: unknown }>;
+  discoverSessionLog?: () => Promise<string | null>;
+}) {
+  const failureTracker = new CliFailureTracker();
+  let failureReason: string | undefined;
+  const provider = createProvider(options);
+
+  const runner = new CliExecutionRunner({
+    provider,
+    transportCoordinator: {
+      executeStandaloneInteractiveProcess: async () => ({ success: true }),
+      startInteractiveProcess: async () => {
+        failureTracker.capturePtyExit(0, []);
+      },
+      executeHeadless: async () => true,
+    },
+    failureTracker,
+    createInteractiveStartupCoordinator: () =>
+      new CliInteractiveStartupCoordinator({
+        logParser: provider.logParser!,
+        notificationMonitor: provider.notificationMonitor,
+        getWorkspaceRoot: () => process.cwd(),
+        getAbortState: () => failureTracker.getInteractiveAbortState(false),
+        markProcessExitDuringStage: (stage: string, exitCode: number) =>
+          failureTracker.markProcessExitDuringStage(stage, exitCode),
+        setFailureReason: (reason: string) => {
+          failureReason = reason;
+        },
+        logger: createLogger(),
+      }),
+    createResponseCollector: () => ({
+      collectHeadlessResponse: async () => ({
+        success: true,
+        parsedOutput: { events: [], metadata: {} },
+        cliResult: {
+          success: true,
+          response: "",
+          statistics: "",
+        },
+      }),
+    }),
+    cleanupTempFiles: async () => {},
+    getWorkspaceRoot: () => process.cwd(),
+    getExtensionPath: () => process.cwd(),
+    isVsCodeContext: () => true,
+    isCancelling: () => false,
+    onStreamingEvents: () => {},
+    onResponseComplete: () => {},
+    logResponse: () => {},
+    setFailureReason: (reason: string) => {
+      failureReason = reason;
+    },
+    logger: createLogger(),
+  });
+
+  return {
+    runner,
+    failureTracker,
+    getFailureReason: () => failureReason,
+  };
+}
+
+suite("CliExecutionRunner", () => {
+  test("should flag PTY exit while waiting for SessionStart", async () => {
+    let cancelObserved = false;
+    const { runner, failureTracker, getFailureReason } = createRunner({
+      waitForSessionStart: async (onCancel) => {
+        cancelObserved = onCancel?.() ?? false;
+        return {
+          completed: false,
+          error: cancelObserved ? "cancelled" : "still waiting",
+        };
+      },
+    });
+
+    const success = await runner.executeInteractive(
+      new CliExecutionSession({ prompt: { prompt: "just say hi" } }),
+      []
+    );
+
+    assert.strictEqual(success, false);
+    assert.strictEqual(cancelObserved, true);
+    assert.strictEqual(failureTracker.wasLastFailureProcessExit(), true);
+    const failureReason = getFailureReason();
+    assert.ok(failureReason);
+    assert.match(failureReason, /waiting for SessionStart hook/iu);
+  });
+
+  test("should stop early when PTY exits during session log discovery", async function () {
+    this.timeout(5_000);
+
+    const { runner, failureTracker, getFailureReason } = createRunner({
+      supportsSessionStart: false,
+      discoverSessionLog: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        return null;
+      },
+    });
+
+    const startedAt = Date.now();
+    const success = await runner.executeInteractive(
+      new CliExecutionSession({ prompt: { prompt: "just say hi" } }),
+      []
+    );
+    const elapsedMs = Date.now() - startedAt;
+
+    assert.strictEqual(success, false);
+    assert.ok(
+      elapsedMs < 300,
+      `expected discovery to abort quickly after PTY exit, but it took ${elapsedMs}ms`
+    );
+    assert.strictEqual(failureTracker.wasLastFailureProcessExit(), true);
+    const failureReason = getFailureReason();
+    assert.ok(failureReason);
+    assert.match(failureReason, /discovering the session log/iu);
+  });
+});

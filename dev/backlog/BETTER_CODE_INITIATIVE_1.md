@@ -1,7 +1,7 @@
 # Better Code Initiative 1
 
 **Date:** March 31, 2026  
-**Status:** Backlog  
+**Status:** In Progress - Phase 2 partially implemented; Phase 1 still pending  
 **Scope:** Post-bugfix architectural cleanup  
 **Intent:** Reduce responsibility sprawl, make workflow state transitions authoritative, and replace split output persistence with a canonical append-only timeline.
 
@@ -32,6 +32,85 @@ The core recommendation is:
 This is not one giant PR. It should be delivered in phases, with compatibility
 shortcuts explicitly allowed because FlightPath is still pre-release and local
 history can be wiped.
+
+---
+
+## Current Branch Status
+
+### What Has Been Accomplished
+
+Phase 2 has started and is now materially underway.
+
+- `WorkflowStateMachine` is no longer just a timer-field wrapper. It now owns
+  validated run-level transitions, runtime snapshot/restore, continuation
+  reopening, and pause-aware execution-time calculation.
+- `WorkflowInstance` now creates the runtime owner and shares it with
+  `PromptQueue`, so runtime state is no longer hidden inside the queue.
+- `WorkflowExecutor` now routes run start, stop, error, completion,
+  end-condition failure, and limit-triggered failure transitions through the
+  runtime owner instead of treating `PromptQueue` as the lifecycle truth.
+- `WorkflowInstance` now routes pause/resume/stop and early execution failures
+  through the same runtime owner.
+- `PromptQueue` has been partially demoted toward queue topology and
+  persistence. It now exposes `commitRuntimeTransition()`,
+  `markCurrentPromptCancelled()`, `advanceCancelledPromptAfterStop()`, and
+  `failCurrentPromptIfInProgress()` as queue-topology/persistence helpers around
+  the shared runtime owner.
+- `WorkflowRuntimeState` was added so `QueueState` can project runtime fields
+  from the shared runtime owner instead of duplicating them as independent
+  lifecycle truth.
+- Phase 1 is now underway as well. `CliExecutionSession` owns per-attempt
+  mutable state, `CliExecutionRunner` owns interactive/headless execution
+  orchestration, and the old private-method tests were moved to the new seam.
+- Focused lifecycle coverage was strengthened: a dedicated
+  `WorkflowStateMachine` test file was added, affected queue/instance tests were
+  updated, focused lifecycle tests passed, and `npm run compile` passed.
+
+### What Is Still Incomplete In Phase 2
+
+The plan does **not** need a redesign right now, but Phase 2 is still only
+partially complete.
+
+- `PromptQueue` still contains compatibility lifecycle methods such as
+  `start()`, `pause()`, `resume()`, `stop()`, `confirmedStopped()`,
+  `markCompleted()`, and `markErrored()`. They are thinner now, but the class
+  is still acting as a lifecycle facade instead of being queue-topology-only.
+- Runtime-driven side effects are still coupled to queue-state projection.
+  `WorkflowInstance.onQueueStateChanged()` still derives dashboard and
+  auto-start behavior from `QueueState.status` rather than consuming explicit
+  runtime transition notifications.
+- The current `WorkflowStateMachine` owns run-level status transitions, but it
+  does **not** yet model the fuller attempt-oriented command surface described
+  later in this document (`beginAttempt`, `completeAttempt`, `failAttempt`,
+  etc.).
+- Transition side effects are still coordinated through
+  `PromptQueue.commitRuntimeTransition()` rather than through a more explicit
+  runtime observer/store layer.
+- Phase 0 is only partially complete. The interactive-startup and log-discovery
+  regression coverage called out below is still missing.
+- Phase 1 is no longer blocked, but it is still incomplete. `CliIntegration`
+  remains the public facade and still owns prompt/session setup, runtime
+  persistence handoff, and helper-factory glue.
+
+### Handoff Guidance For The Next Agent
+
+The practical order on this branch is now different from the ideal greenfield
+order.
+
+1. Finish Phase 2 first. The runtime-ownership refactor is far enough along
+   that leaving it half-migrated would be worse than continuing it.
+2. Keep the remaining Phase 2 scope narrow.
+3. Move the last lifecycle authority out of `PromptQueue` and leave it with
+   queue topology plus persistence only.
+4. Move runtime-driven side effects out of queue-state polling in
+   `WorkflowInstance` and make them respond to one authoritative runtime owner.
+5. Decide whether to extend the current `WorkflowStateMachine` into the fuller
+   attempt-aware API from this plan, or introduce a small companion runtime
+   store around it. Do not let attempt transitions stay scattered.
+6. Continue the remaining Phase 1 decomposition from the new
+   `CliExecutionSession` and `CliExecutionRunner` seams once Phase 2 cleanup is
+   no longer the limiting factor.
+7. Do not start Phase 3 timeline work until Phase 2 is clean.
 
 ---
 
@@ -176,6 +255,7 @@ its internal logic moves into focused classes with narrow contracts.
 | `CliIntegration`                   | Thin facade that wires provider + runtime services and exposes `sendPrompt()`  |
 | `CliPromptPreparer`                | Build prompt payloads, temp files, split prompt files, reference instructions  |
 | `CliExecutionSession`              | Per-attempt runtime container for one prompt execution                         |
+| `CliExecutionRunner`               | Coordinate one interactive/headless attempt using transport, startup, and logs |
 | `CliTransportCoordinator`          | Start headless/interactive execution via `CliProcessManager` / PTY             |
 | `CliInteractiveStartupCoordinator` | Wait for SessionStart, monitor startup aborts, coordinate log discovery        |
 | `CliResponseCollector`             | Accumulate streaming text, structured output, session metadata, final response |
@@ -463,6 +543,8 @@ than polluting the runtime and webview paths forever.
 
 ## Phase 0: Lock Down Behavior With Tests
 
+**Status as of March 31, 2026:** Partial
+
 Before deeper refactors, strengthen tests around the bug-prone seams.
 
 ### Add or expand coverage for
@@ -479,9 +561,16 @@ Before deeper refactors, strengthen tests around the bug-prone seams.
 A behavior baseline that lets us refactor aggressively without reintroducing the
 same bug class.
 
+**Progress note:** Focused runtime/lifecycle coverage was improved as part of
+the current Phase 2 work, and interactive-startup/log-discovery abort coverage
+now exists around `CliExecutionRunner`. Broader ordering-specific regression
+coverage from this phase is still incomplete.
+
 ---
 
 ## Phase 1: Decompose `CliIntegration`
+
+**Status as of April 1, 2026:** In progress
 
 ### Deliverables
 
@@ -496,9 +585,16 @@ same bug class.
 No history schema change yet. Keep behavior stable while splitting class
 responsibilities.
 
+**Progress note:** `CliExecutionSession` and `CliExecutionRunner` are now in
+place, so `CliIntegration` no longer owns per-attempt mutable state or the full
+interactive/headless execution path. The remaining work is to keep trimming the
+facade without changing behavior.
+
 ---
 
 ## Phase 2: Introduce Authoritative Runtime State Machine
+
+**Status as of March 31, 2026:** In progress
 
 ### Deliverables
 
@@ -512,9 +608,17 @@ responsibilities.
 Do this before the event-timeline rewrite so the new timeline records clean,
 authoritative transitions rather than legacy mixed ownership.
 
+**Progress note:** This phase has started successfully. The shared
+`WorkflowStateMachine` now exists and is being used by `WorkflowInstance`,
+`PromptQueue`, and `WorkflowExecutor`. What remains is finishing the demotion of
+`PromptQueue`, removing queue-state-derived lifecycle authority from
+`WorkflowInstance`, and deciding how attempt-level transitions should be owned.
+
 ---
 
 ## Phase 3: Add Append-Only Timeline Recorder
+
+**Status as of March 31, 2026:** Not started
 
 ### Deliverables
 
@@ -532,6 +636,8 @@ to timeline-derived projections.
 
 ## Phase 4: Move UI and History Replay to Timeline Projections
 
+**Status as of March 31, 2026:** Not started
+
 ### Deliverables
 
 - webview selector/projection helpers that consume timeline events
@@ -547,6 +653,8 @@ serve both.
 ---
 
 ## Phase 5: Delete Legacy Structures
+
+**Status as of March 31, 2026:** Not started
 
 ### Remove or demote
 
@@ -628,12 +736,18 @@ Prefer extraction and adapters before renaming public concepts.
 
 ## Recommendation
 
-Build this in the following order:
+The original architectural recommendation still makes sense in principle, but
+the current branch already has meaningful Phase 2 work landed.
 
-1. Split `CliIntegration` without behavior changes.
-2. Centralize workflow lifecycle state ownership.
+If this initiative were being started from zero, the cleaner order would still
+be Phase 1 before Phase 2.
+
+Given the branch state today, the practical continuation order is:
+
+1. Finish Phase 2 from the current partial state.
+2. Return to Phase 1 and do the proper `CliIntegration` decomposition.
 3. Introduce canonical append-only timeline persistence.
 4. Migrate UI projections and markdown export.
 5. Delete legacy split persistence and ordering code.
 
-That sequence gives the best balance of safety, clarity, and long-term payoff.
+That is the lowest-risk path from the code that exists now.

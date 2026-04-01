@@ -224,6 +224,76 @@ suite("WorkflowInstance finalPrompt replay", () => {
   });
 });
 
+suite("WorkflowInstance runtime transitions", () => {
+  test("drives execution-state updates and cancelled-step status from runtime transitions", async () => {
+    const platform = new MockPlatform();
+
+    const executionStates: string[] = [];
+    const stepStatuses: Array<{ stepIndex: number; state: string }> = [];
+
+    const dashboardSink: any = {
+      updateFileSelected: async () => {},
+      updateSessionRestored: async () => {},
+      updateExecutionStarted: () => {},
+      notifyRunHistoryUpdated: () => {},
+      updateProgress: () => {},
+      updateExecutionState: (state: string) => {
+        executionStates.push(state);
+      },
+      updateStepStatus: (stepIndex: number, details: { state: string }) => {
+        stepStatuses.push({ stepIndex, state: details.state });
+      },
+      updateRetryAttempt: () => {},
+      updateCliOutput: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: () => {},
+      updatePromptsExtended: () => {},
+      updatePromptDeleted: () => {},
+      updateFinalPrompt: () => {},
+      updateFinalPromptStatus: () => {},
+      updateFinalPromptOutput: () => {},
+      updateFinalPromptStreamingChunk: () => {},
+      updateFinalPromptStreamingEvents: () => {},
+      updateStatusMessage: () => {},
+      notifyWorkflowStateReset: () => {},
+      notifyStartPositionSet: () => {},
+      notifyPromptsReordered: () => {},
+    };
+
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    instance.setActive(true);
+    instance.promptQueue.loadPrompts({
+      prompts: [{ prompt: "queue-1" }],
+    });
+
+    const runtime = instance.promptQueue.getRuntimeStateMachine();
+    assert.strictEqual(runtime.startExecution(), true);
+    await instance.promptQueue.commitRuntimeTransition({ persist: false });
+
+    await instance.promptQueue.markCurrentAsSent();
+    instance.promptQueue.markCurrentPromptCancelled();
+    assert.strictEqual(runtime.requestStop(), true);
+    await instance.promptQueue.commitRuntimeTransition({ persist: false });
+
+    assert.deepStrictEqual(executionStates, [
+      EXECUTION_STATES.RUNNING,
+      EXECUTION_STATES.CANCELLING,
+    ]);
+    assert.deepStrictEqual(stepStatuses, [
+      { stepIndex: 0, state: STEP_STATUS.CANCELLED },
+    ]);
+  });
+});
+
 suite("WorkflowInstance eager working file creation", () => {
   test("deduplicates concurrent ensureEphemeralWorkingFile calls", async () => {
     const platform = new MockPlatform();
@@ -336,7 +406,7 @@ suite("WorkflowInstance append-and-continue", () => {
     instance.promptQueue.loadPrompts({
       prompts: [{ prompt: "first prompt" }],
     });
-    (instance.promptQueue as any).state.status = EXECUTION_STATES.COMPLETED;
+    await instance.promptQueue.markCompleted();
     (instance.promptQueue as any).state.results[0].status =
       STEP_STATUS.COMPLETED;
 
@@ -403,7 +473,7 @@ suite("WorkflowInstance append-and-continue", () => {
     instance.promptQueue.loadPrompts({
       prompts: [{ prompt: "completed prompt" }, { prompt: "appended prompt" }],
     });
-    (instance.promptQueue as any).state.status = EXECUTION_STATES.COMPLETED;
+    await instance.promptQueue.markCompleted();
     (instance.promptQueue as any).state.results[0].status =
       STEP_STATUS.COMPLETED;
     (instance.promptQueue as any).state.results[1].status = STEP_STATUS.PENDING;

@@ -84,18 +84,13 @@ export class PromptQueue {
   private onStateChanged = new TypedEmitter<QueueState>();
   private currentRetryCount: number = 0; // Track retry attempts for current prompt
   private readonly workingFileManager: WorkingFileManager;
-
-  /**
-   * Authoritative owner of execution status transitions.
-   * All status mutations go through this object; this.state fields are kept
-   * in sync via syncFromStateMachine() / syncToStateMachine().
-   */
-  private readonly stateMachine = new WorkflowStateMachine();
+  private readonly stateMachine: WorkflowStateMachine;
 
   // Public event for state changes
   public readonly onDidChangeState = this.onStateChanged.event;
 
-  constructor() {
+  constructor(stateMachine: WorkflowStateMachine = new WorkflowStateMachine()) {
+    this.stateMachine = stateMachine;
     this.state = {
       currentIndex: 0,
       status: EXECUTION_STATES.IDLE,
@@ -113,7 +108,7 @@ export class PromptQueue {
       getWorkingFilePath: () => this.state.workingFilePath,
       getPrompts: () => this.state.prompts,
       getCurrentIndex: () => this.state.currentIndex,
-      getStatus: () => this.state.status,
+      getStatus: () => this.stateMachine.status,
       getWorkflowName: () => this.state.workflowName,
       mergeDiskPrompts: (diskPrompts: PromptItem[]) =>
         this.mergeDiskPrompts(diskPrompts),
@@ -179,6 +174,100 @@ export class PromptQueue {
 
     this.emitStateChange();
     Log.info("Queue cleared - ready for new workflow");
+  }
+
+  public getRuntimeStateMachine(): WorkflowStateMachine {
+    return this.stateMachine;
+  }
+
+  public async commitRuntimeTransition(
+    options: {
+      persist?: boolean;
+      emitStateChange?: boolean;
+      skipMerge?: boolean;
+    } = {}
+  ): Promise<void> {
+    const {
+      persist = true,
+      emitStateChange = true,
+      skipMerge = false,
+    } = options;
+
+    this.syncFromStateMachine();
+
+    if (emitStateChange) {
+      this.emitStateChange();
+    }
+
+    if (persist) {
+      await this.updateWorkingFile(skipMerge);
+    }
+  }
+
+  public markCurrentPromptCancelled(): void {
+    const currentIndex = this.state.currentIndex;
+    this.state.results.forEach((result, index) => {
+      if (
+        result.status === STEP_STATUS.SENT ||
+        (result.status === STEP_STATUS.PENDING && index === currentIndex)
+      ) {
+        result.status = STEP_STATUS.CANCELLED;
+      }
+    });
+  }
+
+  public advanceCancelledPromptAfterStop(): boolean {
+    const index = this.state.currentIndex;
+    const prompt = this.state.prompts[index];
+
+    if (!prompt) {
+      return false;
+    }
+
+    const now = Date.now();
+    prompt._runtime = {
+      startedAt: prompt._runtime?.startedAt ?? now,
+      ...prompt._runtime,
+      completedAt: now,
+      terminalStatus: "cancelled",
+    };
+    this.state.completedIndices.add(String(index));
+    this.state.currentIndex++;
+
+    return true;
+  }
+
+  public failCurrentPromptIfInProgress(): boolean {
+    if (!this.hasNext()) {
+      return false;
+    }
+
+    const index = this.state.currentIndex;
+    const currentResult = this.state.results[index];
+    if (
+      currentResult?.status !== STEP_STATUS.SENT &&
+      currentResult?.status !== STEP_STATUS.RUNNING
+    ) {
+      return false;
+    }
+
+    currentResult.status = STEP_STATUS.FAILED;
+    currentResult.timestamp = new Date();
+
+    const prompt = this.state.prompts[index];
+    if (prompt) {
+      const now = Date.now();
+      prompt._runtime = {
+        startedAt: prompt._runtime?.startedAt ?? now,
+        ...prompt._runtime,
+        completedAt: now,
+        terminalStatus: "failed",
+      };
+    }
+    this.state.completedIndices.add(String(index));
+    this.state.currentIndex++;
+
+    return true;
   }
 
   /**
@@ -389,7 +478,7 @@ export class PromptQueue {
    * triggers WorkflowOrchestrator.onQueueStateChanged() which starts actual execution.
    */
   async start(): Promise<void> {
-    if (this.state.status === EXECUTION_STATES.RUNNING) {
+    if (this.stateMachine.status === EXECUTION_STATES.RUNNING) {
       Log.debug("Queue is already running");
       return;
     }
@@ -399,31 +488,25 @@ export class PromptQueue {
       return;
     }
 
-    this.stateMachine.startExecution();
-    this.syncFromStateMachine();
-    this.emitStateChange();
+    if (!this.stateMachine.startExecution()) {
+      return;
+    }
+
+    await this.commitRuntimeTransition();
 
     Log.debug("Queue state set to running");
-
-    // Update working file to persist RUNNING state to disk
-    await this.updateWorkingFile();
   }
 
   /**
    * Pause queue execution
    */
   async pause(): Promise<void> {
-    if (this.state.status !== EXECUTION_STATES.RUNNING) {
+    if (!this.stateMachine.pause()) {
       return;
     }
 
-    this.stateMachine.pause();
-    this.syncFromStateMachine();
-    this.emitStateChange();
+    await this.commitRuntimeTransition();
     Log.info("Queue execution paused");
-
-    // Update working file to persist PAUSED state to disk
-    await this.updateWorkingFile();
   }
 
   /**
@@ -436,23 +519,14 @@ export class PromptQueue {
    *          so currentIndex already points to the next prompt to run.
    */
   async resume(): Promise<void> {
-    if (
-      this.state.status !== EXECUTION_STATES.PAUSED &&
-      this.state.status !== EXECUTION_STATES.STOPPED
-    ) {
+    const previousState = this.stateMachine.status;
+    if (!this.stateMachine.resume()) {
       return;
     }
 
-    const previousState = this.state.status;
-
-    this.stateMachine.resume();
-    this.syncFromStateMachine();
-    this.emitStateChange();
+    await this.commitRuntimeTransition();
 
     Log.info(`Queue state set to running (resumed from ${previousState})`);
-
-    // Update working file to persist RUNNING state to disk
-    await this.updateWorkingFile();
   }
 
   /**
@@ -460,24 +534,13 @@ export class PromptQueue {
    * Sets state to CANCELLING - call confirmedStopped() once process actually exits
    */
   stop(): void {
-    this.stateMachine.requestStop();
+    if (!this.stateMachine.requestStop()) {
+      return;
+    }
+
+    this.markCurrentPromptCancelled();
+
     this.syncFromStateMachine();
-
-    // Mark the active step as CANCELLED. Covers both SENT and PENDING because
-    // updateDashboardForPromptStart (which sets the UI to RUNNING) fires before
-    // markCurrentAsSent (which records SENT), so the result may still be PENDING
-    // when stop() is called.  Only the current index needs the PENDING check —
-    // future prompts that haven't started should stay PENDING.
-    const currentIndex = this.state.currentIndex;
-    this.state.results.forEach((result, index) => {
-      if (
-        result.status === STEP_STATUS.SENT ||
-        (result.status === STEP_STATUS.PENDING && index === currentIndex)
-      ) {
-        result.status = STEP_STATUS.CANCELLED;
-      }
-    });
-
     this.emitStateChange();
     Log.info("Queue cancellation requested (waiting for process to exit)");
   }
@@ -493,37 +556,20 @@ export class PromptQueue {
    * - Resume / Run continues from the next prompt (use setStartPosition to re-run the cancelled one)
    */
   async confirmedStopped(): Promise<void> {
-    if (this.state.status === EXECUTION_STATES.CANCELLING) {
-      const index = this.state.currentIndex;
-      let advancedPastQueuePrompt = false;
+    if (!this.stateMachine.confirmStopped()) {
+      return;
+    }
 
-      // Record terminal state on the cancelled prompt before advancing
-      const prompt = this.state.prompts[index];
-      if (prompt) {
-        const now = Date.now();
-        prompt._runtime = {
-          startedAt: prompt._runtime?.startedAt ?? now,
-          ...prompt._runtime,
-          completedAt: now,
-          terminalStatus: "cancelled",
-        };
-        this.state.completedIndices.add(String(index));
-        this.state.currentIndex++;
-        advancedPastQueuePrompt = true;
-      }
+    const stoppedIndex = this.state.currentIndex;
+    const advancedPastQueuePrompt = this.advanceCancelledPromptAfterStop();
 
-      this.stateMachine.confirmStopped();
-      this.syncFromStateMachine();
-      this.emitStateChange();
-      if (advancedPastQueuePrompt) {
-        Log.info(
-          `Queue execution fully stopped - advanced past cancelled step ${index}`
-        );
-      } else {
-        Log.info("Queue execution fully stopped");
-      }
-
-      await this.updateWorkingFile();
+    await this.commitRuntimeTransition();
+    if (advancedPastQueuePrompt) {
+      Log.info(
+        `Queue execution fully stopped - advanced past cancelled step ${stoppedIndex}`
+      );
+    } else {
+      Log.info("Queue execution fully stopped");
     }
   }
 
@@ -604,7 +650,10 @@ export class PromptQueue {
    * Get current queue state
    */
   getState(): QueueState {
-    return { ...this.state };
+    return {
+      ...this.state,
+      ...this.stateMachine.getSnapshot(),
+    };
   }
 
   /**
@@ -701,11 +750,7 @@ export class PromptQueue {
     this.state.currentIndex++;
 
     this.stateMachine.fail();
-    this.syncFromStateMachine();
-    this.emitStateChange();
-
-    // Update working file with failed status
-    this.updateWorkingFile().catch((err) =>
+    this.commitRuntimeTransition().catch((err) =>
       Log.error("Failed to update working file after error:", err)
     );
 
@@ -843,11 +888,7 @@ export class PromptQueue {
    */
   async markCompleted(): Promise<void> {
     this.stateMachine.complete();
-    this.syncFromStateMachine();
-    this.emitStateChange();
-
-    // Update working file with completed status
-    await this.updateWorkingFile();
+    await this.commitRuntimeTransition();
   }
 
   /**
@@ -856,46 +897,18 @@ export class PromptQueue {
    * so that resume/run continues from the next prompt.
    */
   async markErrored(): Promise<void> {
-    // Advance past the current prompt if it was actively in-progress
-    if (this.hasNext()) {
-      const index = this.state.currentIndex;
-      const currentResult = this.state.results[index];
-      if (
-        currentResult?.status === STEP_STATUS.SENT ||
-        currentResult?.status === STEP_STATUS.RUNNING
-      ) {
-        currentResult.status = STEP_STATUS.FAILED;
-        currentResult.timestamp = new Date();
-
-        const prompt = this.state.prompts[index];
-        if (prompt) {
-          const now = Date.now();
-          prompt._runtime = {
-            startedAt: prompt._runtime?.startedAt ?? now,
-            ...prompt._runtime,
-            completedAt: now,
-            terminalStatus: "failed",
-          };
-        }
-        this.state.completedIndices.add(String(index));
-        this.state.currentIndex++;
-      }
-    }
-
+    this.failCurrentPromptIfInProgress();
     this.stateMachine.fail();
-    this.syncFromStateMachine();
-    this.emitStateChange();
-
-    // Update working file with error status
-    await this.updateWorkingFile();
+    await this.commitRuntimeTransition();
   }
 
   /**
    * Start execution time tracking
    */
   startExecutionTimer(): void {
-    this.stateMachine.startExecutionTimer();
-    this.syncFromStateMachine();
+    if (this.stateMachine.startExecutionTimer()) {
+      this.syncFromStateMachine();
+    }
   }
 
   /**
@@ -1263,16 +1276,15 @@ export class PromptQueue {
       // - IDLE: Stay IDLE (user hasn't started yet, don't auto-start)
       // - PAUSED: Stay PAUSED (user explicitly paused, don't auto-resume)
       // - RUNNING: Already running, no change needed
-      const previousStatus = this.state.status;
+      const previousStatus = this.stateMachine.status;
       if (
-        this.state.status === EXECUTION_STATES.COMPLETED &&
+        this.stateMachine.status === EXECUTION_STATES.COMPLETED &&
         !willRunImmediately
       ) {
         Log.info(
           `appendPrompts: Setting to STOPPED (appended to COMPLETED queue, ${this.state.completedIndices.size} prompts previously completed, user can Resume)`
         );
-        this.stateMachine.setStatus(EXECUTION_STATES.STOPPED);
-        this.stateMachine.setStopped(true);
+        this.stateMachine.reopenForContinuation();
         this.syncFromStateMachine();
       } else {
         Log.info(
@@ -1302,7 +1314,7 @@ export class PromptQueue {
       EXECUTION_STATES.CANCELLING,
       EXECUTION_STATES.ERROR,
     ];
-    return !invalidStates.includes(this.state.status);
+    return !invalidStates.includes(this.stateMachine.status);
   }
 
   // ==================== Working File Operations (delegated to WorkingFileManager) ====================
@@ -1436,7 +1448,8 @@ export class PromptQueue {
    * Emit state change event
    */
   private emitStateChange(): void {
-    this.onStateChanged.fire({ ...this.state });
+    this.syncFromStateMachine();
+    this.onStateChanged.fire(this.getState());
   }
 
   /**
@@ -1457,11 +1470,13 @@ export class PromptQueue {
    * so the state machine reflects the reconstructed state.
    */
   private syncToStateMachine(): void {
-    this.stateMachine.restore(
-      this.state.status,
-      this.state.stopped,
-      this.state.totalPausedDuration
-    );
+    this.stateMachine.restore({
+      status: this.state.status,
+      stopped: this.state.stopped,
+      startTime: this.state.startTime,
+      pausedTime: this.state.pausedTime,
+      totalPausedDuration: this.state.totalPausedDuration,
+    });
   }
 
   /**
@@ -1507,9 +1522,9 @@ export class PromptQueue {
     // When the workflow is idle, stopped, or completed nothing is executing, so
     // any non-completed prompt may be deleted freely.
     const isActivelyExecuting =
-      this.state.status === EXECUTION_STATES.RUNNING ||
-      this.state.status === EXECUTION_STATES.PAUSED ||
-      this.state.status === EXECUTION_STATES.CANCELLING;
+      this.stateMachine.status === EXECUTION_STATES.RUNNING ||
+      this.stateMachine.status === EXECUTION_STATES.PAUSED ||
+      this.stateMachine.status === EXECUTION_STATES.CANCELLING;
 
     if (isActivelyExecuting && index === this.state.currentIndex) {
       throw new Error("Cannot delete the currently executing prompt");

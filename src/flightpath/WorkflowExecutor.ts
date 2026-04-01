@@ -162,8 +162,16 @@ export class WorkflowExecutor {
     this.stepStatusMessages.clear();
     this.attemptStartTimestamps.clear();
 
-    await this.promptQueue.start();
-    this.promptQueue.startExecutionTimer();
+    const runtime = this.promptQueue.getRuntimeStateMachine();
+    if (runtime.startExecution()) {
+      await this.promptQueue.commitRuntimeTransition();
+    }
+    if (runtime.startExecutionTimer()) {
+      await this.promptQueue.commitRuntimeTransition({
+        persist: false,
+        emitStateChange: false,
+      });
+    }
 
     await this.showDashboard();
 
@@ -575,7 +583,9 @@ export class WorkflowExecutor {
 
       if (!shouldContinue) {
         Log.info("Workflow stopped due to end condition failure");
-        await this.promptQueue.markErrored();
+        this.promptQueue.failCurrentPromptIfInProgress();
+        this.promptQueue.getRuntimeStateMachine().fail();
+        await this.promptQueue.commitRuntimeTransition();
         return false;
       }
 
@@ -1288,7 +1298,8 @@ export class WorkflowExecutor {
       this.platform.warn(message);
       Log.trace(`⏱️ ${message}`);
 
-      await this.promptQueue.markErrored();
+      this.promptQueue.getRuntimeStateMachine().fail();
+      await this.promptQueue.commitRuntimeTransition();
       return true;
     }
 
@@ -1310,7 +1321,8 @@ export class WorkflowExecutor {
     const message = `Workflow stopped - Maximum queue size reached (${totalPrompts}/${dynamicConfig.maxQueueSize}).`;
     this.platform.warn(message);
     Log.trace(`📏 ${message}`);
-    await this.promptQueue.markErrored();
+    this.promptQueue.getRuntimeStateMachine().fail();
+    await this.promptQueue.commitRuntimeTransition();
     return true;
   }
 
@@ -1335,13 +1347,17 @@ export class WorkflowExecutor {
     prompt: PromptItem,
     legacyStepIndex: number
   ): Promise<boolean> {
+    const runtime = this.promptQueue.getRuntimeStateMachine();
     const queueState = this.promptQueue.getState();
     if (queueState.stopped) {
       return false;
     }
 
     if (integration.wasLastFailureUserCancellation()) {
-      this.promptQueue.stop();
+      this.promptQueue.markCurrentPromptCancelled();
+      if (runtime.requestStop()) {
+        await this.promptQueue.commitRuntimeTransition({ persist: false });
+      }
       return false;
     }
 
@@ -1428,8 +1444,14 @@ export class WorkflowExecutor {
           );
       }
 
-      this.promptQueue.stop();
-      await this.promptQueue.confirmedStopped();
+      this.promptQueue.markCurrentPromptCancelled();
+      if (runtime.requestStop()) {
+        await this.promptQueue.commitRuntimeTransition({ persist: false });
+      }
+      if (runtime.confirmStopped()) {
+        this.promptQueue.advanceCancelledPromptAfterStop();
+        await this.promptQueue.commitRuntimeTransition();
+      }
       return false;
     }
 
@@ -1450,7 +1472,9 @@ export class WorkflowExecutor {
       });
     }
 
-    await this.promptQueue.markErrored();
+    this.promptQueue.failCurrentPromptIfInProgress();
+    runtime.fail();
+    await this.promptQueue.commitRuntimeTransition();
 
     // Write a final (non-streaming) error CLI output so the failure is visible
     // in the dashboard and persisted to history. This replaces the initial
@@ -1626,7 +1650,8 @@ export class WorkflowExecutor {
       finalState.status !== EXECUTION_STATES.CANCELLING &&
       finalState.status !== EXECUTION_STATES.ERROR
     ) {
-      await this.promptQueue.markCompleted();
+      this.promptQueue.getRuntimeStateMachine().complete();
+      await this.promptQueue.commitRuntimeTransition();
       if (context.dashboardProvider) {
         context.dashboardProvider.updateExecutionCompleted();
       }

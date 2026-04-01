@@ -15,6 +15,7 @@ import {
   McpServerConfig,
   EXECUTION_STATES,
   WorkingFile,
+  WorkflowRuntimeTransition,
   WorkflowSummary,
   WorkflowRunnerLock,
   UserHookConfig,
@@ -52,6 +53,7 @@ import {
   type PromptStartData,
   type PromptCompleteData,
 } from "./OutputCaptureBuffer";
+import { WorkflowStateMachine } from "./WorkflowStateMachine";
 export type {
   PromptStartData,
   PromptCompleteData,
@@ -102,6 +104,7 @@ export class WorkflowInstance {
   readonly promptFileParser: PromptFileParser;
   readonly promptQueue: PromptQueue;
   readonly workflowExecutor: WorkflowExecutor;
+  private readonly workflowRuntime: WorkflowStateMachine;
   /** Currently-executing integration (set for the duration of startWorkflowExecution) */
   activeIntegration?: HarnessIntegration;
   private readonly endConditionEvaluator: EndConditionEvaluator;
@@ -234,7 +237,8 @@ export class WorkflowInstance {
 
     // Per-workflow dependencies
     this.promptFileParser = new PromptFileParser(this.platform);
-    this.promptQueue = new PromptQueue();
+    this.workflowRuntime = new WorkflowStateMachine();
+    this.promptQueue = new PromptQueue(this.workflowRuntime);
 
     const resolvedWorkspacePath =
       workspaceFolderPath ?? this.platform.getWorkspaceRoot();
@@ -283,6 +287,7 @@ export class WorkflowInstance {
 
     // Subscribe to queue state changes
     this.promptQueue.onDidChangeState(this.onQueueStateChanged.bind(this));
+    this.workflowRuntime.onDidTransition(this.onRuntimeTransition.bind(this));
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -583,6 +588,7 @@ export class WorkflowInstance {
 
     this.setupPromptFileWatcher(workingFilePath);
     this.propagateWorkflowNameToIntegrations();
+    await this.resumeRestoredRunningWorkflowIfNeeded();
   }
 
   /**
@@ -625,6 +631,7 @@ export class WorkflowInstance {
 
     this.setupPromptFileWatcher(workingFilePath);
     this.propagateWorkflowNameToIntegrations();
+    await this.resumeRestoredRunningWorkflowIfNeeded();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -940,7 +947,9 @@ export class WorkflowInstance {
       );
     } catch (error) {
       Log.error("Failed to execute prompt file:", error);
-      await this.promptQueue.markErrored();
+      this.promptQueue.failCurrentPromptIfInProgress();
+      this.workflowRuntime.fail();
+      await this.promptQueue.commitRuntimeTransition();
       // Finalize the history run if it was initialized before the error occurred
       // (errors thrown between initializeRun and startWorkflowExecution; the latter
       // has its own finally block that handles finalization for errors within execution).
@@ -963,14 +972,22 @@ export class WorkflowInstance {
    * Pause current execution.
    */
   async pause(): Promise<void> {
-    await this.promptQueue.pause();
+    if (!this.workflowRuntime.pause()) {
+      return;
+    }
+
+    await this.promptQueue.commitRuntimeTransition();
   }
 
   /**
    * Resume execution from paused state.
    */
   async resume(): Promise<void> {
-    await this.promptQueue.resume();
+    if (!this.workflowRuntime.resume()) {
+      return;
+    }
+
+    await this.promptQueue.commitRuntimeTransition();
 
     if (this.workflowExecutor.hasPendingResponse()) {
       Log.debug(
@@ -999,17 +1016,43 @@ export class WorkflowInstance {
 
     Log.info(`⏹️ WorkflowInstance.stop() - stopping active integration`);
 
-    this.promptQueue.stop();
+    this.promptQueue.markCurrentPromptCancelled();
+    if (this.workflowRuntime.requestStop()) {
+      await this.promptQueue.commitRuntimeTransition({ persist: false });
+    }
 
     let confirmedStoppedCalled = false;
 
+    const confirmStopped = async (): Promise<void> => {
+      if (confirmedStoppedCalled) {
+        return;
+      }
+
+      confirmedStoppedCalled = true;
+      if (!this.workflowRuntime.confirmStopped()) {
+        return;
+      }
+
+      const stoppedIndex = this.promptQueue.getState().currentIndex;
+      const advancedPastQueuePrompt =
+        this.promptQueue.advanceCancelledPromptAfterStop();
+
+      await this.promptQueue.commitRuntimeTransition();
+      if (advancedPastQueuePrompt) {
+        Log.info(
+          `Queue execution fully stopped - advanced past cancelled step ${stoppedIndex}`
+        );
+      } else {
+        Log.info("Queue execution fully stopped");
+      }
+    };
+
     const timeoutHandle = setTimeout(() => {
       if (!confirmedStoppedCalled) {
-        confirmedStoppedCalled = true;
         Log.warn(
           "⏱️ Stop timeout: onResponseComplete never fired within 10s, forcing confirmedStopped()"
         );
-        this.promptQueue.confirmedStopped().catch((err) => {
+        confirmStopped().catch((err) => {
           Log.error("Failed to update working file after stop:", err);
         });
       }
@@ -1018,11 +1061,10 @@ export class WorkflowInstance {
     // Single listener handles both confirmedStopped and timeout cancellation
     const responseCompleteDisposable = integration.onResponseComplete(() => {
       if (!confirmedStoppedCalled) {
-        confirmedStoppedCalled = true;
         Log.debug(
           "🔔 Process confirmed exited - setting queue state to STOPPED"
         );
-        this.promptQueue.confirmedStopped().catch((err) => {
+        confirmStopped().catch((err) => {
           Log.error("Failed to update working file after stop:", err);
         });
       }
@@ -1945,6 +1987,71 @@ export class WorkflowInstance {
     );
   }
 
+  private bufferExecutionStateChange(
+    status: QueueState["status"],
+    currentIndex: number
+  ): void {
+    this.bufferedEvents.push({
+      type: "executionStateChanged",
+      data: { status, currentIndex },
+      timestamp: Date.now(),
+    });
+
+    if (this.bufferedEvents.length > WorkflowInstance.MAX_BUFFER_SIZE) {
+      this.bufferedEvents = this.bufferedEvents.slice(
+        -WorkflowInstance.MAX_BUFFER_SIZE
+      );
+    }
+  }
+
+  private onRuntimeTransition(transition: WorkflowRuntimeTransition): void {
+    if (transition.command === "reopenForContinuation") {
+      return;
+    }
+
+    const state = this.promptQueue.getState();
+    Log.debug(
+      `[inst:${this.id.slice(0, 8)}] Runtime transition ${transition.command}: ${transition.previous.status} -> ${transition.current.status} ` +
+        `(step ${state.currentIndex}/${state.prompts.length}, isActive=${this.isActive})`
+    );
+
+    if (this.isActive && this.dashboardSink) {
+      this.dashboardSink.updateExecutionState(transition.current.status);
+
+      if (transition.current.status === EXECUTION_STATES.CANCELLING) {
+        const currentResult = state.results[state.currentIndex];
+        if (currentResult?.status === STEP_STATUS.CANCELLED) {
+          this.dashboardSink.updateStepStatus(state.currentIndex, {
+            state: STEP_STATUS.CANCELLED,
+          });
+        }
+      }
+
+      return;
+    }
+
+    this.bufferExecutionStateChange(
+      transition.current.status,
+      state.currentIndex
+    );
+  }
+
+  private async resumeRestoredRunningWorkflowIfNeeded(): Promise<void> {
+    const state = this.promptQueue.getState();
+    if (
+      state.status !== EXECUTION_STATES.RUNNING ||
+      this.activeIntegration ||
+      this.startPending
+    ) {
+      return;
+    }
+
+    Log.debug(
+      `[inst:${this.id.slice(0, 8)}] Resuming restored RUNNING workflow explicitly`
+    );
+    await this.autoStartWithHistory(state);
+  }
+
   private onQueueStateChanged(state: QueueState): void {
     Log.debug(
       `[inst:${this.id.slice(0, 8)}] Queue state → ${state.status} (step ${state.currentIndex}/${state.prompts.length}, isActive=${this.isActive})`
@@ -1959,32 +2066,12 @@ export class WorkflowInstance {
       }
 
       // Active workflow: forward state changes directly to the dashboard.
-      // When prompts also increase in the same state change, piggyback the
-      // execution state onto the PROMPTS_EXTENDED message so both updates land
-      // in a single webview render.  Sending them as two separate postMessage
-      // calls causes React 19 error #185: a component that mounts during the
-      // first render (executionStateChanged) can unmount in the second render
-      // (promptsExtended) before its passive-mount effect fires, leaving a
-      // detached fiber that useSyncExternalStore fails to re-render.
+      // Runtime transitions now flow through WorkflowStateMachine.onDidTransition.
+      // Queue state changes stay responsible for queue topology updates only.
+      // When prompts increase, piggyback the current execution state onto the
+      // PROMPTS_EXTENDED message so prompt-growth + lifecycle updates still land
+      // in one render and avoid the React 19 detached-fiber issue.
       const hasNewPrompts = state.prompts.length > this.lastKnownPromptCount;
-
-      if (!hasNewPrompts) {
-        // Execution state changed with no new prompts — send standalone message.
-        this.dashboardSink.updateExecutionState(state.status);
-      }
-
-      // When cancelling, the currently-executing step must be marked CANCELLED.
-      // The queue updates its internal result record but WorkflowExecutor never
-      // sends a STEP_STATUS_CHANGED for the cancelled step (it already broke out
-      // of the loop), so we send it here from the authoritative state change.
-      if (state.status === EXECUTION_STATES.CANCELLING) {
-        const currentResult = state.results[state.currentIndex];
-        if (currentResult && currentResult.status === STEP_STATUS.CANCELLED) {
-          this.dashboardSink.updateStepStatus(state.currentIndex, {
-            state: STEP_STATUS.CANCELLED,
-          });
-        }
-      }
 
       if (hasNewPrompts) {
         Log.debug(
@@ -2001,39 +2088,10 @@ export class WorkflowInstance {
           state.prompts.length
         );
       }
-    } else if (!this.isActive) {
-      // Inactive workflow: buffer the event for replay when this workflow becomes active
-      this.bufferedEvents.push({
-        type: "executionStateChanged",
-        data: { status: state.status, currentIndex: state.currentIndex },
-        timestamp: Date.now(),
-      });
-      // Cap buffer size to prevent unbounded memory growth
-      if (this.bufferedEvents.length > WorkflowInstance.MAX_BUFFER_SIZE) {
-        this.bufferedEvents = this.bufferedEvents.slice(
-          -WorkflowInstance.MAX_BUFFER_SIZE
-        );
-      }
     }
 
     this.lastKnownPromptCount = state.prompts.length;
     this.lastKnownWorkflowName = state.workflowName ?? "";
-
-    if (state.status === EXECUTION_STATES.RUNNING && !this.activeIntegration) {
-      Log.debug(
-        `Auto-starting workflow: State=RUNNING, activeIntegration=null, currentIndex=${state.currentIndex}, totalPrompts=${state.prompts.length}`
-      );
-      this.autoStartWithHistory(state).catch((error) => {
-        Log.error("Auto-start failed:", error);
-        this.platform.error(
-          `FlightPath: Failed to auto-start workflow: ${error}`
-        );
-      });
-    } else if (state.status === EXECUTION_STATES.RUNNING) {
-      Log.debug(
-        `State is RUNNING but NOT auto-starting (activeIntegration already exists)`
-      );
-    }
   }
 
   /**
@@ -2044,7 +2102,8 @@ export class WorkflowInstance {
    * - Bug 2: EXECUTION_STARTED was never sent → webview stayed in history view mode,
    *   hiding live output behind the old run's history data
    *
-   * Called from onQueueStateChanged when state transitions to RUNNING with no active integration.
+   * Called from explicit restore/resume paths when a working file is rehydrated as RUNNING
+   * and the instance needs to attach execution/history state without queue-status polling.
    */
   private async autoStartWithHistory(state: QueueState): Promise<void> {
     const workingFilePath = state.workingFilePath || undefined;

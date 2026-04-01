@@ -1,4 +1,3 @@
-import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
@@ -16,12 +15,16 @@ import {
   EXECUTION_MODES,
   type ExecutionMode,
 } from "../../types/DashboardConstants";
-import { getErrorMessage } from "../../utils/ErrorUtils";
 import type { ICliProvider } from "./shared/interfaces/ICliProvider";
 import type { ToolPermissionConfig } from "./shared/interfaces/IToolPermissionMapper";
 import { CliOutputFormatter } from "./shared/CliOutputFormatter";
 import { CliLogMonitor } from "./CliLogMonitor";
 import { CliFailureTracker } from "./shared/CliFailureTracker";
+import {
+  CliExecutionSession,
+  type CliExecutionSessionSnapshot,
+} from "./shared/CliExecutionSession";
+import { CliExecutionRunner } from "./shared/CliExecutionRunner";
 import { CliInteractiveStartupCoordinator } from "./shared/CliInteractiveStartupCoordinator";
 import {
   CliPromptPreparer,
@@ -96,20 +99,11 @@ export class CliIntegration extends HarnessIntegration {
   /** Initialization status */
   protected initializationStatus: HarnessStatus = HarnessStatus.Initializing;
 
-  /** Last CLI execution result */
-  protected lastResult?: CliResult;
+  /** Last execution snapshot exposed through getLast* accessors. */
+  private lastExecutionSnapshot?: CliExecutionSessionSnapshot;
 
-  /** Last parsed output with structured data (tool calls, thinking blocks, etc.) */
-  protected lastParsedOutput?: UniversalCliOutput;
-
-  /** Last CLI command executed (for debugging) */
-  protected lastCliCommand?: string;
-
-  /** Last full prompt text sent (for debugging) */
-  protected lastFullPrompt?: string;
-
-  /** Actual prompt text sent to CLI (may be file reference if using temp files) */
-  protected actualPromptSent?: string;
+  /** Active per-prompt session while sendPrompt() is running. */
+  private activeSession?: CliExecutionSession;
 
   // NOTE: currentProcess field removed — the child process lives in processManager,
   // not on this class. See processManager.isActive() for process state.
@@ -131,6 +125,9 @@ export class CliIntegration extends HarnessIntegration {
 
   /** Launch/cancellation helper extracted from CliIntegration. */
   private readonly transportCoordinator: CliTransportCoordinator;
+
+  /** Execution orchestration helper extracted from CliIntegration. */
+  private readonly executionRunner: CliExecutionRunner;
 
   /** Workflow display name used for VS Code terminal tab naming */
   private workflowName?: string;
@@ -249,8 +246,10 @@ export class CliIntegration extends HarnessIntegration {
         }
       },
       onCommandPrepared: ({ promptArgument, cliCommand }) => {
-        this.lastCliCommand = cliCommand;
-        this.actualPromptSent = promptArgument;
+        this.activeSession?.recordCommandPrepared({
+          promptArgument,
+          cliCommand,
+        });
         this.promptReadyEmitter.fire({
           fullPrompt: promptArgument,
           cliCommand,
@@ -274,6 +273,34 @@ export class CliIntegration extends HarnessIntegration {
       },
       isCancelling: () => this.isCancelling,
       cleanupTempFiles: (tempFilePaths) => this.cleanupTempFiles(tempFilePaths),
+      logger: {
+        debug: (message) => Log.debug(message),
+        info: (message) => Log.info(message),
+        warn: (message) => Log.warn(message),
+        error: (message, error) => Log.error(message, error),
+      },
+    });
+
+    this.executionRunner = new CliExecutionRunner({
+      provider: this.provider,
+      transportCoordinator: this.transportCoordinator,
+      failureTracker: this.failureTracker,
+      createInteractiveStartupCoordinator: () =>
+        this.createInteractiveStartupCoordinator(),
+      createResponseCollector: () => this.createResponseCollector(),
+      cleanupTempFiles: (tempFilePaths) => this.cleanupTempFiles(tempFilePaths),
+      getWorkspaceRoot: () => this.getWorkspaceRoot(),
+      getExtensionPath: () => this.platform.getExtensionPath(),
+      isVsCodeContext: () => this.isVsCodeContext(),
+      isCancelling: () => this.isCancelling,
+      onStreamingEvents: (events) => this.streamingEventsEmitter.fire(events),
+      onResponseComplete: (response) =>
+        this.responseCompleteEmitter.fire(response),
+      logResponse: (response, statistics) =>
+        this.logResponse(response, statistics),
+      setFailureReason: (reason) => {
+        this.lastFailureReason = reason;
+      },
       logger: {
         debug: (message) => Log.debug(message),
         info: (message) => Log.info(message),
@@ -539,6 +566,56 @@ export class CliIntegration extends HarnessIntegration {
     });
   }
 
+  private applyExecutionSession(session: CliExecutionSession): void {
+    this.lastExecutionSnapshot = session.toSnapshot();
+  }
+
+  private createExecutionSession(
+    prompt: PromptItem,
+    workflowContext: WorkflowContext | undefined,
+    resolvedProperties: ResolvedProperties | undefined,
+    resolvedSessionId: string | undefined
+  ): CliExecutionSession {
+    this.lastExecutionSnapshot = undefined;
+    return new CliExecutionSession({
+      prompt,
+      workflowContext,
+      resolvedProperties,
+      resolvedSessionId,
+    });
+  }
+
+  private async prepareExecutionSessionPrompt(
+    session: CliExecutionSession
+  ): Promise<void> {
+    const originalPromptText = session.prompt.prompt.trim();
+    const slashCommand = this.extractLeadingSlashCommand(originalPromptText);
+    const isPureSlashCommand =
+      slashCommand !== null && /^\/\w+\s*$/.test(originalPromptText);
+
+    if (isPureSlashCommand) {
+      session.preparePrompt(originalPromptText, []);
+      Log.debug(
+        `⚡ Slash command detected ("${slashCommand}") — skipping instruction assembly`
+      );
+      return;
+    }
+
+    const prepared = await this.buildAndPreparePrompt(
+      session.prompt,
+      session.workflowContext,
+      session.resolvedProperties,
+      session.resolvedSessionId,
+      session.workflowContext?.promptQueue?.getFinalPromptResponseTexts()
+    );
+
+    const promptArgument = slashCommand
+      ? `${slashCommand} ${prepared.promptWithInstruction.trimStart()}`
+      : prepared.promptWithInstruction;
+
+    session.preparePrompt(promptArgument, prepared.tempFilePaths);
+  }
+
   /**
    * Returns true when running inside a VS Code extension context.
    *
@@ -554,278 +631,6 @@ export class CliIntegration extends HarnessIntegration {
     return "getExtensionContext" in this.platform;
   }
 
-  // ============================================================
-  // CLI INTERACTIVE EXECUTION (spawn with stdio:inherit)
-  // ============================================================
-
-  /**
-   * Execute a CLI command in interactive mode for the standalone CLI binary.
-   *
-   * Unlike the VS Code interactive path (which runs the AI CLI inside a
-   * vscode.Terminal), this path spawns the AI CLI as a child process with
-   * `stdio: 'inherit'` so the user's terminal is wired directly to the AI
-   * CLI's stdin/stdout/stderr.
-   *
-   * The user ends the session manually (Ctrl+D, /exit, etc.). When the child
-   * process exits, this method returns and the next prompt starts.
-   *
-   * No output is captured (no CliEvent[], no session ID extraction from logs).
-   *
-   * @param args Base CLI args (from buildCliArgs with isInteractive=true)
-   * @param promptArgument Final prompt argument — direct text or file reference instruction
-   * @param tempFilePaths Temp files to clean up after execution (may be empty)
-   * @param workflowContext Optional workflow context
-   * @param resolvedSessionId Resolved session ID (preserved across prompts)
-   * @returns success flag and the original sessionId (no new ID extracted)
-   */
-  private async executeInteractiveCliProcess(
-    args: string[],
-    promptArgument: string,
-    tempFilePaths: string[],
-    workflowContext: WorkflowContext | undefined,
-    resolvedSessionId: string | undefined
-  ): Promise<{ success: boolean; sessionId?: string }> {
-    try {
-      // Print a separator for multi-prompt workflows so users see the boundary
-      if (workflowContext && workflowContext.promptIndex > 0) {
-        Log.info(`\n${"─".repeat(52)}`);
-        Log.info(
-          `Prompt ${workflowContext.promptIndex + 1} / ${workflowContext.allPrompts.length}`
-        );
-        Log.info("\n");
-      }
-
-      return await this.transportCoordinator.executeStandaloneInteractiveProcess(
-        args,
-        promptArgument,
-        tempFilePaths,
-        resolvedSessionId
-      );
-    } catch (error) {
-      Log.error("❌ CLI interactive execution error", error);
-      this.lastFailureReason = getErrorMessage(error);
-      return { success: false };
-    }
-  }
-
-  /**
-   * Execute a CLI command in interactive mode with log file monitoring.
-   *
-   * Strategy:
-   * 1. Record start time BEFORE spawning CLI
-   * 2. Spawn CLI in terminal (TUI displays for user, but we ignore it)
-   * 3. Wait for session start and discover log file:
-   *    - **Session resumption:** If resolvedSessionId provided, use it directly to find log file
-   *    - **Claude + Copilot (SessionStart hook):** Wait up to 60 seconds for SessionStart hook,
-   *      then use session ID to find log file directly
-   *    - **Codex (no start hook):** Discover log file by matching prompt text
-   * 4. Monitor log file for completion
-   *
-   * **Important:** 60-second timeout gives Claude CLI plenty of time to:
-   * - Start the session
-   * - Fire the SessionStart hook
-   * - Create the log file
-   *
-   * @param args The CLI arguments (WITHOUT prompt, but WITH --resume if session should continue)
-   * @param promptText The prompt text (will be sent via sendText)
-   * @param workflowContext Optional workflow context for temp file naming
-   * @param resolvedSessionId Resolved session ID (used for session resumption to skip log discovery)
-   * @returns Promise with success flag and optional sessionId
-   */
-  protected async executeInTerminal(
-    args: string[],
-    promptArgument: string,
-    tempFilePaths: string[],
-    workflowContext?: WorkflowContext,
-    resolvedSessionId?: string
-  ): Promise<{ success: boolean; sessionId?: string }> {
-    // In the standalone CLI binary (CliAdapter), vscode.Terminal is unavailable.
-    // Delegate to the spawn-with-stdio:inherit path so the user gets a real TUI.
-    if (!this.isVsCodeContext()) {
-      return this.executeInteractiveCliProcess(
-        args,
-        promptArgument,
-        tempFilePaths,
-        workflowContext,
-        resolvedSessionId
-      );
-    }
-
-    try {
-      // Check if provider has log parser capability
-      if (!this.provider.logParser) {
-        Log.error("❌ Harness does not support log file monitoring");
-        return { success: false };
-      }
-
-      // 1. Record start time BEFORE spawning CLI
-      const startTime = new Date();
-      Log.debug(`⏱️ Recording start time: ${startTime.toISOString()}`);
-
-      // Clean up any stale stop notification file from a previous run of this session.
-      // If the previous run crashed before cleanup, the leftover file would cause an
-      // immediate false completion the next time this session is resumed.
-      if (resolvedSessionId && this.provider.notificationMonitor) {
-        const workspaceRoot = this.getWorkspaceRoot();
-        if (workspaceRoot) {
-          const notifyDir =
-            this.provider.notificationMonitor.getNotificationDirectory(
-              workspaceRoot
-            );
-          const staleStopFile = path.join(
-            notifyDir,
-            `${resolvedSessionId}-stop.json`
-          );
-          if (fs.existsSync(staleStopFile)) {
-            try {
-              fs.unlinkSync(staleStopFile);
-              Log.debug(
-                `🧹 Cleaned up stale stop notification for session ${resolvedSessionId.substring(0, 8)}`
-              );
-            } catch {
-              // Non-fatal — worst case the notification monitor will find it
-              // but the startTime filter will ignore it if it's old enough
-            }
-          }
-        }
-      }
-
-      // 2. Spawn CLI in terminal (TUI displays for user)
-      // Generate a per-run ID so the hook script writes a uniquely-named start file.
-      // This eliminates the parallel-workflow race in waitForSessionStart: each run's
-      // hook writes {runId}-start.json, and waitForSessionStart watches only that file.
-      // Both IDs travel to the hook/plugin via env vars in the terminal's process env.
-      const runId = crypto.randomUUID();
-      const terminalEnv: Record<string, string> = { FLIGHTPATH_RUN_ID: runId };
-      if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
-        terminalEnv.FLIGHTPATH_DIAGNOSTIC_LOGS = "true";
-      }
-      const wsRootForEnv = this.getWorkspaceRoot();
-      if (wsRootForEnv) {
-        terminalEnv.FLIGHTPATH_NOTIFY_DIR =
-          this.provider.notificationMonitor.getNotificationDirectory(
-            wsRootForEnv
-          );
-      }
-      await this.startCliProcess(
-        args,
-        promptArgument,
-        tempFilePaths,
-        workflowContext,
-        terminalEnv
-      );
-
-      // 3. Wait for SessionStart hook and discover log file
-      const startupCoordinator = this.createInteractiveStartupCoordinator();
-      const discovery = await startupCoordinator.resolveSession({
-        promptForDiscovery: this.actualPromptSent || promptArgument,
-        startTime,
-        resolvedSessionId,
-        runId,
-      });
-
-      if (!discovery) {
-        return { success: false };
-      }
-
-      // 4. Monitor log file for completion
-      const result = await this.monitorLogFile(
-        discovery.logPath,
-        discovery.sessionId,
-        startTime
-      );
-
-      return result;
-    } catch (error) {
-      Log.error(`❌ Interactive execution error`, error);
-      this.lastFailureReason = getErrorMessage(error);
-      throw error;
-    } finally {
-      // Always clean up temp files, regardless of success or failure
-      await this.cleanupTempFiles(tempFilePaths);
-    }
-  }
-
-  /**
-   * Start CLI process in terminal and return execution details.
-   *
-   * **Security:** Uses `isSimplePrompt` to decide the passing strategy.
-   * Simple prompts (≤300 chars, shell-safe characters only) are passed directly.
-   * Complex prompts go through a temp file reference
-   * (e.g., "Follow instructions in @.flightpath/temp/prompt.md"),
-   * which eliminates shell injection risk entirely.
-   *
-   * @param args CLI arguments
-   * @param promptText Prompt text
-   * @param workflowContext Optional workflow context
-   * @returns Terminal, execution, and temp file paths for cleanup
-   */
-  private async startCliProcess(
-    args: string[],
-    promptArgument: string,
-    tempFilePaths: string[],
-    workflowContext?: WorkflowContext,
-    env?: Record<string, string>
-  ): Promise<void> {
-    await this.transportCoordinator.startInteractiveProcess(
-      args,
-      promptArgument,
-      tempFilePaths,
-      workflowContext,
-      env
-    );
-  }
-
-  /**
-   * Monitor log file for completion using harness's log parser.
-   *
-   * Delegates to CliLogMonitor for the actual monitoring logic.
-   * Stores parsed output and CLI result on this instance for callers.
-   *
-   * @param logPath Absolute path to log file
-   * @param sessionId Session ID (if already extracted)
-   * @param startTime Execution start time
-   * @returns Promise with success flag and sessionId
-   */
-  private async monitorLogFile(
-    logPath: string,
-    sessionId: string | null,
-    startTime: Date
-  ): Promise<{ success: boolean; sessionId?: string }> {
-    const monitor = new CliLogMonitor({
-      logParser: this.provider.logParser!,
-      notificationMonitor: this.provider.notificationMonitor,
-      getWorkspaceRoot: () => this.getWorkspaceRoot(),
-      isCancelling: () => this.isCancelling,
-      isPtyTerminated: () => this.failureTracker.getPtyTermination(),
-      onStreamingEvents: (events) => this.streamingEventsEmitter.fire(events),
-      onResponseComplete: (msg) => this.responseCompleteEmitter.fire(msg),
-      logResponse: (response, statistics) =>
-        this.logResponse(response, statistics),
-    });
-
-    const result = await monitor.monitor(logPath, sessionId, startTime);
-
-    // Store structured output and legacy result on this instance
-    if (result.parsedOutput) {
-      this.lastParsedOutput = result.parsedOutput;
-    }
-    if (result.cliResult) {
-      this.lastResult = result.cliResult;
-    }
-
-    // Flag process-exit termination so callers (WorkflowExecutor) can
-    // distinguish it from user cancellation or normal failure.
-    if (result.processExited) {
-      this.lastFailureReason =
-        this.failureTracker.markCompletionDetectionProcessExit(
-          result.processExited.exitCode
-        );
-    }
-
-    return { success: result.success, sessionId: result.sessionId };
-  }
-
   /**
    * Clean up temporary prompt files.
    *
@@ -837,59 +642,6 @@ export class CliIntegration extends HarnessIntegration {
     }
     await this.deleteTempFiles(tempFilePaths);
     Log.debug(`🗑️ Cleaned up ${tempFilePaths.length} temp file(s)`);
-  }
-
-  // ============================================================
-  // HEADLESS EXECUTION
-  // ============================================================
-
-  /**
-   * Execute a CLI command in headless mode.
-   *
-   * Strategy for simple prompts (≤300 chars, no XML, no backticks):
-   * 1. Pass prompt directly on command line (fast!)
-   * 2. No file I/O overhead
-   *
-   * Strategy for complex prompts:
-   * 1. Write fully-expanded prompt to temp file
-   * 2. Spawn CLI process with @temp-file or --prompt @temp-file parameter
-   * 3. Wait for process to complete
-   * 4. Cleanup temp file
-   *
-   * @param args The CLI arguments (WITHOUT prompt)
-   * @param promptText The prompt text (will be written to temp file or passed directly)
-   * @param workflowContext Optional workflow context for temp file naming
-   * @param executeCallback Callback for CLI-specific result handling
-   * @returns Promise<boolean> indicating success
-   */
-  protected async executeHeadlessWithPromptFile(
-    args: string[],
-    promptArgument: string,
-    tempFilePaths: string[],
-    executeCallback: (result: {
-      stdout: string;
-      stderr: string;
-      exitCode: number;
-    }) => Promise<boolean>
-  ): Promise<boolean> {
-    return await this.transportCoordinator.executeHeadless(
-      args,
-      promptArgument,
-      tempFilePaths,
-      executeCallback
-    );
-  }
-
-  /**
-   * Spawn a simple command (like --version checks) without stdin.
-   * Uses shell: true for PATH resolution.
-   */
-  protected async spawnSimpleCommand(
-    command: string,
-    args: string[],
-    timeoutMs: number = 5000
-  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-    return await this.processManager.spawnSimple(command, args, timeoutMs);
   }
 
   // ============================================================
@@ -951,7 +703,7 @@ export class CliIntegration extends HarnessIntegration {
    * Get the last CLI result
    */
   getLastResult(): CliResult | undefined {
-    return this.lastResult;
+    return this.lastExecutionSnapshot?.result;
   }
 
   /**
@@ -960,14 +712,14 @@ export class CliIntegration extends HarnessIntegration {
    * Returns undefined if no parsed output is available (e.g., non-CLI integrations).
    */
   getLastParsedOutput(): UniversalCliOutput | undefined {
-    return this.lastParsedOutput;
+    return this.lastExecutionSnapshot?.parsedOutput;
   }
 
   /**
    * Get the last CLI command executed
    */
   getLastCliCommand(): string | undefined {
-    return this.lastCliCommand;
+    return this.lastExecutionSnapshot?.cliCommand;
   }
 
   override getLastFailureOutput(): string | undefined {
@@ -1181,68 +933,6 @@ export class CliIntegration extends HarnessIntegration {
   // ============================================================
 
   /**
-   * Build the headless response callback that parses results, stores output,
-   * extracts session IDs, and fires response events.
-   *
-   * Previously duplicated in both the primary headless execution and the
-   * session error retry path. Now extracted as a single source of truth.
-   *
-   * @param finalPromptText Original prompt text (for log-based session extraction)
-   * @param executionStartTime When execution started
-   * @param resolvedSessionId Session ID used for resume (null = new session)
-   * @param extractedSessionIdSetter Callback to store the extracted session ID
-   * @param label Label for debug logging (e.g., "" or " (retry)")
-   * @returns Callback compatible with executeHeadlessWithPromptFile
-   */
-  private buildHeadlessResponseCallback(
-    finalPromptText: string,
-    executionStartTime: Date,
-    resolvedSessionId: string | undefined,
-    extractedSessionIdSetter: (id: string) => void,
-    label: string = ""
-  ): (result: {
-    stdout: string;
-    stderr: string;
-    exitCode: number;
-  }) => Promise<boolean> {
-    const responseCollector = this.createResponseCollector();
-
-    return async (result) => {
-      // Debug logging: Log raw stdout/stderr if enabled
-      const logRawOutput = ConfigurationUtils.shouldLogRawCliOutput();
-      if (logRawOutput) {
-        Log.debug(
-          `[${this.provider.config.displayName} FINAL STDOUT${label}]:\n${result.stdout}`
-        );
-        if (result.stderr) {
-          Log.debug(
-            `[${this.provider.config.displayName} FINAL STDERR${label}]:\n${result.stderr}`
-          );
-        }
-      }
-
-      const collected = await responseCollector.collectHeadlessResponse({
-        stdout: result.stdout,
-        stderr: result.stderr,
-        exitCode: result.exitCode,
-        promptForSessionLog: this.actualPromptSent || finalPromptText,
-        executionStartTime,
-        resolvedSessionId,
-        label,
-      });
-
-      this.lastParsedOutput = collected.parsedOutput;
-      this.lastResult = collected.cliResult;
-
-      if (collected.extractedSessionId) {
-        extractedSessionIdSetter(collected.extractedSessionId);
-      }
-
-      return collected.success;
-    };
-  }
-
-  /**
    * Send a prompt to the CLI.
    *
    * This is the main entry point for executing prompts. It:
@@ -1261,59 +951,26 @@ export class CliIntegration extends HarnessIntegration {
     _needsCompletionDetection: boolean = true,
     workflowContext?: WorkflowContext
   ): Promise<boolean> {
+    let executionSession: CliExecutionSession | undefined;
+
     try {
       this.resetCancellationFlag();
       this.failureTracker.reset();
 
       const { resolvedProperties, resolvedSessionId: initialSessionId } =
         this.sessionResolverAdapter.resolve(prompt, workflowContext);
-      let resolvedSessionId = initialSessionId;
+      executionSession = this.createExecutionSession(
+        prompt,
+        workflowContext,
+        resolvedProperties,
+        initialSessionId
+      );
+      this.activeSession = executionSession;
 
-      // Detect leading slash command (e.g. /handoff, /context) in the original prompt text.
-      // Pure slash commands (/word only) bypass instruction assembly and are sent directly —
-      // injecting skill/agent blocks into a meta-command makes no sense and would bury the
-      // slash command inside a temp file where the harness won't execute it.
-      // Slash commands with a body (/handoff to the next agent) are assembled normally but
-      // have the slash word prepended to the temp file reference instruction so the harness
-      // still picks it up as a top-level command.
-      const originalPromptText = prompt.prompt.trim();
-      const slashCommand = this.extractLeadingSlashCommand(originalPromptText);
-      const isPureSlashCommand =
-        slashCommand !== null && /^\/\w+\s*$/.test(originalPromptText);
-
-      // Build all temp files and the final prompt argument in one step.
-      // Pure slash commands bypass assembly entirely and are sent as-is.
-      let promptArgument: string;
-      let tempFilePaths: string[];
-      if (isPureSlashCommand) {
-        promptArgument = originalPromptText;
-        tempFilePaths = [];
-        Log.debug(
-          `⚡ Slash command detected ("${slashCommand}") — skipping instruction assembly`
-        );
-      } else {
-        const prepared = await this.buildAndPreparePrompt(
-          prompt,
-          workflowContext,
-          resolvedProperties,
-          resolvedSessionId,
-          workflowContext?.promptQueue?.getFinalPromptResponseTexts()
-        );
-        // Prepend slash command prefix for slash+body prompts so the harness
-        // executes it as a top-level command (e.g. "/handoff Follow instructions in @prompt.md")
-        promptArgument = slashCommand
-          ? `${slashCommand} ${prepared.promptWithInstruction.trimStart()}`
-          : prepared.promptWithInstruction;
-        tempFilePaths = prepared.tempFilePaths;
-      }
-
-      this.lastFullPrompt = promptArgument;
+      await this.prepareExecutionSessionPrompt(executionSession);
 
       // Log prompt
-      this.logPrompt(promptArgument);
-
-      // Capture execution start time for session log discovery
-      const executionStartTime = new Date();
+      this.logPrompt(executionSession.promptArgument);
 
       // Determine execution mode first
       const mode = this.getExecutionMode();
@@ -1326,156 +983,58 @@ export class CliIntegration extends HarnessIntegration {
         isInteractive,
         this.platform.getExtensionPath(),
         workspaceRoot,
-        resolvedSessionId, // Use resolved session instead of this.sessionId
+        executionSession.resolvedSessionId,
         workflowContext
       );
 
       // Execute based on mode
-      let success = false;
-      let extractedSessionId: string | undefined;
+      const success =
+        mode === CLI_EXECUTION_MODE.INTERACTIVE
+          ? await this.executionRunner.executeInteractive(
+              executionSession,
+              baseArgs
+            )
+          : (() => {
+              this.warnIfHeadlessWithoutPermissions(
+                executionSession.resolvedProperties?.toolPermissions
+              );
+              return this.executionRunner.executeHeadless(
+                executionSession,
+                baseArgs
+              );
+            })();
 
-      if (mode === CLI_EXECUTION_MODE.INTERACTIVE) {
-        const result = await this.executeInTerminal(
-          baseArgs,
-          promptArgument,
-          tempFilePaths,
-          workflowContext,
-          resolvedSessionId
+      if (
+        !executionSession.effectiveSessionId &&
+        executionSession.resolvedSessionId
+      ) {
+        executionSession.setExtractedSessionId(
+          executionSession.resolvedSessionId
         );
-        success = result.success;
-        extractedSessionId = result.sessionId;
-
-        // Fallback: Extract session ID from logs if not available from notification.
-        // Copilot and Claude provide session IDs via hooks (SessionStart + Stop hooks).
-        // Codex provides a thread ID at completion (notify hook) but has no start hook yet —
-        // it discovers the session log via prompt-text matching instead. This fallback
-        // also covers edge cases where hook delivery fails for any harness.
-        // Skip if we already have resolvedSessionId - log discovery is unnecessary
-        // (the session didn't change) and would search deep into a resumed session log.
-        if (
-          success &&
-          !extractedSessionId &&
-          !resolvedSessionId &&
-          this.provider.extractSessionIdFromLogs
-        ) {
-          const logSessionId = await this.provider.extractSessionIdFromLogs(
-            this.actualPromptSent || promptArgument,
-            executionStartTime
-          );
-          if (logSessionId) {
-            extractedSessionId = logSessionId;
-            Log.debug(
-              `📝 Session ID from logs (interactive): ${extractedSessionId}`
-            );
-          }
-        }
-      } else {
-        // Headless mode
-        this.warnIfHeadlessWithoutPermissions(
-          resolvedProperties?.toolPermissions
-        );
-
-        // Build the shared response callback (single source of truth)
-        const responseCallback = this.buildHeadlessResponseCallback(
-          promptArgument,
-          executionStartTime,
-          resolvedSessionId,
-          (id) => {
-            extractedSessionId = id;
-          }
-        );
-
-        // Claude CLI error recovery wrapper (Phase 5)
-        const executeWithRecovery = async (
-          args: string[]
-        ): Promise<boolean> => {
-          try {
-            return await this.executeHeadlessWithPromptFile(
-              args,
-              promptArgument,
-              tempFilePaths,
-              responseCallback
-            );
-          } catch (error) {
-            // Check for recoverable session errors using provider's response parser (Phase 5)
-            if (
-              this.provider.responseParser.isRecoverableSessionError?.(error)
-            ) {
-              const currentHarness =
-                resolvedProperties?.harness ??
-                (this.getIntegrationMode() as Harness);
-
-              if (currentHarness === Harness.ClaudeCli) {
-                Log.warn(
-                  `⚠️ Claude CLI rejected session ID "${resolvedSessionId}". ` +
-                    `Retrying without resume flag.`
-                );
-
-                // Rebuild args without session ID
-                const argsWithoutResume = await this.provider.buildCliArgs(
-                  prompt,
-                  false, // headless mode
-                  this.platform.getExtensionPath(),
-                  this.getWorkspaceRoot() || "",
-                  undefined, // no session ID - start new session
-                  workflowContext
-                );
-
-                // Build retry callback with label
-                const retryCallback = this.buildHeadlessResponseCallback(
-                  promptArgument,
-                  executionStartTime,
-                  undefined, // no session ID on retry
-                  (id) => {
-                    extractedSessionId = id;
-                  },
-                  " (retry)"
-                );
-
-                // Retry with new args — reuse same promptArgument and tempFilePaths
-                return await this.executeHeadlessWithPromptFile(
-                  argsWithoutResume,
-                  promptArgument,
-                  tempFilePaths,
-                  retryCallback
-                );
-              }
-            }
-            // Re-throw if not a recoverable error
-            throw error;
-          }
-        };
-
-        success = await executeWithRecovery(baseArgs);
-      }
-
-      // If we resumed an existing session and log discovery didn't run (or couldn't find the log),
-      // fall back to the resolved session ID — the session hasn't changed.
-      if (!extractedSessionId && resolvedSessionId) {
-        extractedSessionId = resolvedSessionId;
         Log.debug(
-          `📝 Reusing resolved session ID (no new ID extracted): ${extractedSessionId}`
+          `📝 Reusing resolved session ID (no new ID extracted): ${executionSession.effectiveSessionId}`
         );
       }
 
       if (!success && this.isCancelling && workflowContext?.promptQueue) {
         await this.promptRuntimeCoordinator.persistCancelledPromptRuntime({
           prompt,
-          executionStartTime,
-          extractedSessionId,
+          executionStartTime: executionSession.executionStartTime,
+          extractedSessionId: executionSession.effectiveSessionId,
           promptQueue: workflowContext.promptQueue,
         });
       }
 
       if (success) {
-        this.lastParsedOutput =
+        const persistedOutput =
           await this.promptRuntimeCoordinator.persistSuccessfulPromptRuntime({
             prompt,
-            resolvedProperties,
-            extractedSessionId,
-            parsedOutput: this.lastParsedOutput,
+            resolvedProperties: executionSession.resolvedProperties,
+            extractedSessionId: executionSession.effectiveSessionId,
+            parsedOutput: executionSession.parsedOutput,
             promptQueue: workflowContext?.promptQueue,
           });
+        executionSession.updateParsedOutput(persistedOutput);
       }
 
       return success;
@@ -1484,12 +1043,13 @@ export class CliIntegration extends HarnessIntegration {
       this.lastFailureReason =
         error instanceof Error ? error.message : "Unknown error";
       return false;
+    } finally {
+      if (executionSession) {
+        this.applyExecutionSession(executionSession);
+      }
+      this.activeSession = undefined;
+      this.currentPromptNumber = undefined;
+      this.currentPromptTotal = undefined;
     }
   }
-
-  // ============================================================
-  // ERROR RECOVERY (PHASE 5)
-  // ============================================================
-  // NOTE: Error recovery logic is now Harness-specific.
-  // See IResponseParser.isRecoverableSessionError() for implementation.
 }

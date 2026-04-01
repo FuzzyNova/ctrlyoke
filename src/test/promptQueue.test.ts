@@ -938,8 +938,15 @@ suite("PromptQueue State Machine Tests", () => {
       ];
       queue.loadPrompts(createPromptFile(prompts));
       (queue as any).state.currentIndex = 2;
-      (queue as any).state.status = EXECUTION_STATES.STOPPED;
-      (queue as any).state.stopped = true;
+      queue.getRuntimeStateMachine().restore({
+        status: EXECUTION_STATES.STOPPED,
+        stopped: true,
+        totalPausedDuration: 0,
+      });
+      await queue.commitRuntimeTransition({
+        persist: false,
+        emitStateChange: false,
+      });
 
       await queue.setStartPosition(0);
 
