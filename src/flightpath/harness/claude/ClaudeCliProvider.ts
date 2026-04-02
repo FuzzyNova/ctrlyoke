@@ -222,6 +222,23 @@ export class ClaudeCliProvider implements ICliProvider {
     // IMPORTANT: This MUST come after session management because --disallowedTools is variadic
     // and will consume any flags after it (including -r <sessionId>)
     if (!isInteractive) {
+      // User hooks for headless mode — write before tool permissions so --disallowedTools
+      // (variadic) cannot accidentally consume the --settings flag value.
+      if (workspaceRoot) {
+        const userHooks =
+          workflowContext?.resolvedProperties?.hooks ?? undefined;
+        if (userHooks && userHooks.length > 0) {
+          const settingsPath = await this.buildHeadlessUserHookSettings(
+            workspaceRoot,
+            workflowContext?.promptIndex ?? 0,
+            workflowContext?.workingFilePath,
+            userHooks
+          );
+          args.push("--settings", settingsPath);
+          Log.debug(`🔔 Configured user hooks for headless mode`);
+        }
+      }
+
       // Use resolved permissions from workflow context; fall back to global settings
       const toolPermissions =
         workflowContext?.resolvedProperties?.toolPermissions;
@@ -370,8 +387,38 @@ export class ClaudeCliProvider implements ICliProvider {
   }
 
   /**
+   * Write user-only hook settings JSON to a temp file for headless execution.
+   * No FlightPath notification hooks are included since headless uses process-exit for completion.
+   */
+  private async buildHeadlessUserHookSettings(
+    workspaceRoot: string,
+    promptIndex: number,
+    workingFilePath?: string,
+    userHooks?: UserHookConfig[]
+  ): Promise<string> {
+    const fs = require("fs/promises");
+    const settingsJson = ClaudeNotificationMonitor.buildUserOnlyConfig(
+      userHooks ?? []
+    );
+    const tempDir = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.TEMP_DIR
+    );
+    await fs.mkdir(tempDir, { recursive: true });
+    const hookFileName = ClaudeCliProvider.buildHookSettingsFileName(
+      promptIndex,
+      workingFilePath
+    );
+    const settingsPath = path.join(tempDir, hookFileName);
+    this.interactiveHookSettingsPaths.push(settingsPath);
+    await fs.writeFile(settingsPath, settingsJson, "utf-8");
+    return settingsPath;
+  }
+
+  /**
    * Return additional file paths to delete after workflow cleanup.
-   * Includes all per-prompt hook settings files created during interactive sessions.
+   * Includes all per-prompt hook settings files created during interactive and headless sessions.
    */
   getAdditionalCleanupFilePaths(_workspaceRoot: string): string[] {
     return [...this.interactiveHookSettingsPaths];

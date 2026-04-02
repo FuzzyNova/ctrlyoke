@@ -210,6 +210,22 @@ export class CopilotCliProvider implements ICliProvider {
         args.push(...toolPermissionArgs);
       }
       // else: toolPermissions === null → none mode, skip permission flags entirely
+
+      // User hooks for headless mode — no FlightPath notification hooks needed since
+      // headless completion is detected via process exit.
+      if (workspaceRoot) {
+        const userHooks =
+          workflowContext?.resolvedProperties?.hooks ?? undefined;
+        if (userHooks && userHooks.length > 0) {
+          await this.createHeadlessUserHookFile(
+            workspaceRoot,
+            workflowContext?.promptIndex ?? 0,
+            workflowContext?.workingFilePath,
+            userHooks
+          );
+          Log.debug(`🔔 Configured user hooks for headless mode`);
+        }
+      }
     } else {
       // Interactive mode: Configure sessionEnd hook for completion detection
       if (workspaceRoot) {
@@ -364,10 +380,29 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   /**
+   * Create a hook file with only user-defined hooks for headless execution.
+   * No FlightPath notification hooks are needed since headless uses process-exit for completion.
+   */
+  private async createHeadlessUserHookFile(
+    workspaceRoot: string,
+    promptIndex: number,
+    workingFilePath?: string,
+    userHooks?: UserHookConfig[]
+  ): Promise<void> {
+    if (!userHooks || userHooks.length === 0) return;
+    const config = CopilotNotificationMonitor.buildUserOnlyConfig(userHooks);
+    const hookFileName = CopilotCliProvider.buildHookFileName(
+      promptIndex,
+      workingFilePath
+    );
+    await this.createHookFile({ config }, workspaceRoot, hookFileName);
+  }
+
+  /**
    * Return additional file paths to delete after workflow cleanup.
    *
    * Includes all per-prompt hook files created during this workflow's
-   * interactive sessions, plus the Copilot OTel telemetry file.
+   * interactive and headless sessions, plus the Copilot OTel telemetry file.
    */
   getAdditionalCleanupFilePaths(workspaceRoot: string): string[] {
     return [

@@ -25,6 +25,32 @@ export class ClaudeNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
 {
+  /** Map logical event names to Claude's native event names. */
+  static readonly EVENT_MAP: Record<string, string> = {
+    stop: "Stop",
+    sessionStart: "SessionStart",
+    preToolUse: "PreToolUse",
+    postToolUse: "PostToolUse",
+    userPromptSubmit: "UserPromptSubmit",
+  };
+
+  /**
+   * Build a user-hooks-only Claude settings JSON string (no FlightPath notification entries).
+   * Used for headless mode where completion detection is process-exit based.
+   */
+  static buildUserOnlyConfig(userHooks: UserHookConfig[]): string {
+    const hooks: Record<string, unknown[]> = {};
+    for (const uh of userHooks) {
+      const nativeEvent = ClaudeNotificationMonitor.EVENT_MAP[uh.event];
+      if (!nativeEvent) continue;
+      if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
+      hooks[nativeEvent].push({
+        hooks: [{ type: "command", command: uh.command }],
+      });
+    }
+    return JSON.stringify({ hooks });
+  }
+
   /**
    * Build hook configuration for Claude CLI
    *
@@ -55,15 +81,6 @@ export class ClaudeNotificationMonitor
       ],
     };
 
-    // Map logical event names to Claude's native event names
-    const eventMap: Record<string, string> = {
-      stop: "Stop",
-      sessionStart: "SessionStart",
-      preToolUse: "PreToolUse",
-      postToolUse: "PostToolUse",
-      userPromptSubmit: "UserPromptSubmit",
-    };
-
     // Build hooks object starting with FlightPath's entries
     const hooks: Record<string, unknown[]> = {
       SessionStart: [flightpathEntry],
@@ -73,7 +90,7 @@ export class ClaudeNotificationMonitor
     // Append user hooks to their respective events
     if (userHooks) {
       for (const uh of userHooks) {
-        const nativeEvent = eventMap[uh.event];
+        const nativeEvent = ClaudeNotificationMonitor.EVENT_MAP[uh.event];
         if (!nativeEvent) continue; // Skip unsupported events
         if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
         hooks[nativeEvent].push({

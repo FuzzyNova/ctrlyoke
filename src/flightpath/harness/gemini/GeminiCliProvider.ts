@@ -163,6 +163,24 @@ export class GeminiCliProvider implements ICliProvider {
         args.push(...toolPermissionArgs);
       }
       // else: toolPermissions === null → none mode, skip permission flags entirely
+
+      // User hooks for headless mode — no FlightPath notification hooks needed.
+      if (workspaceRoot) {
+        const userHooks =
+          workflowContext?.resolvedProperties?.hooks ?? undefined;
+        if (userHooks && userHooks.length > 0) {
+          const workflowKey =
+            workflowContext?.workingFilePath ?? workspaceRoot;
+          await this.buildInteractiveHookSettings(
+            extensionPath,
+            workspaceRoot,
+            workflowKey,
+            userHooks,
+            false
+          );
+          Log.debug(`🔔 Configured user hooks for headless mode`);
+        }
+      }
     } else {
       // Interactive mode: write AfterAgent hook to .gemini/settings.json
       if (workspaceRoot) {
@@ -198,39 +216,20 @@ export class GeminiCliProvider implements ICliProvider {
   }
 
   /**
-   * Merge FlightPath hooks into .gemini/settings.json and pre-trust them in
+   * Merge hooks into .gemini/settings.json and pre-trust them in
    * ~/.gemini/trusted_hooks.json so Gemini doesn't prompt the user for approval.
    *
    * Uses SettingsJsonHooksTracker for parallel-safe ref-counted hook management.
+   *
+   * @param includeFlightpathHooks When false, only user hooks are registered (headless mode).
    */
   private async buildInteractiveHookSettings(
     extensionPath: string,
     workspaceRoot: string,
     workflowKey: string,
-    userHooks?: UserHookConfig[]
+    userHooks?: UserHookConfig[],
+    includeFlightpathHooks: boolean = true
   ): Promise<void> {
-    const scriptPath = path.join(
-      extensionPath,
-      "out",
-      "scripts",
-      "flightpath-gemini-hook.js"
-    );
-    const notifyDir =
-      this.notificationMonitor.getNotificationDirectory(workspaceRoot);
-
-    const hookConfig = this.notificationMonitor.buildHookConfig(
-      scriptPath,
-      notifyDir,
-      workspaceRoot
-    );
-    if (hookConfig.type !== "json") {
-      throw new Error("Unexpected hook config type for Gemini CLI");
-    }
-
-    const flightpathHooksSection = (
-      hookConfig.config as Record<string, unknown>
-    )["hooks"] as Record<string, unknown[]>;
-
     // Convert user hooks to Gemini native format
     const geminiEventMap: Record<string, string> = {
       stop: "AfterAgent",
@@ -250,6 +249,39 @@ export class GeminiCliProvider implements ICliProvider {
       }
     }
 
+    let flightpathHooksSection: Record<string, unknown[]> = {};
+    let hookKey: string | undefined;
+
+    if (includeFlightpathHooks) {
+      const scriptPath = path.join(
+        extensionPath,
+        "out",
+        "scripts",
+        "flightpath-gemini-hook.js"
+      );
+      const notifyDir =
+        this.notificationMonitor.getNotificationDirectory(workspaceRoot);
+
+      const hookConfig = this.notificationMonitor.buildHookConfig(
+        scriptPath,
+        notifyDir,
+        workspaceRoot
+      );
+      if (hookConfig.type !== "json") {
+        throw new Error("Unexpected hook config type for Gemini CLI");
+      }
+
+      flightpathHooksSection = (
+        hookConfig.config as Record<string, unknown>
+      )["hooks"] as Record<string, unknown[]>;
+
+      // Pre-trust the FlightPath hook command in ~/.gemini/trusted_hooks.json
+      const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
+      const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
+      const hookCommand = `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`;
+      hookKey = `:${hookCommand}`;
+    }
+
     // Register hooks via ref-counted tracker under shared mutex
     await GeminiCliProvider.mcpTracker.withLock(async () => {
       await GeminiCliProvider.hooksTracker.registerWorkflow(
@@ -260,13 +292,8 @@ export class GeminiCliProvider implements ICliProvider {
       );
     });
 
-    // Pre-trust the hook commands in ~/.gemini/trusted_hooks.json
+    // Pre-trust hook commands in ~/.gemini/trusted_hooks.json
     // Key format: "${name}:${command}" where name defaults to ""
-    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
-    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
-    const hookCommand = `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`;
-    const hookKey = `:${hookCommand}`;
-
     const globalGeminiDir = path.join(os.homedir(), ".gemini");
     const trustedHooksPath = path.join(globalGeminiDir, "trusted_hooks.json");
 
@@ -281,7 +308,7 @@ export class GeminiCliProvider implements ICliProvider {
     if (!trustedHooks[workspaceRoot]) {
       trustedHooks[workspaceRoot] = [];
     }
-    if (!trustedHooks[workspaceRoot].includes(hookKey)) {
+    if (hookKey && !trustedHooks[workspaceRoot].includes(hookKey)) {
       trustedHooks[workspaceRoot].push(hookKey);
     }
 

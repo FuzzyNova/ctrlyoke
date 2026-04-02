@@ -25,10 +25,10 @@ export type ToolClassification =
  *
  * **Harness-specific tool name variations handled:**
  * - Bash/shell: `bash`, `shell`, `powershell`, `command`, `execute_command`, `run_command`, `shell_command`
- * - File read: `read`, `read_file`, `view`, `cat`
+ * - File read: `read`, `read_file`, `view` (native harness read tools only; `cat`, `ls`, etc. are shell commands → TOOL_CALL)
  * - File write: `write`, `write_file`, `create`, `create_file`
  * - File edit: `edit`, `edit_file`, `modify_file`, `replace_string_in_file`, `multiedit`, `apply_patch`
- * - File delete: `delete`, `delete_file`, `remove_file`, `rm`
+ * - File delete: `delete`, `delete_file`, `remove_file` (`rm` is a shell command → TOOL_CALL)
  * - Web search: `web_search`, `search`, `webfetch`
  * - MCP tools: `server(tool)` (Copilot), `server.tool` / `mcp_*` (Claude), `server__tool` (Codex)
  *
@@ -58,19 +58,11 @@ export class CliEventMapper {
     "run_shell_command",
   ]);
 
-  /** Tool names that map to FILE_READ */
+  /** Tool names that map to FILE_READ (native harness built-in read tools only) */
   private static readonly FILE_READ_TOOLS = new Set([
     "read",
     "read_file",
     "view",
-    "cat",
-    "list_directory",
-    "ls",
-    "dir",
-    "grep_search",
-    "grep",
-    "search_files",
-    "glob",
   ]);
 
   /** Tool names that map to FILE_WRITE */
@@ -92,12 +84,11 @@ export class CliEventMapper {
     "replace",
   ]);
 
-  /** Tool names that map to FILE_DELETE */
+  /** Tool names that map to FILE_DELETE (native harness built-in delete tools only) */
   private static readonly FILE_DELETE_TOOLS = new Set([
     "delete",
     "delete_file",
     "remove_file",
-    "rm",
   ]);
 
   /** Tool names that map to WEB_SEARCH */

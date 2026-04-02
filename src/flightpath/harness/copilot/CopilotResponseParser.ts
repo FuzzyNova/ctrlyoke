@@ -6,6 +6,7 @@ import {
   UniversalCliOutput,
   CliEvent,
   TokenUsage,
+  McpToolCallData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -83,6 +84,20 @@ export class CopilotResponseParser
     >();
 
     for (const json of objects) {
+      // Surface MCP server connection events even though they are ephemeral.
+      // These have no non-ephemeral counterpart, so they must be captured here.
+      if (json.type === "session.mcp_server_status_changed" && json.data?.serverName) {
+        events.push({
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          timestamp: Date.now(),
+          data: {
+            server: json.data.serverName as string,
+            tool: (json.data.status as string) || "connected",
+          } as McpToolCallData,
+        });
+        continue;
+      }
+
       // Only process non-ephemeral events in batch parse.
       // Ephemeral events (message_delta, reasoning_delta, assistant.reasoning) are
       // streaming helpers — their content is also present in the non-ephemeral
@@ -380,6 +395,20 @@ export class CopilotResponseParser
               );
               pendingCalls!.delete(toolCallId);
             }
+          }
+          break;
+        }
+
+        case "session.mcp_server_status_changed": {
+          if (json.data?.serverName) {
+            events.push({
+              type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+              timestamp: Date.now(),
+              data: {
+                server: json.data.serverName as string,
+                tool: (json.data.status as string) || "connected",
+              } as McpToolCallData,
+            });
           }
           break;
         }

@@ -52,9 +52,9 @@ suite("CliEventMapper", () => {
       assert.strictEqual(result.type, CLI_EVENT_TYPES.FILE_READ);
     });
 
-    test("cat → FILE_READ", () => {
+    test("cat → TOOL_CALL (shell command, not a native harness read tool)", () => {
       const result = CliEventMapper.classifyTool("cat");
-      assert.strictEqual(result.type, CLI_EVENT_TYPES.FILE_READ);
+      assert.strictEqual(result.type, CLI_EVENT_TYPES.TOOL_CALL);
     });
 
     // ── FILE_WRITE ────────────────────────────────────────────────────────────
@@ -99,9 +99,9 @@ suite("CliEventMapper", () => {
       assert.strictEqual(result.type, CLI_EVENT_TYPES.FILE_DELETE);
     });
 
-    test("rm → FILE_DELETE", () => {
+    test("rm → TOOL_CALL (shell command, not a native harness delete tool)", () => {
       const result = CliEventMapper.classifyTool("rm");
-      assert.strictEqual(result.type, CLI_EVENT_TYPES.FILE_DELETE);
+      assert.strictEqual(result.type, CLI_EVENT_TYPES.TOOL_CALL);
     });
 
     // ── WEB_SEARCH ────────────────────────────────────────────────────────────

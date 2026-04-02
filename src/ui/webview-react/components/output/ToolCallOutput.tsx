@@ -8,12 +8,13 @@
  * Re-exports from FileOperationOutput and DiffView are preserved for
  * backward compatibility with existing consumers.
  */
-import React from "react";
-import { truncate, extractKeyParameters } from "@utils/outputUtils";
+import React, { useState, useId } from "react";
+import { extractKeyParameters } from "@utils/outputUtils";
 import {
   TOOL_CALL_TERMINAL,
   TOOL_CALL_LINE,
   TOOL_RESULT_LINE,
+  TOOL_ERROR_LINE,
 } from "./outputStyles";
 import {
   ToolDot,
@@ -101,18 +102,74 @@ interface GenericToolCallOutputProps {
   className?: string;
 }
 
+const MAX_RESULT_LINES = 10;
+
 export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   name,
   parameters,
   result,
   className = "",
 }) => {
-  const params = extractKeyParameters(name, parameters);
+  const [paramsExpanded, setParamsExpanded] = useState(false);
+  const [outputExpanded, setOutputExpanded] = useState(false);
+  const [errorExpanded, setErrorExpanded] = useState(false);
+  const containerId = useId();
 
-  const getResultText = (r: ToolResult): string => {
-    if (!r.success && r.error) return truncate(r.error, 200);
-    if (r.output) return truncate(r.output, 100);
-    return r.success ? "Success" : "Failed";
+  const params = extractKeyParameters(name, parameters);
+  const hasParams = parameters != null && Object.keys(parameters).length > 0;
+
+  const fullParamsText = hasParams
+    ? Object.entries(parameters!)
+        .map(
+          ([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`
+        )
+        .join("\n")
+    : "";
+
+  const outputStr =
+    typeof result?.output === "string" ? result.output : undefined;
+  const errorStr =
+    result != null && !result.success && typeof result.error === "string"
+      ? result.error
+      : undefined;
+
+  const renderExpandableSection = (
+    content: string,
+    type: "output" | "error",
+    isExpanded: boolean,
+    setExpanded: (v: boolean) => void
+  ) => {
+    const lines = content.split("\n");
+    const isTruncated = lines.length > MAX_RESULT_LINES;
+    const visible =
+      isTruncated && !isExpanded
+        ? lines.slice(0, MAX_RESULT_LINES).join("\n")
+        : content;
+    const hiddenLines = lines.length - MAX_RESULT_LINES;
+    const cssClass = type === "error" ? TOOL_ERROR_LINE : TOOL_RESULT_LINE;
+
+    return (
+      <div className={cssClass}>
+        <span className="text-vscode-description-fg shrink-0">{"  ⎿  "}</span>
+        <div
+          className="inline whitespace-pre-wrap break-words"
+          id={`${containerId}-${type}`}
+        >
+          {visible}
+          {isTruncated && (
+            <button
+              type="button"
+              className="text-bash-expand-link no-underline text-[0.9em] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
+              onClick={() => setExpanded(!isExpanded)}
+            >
+              {isExpanded
+                ? "[show less]"
+                : `[show ${hiddenLines} more line${hiddenLines !== 1 ? "s" : ""}]`}
+            </button>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -122,17 +179,38 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
         <span>
           {name}({params})
         </span>
+        {hasParams && (
+          <button
+            type="button"
+            className="text-bash-expand-link text-[0.85em] cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline"
+            onClick={() => setParamsExpanded(!paramsExpanded)}
+            title={paramsExpanded ? "Hide parameters" : "Show all parameters"}
+          >
+            {paramsExpanded ? "▲" : "▼"}
+          </button>
+        )}
       </div>
-      {result && (
-        <div
-          className={`${result.success ? TOOL_RESULT_LINE : "text-bash-status-error pl-4 ml-2 text-[length:var(--fp-output-font-size-sm)]"} flex items-start gap-1`}
-        >
-          <span className="shrink-0">⎿</span>
-          <span className="whitespace-pre-wrap break-words min-w-0">
-            {getResultText(result)}
-          </span>
+
+      {paramsExpanded && fullParamsText && (
+        <div className="pl-4 ml-2 text-[length:var(--fp-output-font-size-sm)] text-description-fg whitespace-pre-wrap break-all">
+          {fullParamsText}
         </div>
       )}
+
+      {outputStr &&
+        renderExpandableSection(
+          outputStr,
+          "output",
+          outputExpanded,
+          setOutputExpanded
+        )}
+      {errorStr &&
+        renderExpandableSection(
+          errorStr,
+          "error",
+          errorExpanded,
+          setErrorExpanded
+        )}
     </div>
   );
 };

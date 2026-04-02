@@ -219,6 +219,25 @@ export class QwenCliProvider implements ICliProvider {
         args.push(...toolPermissionArgs);
       }
       // else: toolPermissions === null → none mode, skip permission flags entirely
+
+      // User hooks for headless mode — no FlightPath notification hooks needed.
+      if (workspaceRoot) {
+        const userHooks =
+          workflowContext?.resolvedProperties?.hooks ?? undefined;
+        if (userHooks && userHooks.length > 0) {
+          args.push("--experimental-hooks");
+          const workflowKey =
+            workflowContext?.workingFilePath ?? workspaceRoot;
+          await this.buildInteractiveHookSettings(
+            extensionPath,
+            workspaceRoot,
+            workflowKey,
+            userHooks,
+            false
+          );
+          Log.debug(`🔔 Configured user hooks for headless mode`);
+        }
+      }
     } else {
       // Interactive mode: enable experimental hooks and write Stop hook to .qwen/settings.json
       args.push("--experimental-hooks");
@@ -255,39 +274,20 @@ export class QwenCliProvider implements ICliProvider {
   }
 
   /**
-   * Merge FlightPath hooks into .qwen/settings.json and pre-trust them in
+   * Merge hooks into .qwen/settings.json and pre-trust them in
    * ~/.qwen/trusted_hooks.json so Qwen doesn't prompt the user for approval.
    *
    * Uses SettingsJsonHooksTracker for parallel-safe ref-counted hook management.
+   *
+   * @param includeFlightpathHooks When false, only user hooks are registered (headless mode).
    */
   private async buildInteractiveHookSettings(
     extensionPath: string,
     workspaceRoot: string,
     workflowKey: string,
-    userHooks?: UserHookConfig[]
+    userHooks?: UserHookConfig[],
+    includeFlightpathHooks: boolean = true
   ): Promise<void> {
-    const scriptPath = path.join(
-      extensionPath,
-      "out",
-      "scripts",
-      "flightpath-qwen-hook.js"
-    );
-    const notifyDir =
-      this.notificationMonitor.getNotificationDirectory(workspaceRoot);
-
-    // Build hooks section via the notification monitor (single source of truth).
-    // FLIGHTPATH_DIAGNOSTIC_LOGS is injected into the CLI process env at spawn time
-    // via CliIntegration (CliProviderUtils.buildProcessEnv default) so hook subprocesses
-    // inherit it. Using KEY=VALUE prefix in the command string does not work on Windows.
-    const hookConfig = this.notificationMonitor.buildHookConfig(
-      scriptPath,
-      notifyDir,
-      workspaceRoot
-    );
-    const hooksSection = (
-      hookConfig as { type: string; config: { hooks: Record<string, unknown> } }
-    ).config.hooks;
-
     // Convert user hooks to Qwen native format
     const qwenEventMap: Record<string, string> = {
       stop: "Stop",
@@ -310,23 +310,51 @@ export class QwenCliProvider implements ICliProvider {
       }
     }
 
+    let flightpathHooksSection: Record<string, unknown[]> = {};
+    let flightpathKey: string | undefined;
+
+    if (includeFlightpathHooks) {
+      const scriptPath = path.join(
+        extensionPath,
+        "out",
+        "scripts",
+        "flightpath-qwen-hook.js"
+      );
+      const notifyDir =
+        this.notificationMonitor.getNotificationDirectory(workspaceRoot);
+
+      // Build hooks section via the notification monitor (single source of truth).
+      // FLIGHTPATH_DIAGNOSTIC_LOGS is injected into the CLI process env at spawn time
+      // via CliIntegration (CliProviderUtils.buildProcessEnv default) so hook subprocesses
+      // inherit it. Using KEY=VALUE prefix in the command string does not work on Windows.
+      const hookConfig = this.notificationMonitor.buildHookConfig(
+        scriptPath,
+        notifyDir,
+        workspaceRoot
+      );
+      flightpathHooksSection = (
+        hookConfig as { type: string; config: { hooks: Record<string, unknown> } }
+      ).config.hooks as Record<string, unknown[]>;
+
+      // Pre-trust the FlightPath hook command in ~/.qwen/trusted_hooks.json.
+      // Key format: "${name}:${command}" where name defaults to "".
+      // Must match the command format in buildHookConfig exactly (no quotes — see note there).
+      const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
+      const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
+      flightpathKey = `:node ${normalizedScriptPath} ${normalizedNotifyDir}`;
+    }
+
     // Register hooks via ref-counted tracker under shared mutex
     await QwenCliProvider.mcpTracker.withLock(async () => {
       await QwenCliProvider.hooksTracker.registerWorkflow(
         workflowKey,
         workspaceRoot,
-        hooksSection as Record<string, unknown[]>,
+        flightpathHooksSection,
         workflowUserHooks
       );
     });
 
-    // Pre-trust the hook command in ~/.qwen/trusted_hooks.json.
-    // Key format: "${name}:${command}" where name defaults to "".
-    // Must match the command format in buildHookConfig exactly (no quotes — see note there).
-    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
-    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
-    const baseCommand = `node ${normalizedScriptPath} ${normalizedNotifyDir}`;
-
+    // Pre-trust hook commands in ~/.qwen/trusted_hooks.json
     const globalQwenDir = path.join(os.homedir(), ".qwen");
     const trustedHooksPath = path.join(globalQwenDir, "trusted_hooks.json");
 
@@ -341,9 +369,8 @@ export class QwenCliProvider implements ICliProvider {
     if (!trustedHooks[workspaceRoot]) {
       trustedHooks[workspaceRoot] = [];
     }
-    const key = `:${baseCommand}`;
-    if (!trustedHooks[workspaceRoot].includes(key)) {
-      trustedHooks[workspaceRoot].push(key);
+    if (flightpathKey && !trustedHooks[workspaceRoot].includes(flightpathKey)) {
+      trustedHooks[workspaceRoot].push(flightpathKey);
     }
 
     // Also pre-trust user hook commands
