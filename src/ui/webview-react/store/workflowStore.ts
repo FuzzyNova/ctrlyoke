@@ -352,7 +352,7 @@ export const useWorkflowStore = create<
               if (streamingIdx >= 0) {
                 const newEntries = [...state.liveOrderedEntries];
                 newEntries[streamingIdx] = entry;
-                return { liveOrderedEntries: newEntries };
+                return { liveOrderedEntries: newEntries, liveSequence: state.liveSequence + 1 };
               }
             }
             return {
