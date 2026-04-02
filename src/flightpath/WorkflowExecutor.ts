@@ -1362,6 +1362,65 @@ export class WorkflowExecutor {
   ): Promise<boolean> {
     const runtime = this.getRuntime();
     if (runtime.stopped) {
+      // Workflow was stopped by the user. Flush whatever partial output is available
+      // so the history file is not empty and the user can resume from the stopped state.
+      const failureOutput = integration.getLastFailureOutput?.();
+      const failureReason =
+        integration.getLastFailureReason() || "Workflow stopped by user";
+      const attemptTimestampMs = this.getAttemptStartedAt(target) ?? Date.now();
+
+      const stoppedOutput = {
+        prompt: prompt.prompt,
+        response: failureOutput ?? "",
+        isStreaming: false,
+        elapsed: 0,
+        tokens: undefined,
+        cliCommand: context.shouldShowCliCommand
+          ? integration.getLastCliCommand()
+          : undefined,
+        workingDirectory: context.workspaceFolderPath,
+        timestampMs: attemptTimestampMs,
+        attemptIndex,
+        rawTextOutput:
+          failureOutput !== undefined
+            ? true
+            : integration.rawTextOutput || undefined,
+        errorMessage: failureReason,
+      };
+
+      if (context.dashboardProvider && legacyStepIndex >= 0) {
+        context.dashboardProvider.updateCliOutput(legacyStepIndex, stoppedOutput);
+      } else if (
+        context.dashboardProvider &&
+        target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
+      ) {
+        context.dashboardProvider.updateFinalPromptOutput(
+          target.loopIndex,
+          stoppedOutput
+        );
+      }
+
+      if (legacyStepIndex >= 0) {
+        context.captureCompletedOutput?.(legacyStepIndex, stoppedOutput);
+      } else if (target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+        context.captureFinalPromptCompletedOutput?.(
+          target.loopIndex,
+          stoppedOutput
+        );
+      }
+
+      if (context.historyFilePath && context.outputHistoryManager) {
+        await context.outputHistoryManager
+          .saveExecutionOutput(
+            context.historyFilePath,
+            this.toOutputExecutionTarget(target),
+            [stoppedOutput]
+          )
+          .catch((err) =>
+            Log.warn("Failed to save stopped-by-user output to history:", err)
+          );
+      }
+
       return false;
     }
 

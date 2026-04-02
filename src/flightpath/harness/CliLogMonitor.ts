@@ -413,7 +413,8 @@ export class CliLogMonitor {
             clearTimeout(timeoutHandle);
           }
           watcher.close();
-          resolve({ success: false });
+          // Preserve the sessionId so the caller can persist it for resume-after-stop.
+          resolve({ success: false, sessionId: sessionId || undefined });
           return;
         }
         const ptyExit = this.deps.isPtyTerminated?.();
@@ -436,6 +437,8 @@ export class CliLogMonitor {
           void drainLogEvents().then(() => {
             resolve({
               success: false,
+              // Preserve the sessionId so the caller can persist it for resume-after-stop.
+              sessionId: sessionId || undefined,
               processExited: { exitCode: ptyExit.exitCode },
             });
           });
