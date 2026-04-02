@@ -8,6 +8,8 @@ export interface TabIconOverride {
   color?: string;
   /** Tailwind hover:text-* class to apply on hover when inactive; defaults to hover:text-foreground */
   hoverColor?: string;
+  /** Tailwind text-color class to apply when the tab is active; defaults to text-foreground */
+  activeColor?: string;
 }
 
 /**
@@ -35,7 +37,7 @@ export function getHooksTabOverride(
   hooks: object[] | null | undefined
 ): TabIconOverride | undefined {
   if (Array.isArray(hooks) && hooks.length > 0) {
-    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight" };
+    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight", activeColor: "text-focus-highlight" };
   }
   return undefined;
 }
@@ -45,7 +47,7 @@ export function getMcpTabOverride(
   mcpServers: (string | object)[] | null | undefined
 ): TabIconOverride | undefined {
   if (Array.isArray(mcpServers) && mcpServers.length > 0) {
-    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight" };
+    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight", activeColor: "text-focus-highlight" };
   }
   return undefined;
 }
@@ -55,7 +57,7 @@ export function getValidationTabOverride(
   endCondition: { script?: string } | null | undefined
 ): TabIconOverride | undefined {
   if (endCondition?.script) {
-    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight" };
+    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight", activeColor: "text-focus-highlight" };
   }
   return undefined;
 }
@@ -73,7 +75,7 @@ export function getContextTabOverride(
     ? priorContext.length > 0
     : typeof priorContext === "string" && priorContext !== "none";
   if (sessionActive || contextActive) {
-    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight" };
+    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight", activeColor: "text-focus-highlight" };
   }
   return undefined;
 }

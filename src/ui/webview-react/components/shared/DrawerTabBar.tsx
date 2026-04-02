@@ -29,8 +29,9 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
         const codicon = override?.codicon ?? tab.codicon;
         const overrideColor = !isActive ? override?.color : undefined;
         const inactiveColor = overrideColor ?? "text-description-fg";
+        const activeColor = override?.activeColor ?? "text-foreground";
         const hoverClass = !isActive
-          ? (override?.hoverColor ?? "hover:text-foreground")
+          ? (override?.hoverColor ?? "hover:text-foreground") + " hover:border-panel-border"
           : "";
         return (
           <button
@@ -39,7 +40,7 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
             title={tab.label}
             className={`flex-1 flex items-center justify-center py-1.5 transition-colors cursor-pointer border-b-2 ${
               isActive
-                ? "border-focus-border text-foreground"
+                ? `border-focus-border ${activeColor}`
                 : `border-transparent ${inactiveColor} ${hoverClass}${tab.placeholder ? " opacity-60" : ""}`
             }`}
             onClick={() => onTabChange(tab.id)}
@@ -50,7 +51,7 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
                 style={{ fontSize: 16 }}
               />
             ) : (
-              <HarnessIcon harnessId={harnessId} size={18} />
+              <HarnessIcon harnessId={harnessId} size={18} className={isActive ? "opacity-100" : "opacity-80 hover:opacity-100"} />
             )}
           </button>
         );
