@@ -78,8 +78,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
           timestampMs: 100,
           attemptIndex: 0,
         },
-      ],
-      [{ message: "started", severity: "info", timestamp: 110 }]
+      ]
     );
 
     await manager.saveExecutionOutput(
@@ -94,8 +93,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
           timestampMs: 120,
           attemptIndex: 0,
         },
-      ],
-      [{ message: "started", severity: "info", timestamp: 110 }]
+      ]
     );
 
     await manager.appendStatusMessage(
@@ -111,11 +109,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     await manager.saveExecutionOutput(
       historyFilePath,
       { kind: "queue", stepIndex: 0 },
-      [],
-      [
-        { message: "started", severity: "info", timestamp: 110 },
-        { message: "done", severity: "info", timestamp: 130 },
-      ]
+      []
     );
 
     await manager.saveExecutionOutput(
@@ -129,8 +123,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
           isStreaming: false,
           timestampMs: 200,
         },
-      ],
-      []
+      ]
     );
 
     await manager.saveSnapshotForTarget(
@@ -374,8 +367,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
           timestampMs: 110,
           attemptIndex: 0,
         },
-      ],
-      [{ message: "queued", severity: "info", timestamp: 100 }]
+      ]
     );
 
     await manager.appendStatusMessage(
@@ -430,10 +422,6 @@ suite("OutputHistoryManager timeline-backed storage", () => {
           timestampMs: 110,
           attemptIndex: 0,
         },
-      ],
-      [
-        { message: "queued", severity: "info", timestamp: 100 },
-        { message: "stale-compat", severity: "warning", timestamp: 105 },
       ]
     );
 

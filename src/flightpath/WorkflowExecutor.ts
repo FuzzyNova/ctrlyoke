@@ -32,7 +32,7 @@ import {
   DashboardOutput,
 } from "./harness/shared/CliOutputFormatter";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
-import { StatusMessage, CliEvent } from "../types/WebviewMessageTypes";
+import { CliEvent } from "../types/WebviewMessageTypes";
 import {
   WorkspaceSnapshotService,
   RawWorkspaceState,
@@ -116,7 +116,6 @@ export interface WorkflowExecutionContext {
 
 type ExecutionTarget = WorkflowAttemptTarget;
 
-type StepExecutionKey = `queue:${number}` | `final:${number}`;
 
 /**
  * Drives the sequential execution loop for a FlightPath workflow.
@@ -135,8 +134,6 @@ export class WorkflowExecutor {
   private pendingResponseText: string | null = null;
   private isWaitingForResponse: boolean = false;
 
-  private stepStatusMessages: Map<StepExecutionKey, StatusMessage[]> =
-    new Map();
 
   constructor(
     private readonly promptQueue: PromptQueue,
@@ -160,7 +157,6 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext
   ): Promise<void> {
     this.clearPendingState();
-    this.stepStatusMessages.clear();
 
     const runtime = this.promptQueue.getRuntimeStateMachine();
     if (runtime.startExecution()) {
@@ -635,12 +631,6 @@ export class WorkflowExecutor {
     return true;
   }
 
-  private getExecutionKey(target: ExecutionTarget): StepExecutionKey {
-    return target.kind === FINAL_PROMPT_PHASES.QUEUE
-      ? `queue:${target.stepIndex}`
-      : `final:${target.loopIndex}`;
-  }
-
   private getAttemptStartedAt(target: ExecutionTarget): number | undefined {
     return this.promptQueue.getRuntimeStateMachine().getAttempt(target)
       ?.startedAt;
@@ -746,7 +736,6 @@ export class WorkflowExecutor {
     severity: string = STATUS_MESSAGE_SEVERITY.INFO,
     timestampMs?: number
   ): Promise<void> {
-    const key = this.getExecutionKey(target);
     const legacyStepIndex = this.getLegacyStepIndex(target);
 
     // Queue steps keep non-negative indices; finalPrompt loops use negative
@@ -764,16 +753,13 @@ export class WorkflowExecutor {
       context.onStatusMessage?.(legacyStepIndex, message, severity);
     }
 
-    const messages = this.stepStatusMessages.get(key) ?? [];
     const statusMessage = {
       message,
       severity: severity as any,
       timestamp: timestampMs ?? Date.now(),
     };
-    messages.push(statusMessage);
-    this.stepStatusMessages.set(key, messages);
 
-    if (context.historyFilePath && context.outputHistoryManager) {
+    if(context.historyFilePath && context.outputHistoryManager) {
       await context.outputHistoryManager
         .appendStatusMessage(
           context.historyFilePath,
@@ -1457,14 +1443,11 @@ export class WorkflowExecutor {
       }
 
       if (context.historyFilePath && context.outputHistoryManager) {
-        const key = this.getExecutionKey(target);
-        const statusMessages = this.stepStatusMessages.get(key) ?? [];
         await context.outputHistoryManager
           .saveExecutionOutput(
             context.historyFilePath,
             this.toOutputExecutionTarget(target),
-            [processExitOutput],
-            statusMessages
+            [processExitOutput]
           )
           .catch((err) =>
             Log.warn("Failed to save process-exit output to history:", err)
@@ -1548,14 +1531,11 @@ export class WorkflowExecutor {
     }
 
     if (context.historyFilePath && context.outputHistoryManager) {
-      const key = this.getExecutionKey(target);
-      const statusMessages = this.stepStatusMessages.get(key) ?? [];
       await context.outputHistoryManager
         .saveExecutionOutput(
           context.historyFilePath,
           this.toOutputExecutionTarget(target),
-          [errorCliOutput],
-          statusMessages
+          [errorCliOutput]
         )
         .catch((err) =>
           Log.warn("Failed to save error output to history:", err)
@@ -1648,14 +1628,11 @@ export class WorkflowExecutor {
     }
 
     if (context.historyFilePath && context.outputHistoryManager) {
-      const key = this.getExecutionKey(target);
-      const statusMessages = this.stepStatusMessages.get(key) ?? [];
       await context.outputHistoryManager
         .saveExecutionOutput(
           context.historyFilePath,
           this.toOutputExecutionTarget(target),
-          [cliOutputObj],
-          statusMessages
+          [cliOutputObj]
         )
         .catch((err) =>
           Log.warn("Failed to save step output to history:", err)

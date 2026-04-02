@@ -492,7 +492,6 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     const historySaves: Array<{
       target: unknown;
       cliOutputs: any[];
-      statusMessages: any[];
     }> = [];
     const historyCallOrder: string[] = [];
 
@@ -528,11 +527,10 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
       saveExecutionOutput: async (
         _historyFilePath: string,
         target: unknown,
-        cliOutputs: any[],
-        statusMessages: any[]
+        cliOutputs: any[]
       ) => {
         historyCallOrder.push("output");
-        historySaves.push({ target, cliOutputs, statusMessages });
+        historySaves.push({ target, cliOutputs });
       },
     } as any;
 
@@ -585,15 +583,6 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     assert.match(
       historySaves[0].cliOutputs[0].response,
       /unknown option '--poopy'/
-    );
-    assert.ok(
-      historySaves[0].cliOutputs[0].timestampMs <
-        historySaves[0].statusMessages[0].timestamp
-    );
-    assert.ok(
-      historySaves[0].statusMessages.some((msg) =>
-        /Process exited unexpectedly/.test(msg.message)
-      )
     );
   });
 });

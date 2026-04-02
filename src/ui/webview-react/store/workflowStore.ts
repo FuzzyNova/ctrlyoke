@@ -171,7 +171,7 @@ interface WorkflowActions {
     newCurrentStep: number
   ) => void;
 
-  // Promote history snapshot data into live cliOutputs/statusMessages for preserved steps.
+  // Promote completed history entries into the live ordered timeline for preserved steps.
   // Called before switching from history→live view on a continuation run so the user
   // still sees previous prompts' output in the live panel.
   promoteHistoryToLive: (stepCount: number) => void;

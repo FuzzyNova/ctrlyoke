@@ -401,7 +401,7 @@ function createMessageHandlers(): MessageHandlerMap {
     );
 
     if (isContinuation && preserveStepCount > 0) {
-      // Append-continuation run: promote history snapshot into live cliOutputs BEFORE
+      // Append-continuation run: promote history entries into liveOrderedEntries BEFORE
       // clearing history view, so the user still sees previous prompts' output.
       WebviewLog.debug(
         `[EXECUTION_STARTED] Continuation — promoting ${preserveStepCount} history step(s) to live, then switching to live view`

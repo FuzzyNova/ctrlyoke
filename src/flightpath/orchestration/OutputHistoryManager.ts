@@ -130,33 +130,12 @@ export class OutputHistoryManager {
   }
 
   /**
-   * Save CLI outputs for a step (called after each prompt completes or retries).
-   * Merges incoming CLI outputs with existing ones by attemptIndex so all retry
-   * attempts are preserved. Timeline-backed runs ignore statusMessages here;
-   * canonical status persistence goes through appendStatusMessage().
-   */
-  async saveStepOutput(
-    historyFilePath: string,
-    stepIndex: number,
-    cliOutputs: CliOutput[],
-    statusMessages: StatusMessage[]
-  ): Promise<void> {
-    await this.saveExecutionOutput(
-      historyFilePath,
-      { kind: "queue", stepIndex },
-      cliOutputs,
-      statusMessages
-    );
-  }
-
-  /**
    * Save outputs for either a queue step or a finalPrompt loop.
    */
   async saveExecutionOutput(
     historyFilePath: string,
     target: OutputExecutionTarget,
-    cliOutputs: CliOutput[],
-    _statusMessages: StatusMessage[]
+    cliOutputs: CliOutput[]
   ): Promise<void> {
     if (!historyFilePath) {
       return;
