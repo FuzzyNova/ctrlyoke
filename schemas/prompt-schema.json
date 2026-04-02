@@ -67,7 +67,9 @@
             "copilot-chat",
             "claude-cli",
             "codex-cli",
-            "opencode-cli"
+            "opencode-cli",
+            "qwen-cli",
+            "gemini-cli"
           ]
         },
         "model": {

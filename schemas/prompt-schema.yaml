@@ -62,6 +62,8 @@ definitions:
           - claude-cli
           - codex-cli
           - opencode-cli
+          - qwen-cli
+          - gemini-cli
       model:
         type: string
         description: >-

@@ -49,6 +49,18 @@ const HARNESSES = [
 type HarnessId = (typeof HARNESSES)[number];
 
 /**
+ * Models to use per harness — prefer free/cheap tiers to minimise cost.
+ */
+const HARNESS_MODELS: Record<HarnessId, string | undefined> = {
+  "copilot-cli": "gpt-5-mini",
+  "claude-cli": "haiku",
+  "codex-cli": "gpt-5.1-codex-mini",
+  "opencode-cli": "opencode/big-pickle",
+  "qwen-cli": "coder-model",
+  "gemini-cli": "gemini-3-flash-preview",
+};
+
+/**
  * Hooks that MUST fire for each harness (test fails if they don't).
  * "stop" fires for every harness on normal completion.
  */
@@ -67,24 +79,24 @@ const REQUIRED_HOOKS: Record<HarnessId, string[]> = {
  * might theoretically answer without using bash in rare cases.
  */
 const TOOL_HOOKS: Record<HarnessId, string[]> = {
-  "copilot-cli": [],
+  "copilot-cli": ["preToolUse", "postToolUse"],
   "claude-cli": ["preToolUse", "postToolUse"],
   "codex-cli": [],
-  "opencode-cli": [],
+  "opencode-cli": ["preToolUse", "postToolUse"],
   "qwen-cli": ["preToolUse", "postToolUse"],
-  "gemini-cli": [],
+  "gemini-cli": ["preToolUse", "postToolUse"],
 };
 
 /**
  * Hooks supported at session level (expected unless AI skips session start).
  */
 const SESSION_HOOKS: Record<HarnessId, string[]> = {
-  "copilot-cli": ["sessionStart"],
+  "copilot-cli": ["sessionStart", "userPromptSubmit"],
   "claude-cli": ["sessionStart", "userPromptSubmit"],
   "codex-cli": [],
   "opencode-cli": ["sessionStart"],
-  "qwen-cli": ["sessionStart"],
-  "gemini-cli": ["sessionStart"],
+  "qwen-cli": ["sessionStart", "userPromptSubmit"],
+  "gemini-cli": ["sessionStart", "userPromptSubmit"],
 };
 
 // ---------------------------------------------------------------------------
@@ -122,6 +134,8 @@ interface HarnessRunResult {
   skipped: boolean;
   /** exit code from flightpath CLI */
   exitCode: number | null;
+  /** stdout output from flightpath CLI */
+  stdout: string;
   /** stderr output from flightpath CLI */
   stderr: string;
   /** hook records written by the recorder script */
@@ -147,6 +161,7 @@ function buildWorkflow(harness: HarnessId, recorderScript: string): PromptFile {
 
   return {
     harness: harness as any,
+    ...(HARNESS_MODELS[harness] !== undefined && { model: HARNESS_MODELS[harness] }),
     hooks: [
       { event: "stop", command: hookCmd("stop") },
       { event: "sessionStart", command: hookCmd("sessionStart") },
@@ -187,7 +202,7 @@ function runHarness(
       "run",
       workflowFile,
       "--headless",
-      "--quiet",
+      "--verbose",
       "--timeout",
       "60",
       "--var",
@@ -205,6 +220,7 @@ function runHarness(
     return {
       skipped: true,
       exitCode: 3,
+      stdout: result.stdout ?? "",
       stderr: result.stderr ?? "",
       records: [],
     };
@@ -229,6 +245,7 @@ function runHarness(
   return {
     skipped: false,
     exitCode: result.status,
+    stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
     records,
   };
@@ -252,7 +269,12 @@ suite("Harness Hook Tests", function () {
   });
 
   teardown(function () {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // EBUSY on Windows if a harness process still has files open; best-effort cleanup
+      console.log(`  ⚠  Could not clean up ${tmpDir} (may still be in use)`);
+    }
   });
 
   for (const harness of HARNESSES) {
@@ -262,7 +284,7 @@ suite("Harness Hook Tests", function () {
     test(`${h}: required hooks fire on successful run`, function () {
       this.timeout(HARNESS_TIMEOUT_MS + 5_000);
 
-      const { skipped, exitCode, stderr, records } = runHarness(
+      const { skipped, exitCode, stdout, stderr, records } = runHarness(
         h,
         tmpDir,
         recorderScript
@@ -272,6 +294,14 @@ suite("Harness Hook Tests", function () {
         console.log(`  ⚠  ${h} — SKIPPED (not installed)`);
         return; // Mocha doesn't have a built-in skip in TDD mode; just return
       }
+
+      // Always show CLI output for visibility
+      console.log(
+        `  --- stdout (${stdout.length} bytes) ---\n${stdout.trimEnd() || "(empty)"}\n  ---`
+      );
+      console.log(
+        `  --- stderr (${stderr.length} bytes) ---\n${stderr.trimEnd() || "(empty)"}\n  ---`
+      );
 
       const firedEvents = new Set(records.map((r) => r.event));
 
@@ -303,7 +333,7 @@ suite("Harness Hook Tests", function () {
       assert.strictEqual(
         exitCode,
         0,
-        `${h}: CLI exited with code ${exitCode}\nstderr: ${stderr}`
+        `${h}: CLI exited with code ${exitCode}\nstdout: ${stdout}\nstderr: ${stderr}`
       );
 
       // Hard assertion: required hooks must have fired

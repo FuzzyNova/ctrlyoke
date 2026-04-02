@@ -1213,6 +1213,7 @@
     "test:ui:watch": "vitest --config src/ui/webview-react/vitest.config.ts",
     "test:ui:coverage": "vitest run --coverage --config src/ui/webview-react/vitest.config.ts",
     "test:unit": "node ./out/test/runTest.js --grep \"^(CliIntegration|CopilotChatIntegration)\"",
+    "pretest:harness": "npm run compile-tests && node esbuild.js",
     "test:harness": "mocha --ui tdd --timeout 120000 --reporter spec \"out/test/harness/**/*.test.js\"",
     "test:integration": "cross-env COPILOT_CLI_INTEGRATION_TESTS=1 npm test",
     "test:watch": "npm run compile && npm test -- --watch",

@@ -1,0 +1,20 @@
+harness: copilot-cli
+model: gpt-5-mini
+
+hooks:
+  - event: stop
+    command: node manual-test/hooks/hook-test-script.js stop
+  - event: sessionStart
+    command: node manual-test/hooks/hook-test-script.js sessionStart
+  - event: preToolUse
+    command: node manual-test/hooks/hook-test-script.js preToolUse
+  - event: postToolUse
+    command: node manual-test/hooks/hook-test-script.js postToolUse
+  - event: userPromptSubmit
+    command: node manual-test/hooks/hook-test-script.js userPromptSubmit
+
+prompts:
+  - name: hook-test
+    prompt: |
+      Run the bash command `ls` to list files in the current working directory.
+      Do not explain — just run it.
