@@ -3,15 +3,7 @@ import { suite, test } from "mocha";
 import { CliTransportCoordinator } from "../../flightpath/harness/shared/CliTransportCoordinator";
 import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-
-function createLogger() {
-  return {
-    debug(_message: string): void {},
-    info(_message: string): void {},
-    warn(_message: string): void {},
-    error(_message: string, _error?: unknown): void {},
-  };
-}
+import { Log } from "../../utils/Log";
 
 suite("CliTransportCoordinator", () => {
   test("should normalize headless prompt text and emit prompt-ready info", async () => {
@@ -63,23 +55,26 @@ suite("CliTransportCoordinator", () => {
         },
         isActive: () => false,
       } as any,
-      getWorkspaceRoot: () => process.cwd(),
-      getTerminalName: () => "FP: Test",
-      onBeforeInteractiveStart: () => {},
-      onCommandPrepared: (info) => {
-        preparedCommand = info;
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        getTerminalName: () => "FP: Test",
+        isCancelling: () => false,
       },
-      onStreamingChunk: (chunk) => streamedChunks.push(chunk),
-      onStreamingEvents: () => {
-        throw new Error("expected plain-text streaming path");
+      hostCallbacks: {
+        onBeforeInteractiveStart: () => {},
+        onCommandPrepared: (info) => {
+          preparedCommand = info;
+        },
+        onStreamingChunk: (chunk) => streamedChunks.push(chunk),
+        onStreamingEvents: () => {
+          throw new Error("expected plain-text streaming path");
+        },
+        onResponseComplete: () => {},
+        onPtyExit: () => {},
+        cleanupTempFiles: async (tempFilePaths) => {
+          cleanedTempPaths.push(tempFilePaths);
+        },
       },
-      onResponseComplete: () => {},
-      onPtyExit: () => {},
-      isCancelling: () => false,
-      cleanupTempFiles: async (tempFilePaths) => {
-        cleanedTempPaths.push(tempFilePaths);
-      },
-      logger: createLogger(),
     });
 
     const success = await coordinator.executeHeadless(
@@ -109,9 +104,15 @@ suite("CliTransportCoordinator", () => {
     const debugMessages: string[] = [];
     const originalShouldLogRawCliOutput =
       ConfigurationUtils.shouldLogRawCliOutput;
+    const originalDebug = Log.debug;
     (
       ConfigurationUtils as unknown as { shouldLogRawCliOutput: () => boolean }
     ).shouldLogRawCliOutput = () => true;
+    (Log as unknown as { debug(message: string): void }).debug = (
+      message: string
+    ) => {
+      debugMessages.push(message);
+    };
 
     try {
       const coordinator = new CliTransportCoordinator({
@@ -155,23 +156,19 @@ suite("CliTransportCoordinator", () => {
           },
           isActive: () => false,
         } as any,
-        getWorkspaceRoot: () => process.cwd(),
-        getTerminalName: () => "FP: Test",
-        onBeforeInteractiveStart: () => {},
-        onCommandPrepared: () => {},
-        onStreamingChunk: () => {},
-        onStreamingEvents: () => {},
-        onResponseComplete: () => {},
-        onPtyExit: () => {},
-        isCancelling: () => false,
-        cleanupTempFiles: async () => {},
-        logger: {
-          debug(message: string): void {
-            debugMessages.push(message);
-          },
-          info(_message: string): void {},
-          warn(_message: string): void {},
-          error(_message: string, _error?: unknown): void {},
+        runtimeState: {
+          getWorkspaceRoot: () => process.cwd(),
+          getTerminalName: () => "FP: Test",
+          isCancelling: () => false,
+        },
+        hostCallbacks: {
+          onBeforeInteractiveStart: () => {},
+          onCommandPrepared: () => {},
+          onStreamingChunk: () => {},
+          onStreamingEvents: () => {},
+          onResponseComplete: () => {},
+          onPtyExit: () => {},
+          cleanupTempFiles: async () => {},
         },
       });
 
@@ -194,6 +191,7 @@ suite("CliTransportCoordinator", () => {
           shouldLogRawCliOutput: () => boolean;
         }
       ).shouldLogRawCliOutput = originalShouldLogRawCliOutput;
+      (Log as unknown as { debug(message: string): void }).debug = originalDebug;
     }
   });
 
@@ -230,18 +228,21 @@ suite("CliTransportCoordinator", () => {
         checkAvailability: async () => true,
       } as unknown as ICliProvider,
       processManager: {} as any,
-      getWorkspaceRoot: () => process.cwd(),
-      getTerminalName: () => "FP: Test",
-      getWorkflowName: () => "named-workflow",
-      onBeforeInteractiveStart: () => {},
-      onCommandPrepared: () => {},
-      onStreamingChunk: () => {},
-      onStreamingEvents: () => {},
-      onResponseComplete: () => {},
-      onPtyExit: () => {},
-      isCancelling: () => false,
-      cleanupTempFiles: async () => {},
-      logger: createLogger(),
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        getTerminalName: () => "FP: Test",
+        getWorkflowName: () => "named-workflow",
+        isCancelling: () => false,
+      },
+      hostCallbacks: {
+        onBeforeInteractiveStart: () => {},
+        onCommandPrepared: () => {},
+        onStreamingChunk: () => {},
+        onStreamingEvents: () => {},
+        onResponseComplete: () => {},
+        onPtyExit: () => {},
+        cleanupTempFiles: async () => {},
+      },
       postTerminalMessage: (message: unknown) => {
         postedMessages.push(message as { workflowId?: string });
       },
@@ -311,19 +312,22 @@ suite("CliTransportCoordinator", () => {
           disposedProcess = true;
         },
       } as any,
-      getWorkspaceRoot: () => process.cwd(),
-      getTerminalName: () => "FP: Test",
-      onBeforeInteractiveStart: () => {},
-      onCommandPrepared: () => {},
-      onStreamingChunk: () => {},
-      onStreamingEvents: () => {},
-      onResponseComplete: (response) => {
-        responseCompleted = response;
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        getTerminalName: () => "FP: Test",
+        isCancelling: () => false,
       },
-      onPtyExit: () => {},
-      isCancelling: () => false,
-      cleanupTempFiles: async () => {},
-      logger: createLogger(),
+      hostCallbacks: {
+        onBeforeInteractiveStart: () => {},
+        onCommandPrepared: () => {},
+        onStreamingChunk: () => {},
+        onStreamingEvents: () => {},
+        onResponseComplete: (response) => {
+          responseCompleted = response;
+        },
+        onPtyExit: () => {},
+        cleanupTempFiles: async () => {},
+      },
     });
 
     const result = await coordinator.executeStandaloneInteractiveProcess(

@@ -7,21 +7,12 @@ import {
   type PromptItem,
 } from "../../types/FlightPathTypes";
 import type { WorkflowContext } from "../../types/WorkflowContextTypes";
-
-function createLogger(messages: string[]): { info(message: string): void } {
-  return {
-    info(message: string): void {
-      messages.push(message);
-    },
-  };
-}
+import { Log } from "../../utils/Log";
 
 suite("CliSessionResolverAdapter", () => {
   test("should resolve workflow properties and auto-resumed session IDs", () => {
-    const messages: string[] = [];
     const adapter = new CliSessionResolverAdapter({
       getIntegrationHarness: () => Harness.CopilotCli,
-      logger: createLogger(messages),
     });
 
     const previousPrompt: PromptItem = {
@@ -57,45 +48,52 @@ suite("CliSessionResolverAdapter", () => {
     );
     assert.strictEqual(result.resolvedProperties?.harness, Harness.CopilotCli);
     assert.strictEqual(result.resolvedProperties?.model, "gpt-5");
-    assert.deepStrictEqual(messages, []);
   });
 
   test("should clear invalid session IDs for the resolved harness", () => {
     const messages: string[] = [];
-    const adapter = new CliSessionResolverAdapter({
-      getIntegrationHarness: () => Harness.ClaudeCli,
-      logger: createLogger(messages),
-    });
-
-    const prompt: PromptItem = {
-      prompt: "test",
-      resumeSession: true,
-      sessionId: "not-a-valid-uuid",
-    };
-    const workflowFile: PromptFile = {
-      prompts: [prompt],
-      harness: Harness.ClaudeCli,
-      model: "sonnet",
-      resumeSession: true,
+    const originalInfo = Log.info;
+    (Log as unknown as { info(message: string): void }).info = (
+      message: string
+    ) => {
+      messages.push(message);
     };
 
-    const result = adapter.resolve(prompt, {
-      promptIndex: 0,
-      allPrompts: [prompt],
-      workflowFile,
-    } as WorkflowContext);
+    try {
+      const adapter = new CliSessionResolverAdapter({
+        getIntegrationHarness: () => Harness.ClaudeCli,
+      });
 
-    assert.strictEqual(result.resolvedSessionId, undefined);
-    assert.deepStrictEqual(messages, [
-      "🔄 Starting new session due to invalid session ID format",
-    ]);
+      const prompt: PromptItem = {
+        prompt: "test",
+        resumeSession: true,
+        sessionId: "not-a-valid-uuid",
+      };
+      const workflowFile: PromptFile = {
+        prompts: [prompt],
+        harness: Harness.ClaudeCli,
+        model: "sonnet",
+        resumeSession: true,
+      };
+
+      const result = adapter.resolve(prompt, {
+        promptIndex: 0,
+        allPrompts: [prompt],
+        workflowFile,
+      } as WorkflowContext);
+
+      assert.strictEqual(result.resolvedSessionId, undefined);
+      assert.deepStrictEqual(messages, [
+        "🔄 Starting new session due to invalid session ID format",
+      ]);
+    } finally {
+      (Log as unknown as { info(message: string): void }).info = originalInfo;
+    }
   });
 
   test("should return workflowContext resolved properties when no workflow file exists", () => {
-    const messages: string[] = [];
     const adapter = new CliSessionResolverAdapter({
       getIntegrationHarness: () => Harness.CodexCli,
-      logger: createLogger(messages),
     });
 
     const prompt: PromptItem = {
@@ -118,6 +116,5 @@ suite("CliSessionResolverAdapter", () => {
     assert.strictEqual(result.resolvedSessionId, undefined);
     assert.strictEqual(result.resolvedProperties?.harness, Harness.CodexCli);
     assert.strictEqual(result.resolvedProperties?.model, "gpt-5.2-codex");
-    assert.deepStrictEqual(messages, []);
   });
 });

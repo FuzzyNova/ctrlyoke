@@ -4,6 +4,7 @@ import { MESSAGE_TYPES } from "../../../types/DashboardConstants";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type { CliProcessManager } from "../../../utils/CliProcessManager";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "./CliProviderUtils";
 import type { ICliProvider } from "./interfaces/ICliProvider";
 import {
@@ -13,33 +14,33 @@ import {
 } from "../PtyProcessManager";
 import type { PtyProcessManager, PtySession } from "../PtyProcessManager";
 
-interface CliTransportCoordinatorLogger {
-  debug(message: string): void;
-  info(message: string): void;
-  warn(message: string): void;
-  error(message: string, error?: unknown): void;
-}
-
 interface CliTransportCoordinatorCommandInfo {
   promptArgument: string;
   cliCommand: string;
 }
 
-export interface CliTransportCoordinatorDeps {
-  provider: ICliProvider;
-  processManager: CliProcessManager;
+interface CliTransportCoordinatorRuntimeState {
   getWorkspaceRoot: () => string | undefined;
   getTerminalName: () => string;
   getWorkflowName?: () => string | undefined;
+  isCancelling: () => boolean;
+}
+
+interface CliTransportCoordinatorHostCallbacks {
   onBeforeInteractiveStart: (workflowContext?: WorkflowContext) => void;
   onCommandPrepared: (info: CliTransportCoordinatorCommandInfo) => void;
   onStreamingChunk: (chunk: string) => void;
   onStreamingEvents: (events: CliEvent[]) => void;
   onResponseComplete: (response: string) => void;
   onPtyExit: (session: PtySession, exitCode: number) => void;
-  isCancelling: () => boolean;
   cleanupTempFiles: (tempFilePaths: string[]) => Promise<void>;
-  logger: CliTransportCoordinatorLogger;
+}
+
+export interface CliTransportCoordinatorDeps {
+  provider: ICliProvider;
+  processManager: CliProcessManager;
+  runtimeState: CliTransportCoordinatorRuntimeState;
+  hostCallbacks: CliTransportCoordinatorHostCallbacks;
   getPtyManager?: () => PtyProcessManager | null;
   postTerminalMessage?: (message: unknown) => void;
 }
@@ -63,13 +64,13 @@ export class CliTransportCoordinator {
       );
       const commandStr = String(tuiCommand).replace(/\s+/g, " ").trim();
 
-      this.deps.onCommandPrepared({
+      this.deps.hostCallbacks.onCommandPrepared({
         promptArgument,
         cliCommand: commandStr,
       });
 
       const startTime = new Date();
-      const workingDir = this.deps.getWorkspaceRoot() || process.cwd();
+      const workingDir = this.deps.runtimeState.getWorkspaceRoot() || process.cwd();
       const interactiveEnv =
         this.deps.provider.getInteractiveSpawnEnv?.() ??
         CliProviderUtils.buildProcessEnv();
@@ -83,7 +84,7 @@ export class CliTransportCoordinator {
           processExited = true;
         });
 
-      const workspaceRoot = this.deps.getWorkspaceRoot();
+      const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
       if (
         workspaceRoot &&
         this.deps.provider.config.usesInteractiveNotificationMonitor
@@ -100,7 +101,7 @@ export class CliTransportCoordinator {
             { directory: notifyDir, timeoutMs },
             resolvedSessionId,
             startTime,
-            () => this.deps.isCancelling() || processExited
+            () => this.deps.runtimeState.isCancelling() || processExited
           )
           .then((result) => {
             if (result.completed && !processExited) {
@@ -108,7 +109,7 @@ export class CliTransportCoordinator {
                 this.deps.provider.notificationMonitor.extractSessionId?.(
                   result.data
                 );
-              this.deps.logger.info(
+              Log.info(
                 `✅ Stop hook detected — terminating interactive session` +
                   (hookSessionId ? ` (session: ${hookSessionId})` : "")
               );
@@ -121,12 +122,12 @@ export class CliTransportCoordinator {
         await spawnPromise;
       }
 
-      this.deps.onResponseComplete("Interactive session ended");
+      this.deps.hostCallbacks.onResponseComplete("Interactive session ended");
       return { success: true, sessionId: hookSessionId ?? resolvedSessionId };
     } catch (error) {
       throw error;
     } finally {
-      await this.deps.cleanupTempFiles(tempFilePaths);
+      await this.deps.hostCallbacks.cleanupTempFiles(tempFilePaths);
     }
   }
 
@@ -143,8 +144,8 @@ export class CliTransportCoordinator {
     );
     const commandStr = String(tuiCommand).replace(/\s+/g, " ").trim();
 
-    this.deps.onBeforeInteractiveStart(workflowContext);
-    this.deps.onCommandPrepared({
+    this.deps.hostCallbacks.onBeforeInteractiveStart(workflowContext);
+    this.deps.hostCallbacks.onCommandPrepared({
       promptArgument,
       cliCommand: commandStr,
     });
@@ -155,7 +156,7 @@ export class CliTransportCoordinator {
       const workflowId =
         workflowContext?.instanceId ??
         workflowContext?.filePath ??
-        this.deps.getWorkflowName?.() ??
+        this.deps.runtimeState.getWorkflowName?.() ??
         "unknown";
       const stepName = workflowContext
         ? (workflowContext.allPrompts[workflowContext.promptIndex]?.name ??
@@ -169,7 +170,7 @@ export class CliTransportCoordinator {
         process.platform === "win32"
           ? ["-NoProfile", "-Command", String(tuiCommand)]
           : ["-c", String(tuiCommand)];
-      const cwd = this.deps.getWorkspaceRoot() ?? process.cwd();
+      const cwd = this.deps.runtimeState.getWorkspaceRoot() ?? process.cwd();
       const mergedEnv = env ? { ...process.env, ...env } : process.env;
       const promptNumber = workflowContext
         ? workflowContext.promptIndex + 1
@@ -214,29 +215,27 @@ export class CliTransportCoordinator {
           if (this.currentPtySession === ptySession) {
             this.currentPtySession = undefined;
           }
-          this.deps.onPtyExit(ptySession, exitCode);
+          this.deps.hostCallbacks.onPtyExit(ptySession, exitCode);
         },
       });
 
       this.currentPtySession = session;
-      this.deps.logger.info(
+      Log.info(
         `🖥️ PTY session spawned: "${stepName}" (${session.id.slice(0, 8)}) workflowId=inst:${workflowId.slice(0, 8)}`
       );
       return;
     }
 
     const terminal = await this.createFreshTerminal(env);
-    this.deps.logger.info(
-      `🖥️ Opened terminal: "${this.deps.getTerminalName()}"`
-    );
+    Log.info(`🖥️ Opened terminal: "${this.deps.runtimeState.getTerminalName()}"`);
     if (tempFilePaths.length > 0) {
-      this.deps.logger.debug(
+      Log.debug(
         `📁 Interactive mode using ${tempFilePaths.length} temp file(s)`
       );
     }
     terminal.show();
 
-    this.deps.onStreamingChunk(
+    this.deps.hostCallbacks.onStreamingChunk(
       "📺 Interactive mode: Output is streaming to the VS Code terminal.\n" +
         "   View the terminal for real-time output.\n\n"
     );
@@ -258,13 +257,11 @@ export class CliTransportCoordinator {
   ): Promise<boolean> {
     try {
       if (tempFilePaths.length > 0) {
-        this.deps.logger.info(
+        Log.info(
           `🚀 Starting headless mode with ${tempFilePaths.length} file(s)`
         );
       } else {
-        this.deps.logger.info(
-          "🚀 Starting headless mode with direct prompt (fast path)"
-        );
+        Log.info("🚀 Starting headless mode with direct prompt (fast path)");
       }
 
       const shellSafePrompt = promptArgument.replace(/[\r\n]+/g, " ");
@@ -274,7 +271,7 @@ export class CliTransportCoordinator {
       );
       const displayCommand = `${this.deps.provider.config.name} ${headlessArgs.join(" ")}`;
 
-      this.deps.onCommandPrepared({
+      this.deps.hostCallbacks.onCommandPrepared({
         promptArgument,
         cliCommand: displayCommand,
       });
@@ -289,7 +286,7 @@ export class CliTransportCoordinator {
           onStdout: shouldStream
             ? (chunk) => {
                 if (ConfigurationUtils.shouldLogRawCliOutput()) {
-                  this.deps.logger.debug(
+                  Log.debug(
                     `[${this.deps.provider.config.displayName} RAW OUTPUT]: ${chunk}`
                   );
                 }
@@ -302,30 +299,30 @@ export class CliTransportCoordinator {
                     );
                   if (processedChunk !== undefined) {
                     if (Array.isArray(processedChunk)) {
-                      this.deps.onStreamingEvents(processedChunk);
+                      this.deps.hostCallbacks.onStreamingEvents(processedChunk);
                     } else {
-                      this.deps.onStreamingChunk(processedChunk);
+                      this.deps.hostCallbacks.onStreamingChunk(processedChunk);
                     }
                   }
                 } else {
-                  this.deps.onStreamingChunk(chunk);
+                  this.deps.hostCallbacks.onStreamingChunk(chunk);
                 }
               }
             : undefined,
         }
       );
 
-      if (this.deps.isCancelling()) {
-        this.deps.logger.info("⏹️ Prompt execution cancelled by user");
+      if (this.deps.runtimeState.isCancelling()) {
+        Log.info("⏹️ Prompt execution cancelled by user");
         return false;
       }
 
       return await executeCallback(result);
     } catch (error) {
-      this.deps.logger.error("❌ Headless execution error", error);
+      Log.error("❌ Headless execution error", error);
       return false;
     } finally {
-      await this.deps.cleanupTempFiles(tempFilePaths);
+      await this.deps.hostCallbacks.cleanupTempFiles(tempFilePaths);
     }
   }
 
@@ -369,8 +366,8 @@ export class CliTransportCoordinator {
   ): Promise<vscode.Terminal> {
     this.disposeTerminalIfExists();
     return await this.deps.processManager.createTerminal(
-      this.deps.getTerminalName(),
-      this.deps.getWorkspaceRoot(),
+      this.deps.runtimeState.getTerminalName(),
+      this.deps.runtimeState.getWorkspaceRoot(),
       env
     );
   }
@@ -378,11 +375,11 @@ export class CliTransportCoordinator {
   private disposeTerminalIfExists(): void {
     const hasTerminal = !!this.deps.processManager.getTerminal();
     if (hasTerminal) {
-      this.deps.logger.info(
-        `🗑️ Closing previous terminal before starting next prompt (was: "${this.deps.getTerminalName()}")`
+      Log.info(
+        `🗑️ Closing previous terminal before starting next prompt (was: "${this.deps.runtimeState.getTerminalName()}")`
       );
     } else {
-      this.deps.logger.debug(
+      Log.debug(
         "🗑️ disposeTerminalIfExists: no terminal open, nothing to close"
       );
     }
@@ -402,14 +399,14 @@ export class CliTransportCoordinator {
     const env = CliProviderUtils.buildProcessEnv();
 
     const result = await this.deps.processManager.spawn(command, args, {
-      cwd: this.deps.getWorkspaceRoot() || "",
+      cwd: this.deps.runtimeState.getWorkspaceRoot() || "",
       timeout: options.timeout,
       onStdout: options.onStdout,
       shell,
       env,
     });
 
-    this.deps.logger.info("✅ Process exited - execution complete");
+    Log.info("✅ Process exited - execution complete");
     return result;
   }
 }

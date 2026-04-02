@@ -3,20 +3,15 @@ import { suite, test } from "mocha";
 import { CliPromptRuntimeCoordinator } from "../../flightpath/harness/shared/CliPromptRuntimeCoordinator";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { Harness, type PromptItem } from "../../types/FlightPathTypes";
+import { Log } from "../../utils/Log";
 
 function createCoordinator(options?: {
   nowValues?: number[];
-  debugMessages?: string[];
 }): CliPromptRuntimeCoordinator {
   const nowValues = [...(options?.nowValues ?? [])];
 
   return new CliPromptRuntimeCoordinator({
     getIntegrationHarness: () => Harness.CopilotCli,
-    logger: {
-      debug: (message: string) => {
-        options?.debugMessages?.push(message);
-      },
-    },
     now: () => {
       const nextValue = nowValues.shift();
       return nextValue ?? 0;
@@ -41,17 +36,27 @@ suite("CliPromptRuntimeCoordinator", () => {
       prompt: "cancelled",
     };
     let updateCount = 0;
+    const originalDebug = Log.debug;
+    (Log as unknown as { debug(message: string): void }).debug = (
+      message: string
+    ) => {
+      debugMessages.push(message);
+    };
 
-    await createCoordinator({ debugMessages }).persistCancelledPromptRuntime({
-      prompt,
-      executionStartTime: new Date(1234),
-      extractedSessionId: "session-123",
-      workingFilePersistence: {
-        async updateWorkingFile(): Promise<void> {
-          updateCount += 1;
+    try {
+      await createCoordinator().persistCancelledPromptRuntime({
+        prompt,
+        executionStartTime: new Date(1234),
+        extractedSessionId: "session-123",
+        workingFilePersistence: {
+          async updateWorkingFile(): Promise<void> {
+            updateCount += 1;
+          },
         },
-      },
-    });
+      });
+    } finally {
+      (Log as unknown as { debug(message: string): void }).debug = originalDebug;
+    }
 
     assert.strictEqual(prompt._runtime?.startedAt, 1234);
     assert.strictEqual(prompt._runtime?.sessionId, "session-123");
@@ -67,29 +72,39 @@ suite("CliPromptRuntimeCoordinator", () => {
       prompt: "done",
     };
     let updateCount = 0;
+    const originalDebug = Log.debug;
+    (Log as unknown as { debug(message: string): void }).debug = (
+      message: string
+    ) => {
+      debugMessages.push(message);
+    };
 
-    const parsedOutput = await createCoordinator({
-      nowValues: [2000, 3000],
-      debugMessages,
-    }).persistSuccessfulPromptRuntime({
-      prompt,
-      resolvedProperties: {
-        harness: Harness.ClaudeCli,
-        model: "sonnet",
-        agent: "reviewer",
-        resumeSession: true,
-        mcpServers: null,
-        hooks: null,
-        toolPermissions: null,
-      },
-      extractedSessionId: "session-456",
-      parsedOutput: createParsedOutput(),
-      workingFilePersistence: {
-        async updateWorkingFile(): Promise<void> {
-          updateCount += 1;
+    let parsedOutput: UniversalCliOutput | undefined;
+    try {
+      parsedOutput = await createCoordinator({
+        nowValues: [2000, 3000],
+      }).persistSuccessfulPromptRuntime({
+        prompt,
+        resolvedProperties: {
+          harness: Harness.ClaudeCli,
+          model: "sonnet",
+          agent: "reviewer",
+          resumeSession: true,
+          mcpServers: null,
+          hooks: null,
+          toolPermissions: null,
         },
-      },
-    });
+        extractedSessionId: "session-456",
+        parsedOutput: createParsedOutput(),
+        workingFilePersistence: {
+          async updateWorkingFile(): Promise<void> {
+            updateCount += 1;
+          },
+        },
+      });
+    } finally {
+      (Log as unknown as { debug(message: string): void }).debug = originalDebug;
+    }
 
     assert.strictEqual(prompt._runtime?.harness, Harness.ClaudeCli);
     assert.strictEqual(prompt._runtime?.model, "sonnet");

@@ -217,10 +217,10 @@ export class OutputHistoryManager {
     try {
       const history = await this.timelineAdapter.loadHistory(historyFilePath);
       const stepOutput = this.getStepOutput(history, target);
-      if (!stepOutput) {
-        return;
-      }
-      if (JSON.stringify(stepOutput.workspaceSnapshot) === JSON.stringify(snapshot)) {
+      if (
+        stepOutput &&
+        JSON.stringify(stepOutput.workspaceSnapshot) === JSON.stringify(snapshot)
+      ) {
         return;
       }
 
@@ -406,10 +406,10 @@ export class OutputHistoryManager {
     try {
       const history = await this.timelineAdapter.loadHistory(historyFilePath);
       const stepOutput = this.getStepOutput(history, target);
-      if (!stepOutput) {
-        return;
-      }
-      if (JSON.stringify(stepOutput.undoRecord) === JSON.stringify(undoRecord)) {
+      if (
+        stepOutput &&
+        JSON.stringify(stepOutput.undoRecord) === JSON.stringify(undoRecord)
+      ) {
         return;
       }
 

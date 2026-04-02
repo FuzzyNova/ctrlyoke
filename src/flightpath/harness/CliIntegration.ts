@@ -2,10 +2,13 @@ import * as fs from "fs";
 import * as path from "path";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import type { VsCodeAdapter } from "../../platform/VsCodeAdapter";
-import { CliResult } from "../../types/CliOutputTypes";
+import {
+  CliEvent,
+  CliResult,
+  UniversalCliOutput,
+} from "../../types/CliOutputTypes";
 import { PromptItem, Harness } from "../../types/FlightPathTypes";
 import { WorkflowContext } from "../../types/WorkflowContextTypes";
-import { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
@@ -17,8 +20,6 @@ import {
 } from "../../types/DashboardConstants";
 import type { ICliProvider } from "./shared/interfaces/ICliProvider";
 import type { ToolPermissionConfig } from "./shared/interfaces/IToolPermissionMapper";
-import { CliOutputFormatter } from "./shared/CliOutputFormatter";
-import { CliLogMonitor } from "./CliLogMonitor";
 import { CliFailureTracker } from "./shared/CliFailureTracker";
 import {
   CliExecutionSession,
@@ -32,6 +33,7 @@ import { CliResponseCollector } from "./shared/CliResponseCollector";
 import { CliSessionResolverAdapter } from "./shared/CliSessionResolverAdapter";
 import { CliTransportCoordinator } from "./shared/CliTransportCoordinator";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
+import type { PtySession } from "./PtyProcessManager";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
 /**
@@ -369,6 +371,56 @@ export class CliIntegration extends HarnessIntegration {
     return this.failureTracker.getInteractiveAbortState(this.isCancelling);
   }
 
+  private setFailureReason(reason: string): void {
+    this.lastFailureReason = reason;
+  }
+
+  private emitStreamingChunk(chunk: string): void {
+    this.streamingChunkEmitter.fire(chunk);
+  }
+
+  private emitStreamingEvents(events: CliEvent[]): void {
+    this.streamingEventsEmitter.fire(events);
+  }
+
+  private emitResponseComplete(response: string): void {
+    this.responseCompleteEmitter.fire(response);
+  }
+
+  private handleBeforeInteractiveStart(
+    workflowContext?: WorkflowContext
+  ): void {
+    if (workflowContext) {
+      this.currentPromptNumber = workflowContext.promptIndex + 1;
+      this.currentPromptTotal = workflowContext.allPrompts.length;
+    }
+  }
+
+  private handleCommandPrepared(params: {
+    promptArgument: string;
+    cliCommand: string;
+  }): void {
+    this.activeSession?.recordCommandPrepared(params);
+    this.promptReadyEmitter.fire({
+      fullPrompt: params.promptArgument,
+      cliCommand: params.cliCommand,
+    });
+  }
+
+  private handlePtyExit(session: PtySession, exitCode: number): void {
+    this.failureTracker.capturePtyExit(exitCode, session.reconnectBuffer);
+    if (exitCode !== 0) {
+      Log.warn(
+        `⚠️ AI CLI PTY session ${session.id} exited with code ${exitCode} — workflow step will be stopped`
+      );
+      return;
+    }
+
+    Log.info(
+      `🛑 AI CLI PTY session ${session.id} exited with code 0 before completion — workflow step will be stopped`
+    );
+  }
+
   private createInteractiveStartupCoordinator(): CliInteractiveStartupCoordinator {
     return new CliInteractiveStartupCoordinator({
       logParser: this.provider.logParser!,
@@ -377,33 +429,17 @@ export class CliIntegration extends HarnessIntegration {
       getAbortState: () => this.getInteractiveAbortState(),
       markProcessExitDuringStage: (stage, exitCode) =>
         this.failureTracker.markProcessExitDuringStage(stage, exitCode),
-      setFailureReason: (reason) => {
-        this.lastFailureReason = reason;
-      },
-      logger: {
-        debug: (message) => Log.debug(message),
-        info: (message) => Log.info(message),
-        warn: (message) => Log.warn(message),
-        error: (message) => Log.error(message),
-      },
+      setFailureReason: (reason) => this.setFailureReason(reason),
     });
   }
 
   private createResponseCollector(): CliResponseCollector {
     return new CliResponseCollector({
-      responseParser: this.provider.responseParser,
-      augmentParsedOutput: this.provider.augmentParsedOutput?.bind(this.provider),
-      extractSessionIdFromLogs: this.provider.extractSessionIdFromLogs?.bind(this.provider),
-      extractTextFromEvents: (output) =>
-        CliLogMonitor.extractTextFromEvents(output),
-      formatStatistics: (metadata) =>
-        CliOutputFormatter.formatStatistics(metadata),
-      logResponse: (response, statistics) =>
-        this.logResponse(response, statistics),
-      onResponseComplete: (response) =>
-        this.responseCompleteEmitter.fire(response),
-      logger: {
-        debug: (message) => Log.debug(message),
+      provider: this.provider,
+      hostCallbacks: {
+        logResponse: (response, statistics) =>
+          this.logResponse(response, statistics),
+        onResponseComplete: (response) => this.emitResponseComplete(response),
       },
     });
   }
@@ -474,69 +510,34 @@ export class CliIntegration extends HarnessIntegration {
           excerptRefs,
           promptRefs
         ),
-      logDebug: (message) => Log.debug(message),
-      logInfo: (message) => Log.info(message),
     });
 
     const sessionResolverAdapter = new CliSessionResolverAdapter({
       getIntegrationHarness: () => this.getIntegrationMode() as Harness,
-      logger: {
-        info: (message) => Log.info(message),
-      },
     });
 
     const promptRuntimeCoordinator = new CliPromptRuntimeCoordinator({
       getIntegrationHarness: () => this.getIntegrationMode() as Harness,
-      logger: {
-        debug: (message) => Log.debug(message),
-      },
     });
 
     const transportCoordinator = new CliTransportCoordinator({
       provider: this.provider,
       processManager: this.processManager,
-      getWorkspaceRoot: () => this.getWorkspaceRoot(),
-      getTerminalName: () => this.buildTerminalName(),
-      getWorkflowName: () => this.workflowName,
-      onBeforeInteractiveStart: (workflowContext) => {
-        if (workflowContext) {
-          this.currentPromptNumber = workflowContext.promptIndex + 1;
-          this.currentPromptTotal = workflowContext.allPrompts.length;
-        }
+      runtimeState: {
+        getWorkspaceRoot: () => this.getWorkspaceRoot(),
+        getTerminalName: () => this.buildTerminalName(),
+        getWorkflowName: () => this.workflowName,
+        isCancelling: () => this.isCancelling,
       },
-      onCommandPrepared: ({ promptArgument, cliCommand }) => {
-        this.activeSession?.recordCommandPrepared({
-          promptArgument,
-          cliCommand,
-        });
-        this.promptReadyEmitter.fire({
-          fullPrompt: promptArgument,
-          cliCommand,
-        });
-      },
-      onStreamingChunk: (chunk) => this.streamingChunkEmitter.fire(chunk),
-      onStreamingEvents: (events) => this.streamingEventsEmitter.fire(events),
-      onResponseComplete: (response) =>
-        this.responseCompleteEmitter.fire(response),
-      onPtyExit: (session, exitCode) => {
-        this.failureTracker.capturePtyExit(exitCode, session.reconnectBuffer);
-        if (exitCode !== 0) {
-          Log.warn(
-            `⚠️ AI CLI PTY session ${session.id} exited with code ${exitCode} — workflow step will be stopped`
-          );
-        } else {
-          Log.info(
-            `🛑 AI CLI PTY session ${session.id} exited with code 0 before completion — workflow step will be stopped`
-          );
-        }
-      },
-      isCancelling: () => this.isCancelling,
-      cleanupTempFiles: (tempFilePaths) => this.cleanupTempFiles(tempFilePaths),
-      logger: {
-        debug: (message) => Log.debug(message),
-        info: (message) => Log.info(message),
-        warn: (message) => Log.warn(message),
-        error: (message, error) => Log.error(message, error),
+      hostCallbacks: {
+        onBeforeInteractiveStart: (workflowContext) =>
+          this.handleBeforeInteractiveStart(workflowContext),
+        onCommandPrepared: (params) => this.handleCommandPrepared(params),
+        onStreamingChunk: (chunk) => this.emitStreamingChunk(chunk),
+        onStreamingEvents: (events) => this.emitStreamingEvents(events),
+        onResponseComplete: (response) => this.emitResponseComplete(response),
+        onPtyExit: (session, exitCode) => this.handlePtyExit(session, exitCode),
+        cleanupTempFiles: (tempFilePaths) => this.cleanupTempFiles(tempFilePaths),
       },
     });
 
@@ -544,27 +545,24 @@ export class CliIntegration extends HarnessIntegration {
       provider: this.provider,
       transportCoordinator,
       failureTracker: this.failureTracker,
-      createInteractiveStartupCoordinator: () =>
-        this.createInteractiveStartupCoordinator(),
-      createResponseCollector: () => this.createResponseCollector(),
-      cleanupTempFiles: (tempFilePaths) => this.cleanupTempFiles(tempFilePaths),
-      getWorkspaceRoot: () => this.getWorkspaceRoot(),
-      getExtensionPath: () => this.platform.getExtensionPath(),
-      isVsCodeContext: () => this.isVsCodeContext(),
-      isCancelling: () => this.isCancelling,
-      onStreamingEvents: (events) => this.streamingEventsEmitter.fire(events),
-      onResponseComplete: (response) =>
-        this.responseCompleteEmitter.fire(response),
-      logResponse: (response, statistics) =>
-        this.logResponse(response, statistics),
-      setFailureReason: (reason) => {
-        this.lastFailureReason = reason;
+      factories: {
+        createInteractiveStartupCoordinator: () =>
+          this.createInteractiveStartupCoordinator(),
+        createResponseCollector: () => this.createResponseCollector(),
+        cleanupTempFiles: (tempFilePaths) => this.cleanupTempFiles(tempFilePaths),
       },
-      logger: {
-        debug: (message) => Log.debug(message),
-        info: (message) => Log.info(message),
-        warn: (message) => Log.warn(message),
-        error: (message, error) => Log.error(message, error),
+      runtimeState: {
+        getWorkspaceRoot: () => this.getWorkspaceRoot(),
+        getExtensionPath: () => this.platform.getExtensionPath(),
+        isVsCodeContext: () => this.isVsCodeContext(),
+        isCancelling: () => this.isCancelling,
+        setFailureReason: (reason) => this.setFailureReason(reason),
+      },
+      hostCallbacks: {
+        onStreamingEvents: (events) => this.emitStreamingEvents(events),
+        onResponseComplete: (response) => this.emitResponseComplete(response),
+        logResponse: (response, statistics) =>
+          this.logResponse(response, statistics),
       },
     });
 

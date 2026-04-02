@@ -2,14 +2,10 @@ import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import type { Harness, PromptItem } from "../../../types/FlightPathTypes";
 import type { WorkflowWorkingFilePersistence } from "../../../types/WorkflowContextTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
-
-interface CliPromptRuntimeCoordinatorLogger {
-  debug(message: string): void;
-}
+import { Log } from "../../../utils/Log";
 
 export interface CliPromptRuntimeCoordinatorDeps {
   getIntegrationHarness: () => Harness;
-  logger: CliPromptRuntimeCoordinatorLogger;
   now?: () => number;
 }
 
@@ -43,7 +39,7 @@ export class CliPromptRuntimeCoordinator {
     }
 
     await params.workingFilePersistence.updateWorkingFile();
-    this.deps.logger.debug(
+    Log.debug(
       `💾 Saved cancelled-prompt runtime to working file (sessionId: ${params.extractedSessionId || "none"})`
     );
   }
@@ -93,7 +89,7 @@ export class CliPromptRuntimeCoordinator {
 
     if (params.workingFilePersistence) {
       await params.workingFilePersistence.updateWorkingFile();
-      this.deps.logger.debug(
+      Log.debug(
         `💾 Saved runtime metadata to working file (sessionId: ${params.extractedSessionId || "none"})`
       );
     }

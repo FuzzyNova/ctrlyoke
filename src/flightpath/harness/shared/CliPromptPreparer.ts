@@ -6,6 +6,7 @@ import {
 } from "../../../utils/PromptFileSplitter";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { TempFileManager } from "../../../utils/TempFileManager";
+import { Log } from "../../../utils/Log";
 import type { PromptSections } from "../../HarnessIntegration";
 
 export interface PromptFileResult {
@@ -40,8 +41,6 @@ export interface CliPromptPreparerDeps {
     excerptRefs: string[],
     promptRefs: string[]
   ) => string;
-  logDebug: (message: string) => void;
-  logInfo: (message: string) => void;
 }
 
 export class CliPromptPreparer {
@@ -61,7 +60,7 @@ export class CliPromptPreparer {
       slashCommand !== null && /^\/\w+\s*$/.test(originalPromptText);
 
     if (isPureSlashCommand) {
-      this.deps.logDebug(
+      Log.debug(
         `⚡ Slash command detected ("${slashCommand}") — skipping instruction assembly`
       );
       return {
@@ -212,7 +211,7 @@ export class CliPromptPreparer {
     allTempFilePaths.push(...promptPaths);
     const promptRefs = promptPaths.map(fmtRef);
 
-    this.deps.logInfo(
+    Log.info(
       `📁 Categorized prompt files: ${allTempFilePaths.length} file(s)`
     );
 

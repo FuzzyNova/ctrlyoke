@@ -1,28 +1,21 @@
 import type {
   CliResult,
-  OutputMetadata,
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
-import type { IResponseParser } from "./interfaces/IResponseParser";
-
-interface CliResponseCollectorLogger {
-  debug(message: string): void;
-}
+import { Log } from "../../../utils/Log";
+import { CliOutputFormatter } from "./CliOutputFormatter";
+import { extractTextFromEvents } from "./CliResponseTextExtractor";
+import type { ICliProvider } from "./interfaces/ICliProvider";
 
 export interface CliResponseCollectorDeps {
-  responseParser: IResponseParser;
-  augmentParsedOutput?: (
-    output: UniversalCliOutput
-  ) => Promise<UniversalCliOutput>;
-  extractSessionIdFromLogs?: (
-    promptText: string,
-    startTime: Date
-  ) => Promise<string | undefined>;
-  extractTextFromEvents: (output: UniversalCliOutput) => string;
-  formatStatistics: (metadata: OutputMetadata) => string;
-  logResponse: (response: string, statistics?: string) => void;
-  onResponseComplete: (response: string) => void;
-  logger: CliResponseCollectorLogger;
+  provider: Pick<
+    ICliProvider,
+    "responseParser" | "augmentParsedOutput" | "extractSessionIdFromLogs"
+  >;
+  hostCallbacks: {
+    logResponse: (response: string, statistics?: string) => void;
+    onResponseComplete: (response: string) => void;
+  };
 }
 
 export interface CollectedHeadlessResponse {
@@ -44,18 +37,18 @@ export class CliResponseCollector {
     resolvedSessionId?: string;
     label?: string;
   }): Promise<CollectedHeadlessResponse> {
-    let parsedOutput = this.deps.responseParser.parse(
+    let parsedOutput = this.deps.provider.responseParser.parse(
       params.stdout,
       params.stderr,
       params.exitCode
     );
 
-    if (this.deps.augmentParsedOutput) {
-      parsedOutput = await this.deps.augmentParsedOutput(parsedOutput);
+    if (this.deps.provider.augmentParsedOutput) {
+      parsedOutput = await this.deps.provider.augmentParsedOutput(parsedOutput);
     }
 
-    const responseText = this.deps.extractTextFromEvents(parsedOutput);
-    const statistics = this.deps.formatStatistics(parsedOutput.metadata);
+    const responseText = extractTextFromEvents(parsedOutput);
+    const statistics = CliOutputFormatter.formatStatistics(parsedOutput.metadata);
 
     const cliResult: CliResult = {
       success: params.exitCode === 0,
@@ -67,27 +60,27 @@ export class CliResponseCollector {
 
     let extractedSessionId = parsedOutput.metadata.sessionId;
     if (extractedSessionId) {
-      this.deps.logger.debug(
+      Log.debug(
         `📝 Session ID from output${params.label || ""}: ${extractedSessionId}`
       );
     } else if (
       !params.resolvedSessionId &&
-      this.deps.extractSessionIdFromLogs
+      this.deps.provider.extractSessionIdFromLogs
     ) {
-      const logSessionId = await this.deps.extractSessionIdFromLogs(
+      const logSessionId = await this.deps.provider.extractSessionIdFromLogs(
         params.promptForSessionLog,
         params.executionStartTime
       );
       if (logSessionId) {
         extractedSessionId = logSessionId;
-        this.deps.logger.debug(
+        Log.debug(
           `📝 Session ID from logs${params.label || ""}: ${logSessionId}`
         );
       }
     }
 
-    this.deps.logResponse(responseText, statistics);
-    this.deps.onResponseComplete(responseText);
+    this.deps.hostCallbacks.logResponse(responseText, statistics);
+    this.deps.hostCallbacks.onResponseComplete(responseText);
 
     return {
       success: params.exitCode === 0,

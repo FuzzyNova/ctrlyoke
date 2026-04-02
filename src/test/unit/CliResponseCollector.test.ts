@@ -2,6 +2,8 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { CliResponseCollector } from "../../flightpath/harness/shared/CliResponseCollector";
+import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
+import { Log } from "../../utils/Log";
 
 function createParsedOutput(
   overrides?: Partial<UniversalCliOutput>
@@ -24,27 +26,101 @@ suite("CliResponseCollector", () => {
       [];
     const completedResponses: string[] = [];
     const debugMessages: string[] = [];
+    const originalDebug = Log.debug;
+    (Log as unknown as { debug(message: string): void }).debug = (
+      message: string
+    ) => {
+      debugMessages.push(message);
+    };
 
-    const collector = new CliResponseCollector({
+    try {
+      const collector = new CliResponseCollector({
+        provider: {
+          responseParser: {
+            parse: () =>
+              createParsedOutput({
+                metadata: {
+                  sessionId: "session-from-output",
+                  usage: {
+                    inputTokens: 1,
+                    outputTokens: 2,
+                    totalTokens: 3,
+                  },
+                } as any,
+              }),
+            parseTokenCounts: () => undefined,
+          },
+        } as Pick<
+          ICliProvider,
+          "responseParser" | "augmentParsedOutput" | "extractSessionIdFromLogs"
+        >,
+        hostCallbacks: {
+          logResponse: (response: string, statistics?: string) => {
+            loggedResponses.push({ response, statistics });
+          },
+          onResponseComplete: (response: string) => {
+            completedResponses.push(response);
+          },
+        },
+      });
+
+      const result = await collector.collectHeadlessResponse({
+        stdout: "stdout",
+        stderr: "",
+        exitCode: 0,
+        promptForSessionLog: "say hi",
+        executionStartTime: new Date(),
+      });
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.cliResult.success, true);
+      assert.strictEqual(result.cliResult.response, "hello world");
+      assert.strictEqual(
+        result.cliResult.statistics,
+        "Session: session- | Tokens: 1 in / 2 out"
+      );
+      assert.strictEqual(result.extractedSessionId, "session-from-output");
+      assert.deepStrictEqual(loggedResponses, [
+        {
+          response: "hello world",
+          statistics: "Session: session- | Tokens: 1 in / 2 out",
+        },
+      ]);
+      assert.deepStrictEqual(completedResponses, ["hello world"]);
+      assert.ok(
+        debugMessages.some((message) => message.includes("session-from-output"))
+      );
+    } finally {
+      (Log as unknown as { debug(message: string): void }).debug = originalDebug;
+    }
+  });
+
+  test("should call provider-owned augmentParsedOutput without detaching provider context", async () => {
+    const provider = {
+      augmentationSessionId: "augmented-session",
       responseParser: {
-        parse: () =>
-          createParsedOutput({
-            metadata: { sessionId: "session-from-output" },
-          }),
+        parse: () => createParsedOutput(),
         parseTokenCounts: () => undefined,
       },
-      extractTextFromEvents: () => "hello world",
-      formatStatistics: () => "Usage: 1 input + 2 output = 3 tokens",
-      logResponse: (response: string, statistics?: string) => {
-        loggedResponses.push({ response, statistics });
+      async augmentParsedOutput(output: UniversalCliOutput) {
+        return {
+          ...output,
+          metadata: {
+            ...output.metadata,
+            sessionId: this.augmentationSessionId,
+          },
+        };
       },
-      onResponseComplete: (response: string) => {
-        completedResponses.push(response);
-      },
-      logger: {
-        debug: (message: string) => {
-          debugMessages.push(message);
-        },
+    } as Pick<
+      ICliProvider,
+      "responseParser" | "augmentParsedOutput" | "extractSessionIdFromLogs"
+    > & { augmentationSessionId: string };
+
+    const collector = new CliResponseCollector({
+      provider,
+      hostCallbacks: {
+        logResponse: () => {},
+        onResponseComplete: () => {},
       },
     });
 
@@ -56,43 +132,33 @@ suite("CliResponseCollector", () => {
       executionStartTime: new Date(),
     });
 
-    assert.strictEqual(result.success, true);
-    assert.strictEqual(result.cliResult.success, true);
-    assert.strictEqual(result.cliResult.response, "hello world");
-    assert.strictEqual(
-      result.cliResult.statistics,
-      "Usage: 1 input + 2 output = 3 tokens"
-    );
-    assert.strictEqual(result.extractedSessionId, "session-from-output");
-    assert.deepStrictEqual(loggedResponses, [
-      {
-        response: "hello world",
-        statistics: "Usage: 1 input + 2 output = 3 tokens",
-      },
-    ]);
-    assert.deepStrictEqual(completedResponses, ["hello world"]);
-    assert.ok(
-      debugMessages.some((message) => message.includes("session-from-output"))
-    );
+    assert.strictEqual(result.extractedSessionId, "augmented-session");
+    assert.strictEqual(result.parsedOutput.metadata.sessionId, "augmented-session");
   });
 
   test("should fall back to log-based session extraction when output has no session ID", async () => {
     let extractedPrompt: string | undefined;
-
-    const collector = new CliResponseCollector({
+    const provider = {
+      logSessionId: "session-from-log",
       responseParser: {
         parse: () => createParsedOutput(),
         parseTokenCounts: () => undefined,
       },
-      extractSessionIdFromLogs: async (promptText: string) => {
+      async extractSessionIdFromLogs(promptText: string) {
         extractedPrompt = promptText;
-        return "session-from-log";
+        return this.logSessionId;
       },
-      extractTextFromEvents: () => "hello world",
-      formatStatistics: () => "",
-      logResponse: () => {},
-      onResponseComplete: () => {},
-      logger: { debug: (_message: string) => {} },
+    } as Pick<
+      ICliProvider,
+      "responseParser" | "augmentParsedOutput" | "extractSessionIdFromLogs"
+    > & { logSessionId: string };
+
+    const collector = new CliResponseCollector({
+      provider,
+      hostCallbacks: {
+        logResponse: () => {},
+        onResponseComplete: () => {},
+      },
     });
 
     const result = await collector.collectHeadlessResponse({
@@ -111,19 +177,23 @@ suite("CliResponseCollector", () => {
     let logExtractionCalled = false;
 
     const collector = new CliResponseCollector({
-      responseParser: {
-        parse: () => createParsedOutput(),
-        parseTokenCounts: () => undefined,
+      provider: {
+        responseParser: {
+          parse: () => createParsedOutput(),
+          parseTokenCounts: () => undefined,
+        },
+        extractSessionIdFromLogs: async () => {
+          logExtractionCalled = true;
+          return "session-from-log";
+        },
+      } as Pick<
+        ICliProvider,
+        "responseParser" | "augmentParsedOutput" | "extractSessionIdFromLogs"
+      >,
+      hostCallbacks: {
+        logResponse: () => {},
+        onResponseComplete: () => {},
       },
-      extractSessionIdFromLogs: async () => {
-        logExtractionCalled = true;
-        return "session-from-log";
-      },
-      extractTextFromEvents: () => "hello world",
-      formatStatistics: () => "",
-      logResponse: () => {},
-      onResponseComplete: () => {},
-      logger: { debug: (_message: string) => {} },
     });
 
     const result = await collector.collectHeadlessResponse({

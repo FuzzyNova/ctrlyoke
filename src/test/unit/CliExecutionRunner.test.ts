@@ -6,15 +6,6 @@ import { CliFailureTracker } from "../../flightpath/harness/shared/CliFailureTra
 import { CliInteractiveStartupCoordinator } from "../../flightpath/harness/shared/CliInteractiveStartupCoordinator";
 import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
 
-function createLogger() {
-  return {
-    debug(_message: string): void {},
-    info(_message: string): void {},
-    warn(_message: string): void {},
-    error(_message: string, _error?: unknown): void {},
-  };
-}
-
 function createProvider(options?: {
   supportsSessionStart?: boolean;
   waitForSessionStart?: (
@@ -107,42 +98,46 @@ function createRunner(options?: {
       executeHeadless: async () => true,
     },
     failureTracker,
-    createInteractiveStartupCoordinator: () =>
-      new CliInteractiveStartupCoordinator({
-        logParser: provider.logParser!,
-        notificationMonitor: provider.notificationMonitor,
-        getWorkspaceRoot: () => process.cwd(),
-        getAbortState: () => failureTracker.getInteractiveAbortState(false),
-        markProcessExitDuringStage: (stage: string, exitCode: number) =>
-          failureTracker.markProcessExitDuringStage(stage, exitCode),
-        setFailureReason: (reason: string) => {
-          failureReason = reason;
-        },
-        logger: createLogger(),
-      }),
-    createResponseCollector: () => ({
-      collectHeadlessResponse: async () => ({
-        success: true,
-        parsedOutput: { events: [], metadata: {} },
-        cliResult: {
+    factories: {
+      createInteractiveStartupCoordinator: () =>
+        new CliInteractiveStartupCoordinator({
+          logParser: provider.logParser!,
+          notificationMonitor: provider.notificationMonitor,
+          getWorkspaceRoot: () => process.cwd(),
+          getAbortState: () => failureTracker.getInteractiveAbortState(false),
+          markProcessExitDuringStage: (stage: string, exitCode: number) =>
+            failureTracker.markProcessExitDuringStage(stage, exitCode),
+          setFailureReason: (reason: string) => {
+            failureReason = reason;
+          },
+        }),
+      createResponseCollector: () => ({
+        collectHeadlessResponse: async () => ({
           success: true,
-          response: "",
-          statistics: "",
-        },
+          parsedOutput: { events: [], metadata: {} },
+          cliResult: {
+            success: true,
+            response: "",
+            statistics: "",
+          },
+        }),
       }),
-    }),
-    cleanupTempFiles: async () => {},
-    getWorkspaceRoot: () => process.cwd(),
-    getExtensionPath: () => process.cwd(),
-    isVsCodeContext: () => true,
-    isCancelling: () => false,
-    onStreamingEvents: () => {},
-    onResponseComplete: () => {},
-    logResponse: () => {},
-    setFailureReason: (reason: string) => {
-      failureReason = reason;
+      cleanupTempFiles: async () => {},
     },
-    logger: createLogger(),
+    runtimeState: {
+      getWorkspaceRoot: () => process.cwd(),
+      getExtensionPath: () => process.cwd(),
+      isVsCodeContext: () => true,
+      isCancelling: () => false,
+      setFailureReason: (reason: string) => {
+        failureReason = reason;
+      },
+    },
+    hostCallbacks: {
+      onStreamingEvents: () => {},
+      onResponseComplete: () => {},
+      logResponse: () => {},
+    },
   });
 
   return {

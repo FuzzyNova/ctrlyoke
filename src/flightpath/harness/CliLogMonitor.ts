@@ -2,12 +2,11 @@ import type * as fs from "fs";
 import type {
   CliEvent,
   CliResult,
-  FileEditData,
   UniversalCliOutput,
 } from "../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
+import { extractTextFromEvents } from "./shared/CliResponseTextExtractor";
 import type { BaseCliEvent, ILogParser } from "./shared/interfaces/ILogParser";
 import type { INotificationMonitor } from "./shared/interfaces/INotificationMonitor";
 
@@ -39,20 +38,24 @@ export interface LogMonitorDependencies {
   logParser: ILogParser;
   /** Optional notification monitor for hook-based completion detection (Claude, Codex) */
   notificationMonitor?: INotificationMonitor;
-  /** Returns the workspace root path (needed for notification directory resolution) */
-  getWorkspaceRoot: () => string | undefined;
-  /** Returns true when the user has requested cancellation */
-  isCancelling: () => boolean;
-  /** Returns exit code when the PTY/terminal process has terminated, null if still running.
-   *  All CLI harnesses are TUIs that stay open between prompts — any process exit before
-   *  completion detection is abnormal. The log monitor drains remaining events and stops. */
-  isPtyTerminated?: () => { exitCode: number } | null;
-  /** Callback for streaming structured CliEvents to the output panel */
-  onStreamingEvents: (events: CliEvent[]) => void;
-  /** Callback fired when the full response is complete */
-  onResponseComplete: (message: string) => void;
-  /** Callback to log the response (respects showCliOutput setting) */
-  logResponse: (response: string, statistics?: string) => void;
+  runtimeState: {
+    /** Returns the workspace root path (needed for notification directory resolution) */
+    getWorkspaceRoot: () => string | undefined;
+    /** Returns true when the user has requested cancellation */
+    isCancelling: () => boolean;
+    /** Returns exit code when the PTY/terminal process has terminated, null if still running.
+     *  All CLI harnesses are TUIs that stay open between prompts — any process exit before
+     *  completion detection is abnormal. The log monitor drains remaining events and stops. */
+    isPtyTerminated?: () => { exitCode: number } | null;
+  };
+  hostCallbacks: {
+    /** Callback for streaming structured CliEvents to the output panel */
+    onStreamingEvents: (events: CliEvent[]) => void;
+    /** Callback fired when the full response is complete */
+    onResponseComplete: (message: string) => void;
+    /** Callback to log the response (respects showCliOutput setting) */
+    logResponse: (response: string, statistics?: string) => void;
+  };
 }
 
 /**
@@ -82,11 +85,7 @@ export class CliLogMonitor {
   /** Interval (ms) for checking user cancellation during monitoring */
   private static readonly CANCELLATION_CHECK_INTERVAL_MS = 100;
 
-  private readonly deps: LogMonitorDependencies;
-
-  constructor(deps: LogMonitorDependencies) {
-    this.deps = deps;
-  }
+  constructor(private readonly deps: LogMonitorDependencies) {}
 
   /**
    * Monitor a log file for completion, streaming events as they arrive.
@@ -128,7 +127,7 @@ export class CliLogMonitor {
       // ──────────────────────────────────────────────────────
       const handleCompletion = async (source: string) => {
         if (completed) {
-          return; // Already completed
+          return;
         }
         completed = true;
 
@@ -144,10 +143,9 @@ export class CliLogMonitor {
             continue;
           }
           events.push(event);
-          const streamingEvents =
-            parser.extractStructuredEventsFromEvent(event);
+          const streamingEvents = parser.extractStructuredEventsFromEvent(event);
           if (streamingEvents.length > 0) {
-            this.deps.onStreamingEvents(streamingEvents);
+            this.deps.hostCallbacks.onStreamingEvents(streamingEvents);
           }
         }
 
@@ -188,15 +186,11 @@ export class CliLogMonitor {
           }
         }
 
-        // Extract text from events for legacy response field
-        const responseText = CliLogMonitor.extractTextFromEvents(response);
-
-        // Format statistics
+        const responseText = extractTextFromEvents(response);
         const statistics = parser.formatStatistics(
           response.metadata as unknown as BaseCliEvent
         );
 
-        // Build CLI result
         const cliResult: CliResult = {
           success: true,
           response: responseText,
@@ -205,9 +199,11 @@ export class CliLogMonitor {
           sessionId: response.metadata.sessionId || sessionId || undefined,
         };
 
-        this.deps.logResponse(cliResult.response, cliResult.statistics);
+        this.deps.hostCallbacks.logResponse(
+          cliResult.response,
+          cliResult.statistics
+        );
 
-        // Cleanup
         watcher.close();
         if (timeoutHandle) {
           clearTimeout(timeoutHandle);
@@ -215,7 +211,7 @@ export class CliLogMonitor {
         if (cancellationInterval) {
           clearInterval(cancellationInterval);
         }
-        this.deps.onResponseComplete(cliResult.response);
+        this.deps.hostCallbacks.onResponseComplete(cliResult.response);
 
         resolve({
           success: true,
@@ -231,10 +227,9 @@ export class CliLogMonitor {
       const processEvent = (event: BaseCliEvent, source: string) => {
         events.push(event);
 
-        // Stream structured events to output window (delegates to harness's log parser)
         const streamingEvents = parser.extractStructuredEventsFromEvent(event);
         if (streamingEvents.length > 0) {
-          this.deps.onStreamingEvents(streamingEvents);
+          this.deps.hostCallbacks.onStreamingEvents(streamingEvents);
         }
 
         // Check completion via log file — only for harnesses without a notification monitor.
@@ -291,7 +286,6 @@ export class CliLogMonitor {
         startTime
       );
 
-      // Initial read to capture events written before watcher setup (fast prompts)
       try {
         const initialEntries = await parser.readNewLines(logPath);
         for (const entry of initialEntries) {
@@ -305,24 +299,14 @@ export class CliLogMonitor {
         Log.warn(`⚠️ Failed initial log read: ${error}`);
       }
 
-      // ──────────────────────────────────────────────────────
-      // Notification monitor (parallel completion detection)
-      // ──────────────────────────────────────────────────────
       if (this.deps.notificationMonitor) {
-        const workspaceRoot = this.deps.getWorkspaceRoot();
+        const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
         if (workspaceRoot) {
           const notifyDir =
-            this.deps.notificationMonitor.getNotificationDirectory(
-              workspaceRoot
-            );
+            this.deps.notificationMonitor.getNotificationDirectory(workspaceRoot);
 
-          Log.debug(
-            `🔔 Starting notification monitor for completion detection`
-          );
+          Log.debug("🔔 Starting notification monitor for completion detection");
 
-          // Determine monitoring mode:
-          // - If harness supports session IDs in notification filenames, use specific session monitoring
-          // - Otherwise (like Copilot), use wildcard mode (undefined sessionId)
           const monitoringSessionId = this.deps.notificationMonitor
             .supportsSessionIdInFilename
             ? (sessionId ?? undefined)
@@ -334,12 +318,10 @@ export class CliLogMonitor {
             );
           } else {
             Log.debug(
-              `📋 Monitoring notification directory for any new completion file`
+              "📋 Monitoring notification directory for any new completion file"
             );
           }
 
-          // Launch harness-specific notification monitoring in parallel
-          // (each harness knows its own file naming conventions)
           void (async () => {
             try {
               const result =
@@ -352,13 +334,12 @@ export class CliLogMonitor {
                   monitoringSessionId,
                   startTime,
                   () =>
-                    this.deps.isCancelling() ||
-                    !!this.deps.isPtyTerminated?.() ||
+                    this.deps.runtimeState.isCancelling() ||
+                    !!this.deps.runtimeState.isPtyTerminated?.() ||
                     completed
                 );
 
               if (result.completed && !completed) {
-                // Cleanup any remaining notification files (provider-specific)
                 if (
                   this.deps.notificationMonitor!.cleanupNotificationFiles &&
                   sessionId
@@ -375,8 +356,6 @@ export class CliLogMonitor {
                 sessionId &&
                 this.deps.notificationMonitor!.cleanupNotificationFiles
               ) {
-                // Cancelled, timed out, or completed via another path — clean up
-                // the -start.json file that was left by waitForSessionStart().
                 await this.deps.notificationMonitor!.cleanupNotificationFiles(
                   sessionId,
                   notifyDir
@@ -389,9 +368,6 @@ export class CliLogMonitor {
         }
       }
 
-      // ──────────────────────────────────────────────────────
-      // Timeout handling (skipped when user sets unlimited / -1)
-      // ──────────────────────────────────────────────────────
       if (timeoutMs !== undefined) {
         timeoutHandle = setTimeout(() => {
           Log.warn(`⚠️ Log monitoring timeout after ${timeoutMs}ms`);
@@ -400,11 +376,8 @@ export class CliLogMonitor {
         }, timeoutMs);
       }
 
-      // ──────────────────────────────────────────────────────
-      // Cancellation handling
-      // ──────────────────────────────────────────────────────
       cancellationInterval = setInterval(() => {
-        if (this.deps.isCancelling()) {
+        if (this.deps.runtimeState.isCancelling()) {
           Log.info("⏹️ Log monitoring cancelled by user");
           if (cancellationInterval) {
             clearInterval(cancellationInterval);
@@ -413,11 +386,10 @@ export class CliLogMonitor {
             clearTimeout(timeoutHandle);
           }
           watcher.close();
-          // Preserve the sessionId so the caller can persist it for resume-after-stop.
           resolve({ success: false, sessionId: sessionId || undefined });
           return;
         }
-        const ptyExit = this.deps.isPtyTerminated?.();
+        const ptyExit = this.deps.runtimeState.isPtyTerminated?.();
         if (ptyExit) {
           if (cancellationInterval) {
             clearInterval(cancellationInterval);
@@ -427,17 +399,12 @@ export class CliLogMonitor {
           }
           watcher.close();
 
-          // All CLI harnesses are TUIs that stay open between prompts.
-          // Any process exit before completion detection is abnormal —
-          // the user killed it (Ctrl+C), SIGKILL, or the process crashed.
-          // Drain remaining log events to preserve partial output, then stop.
           Log.warn(
             `⚠️ CLI process exited (code ${ptyExit.exitCode}) before completion — stopping workflow`
           );
           void drainLogEvents().then(() => {
             resolve({
               success: false,
-              // Preserve the sessionId so the caller can persist it for resume-after-stop.
               sessionId: sessionId || undefined,
               processExited: { exitCode: ptyExit.exitCode },
             });
@@ -445,72 +412,5 @@ export class CliLogMonitor {
         }
       }, CliLogMonitor.CANCELLATION_CHECK_INTERVAL_MS);
     });
-  }
-
-  // ============================================================
-  // STATIC UTILITIES
-  // ============================================================
-
-  /**
-   * Extract text content from a UniversalCliOutput's events array.
-   * Concatenates all text events to form the complete response text.
-   *
-   * Used by both interactive (log monitoring) and headless execution paths
-   * to convert structured events into a legacy response string.
-   *
-   * @param output Structured CLI output with events array
-   * @returns Concatenated text content from all TEXT events
-   */
-  static extractTextFromEvents(output: UniversalCliOutput): string {
-    const textParts: string[] = [];
-    for (const event of output.events) {
-      if (!event.data) {
-        continue;
-      }
-      if (event.type === CLI_EVENT_TYPES.TEXT && "text" in event.data) {
-        textParts.push(event.data.text as string);
-      } else if (
-        event.type === CLI_EVENT_TYPES.THINKING &&
-        "text" in event.data
-      ) {
-        textParts.push(
-          `\n[Thinking]\n${(event.data as { text: string }).text}\n[/Thinking]`
-        );
-      } else if (
-        event.type === CLI_EVENT_TYPES.FILE_WRITE &&
-        "path" in event.data
-      ) {
-        textParts.push(`\n[Created: ${(event.data as { path: string }).path}]`);
-      } else if (
-        event.type === CLI_EVENT_TYPES.FILE_EDIT &&
-        "path" in event.data
-      ) {
-        const editData = event.data as FileEditData;
-        if (editData.structuredPatch && editData.structuredPatch.length > 0) {
-          let added = 0,
-            removed = 0;
-          for (const hunk of editData.structuredPatch) {
-            for (const line of hunk.lines) {
-              if (line.startsWith("+")) {
-                added++;
-              } else if (line.startsWith("-")) {
-                removed++;
-              }
-            }
-          }
-          textParts.push(
-            `\n[Edited: ${editData.path} (+${added}, -${removed})]`
-          );
-        } else {
-          textParts.push(`\n[Edited: ${editData.path}]`);
-        }
-      } else if (
-        event.type === CLI_EVENT_TYPES.FILE_DELETE &&
-        "path" in event.data
-      ) {
-        textParts.push(`\n[Deleted: ${(event.data as { path: string }).path}]`);
-      }
-    }
-    return textParts.join("");
   }
 }

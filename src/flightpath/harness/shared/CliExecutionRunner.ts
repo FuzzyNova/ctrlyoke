@@ -6,19 +6,13 @@ import { Harness } from "../../../types/FlightPathTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
+import { Log } from "../../../utils/Log";
 import { CliLogMonitor } from "../CliLogMonitor";
 import type { CliExecutionSession } from "./CliExecutionSession";
 import type { CliFailureTracker } from "./CliFailureTracker";
 import type { CollectedHeadlessResponse } from "./CliResponseCollector";
 import type { InteractiveSessionDiscovery } from "./CliInteractiveStartupCoordinator";
 import type { ICliProvider } from "./interfaces/ICliProvider";
-
-interface CliExecutionRunnerLogger {
-  debug(message: string): void;
-  info(message: string): void;
-  warn(message: string): void;
-  error(message: string, error?: unknown): void;
-}
 
 interface CliExecutionTransportCoordinator {
   executeStandaloneInteractiveProcess(
@@ -71,18 +65,23 @@ export interface CliExecutionRunnerDeps {
   provider: ICliProvider;
   transportCoordinator: CliExecutionTransportCoordinator;
   failureTracker: CliFailureTracker;
-  createInteractiveStartupCoordinator: () => CliInteractiveStartupCoordinatorLike;
-  createResponseCollector: () => CliResponseCollectorLike;
-  cleanupTempFiles: (tempFilePaths: string[]) => Promise<void>;
-  getWorkspaceRoot: () => string | undefined;
-  getExtensionPath: () => string;
-  isVsCodeContext: () => boolean;
-  isCancelling: () => boolean;
-  onStreamingEvents: (events: CliEvent[]) => void;
-  onResponseComplete: (response: string) => void;
-  logResponse: (response: string, statistics?: string) => void;
-  setFailureReason: (reason: string) => void;
-  logger: CliExecutionRunnerLogger;
+  factories: {
+    createInteractiveStartupCoordinator: () => CliInteractiveStartupCoordinatorLike;
+    createResponseCollector: () => CliResponseCollectorLike;
+    cleanupTempFiles: (tempFilePaths: string[]) => Promise<void>;
+  };
+  runtimeState: {
+    getWorkspaceRoot: () => string | undefined;
+    getExtensionPath: () => string;
+    isVsCodeContext: () => boolean;
+    isCancelling: () => boolean;
+    setFailureReason: (reason: string) => void;
+  };
+  hostCallbacks: {
+    onStreamingEvents: (events: CliEvent[]) => void;
+    onResponseComplete: (response: string) => void;
+    logResponse: (response: string, statistics?: string) => void;
+  };
 }
 
 export class CliExecutionRunner {
@@ -106,9 +105,7 @@ export class CliExecutionRunner {
       );
       if (logSessionId) {
         session.setExtractedSessionId(logSessionId);
-        this.deps.logger.debug(
-          `📝 Session ID from logs (interactive): ${logSessionId}`
-        );
+        Log.debug(`📝 Session ID from logs (interactive): ${logSessionId}`);
       }
     }
 
@@ -138,7 +135,7 @@ export class CliExecutionRunner {
             (this.deps.provider.config.name as Harness);
 
           if (currentHarness === Harness.ClaudeCli) {
-            this.deps.logger.warn(
+            Log.warn(
               `⚠️ Claude CLI rejected session ID "${session.resolvedSessionId}". ` +
                 `Retrying without resume flag.`
             );
@@ -146,8 +143,8 @@ export class CliExecutionRunner {
             const argsWithoutResume = await this.deps.provider.buildCliArgs(
               session.prompt,
               false,
-              this.deps.getExtensionPath(),
-              this.deps.getWorkspaceRoot() || "",
+              this.deps.runtimeState.getExtensionPath(),
+              this.deps.runtimeState.getWorkspaceRoot() || "",
               undefined,
               session.workflowContext
             );
@@ -173,8 +170,8 @@ export class CliExecutionRunner {
     try {
       return await executeWithRecovery(baseArgs);
     } catch (error) {
-      this.deps.logger.error("❌ Headless execution error", error);
-      this.deps.setFailureReason(getErrorMessage(error));
+      Log.error("❌ Headless execution error", error);
+      this.deps.runtimeState.setFailureReason(getErrorMessage(error));
       return false;
     }
   }
@@ -185,11 +182,11 @@ export class CliExecutionRunner {
   ): Promise<{ success: boolean; sessionId?: string }> {
     try {
       if (session.workflowContext && session.workflowContext.promptIndex > 0) {
-        this.deps.logger.info(`\n${"─".repeat(52)}`);
-        this.deps.logger.info(
+        Log.info(`\n${"─".repeat(52)}`);
+        Log.info(
           `Prompt ${session.workflowContext.promptIndex + 1} / ${session.workflowContext.allPrompts.length}`
         );
-        this.deps.logger.info("\n");
+        Log.info("\n");
       }
 
       return await this.deps.transportCoordinator.executeStandaloneInteractiveProcess(
@@ -199,8 +196,8 @@ export class CliExecutionRunner {
         session.resolvedSessionId
       );
     } catch (error) {
-      this.deps.logger.error("❌ CLI interactive execution error", error);
-      this.deps.setFailureReason(getErrorMessage(error));
+      Log.error("❌ CLI interactive execution error", error);
+      this.deps.runtimeState.setFailureReason(getErrorMessage(error));
       return { success: false };
     }
   }
@@ -209,25 +206,21 @@ export class CliExecutionRunner {
     args: string[],
     session: CliExecutionSession
   ): Promise<{ success: boolean; sessionId?: string }> {
-    if (!this.deps.isVsCodeContext()) {
+    if (!this.deps.runtimeState.isVsCodeContext()) {
       return this.executeInteractiveCliProcess(args, session);
     }
 
     try {
       if (!this.deps.provider.logParser) {
-        this.deps.logger.error(
-          "❌ Harness does not support log file monitoring"
-        );
+        Log.error("❌ Harness does not support log file monitoring");
         return { success: false };
       }
 
       const startTime = new Date();
-      this.deps.logger.debug(
-        `⏱️ Recording start time: ${startTime.toISOString()}`
-      );
+      Log.debug(`⏱️ Recording start time: ${startTime.toISOString()}`);
 
       if (session.resolvedSessionId && this.deps.provider.notificationMonitor) {
-        const workspaceRoot = this.deps.getWorkspaceRoot();
+        const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
         if (workspaceRoot) {
           const notifyDir =
             this.deps.provider.notificationMonitor.getNotificationDirectory(
@@ -240,7 +233,7 @@ export class CliExecutionRunner {
           if (fs.existsSync(staleStopFile)) {
             try {
               fs.unlinkSync(staleStopFile);
-              this.deps.logger.debug(
+              Log.debug(
                 `🧹 Cleaned up stale stop notification for session ${session.resolvedSessionId.substring(0, 8)}`
               );
             } catch {
@@ -256,7 +249,7 @@ export class CliExecutionRunner {
         terminalEnv.FLIGHTPATH_DIAGNOSTIC_LOGS = "true";
       }
 
-      const workspaceRoot = this.deps.getWorkspaceRoot();
+      const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
       if (workspaceRoot && this.deps.provider.notificationMonitor) {
         terminalEnv.FLIGHTPATH_NOTIFY_DIR =
           this.deps.provider.notificationMonitor.getNotificationDirectory(
@@ -273,7 +266,7 @@ export class CliExecutionRunner {
       );
 
       const startupCoordinator =
-        this.deps.createInteractiveStartupCoordinator();
+        this.deps.factories.createInteractiveStartupCoordinator();
       const discovery = await startupCoordinator.resolveSession({
         promptForDiscovery: session.promptForSessionLog,
         startTime,
@@ -290,11 +283,11 @@ export class CliExecutionRunner {
         startTime,
       });
     } catch (error) {
-      this.deps.logger.error("❌ Interactive execution error", error);
-      this.deps.setFailureReason(getErrorMessage(error));
+      Log.error("❌ Interactive execution error", error);
+      this.deps.runtimeState.setFailureReason(getErrorMessage(error));
       throw error;
     } finally {
-      await this.deps.cleanupTempFiles(session.tempFilePaths);
+      await this.deps.factories.cleanupTempFiles(session.tempFilePaths);
     }
   }
 
@@ -306,12 +299,12 @@ export class CliExecutionRunner {
     const monitor = new CliLogMonitor({
       logParser: this.deps.provider.logParser!,
       notificationMonitor: this.deps.provider.notificationMonitor,
-      getWorkspaceRoot: this.deps.getWorkspaceRoot,
-      isCancelling: this.deps.isCancelling,
-      isPtyTerminated: () => this.deps.failureTracker.getPtyTermination(),
-      onStreamingEvents: this.deps.onStreamingEvents,
-      onResponseComplete: this.deps.onResponseComplete,
-      logResponse: this.deps.logResponse,
+      runtimeState: {
+        getWorkspaceRoot: this.deps.runtimeState.getWorkspaceRoot,
+        isCancelling: this.deps.runtimeState.isCancelling,
+        isPtyTerminated: () => this.deps.failureTracker.getPtyTermination(),
+      },
+      hostCallbacks: this.deps.hostCallbacks,
     });
 
     const result = await monitor.monitor(
@@ -328,7 +321,7 @@ export class CliExecutionRunner {
     }
 
     if (result.processExited) {
-      this.deps.setFailureReason(
+      this.deps.runtimeState.setFailureReason(
         this.deps.failureTracker.markCompletionDetectionProcessExit(
           result.processExited.exitCode
         )
@@ -346,15 +339,15 @@ export class CliExecutionRunner {
     stderr: string;
     exitCode: number;
   }) => Promise<boolean> {
-    const responseCollector = this.deps.createResponseCollector();
+    const responseCollector = this.deps.factories.createResponseCollector();
 
     return async (result) => {
       if (ConfigurationUtils.shouldLogRawCliOutput()) {
-        this.deps.logger.debug(
+        Log.debug(
           `[${this.deps.provider.config.displayName} FINAL STDOUT${label}]:\n${result.stdout}`
         );
         if (result.stderr) {
-          this.deps.logger.debug(
+          Log.debug(
             `[${this.deps.provider.config.displayName} FINAL STDERR${label}]:\n${result.stderr}`
           );
         }

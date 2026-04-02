@@ -1,6 +1,7 @@
 import type { ILogParser } from "./interfaces/ILogParser";
 import type { INotificationMonitor } from "./interfaces/INotificationMonitor";
 import type { InteractiveAbortState } from "./CliFailureTracker";
+import { Log } from "../../../utils/Log";
 
 const SESSION_START_TIMEOUT_MS = 60_000;
 const SESSION_START_POLL_MS = 100;
@@ -11,13 +12,6 @@ export interface InteractiveSessionDiscovery {
   sessionId: string | null;
 }
 
-interface CliInteractiveStartupLogger {
-  debug(message: string): void;
-  info(message: string): void;
-  warn(message: string): void;
-  error(message: string): void;
-}
-
 export interface CliInteractiveStartupCoordinatorDeps {
   logParser: ILogParser;
   notificationMonitor: INotificationMonitor;
@@ -25,7 +19,6 @@ export interface CliInteractiveStartupCoordinatorDeps {
   getAbortState: () => InteractiveAbortState | null;
   markProcessExitDuringStage: (stage: string, exitCode: number) => string;
   setFailureReason: (reason: string) => void;
-  logger: CliInteractiveStartupLogger;
 }
 
 export class CliInteractiveStartupCoordinator {
@@ -57,7 +50,7 @@ export class CliInteractiveStartupCoordinator {
     startTime: Date;
     resolvedSessionId: string;
   }): Promise<InteractiveSessionDiscovery | null> {
-    this.deps.logger.debug(
+    Log.debug(
       `🔄 Resuming session ${params.resolvedSessionId} - discovering log file directly...`
     );
 
@@ -77,7 +70,7 @@ export class CliInteractiveStartupCoordinator {
         return null;
       }
 
-      this.deps.logger.error(
+      Log.error(
         `❌ Could not find log file for resumed session ${params.resolvedSessionId}\n` +
           `   The session may have been deleted or never existed.\n` +
           `   To fix: Remove the sessionId property to start a new session.`
@@ -85,7 +78,7 @@ export class CliInteractiveStartupCoordinator {
       return null;
     }
 
-    this.deps.logger.info(
+    Log.info(
       `✅ Found log file for resumed session: ${discovery.logPath}`
     );
 
@@ -98,13 +91,13 @@ export class CliInteractiveStartupCoordinator {
     startTime: Date;
     runId: string;
   }): Promise<InteractiveSessionDiscovery | null> {
-    this.deps.logger.info(
+    Log.info(
       "🔍 Waiting for SessionStart hook and log file creation..."
     );
 
     const workspaceRoot = this.deps.getWorkspaceRoot();
     if (!workspaceRoot) {
-      this.deps.logger.error(
+      Log.error(
         "❌ No workspace root for session start monitoring"
       );
       return null;
@@ -130,7 +123,7 @@ export class CliInteractiveStartupCoordinator {
         return null;
       }
 
-      this.deps.logger.error(
+      Log.error(
         `❌ SessionStart hook timeout: ${startResult.error || "Unknown error"}`
       );
       this.deps.setFailureReason(
@@ -142,14 +135,14 @@ export class CliInteractiveStartupCoordinator {
     const hookSessionId = startResult.data?.sessionId || null;
 
     if (hookSessionId) {
-      this.deps.logger.debug(
+      Log.debug(
         `✅ SessionStart hook provided session ID: ${hookSessionId}`
       );
     } else {
-      this.deps.logger.debug(
+      Log.debug(
         "✅ SessionStart hook confirmed (session ID not provided by CLI)"
       );
-      this.deps.logger.debug(
+      Log.debug(
         "🔍 Discovering session log file via prompt text matching..."
       );
     }
@@ -173,18 +166,18 @@ export class CliInteractiveStartupCoordinator {
       }
 
       if (hookSessionId) {
-        this.deps.logger.error(
+        Log.error(
           `❌ Could not find log file for session ${hookSessionId} - this should not happen!`
         );
       } else {
-        this.deps.logger.error(
+        Log.error(
           "❌ Could not discover session log - no matching prompt found"
         );
       }
       return null;
     }
 
-    this.deps.logger.info(`✅ Found session log: ${discovery.logPath}`);
+    Log.info(`✅ Found session log: ${discovery.logPath}`);
     return discovery;
   }
 
@@ -192,7 +185,7 @@ export class CliInteractiveStartupCoordinator {
     promptForDiscovery: string;
     startTime: Date;
   }): Promise<InteractiveSessionDiscovery | null> {
-    this.deps.logger.info(
+    Log.info(
       "🔍 Discovering session log file (no SessionStart hook)..."
     );
 
@@ -208,13 +201,13 @@ export class CliInteractiveStartupCoordinator {
         return null;
       }
 
-      this.deps.logger.error(
+      Log.error(
         "❌ Could not discover session log - no matching prompt found"
       );
       return null;
     }
 
-    this.deps.logger.info(`✅ Found session log: ${discovery.logPath}`);
+    Log.info(`✅ Found session log: ${discovery.logPath}`);
     return discovery;
   }
 
@@ -245,7 +238,7 @@ export class CliInteractiveStartupCoordinator {
       const events = await this.deps.logParser.readNewLines(discoveredLogPath);
       const extractedId = this.deps.logParser.extractSessionId(events);
       if (extractedId) {
-        this.deps.logger.debug(
+        Log.debug(
           `💾 Extracted session ID from log: ${extractedId}`
         );
       }
@@ -262,7 +255,7 @@ export class CliInteractiveStartupCoordinator {
     }
 
     if (abortState.kind === "user-cancelled") {
-      this.deps.logger.info(
+      Log.info(
         `⏹️ Interactive execution cancelled while ${stage}`
       );
       return true;
@@ -271,7 +264,7 @@ export class CliInteractiveStartupCoordinator {
     this.deps.setFailureReason(
       this.deps.markProcessExitDuringStage(stage, abortState.exitCode)
     );
-    this.deps.logger.warn(
+    Log.warn(
       `⚠️ CLI process exited while ${stage} (exit code ${abortState.exitCode})`
     );
     return true;

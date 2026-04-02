@@ -2,15 +2,6 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliInteractiveStartupCoordinator } from "../../flightpath/harness/shared/CliInteractiveStartupCoordinator";
 
-function createLogger() {
-  return {
-    debug(_message: string): void {},
-    info(_message: string): void {},
-    warn(_message: string): void {},
-    error(_message: string): void {},
-  };
-}
-
 suite("CliInteractiveStartupCoordinator", () => {
   test("should seek to end for resumed session logs", async () => {
     let seekedPath: string | undefined;
@@ -50,7 +41,6 @@ suite("CliInteractiveStartupCoordinator", () => {
       markProcessExitDuringStage: (_stage: string, exitCode: number) =>
         `process exit ${exitCode}`,
       setFailureReason: () => {},
-      logger: createLogger(),
     });
 
     const result = await coordinator.resolveSession({
@@ -110,7 +100,6 @@ suite("CliInteractiveStartupCoordinator", () => {
       setFailureReason: (reason: string) => {
         failureReason = reason;
       },
-      logger: createLogger(),
     });
 
     const result = await coordinator.resolveSession({
@@ -153,7 +142,6 @@ suite("CliInteractiveStartupCoordinator", () => {
       markProcessExitDuringStage: (_stage: string, exitCode: number) =>
         `process exit ${exitCode}`,
       setFailureReason: () => {},
-      logger: createLogger(),
     });
 
     const result = await coordinator.resolveSession({

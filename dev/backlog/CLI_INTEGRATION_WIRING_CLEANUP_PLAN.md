@@ -1,7 +1,7 @@
 # CliIntegration Wiring Cleanup Plan
 
 **Date:** April 2, 2026  
-**Status:** Proposed  
+**Status:** implemented  
 **Scope:** Post-split cleanup of harness composition and dependency wiring
 
 ---
@@ -108,9 +108,8 @@ Good candidates:
     - `responseParser`
     - `augmentParsedOutput`
     - `extractSessionIdFromLogs`
-  - with either:
-    - `provider: ICliProvider`, or
-    - a narrower `CliResponseProviderAdapter`
+  - with:
+    - `provider: ICliProvider`
 
 This avoids `bind(...)` and makes it clearer that these behaviors are part of one
 cohesive provider abstraction.
@@ -222,8 +221,7 @@ the same rules.
    change.
 2. Preserve existing test seams where they meaningfully reduce setup cost.
 3. Avoid passing the full `CliIntegration` object into helpers.
-4. Prefer small cohesive adapters over very wide interfaces.
-5. Validate that headless and interactive flows still behave identically after
+4. Validate that headless and interactive flows still behave identically after
    each phase.
 
 ---

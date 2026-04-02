@@ -4,12 +4,9 @@ import {
   PropertyResolver,
   type ResolvedProperties,
 } from "../../../utils/PropertyResolver";
+import { Log } from "../../../utils/Log";
 import { SessionResolver } from "../../../utils/SessionResolver";
 import { SessionValidator } from "../../../utils/SessionValidator";
-
-interface CliSessionResolverAdapterLogger {
-  info(message: string): void;
-}
 
 export interface CliSessionResolution {
   resolvedProperties?: ResolvedProperties;
@@ -18,7 +15,6 @@ export interface CliSessionResolution {
 
 export interface CliSessionResolverAdapterDeps {
   getIntegrationHarness: () => Harness;
-  logger: CliSessionResolverAdapterLogger;
 }
 
 export class CliSessionResolverAdapter {
@@ -44,7 +40,7 @@ export class CliSessionResolverAdapter {
       const harness =
         resolvedProperties?.harness ?? this.deps.getIntegrationHarness();
       if (!SessionValidator.validate(resolvedSessionId, harness)) {
-        this.deps.logger.info(
+        Log.info(
           "🔄 Starting new session due to invalid session ID format"
         );
         resolvedSessionId = undefined;

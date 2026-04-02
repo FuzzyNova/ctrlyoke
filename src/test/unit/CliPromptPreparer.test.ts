@@ -35,8 +35,6 @@ suite("CliPromptPreparer", () => {
       formatCategorizedReferences: () => {
         throw new Error("should not build categorized refs on fast path");
       },
-      logDebug: () => {},
-      logInfo: () => {},
     });
 
     const result = await preparer.preparePrompt(
@@ -75,8 +73,6 @@ suite("CliPromptPreparer", () => {
       formatDirectFileRef: () => "",
       formatTempFileRef: () => "",
       formatCategorizedReferences: () => "",
-      logDebug: () => {},
-      logInfo: () => {},
     });
 
     await preparer.preparePrompt(
@@ -118,8 +114,6 @@ suite("CliPromptPreparer", () => {
         _excerptRefs,
         promptRefs
       ) => [...directRefs, ...contextRefs, ...promptRefs].join(" | "),
-      logDebug: () => {},
-      logInfo: () => {},
     });
 
     const result = await preparer.preparePrompt(
@@ -156,8 +150,6 @@ suite("CliPromptPreparer", () => {
       formatDirectFileRef: () => "",
       formatTempFileRef: () => "",
       formatCategorizedReferences: () => "",
-      logDebug: () => {},
-      logInfo: () => {},
     });
 
     const result = await preparer.preparePrompt(
@@ -187,8 +179,6 @@ suite("CliPromptPreparer", () => {
       formatDirectFileRef: () => "",
       formatTempFileRef: () => "",
       formatCategorizedReferences: () => "",
-      logDebug: () => {},
-      logInfo: () => {},
     });
 
     const result = await preparer.preparePrompt(
@@ -227,8 +217,6 @@ suite("CliPromptPreparer", () => {
         _excerptRefs,
         promptRefs
       ) => [...directRefs, ...promptRefs].join(" | "),
-      logDebug: () => {},
-      logInfo: () => {},
     });
 
     const result = await preparer.preparePrompt(
