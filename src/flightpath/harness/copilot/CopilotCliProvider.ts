@@ -80,8 +80,8 @@ export class CopilotCliProvider implements ICliProvider {
     new CopilotToolPermissionMapper();
   readonly logParser = new CopilotLogParser();
 
-  /** Hook files created during interactive mode (cleaned up after workflow). */
-  private interactiveHookFilePaths: string[] = [];
+  /** Hook files created for both interactive and headless mode (cleaned up after workflow). */
+  private hookFilePaths: string[] = [];
 
   constructor() {
     // No initialization needed
@@ -210,38 +210,11 @@ export class CopilotCliProvider implements ICliProvider {
         args.push(...toolPermissionArgs);
       }
       // else: toolPermissions === null → none mode, skip permission flags entirely
-
-      // User hooks for headless mode — no FlightPath notification hooks needed since
-      // headless completion is detected via process exit.
-      if (workspaceRoot) {
-        const userHooks =
-          workflowContext?.resolvedProperties?.hooks ?? undefined;
-        if (userHooks && userHooks.length > 0) {
-          await this.createHeadlessUserHookFile(
-            workspaceRoot,
-            workflowContext?.promptIndex ?? 0,
-            workflowContext?.workingFilePath,
-            userHooks
-          );
-          Log.debug(`🔔 Configured user hooks for headless mode`);
-        }
-      }
-    } else {
-      // Interactive mode: Configure sessionEnd hook for completion detection
-      if (workspaceRoot) {
-        const userHooks =
-          workflowContext?.resolvedProperties?.hooks ?? undefined;
-        const hookArgs = await this.buildSessionEndHookArgs(
-          extensionPath,
-          workspaceRoot,
-          workflowContext?.promptIndex ?? 0,
-          workflowContext?.workingFilePath,
-          userHooks
-        );
-        args.push(...hookArgs);
-        Log.debug(`🔔 Configured sessionEnd hook for completion detection`);
-      }
     }
+
+    // Hook setup (interactive notification hooks + headless user hooks) is dispatched
+    // by CliIntegration.runExecutionSession() via buildNotificationHookArgs() /
+    // buildHeadlessUserHookArgs() — not here in buildCliArgs().
 
     // Path permissions
     if (ConfigurationUtils.shouldAllowAllPaths()) {
@@ -324,57 +297,40 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   /**
-   * Build sessionEnd hook arguments for interactive mode.
+   * Set up FlightPath notification hooks (sessionEnd + user hooks) for interactive mode.
    *
    * Creates a uniquely-named hook file per prompt in `.github/hooks/` so that
    * parallel workflows don't interfere with each other. Copilot auto-discovers
    * all JSON files in the hooks directory, so each prompt's file is loaded
    * independently — no merging or ref-counting needed.
    *
-   * This also sets up cleanly for the upcoming `hooks` property (HOOKS_EXPOSURE_PLAN)
-   * where different prompts may define different user hooks alongside FlightPath's
-   * completion detection hooks.
-   *
-   * @param extensionPath Extension path for accessing hook script
-   * @param workspaceRoot Workspace root directory
-   * @param promptIndex Zero-based prompt index within the workflow
-   * @param workingFilePath Working file path (used to derive a unique filename)
-   * @returns CLI arguments array (empty — Copilot auto-discovers hooks)
+   * @returns CLI arguments array (empty — Copilot auto-discovers hooks from .github/hooks/)
    */
-  private async buildSessionEndHookArgs(
+  async buildNotificationHookArgs(
     extensionPath: string,
     workspaceRoot: string,
     promptIndex: number,
-    workingFilePath?: string,
-    userHooks?: UserHookConfig[]
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined
   ): Promise<string[]> {
-    // Get notification directory from notification monitor
     const notifyDir =
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
-
-    // Get hook script path from extension
     const hookScriptPath = path.join(
       extensionPath,
       "out/scripts/flightpath-copilot-hook.js"
     );
-
-    // Build hook config using notification monitor
     const hookConfig = this.notificationMonitor.buildHookConfig(
       hookScriptPath,
       notifyDir,
       workspaceRoot,
       userHooks
     );
-
-    // Write a uniquely-named hook file for this prompt.
-    // Copilot loads all *.json files in .github/hooks/, so per-prompt files
-    // coexist safely across parallel workflows.
     const hookFileName = CopilotCliProvider.buildHookFileName(
       promptIndex,
       workingFilePath
     );
     await this.createHookFile(hookConfig, workspaceRoot, hookFileName);
-
+    Log.debug(`🔔 Configured sessionEnd hook for completion detection`);
     // No additional CLI args needed - Copilot auto-discovers hooks in .github/hooks/
     return [];
   }
@@ -382,20 +338,23 @@ export class CopilotCliProvider implements ICliProvider {
   /**
    * Create a hook file with only user-defined hooks for headless execution.
    * No FlightPath notification hooks are needed since headless uses process-exit for completion.
+   *
+   * @returns CLI arguments array (empty — Copilot auto-discovers hooks from .github/hooks/)
    */
-  private async createHeadlessUserHookFile(
+  async buildHeadlessUserHookArgs(
     workspaceRoot: string,
     promptIndex: number,
-    workingFilePath?: string,
-    userHooks?: UserHookConfig[]
-  ): Promise<void> {
-    if (!userHooks || userHooks.length === 0) return;
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[]
+  ): Promise<string[]> {
     const config = CopilotNotificationMonitor.buildUserOnlyConfig(userHooks);
     const hookFileName = CopilotCliProvider.buildHookFileName(
       promptIndex,
       workingFilePath
     );
     await this.createHookFile({ config }, workspaceRoot, hookFileName);
+    Log.debug(`🔔 Configured user hooks for headless mode`);
+    return [];
   }
 
   /**
@@ -406,7 +365,7 @@ export class CopilotCliProvider implements ICliProvider {
    */
   getAdditionalCleanupFilePaths(workspaceRoot: string): string[] {
     return [
-      ...this.interactiveHookFilePaths,
+      ...this.hookFilePaths,
       // Copilot CLI writes OpenTelemetry telemetry to COPILOT_OTEL_FILE_EXPORTER_PATH,
       // which is internally set to the relative path "NUL". When the CWD is the workspace
       // root this resolves to a real file rather than the Windows null device.
@@ -445,7 +404,7 @@ export class CopilotCliProvider implements ICliProvider {
         "utf-8"
       );
 
-      this.interactiveHookFilePaths.push(hookPath);
+      this.hookFilePaths.push(hookPath);
       Log.debug(`📁 Created hook file: ${hookPath}`);
     } catch (error) {
       Log.warn(`⚠️ Failed to create hook file: ${error}`);

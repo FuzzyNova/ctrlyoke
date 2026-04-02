@@ -223,24 +223,11 @@ export class CodexCliProvider implements ICliProvider {
         }
       }
       // else: toolPermissions === null → none mode, skip permission flags entirely
-    } else {
-      // Interactive mode: enable hooks system and write .codex/hooks.json
-      args.push("--enable", "codex_hooks");
-      if (workspaceRoot) {
-        const userHooks =
-          workflowContext?.resolvedProperties?.hooks ?? undefined;
-        const workflowKey = workflowContext?.workingFilePath ?? workspaceRoot;
-        await this.buildInteractiveHookSettings(
-          extensionPath,
-          workspaceRoot,
-          workflowKey,
-          userHooks
-        );
-        Log.debug(
-          `🔔 Configured SessionStart + Stop hooks for Codex completion detection`
-        );
-      }
     }
+
+    // Hook setup (interactive notification hooks) is dispatched by
+    // CliIntegration.runExecutionSession() via buildNotificationHookArgs() — not here.
+    // buildNotificationHookArgs() returns ["--enable", "codex_hooks"] for interactive mode.
 
     // Session management
     const shouldResume = CliProviderUtils.shouldResumeSession(
@@ -269,13 +256,35 @@ export class CodexCliProvider implements ICliProvider {
   }
 
   /**
-   * Write FlightPath hooks into .codex/hooks.json for completion detection.
+   * Set up FlightPath notification hooks (SessionStart + Stop + user hooks) for interactive mode.
+   * Writes hooks to .codex/hooks.json and enables the Codex hook system.
    *
    * Uses SettingsJsonHooksTracker for parallel-safe ref-counted hook management.
    * Unlike Qwen/Gemini, Codex has no trusted_hooks.json — hooks run without
    * any trust prompt when codex_hooks is enabled.
+   *
+   * @returns ["--enable", "codex_hooks"] — required for Codex to activate its hook system
    */
-  private async buildInteractiveHookSettings(
+  async buildNotificationHookArgs(
+    extensionPath: string,
+    workspaceRoot: string,
+    _promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined
+  ): Promise<string[]> {
+    const workflowKey = workingFilePath ?? workspaceRoot;
+    await this.writeCodexHooks(extensionPath, workspaceRoot, workflowKey, userHooks);
+    Log.debug(
+      `🔔 Configured SessionStart + Stop hooks for Codex completion detection`
+    );
+    return ["--enable", "codex_hooks"];
+  }
+
+  /**
+   * Write FlightPath hooks into .codex/hooks.json for completion detection.
+   * Shared implementation for buildNotificationHookArgs.
+   */
+  private async writeCodexHooks(
     extensionPath: string,
     workspaceRoot: string,
     workflowKey: string,

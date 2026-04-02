@@ -613,15 +613,50 @@ export class CliIntegration extends HarnessIntegration {
   ): Promise<boolean> {
     const mode = this.getExecutionMode();
     const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
+    const workspaceRoot = this.getWorkspaceRoot();
+    const extensionPath = this.platform.getExtensionPath();
 
     const baseArgs = await this.provider.buildCliArgs(
       session.prompt,
       isInteractive,
-      this.platform.getExtensionPath(),
-      this.getWorkspaceRoot(),
+      extensionPath,
+      workspaceRoot,
       session.resolvedSessionId,
       session.workflowContext
     );
+
+    // Dispatch hook setup at the integration layer so providers don't have to
+    // remember to handle both interactive and headless cases in buildCliArgs().
+    if (workspaceRoot) {
+      const userHooks =
+        session.workflowContext?.resolvedProperties?.hooks ?? undefined;
+      const promptIndex = session.workflowContext?.promptIndex ?? 0;
+      const workingFilePath = session.workflowContext?.workingFilePath;
+
+      if (isInteractive) {
+        // Notification hooks (FlightPath completion detection + user hooks combined)
+        const hookArgs =
+          (await this.provider.buildNotificationHookArgs?.(
+            extensionPath,
+            workspaceRoot,
+            promptIndex,
+            workingFilePath,
+            userHooks
+          )) ?? [];
+        baseArgs.push(...hookArgs);
+      } else if (userHooks?.length) {
+        // Headless: user hooks only (no FlightPath notification hooks needed)
+        const hookArgs =
+          (await this.provider.buildHeadlessUserHookArgs?.(
+            workspaceRoot,
+            promptIndex,
+            workingFilePath,
+            userHooks
+          )) ?? [];
+        // Prepend so hook args appear before --disallowedTools (Claude variadic flag issue)
+        baseArgs.unshift(...hookArgs);
+      }
+    }
 
     const success = isInteractive
       ? await this.executionRunner.executeInteractive(session, baseArgs)

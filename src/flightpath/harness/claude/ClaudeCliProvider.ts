@@ -54,7 +54,7 @@ const execAsync = promisify(exec);
  */
 export class ClaudeCliProvider implements ICliProvider {
   /** Tracks per-prompt hook settings files for cleanup */
-  private interactiveHookSettingsPaths: string[] = [];
+  private hookSettingsPaths: string[] = [];
 
   readonly config: HarnessConfig = {
     name: "claude",
@@ -222,23 +222,6 @@ export class ClaudeCliProvider implements ICliProvider {
     // IMPORTANT: This MUST come after session management because --disallowedTools is variadic
     // and will consume any flags after it (including -r <sessionId>)
     if (!isInteractive) {
-      // User hooks for headless mode — write before tool permissions so --disallowedTools
-      // (variadic) cannot accidentally consume the --settings flag value.
-      if (workspaceRoot) {
-        const userHooks =
-          workflowContext?.resolvedProperties?.hooks ?? undefined;
-        if (userHooks && userHooks.length > 0) {
-          const settingsPath = await this.buildHeadlessUserHookSettings(
-            workspaceRoot,
-            workflowContext?.promptIndex ?? 0,
-            workflowContext?.workingFilePath,
-            userHooks
-          );
-          args.push("--settings", settingsPath);
-          Log.debug(`🔔 Configured user hooks for headless mode`);
-        }
-      }
-
       // Use resolved permissions from workflow context; fall back to global settings
       const toolPermissions =
         workflowContext?.resolvedProperties?.toolPermissions;
@@ -259,22 +242,13 @@ export class ClaudeCliProvider implements ICliProvider {
         args.push(...toolPermissionArgs);
       }
       // else: toolPermissions === null → none mode, skip permission flags entirely
-    } else {
-      // Interactive mode: Configure stop hook for completion detection
-      if (workspaceRoot) {
-        const userHooks =
-          workflowContext?.resolvedProperties?.hooks ?? undefined;
-        const hookSettingsPath = await this.buildStopHookSettings(
-          extensionPath,
-          workspaceRoot,
-          workflowContext?.promptIndex ?? 0,
-          workflowContext?.workingFilePath,
-          userHooks
-        );
-        args.push("--settings", hookSettingsPath);
-        Log.debug(`🔔 Configured stop hook for completion detection`);
-      }
     }
+
+    // Hook setup (interactive notification hooks + headless user hooks) is dispatched
+    // by CliIntegration.runExecutionSession() via buildNotificationHookArgs() /
+    // buildHeadlessUserHookArgs() — not here in buildCliArgs().
+    // NOTE: For headless Claude, CliIntegration prepends hook args to baseArgs so that
+    // --settings appears before --disallowedTools (which is variadic and would consume it).
 
     // Note: Prompt is NOT included here - it's a positional argument
     // handled by the execution methods
@@ -316,19 +290,18 @@ export class ClaudeCliProvider implements ICliProvider {
   }
 
   /**
-   * Write stop hook settings JSON to a temp file and return its path.
-   * Claude CLI's --settings flag requires a file path, not inline JSON.
+   * Set up FlightPath notification hooks (Stop hook + user hooks) for interactive mode.
+   * Writes hook settings to a temp file and returns ["--settings", path] for Claude CLI.
    * Uses unique filenames per prompt to avoid parallel workflow collisions.
    */
-  private async buildStopHookSettings(
+  async buildNotificationHookArgs(
     extensionPath: string,
     workspaceRoot: string,
     promptIndex: number,
-    workingFilePath?: string,
-    userHooks?: UserHookConfig[]
-  ): Promise<string> {
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined
+  ): Promise<string[]> {
     const fs = require("fs/promises");
-
     const scriptPath = path.join(
       extensionPath,
       "out",
@@ -337,19 +310,15 @@ export class ClaudeCliProvider implements ICliProvider {
     );
     const notifyDir =
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
-
     const hookConfig = this.notificationMonitor.buildHookConfig(
       scriptPath,
       notifyDir,
       workspaceRoot,
       userHooks
     );
-
-    // Extract JSON string from hook config (type guard for json-string variant)
     if (hookConfig.type !== "json-string") {
       throw new Error("Unexpected hook config type for Claude CLI");
     }
-
     const tempDir = path.join(
       workspaceRoot,
       PATH_CONSTANTS.FLIGHTPATH_DIR,
@@ -361,9 +330,10 @@ export class ClaudeCliProvider implements ICliProvider {
       workingFilePath
     );
     const settingsPath = path.join(tempDir, hookFileName);
-    this.interactiveHookSettingsPaths.push(settingsPath);
+    this.hookSettingsPaths.push(settingsPath);
     await fs.writeFile(settingsPath, hookConfig.config, "utf-8");
-    return settingsPath;
+    Log.debug(`🔔 Configured stop hook for completion detection`);
+    return ["--settings", settingsPath];
   }
 
   /**
@@ -387,19 +357,19 @@ export class ClaudeCliProvider implements ICliProvider {
   }
 
   /**
-   * Write user-only hook settings JSON to a temp file for headless execution.
+   * Set up user-only hooks for headless execution.
    * No FlightPath notification hooks are included since headless uses process-exit for completion.
+   * Returns ["--settings", path] — CliIntegration prepends this to baseArgs so it appears
+   * before --disallowedTools (which is variadic and would consume later flags).
    */
-  private async buildHeadlessUserHookSettings(
+  async buildHeadlessUserHookArgs(
     workspaceRoot: string,
     promptIndex: number,
-    workingFilePath?: string,
-    userHooks?: UserHookConfig[]
-  ): Promise<string> {
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[]
+  ): Promise<string[]> {
     const fs = require("fs/promises");
-    const settingsJson = ClaudeNotificationMonitor.buildUserOnlyConfig(
-      userHooks ?? []
-    );
+    const settingsJson = ClaudeNotificationMonitor.buildUserOnlyConfig(userHooks);
     const tempDir = path.join(
       workspaceRoot,
       PATH_CONSTANTS.FLIGHTPATH_DIR,
@@ -411,9 +381,10 @@ export class ClaudeCliProvider implements ICliProvider {
       workingFilePath
     );
     const settingsPath = path.join(tempDir, hookFileName);
-    this.interactiveHookSettingsPaths.push(settingsPath);
+    this.hookSettingsPaths.push(settingsPath);
     await fs.writeFile(settingsPath, settingsJson, "utf-8");
-    return settingsPath;
+    Log.debug(`🔔 Configured user hooks for headless mode`);
+    return ["--settings", settingsPath];
   }
 
   /**
@@ -421,7 +392,7 @@ export class ClaudeCliProvider implements ICliProvider {
    * Includes all per-prompt hook settings files created during interactive and headless sessions.
    */
   getAdditionalCleanupFilePaths(_workspaceRoot: string): string[] {
-    return [...this.interactiveHookSettingsPaths];
+    return [...this.hookSettingsPaths];
   }
 
   /**

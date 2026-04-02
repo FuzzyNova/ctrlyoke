@@ -2,7 +2,7 @@ import type { IResponseParser } from "./IResponseParser";
 import type { INotificationMonitor } from "./INotificationMonitor";
 import type { IToolPermissionMapper } from "./IToolPermissionMapper";
 import type { ILogParser } from "./ILogParser";
-import type { PromptItem } from "../../../../types/FlightPathTypes";
+import type { PromptItem, UserHookConfig } from "../../../../types/FlightPathTypes";
 import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 
 /** Timeout for CLI version-check subprocesses (checkAvailability + getVersion) */
@@ -208,6 +208,33 @@ export interface ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string
   ): Promise<void>;
+
+  /**
+   * Set up FlightPath notification hooks for interactive mode completion detection.
+   * Called only in interactive mode (when workspaceRoot is defined).
+   * Returns additional CLI args to append to baseArgs (e.g. ["--settings", path]).
+   * Replaces the interactive-mode hook block that was previously inside buildCliArgs().
+   */
+  buildNotificationHookArgs?(
+    extensionPath: string,
+    workspaceRoot: string,
+    promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[] | undefined
+  ): Promise<string[]>;
+
+  /**
+   * Set up user-defined hooks for headless execution.
+   * Called only in headless mode when userHooks are defined and workspaceRoot is set.
+   * Returns additional CLI args to prepend to baseArgs (empty if hooks are file-based).
+   * Replaces the headless user-hook block that was previously inside buildCliArgs().
+   */
+  buildHeadlessUserHookArgs?(
+    workspaceRoot: string,
+    promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[]
+  ): Promise<string[]>;
 
   /**
    * Check if CLI is available on the system
