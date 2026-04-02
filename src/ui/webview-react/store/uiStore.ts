@@ -196,7 +196,14 @@ interface UiState {
   } | null;
 
   // Footer quick picker state (transient, not persisted)
-  footerOpenPicker: "harness" | "model" | "agent" | "skills" | null;
+  footerOpenPicker:
+    | "harness"
+    | "model"
+    | "agent"
+    | "skills"
+    | "permissions"
+    | "context"
+    | null;
 
   // MCP Discovery state
   mcpDiscoveryTab: "local" | "registry";
@@ -324,7 +331,14 @@ interface UiActions {
 
   // Footer quick picker
   setFooterOpenPicker: (
-    picker: "harness" | "model" | "agent" | "skills" | null
+    picker:
+      | "harness"
+      | "model"
+      | "agent"
+      | "skills"
+      | "permissions"
+      | "context"
+      | null
   ) => void;
 
   // MCP discovery

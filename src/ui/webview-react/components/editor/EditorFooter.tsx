@@ -4,6 +4,8 @@ import { HarnessQuickPicker } from "./HarnessQuickPicker";
 import { ModelQuickPicker } from "./ModelQuickPicker";
 import { AgentQuickPicker } from "./AgentQuickPicker";
 import { SkillsQuickPicker } from "./SkillsQuickPicker";
+import { PermissionsQuickPicker } from "./PermissionsQuickPicker";
+import { ContextQuickPicker } from "./ContextQuickPicker";
 
 interface EditorFooterProps {
   isEditMode: boolean;
@@ -102,6 +104,16 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           disabled={isCLIManaged}
         />
         <SkillsQuickPicker
+          isNarrow={isNarrow}
+          showLabel={!isNarrow}
+          disabled={isCLIManaged}
+        />
+        <PermissionsQuickPicker
+          isNarrow={isNarrow}
+          showLabel={!isNarrow}
+          disabled={isCLIManaged}
+        />
+        <ContextQuickPicker
           isNarrow={isNarrow}
           showLabel={!isNarrow}
           disabled={isCLIManaged}

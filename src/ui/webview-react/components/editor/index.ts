@@ -7,3 +7,5 @@ export { HarnessQuickPicker } from "./HarnessQuickPicker";
 export { ModelQuickPicker } from "./ModelQuickPicker";
 export { AgentQuickPicker } from "./AgentQuickPicker";
 export { SkillsQuickPicker } from "./SkillsQuickPicker";
+export { PermissionsQuickPicker } from "./PermissionsQuickPicker";
+export { ContextQuickPicker } from "./ContextQuickPicker";
