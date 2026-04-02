@@ -1,6 +1,6 @@
 import type { IResponseParser } from "./IResponseParser";
 import type { INotificationMonitor } from "./INotificationMonitor";
-import type { IToolPermissionMapper } from "./IToolPermissionMapper";
+import type { IToolPermissionMapper, ToolPermissionConfig } from "./IToolPermissionMapper";
 import type { ILogParser } from "./ILogParser";
 import type { PromptItem, UserHookConfig } from "../../../../types/FlightPathTypes";
 import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
@@ -208,6 +208,17 @@ export interface ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string
   ): Promise<void>;
+
+  /**
+   * Build CLI arguments for tool permissions.
+   * Called for both interactive and headless modes.
+   * For undefined toolPermissions, falls back to global ConfigurationUtils settings.
+   * For null toolPermissions (none mode), returns [] — no permission flags injected.
+   * Returns permission args to append to baseArgs after all other args.
+   */
+  buildPermissionArgs?(
+    toolPermissions: ToolPermissionConfig | null | undefined
+  ): string[];
 
   /**
    * Set up FlightPath notification hooks for interactive mode completion detection.

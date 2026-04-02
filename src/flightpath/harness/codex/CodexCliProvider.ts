@@ -8,7 +8,10 @@ import {
 } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
-import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
+import {
+  IToolPermissionMapper,
+  ToolPermissionConfig,
+} from "../shared/interfaces/IToolPermissionMapper";
 import { CodexResponseParser } from "./CodexResponseParser";
 import { CodexNotificationMonitor } from "./CodexNotificationMonitor";
 import { CodexToolPermissionMapper } from "./CodexToolPermissionMapper";
@@ -177,54 +180,6 @@ export class CodexCliProvider implements ICliProvider {
       Log.info(`Extra CLI args applied (${appendTokens.length} tokens)`);
     }
 
-    // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
-    if (!isInteractive) {
-      // Use resolved permissions from workflow context; fall back to global settings
-      const toolPermissions =
-        workflowContext?.resolvedProperties?.toolPermissions;
-      if (toolPermissions === undefined) {
-        // No workflow context — fall back to global ConfigurationUtils settings
-        const permissionConfig = {
-          mode: ConfigurationUtils.getCliToolPermissions(),
-          allowedTools: ConfigurationUtils.getCliAllowedTools(),
-          deniedTools: ConfigurationUtils.getCliDeniedTools(),
-        };
-
-        // Use Codex-specific permission mapper with sandbox/approval settings
-        const sandboxMode = ConfigurationUtils.getCodexSandboxMode();
-        const approvalPolicy = ConfigurationUtils.getCodexApprovalPolicy();
-        const toolPermissionArgs = (
-          this.toolPermissionMapper as CodexToolPermissionMapper
-        ).buildCodexSpecificArgs(permissionConfig, sandboxMode, approvalPolicy);
-        args.push(...toolPermissionArgs);
-
-        // Add additional allowed directories (only in headless mode when not dangerous mode)
-        if (permissionConfig.mode !== PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
-          const additionalDirs = ConfigurationUtils.getCodexAllowedDirs();
-          additionalDirs.forEach((dir: string) => {
-            args.push("--add-dir", dir);
-          });
-        }
-      } else if (toolPermissions !== null) {
-        // Resolved non-none permissions from workflow
-        const sandboxMode = ConfigurationUtils.getCodexSandboxMode();
-        const approvalPolicy = ConfigurationUtils.getCodexApprovalPolicy();
-        const toolPermissionArgs = (
-          this.toolPermissionMapper as CodexToolPermissionMapper
-        ).buildCodexSpecificArgs(toolPermissions, sandboxMode, approvalPolicy);
-        args.push(...toolPermissionArgs);
-
-        // Add additional allowed directories (only when not dangerous mode)
-        if (toolPermissions.mode !== PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
-          const additionalDirs = ConfigurationUtils.getCodexAllowedDirs();
-          additionalDirs.forEach((dir: string) => {
-            args.push("--add-dir", dir);
-          });
-        }
-      }
-      // else: toolPermissions === null → none mode, skip permission flags entirely
-    }
-
     // Hook setup (interactive notification hooks) is dispatched by
     // CliIntegration.runExecutionSession() via buildNotificationHookArgs() — not here.
     // buildNotificationHookArgs() returns ["--enable", "codex_hooks"] for interactive mode.
@@ -278,6 +233,41 @@ export class CodexCliProvider implements ICliProvider {
       `🔔 Configured SessionStart + Stop hooks for Codex completion detection`
     );
     return ["--enable", "codex_hooks"];
+  }
+
+  /**
+   * Build CLI arguments for tool permissions.
+   * Called for both interactive and headless modes by CliIntegration.runExecutionSession().
+   * Uses Codex-specific permission mapper with sandbox/approval settings.
+   */
+  buildPermissionArgs(
+    toolPermissions: ToolPermissionConfig | null | undefined
+  ): string[] {
+    if (toolPermissions === null) {
+      // none mode — skip permission flags entirely
+      return [];
+    }
+    const sandboxMode = ConfigurationUtils.getCodexSandboxMode();
+    const approvalPolicy = ConfigurationUtils.getCodexApprovalPolicy();
+    const args: string[] = [];
+    const config =
+      toolPermissions ?? {
+        mode: ConfigurationUtils.getCliToolPermissions(),
+        allowedTools: ConfigurationUtils.getCliAllowedTools(),
+        deniedTools: ConfigurationUtils.getCliDeniedTools(),
+      };
+    const permissionArgs = (
+      this.toolPermissionMapper as CodexToolPermissionMapper
+    ).buildCodexSpecificArgs(config, sandboxMode, approvalPolicy);
+    args.push(...permissionArgs);
+    // Add additional allowed directories when not in dangerous mode
+    if (config.mode !== PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
+      const additionalDirs = ConfigurationUtils.getCodexAllowedDirs();
+      additionalDirs.forEach((dir: string) => {
+        args.push("--add-dir", dir);
+      });
+    }
+    return args;
   }
 
   /**

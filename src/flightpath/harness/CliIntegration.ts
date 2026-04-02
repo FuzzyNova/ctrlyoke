@@ -658,6 +658,14 @@ export class CliIntegration extends HarnessIntegration {
       }
     }
 
+    // Dispatch permission args at the integration layer so providers don't have to
+    // limit permissions to headless-only in buildCliArgs().
+    const permissionArgs =
+      this.provider.buildPermissionArgs?.(
+        session.workflowContext?.resolvedProperties?.toolPermissions
+      ) ?? [];
+    baseArgs.push(...permissionArgs);
+
     const success = isInteractive
       ? await this.executionRunner.executeInteractive(session, baseArgs)
       : (() => {

@@ -10,7 +10,10 @@ import {
 } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
-import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
+import {
+  IToolPermissionMapper,
+  ToolPermissionConfig,
+} from "../shared/interfaces/IToolPermissionMapper";
 import { QwenResponseParser } from "./QwenResponseParser";
 import { QwenNotificationMonitor } from "./QwenNotificationMonitor";
 import { QwenToolPermissionMapper } from "./QwenToolPermissionMapper";
@@ -107,7 +110,7 @@ export class QwenCliProvider implements ICliProvider {
    */
   async buildCliArgs(
     _prompt: PromptItem,
-    isInteractive: boolean,
+    _isInteractive: boolean,
     extensionPath: string,
     workspaceRoot: string | undefined,
     sessionId: string | undefined,
@@ -197,34 +200,11 @@ export class QwenCliProvider implements ICliProvider {
       Log.info(`Extra CLI args applied (${appendTokens.length} tokens)`);
     }
 
-    // Tool permissions (headless only) / interactive hook setup
-    if (!isInteractive) {
-      // Use resolved permissions from workflow context; fall back to global settings
-      const toolPermissions =
-        workflowContext?.resolvedProperties?.toolPermissions;
-      if (toolPermissions === undefined) {
-        // No workflow context — fall back to global ConfigurationUtils settings
-        const permissionConfig = {
-          mode: ConfigurationUtils.getCliToolPermissions(),
-          allowedTools: ConfigurationUtils.getCliAllowedTools(),
-          deniedTools: ConfigurationUtils.getCliDeniedTools(),
-        };
-        const toolPermissionArgs =
-          this.toolPermissionMapper.buildArgs(permissionConfig);
-        args.push(...toolPermissionArgs);
-      } else if (toolPermissions !== null) {
-        // Resolved non-none permissions from workflow
-        const toolPermissionArgs =
-          this.toolPermissionMapper.buildArgs(toolPermissions);
-        args.push(...toolPermissionArgs);
-      }
-      // else: toolPermissions === null → none mode, skip permission flags entirely
-    }
-
     // Hook setup (interactive notification hooks + headless user hooks) is dispatched
     // by CliIntegration.runExecutionSession() via buildNotificationHookArgs() /
     // buildHeadlessUserHookArgs() — not here in buildCliArgs().
     // NOTE: buildHeadlessUserHookArgs returns ["--experimental-hooks"] for Qwen headless.
+    // Permission args are similarly dispatched via buildPermissionArgs() — not here.
 
     Log.debug(`🔧 Qwen CLI arguments: ${JSON.stringify(args)}`);
 
@@ -311,6 +291,26 @@ export class QwenCliProvider implements ICliProvider {
     );
     Log.debug(`🔔 Configured user hooks for Qwen headless mode`);
     return ["--experimental-hooks"];
+  }
+
+  /**
+   * Build CLI arguments for tool permissions.
+   * Called for both interactive and headless modes by CliIntegration.runExecutionSession().
+   */
+  buildPermissionArgs(
+    toolPermissions: ToolPermissionConfig | null | undefined
+  ): string[] {
+    if (toolPermissions === null) {
+      // none mode — skip permission flags entirely
+      return [];
+    }
+    const config =
+      toolPermissions ?? {
+        mode: ConfigurationUtils.getCliToolPermissions(),
+        allowedTools: ConfigurationUtils.getCliAllowedTools(),
+        deniedTools: ConfigurationUtils.getCliDeniedTools(),
+      };
+    return this.toolPermissionMapper.buildArgs(config);
   }
 
   /**

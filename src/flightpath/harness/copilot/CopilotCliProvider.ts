@@ -9,7 +9,10 @@ import {
 } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
-import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
+import {
+  IToolPermissionMapper,
+  ToolPermissionConfig,
+} from "../shared/interfaces/IToolPermissionMapper";
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import { CopilotResponseParser } from "./CopilotResponseParser";
 import { CopilotNotificationMonitor } from "./CopilotNotificationMonitor";
@@ -112,7 +115,7 @@ export class CopilotCliProvider implements ICliProvider {
    */
   async buildCliArgs(
     _prompt: PromptItem,
-    isInteractive: boolean,
+    _isInteractive: boolean,
     extensionPath: string,
     workspaceRoot: string | undefined,
     sessionId: string | undefined,
@@ -188,33 +191,10 @@ export class CopilotCliProvider implements ICliProvider {
       Log.info(`Extra CLI args applied (${appendTokens.length} tokens)`);
     }
 
-    // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
-    if (!isInteractive) {
-      // Use resolved permissions from workflow context; fall back to global settings
-      const toolPermissions =
-        workflowContext?.resolvedProperties?.toolPermissions;
-      if (toolPermissions === undefined) {
-        // No workflow context — fall back to global ConfigurationUtils settings
-        const permissionConfig = {
-          mode: ConfigurationUtils.getCliToolPermissions(),
-          allowedTools: ConfigurationUtils.getCliAllowedTools(),
-          deniedTools: ConfigurationUtils.getCliDeniedTools(),
-        };
-        const toolPermissionArgs =
-          this.toolPermissionMapper.buildArgs(permissionConfig);
-        args.push(...toolPermissionArgs);
-      } else if (toolPermissions !== null) {
-        // Resolved non-none permissions from workflow
-        const toolPermissionArgs =
-          this.toolPermissionMapper.buildArgs(toolPermissions);
-        args.push(...toolPermissionArgs);
-      }
-      // else: toolPermissions === null → none mode, skip permission flags entirely
-    }
-
     // Hook setup (interactive notification hooks + headless user hooks) is dispatched
     // by CliIntegration.runExecutionSession() via buildNotificationHookArgs() /
     // buildHeadlessUserHookArgs() — not here in buildCliArgs().
+    // Permission args are similarly dispatched via buildPermissionArgs() — not here.
 
     // Path permissions
     if (ConfigurationUtils.shouldAllowAllPaths()) {
@@ -355,6 +335,26 @@ export class CopilotCliProvider implements ICliProvider {
     await this.createHookFile({ config }, workspaceRoot, hookFileName);
     Log.debug(`🔔 Configured user hooks for headless mode`);
     return [];
+  }
+
+  /**
+   * Build CLI arguments for tool permissions.
+   * Called for both interactive and headless modes by CliIntegration.runExecutionSession().
+   */
+  buildPermissionArgs(
+    toolPermissions: ToolPermissionConfig | null | undefined
+  ): string[] {
+    if (toolPermissions === null) {
+      // none mode — skip permission flags entirely
+      return [];
+    }
+    const config =
+      toolPermissions ?? {
+        mode: ConfigurationUtils.getCliToolPermissions(),
+        allowedTools: ConfigurationUtils.getCliAllowedTools(),
+        deniedTools: ConfigurationUtils.getCliDeniedTools(),
+      };
+    return this.toolPermissionMapper.buildArgs(config);
   }
 
   /**

@@ -88,36 +88,40 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             />
           )}
         </button>
-        <HarnessQuickPicker
-          isNarrow={isNarrow}
-          showLabel={!isNarrow}
-          disabled={isCLIManaged}
-        />
-        <ModelQuickPicker
-          isNarrow={isNarrow}
-          showLabel={!isNarrow}
-          disabled={isCLIManaged}
-        />
-        <AgentQuickPicker
-          isNarrow={isNarrow}
-          showLabel={!isNarrow}
-          disabled={isCLIManaged}
-        />
-        <SkillsQuickPicker
-          isNarrow={isNarrow}
-          showLabel={!isNarrow}
-          disabled={isCLIManaged}
-        />
-        <PermissionsQuickPicker
-          isNarrow={isNarrow}
-          showLabel={!isNarrow}
-          disabled={isCLIManaged}
-        />
-        <ContextQuickPicker
-          isNarrow={isNarrow}
-          showLabel={!isNarrow}
-          disabled={isCLIManaged}
-        />
+        {!propertiesOpen && (
+          <>
+            <HarnessQuickPicker
+              isNarrow={isNarrow}
+              showLabel={!isNarrow}
+              disabled={isCLIManaged}
+            />
+            <ModelQuickPicker
+              isNarrow={isNarrow}
+              showLabel={!isNarrow}
+              disabled={isCLIManaged}
+            />
+            <AgentQuickPicker
+              isNarrow={isNarrow}
+              showLabel={!isNarrow}
+              disabled={isCLIManaged}
+            />
+            <SkillsQuickPicker
+              isNarrow={isNarrow}
+              showLabel={!isNarrow}
+              disabled={isCLIManaged}
+            />
+            <PermissionsQuickPicker
+              isNarrow={isNarrow}
+              showLabel={!isNarrow}
+              disabled={isCLIManaged}
+            />
+            <ContextQuickPicker
+              isNarrow={isNarrow}
+              showLabel={!isNarrow}
+              disabled={isCLIManaged}
+            />
+          </>
+        )}
       </div>
 
       {/* Right side: Action buttons */}

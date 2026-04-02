@@ -8,7 +8,10 @@ import {
 } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
-import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
+import {
+  IToolPermissionMapper,
+  ToolPermissionConfig,
+} from "../shared/interfaces/IToolPermissionMapper";
 import { ClaudeResponseParser } from "./ClaudeResponseParser";
 import { ClaudeNotificationMonitor } from "./ClaudeNotificationMonitor";
 import { ClaudeToolPermissionMapper } from "./ClaudeToolPermissionMapper";
@@ -96,7 +99,7 @@ export class ClaudeCliProvider implements ICliProvider {
    */
   async buildCliArgs(
     _prompt: PromptItem,
-    isInteractive: boolean,
+    _isInteractive: boolean,
     extensionPath: string,
     workspaceRoot: string | undefined,
     sessionId: string | undefined,
@@ -218,37 +221,14 @@ export class ClaudeCliProvider implements ICliProvider {
       Log.info(`Extra CLI args applied (${appendTokens.length} tokens)`);
     }
 
-    // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
-    // IMPORTANT: This MUST come after session management because --disallowedTools is variadic
-    // and will consume any flags after it (including -r <sessionId>)
-    if (!isInteractive) {
-      // Use resolved permissions from workflow context; fall back to global settings
-      const toolPermissions =
-        workflowContext?.resolvedProperties?.toolPermissions;
-      if (toolPermissions === undefined) {
-        // No workflow context — fall back to global ConfigurationUtils settings
-        const permissionConfig = {
-          mode: ConfigurationUtils.getCliToolPermissions(),
-          allowedTools: ConfigurationUtils.getCliAllowedTools(),
-          deniedTools: ConfigurationUtils.getCliDeniedTools(),
-        };
-        const toolPermissionArgs =
-          this.toolPermissionMapper.buildArgs(permissionConfig);
-        args.push(...toolPermissionArgs);
-      } else if (toolPermissions !== null) {
-        // Resolved non-none permissions from workflow
-        const toolPermissionArgs =
-          this.toolPermissionMapper.buildArgs(toolPermissions);
-        args.push(...toolPermissionArgs);
-      }
-      // else: toolPermissions === null → none mode, skip permission flags entirely
-    }
-
     // Hook setup (interactive notification hooks + headless user hooks) is dispatched
     // by CliIntegration.runExecutionSession() via buildNotificationHookArgs() /
     // buildHeadlessUserHookArgs() — not here in buildCliArgs().
     // NOTE: For headless Claude, CliIntegration prepends hook args to baseArgs so that
     // --settings appears before --disallowedTools (which is variadic and would consume it).
+    // Permission args are similarly dispatched via buildPermissionArgs() — not here.
+    // IMPORTANT: CliIntegration appends permission args last, so --disallowedTools (variadic)
+    // is always the final group of flags and cannot accidentally consume other flags.
 
     // Note: Prompt is NOT included here - it's a positional argument
     // handled by the execution methods
@@ -385,6 +365,27 @@ export class ClaudeCliProvider implements ICliProvider {
     await fs.writeFile(settingsPath, settingsJson, "utf-8");
     Log.debug(`🔔 Configured user hooks for headless mode`);
     return ["--settings", settingsPath];
+  }
+
+  /**
+   * Build CLI arguments for tool permissions.
+   * Called for both interactive and headless modes by CliIntegration.runExecutionSession().
+   * Permission args are appended last so --disallowedTools (variadic) is always final.
+   */
+  buildPermissionArgs(
+    toolPermissions: ToolPermissionConfig | null | undefined
+  ): string[] {
+    if (toolPermissions === null) {
+      // none mode — skip permission flags entirely
+      return [];
+    }
+    const config =
+      toolPermissions ?? {
+        mode: ConfigurationUtils.getCliToolPermissions(),
+        allowedTools: ConfigurationUtils.getCliAllowedTools(),
+        deniedTools: ConfigurationUtils.getCliDeniedTools(),
+      };
+    return this.toolPermissionMapper.buildArgs(config);
   }
 
   /**
