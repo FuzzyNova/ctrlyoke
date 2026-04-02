@@ -78,9 +78,16 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
 
     useUiStore.getState().setTerminalSessionActive(workflowId, true);
 
-    // Auto-switch to Terminal tab when an ai-cli session starts
+    // Auto-switch to Terminal tab when an ai-cli session starts.
+    // Also promote this workflow to active if needed — ACTIVE_WORKFLOW_CHANGED
+    // may have been silently dropped if it was posted before the webview panel
+    // was visible (postMessage no-ops when this.view is null).
     if (kind === SESSION_KINDS.AI_CLI) {
-      useUiStore.getState().setActiveOutputTab(workflowId, "terminal");
+      const uiState = useUiStore.getState();
+      if (uiState.activeWorkflowId !== workflowId) {
+        uiState.setActiveWorkflowId(workflowId);
+      }
+      uiState.setActiveOutputTab(workflowId, "terminal");
     }
   };
 

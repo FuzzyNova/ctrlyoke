@@ -556,6 +556,14 @@ export class WorkflowOrchestrator {
     Log.info("✅ Dashboard is ready");
     this.dashboardReady = true;
 
+    // Re-hydrate on every READY (handles webview reloads and panels opened after
+    // workflow creation, where the original ACTIVE_WORKFLOW_CHANGED was dropped
+    // because postMessage no-ops when the view is not yet visible).
+    if (this.viewedInstance) {
+      this.viewedInstance.sendFullStateToDashboard();
+      this.dashboardProvider?.notifyActiveWorkflowChanged(this.viewedInstance.id);
+    }
+
     if (this.orchestratorInitialized) {
       await this.triggerStartupAutoLoadIfReady();
     } else {
