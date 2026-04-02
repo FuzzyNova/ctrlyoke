@@ -170,7 +170,13 @@ export class CliExecutionRunner {
       }
     };
 
-    return await executeWithRecovery(baseArgs);
+    try {
+      return await executeWithRecovery(baseArgs);
+    } catch (error) {
+      this.deps.logger.error("❌ Headless execution error", error);
+      this.deps.setFailureReason(getErrorMessage(error));
+      return false;
+    }
   }
 
   private async executeInteractiveCliProcess(

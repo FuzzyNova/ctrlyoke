@@ -392,8 +392,8 @@ export class CliIntegration extends HarnessIntegration {
   private createResponseCollector(): CliResponseCollector {
     return new CliResponseCollector({
       responseParser: this.provider.responseParser,
-      augmentParsedOutput: this.provider.augmentParsedOutput,
-      extractSessionIdFromLogs: this.provider.extractSessionIdFromLogs,
+      augmentParsedOutput: this.provider.augmentParsedOutput?.bind(this.provider),
+      extractSessionIdFromLogs: this.provider.extractSessionIdFromLogs?.bind(this.provider),
       extractTextFromEvents: (output) =>
         CliLogMonitor.extractTextFromEvents(output),
       formatStatistics: (metadata) =>
