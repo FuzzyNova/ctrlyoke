@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { useWorkflowStore } from "@store/workflowStore";
 import { EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
 import type { PromptItem, CliOutput } from "@/types/messages";
-import type { WorkflowOutputHistory } from "@root/types/OutputHistoryTypes";
+import type { WorkflowOutputHistory, OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,15 +90,22 @@ describe("loadWorkflow", () => {
     expect(store().prompts[1].status).toBe(STEP_STATUS.PENDING);
   });
 
-  it("clears runtime state (cliOutputs, retryStates, etc.)", () => {
+  it("clears runtime state (liveOrderedEntries, retryStates, etc.)", () => {
     // Populate some runtime state first
     store().loadWorkflow({ fileName: "a.yaml", prompts: [makePrompt()] });
-    store().addCliOutput(0, makeOutput());
+    store().appendLiveEntry({
+      kind: "cli",
+      target: { kind: "queue", stepIndex: 0 },
+      attemptIndex: 0,
+      cliOutput: makeOutput(),
+      timestampMs: Date.now(),
+      sequence: 1,
+    });
     store().setRetryState(0, 1, 3);
 
     // Load new workflow — runtime state should clear
     store().loadWorkflow({ fileName: "b.yaml", prompts: [makePrompt()] });
-    expect(store().cliOutputs).toEqual({});
+    expect(store().liveOrderedEntries).toEqual([]);
     expect(store().retryStates).toEqual({});
   });
 
@@ -134,36 +141,68 @@ describe("setStepStatus", () => {
 });
 
 // ---------------------------------------------------------------------------
-// addCliOutput
+// appendLiveEntry (cli)
 // ---------------------------------------------------------------------------
 
-describe("addCliOutput", () => {
-  it("appends the first output for a step", () => {
+describe("appendLiveEntry (cli)", () => {
+  it("appends the first cli entry for a step", () => {
     store().loadWorkflow({ fileName: "wf.yaml", prompts: [makePrompt()] });
-    store().addCliOutput(0, makeOutput({ response: "first" }));
+    store().appendLiveEntry({
+      kind: "cli",
+      target: { kind: "queue", stepIndex: 0 },
+      attemptIndex: 0,
+      cliOutput: makeOutput({ response: "first" }),
+      timestampMs: Date.now(),
+      sequence: 1,
+    });
     expect(store().getStepOutputs(0)).toHaveLength(1);
     expect(store().getStepOutputs(0)[0].response).toBe("first");
   });
 
-  it("replaces output for attemptIndex 0 (no retry state)", () => {
+  it("replaces a streaming entry for the same attemptIndex", () => {
     store().loadWorkflow({ fileName: "wf.yaml", prompts: [makePrompt()] });
-    store().addCliOutput(0, makeOutput({ response: "first", attemptIndex: 0 }));
-    store().addCliOutput(
-      0,
-      makeOutput({ response: "second", attemptIndex: 0 })
-    );
-    // Second write replaces first
+    store().appendLiveEntry({
+      kind: "cli",
+      target: { kind: "queue", stepIndex: 0 },
+      attemptIndex: 0,
+      cliOutput: makeOutput({ response: "streaming", isStreaming: true }),
+      timestampMs: Date.now(),
+      sequence: 1,
+    });
+    store().appendLiveEntry({
+      kind: "cli",
+      target: { kind: "queue", stepIndex: 0 },
+      attemptIndex: 0,
+      cliOutput: makeOutput({ response: "final", isStreaming: false }),
+      timestampMs: Date.now(),
+      sequence: 2,
+    });
+    // Final replaces streaming entry
     expect(store().getStepOutputs(0)).toHaveLength(1);
-    expect(store().getStepOutputs(0)[0].response).toBe("second");
+    expect(store().getStepOutputs(0)[0].response).toBe("final");
   });
 
-  it("appends outputs for different steps independently", () => {
+  it("appends entries for different steps independently", () => {
     store().loadWorkflow({
       fileName: "wf.yaml",
       prompts: [makePrompt(), makePrompt()],
     });
-    store().addCliOutput(0, makeOutput({ response: "step0" }));
-    store().addCliOutput(1, makeOutput({ response: "step1" }));
+    store().appendLiveEntry({
+      kind: "cli",
+      target: { kind: "queue", stepIndex: 0 },
+      attemptIndex: 0,
+      cliOutput: makeOutput({ response: "step0" }),
+      timestampMs: Date.now(),
+      sequence: 1,
+    });
+    store().appendLiveEntry({
+      kind: "cli",
+      target: { kind: "queue", stepIndex: 1 },
+      attemptIndex: 0,
+      cliOutput: makeOutput({ response: "step1" }),
+      timestampMs: Date.now(),
+      sequence: 2,
+    });
     expect(store().getStepOutputs(0)[0].response).toBe("step0");
     expect(store().getStepOutputs(1)[0].response).toBe("step1");
   });
@@ -223,33 +262,76 @@ describe("clearRetryState", () => {
 });
 
 // ---------------------------------------------------------------------------
-// addStatusMessage
+// appendLiveEntry (status)
 // ---------------------------------------------------------------------------
 
-describe("addStatusMessage", () => {
-  it("appends status messages for a step", () => {
-    store().addStatusMessage(0, "Starting...");
-    store().addStatusMessage(0, "Retrying...", "warning");
-    expect(store().statusMessages[0]).toHaveLength(2);
-    expect(store().statusMessages[0][0].message).toBe("Starting...");
-    expect(store().statusMessages[0][0].severity).toBe("info");
-    expect(store().statusMessages[0][1].severity).toBe("warning");
+describe("appendLiveEntry (status)", () => {
+  it("appends status entries", () => {
+    store().appendLiveEntry({
+      kind: "status",
+      target: { kind: "queue", stepIndex: 0 },
+      statusMessage: { message: "Starting...", severity: "info", timestamp: Date.now() },
+      timestampMs: Date.now(),
+      sequence: 1,
+    });
+    store().appendLiveEntry({
+      kind: "status",
+      target: { kind: "queue", stepIndex: 0 },
+      statusMessage: { message: "Retrying...", severity: "warning", timestamp: Date.now() },
+      timestampMs: Date.now(),
+      sequence: 2,
+    });
+    const statusEntries = store().liveOrderedEntries.filter(
+      (e) => e.kind === "status" && (e as any).target.stepIndex === 0
+    );
+    expect(statusEntries).toHaveLength(2);
+    expect((statusEntries[0] as any).statusMessage.message).toBe("Starting...");
+    expect((statusEntries[0] as any).statusMessage.severity).toBe("info");
+    expect((statusEntries[1] as any).statusMessage.severity).toBe("warning");
   });
 
-  it("does not mix messages between steps", () => {
-    store().addStatusMessage(0, "step0 msg");
-    store().addStatusMessage(1, "step1 msg");
-    expect(store().statusMessages[0]).toHaveLength(1);
-    expect(store().statusMessages[1]).toHaveLength(1);
+  it("does not mix entries between steps", () => {
+    store().appendLiveEntry({
+      kind: "status",
+      target: { kind: "queue", stepIndex: 0 },
+      statusMessage: { message: "step0 msg", severity: "info", timestamp: Date.now() },
+      timestampMs: Date.now(),
+      sequence: 1,
+    });
+    store().appendLiveEntry({
+      kind: "status",
+      target: { kind: "queue", stepIndex: 1 },
+      statusMessage: { message: "step1 msg", severity: "info", timestamp: Date.now() },
+      timestampMs: Date.now(),
+      sequence: 2,
+    });
+    const step0 = store().liveOrderedEntries.filter(
+      (e) => e.kind === "status" && (e as any).target.stepIndex === 0
+    );
+    const step1 = store().liveOrderedEntries.filter(
+      (e) => e.kind === "status" && (e as any).target.stepIndex === 1
+    );
+    expect(step0).toHaveLength(1);
+    expect(step1).toHaveLength(1);
   });
-});
 
-describe("clearStatusMessages", () => {
-  it("removes all messages for a step", () => {
-    store().addStatusMessage(0, "msg1");
-    store().addStatusMessage(0, "msg2");
-    store().clearStatusMessages(0);
-    expect(store().statusMessages[0]).toBeUndefined();
+  it("clearLiveEntries removes all entries", () => {
+    store().appendLiveEntry({
+      kind: "status",
+      target: { kind: "queue", stepIndex: 0 },
+      statusMessage: { message: "msg1", severity: "info", timestamp: Date.now() },
+      timestampMs: Date.now(),
+      sequence: 1,
+    });
+    store().appendLiveEntry({
+      kind: "status",
+      target: { kind: "queue", stepIndex: 0 },
+      statusMessage: { message: "msg2", severity: "info", timestamp: Date.now() },
+      timestampMs: Date.now(),
+      sequence: 2,
+    });
+    store().clearLiveEntries();
+    expect(store().liveOrderedEntries).toEqual([]);
   });
 });
 
@@ -258,7 +340,31 @@ describe("clearStatusMessages", () => {
 // ---------------------------------------------------------------------------
 
 describe("loadHistoryRun", () => {
-  it("stores canonical ordered history entries when present", () => {
+  it("stores canonical ordered history entries", () => {
+    const orderedEntries: OrderedHistoryEntry[] = [
+      {
+        kind: "status",
+        target: { kind: "queue", stepIndex: 0 },
+        statusMessage: {
+          message: "history status",
+          severity: "info",
+          timestamp: 110,
+        },
+        timestampMs: 110,
+        sequence: 1,
+      },
+      {
+        kind: "cli",
+        target: { kind: "queue", stepIndex: 0 },
+        attemptIndex: 0,
+        cliOutput: makeOutput({
+          response: "history output",
+          timestampMs: 120,
+        }),
+        timestampMs: 120,
+        sequence: 2,
+      },
+    ];
     const history: WorkflowOutputHistory = {
       schemaVersion: "1.1.0",
       workflowId: "wf-history",
@@ -266,89 +372,14 @@ describe("loadHistoryRun", () => {
       startedAt: 100,
       completedAt: 150,
       executionState: EXECUTION_STATES.COMPLETED,
-      runStepCount: 1,
-      promptOutputs: {
-        0: {
-          cliOutputs: [
-            makeOutput({ response: "history output", timestampMs: 120 }),
-          ],
-          statusMessages: [
-            { message: "history status", severity: "info", timestamp: 110 },
-          ],
-        },
-      },
-      orderedEntries: [
-        {
-          kind: "status",
-          target: { kind: "queue", stepIndex: 0 },
-          statusMessage: {
-            message: "history status",
-            severity: "info",
-            timestamp: 110,
-          },
-          timestampMs: 110,
-          sequence: 1,
-        },
-        {
-          kind: "cli",
-          target: { kind: "queue", stepIndex: 0 },
-          attemptIndex: 0,
-          cliOutput: makeOutput({
-            response: "history output",
-            timestampMs: 120,
-          }),
-          timestampMs: 120,
-          sequence: 2,
-        },
-      ],
-      outputTimeline: [
-        {
-          key: "queue:0",
-          target: { kind: "queue", stepIndex: 0 },
-          firstOutputAt: 110,
-        },
-      ],
+      promptOutputs: {},
+      orderedEntries,
     };
 
     store().loadHistoryRun(history, 4, 1);
 
-    expect(store().historyOutputs?.orderedEntries).toEqual(
-      history.orderedEntries
-    );
-    expect(store().historyOutputs?.outputTimeline).toEqual(
-      history.outputTimeline
-    );
-    expect(store().historyOutputs?.steps[0]?.cliOutputs[0]?.response).toBe(
-      "history output"
-    );
-  });
-
-  it("keeps legacy histories compatible when ordered entries are absent", () => {
-    const history: WorkflowOutputHistory = {
-      schemaVersion: "1.1.0",
-      workflowId: "wf-legacy-history",
-      runId: 1,
-      startedAt: 100,
-      completedAt: 140,
-      executionState: EXECUTION_STATES.COMPLETED,
-      runStepCount: 1,
-      promptOutputs: {
-        0: {
-          cliOutputs: [
-            makeOutput({ response: "legacy output", timestampMs: 120 }),
-          ],
-          statusMessages: [],
-        },
-      },
-    };
-
-    store().loadHistoryRun(history, 1, 0);
-
-    expect(store().historyOutputs?.orderedEntries).toBeUndefined();
-    expect(store().historyOutputs?.outputTimeline).toBeUndefined();
-    expect(store().historyOutputs?.steps[0]?.cliOutputs[0]?.response).toBe(
-      "legacy output"
-    );
+    expect(store().historyOutputs?.orderedEntries).toEqual(orderedEntries);
+    expect(store().historyOutputs?.promptOutputs).toEqual({});
   });
 });
 
@@ -439,8 +470,14 @@ describe("isStepFailed", () => {
 describe("getLatestOutput", () => {
   it("returns last output for a step", () => {
     store().loadWorkflow({ fileName: "wf.yaml", prompts: [makePrompt()] });
-    store().addCliOutput(0, makeOutput({ response: "first" }));
-    // The second write replaces (no retry state) — so only one entry
+    store().appendLiveEntry({
+      kind: "cli",
+      target: { kind: "queue", stepIndex: 0 },
+      attemptIndex: 0,
+      cliOutput: makeOutput({ response: "first" }),
+      timestampMs: Date.now(),
+      sequence: 1,
+    });
     expect(store().getLatestOutput(0)?.response).toBe("first");
   });
 
@@ -460,7 +497,14 @@ describe("resetWorkflow", () => {
       workflowName: "Test",
       prompts: [makePrompt()],
     });
-    store().addCliOutput(0, makeOutput());
+    store().appendLiveEntry({
+      kind: "cli",
+      target: { kind: "queue", stepIndex: 0 },
+      attemptIndex: 0,
+      cliOutput: makeOutput(),
+      timestampMs: Date.now(),
+      sequence: 1,
+    });
     store().setRetryState(0, 1, 3);
 
     store().resetWorkflow();
@@ -468,7 +512,7 @@ describe("resetWorkflow", () => {
     expect(store().fileName).toBeNull();
     expect(store().workflowName).toBeNull();
     expect(store().prompts).toHaveLength(0);
-    expect(store().cliOutputs).toEqual({});
+    expect(store().liveOrderedEntries).toEqual([]);
     expect(store().retryStates).toEqual({});
     expect(store().executionState).toBe(EXECUTION_STATES.IDLE);
   });

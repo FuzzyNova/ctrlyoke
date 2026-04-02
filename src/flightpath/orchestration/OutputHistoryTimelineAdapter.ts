@@ -2,7 +2,6 @@ import { FINAL_PROMPT_PHASES } from "../../types/DashboardConstants";
 import type {
   OrderedHistoryEntry,
   OutputExecutionTarget,
-  OutputTimelineEntry,
   StepOutput,
   WorkflowOutputHistory,
 } from "../../types/OutputHistoryTypes";
@@ -38,10 +37,9 @@ export class OutputHistoryTimelineAdapter {
       startedAt: manifest.startedAt,
       completedAt: manifest.completedAt,
       executionState: manifest.executionState,
-      runStepCount: manifest.runStepCount,
       promptOutputs: {},
+      orderedEntries: [],
     };
-    const outputTimelineByKey = new Map<string, OutputTimelineEntry>();
     const orderedEntries: OrderedHistoryEntry[] = [];
     const cliEntriesByKey = new Map<string, OrderedHistoryEntry>();
 
@@ -56,23 +54,7 @@ export class OutputHistoryTimelineAdapter {
           });
           break;
         case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED: {
-          const stepOutput = this.ensureStepOutput(history, event.target);
           const attemptIndex = event.attemptIndex;
-          const existingIndex = stepOutput.cliOutputs.findIndex(
-            (output) => (output.attemptIndex ?? 0) === attemptIndex
-          );
-
-          if (existingIndex >= 0) {
-            stepOutput.cliOutputs[existingIndex] = event.payload.cliOutput;
-          } else {
-            stepOutput.cliOutputs.push(event.payload.cliOutput);
-          }
-
-          stepOutput.cliOutputs.sort(
-            (left, right) =>
-              (left.attemptIndex ?? 0) - (right.attemptIndex ?? 0)
-          );
-
           cliEntriesByKey.set(getCliEntryKey(event.target, attemptIndex), {
             kind: "cli",
             target: event.target,
@@ -81,24 +63,9 @@ export class OutputHistoryTimelineAdapter {
             timestampMs: event.timestampMs,
             sequence: event.sequence,
           });
-
-          const firstOutputAt =
-            event.payload.cliOutput.timestampMs ?? event.timestampMs;
-          const key = getTimelineKey(event.target);
-          const existingEntry = outputTimelineByKey.get(key);
-          if (!existingEntry || firstOutputAt < existingEntry.firstOutputAt) {
-            outputTimelineByKey.set(key, {
-              key,
-              target: event.target,
-              firstOutputAt,
-            });
-          }
           break;
         }
         case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
-          this.ensureStepOutput(history, event.target).statusMessages.push(
-            event.payload.statusMessage
-          );
           orderedEntries.push({
             kind: "status",
             target: event.target,
@@ -106,10 +73,6 @@ export class OutputHistoryTimelineAdapter {
             timestampMs: event.timestampMs,
             sequence: event.sequence,
           });
-          break;
-        case TIMELINE_EVENT_TYPES.STATUS_MESSAGES_UPDATED:
-          this.ensureStepOutput(history, event.target).statusMessages =
-            event.payload.statusMessages;
           break;
         case TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_CAPTURED:
         case TIMELINE_EVENT_TYPES.WORKSPACE_SNAPSHOT_UPDATED:
@@ -125,20 +88,10 @@ export class OutputHistoryTimelineAdapter {
       }
     }
 
-    const outputTimeline = [...outputTimelineByKey.values()].sort(
-      (left, right) => left.firstOutputAt - right.firstOutputAt
-    );
-    if (outputTimeline.length > 0) {
-      history.outputTimeline = outputTimeline;
-    }
-
-    const canonicalOrderedEntries = [
+    history.orderedEntries = [
       ...orderedEntries,
       ...cliEntriesByKey.values(),
     ].sort(compareOrderedHistoryEntries);
-    if (canonicalOrderedEntries.length > 0) {
-      history.orderedEntries = canonicalOrderedEntries;
-    }
 
     if (
       history.finalPromptOutputs &&
@@ -155,18 +108,12 @@ export class OutputHistoryTimelineAdapter {
     target: OutputExecutionTarget
   ): StepOutput {
     if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
-      history.promptOutputs[target.stepIndex] ??= {
-        cliOutputs: [],
-        statusMessages: [],
-      };
+      history.promptOutputs[target.stepIndex] ??= {};
       return history.promptOutputs[target.stepIndex];
     }
 
     history.finalPromptOutputs ??= {};
-    history.finalPromptOutputs[target.loopIndex] ??= {
-      cliOutputs: [],
-      statusMessages: [],
-    };
+    history.finalPromptOutputs[target.loopIndex] ??= {};
     return history.finalPromptOutputs[target.loopIndex];
   }
 }
@@ -178,17 +125,14 @@ function compareTimelineEvents(
   return left.timestampMs - right.timestampMs || left.sequence - right.sequence;
 }
 
-function getTimelineKey(target: OutputExecutionTarget): string {
-  return target.kind === FINAL_PROMPT_PHASES.QUEUE
-    ? `queue:${target.stepIndex}`
-    : `final:${target.loopIndex}`;
-}
-
 function getCliEntryKey(
   target: OutputExecutionTarget,
   attemptIndex: number
 ): string {
-  return `${getTimelineKey(target)}:attempt:${attemptIndex}`;
+  const base = target.kind === FINAL_PROMPT_PHASES.QUEUE
+    ? `queue:${target.stepIndex}`
+    : `final:${target.loopIndex}`;
+  return `${base}:attempt:${attemptIndex}`;
 }
 
 function compareOrderedHistoryEntries(

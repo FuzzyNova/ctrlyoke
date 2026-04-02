@@ -34,7 +34,7 @@ import {
 } from "../types/DashboardConstants";
 import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { IDashboardSink } from "../types/IDashboardSink";
-import type { CliEvent } from "../types/WebviewMessageTypes";
+import type { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -862,15 +862,25 @@ export class WorkflowInstance {
           try {
             const history =
               await this.outputHistoryManager.loadHistory(historyFilePath);
+
+            const cliEntriesByStep = new Map<number, Array<{ cliOutput: CliOutput; attemptIndex: number }>>();
+            for (const entry of history.orderedEntries) {
+              if (entry.kind === "cli" && entry.target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+                const stepIndex = (entry.target as { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }).stepIndex;
+                const arr = cliEntriesByStep.get(stepIndex) ?? [];
+                arr.push({ cliOutput: entry.cliOutput, attemptIndex: entry.attemptIndex });
+                cliEntriesByStep.set(stepIndex, arr);
+              }
+            }
+
             for (let i = 0; i < prevCompletedCount; i++) {
-              const stepData = history.promptOutputs[i];
-              if (stepData && stepData.cliOutputs.length > 0) {
-                const maxAttemptIndex = Math.max(
-                  ...stepData.cliOutputs.map((o) => o.attemptIndex ?? 0)
-                );
+              const entries = cliEntriesByStep.get(i);
+              if (entries && entries.length > 0) {
+                const cliOutputs = entries.map((e) => e.cliOutput);
+                const maxAttemptIndex = Math.max(...entries.map((e) => e.attemptIndex));
                 this.outputCaptureBuffer.cacheHistoricalStepOutput(
                   i,
-                  stepData.cliOutputs,
+                  cliOutputs,
                   maxAttemptIndex > 0
                     ? {
                         currentRetry: maxAttemptIndex,

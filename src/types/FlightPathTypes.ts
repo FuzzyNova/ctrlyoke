@@ -374,6 +374,15 @@ export interface EndCondition {
   resumeSessionOnRetry?: boolean; // Resume the same session for retries (default: true). Set false to start a fresh session for each retry.
 }
 
+/**
+ * Full public state of the queue, combining topology fields from PromptQueue
+ * with runtime execution fields from WorkflowStateMachine.
+ *
+ * Consumers always receive this combined shape via PromptQueue.getState().
+ * The WorkflowRuntimeState fields (status, stopped, startTime, pausedTime,
+ * totalPausedDuration) are authoritative in WorkflowStateMachine and projected
+ * here by spreading stateMachine.getSnapshot() last in getState().
+ */
 export interface QueueState extends WorkflowRuntimeState {
   currentIndex: number;
   prompts: PromptItem[];

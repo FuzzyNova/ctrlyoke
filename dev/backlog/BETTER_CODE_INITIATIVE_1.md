@@ -1,7 +1,7 @@
 # Better Code Initiative 1
 
-**Date:** March 31, 2026  
-**Status:** In Progress - Phase 2 partially implemented; Phase 1 still pending  
+**Date:** March 31, 2026 — last updated April 1, 2026  
+**Status:** In Progress - Phases 1, 2, and 3 materially complete; Phase 4 partially implemented  
 **Scope:** Post-bugfix architectural cleanup  
 **Intent:** Reduce responsibility sprawl, make workflow state transitions authoritative, and replace split output persistence with a canonical append-only timeline.
 
@@ -39,78 +39,145 @@ history can be wiped.
 
 ### What Has Been Accomplished
 
-Phase 2 has started and is now materially underway.
+Phases 1, 2, and 3 are now materially complete. Phase 4 is partially implemented.
 
-- `WorkflowStateMachine` is no longer just a timer-field wrapper. It now owns
-  validated run-level transitions, runtime snapshot/restore, continuation
-  reopening, and pause-aware execution-time calculation.
-- `WorkflowInstance` now creates the runtime owner and shares it with
-  `PromptQueue`, so runtime state is no longer hidden inside the queue.
-- `WorkflowExecutor` now routes run start, stop, error, completion,
-  end-condition failure, and limit-triggered failure transitions through the
-  runtime owner instead of treating `PromptQueue` as the lifecycle truth.
-- `WorkflowInstance` now routes pause/resume/stop and early execution failures
-  through the same runtime owner.
-- `PromptQueue` has been partially demoted toward queue topology and
-  persistence. It now exposes `commitRuntimeTransition()`,
-  `markCurrentPromptCancelled()`, `advanceCancelledPromptAfterStop()`, and
-  `failCurrentPromptIfInProgress()` as queue-topology/persistence helpers around
-  the shared runtime owner.
-- `WorkflowRuntimeState` was added so `QueueState` can project runtime fields
-  from the shared runtime owner instead of duplicating them as independent
-  lifecycle truth.
-- Phase 1 is now underway as well. `CliExecutionSession` owns per-attempt
-  mutable state, `CliExecutionRunner` owns interactive/headless execution
-  orchestration, and the old private-method tests were moved to the new seam.
-- Focused lifecycle coverage was strengthened: a dedicated
-  `WorkflowStateMachine` test file was added, affected queue/instance tests were
-  updated, focused lifecycle tests passed, and `npm run compile` passed.
+**Phase 2 — Authoritative Runtime State Machine (complete with minor cleanup remaining):**
+- `WorkflowStateMachine` is now the sole owner of runtime lifecycle state
+  (`status`, `stopped`, `startTime`, `pausedTime`, `totalPausedDuration`). It
+  provides named transitions for run-level (`startExecution`, `pause`, `resume`,
+  `requestStop`, `confirmStopped`, `complete`, `fail`, `reset`) and attempt-level
+  operations (`beginAttempt`, `completeAttempt`, `failAttempt`, `scheduleRetry`,
+  `cancelAttempt`). Attempt-level transitions are no longer scattered.
+- `WorkflowInstance` subscribes to `workflowRuntime.onDidTransition()` for
+  state-driven side effects. `onQueueStateChanged()` no longer derives dashboard
+  or auto-start behavior from `QueueState.status`; it buffers events for inactive
+  workflows and syncs to the dashboard. Lifecycle authority comes from the runtime
+  owner, not queue projection.
+- `WorkflowExecutor` routes all transitions through the state machine rather than
+  treating `PromptQueue` as lifecycle truth.
+- `PromptQueue` lifecycle methods (`start`, `pause`, `resume`, `stop`,
+  `confirmedStopped`, `markCompleted`, `markErrored`) have been removed. The
+  queue now exposes `commitRuntimeTransition()`,
+  `markInFlightPromptCancelled()`, `finalizeCancelledPromptAfterStop()`, and
+  `finalizeFailedInFlightPrompt()` as queue-topology/persistence helpers only.
 
-### What Is Still Incomplete In Phase 2
+**Phase 1 — `CliIntegration` decomposition (materially complete):**
+- `CliExecutionSession` owns per-attempt mutable state (prompt text, resolved
+  properties, parsed output, temp files, session ID, result).
+- `CliExecutionRunner` coordinates interactive and headless execution via
+  `CliTransportCoordinator`, `CliInteractiveStartupCoordinator`,
+  `CliResponseCollector`, and `CliPromptPreparer`. `CliIntegration` is no longer
+  the execution path itself; it is a delegation facade.
+- Old private-method tests were moved to the new seam.
 
-The plan does **not** need a redesign right now, but Phase 2 is still only
-partially complete.
+**Phase 3 — Append-Only Timeline Recorder (complete):**
+- `TimelineRecorder` manages `manifest.json` + `events.jsonl` under
+  `.flightpath/.history/<workflow-id>/run-<timestamp>/`. Events are appended
+  atomically with file locking. Schema version `2.0.0`.
+- `OutputHistoryManager` now writes to the timeline format: `appendCliOutput()`,
+  `appendStatusMessage()`, `appendRuntimeTransition()`,
+  `saveSnapshotForTarget()`, and `saveUndoRecord()` all produce discrete events
+  with `timestampMs` and monotonic `sequence`.
+- `WorkflowTimelineTypes.ts` defines the full event discriminated union
+  (`WorkflowTimelineEvent`) and run manifest type (`WorkflowRunManifest`).
+- `OutputHistoryTimelineAdapter` projects timeline events back into
+  `WorkflowOutputHistory` shape for UI consumption, including the canonical
+  `orderedEntries: OrderedHistoryEntry[]` array sorted by `(timestampMs,
+  sequence)`.
+- `OutputHistoryTypes.ts` was extended with `OutputExecutionTarget`,
+  `OrderedHistoryEntry` (union of cli/status/runtime sub-types), and the optional
+  `orderedEntries` and `outputTimeline` fields on `WorkflowOutputHistory`.
 
-- `PromptQueue` still contains compatibility lifecycle methods such as
-  `start()`, `pause()`, `resume()`, `stop()`, `confirmedStopped()`,
-  `markCompleted()`, and `markErrored()`. They are thinner now, but the class
-  is still acting as a lifecycle facade instead of being queue-topology-only.
-- Runtime-driven side effects are still coupled to queue-state projection.
-  `WorkflowInstance.onQueueStateChanged()` still derives dashboard and
-  auto-start behavior from `QueueState.status` rather than consuming explicit
-  runtime transition notifications.
-- The current `WorkflowStateMachine` owns run-level status transitions, but it
-  does **not** yet model the fuller attempt-oriented command surface described
-  later in this document (`beginAttempt`, `completeAttempt`, `failAttempt`,
-  etc.).
-- Transition side effects are still coordinated through
-  `PromptQueue.commitRuntimeTransition()` rather than through a more explicit
-  runtime observer/store layer.
-- Phase 0 is only partially complete. The interactive-startup and log-discovery
-  regression coverage called out below is still missing.
-- Phase 1 is no longer blocked, but it is still incomplete. `CliIntegration`
-  remains the public facade and still owns prompt/session setup, runtime
-  persistence handoff, and helper-factory glue.
+**Phase 4 — UI Projections (partially implemented):**
+- `outputProjection.ts` is a new utility providing `mapOrderedHistoryEntriesToMessages`
+  (canonical path using `orderedEntries`), `buildProjectedOutputMessages` (legacy
+  fallback using per-step arrays with real timestamps instead of synthetic index
+  math), and `buildHistoricalProjectionSteps` (interleaves queue/finalPrompt steps
+  using `outputTimeline` ordering).
+- `OutputSection.tsx` now delegates all output ordering to `outputProjection`.
+  When `orderedEntries` are present (timeline-backed runs), it uses the canonical
+  path; otherwise it falls back to projection from per-step arrays. No more manual
+  merge of `cliOutputs + statusMessages` inside the component.
+- `markdownExport.ts` uses `mapOrderedHistoryEntriesToMessages` when
+  `orderedEntries` are available and sorts by `(timestamp, sequence)` otherwise.
+  Markdown output now correctly labels `finalPrompt` sections as "Final Prompt
+  Loop N" rather than "Prompt N".
+- `workflowStore.ts` passes `orderedEntries` and `outputTimeline` through to
+  `historyOutputs` so the webview can use them.
+
+**Test coverage improvements:**
+- Dedicated test files added: `OutputHistoryManager.test.ts`,
+  `EndConditionHandler.test.ts`, `QueueOperations.test.ts`,
+  `workflowStore.test.ts` (loadHistoryRun coverage),
+  `outputProjection.test.ts`.
+- `WorkflowInstance.test.ts` significantly expanded.
+
+### What Is Still Incomplete
+
+Phases 1–3 are in good shape. The remaining work is cleanup, full Phase 4
+migration, and Phase 5 deletion.
+
+**Remaining Phase 2 cleanup:**
+- `QueueState` still carries `status`, `stopped`, and `totalPausedDuration`
+  fields even though `WorkflowStateMachine` now owns these. They are kept for
+  backward-compatible queue serialization via `syncToStateMachine()` /
+  `syncFromStateMachine()`, creating a secondary source of truth. These redundant
+  fields should be removed from `QueueState` once serialization is fully migrated
+  to the timeline format.
+- `PromptQueue.commitRuntimeTransition()` still acts as a persistence shim
+  between the state machine and queue storage. A cleaner design would route
+  persistence through `OutputHistoryManager` directly and remove this coupling.
+
+**Remaining Phase 1 cleanup:**
+- `CliIntegration` still owns prompt/session setup, runtime persistence handoff,
+  and helper-factory wiring. It is a delegation facade but is still ~850 lines.
+  The helper-factory glue could be extracted further if `CliIntegration` still
+  feels dense after reading.
+
+**Phase 0 (tests) still incomplete:**
+- Ordering-specific regression coverage (history replay ordering across queue and
+  finalPrompt) is still missing despite the new projection utilities.
+- PTY exit during log discovery and interactive startup abort coverage is
+  incomplete.
+
+**Remaining Phase 4 work:**
+- Live workflow output in `OutputSection.tsx` still builds messages from
+  per-step `cliOutputs[i]` and `statusMessages[i]` arrays rather than consuming
+  live timeline events. The canonical path (`mapOrderedHistoryEntriesToMessages`)
+  is only used for history replay. The live path still relies on per-step array
+  structure.
+- History minimap is not yet fed from canonical event order.
+- Run summary badges are not yet driven from timeline projections.
+
+**Phase 5 not started:**
+- Split `statusMessages[]` and `cliOutputs[]` per-step arrays still exist in
+  `StepOutput` and are written during runs. These should be removed once the
+  live output path also reads from the timeline.
+- Legacy `.history/<workflow-id>/*.json` snapshot format is still supported
+  alongside the new `run-*/manifest.json + events.jsonl` format. A one-time
+  converter script or a clean schema bump should retire the old format.
+- Render-time ordering math and compatibility replay fallbacks still exist in
+  `buildProjectedOutputMessages` for legacy history files.
 
 ### Handoff Guidance For The Next Agent
 
-The practical order on this branch is now different from the ideal greenfield
-order.
+The practical next steps in priority order:
 
-1. Finish Phase 2 first. The runtime-ownership refactor is far enough along
-   that leaving it half-migrated would be worse than continuing it.
-2. Keep the remaining Phase 2 scope narrow.
-3. Move the last lifecycle authority out of `PromptQueue` and leave it with
-   queue topology plus persistence only.
-4. Move runtime-driven side effects out of queue-state polling in
-   `WorkflowInstance` and make them respond to one authoritative runtime owner.
-5. Decide whether to extend the current `WorkflowStateMachine` into the fuller
-   attempt-aware API from this plan, or introduce a small companion runtime
-   store around it. Do not let attempt transitions stay scattered.
-6. Continue the remaining Phase 1 decomposition from the new
-   `CliExecutionSession` and `CliExecutionRunner` seams once Phase 2 cleanup is
-   no longer the limiting factor.
-7. Do not start Phase 3 timeline work until Phase 2 is clean.
+1. **Remove redundant lifecycle fields from `QueueState`.** Now that
+   `WorkflowStateMachine` is authoritative, `status`, `stopped`, and
+   `totalPausedDuration` should not live in two places. This is the last
+   meaningful Phase 2 cleanup item.
+2. **Feed live output through the timeline.** `OutputSection.tsx` has two paths:
+   canonical history and per-step-array live. Unifying them means emitting
+   live `OrderedHistoryEntry` events to the webview during execution instead of
+   separate `cliOutputs` / `statusMessages` arrays. This is the core Phase 4
+   work.
+3. **Remove `StepOutput.cliOutputs[]` and `StepOutput.statusMessages[]`** once
+   the live path no longer needs them (Phase 5 start).
+4. **Retire the legacy JSON history format** with a version bump and one-time
+   migration script rather than keeping dual reader paths forever.
+5. **Finish Phase 0 test gaps**: ordering regression coverage and interactive
+   startup abort/log-discovery abort edge cases.
 
 ---
 
@@ -543,7 +610,7 @@ than polluting the runtime and webview paths forever.
 
 ## Phase 0: Lock Down Behavior With Tests
 
-**Status as of March 31, 2026:** Partial
+**Status as of April 1, 2026:** Partial
 
 Before deeper refactors, strengthen tests around the bug-prone seams.
 
@@ -561,16 +628,18 @@ Before deeper refactors, strengthen tests around the bug-prone seams.
 A behavior baseline that lets us refactor aggressively without reintroducing the
 same bug class.
 
-**Progress note:** Focused runtime/lifecycle coverage was improved as part of
-the current Phase 2 work, and interactive-startup/log-discovery abort coverage
-now exists around `CliExecutionRunner`. Broader ordering-specific regression
-coverage from this phase is still incomplete.
+**Progress note:** Dedicated test files were added for `OutputHistoryManager`,
+`EndConditionHandler`, `QueueOperations`, `WorkflowInstance` (loadHistoryRun),
+`outputProjection`, and `workflowStore`. Interactive-startup and log-discovery
+abort coverage exists around `CliExecutionRunner`. Ordering-specific regression
+coverage for history replay across queue and finalPrompt interleaving is still
+incomplete.
 
 ---
 
 ## Phase 1: Decompose `CliIntegration`
 
-**Status as of April 1, 2026:** In progress
+**Status as of April 1, 2026:** Materially complete; minor cleanup remaining
 
 ### Deliverables
 
@@ -585,16 +654,18 @@ coverage from this phase is still incomplete.
 No history schema change yet. Keep behavior stable while splitting class
 responsibilities.
 
-**Progress note:** `CliExecutionSession` and `CliExecutionRunner` are now in
-place, so `CliIntegration` no longer owns per-attempt mutable state or the full
-interactive/headless execution path. The remaining work is to keep trimming the
-facade without changing behavior.
+**Progress note:** `CliExecutionSession`, `CliExecutionRunner`,
+`CliTransportCoordinator`, `CliInteractiveStartupCoordinator`,
+`CliResponseCollector`, and `CliPromptPreparer` are all in place. `CliIntegration`
+is now a delegation facade (~850 lines) and no longer owns per-attempt mutable
+state or the execution path itself. Remaining work is helper-factory wiring
+cleanup within `CliIntegration` if it still feels dense after reading.
 
 ---
 
 ## Phase 2: Introduce Authoritative Runtime State Machine
 
-**Status as of March 31, 2026:** In progress
+**Status as of April 1, 2026:** Materially complete; minor cleanup remaining
 
 ### Deliverables
 
@@ -608,17 +679,19 @@ facade without changing behavior.
 Do this before the event-timeline rewrite so the new timeline records clean,
 authoritative transitions rather than legacy mixed ownership.
 
-**Progress note:** This phase has started successfully. The shared
-`WorkflowStateMachine` now exists and is being used by `WorkflowInstance`,
-`PromptQueue`, and `WorkflowExecutor`. What remains is finishing the demotion of
-`PromptQueue`, removing queue-state-derived lifecycle authority from
-`WorkflowInstance`, and deciding how attempt-level transitions should be owned.
+**Progress note:** `WorkflowStateMachine` is now the sole authority for both
+run-level and attempt-level transitions. `PromptQueue` lifecycle methods have
+been removed; it now exposes only queue-topology and persistence helpers.
+`WorkflowInstance` is event-driven via `onDidTransition` rather than deriving
+behavior from `QueueState.status`. Remaining cleanup: remove the now-redundant
+`status`, `stopped`, and `totalPausedDuration` fields from `QueueState` and
+decouple `commitRuntimeTransition()` from queue persistence.
 
 ---
 
 ## Phase 3: Add Append-Only Timeline Recorder
 
-**Status as of March 31, 2026:** Not started
+**Status as of April 1, 2026:** Complete
 
 ### Deliverables
 
@@ -632,11 +705,21 @@ authoritative transitions rather than legacy mixed ownership.
 Keep existing webview contracts alive through an adapter layer until the UI moves
 to timeline-derived projections.
 
+**Progress note:** `TimelineRecorder` manages `manifest.json` + `events.jsonl`
+under `.flightpath/.history/<workflow-id>/run-<timestamp>/` with file-locked
+atomic appends (schema version `2.0.0`). `OutputHistoryManager` writes all
+output events — CLI outputs, status messages, runtime transitions, workspace
+snapshots, undo records — as discrete timeline events with required `timestampMs`
+and monotonic `sequence`. `OutputHistoryTimelineAdapter` projects the event log
+back into `WorkflowOutputHistory` shape including a canonical `orderedEntries`
+array sorted by `(timestampMs, sequence)`. Legacy `.json` snapshot files are
+still read via the original path; new runs use the timeline format exclusively.
+
 ---
 
 ## Phase 4: Move UI and History Replay to Timeline Projections
 
-**Status as of March 31, 2026:** Not started
+**Status as of April 1, 2026:** Partially implemented
 
 ### Deliverables
 
@@ -650,11 +733,23 @@ to timeline-derived projections.
 Avoid duplicating live-vs-history projection logic. One projection layer should
 serve both.
 
+**Progress note:** `outputProjection.ts` provides `mapOrderedHistoryEntriesToMessages`
+(canonical path for timeline-backed history), `buildProjectedOutputMessages` (legacy
+fallback using real timestamps instead of synthetic index math), and
+`buildHistoricalProjectionSteps` (interleaves queue/finalPrompt steps using
+`outputTimeline` ordering). `OutputSection.tsx` uses the canonical path when
+`orderedEntries` are present and falls back to projection for legacy snapshots.
+`markdownExport.ts` uses canonical ordering when `orderedEntries` are available.
+`workflowStore.ts` passes `orderedEntries` and `outputTimeline` through to
+`historyOutputs`. Remaining: live workflow output still uses the per-step-array
+path rather than live timeline events; minimap and run badges are not yet
+timeline-driven.
+
 ---
 
 ## Phase 5: Delete Legacy Structures
 
-**Status as of March 31, 2026:** Not started
+**Status as of April 1, 2026:** Not started
 
 ### Remove or demote
 
@@ -687,15 +782,25 @@ One canonical model remains: append-only timeline events.
 - `src/ui/webview-react/components/layout/OutputSection.tsx`
 - `src/ui/webview-react/utils/markdownExport.ts`
 
-### Likely New Files
+### New Files (now created)
 
-- `src/flightpath/harness/shared/CliFailureTracker.ts`
-- `src/flightpath/harness/shared/CliInteractiveStartupCoordinator.ts`
-- `src/flightpath/harness/shared/CliResponseCollector.ts`
-- `src/flightpath/harness/shared/CliPromptPreparer.ts`
-- `src/flightpath/WorkflowStateMachine.ts`
-- `src/flightpath/orchestration/TimelineRecorder.ts`
-- `src/types/WorkflowTimelineTypes.ts`
+- `src/flightpath/harness/shared/CliExecutionSession.ts` ✓
+- `src/flightpath/harness/shared/CliExecutionRunner.ts` ✓
+- `src/flightpath/harness/shared/CliInteractiveStartupCoordinator.ts` ✓
+- `src/flightpath/harness/shared/CliResponseCollector.ts` ✓
+- `src/flightpath/harness/shared/CliPromptPreparer.ts` ✓
+- `src/flightpath/harness/shared/CliTransportCoordinator.ts` ✓
+- `src/flightpath/WorkflowStateMachine.ts` ✓
+- `src/flightpath/orchestration/TimelineRecorder.ts` ✓
+- `src/flightpath/orchestration/OutputHistoryTimelineAdapter.ts` ✓
+- `src/types/WorkflowTimelineTypes.ts` ✓
+- `src/ui/webview-react/utils/outputProjection.ts` ✓
+
+### Still Pending
+
+- `src/flightpath/harness/shared/CliFailureTracker.ts` — PTY exit tracking and
+  failure classification still live inside `CliIntegration`/`CliExecutionRunner`
+  rather than a dedicated class.
 
 ---
 
@@ -736,18 +841,22 @@ Prefer extraction and adapters before renaming public concepts.
 
 ## Recommendation
 
-The original architectural recommendation still makes sense in principle, but
-the current branch already has meaningful Phase 2 work landed.
+The initiative is in good shape. Phases 1–3 are done. Phase 4 is partial.
+The remaining risk is in two areas: completing the live output path to use
+timeline events (which would let us delete the per-step arrays), and retiring
+the legacy JSON history format.
 
-If this initiative were being started from zero, the cleaner order would still
-be Phase 1 before Phase 2.
+The practical continuation order from the current state:
 
-Given the branch state today, the practical continuation order is:
-
-1. Finish Phase 2 from the current partial state.
-2. Return to Phase 1 and do the proper `CliIntegration` decomposition.
-3. Introduce canonical append-only timeline persistence.
-4. Migrate UI projections and markdown export.
-5. Delete legacy split persistence and ordering code.
+1. Remove redundant lifecycle fields (`status`, `stopped`, `totalPausedDuration`)
+   from `QueueState` — the last meaningful Phase 2 cleanup.
+2. Feed live output through the timeline so `OutputSection.tsx` can use one path
+   for both live and history — the core remaining Phase 4 work.
+3. Once live output uses the timeline, remove `StepOutput.cliOutputs[]` and
+   `StepOutput.statusMessages[]` (Phase 5 start).
+4. Retire the legacy `.json` history format with a version bump and a one-time
+   migration script.
+5. Fill the Phase 0 test gaps: ordering regression coverage and
+   interactive-startup/log-discovery abort edge cases.
 
 That is the lowest-risk path from the code that exists now.

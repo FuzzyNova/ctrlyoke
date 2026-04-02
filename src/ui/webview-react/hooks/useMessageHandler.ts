@@ -28,6 +28,11 @@ import {
   type PromptItem,
   type UndoRecordUpdatedMessage,
 } from "../types/messages";
+import type {
+  OrderedCliHistoryEntry,
+  OrderedStatusHistoryEntry,
+  OutputExecutionTarget,
+} from "@root/types/OutputHistoryTypes";
 import { WebviewLog } from "@utils/logger";
 import { useTerminalStore } from "../store/terminalStore";
 import { terminalRegistry } from "../terminalRegistry";
@@ -391,8 +396,8 @@ function createMessageHandlers(): MessageHandlerMap {
     WebviewLog.debug(
       `[EXECUTION_STARTED] isContinuation=${isContinuation}, preserveStepCount=${preserveStepCount}, ` +
         `totalSteps=${message.totalSteps}, isViewingHistory=${uiStore.isViewingHistory}, ` +
-        `historyOutputs=${workflowStore.historyOutputs ? `{stepCount:${workflowStore.historyOutputs.stepCount}}` : "null"}, ` +
-        `liveOutputKeys=${Object.keys(workflowStore.cliOutputs).join(",") || "none"}`
+        `historyOutputs=${workflowStore.historyOutputs ? "exists" : "null"}, ` +
+        `liveEntries=${workflowStore.liveOrderedEntries.length}`
     );
 
     if (isContinuation && preserveStepCount > 0) {
@@ -428,7 +433,7 @@ function createMessageHandlers(): MessageHandlerMap {
       workflowStore.clearRuntimeStateFromStep(preserveStepCount);
 
       WebviewLog.debug(
-        `[EXECUTION_STARTED] After promote — liveOutputKeys=${Object.keys(useWorkflowStore.getState().cliOutputs).join(",") || "none"}`
+        `[EXECUTION_STARTED] After promote — liveEntries=${useWorkflowStore.getState().liveOrderedEntries.length}`
       );
     } else {
       // Fresh start: switch to live view and reset everything
@@ -554,9 +559,16 @@ function createMessageHandlers(): MessageHandlerMap {
   // FINAL_PROMPT_OUTPUT - CLI output for finalPrompt loop
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FINAL_PROMPT_OUTPUT] = (message) => {
-    useWorkflowStore
-      .getState()
-      .addFinalPromptOutput(message.loopIndex, message.output);
+    const store = useWorkflowStore.getState();
+    const entry: OrderedCliHistoryEntry = {
+      kind: "cli",
+      target: { kind: "finalPrompt", loopIndex: message.loopIndex },
+      attemptIndex: message.output.attemptIndex ?? 0,
+      cliOutput: message.output,
+      timestampMs: message.output.timestampMs ?? Date.now(),
+      sequence: store.liveSequence,
+    };
+    store.appendLiveEntry(entry);
   };
 
   // --------------------------------------------------------------------------
@@ -584,8 +596,16 @@ function createMessageHandlers(): MessageHandlerMap {
   // CLI_OUTPUT - Complete CLI output for a step
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CLI_OUTPUT] = (message) => {
-    const workflowStore = useWorkflowStore.getState();
-    workflowStore.addCliOutput(message.stepIndex, message.output);
+    const store = useWorkflowStore.getState();
+    const entry: OrderedCliHistoryEntry = {
+      kind: "cli",
+      target: { kind: "queue", stepIndex: message.stepIndex },
+      attemptIndex: message.output.attemptIndex ?? 0,
+      cliOutput: message.output,
+      timestampMs: message.output.timestampMs ?? Date.now(),
+      sequence: store.liveSequence,
+    };
+    store.appendLiveEntry(entry);
   };
 
   // --------------------------------------------------------------------------
@@ -618,31 +638,35 @@ function createMessageHandlers(): MessageHandlerMap {
     if (message.workflowId !== activeWorkflowId) {
       return;
     }
-    useWorkflowStore.getState().addCliOutput(message.stepIndex, message.output);
+    const store = useWorkflowStore.getState();
+    const entry: OrderedCliHistoryEntry = {
+      kind: "cli",
+      target: { kind: "queue", stepIndex: message.stepIndex },
+      attemptIndex: message.output.attemptIndex ?? 0,
+      cliOutput: message.output,
+      timestampMs: message.output.timestampMs ?? Date.now(),
+      sequence: store.liveSequence,
+    };
+    store.appendLiveEntry(entry);
   };
 
   // --------------------------------------------------------------------------
   // STATUS_MESSAGE - Status message for a step (info/warning/error)
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.STATUS_MESSAGE] = (message) => {
-    const workflowStore = useWorkflowStore.getState();
+    const store = useWorkflowStore.getState();
     const stepIndex = Number(message.stepIndex);
-    if (Number.isFinite(stepIndex) && stepIndex < 0) {
-      // finalPrompt loop N is encoded as legacy step index -(N+1)
-      const loopIndex = Math.abs(stepIndex) - 1;
-      workflowStore.addFinalPromptStatusMessage(
-        loopIndex,
-        message.message,
-        message.severity
-      );
-      return;
-    }
-
-    workflowStore.addStatusMessage(
-      stepIndex,
-      message.message,
-      message.severity
-    );
+    const target: OutputExecutionTarget = Number.isFinite(stepIndex) && stepIndex < 0
+      ? { kind: "finalPrompt", loopIndex: Math.abs(stepIndex) - 1 }
+      : { kind: "queue", stepIndex: Math.max(0, stepIndex) };
+    const entry: OrderedStatusHistoryEntry = {
+      kind: "status",
+      target,
+      statusMessage: { message: message.message, severity: message.severity ?? "info", timestamp: Date.now() },
+      timestampMs: Date.now(),
+      sequence: store.liveSequence,
+    };
+    store.appendLiveEntry(entry);
   };
 
   // --------------------------------------------------------------------------
@@ -930,25 +954,40 @@ function createMessageHandlers(): MessageHandlerMap {
   // QUEUE_SIZE_LIMIT_REACHED - Queue hit size limit
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.QUEUE_SIZE_LIMIT_REACHED] = (message) => {
-    const workflowStore = useWorkflowStore.getState();
-    workflowStore.addStatusMessage(
-      -1,
-      `Queue size limit reached: ${message.currentSize}/${message.maxSize}`
-    );
+    const store = useWorkflowStore.getState();
+    const entry: OrderedStatusHistoryEntry = {
+      kind: "status",
+      target: { kind: "finalPrompt", loopIndex: 0 },
+      statusMessage: {
+        message: `Queue size limit reached: ${message.currentSize}/${message.maxSize}`,
+        severity: "warning",
+        timestamp: Date.now(),
+      },
+      timestampMs: Date.now(),
+      sequence: store.liveSequence,
+    };
+    store.appendLiveEntry(entry);
   };
 
   // --------------------------------------------------------------------------
   // EXECUTION_TIME_LIMIT_REACHED - Execution hit time limit
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.EXECUTION_TIME_LIMIT_REACHED] = (message) => {
-    const workflowStore = useWorkflowStore.getState();
+    const store = useWorkflowStore.getState();
+    const entry: OrderedStatusHistoryEntry = {
+      kind: "status",
+      target: { kind: "finalPrompt", loopIndex: 0 },
+      statusMessage: {
+        message: `Execution time limit reached: ${message.elapsedSeconds}/${message.maxSeconds}s (${message.completedCount}/${message.totalCount} prompts)`,
+        severity: "warning",
+        timestamp: Date.now(),
+      },
+      timestampMs: Date.now(),
+      sequence: store.liveSequence,
+    };
+    store.appendLiveEntry(entry);
 
-    workflowStore.addStatusMessage(
-      -1,
-      `Execution time limit reached: ${message.elapsedSeconds}/${message.maxSeconds}s (${message.completedCount}/${message.totalCount} prompts)`
-    );
-
-    workflowStore.setExecutionState(EXECUTION_STATES.STOPPED);
+    store.setExecutionState(EXECUTION_STATES.STOPPED);
   };
 
   // --------------------------------------------------------------------------

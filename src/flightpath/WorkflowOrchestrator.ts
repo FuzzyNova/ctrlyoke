@@ -22,6 +22,7 @@ import {
 import {
   HARNESS_IDS,
   LOCK_STATUS,
+  FINAL_PROMPT_PHASES,
   type QueuePosition,
   type ActionType,
   type StepStatus,
@@ -1628,18 +1629,20 @@ export class WorkflowOrchestrator {
       const history =
         await this.getOutputHistoryManager().loadHistory(historyFilePath);
 
-      for (const [stepIndexStr, stepOutput] of Object.entries(
-        history.promptOutputs
-      ) as Array<[string, { cliOutputs: Array<unknown> }]>) {
-        const stepIndex = parseInt(stepIndexStr, 10);
-        const outputs = stepOutput.cliOutputs ?? [];
+      const cliOutputsByStep = new Map<number, unknown[]>();
+      for (const historyEntry of history.orderedEntries) {
+        if (historyEntry.kind === "cli" && historyEntry.target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+          const stepIndex = (historyEntry.target as { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }).stepIndex;
+          const arr = cliOutputsByStep.get(stepIndex) ?? [];
+          arr.push(historyEntry.cliOutput);
+          cliOutputsByStep.set(stepIndex, arr);
+        }
+      }
 
+      for (const [stepIndex, outputs] of cliOutputsByStep) {
         // Update lastKnown so subsequent incremental handleCliWatchOutput calls
         // don't re-send these outputs
-        entry.session.getAndUpdateLastKnownOutputCount(
-          stepIndex,
-          outputs.length
-        );
+        entry.session.getAndUpdateLastKnownOutputCount(stepIndex, outputs.length);
 
         // Send ALL outputs from the beginning (full replay, not diff)
         for (let i = 0; i < outputs.length; i++) {
@@ -1676,11 +1679,17 @@ export class WorkflowOrchestrator {
     this.getOutputHistoryManager()
       .loadHistory(historyFilePath)
       .then((history) => {
-        for (const [stepIndexStr, stepOutput] of Object.entries(
-          history.promptOutputs
-        ) as Array<[string, { cliOutputs: Array<unknown> }]>) {
-          const stepIndex = parseInt(stepIndexStr, 10);
-          const outputs = stepOutput.cliOutputs ?? [];
+        const cliOutputsByStep = new Map<number, unknown[]>();
+        for (const historyEntry of history.orderedEntries) {
+          if (historyEntry.kind === "cli" && historyEntry.target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+            const stepIndex = (historyEntry.target as { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }).stepIndex;
+            const arr = cliOutputsByStep.get(stepIndex) ?? [];
+            arr.push(historyEntry.cliOutput);
+            cliOutputsByStep.set(stepIndex, arr);
+          }
+        }
+
+        for (const [stepIndex, outputs] of cliOutputsByStep) {
           const lastKnown = entry.session.getAndUpdateLastKnownOutputCount(
             stepIndex,
             outputs.length

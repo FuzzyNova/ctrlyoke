@@ -122,14 +122,21 @@ describe("untracked store actions (must not record undo entries)", () => {
     expect(temporal().pastStates).toHaveLength(0);
   });
 
-  it("addCliOutput does not record", () => {
+  it("appendLiveEntry does not record", () => {
     loadWorkflow([makePrompt()]);
-    store().addCliOutput(0, {
-      prompt: "p",
-      response: "r",
-      elapsed: 0,
+    store().appendLiveEntry({
+      kind: "cli",
+      target: { kind: "queue", stepIndex: 0 },
+      attemptIndex: 0,
+      cliOutput: {
+        prompt: "p",
+        response: "r",
+        elapsed: 0,
+        timestampMs: Date.now(),
+        isStreaming: false,
+      },
       timestampMs: Date.now(),
-      isStreaming: false,
+      sequence: 1,
     });
     expect(temporal().pastStates).toHaveLength(0);
   });

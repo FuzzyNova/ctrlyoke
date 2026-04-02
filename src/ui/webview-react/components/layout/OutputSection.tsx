@@ -14,11 +14,8 @@ import { PanelBar, RunSelector } from "../shared";
 import { generateDiffLines } from "@utils/outputUtils";
 import { generateMarkdownExport } from "@utils/markdownExport";
 import {
-  buildHistoricalProjectionSteps,
-  buildProjectedOutputMessages,
   mapOrderedHistoryEntriesToMessages,
   type OutputMessage,
-  type OutputProjectionStep,
 } from "@utils/outputProjection";
 import type {
   CliOutput as CliOutputType,
@@ -110,12 +107,8 @@ export const OutputSection: React.FC = () => {
   const executionState = useWorkflowStore((s) => s.executionState);
   const currentStep = useWorkflowStore((s) => s.currentStep);
   const totalSteps = useWorkflowStore((s) => s.totalSteps);
-  const cliOutputs = useWorkflowStore((s) => s.cliOutputs);
-  const finalPromptOutputs = useWorkflowStore((s) => s.finalPromptOutputs);
-  const statusMessages = useWorkflowStore((s) => s.statusMessages);
-  const finalPromptStatusMessages = useWorkflowStore(
-    (s) => s.finalPromptStatusMessages
-  );
+  const cliOutputs = useWorkflowStore((s) => s.liveOrderedEntries);
+  const liveOrderedEntries = cliOutputs; // alias for clarity
   // streamingChunks changes on every token — keep it isolated so the
   // auto-scroll effect doesn't require rebuilding allMessages.
   const streamingChunks = useWorkflowStore((s) => s.streamingChunks);
@@ -206,53 +199,25 @@ export const OutputSection: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
-  // Determine which steps data source to use: history snapshot or live outputs
-  const stepsToRender = useMemo((): OutputProjectionStep[] => {
-    if (isViewingHistory && historyOutputs) {
-      return buildHistoricalProjectionSteps(historyOutputs);
-    }
-
-    const queueSteps = Array.from({ length: totalSteps }, (_, i) => ({
-      target: { kind: "queue" as const, index: i },
-      cliOutputs: cliOutputs[i] ?? [],
-      statusMessages: statusMessages[i] ?? [],
-    }));
-
-    const finalSteps = Object.keys(finalPromptOutputs)
-      .map((k) => Number(k))
-      .filter((n) => Number.isFinite(n))
-      .sort((a, b) => a - b)
-      .map((loopIndex) => ({
-        target: { kind: "finalPrompt" as const, index: loopIndex },
-        cliOutputs: finalPromptOutputs[loopIndex] ?? [],
-        statusMessages: finalPromptStatusMessages[loopIndex] ?? [],
-      }));
-
-    return [...queueSteps, ...finalSteps];
-  }, [
-    isViewingHistory,
-    historyOutputs,
-    totalSteps,
-    cliOutputs,
-    statusMessages,
-    finalPromptOutputs,
-    finalPromptStatusMessages,
-  ]);
-
-  // Build chronologically sorted list of all messages.
-  // This memo depends on stepsToRender (not streamingChunks), so it only
-  // rebuilds when actual output records change — not on every streaming token.
+  // Build chronologically sorted list of all messages from the single ordered entries array.
   const allMessages = useMemo((): OutputMessage[] => {
-    if (
-      isViewingHistory &&
-      historyOutputs?.orderedEntries &&
-      historyOutputs.orderedEntries.length > 0
-    ) {
+    if (isViewingHistory && historyOutputs) {
       return mapOrderedHistoryEntriesToMessages(historyOutputs.orderedEntries);
     }
+    return mapOrderedHistoryEntriesToMessages(liveOrderedEntries);
+  }, [isViewingHistory, historyOutputs, liveOrderedEntries]);
 
-    return buildProjectedOutputMessages(stepsToRender);
-  }, [isViewingHistory, historyOutputs, stepsToRender]);
+  // Unique step targets in first-appearance order (for DOM measurement and undo/redo iteration).
+  const uniqueStepTargets = useMemo(() => {
+    const seen = new Map<string, OutputMessage["target"]>();
+    for (const msg of allMessages) {
+      const key = `${msg.target.kind}:${msg.target.index}`;
+      if (!seen.has(key)) {
+        seen.set(key, msg.target);
+      }
+    }
+    return [...seen.values()];
+  }, [allMessages]);
 
   // Smart scroll: detect user scrolling away from bottom
   const handleScroll = useCallback(() => {
@@ -296,11 +261,11 @@ export const OutputSection: React.FC = () => {
 
       // Measure step anchor positions
       const fractions = new Map<string, number>();
-      for (const step of stepsToRender) {
+      for (const target of uniqueStepTargets) {
         const kindSlug =
-          step.target.kind === FINAL_PROMPT_PHASES.QUEUE ? "queue" : "final";
+          target.kind === FINAL_PROMPT_PHASES.QUEUE ? "queue" : "final";
         const anchor = document.getElementById(
-          `output-step-${kindSlug}-${step.target.index}`
+          `output-step-${kindSlug}-${target.index}`
         );
         if (anchor) {
           const pixelPos =
@@ -308,7 +273,7 @@ export const OutputSection: React.FC = () => {
             containerTop +
             container.scrollTop;
           fractions.set(
-            `${step.target.kind}:${step.target.index}`,
+            `${target.kind}:${target.index}`,
             pixelPos / scrollHeight
           );
         }
@@ -362,7 +327,7 @@ export const OutputSection: React.FC = () => {
     // activeOutputTab is included so a re-measure fires when switching back from
     // the terminal tab — the output div is unmounted while terminal is active, so
     // its DOM measurements become stale and must be refreshed on re-mount.
-  }, [allMessages, stepsToRender, diffsCollapsed, activeOutputTab]);
+  }, [allMessages, uniqueStepTargets, diffsCollapsed, activeOutputTab]);
 
   // Export handler
   const handleExport = useCallback(() => {
@@ -423,12 +388,16 @@ export const OutputSection: React.FC = () => {
   // Map step key → all CLI outputs for that step (used for minimap undo actions)
   const stepOutputsMap = useMemo(() => {
     const map = new Map<string, CliOutputType[]>();
-    for (const step of stepsToRender) {
-      const key = `${step.target.kind}:${step.target.index}`;
-      map.set(key, step.cliOutputs as CliOutputType[]);
+    for (const msg of allMessages) {
+      if (msg.type === "cli") {
+        const key = `${msg.target.kind}:${msg.target.index}`;
+        const existing = map.get(key) ?? [];
+        existing.push(msg.data as CliOutputType);
+        map.set(key, existing);
+      }
     }
     return map;
-  }, [stepsToRender]);
+  }, [allMessages]);
 
   // Track last CLI message index per step (prompt-level undo button shown only on last attempt)
   const lastCliIndexPerStep = useMemo(() => {
@@ -469,8 +438,8 @@ export const OutputSection: React.FC = () => {
     const redoEntries: WorkflowStepEntry[] = [];
     let workspacePath = "";
 
-    for (const step of stepsToRender) {
-      const key = `${step.target.kind}:${step.target.index}`;
+    for (const msgTarget of uniqueStepTargets) {
+      const key = `${msgTarget.kind}:${msgTarget.index}`;
       const lastCliIdx = lastCliIndexPerStep.get(key);
       if (lastCliIdx === undefined) continue;
 
@@ -482,8 +451,8 @@ export const OutputSection: React.FC = () => {
         workspacePath = lastOutput.workingDirectory;
 
       const isFinalPrompt =
-        step.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT;
-      const stepIndex = step.target.index;
+        msgTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT;
+      const stepIndex = msgTarget.index;
 
       let effectiveSnapshot: WorkspaceSnapshot | undefined;
       let effectiveUndoRecord: UndoRecord | undefined;
@@ -491,10 +460,10 @@ export const OutputSection: React.FC = () => {
       if (isViewingHistory && historyOutputs) {
         effectiveSnapshot = isFinalPrompt
           ? historyOutputs.finalPromptOutputs?.[stepIndex]?.workspaceSnapshot
-          : historyOutputs.steps[stepIndex]?.workspaceSnapshot;
+          : historyOutputs.promptOutputs[stepIndex]?.workspaceSnapshot;
         effectiveUndoRecord = isFinalPrompt
           ? historyOutputs.finalPromptOutputs?.[stepIndex]?.undoRecord
-          : historyOutputs.steps[stepIndex]?.undoRecord;
+          : historyOutputs.promptOutputs[stepIndex]?.undoRecord;
       } else {
         const targetKey = isFinalPrompt
           ? `finalPrompt-${stepIndex}`
@@ -506,7 +475,7 @@ export const OutputSection: React.FC = () => {
       }
 
       const stepOutputs = (stepOutputsMap.get(key) ?? []) as CliOutputType[];
-      const target: UndoExecutionTarget = isFinalPrompt
+      const undoTarget: UndoExecutionTarget = isFinalPrompt
         ? { kind: "finalPrompt", loopIndex: stepIndex }
         : { kind: "queue", stepIndex };
       const label = isFinalPrompt
@@ -520,7 +489,7 @@ export const OutputSection: React.FC = () => {
 
       // Redo entry: files previously undone that can be re-applied
       if (redoInstructions.length > 0) {
-        redoEntries.push({ target, label, redoInstructions });
+        redoEntries.push({ target: undoTarget, label, redoInstructions });
       }
 
       // Undo entry: undoable candidates excluding already-undone files
@@ -537,14 +506,14 @@ export const OutputSection: React.FC = () => {
           : allCandidates;
       const undoCandidates = candidates.filter((c) => c.instruction !== null);
       if (undoCandidates.length > 0) {
-        undoEntries.push({ target, label, undoCandidates });
+        undoEntries.push({ target: undoTarget, label, undoCandidates });
       }
     }
 
     return { undoEntries, redoEntries, workspacePath };
   }, [
     allowUndoActions,
-    stepsToRender,
+    uniqueStepTargets,
     lastCliIndexPerStep,
     allMessages,
     stepOutputsMap,
@@ -658,13 +627,13 @@ export const OutputSection: React.FC = () => {
   // Built from stepsToRender + firstIndexByStep; includes prompt-level
   // undo/redo actions so the minimap can show them without needing CliOutput.
   const minimapSteps = useMemo((): MinimapStep[] => {
-    return stepsToRender.flatMap((step) => {
-      const key = `${step.target.kind}:${step.target.index}`;
+    return uniqueStepTargets.flatMap((msgTarget) => {
+      const key = `${msgTarget.kind}:${msgTarget.index}`;
       const firstIdx = firstIndexByStep.get(key);
       if (firstIdx === undefined) return [];
 
-      const kind = step.target.kind;
-      const stepIndex = step.target.index;
+      const kind = msgTarget.kind;
+      const stepIndex = msgTarget.index;
       const isFinalPrompt = kind === FINAL_PROMPT_PHASES.FINAL_PROMPT;
       const label = isFinalPrompt
         ? `Final Prompt Loop ${stepIndex + 1}`
@@ -763,7 +732,7 @@ export const OutputSection: React.FC = () => {
       const targetKey = isFinalPrompt
         ? `finalPrompt-${stepIndex}`
         : `queue-${stepIndex}`;
-      const target: UndoExecutionTarget = isFinalPrompt
+      const undoTarget: UndoExecutionTarget = isFinalPrompt
         ? { kind: "finalPrompt", loopIndex: stepIndex }
         : { kind: "queue", stepIndex };
 
@@ -773,11 +742,11 @@ export const OutputSection: React.FC = () => {
       if (isViewingHistory && historyOutputs) {
         effectiveSnapshot =
           kind === FINAL_PROMPT_PHASES.QUEUE
-            ? historyOutputs.steps[stepIndex]?.workspaceSnapshot
+            ? historyOutputs.promptOutputs[stepIndex]?.workspaceSnapshot
             : historyOutputs.finalPromptOutputs?.[stepIndex]?.workspaceSnapshot;
         effectiveUndoRecord =
           kind === FINAL_PROMPT_PHASES.QUEUE
-            ? historyOutputs.steps[stepIndex]?.undoRecord
+            ? historyOutputs.promptOutputs[stepIndex]?.undoRecord
             : historyOutputs.finalPromptOutputs?.[stepIndex]?.undoRecord;
       } else {
         effectiveSnapshot = isFinalPrompt
@@ -800,7 +769,7 @@ export const OutputSection: React.FC = () => {
               onTrigger: () => {
                 setMinimapDialogState({
                   mode: "redo",
-                  target,
+                  target: undoTarget,
                   workspacePath,
                   redoInstructions: effectiveUndoRecord!.redoInstructions,
                   requestId: crypto.randomUUID(),
@@ -818,7 +787,7 @@ export const OutputSection: React.FC = () => {
                     ? effectiveUndoRecord.redoInstructions
                     : undefined;
                 const input = buildUndoDialogInputForPrompt(
-                  target,
+                  undoTarget,
                   stepOutputs,
                   effectiveSnapshot,
                   workspacePath,
@@ -826,7 +795,7 @@ export const OutputSection: React.FC = () => {
                 );
                 setMinimapDialogState({
                   mode: "undo",
-                  target,
+                  target: undoTarget,
                   workspacePath,
                   input,
                   requestId: crypto.randomUUID(),
@@ -851,7 +820,7 @@ export const OutputSection: React.FC = () => {
     });
   }, [
     allowUndoActions,
-    stepsToRender,
+    uniqueStepTargets,
     firstIndexByStep,
     lastCliIndexPerStep,
     allMessages,
@@ -1219,7 +1188,7 @@ export const OutputSection: React.FC = () => {
                   const stepSnapshot: WorkspaceSnapshot | undefined =
                     isViewingHistory && historyOutputs
                       ? item.target.kind === FINAL_PROMPT_PHASES.QUEUE
-                        ? historyOutputs.steps[item.target.index]
+                        ? historyOutputs.promptOutputs[item.target.index]
                             ?.workspaceSnapshot
                         : historyOutputs.finalPromptOutputs?.[item.target.index]
                             ?.workspaceSnapshot
@@ -1227,7 +1196,7 @@ export const OutputSection: React.FC = () => {
                   const stepUndoRecord: UndoRecord | undefined =
                     isViewingHistory && historyOutputs
                       ? item.target.kind === FINAL_PROMPT_PHASES.QUEUE
-                        ? historyOutputs.steps[item.target.index]?.undoRecord
+                        ? historyOutputs.promptOutputs[item.target.index]?.undoRecord
                         : historyOutputs.finalPromptOutputs?.[item.target.index]
                             ?.undoRecord
                       : undefined;

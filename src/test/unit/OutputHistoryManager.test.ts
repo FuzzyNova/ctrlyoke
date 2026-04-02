@@ -6,7 +6,6 @@ import { suite, test, setup, teardown } from "mocha";
 import { OutputHistoryManager } from "../../flightpath/orchestration/OutputHistoryManager";
 import { TimelineRecorder } from "../../flightpath/orchestration/TimelineRecorder";
 import { EXECUTION_STATES } from "../../types/DashboardConstants";
-import { WorkflowOutputHistory } from "../../types/OutputHistoryTypes";
 import {
   TIMELINE_EVENT_TYPES,
   TIMELINE_STORAGE_FILES,
@@ -53,7 +52,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.deepStrictEqual(events, []);
   });
 
-  test("projects timeline events back into the legacy WorkflowOutputHistory shape", async () => {
+  test("projects timeline events back into WorkflowOutputHistory shape", async () => {
     const historyInit = await manager.initializeRun("wf-test");
     const historyFilePath = historyInit.filePath;
 
@@ -163,13 +162,20 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     await manager.finalizeRun(historyFilePath, EXECUTION_STATES.COMPLETED, 2);
 
     const loaded = await manager.loadHistory(historyFilePath);
-    assert.strictEqual(loaded.promptOutputs[0]?.cliOutputs.length, 1);
-    assert.strictEqual(
-      loaded.promptOutputs[0]?.cliOutputs[0]?.response,
-      "final"
-    );
-    assert.strictEqual(loaded.promptOutputs[0]?.statusMessages.length, 2);
-    assert.strictEqual(loaded.finalPromptOutputs?.[0]?.cliOutputs.length, 1);
+    // CLI output for queue:0 is the final deduplicated one (attemptIndex=0, response="final")
+    const queueCliEntries = loaded.orderedEntries
+      .filter((e) => e.kind === "cli" && e.target.kind === "queue" && (e.target as any).stepIndex === 0);
+    assert.strictEqual(queueCliEntries.length, 1);
+    assert.strictEqual((queueCliEntries[0] as any).cliOutput.response, "final");
+
+    const queueStatusEntries = loaded.orderedEntries
+      .filter((e) => e.kind === "status" && e.target.kind === "queue" && (e.target as any).stepIndex === 0);
+    assert.strictEqual(queueStatusEntries.length, 2);
+
+    const finalCliEntries = loaded.orderedEntries
+      .filter((e) => e.kind === "cli" && e.target.kind === "finalPrompt" && (e.target as any).loopIndex === 0);
+    assert.strictEqual(finalCliEntries.length, 1);
+
     assert.strictEqual(
       loaded.promptOutputs[0]?.workspaceSnapshot?.capturedAt,
       150
@@ -177,17 +183,12 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.strictEqual(loaded.promptOutputs[0]?.undoRecord?.isRedone, true);
     assert.strictEqual(loaded.promptOutputs[0]?.undoRecord?.redoneAt, 170);
     assert.strictEqual(loaded.executionState, EXECUTION_STATES.COMPLETED);
-    assert.strictEqual(loaded.runStepCount, 2);
-    assert.ok(loaded.outputTimeline);
-    assert.strictEqual(loaded.outputTimeline?.length, 2);
-    assert.strictEqual(loaded.outputTimeline?.[0].key, "queue:0");
-    assert.strictEqual(loaded.outputTimeline?.[1].key, "final:0");
     assert.deepStrictEqual(
-      loaded.orderedEntries?.map((entry) => entry.kind),
+      loaded.orderedEntries.map((entry) => entry.kind),
       ["status", "cli", "status", "cli"]
     );
-    assert.strictEqual(loaded.orderedEntries?.[1]?.kind, "cli");
-    if (loaded.orderedEntries?.[1]?.kind !== "cli") {
+    assert.strictEqual(loaded.orderedEntries[1]?.kind, "cli");
+    if (loaded.orderedEntries[1]?.kind !== "cli") {
       assert.fail("expected second ordered entry to be cli output");
     }
     assert.strictEqual(loaded.orderedEntries[1].cliOutput.response, "final");
@@ -277,11 +278,14 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     });
 
     const loaded = await manager.loadHistory(historyFilePath);
-    assert.deepStrictEqual(loaded.promptOutputs[0]?.statusMessages, [
+    const statusEntries = loaded.orderedEntries.filter(
+      (e) => e.kind === "status" && e.target.kind === "queue" && (e.target as any).stepIndex === 0
+    );
+    assert.deepStrictEqual(statusEntries.map((e) => (e as any).statusMessage), [
       { message: "paused", severity: "info", timestamp: 151 },
     ]);
     assert.deepStrictEqual(
-      loaded.orderedEntries?.map((entry) => entry.kind),
+      loaded.orderedEntries.map((entry) => entry.kind),
       ["runtime", "status"]
     );
   });
@@ -339,7 +343,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     const loaded = await manager.loadHistory(historyFilePath);
     assert.deepStrictEqual(
-      loaded.orderedEntries?.map((entry) =>
+      loaded.orderedEntries.map((entry) =>
         entry.kind === "cli"
           ? `${entry.kind}:${entry.cliOutput.response}:${entry.sequence}`
           : `${entry.kind}:${entry.sequence}`
@@ -395,7 +399,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     );
 
     const loaded = await manager.loadHistory(historyFilePath);
-    assert.deepStrictEqual(loaded.promptOutputs[0]?.statusMessages, [
+    const statusEntries = loaded.orderedEntries.filter(
+      (e) => e.kind === "status" && e.target.kind === "queue" && (e.target as any).stepIndex === 0
+    );
+    assert.deepStrictEqual(statusEntries.map((e) => (e as any).statusMessage), [
       { message: "queued", severity: "info", timestamp: 100 },
       { message: "complete", severity: "info", timestamp: 120 },
     ]);
@@ -440,30 +447,23 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     );
 
     const loaded = await manager.loadHistory(historyFilePath);
-    assert.deepStrictEqual(loaded.promptOutputs[0]?.statusMessages, [
+    const statusEntries = loaded.orderedEntries.filter(
+      (e) => e.kind === "status" && e.target.kind === "queue" && (e.target as any).stepIndex === 0
+    );
+    assert.deepStrictEqual(statusEntries.map((e) => (e as any).statusMessage), [
       { message: "queued", severity: "info", timestamp: 100 },
     ]);
     assert.deepStrictEqual(
-      loaded.orderedEntries?.map((entry) => entry.kind),
+      loaded.orderedEntries.map((entry) => entry.kind),
       ["status", "cli"]
     );
   });
 
-  test("projects older aggregate timeline event kinds for compatibility", async () => {
+  test("ignores unhandled timeline event kinds during projection", async () => {
     const historyInit = await manager.initializeRun("wf-compat");
     const historyFilePath = historyInit.filePath;
 
     await recorder.appendEvents(historyFilePath, [
-      {
-        eventType: TIMELINE_EVENT_TYPES.STATUS_MESSAGES_UPDATED,
-        timestampMs: 110,
-        target: { kind: "queue", stepIndex: 0 },
-        payload: {
-          statusMessages: [
-            { message: "legacy", severity: "warning", timestamp: 110 },
-          ],
-        },
-      },
       {
         eventType: TIMELINE_EVENT_TYPES.UNDO_RECORD_UPDATED,
         timestampMs: 120,
@@ -479,63 +479,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     ]);
 
     const loaded = await manager.loadHistory(historyFilePath);
-    assert.deepStrictEqual(loaded.promptOutputs[0]?.statusMessages, [
-      { message: "legacy", severity: "warning", timestamp: 110 },
-    ]);
     assert.deepStrictEqual(loaded.promptOutputs[0]?.undoRecord, {
       appliedAt: 120,
       restoredFiles: ["src/file.ts"],
       redoInstructions: [],
     });
-  });
-
-  test("loads legacy json history files without migration", async () => {
-    const workflowId = "wf-legacy";
-    const historyDir = path.join(manager.historyBaseDir, workflowId);
-    await fs.mkdir(historyDir, { recursive: true });
-
-    const historyFilePath = path.join(
-      historyDir,
-      "run-2026-03-31T10-00-00-000Z.json"
-    );
-    const legacyHistory: WorkflowOutputHistory = {
-      schemaVersion: "1.1.0",
-      workflowId,
-      runId: 1,
-      startedAt: 100,
-      completedAt: 200,
-      executionState: EXECUTION_STATES.COMPLETED,
-      runStepCount: 1,
-      promptOutputs: {
-        0: {
-          cliOutputs: [
-            {
-              prompt: "legacy",
-              response: "legacy-ok",
-              elapsed: 1,
-              isStreaming: false,
-              timestampMs: 100,
-            },
-          ],
-          statusMessages: [],
-        },
-      },
-    };
-
-    await fs.writeFile(
-      historyFilePath,
-      JSON.stringify(legacyHistory, null, 2),
-      "utf8"
-    );
-
-    const loaded = await manager.loadHistory(historyFilePath);
-    assert.strictEqual(
-      loaded.promptOutputs[0]?.cliOutputs[0]?.response,
-      "legacy-ok"
-    );
-    assert.strictEqual(loaded.orderedEntries, undefined);
-
-    const runs = await manager.getRunsForWorkflow(workflowId);
-    assert.deepStrictEqual(runs, [path.basename(historyFilePath)]);
   });
 });

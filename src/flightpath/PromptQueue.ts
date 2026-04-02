@@ -5,10 +5,18 @@ import {
   PromptFile,
   FinalPromptRuntimeState,
   QueueState,
+  WorkflowRuntimeState,
   PromptResult,
   EXECUTION_STATES,
   STEP_STATUS,
 } from "../types/FlightPathTypes";
+
+/**
+ * Internal state shape: the queue's own topology fields only.
+ * Runtime execution fields (status, stopped, startTime, pausedTime, totalPausedDuration)
+ * are owned by WorkflowStateMachine and projected onto QueueState by getState().
+ */
+type InternalQueueState = Omit<QueueState, keyof WorkflowRuntimeState>;
 import type { WorkingFile } from "../types/FlightPathTypes";
 import {
   QUEUE_POSITION,
@@ -78,7 +86,7 @@ function getEffectiveRetryPrompt(
 }
 
 export class PromptQueue {
-  private state: QueueState;
+  private state: InternalQueueState;
   private workflowFile?: PromptFile; // Store complete workflow file with workflow-level properties
   private finalPromptRuntime?: FinalPromptRuntimeState;
   private onStateChanged = new TypedEmitter<QueueState>();
@@ -93,14 +101,11 @@ export class PromptQueue {
     this.stateMachine = stateMachine;
     this.state = {
       currentIndex: 0,
-      status: EXECUTION_STATES.IDLE,
       prompts: [],
       results: [],
-      stopped: false,
       completedIndices: new Set<string>(),
       totalExecutionTime: 0,
       queueExtensions: 0,
-      totalPausedDuration: 0,
     };
 
     // Create WorkingFileManager with adapter that provides access to queue state
@@ -155,14 +160,11 @@ export class PromptQueue {
   clearQueue(): void {
     this.state = {
       currentIndex: 0,
-      status: EXECUTION_STATES.IDLE,
       prompts: [],
       results: [],
-      stopped: false,
       completedIndices: new Set<string>(),
       totalExecutionTime: 0,
       queueExtensions: 0,
-      totalPausedDuration: 0,
       // Clear working file path and workflow name
       workingFilePath: undefined,
       workflowName: undefined,
@@ -170,7 +172,7 @@ export class PromptQueue {
 
     this.workflowFile = undefined; // Clear workflow file reference
     this.finalPromptRuntime = undefined;
-    this.syncToStateMachine();
+    this.stateMachine.restore({ status: EXECUTION_STATES.IDLE, stopped: false, totalPausedDuration: 0 });
 
     this.emitStateChange();
     Log.info("Queue cleared - ready for new workflow");
@@ -192,8 +194,6 @@ export class PromptQueue {
       emitStateChange = true,
       skipMerge = false,
     } = options;
-
-    this.syncFromStateMachine();
 
     if (emitStateChange) {
       this.emitStateChange();
@@ -293,18 +293,15 @@ export class PromptQueue {
 
     this.state = {
       currentIndex: 0,
-      status: EXECUTION_STATES.IDLE,
       prompts: [...prompts],
       results: prompts.map((prompt) => ({
         prompt: prompt.prompt,
         status: STEP_STATUS.PENDING,
         timestamp: new Date(),
       })),
-      stopped: false, // Reset stopped flag on new load
       completedIndices: new Set<string>(),
       totalExecutionTime: 0,
       queueExtensions: 0,
-      totalPausedDuration: 0,
       workingFilePath,
       workflowName: this.state.workflowName, // Preserve workflow name across reloads
     };
@@ -312,7 +309,7 @@ export class PromptQueue {
     // Store complete workflow file for property resolution
     this.workflowFile = promptFile;
     this.finalPromptRuntime = undefined;
-    this.syncToStateMachine();
+    this.stateMachine.restore({ status: EXECUTION_STATES.IDLE, stopped: false, totalPausedDuration: 0 });
 
     this.emitStateChange();
     Log.info(`Loaded ${prompts.length} prompts into queue`);
@@ -392,25 +389,22 @@ export class PromptQueue {
       // Each prompt's _runtime contains: harness, model, agent, sessionId, startedAt, completedAt
       this.state = {
         currentIndex: runtime?.currentIndex || 0,
-        status: executionState,
         prompts: prompts.map((prompt) => ({
           ...prompt,
           // Backward compatibility: _runtime is optional, old files won't have it
           // The spread operator preserves _runtime if it exists
         })),
         results: [],
-        stopped: false,
         completedIndices,
         totalExecutionTime: 0,
         queueExtensions: 0,
-        totalPausedDuration: 0,
         workingFilePath,
         workflowName: workingFile.workflowName, // Restore workflow name from working file
       };
 
       // Store complete workflow file for property resolution
       this.workflowFile = workingFile;
-      this.syncToStateMachine();
+      this.stateMachine.restore({ status: executionState, stopped: executionState === EXECUTION_STATES.STOPPED, totalPausedDuration: 0 });
 
       // Rebuild results array with proper status based on completion state
       this.state.results = prompts.map((prompt, index) => {
@@ -432,7 +426,7 @@ export class PromptQueue {
           // RUNNING → SENT (actively being processed)
           // Otherwise (IDLE, PAUSED, STOPPED, etc.) → PENDING
           status =
-            this.state.status === EXECUTION_STATES.RUNNING
+            executionState === EXECUTION_STATES.RUNNING
               ? STEP_STATUS.SENT
               : STEP_STATUS.PENDING;
         }
@@ -466,7 +460,7 @@ export class PromptQueue {
         `Restored queue from working file: ${prompts.length} prompts, ` +
           `currentIndex=${this.state.currentIndex}, ` +
           `completed=${this.state.completedIndices.size}, ` +
-          `status=${this.state.status}, ` +
+          `status=${executionState}, ` +
           `_runtime: ${promptsWithRuntime}/${prompts.length} prompts`
       );
     } catch (error) {
@@ -482,7 +476,6 @@ export class PromptQueue {
    */
   async restart(): Promise<void> {
     this.stateMachine.reset();
-    this.syncFromStateMachine();
     this.state.currentIndex = 0;
     this.currentRetryCount = 0;
 
@@ -542,7 +535,6 @@ export class PromptQueue {
    */
   clear(): void {
     this.stateMachine.requestStop();
-    this.syncFromStateMachine();
     this.state.prompts = [];
     this.state.results = [];
     this.emitStateChange();
@@ -1255,35 +1247,7 @@ export class PromptQueue {
    * Emit state change event
    */
   private emitStateChange(): void {
-    this.syncFromStateMachine();
     this.onStateChanged.fire(this.getState());
-  }
-
-  /**
-   * Copy status-related fields from the state machine into this.state.
-   * Call after every named state machine transition so this.state stays current.
-   */
-  private syncFromStateMachine(): void {
-    this.state.status = this.stateMachine.status;
-    this.state.stopped = this.stateMachine.stopped;
-    this.state.startTime = this.stateMachine.startTime;
-    this.state.pausedTime = this.stateMachine.pausedTime;
-    this.state.totalPausedDuration = this.stateMachine.totalPausedDuration;
-  }
-
-  /**
-   * Copy status-related fields from this.state into the state machine.
-   * Call after full state resets (clearQueue, loadPrompts, restoreFromWorkingFile)
-   * so the state machine reflects the reconstructed state.
-   */
-  private syncToStateMachine(): void {
-    this.stateMachine.restore({
-      status: this.state.status,
-      stopped: this.state.stopped,
-      startTime: this.state.startTime,
-      pausedTime: this.state.pausedTime,
-      totalPausedDuration: this.state.totalPausedDuration,
-    });
   }
 
   /**
@@ -1421,7 +1385,6 @@ export class PromptQueue {
 
     this.state.currentIndex = toIndex;
     this.stateMachine.reset();
-    this.syncFromStateMachine();
     this.state.completedIndices = new Set<string>(
       Array.from({ length: toIndex }, (_, i) => String(i))
     );

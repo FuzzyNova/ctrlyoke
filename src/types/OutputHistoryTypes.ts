@@ -5,20 +5,14 @@ import type {
 } from "./FlightPathTypes";
 import {
   CliOutput,
-  StatusMessage,
   UndoFileInstruction,
 } from "./WebviewMessageTypes";
+import type { StatusMessage } from "./WebviewMessageTypes";
 import type { UnifiedDiffHunk } from "./CliOutputTypes";
 
 export type OutputExecutionTarget =
   | { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }
   | { kind: typeof FINAL_PROMPT_PHASES.FINAL_PROMPT; loopIndex: number };
-
-export interface OutputTimelineEntry {
-  key: string;
-  target: OutputExecutionTarget;
-  firstOutputAt: number;
-}
 
 export interface OrderedHistoryEntryBase {
   timestampMs: number;
@@ -54,74 +48,39 @@ export type OrderedHistoryEntry =
 
 /**
  * Complete output history for a single workflow run.
- *
- * Legacy runs are stored directly as .json files.
- * Timeline-backed runs are projected into this same shape from
- * manifest.json + events.jsonl storage so existing consumers stay stable.
- *
- * IMPORTANT: Uses CliOutput[] from WebviewMessageTypes.ts for per-step outputs.
- * Each CliOutput already contains .prompt (unexpanded prompt text) and .cliCommand,
- * so history rendering shows the same Prompt → CLI Command → Output view as live mode.
- *
- * History is rendered as a self-contained snapshot — all steps from this run are shown
- * regardless of how many prompts are currently in the workflow.
+ * Timeline-backed runs are projected into this shape from
+ * manifest.json + events.jsonl storage.
  */
 export interface WorkflowOutputHistory {
-  // Schema version for future migrations
-  // 1.0.0 is retained for backward-compatible reads.
-  schemaVersion: "1.0.0" | "1.1.0";
+  schemaVersion: "1.1.0";
 
   // Run metadata
-  workflowId: string; // Working file basename (e.g., "workflow-2024-01-21T10-30-00")
-  runId: number; // Sequential run number (1, 2, 3, ...)
-  startedAt: number; // Run start timestamp (ms since epoch)
-  completedAt?: number; // Run completion timestamp (undefined if incomplete)
-  executionState: ExecutionState; // Final state (completed, error, stopped, etc.)
+  workflowId: string;
+  runId: number;
+  startedAt: number;
+  completedAt?: number;
+  executionState: ExecutionState;
 
-  // Total step count for this run (used to render all steps in order)
-  // May differ from current workflow prompt count if prompts were added/deleted
-  runStepCount: number;
-
-  // Per-step outputs (keyed by stepIndex, indices 0..runStepCount-1)
-  // Each CliOutput includes .prompt (unexpanded text) and .cliCommand for full fidelity
+  // Per-step outputs (keyed by stepIndex)
   promptOutputs: {
     [stepIndex: number]: StepOutput;
   };
 
-  // Per-loop finalPrompt outputs (keyed by loopIndex, indices 0..N)
-  // Optional for backward compatibility with schemaVersion 1.0.0 histories.
+  // Per-loop finalPrompt outputs (keyed by loopIndex)
   finalPromptOutputs?: {
     [loopIndex: number]: StepOutput;
   };
 
-  // Legacy chronological metadata for history-mode fallback rendering.
-  // Timeline-backed histories should prefer orderedEntries when present.
-  outputTimeline?: OutputTimelineEntry[];
-
-  // Canonical ordered entries for timeline-backed runs. History-mode rendering
-  // should prefer this when present and only fall back to per-step reconstruction
-  // for legacy snapshots that predate ordered projection support.
-  orderedEntries?: OrderedHistoryEntry[];
+  // Canonical ordered entries for timeline-backed runs.
+  orderedEntries: OrderedHistoryEntry[];
 }
 
 /**
  * Output data for a single workflow step.
- * Stores the exact data from workflowStore for that step.
- *
- * CliOutput already contains:
- * - .prompt: the unexpanded prompt text shown in the output header
- * - .cliCommand: the actual CLI command that was run
- * - .response: the plain text response
- * - .structured: structured events (tool calls, thinking blocks, etc.)
- * - .tokens: token usage statistics
- * - .elapsed: execution time
- * - .timestampMs: when the output was created
+ * Only stores workspace/undo metadata — CLI outputs and status messages
+ * are stored in orderedEntries on WorkflowOutputHistory.
  */
 export interface StepOutput {
-  /** All CLI outputs for this step (initial attempt + any retries) */
-  cliOutputs: CliOutput[];
-  /** Status messages for this step (e.g., "Prompt 1 started at 2:20 PM") */
-  statusMessages: StatusMessage[];
   /** Workspace snapshot captured around this step's execution (for undo) */
   workspaceSnapshot?: WorkspaceSnapshot;
   /** Undo record: set if user has applied undo for this step */

@@ -109,13 +109,12 @@ export const PromptsPanel: React.FC<{
     currentStep,
     executionState,
     retryStates,
-    cliOutputs,
+    liveOrderedEntries,
     historyOutputs,
     finalPrompt,
     finalPromptStatus,
     finalPromptLoopCount,
     finalPromptPhase,
-    finalPromptOutputs,
   } = useWorkflowStore();
   const {
     promptsCollapsed,
@@ -298,15 +297,16 @@ export const PromptsPanel: React.FC<{
       if (prompt) {
         selectPrompt({ kind: "queue", index }, prompt);
         // Scroll to this step's output if it exists.
-        // In history mode, check historyOutputs; otherwise check live cliOutputs.
+        // In history mode, check historyOutputs; otherwise check live liveOrderedEntries.
         let hasOutput: boolean;
         if (isViewingHistory && historyOutputs) {
-          const step = historyOutputs.steps[index];
-          hasOutput =
-            (step?.cliOutputs?.length ?? 0) > 0 ||
-            (step?.statusMessages?.length ?? 0) > 0;
+          hasOutput = historyOutputs.orderedEntries.some(
+            (e) => "target" in e && e.target.kind === "queue" && (e.target as any).stepIndex === index
+          );
         } else {
-          hasOutput = (cliOutputs[index]?.length ?? 0) > 0;
+          hasOutput = liveOrderedEntries.some(
+            (e) => e.kind === "cli" && "target" in e && (e as any).target.kind === "queue" && (e as any).target.stepIndex === index
+          );
         }
         if (hasOutput) {
           requestAnimationFrame(() => {
@@ -329,7 +329,7 @@ export const PromptsPanel: React.FC<{
     [
       prompts,
       selectPrompt,
-      cliOutputs,
+      liveOrderedEntries,
       isViewingHistory,
       historyOutputs,
       isCLIManaged,
@@ -393,9 +393,11 @@ export const PromptsPanel: React.FC<{
 
   // Get the latest CLI output for the current final prompt loop
   const finalPromptLatestOutput = (() => {
-    const outputs = finalPromptOutputs[finalPromptLoopCount];
-    if (!outputs || outputs.length === 0) return null;
-    return outputs[outputs.length - 1];
+    const cliEntries = liveOrderedEntries.filter(
+      (e) => e.kind === "cli" && "target" in e && (e as any).target.kind === "finalPrompt" && (e as any).target.loopIndex === finalPromptLoopCount
+    );
+    if (cliEntries.length === 0) return null;
+    return (cliEntries[cliEntries.length - 1] as any).cliOutput;
   })();
 
   // Compute overrides for the final prompt (same logic as regular prompts)
@@ -472,12 +474,15 @@ export const PromptsPanel: React.FC<{
 
   // Get latest output for a step (history-aware)
   const getLatestOutput = (index: number) => {
-    const outputs =
-      isViewingHistory && historyOutputs
-        ? historyOutputs.steps[index]?.cliOutputs
-        : cliOutputs[index];
-    if (!outputs || outputs.length === 0) return null;
-    return outputs[outputs.length - 1];
+    const cliEntries = isViewingHistory && historyOutputs
+      ? historyOutputs.orderedEntries.filter(
+          (e) => e.kind === "cli" && "target" in e && e.target.kind === "queue" && (e.target as any).stepIndex === index
+        )
+      : liveOrderedEntries.filter(
+          (e) => e.kind === "cli" && "target" in e && (e as any).target.kind === "queue" && (e as any).target.stepIndex === index
+        );
+    if (cliEntries.length === 0) return null;
+    return (cliEntries[cliEntries.length - 1] as any).cliOutput as any;
   };
 
   // Build details object for a prompt
@@ -668,11 +673,16 @@ export const PromptsPanel: React.FC<{
                 prompt in both lists simultaneously. */}
             {(() => {
               const doneStepCount =
-                isViewingHistory && historyOutputs
+                  isViewingHistory && historyOutputs
                   ? Math.min(
                       currentStep,
                       prompts.length,
-                      historyOutputs.stepCount
+                      Math.max(0, ...historyOutputs.orderedEntries
+                        .filter((e): e is typeof e & { target: { kind: string; stepIndex: number } } =>
+                          e.kind !== "runtime" && (e as any).target?.kind === "queue"
+                        )
+                        .map((e) => (e as any).target.stepIndex + 1)
+                        .concat([0]))
                     )
                   : currentStep;
               return prompts.slice(0, doneStepCount).map((prompt, sliceIdx) => {
