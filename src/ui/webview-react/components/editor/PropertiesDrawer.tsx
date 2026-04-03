@@ -264,7 +264,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     properties.toolPermissions === undefined
       ? workflowProperties.toolPermissions === null
         ? PERMISSION_MODES.NONE
-        : (workflowProperties.toolPermissions?.mode ?? PERMISSION_MODES.ALLOW_ALL)
+        : (workflowProperties.toolPermissions?.mode ??
+          PERMISSION_MODES.ALLOW_ALL)
       : properties.toolPermissions === null
         ? PERMISSION_MODES.NONE
         : (properties.toolPermissions.mode ?? PERMISSION_MODES.ALLOW_ALL);
@@ -641,9 +642,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 />
                 {/* Session ID — always visible, grayed out when not applicable */}
                 <div
-                  className={
+                  className={`mt-1 ${
                     isSessionIdActive ? "" : "opacity-50 pointer-events-none"
-                  }
+                  }`}
                   title={sessionIdTooltip}
                 >
                   <input

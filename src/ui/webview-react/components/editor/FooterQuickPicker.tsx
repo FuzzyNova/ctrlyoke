@@ -24,6 +24,8 @@ interface FooterQuickPickerProps {
   title: string;
   /** Optional min-width for the popup panel (default: 200px) */
   popupMinWidth?: string;
+  /** Optional max-width for the popup panel */
+  popupMaxWidth?: string;
   /** When true, button and popup are disabled (CLI watch mode) */
   disabled?: boolean;
 }
@@ -50,6 +52,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
   children,
   title,
   popupMinWidth = "200px",
+  popupMaxWidth,
   disabled = false,
 }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -144,6 +147,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
               bottom: popupPos.bottom,
               left: popupPos.left,
               minWidth: popupMinWidth,
+              maxWidth: popupMaxWidth,
               maxHeight: popupPos.maxHeight,
             }}
           >

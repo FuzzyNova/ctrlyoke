@@ -53,7 +53,7 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
   return (
     <FooterQuickPicker
       isNarrow={isNarrow}
-      showLabel={showLabel}
+      showLabel={showLabel && properties.agent !== undefined}
       icon={
         <i
           className={`codicon codicon-agent transition-opacity ${properties.agent !== undefined ? "text-focus-border" : "opacity-40"}`}

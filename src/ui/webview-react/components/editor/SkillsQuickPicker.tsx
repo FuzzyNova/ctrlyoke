@@ -59,7 +59,7 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
   return (
     <FooterQuickPicker
       isNarrow={isNarrow}
-      showLabel={showLabel}
+      showLabel={showLabel && skillsValue !== undefined}
       icon={
         <i
           className={`codicon codicon-tools transition-opacity ${skillsValue !== undefined ? "text-focus-border" : "opacity-40"}`}
@@ -72,6 +72,7 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
       onClose={() => setFooterOpenPicker(null)}
       title="Skills override"
       popupMinWidth="240px"
+      popupMaxWidth="320px"
       disabled={disabled}
     >
       <SkillsSelect

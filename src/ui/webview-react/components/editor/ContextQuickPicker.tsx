@@ -4,7 +4,7 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { SESSION_ID_SENTINELS } from "../../types/messages";
 import { getResumeSessionOptions } from "../../types/dropdownNamespaces";
-import { CustomSelect, PriorContextSelect } from "../shared";
+import { CustomSelect } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
 
 interface ContextQuickPickerProps {
@@ -23,9 +23,7 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
   const { footerOpenPicker, setFooterOpenPicker } = useUiStore();
 
   const isOpen = footerOpenPicker === "context";
-  const isOverride =
-    properties.resumeSession !== undefined ||
-    properties.priorContext !== undefined;
+  const isOverride = properties.resumeSession !== undefined;
 
   // ── valueLabel builder ────────────────────────────────────────────────────
   const effectiveResume =
@@ -41,22 +39,11 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
   const effectiveIsFinal =
     effectiveSessionId === SESSION_ID_SENTINELS.FINAL_PROMPT;
 
-  const effectivePriorContext =
-    properties.priorContext !== undefined
-      ? properties.priorContext
-      : (workflowProperties.priorContext ?? globalSettings.priorContext);
-
-  const hasPriorContext =
-    effectivePriorContext !== undefined && effectivePriorContext !== "none";
-
-  const resumePart = effectiveResume
+  const valueLabel = effectiveResume
     ? effectiveIsFinal
       ? "final"
       : "resume"
-    : "";
-  const ctxPart = hasPriorContext ? "+ctx" : "";
-  const valueLabel =
-    [resumePart, ctxPart].filter(Boolean).join(" ") || "none";
+    : "new";
 
   // ── Resume Session dropdown state ─────────────────────────────────────────
   const resolvedResumeSession =
@@ -109,32 +96,13 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
       ? (resolvedSessionId ?? "")
       : "";
 
-  // ── Prior context default label ───────────────────────────────────────────
-  const resolvedPriorContext =
-    workflowProperties.priorContext ?? globalSettings.priorContext;
-  const defaultPriorContextLabel = (() => {
-    if (Array.isArray(resolvedPriorContext)) {
-      return `Default (Custom: [${resolvedPriorContext.join(", ")}])`;
-    }
-    if (!resolvedPriorContext || resolvedPriorContext === "none") {
-      return "Default (None)";
-    }
-    const labels: Record<string, string> = {
-      previous: "Previous prompt",
-      all: "All prior prompts",
-      finalPromptPrevious: "Previous finalPrompt output",
-      finalPromptAll: "All finalPrompt outputs",
-    };
-    return `Default (${labels[resolvedPriorContext as string] ?? resolvedPriorContext})`;
-  })();
-
   return (
     <FooterQuickPicker
       isNarrow={isNarrow}
       showLabel={showLabel}
       icon={
         <i
-          className={`codicon codicon-history transition-opacity ${isOverride ? "text-focus-border" : "opacity-40"}`}
+          className={`codicon codicon-book transition-opacity ${isOverride ? "text-focus-border" : "opacity-40"}`}
         />
       }
       valueLabel={valueLabel}
@@ -174,23 +142,6 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
               className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border h-7"
             />
           </div>
-        </div>
-
-        {/* Divider */}
-        <hr className="border-panel-border" />
-
-        {/* Prior Context section */}
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[10px] uppercase tracking-wide text-description-fg font-medium">
-            Prior Context
-          </span>
-          <PriorContextSelect
-            value={properties.priorContext}
-            onChange={(v) => setProperty("priorContext", v)}
-            showDefault={true}
-            defaultLabel={defaultPriorContextLabel}
-            dropdownMaxHeight="250px"
-          />
         </div>
       </div>
     </FooterQuickPicker>
