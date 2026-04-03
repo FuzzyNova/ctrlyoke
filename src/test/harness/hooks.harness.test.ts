@@ -33,20 +33,24 @@ const CLI_PATH = path.resolve(__dirname, "../../cli.js");
 /** Timeout (ms) for a single harness run */
 const HARNESS_TIMEOUT_MS = 90_000;
 
-/**
- * All harnesses to test. Comment out any you don't have installed.
- * The test itself skips gracefully on exit code 3 (not installed).
- */
-const HARNESSES = [
+/** Full set of supported harness IDs (for typed config maps below). */
+type HarnessId =
+  | "copilot-cli"
+  | "claude-cli"
+  | "codex-cli"
+  | "opencode-cli"
+  | "qwen-cli"
+  | "gemini-cli";
+
+/** Active harnesses for this test run. Comment out any you don't want to run. */
+const HARNESSES: HarnessId[] = [
   "copilot-cli",
   "claude-cli",
   "codex-cli",
   "opencode-cli",
   "qwen-cli",
   "gemini-cli",
-] as const;
-
-type HarnessId = (typeof HARNESSES)[number];
+];
 
 /**
  * Models to use per harness — prefer free/cheap tiers to minimise cost.

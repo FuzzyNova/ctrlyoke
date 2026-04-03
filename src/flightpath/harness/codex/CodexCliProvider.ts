@@ -236,6 +236,31 @@ export class CodexCliProvider implements ICliProvider {
   }
 
   /**
+   * Set up user-only hooks for headless execution.
+   * No FlightPath notification hooks are included since headless uses process-exit for completion.
+   * Returns ["--enable", "codex_hooks"] so Codex activates its hook system.
+   */
+  async buildHeadlessUserHookArgs(
+    workspaceRoot: string,
+    _promptIndex: number,
+    workingFilePath: string | undefined,
+    userHooks: UserHookConfig[]
+  ): Promise<string[]> {
+    const workflowKey = workingFilePath ?? workspaceRoot;
+    const workflowUserHooks = this.buildUserHooksSection(userHooks);
+    await CodexCliProvider.lockProvider.withLock(async () => {
+      await CodexCliProvider.hooksTracker.registerWorkflow(
+        workflowKey,
+        workspaceRoot,
+        {},
+        workflowUserHooks
+      );
+    });
+    Log.debug(`🔔 Configured user hooks for Codex headless mode`);
+    return ["--enable", "codex_hooks"];
+  }
+
+  /**
    * Build CLI arguments for tool permissions.
    * Called for both interactive and headless modes by CliIntegration.runExecutionSession().
    * Uses Codex-specific permission mapper with sandbox/approval settings.
@@ -303,29 +328,7 @@ export class CodexCliProvider implements ICliProvider {
       hookConfig.config as Record<string, unknown>
     )["hooks"] as Record<string, unknown[]>;
 
-    // Convert user hooks to Codex native format.
-    // Codex uses the matcher-based format: { matcher: "", hooks: [{...}] }
-    const codexEventMap: Record<string, string> = {
-      stop: "Stop",
-      sessionStart: "SessionStart",
-      preToolUse: "PreToolUse",
-      postToolUse: "PostToolUse",
-      userPromptSubmit: "UserPromptSubmit",
-    };
-
-    const workflowUserHooks: Record<string, unknown[]> = {};
-    if (userHooks) {
-      for (const uh of userHooks) {
-        const nativeEvent = codexEventMap[uh.event];
-        if (!nativeEvent) continue;
-        if (!workflowUserHooks[nativeEvent])
-          workflowUserHooks[nativeEvent] = [];
-        workflowUserHooks[nativeEvent].push({
-          matcher: "",
-          hooks: [{ type: "command", command: uh.command }],
-        });
-      }
-    }
+    const workflowUserHooks = this.buildUserHooksSection(userHooks);
 
     // Register hooks via ref-counted tracker under lock
     await CodexCliProvider.lockProvider.withLock(async () => {
@@ -355,6 +358,33 @@ export class CodexCliProvider implements ICliProvider {
         workspaceRoot
       );
     });
+  }
+
+  /**
+   * Convert FlightPath user hooks to the Codex hooks.json section format.
+   * Codex uses matcher-based entries: { matcher: "", hooks: [{type, command}] }
+   */
+  private buildUserHooksSection(
+    userHooks?: UserHookConfig[]
+  ): Record<string, unknown[]> {
+    const codexEventMap: Record<string, string> = {
+      stop: "Stop",
+      sessionStart: "SessionStart",
+      preToolUse: "PreToolUse",
+      postToolUse: "PostToolUse",
+      userPromptSubmit: "UserPromptSubmit",
+    };
+    const section: Record<string, unknown[]> = {};
+    for (const uh of userHooks ?? []) {
+      const nativeEvent = codexEventMap[uh.event];
+      if (!nativeEvent) continue;
+      if (!section[nativeEvent]) section[nativeEvent] = [];
+      section[nativeEvent].push({
+        matcher: "",
+        hooks: [{ type: "command", command: uh.command }],
+      });
+    }
+    return section;
   }
 
   /**
