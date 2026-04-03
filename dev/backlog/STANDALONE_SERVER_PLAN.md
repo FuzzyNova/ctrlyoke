@@ -46,24 +46,26 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 - `src/ui/IDashboardProvider.ts` already exists.
 - `src/ui/FlightPathWebviewProvider.ts` already implements `IDashboardProvider`.
 - `src/types/IDashboardSink.ts` already exists for per-step/live-output dashboard updates.
-- `src/flightpath/WorkflowOrchestrator.ts` already stores `IDashboardProvider[]` and exposes `addDashboardProvider()`.
+- `src/ui/DashboardBroadcastHub.ts` now exists and implements both `IDashboardProvider` and `IDashboardSink`.
+- `src/flightpath/WorkflowOrchestrator.ts` now routes registry and CLI-watch updates through the shared broadcast hub and exposes `addDashboardProvider()` / `removeDashboardProvider()`.
+- `src/flightpath/WorkflowInstance.ts` now receives the shared `IDashboardSink` instead of casting the first provider to `FlightPathWebviewProvider`.
+- `src/ui/WebviewMessageRouter.ts` now supports scoped reply callbacks, and `src/ui/FlightPathWebviewProvider.ts` exposes `routeMessage(...)` / `routeExternalMessage(...)` for hosted clients.
+- `RUNNER_IDS.SERVER` and `MESSAGE_TYPES.ENABLE_SERVER` / `DISABLE_SERVER` now exist.
 - The React app already depends only on the `window.vscodeApi` contract (`postMessage`, `getState`, `setState`), so the browser shim approach is still valid.
 
 ### Still missing before implementation
 
-- `WorkflowOrchestrator` still routes many registry and CLI-watch updates through `dashboardProvider` (the first provider) instead of fanning them out to every registered provider.
-- `WorkflowInstance` still receives a single `IDashboardSink` cast from the first provider, so active-workflow step updates, streaming output, and full-state replays would only reach the VS Code sidebar unless we add a broadcast-capable sink.
 - `WorkflowOrchestrator.buildWorkflowInstance()` still hard-codes `new VsCodeAdapter(this.context)`, which blocks standalone reuse of the current constructor path.
 - `PromptFileWatcher` and `CliWatchSession` still create VS Code file watchers directly.
 - `WebviewSettingsSync` still uses `vscode.workspace.workspaceFolders` directly for agent/skill/workspace discovery.
-- There is no hosted/standalone server code yet, no `flightpath.enableServer` command, no `flightpath.serverPort` setting, no `MESSAGE_TYPES.ENABLE_SERVER`, and no `_internalRouteMessage` command.
-- `RUNNER_IDS.SERVER` does not exist yet.
+- There is no hosted/standalone server code yet, no `flightpath.enableServer` command, no `flightpath.serverPort` setting, and no `_internalRouteMessage` command.
 - `express`, `ws`, `fast-glob`, and `ignore` are not installed. (`chokidar` is already present.)
 - Hosted-server request/response messages such as completions, file-ref validation, and attachment token counts must reply to the requesting WebSocket client only; they cannot be blindly broadcast to every connected tab.
+- The hosted-server UI control still needs to be added to the React shell, along with running URL/status display.
 
 ### Readiness verdict
 
-- **VS Code-hosted server:** ready to start after a shared-foundation cleanup, especially the broadcast sink/provider work and a callable hosted-server routing surface.
+- **VS Code-hosted server:** **ready to implement now.** The shared broadcast sink/provider cleanup and callable hosted-router surface are in place, so Phase 2 can start with `FlightPathHostedServer`, command/setting wiring, and the webview control.
 - **Standalone server:** not ready until that same cleanup is complete and the watcher / `PlatformAdapter` seams are threaded through the orchestration layer.
 
 ---
@@ -170,27 +172,28 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 
 ## Implementation Plan
 
-### Phase 1 — Finish Shared Dashboard Fanout (already partially implemented)
+### Phase 1 — Finish Shared Dashboard Fanout (completed for hosted-server work)
 
-**Status today**
+**Completed**
 
 - `src/ui/IDashboardProvider.ts` already exists.
 - `FlightPathWebviewProvider` already `implements IDashboardProvider`.
-- `WorkflowOrchestrator` already stores `IDashboardProvider[]` and exposes `addDashboardProvider()`.
+- `DashboardBroadcastHub` now single-sources fanout across `IDashboardProvider` + `IDashboardSink`.
+- `WorkflowOrchestrator` now publishes registry/CLI-watch updates through the hub and passes the hub into `WorkflowInstance` as the dashboard sink.
 - `src/types/IDashboardSink.ts` already exists for the finer-grained `WorkflowInstance` update surface.
+- `WebviewMessageRouter` now supports scoped reply callbacks so targeted bootstrap/request-response traffic can stay client-local.
+- `FlightPathWebviewProvider.routeExternalMessage(...)` now exposes the hosted-server routing seam directly.
+- `RUNNER_IDS.SERVER` and hosted-server message types now exist.
 
-**Remaining work**
+**Still deferred**
 
-1. Add a broadcast-capable hub (for example `src/ui/DashboardBroadcastHub.ts`) that implements both `IDashboardProvider` and `IDashboardSink`.
-2. Route **all ongoing orchestrator notifications** through that hub instead of `dashboardProvider` (the first provider). Registry events and CLI-watch updates must fan out to every registered provider.
-3. Change `WorkflowOrchestrator.buildWorkflowInstance()` to pass the broadcast hub as the `IDashboardSink` instead of casting the first provider. This is required so active-workflow step updates, streaming output, run history, and full-state replays reach hosted browser tabs as well as the VS Code sidebar.
-4. Keep targeted bootstrap / request-response traffic separate from global broadcast. `sendInitialState()`, completions, file-ref validation, and attachment token-count replies should go only to the requesting webview or socket.
-5. Start threading `PlatformAdapter`-based watcher creation through `PromptFileWatcher` and `CliWatchSession` now, since standalone mode depends on the same construction path.
+1. Thread `PlatformAdapter`-based watcher creation through `PromptFileWatcher` and `CliWatchSession`.
+2. Stop hard-coding `VsCodeAdapter` creation in the reusable orchestration path.
+3. Move workspace/agent/skill discovery out of direct `vscode.workspace` usage where standalone mode needs it.
 
 **Implementation notes**
 
-- `PromptFileWatcher` already depends on `IDashboardProvider`, and `updateFileSelected()` is already part of the interface.
-- `WorkflowOrchestrator` can keep `vscode.ExtensionContext` for the hosted-server milestone, but it should stop hard-coding `VsCodeAdapter` creation in the same step if standalone reuse is next.
+- The remaining deferred items are primarily **standalone-server prep**, not blockers for the VS Code-hosted server.
 - Do not duplicate provider/sink methods across multiple classes if the broadcast hub can single-source that fanout.
 
 ---
@@ -218,6 +221,13 @@ Starts an HTTP + WebSocket server inside the running VS Code extension process. 
 - Add `MESSAGE_TYPES.ENABLE_SERVER` (and a stop counterpart if needed) for the dashboard button.
 - Add `flightpath.serverPort` setting in `package.json`.
 - Surface the running URL in the dashboard/status UI.
+
+**Dashboard UI placement**
+
+- Put the hosted-server control in `src/ui/webview-react/components/layout/SettingsDrawer.tsx`, in the always-visible footer next to the existing global toggles.
+- Do **not** put it in `src/ui/webview-react/components/layout/Header.tsx`. The header cluster is workflow-local (save, undo/redo, run/pause/stop), while server start/stop is workspace/global transport state.
+- Keep the server control outside any CLI-managed read-only disable wrapper. Viewing a CLI-managed workflow should not prevent starting or stopping the hosted server.
+- When the server is running, the same footer cluster should also surface the active URL (or copy/open-browser affordances) so the control and its status stay together.
 
 **Theme**
 
@@ -837,15 +847,15 @@ Handled entirely by the Phase 3 shim. No changes to any store.
 
 ### Track 1 — Shared Foundation (required for both modes)
 
-1. **Dashboard broadcast hub** (Phase 1) — finish `IDashboardProvider` / `IDashboardSink` fanout; remove first-provider-only assumptions in `WorkflowOrchestrator` and `WorkflowInstance`
-2. **Adapter / watcher seam** (Phase 1) — add `PlatformAdapter.createFileWatcher()`, thread adapter-driven watcher creation into `PromptFileWatcher` and `CliWatchSession`, and stop hard-coding `VsCodeAdapter` in the reusable orchestration path
-3. **Build/runtime plumbing** — add `RUNNER_IDS.SERVER`, hosted-server message types/settings, and runtime deps (`express`, `ws`; `fast-glob` / `ignore` when standalone completions begin)
+1. **Dashboard broadcast hub** (Phase 1) — done; `IDashboardProvider` / `IDashboardSink` fanout and hosted-router reply scoping are now in place
+2. **Adapter / watcher seam** (Phase 1 follow-up) — add `PlatformAdapter.createFileWatcher()`, thread adapter-driven watcher creation into `PromptFileWatcher` and `CliWatchSession`, and stop hard-coding `VsCodeAdapter` in the reusable orchestration path
+3. **Build/runtime plumbing** — partial; `RUNNER_IDS.SERVER` and hosted-server message types exist, but `express` / `ws` and standalone completion deps still need to be added when implementation starts
 
 ### Track 2 — VS Code-Hosted Server (delivers browser access without leaving VS Code)
 
 4. **`FlightPathHostedServer`** (Phase 2) — HTTP + WS inside the extension; registers with the shared dashboard hub; sends targeted initial state on connect
 5. **Hosted router bridge** (Phase 2) — expose reusable `WebviewMessageRouter` logic with per-connection replies; avoid blind broadcast of request/response messages
-6. **Extension/UI wiring** (Phase 2) — `flightpath.enableServer` / `flightpath.disableServer`, dashboard button, `flightpath.serverPort`, URL/status display, deactivation cleanup
+6. **Extension/UI wiring** (Phase 2) — `flightpath.enableServer` / `flightpath.disableServer`, `flightpath.serverPort`, deactivation cleanup, and a SettingsDrawer-footer server toggle with URL/status display
 7. **Shim + theme assets** (Phases 3–4) — `standalone-shim.js`, browser smoke test, and shared fallback theme CSS used by hosted tabs
 
 ### Track 3 — Standalone Server (headless / CI / no VS Code)

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
@@ -44,14 +44,49 @@ export const EditorSection: React.FC = () => {
   const totalPrompts = prompts.length;
   const [sectionRef] = useElementNarrow<HTMLElement>();
 
-  // Generate mode indicator text
+  // Inline name editing state
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameEditValue, setNameEditValue] = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus input when editing starts
+  useEffect(() => {
+    if (isEditingName && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [isEditingName]);
+
+  const startNameEditing = useCallback(() => {
+    if (isCLIManaged) return;
+    setNameEditValue(promptName);
+    setIsEditingName(true);
+  }, [isCLIManaged, promptName]);
+
+  const saveNameEdit = useCallback(() => {
+    setPromptName(nameEditValue.trim());
+    setIsEditingName(false);
+  }, [nameEditValue, setPromptName]);
+
+  const cancelNameEdit = useCallback(() => {
+    setIsEditingName(false);
+  }, []);
+
+  const handleNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") saveNameEdit();
+    else if (e.key === "Escape") cancelNameEdit();
+  };
+
+  // Generate mode indicator text (includes name when set)
   const getModeText = () => {
     if (isEditMode) {
+      if (promptName) return `Editing: ${promptName}`;
       if (selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
         return "Editing: Final Prompt";
       }
       return `Editing: Prompt ${selectionTarget.index + 1} of ${totalPrompts}`;
     }
+    if (promptName) return `New: ${promptName}`;
     return "New Prompt";
   };
 
@@ -95,37 +130,51 @@ export const EditorSection: React.FC = () => {
           </span>
         </div>
 
-        {/* Center: Mode text + token count */}
+        {/* Center: Mode text (clickable to edit name) + token count */}
         <span className="editor-mode-indicator flex-1 text-center text-xs text-description-fg truncate">
-          {isCLIManaged ? "Read-only — CLI run in progress" : getModeText()}
-          {" — "}
-          <span
-            className={`font-bold tabular-nums ${
-              tokenCount >= 100_000
-                ? "text-error-fg"
-                : tokenCount >= 50_000
-                  ? "text-warning-fg"
-                  : ""
-            }`}
-          >
-            {tokenCount >= 1_000
-              ? `${(tokenCount / 1_000).toFixed(1)}K`
-              : tokenCount.toString()}{" "}
-            tokens
-          </span>
+          {isCLIManaged ? (
+            "Read-only — CLI run in progress"
+          ) : isEditingName ? (
+            <input
+              ref={nameInputRef}
+              type="text"
+              value={nameEditValue}
+              onChange={(e) => setNameEditValue(e.target.value)}
+              onKeyDown={handleNameKeyDown}
+              onBlur={saveNameEdit}
+              placeholder="Prompt name (optional)"
+              className="px-1.5 py-0.5 text-xs bg-input-bg text-input-fg border border-focus-border rounded outline-none w-48"
+              style={{ boxShadow: "0 0 0 1px var(--vscode-focusBorder)" }}
+            />
+          ) : (
+            <span
+              className="cursor-pointer hover:text-foreground transition-colors"
+              onClick={startNameEditing}
+              title="Click to set prompt name"
+            >
+              {getModeText()}
+            </span>
+          )}
+          {!isEditingName && (
+            <>
+              {" — "}
+              <span
+                className={`font-bold tabular-nums ${
+                  tokenCount >= 100_000
+                    ? "text-error-fg"
+                    : tokenCount >= 50_000
+                      ? "text-warning-fg"
+                      : ""
+                }`}
+              >
+                {tokenCount >= 1_000
+                  ? `${(tokenCount / 1_000).toFixed(1)}K`
+                  : tokenCount.toString()}{" "}
+                tokens
+              </span>
+            </>
+          )}
         </span>
-
-        {/* Right: Prompt name input (shown in both new and edit modes; disabled in CLI watch mode) */}
-        <input
-          type="text"
-          className={`prompt-name-input max-w-xs px-2 py-0.5 text-sm bg-input-bg text-input-fg border-0 rounded focus:outline-none flex-shrink-0 ${
-            isCLIManaged ? "opacity-50 cursor-not-allowed" : ""
-          }`}
-          placeholder="Prompt name (optional)"
-          value={promptName}
-          onChange={(e) => setPromptName(e.target.value)}
-          disabled={isCLIManaged}
-        />
       </div>
 
       {/* Content area */}
