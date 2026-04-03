@@ -2,14 +2,17 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
+import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { PromptEditor } from "../editor/PromptEditor";
-import { PanelBar } from "../shared";
+import { PanelBar, IconToggleButton } from "../shared";
 import {
   FINAL_PROMPT_PHASES,
   RUNNER_IDS,
   EDITOR_TARGET_KINDS,
+  MESSAGE_TYPES,
 } from "../../types/messages";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 
@@ -34,6 +37,8 @@ export const EditorSection: React.FC = () => {
     activeWorkflowId,
   } = useUiStore();
   const { prompts } = useWorkflowStore();
+  const { globalSettings } = useSettingsStore();
+  const vscode = useVsCodeApi();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
@@ -71,6 +76,17 @@ export const EditorSection: React.FC = () => {
   const cancelNameEdit = useCallback(() => {
     setIsEditingName(false);
   }, []);
+
+  const handleRespectGitignoreChange = useCallback(
+    (checked: boolean) => {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_CONFIG,
+        key: "flightpath.respectGitignoreForCompletions",
+        value: checked,
+      });
+    },
+    [vscode]
+  );
 
   const handleNameKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") saveNameEdit();
@@ -131,7 +147,7 @@ export const EditorSection: React.FC = () => {
         </div>
 
         {/* Center: Mode text (clickable to edit name) + token count */}
-        <span className="editor-mode-indicator flex-1 text-center text-xs text-description-fg truncate">
+        <span className="editor-mode-indicator flex-1 text-center text-xs text-description-fg truncate min-w-0">
           {isCLIManaged ? (
             "Read-only — CLI run in progress"
           ) : isEditingName ? (
@@ -175,6 +191,18 @@ export const EditorSection: React.FC = () => {
             </>
           )}
         </span>
+
+        {/* Right: Git ignore toggle */}
+        {!isCLIManaged && (
+          <IconToggleButton
+            active={globalSettings.respectGitignore}
+            onToggle={handleRespectGitignoreChange}
+            activeIcon="repo-selected"
+            inactiveIcon="repo"
+            activeTooltip="Respecting .gitignore for completions"
+            inactiveTooltip="All files included for completions (ignoring .gitignore)"
+          />
+        )}
       </div>
 
       {/* Content area */}

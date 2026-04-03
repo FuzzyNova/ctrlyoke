@@ -10,7 +10,6 @@ import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
 import {
   MESSAGE_TYPES,
-  EXECUTION_MODES,
   SESSION_ID_SENTINELS,
   RUNNER_IDS,
   HARNESS_IDS,
@@ -26,7 +25,6 @@ import {
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import {
   PanelBar,
-  IconToggleButton,
   CustomSelect,
   MultiCheckboxDropdown,
   HarnessDropdown,
@@ -450,16 +448,6 @@ export const SettingsPanel: React.FC<{
     [vscode]
   );
 
-  const handleExecutionModeChange = useCallback(
-    (mode: string) => {
-      vscode.postMessage({
-        type: MESSAGE_TYPES.CHANGE_EXECUTION_MODE,
-        executionMode: mode,
-      });
-    },
-    [vscode]
-  );
-
   const handleResumeSessionChange = useCallback(
     (v: string) => {
       if (v === SESSION_ID_SENTINELS.FINAL_PROMPT) {
@@ -689,17 +677,6 @@ export const SettingsPanel: React.FC<{
       });
     },
     [vscode, effectiveHarness]
-  );
-
-  const handleRespectGitignoreChange = useCallback(
-    (checked: boolean) => {
-      vscode.postMessage({
-        type: MESSAGE_TYPES.UPDATE_CONFIG,
-        key: "flightpath.respectGitignoreForCompletions",
-        value: checked,
-      });
-    },
-    [vscode]
   );
 
   const handleOpenSettings = useCallback(() => {
@@ -1472,32 +1449,6 @@ export const SettingsPanel: React.FC<{
       <div
         className={`flex items-center justify-center gap-1 px-2 border-t border-panel-border flex-shrink-0 py-2${isCLIManaged ? " pointer-events-none opacity-60" : ""}`}
       >
-        <IconToggleButton
-          active={globalSettings.executionMode === EXECUTION_MODES.INTERACTIVE}
-          onToggle={(active) =>
-            handleExecutionModeChange(
-              active ? EXECUTION_MODES.INTERACTIVE : EXECUTION_MODES.HEADLESS
-            )
-          }
-          activeIcon="debug-console"
-          inactiveIcon="terminal"
-          activeTooltip="Interactive mode: terminal visible"
-          inactiveTooltip="Headless mode: runs in background"
-          activeLabel="Interactive"
-          inactiveLabel="Headless"
-          narrow={isNarrow}
-        />
-        <IconToggleButton
-          active={globalSettings.respectGitignore}
-          onToggle={handleRespectGitignoreChange}
-          activeIcon="repo-selected"
-          inactiveIcon="repo"
-          activeTooltip="Respecting .gitignore for completions"
-          inactiveTooltip="All files included for completions (ignoring .gitignore)"
-          activeLabel="Excluding ignored files"
-          inactiveLabel="Including all files"
-          narrow={isNarrow}
-        />
         <button
           onClick={handleOpenSettings}
           title="Open VS Code settings"

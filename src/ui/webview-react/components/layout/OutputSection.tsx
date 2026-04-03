@@ -9,8 +9,9 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { useElementNarrow } from "@hooks/useElementNarrow";
 import { CliOutput, StatusMessage } from "../output";
-import { PanelBar, RunSelector } from "../shared";
+import { PanelBar, RunSelector, IconToggleButton } from "../shared";
 import { generateDiffLines } from "@utils/outputUtils";
 import { generateMarkdownExport } from "@utils/markdownExport";
 import {
@@ -31,6 +32,7 @@ import type {
 } from "@root/types/OutputHistoryTypes";
 import {
   MESSAGE_TYPES,
+  EXECUTION_MODES,
   EXECUTION_STATES,
   FINAL_PROMPT_PHASES,
 } from "../../types/messages";
@@ -137,6 +139,23 @@ export const OutputSection: React.FC = () => {
   const terminalFontSize = useUiStore((s) => s.terminalFontSize);
   const setTerminalFontSize = useUiStore((s) => s.setTerminalFontSize);
 
+  // Execution mode toggle
+  const executionMode = useSettingsStore(
+    (s) => s.globalSettings.executionMode
+  );
+  const handleExecutionModeChange = useCallback(
+    (active: boolean) => {
+      const vscode = getVsCodeApi();
+      vscode?.postMessage({
+        type: MESSAGE_TYPES.CHANGE_EXECUTION_MODE,
+        executionMode: active
+          ? EXECUTION_MODES.INTERACTIVE
+          : EXECUTION_MODES.HEADLESS,
+      });
+    },
+    []
+  );
+
   // Terminal tab state
   const workspaceRoot = useSettingsStore((s) => s.globalSettings.workspaceRoot);
   const activeWorkflowId = useUiStore((s) => s.activeWorkflowId);
@@ -152,6 +171,8 @@ export const OutputSection: React.FC = () => {
   );
   const showTerminalTab = true;
   const terminalSessionActive = terminalActiveWorkflows.has(terminalWorkflowId);
+
+  const [headerRef, isHeaderNarrow] = useElementNarrow(768);
 
   const outputRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -855,8 +876,8 @@ export const OutputSection: React.FC = () => {
       className="min-h-0 flex-1 bg-editor-bg flex flex-col h-full"
     >
       {/* Section Header */}
-      <div className="flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] px-2 border-b border-panel-border flex-shrink-0 bg-sidebar-bg">
-        {/* Left: clickable collapse area + tab buttons + font size controls */}
+      <div ref={headerRef} className="flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] px-2 border-b border-panel-border flex-shrink-0 bg-sidebar-bg">
+        {/* Left: clickable collapse area + tab buttons + font size controls + execution mode */}
         <div className="flex items-center gap-1">
           {/* Collapse affordance — chevron + icon only (narrower click target) */}
           <div
@@ -972,6 +993,18 @@ export const OutputSection: React.FC = () => {
 
         {/* Right: controls */}
         <div className="ml-auto flex items-center gap-2">
+          {/* Execution mode toggle — always visible regardless of active tab */}
+          <IconToggleButton
+            active={executionMode === EXECUTION_MODES.INTERACTIVE}
+            onToggle={handleExecutionModeChange}
+            activeIcon="debug-console"
+            inactiveIcon="terminal"
+            activeTooltip="Interactive mode: terminal visible"
+            inactiveTooltip="Headless mode: runs in background"
+            activeLabel="Interactive"
+            inactiveLabel="Headless"
+            narrow={isHeaderNarrow}
+          />
           {activeOutputTab === "terminal" && (
             <button
               className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-description-fg hover:text-foreground transition-colors"
