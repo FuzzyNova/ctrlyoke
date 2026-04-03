@@ -48,6 +48,7 @@ import {
  */
 export class WebviewMessageRouter {
   private routeQueue: Promise<void> = Promise.resolve();
+  private scopedPostMessage?: PostMessageFn;
 
   private readonly handlers: Map<
     string,
@@ -55,7 +56,7 @@ export class WebviewMessageRouter {
   >;
 
   constructor(
-    private readonly postMessage: PostMessageFn,
+    private readonly defaultPostMessage: PostMessageFn,
     private readonly settingsSync: WebviewSettingsSync,
     private readonly serializer: WorkflowSerializer,
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
@@ -67,12 +68,35 @@ export class WebviewMessageRouter {
   /**
    * Route a webview message to the appropriate handler.
    */
-  async route(message: any): Promise<void> {
+  async route(message: any, options?: WebviewRouteOptions): Promise<void> {
     this.routeQueue = this.routeQueue.then(() =>
-      this.routeSingleMessage(message)
+      this.withScopedPostMessage(options?.postMessage, () =>
+        this.routeSingleMessage(message)
+      )
     );
 
     await this.routeQueue;
+  }
+
+  private async withScopedPostMessage(
+    postMessage: PostMessageFn | undefined,
+    action: () => Promise<void>
+  ): Promise<void> {
+    const previous = this.scopedPostMessage;
+    this.scopedPostMessage = postMessage;
+    try {
+      await action();
+    } finally {
+      this.scopedPostMessage = previous;
+    }
+  }
+
+  private getCurrentPostMessage(): PostMessageFn {
+    return this.scopedPostMessage ?? this.defaultPostMessage;
+  }
+
+  private emitMessage(message: any): void {
+    this.getCurrentPostMessage()(message);
   }
 
   private async routeSingleMessage(message: any): Promise<void> {
@@ -102,7 +126,7 @@ export class WebviewMessageRouter {
     // ── Lifecycle ──────────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.READY, async () => {
       Log.debug("Received READY from React — sending INIT");
-      this.settingsSync.sendInitialState();
+      this.settingsSync.sendInitialState(this.getCurrentPostMessage());
       const orchestrator = this.getOrchestrator();
       if (orchestrator) {
         await orchestrator.setDashboardReady();
@@ -111,7 +135,7 @@ export class WebviewMessageRouter {
       const ptyManager = getPtyProcessManager();
       if (ptyManager) {
         for (const session of ptyManager.getAllSessions()) {
-          this.postMessage({
+          this.emitMessage({
             type: MESSAGE_TYPES.TERMINAL_STARTED,
             workflowId: session.workflowId,
             sessionId: session.id,
@@ -121,7 +145,7 @@ export class WebviewMessageRouter {
           });
           // Flush reconnect buffer
           for (const chunk of session.reconnectBuffer) {
-            this.postMessage({
+            this.emitMessage({
               type: MESSAGE_TYPES.TERMINAL_OUTPUT,
               workflowId: session.workflowId,
               sessionId: session.id,
@@ -192,7 +216,7 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.SELECT_PROMPT_FOR_EDIT, (message) => {
-      this.postMessage({
+      this.emitMessage({
         type: MESSAGE_TYPES.SELECT_PROMPT_FOR_EDIT,
         index: message.index,
       });
@@ -267,7 +291,7 @@ export class WebviewMessageRouter {
           ? workspaceFolders[0].uri.fsPath
           : "";
       const result = await safeDiscoverLocalMcpServers(workspaceRoot);
-      this.postMessage({
+      this.emitMessage({
         type: MESSAGE_TYPES.MCP_LOCAL_SERVERS_RESULT,
         servers: result.servers,
         ...(result.error ? { error: result.error } : {}),
@@ -280,7 +304,7 @@ export class WebviewMessageRouter {
         search: message.query || undefined,
         updatedSince: message.updatedSince,
       });
-      this.postMessage({
+      this.emitMessage({
         type: MESSAGE_TYPES.MCP_REGISTRY_RESULT,
         servers: result.servers,
         query: message.query,
@@ -291,7 +315,7 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.REQUEST_MCP_WORKSPACE_SERVERS, async () => {
       const servers = await this.loadMcpWorkspaceServers();
-      this.postMessage({
+      this.emitMessage({
         type: MESSAGE_TYPES.MCP_WORKSPACE_SERVERS_RESULT,
         servers,
       });
@@ -399,12 +423,16 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY, (message) => {
       this.settingsSync.handleUpdateWorkflowProperty(
         message.property,
-        message.value
+        message.value,
+        this.getCurrentPostMessage()
       );
     });
 
     table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTIES, (message) => {
-      this.settingsSync.handleUpdateWorkflowProperties(message.properties);
+      this.settingsSync.handleUpdateWorkflowProperties(
+        message.properties,
+        this.getCurrentPostMessage()
+      );
     });
 
     table.set(MESSAGE_TYPES.SET_AS_DEFAULT, (message) => {
@@ -416,7 +444,10 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.GET_CONFIG, (message) => {
-      this.settingsSync.handleGetConfig(message.key);
+      this.settingsSync.handleGetConfig(
+        message.key,
+        this.getCurrentPostMessage()
+      );
     });
 
     table.set(MESSAGE_TYPES.UPDATE_CONFIG, (message) => {
@@ -446,7 +477,7 @@ export class WebviewMessageRouter {
       Log.trace(
         `[GET_WORKFLOWS_LIST] returning ${summaries.length} summaries: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState})`).join(", ") || "(none)"}`
       );
-      this.postMessage({
+      this.emitMessage({
         type: MESSAGE_TYPES.WORKFLOWS_LIST,
         workflows: summaries,
       });
@@ -564,7 +595,7 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.TERMINAL_SPAWN_SHELL, async (msg) => {
       const ptyManager = getPtyProcessManager();
-      const postMsg = this.postMessage;
+      const postMsg = this.getCurrentPostMessage();
       if (!ptyManager || !msg.workflowId) return;
       const workflowId = msg.workflowId as string;
       const cwd = (msg.cwd as string | undefined) ?? process.cwd();
@@ -600,7 +631,7 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.TERMINAL_RESTART_SHELL, async (msg) => {
       const ptyManager = getPtyProcessManager();
-      const postMsg = this.postMessage;
+      const postMsg = this.getCurrentPostMessage();
       if (!ptyManager || !msg.sessionId || !msg.workflowId) return;
       const workflowId = msg.workflowId as string;
       const newSession = ptyManager.restartShellSession(
@@ -790,7 +821,7 @@ export class WebviewMessageRouter {
         `[Dashboard] Completion: trigger="${trigger}", prefix="${prefix}", position=${position} → ${items.length} items`
       );
 
-      this.postMessage({
+      this.emitMessage({
         type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
         items: items.map((item) => ({
           label: item.label,
@@ -805,7 +836,7 @@ export class WebviewMessageRouter {
       });
     } catch (error) {
       Log.error("Failed to get completions:", error);
-      this.postMessage({
+      this.emitMessage({
         type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
         items: [],
         from: position,
@@ -876,7 +907,7 @@ export class WebviewMessageRouter {
       exists = false;
     }
 
-    this.postMessage({
+    this.emitMessage({
       type: MESSAGE_TYPES.FILE_REF_VALIDATION,
       exists,
       filePath,
@@ -948,7 +979,7 @@ export class WebviewMessageRouter {
   ): Promise<void> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!workspaceRoot || !references || references.length === 0) {
-      this.postMessage({
+      this.emitMessage({
         type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
         counts: {},
       });
@@ -980,7 +1011,7 @@ export class WebviewMessageRouter {
       })
     );
 
-    this.postMessage({
+    this.emitMessage({
       type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
       counts,
     });
@@ -998,7 +1029,7 @@ export class WebviewMessageRouter {
       const snapshotService = new WorkspaceSnapshotService();
       const result = await snapshotService.undoFiles(files, workspacePath);
 
-      this.postMessage({
+      this.emitMessage({
         type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
         data: {
           requestId,
@@ -1026,7 +1057,7 @@ export class WebviewMessageRouter {
             );
           }
         }
-        this.postMessage({
+        this.emitMessage({
           type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
           target,
           undoRecord,
@@ -1048,7 +1079,7 @@ export class WebviewMessageRouter {
       }
     } catch (error) {
       const errMsg = getErrorMessage(error);
-      this.postMessage({
+      this.emitMessage({
         type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
         data: {
           requestId,
@@ -1072,7 +1103,7 @@ export class WebviewMessageRouter {
       const snapshotService = new WorkspaceSnapshotService();
       const result = await snapshotService.undoFiles(files, workspacePath);
 
-      this.postMessage({
+      this.emitMessage({
         type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
         data: {
           requestId,
@@ -1104,7 +1135,7 @@ export class WebviewMessageRouter {
             | { undoRecord?: import("../types/OutputHistoryTypes").UndoRecord }
             | undefined;
           if (stepOutput?.undoRecord) {
-            this.postMessage({
+            this.emitMessage({
               type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
               target,
               undoRecord: stepOutput.undoRecord,
@@ -1124,7 +1155,7 @@ export class WebviewMessageRouter {
       }
     } catch (error) {
       const errMsg = getErrorMessage(error);
-      this.postMessage({
+      this.emitMessage({
         type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
         data: {
           requestId,
@@ -1174,7 +1205,7 @@ export class WebviewMessageRouter {
                 entry.target,
                 undoRecord
               );
-              this.postMessage({
+              this.emitMessage({
                 type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
                 target: entry.target,
                 undoRecord,
@@ -1194,7 +1225,7 @@ export class WebviewMessageRouter {
       kind: FINAL_PROMPT_PHASES.QUEUE,
       stepIndex: 0,
     };
-    this.postMessage({
+    this.emitMessage({
       type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
       data: {
         requestId,
@@ -1256,7 +1287,7 @@ export class WebviewMessageRouter {
                 : history.finalPromptOutputs?.[entry.target.loopIndex]
             ) as { undoRecord?: UndoRecord } | undefined;
             if (stepOutput?.undoRecord) {
-              this.postMessage({
+              this.emitMessage({
                 type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
                 target: entry.target,
                 undoRecord: stepOutput.undoRecord,
@@ -1276,7 +1307,7 @@ export class WebviewMessageRouter {
       kind: FINAL_PROMPT_PHASES.QUEUE,
       stepIndex: 0,
     };
-    this.postMessage({
+    this.emitMessage({
       type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
       data: {
         requestId,
@@ -1392,4 +1423,8 @@ export class WebviewMessageRouter {
 export interface WebviewRouterCallbacks {
   handleClearWorkflow: () => Promise<void>;
   updateWorkflowName: (name: string) => void;
+}
+
+export interface WebviewRouteOptions {
+  postMessage?: PostMessageFn;
 }

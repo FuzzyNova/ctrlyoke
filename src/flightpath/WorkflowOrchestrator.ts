@@ -27,8 +27,8 @@ import {
   type ActionType,
   type StepStatus,
 } from "../types/DashboardConstants";
-import type { IDashboardProvider } from "../ui/IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
+import type { CliOutput } from "../types/WebviewMessageTypes";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -47,6 +47,10 @@ import { WorkflowCommandHandler } from "./orchestration/WorkflowCommandHandler";
 import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager";
 import { PromptFileParser } from "./PromptFileParser";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
+import {
+  DashboardBroadcastHub,
+  type DashboardClient,
+} from "../ui/DashboardBroadcastHub";
 
 /**
  * WorkflowOrchestrator
@@ -88,12 +92,7 @@ export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
   // Cross-cutting concerns
   // ─────────────────────────────────────────────────────────────────────────
-  private readonly dashboardProviders: IDashboardProvider[] = [];
-
-  /** Convenience accessor — the first registered provider (undefined when none). */
-  private get dashboardProvider(): IDashboardProvider | undefined {
-    return this.dashboardProviders[0];
-  }
+  private readonly dashboardBroadcastHub = new DashboardBroadcastHub();
   private readonly integrationFactory: VsCodeIntegrationFactory;
   private readonly statusBarManager: StatusBarManager;
   private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
@@ -125,10 +124,10 @@ export class WorkflowOrchestrator {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    dashboardProvider?: IDashboardProvider
+    dashboardProvider?: DashboardClient
   ) {
     if (dashboardProvider) {
-      this.dashboardProviders.push(dashboardProvider);
+      this.dashboardBroadcastHub.addClient(dashboardProvider);
     }
     this.integrationFactory = new VsCodeIntegrationFactory(
       new VsCodeAdapter(context)
@@ -190,7 +189,7 @@ export class WorkflowOrchestrator {
             status === HarnessStatus.Ready ||
             status === HarnessStatus.Unavailable
           ) {
-            this.dashboardProvider?.notifyHarnessAvailability(
+            this.dashboardBroadcastHub.notifyHarnessAvailability(
               harnessId,
               status === HarnessStatus.Ready
             );
@@ -208,14 +207,15 @@ export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
-   * Register an additional IDashboardProvider to receive all orchestrator events.
-   * The first registered provider (set via the constructor) is also used as the
-   * IDashboardSink for WorkflowInstance (granular per-step updates).
-   * Subsequent providers (e.g. FlightPathHostedServer) receive the same events
-   * via the broadcast loop.
+   * Register an additional dashboard client to receive orchestrator and
+   * workflow-instance updates.
    */
-  public addDashboardProvider(provider: IDashboardProvider): void {
-    this.dashboardProviders.push(provider);
+  public addDashboardProvider(provider: DashboardClient): void {
+    this.dashboardBroadcastHub.addClient(provider);
+  }
+
+  public removeDashboardProvider(provider: DashboardClient): void {
+    this.dashboardBroadcastHub.removeClient(provider);
   }
 
   /** Set the MCP server provider for injecting user-defined MCP servers (chat harness) */
@@ -291,7 +291,7 @@ export class WorkflowOrchestrator {
     // Send full state sync so the dashboard reflects the new (or file-loaded) state
     instance.sendFullStateToDashboard();
     // Notify the dashboard that the active workflow changed (new instance is now viewed)
-    this.dashboardProvider?.notifyActiveWorkflowChanged(instance.id);
+    this.dashboardBroadcastHub.notifyActiveWorkflowChanged(instance.id);
 
     return instance;
   }
@@ -325,7 +325,7 @@ export class WorkflowOrchestrator {
     }
 
     // Remove from the Running Workflows section in the dashboard.
-    this.dashboardProvider?.notifyWorkflowDismissed(workflowId);
+    this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowId);
 
     void this.saveState();
   }
@@ -359,9 +359,9 @@ export class WorkflowOrchestrator {
       Log.debug(
         `setActiveWorkflow: switching to CLI-managed session workflowId="${workflowId}"`
       );
-      this.dashboardProvider?.notifyActiveWorkflowChanged(workflowId);
+      this.dashboardBroadcastHub.notifyActiveWorkflowChanged(workflowId);
       // Send the CLI session's summary so the dashboard shows read-only state
-      this.dashboardProvider?.notifyWorkflowSummaryUpdated(cliEntry.summary);
+      this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(cliEntry.summary);
       // Send full workflow state (prompts + outputs) so the dashboard panels update
       this.sendCliWorkflowFullStateToDashboard(workflowId, cliEntry).catch(
         (err) =>
@@ -401,7 +401,7 @@ export class WorkflowOrchestrator {
     // setActive(true) calls flushBufferedEvents → sendFullStateToDashboard internally
     instance.setActive(true);
     // Notify the dashboard that the active workflow selection changed.
-    this.dashboardProvider?.notifyActiveWorkflowChanged(workflowId);
+    this.dashboardBroadcastHub.notifyActiveWorkflowChanged(workflowId);
     Log.debug(
       `setActiveWorkflow: switch complete — inst:${workflowId.slice(0, 8)} is now active`
     );
@@ -561,7 +561,9 @@ export class WorkflowOrchestrator {
     // because postMessage no-ops when the view is not yet visible).
     if (this.viewedInstance) {
       this.viewedInstance.sendFullStateToDashboard();
-      this.dashboardProvider?.notifyActiveWorkflowChanged(this.viewedInstance.id);
+      this.dashboardBroadcastHub.notifyActiveWorkflowChanged(
+        this.viewedInstance.id
+      );
     }
 
     if (this.orchestratorInitialized) {
@@ -616,7 +618,7 @@ export class WorkflowOrchestrator {
           // (e.g. append-to-completed runs) are stored under the real UUID but
           // TerminalView looks up sessions under null/"_shell" — no match.
           const instance = this.getActiveInstance();
-          this.dashboardProvider?.notifyActiveWorkflowChanged(instance.id);
+          this.dashboardBroadcastHub.notifyActiveWorkflowChanged(instance.id);
         }
       );
     }
@@ -815,21 +817,13 @@ export class WorkflowOrchestrator {
   }
 
   async clearWorkflow(): Promise<void> {
-    const active = this.getActiveInstance();
-    const state = active.getQueueState().status;
-    if (
-      state === EXECUTION_STATES.RUNNING ||
-      state === EXECUTION_STATES.PAUSED
-    ) {
-      // Running/paused workflow stays alive in the background;
-      // create a fresh empty instance as the new active view.
-      Log.debug(
-        `clearWorkflow: active inst:${active.id.slice(0, 8)} is ${state} — creating new empty instance`
-      );
-      await this.createWorkflow();
-    } else {
-      active.clearWorkflow();
-    }
+    // Always create a fresh empty instance. This fires ACTIVE_WORKFLOW_CHANGED
+    // with a new workflowId so the webview resets all per-workflow state
+    // (including terminal sessions) to a clean default — regardless of whether
+    // the current workflow is running, paused, completed, or idle.
+    // Running/paused workflows stay alive in the background (createWorkflow only
+    // deactivates them visually); completed/idle instances are disposed.
+    await this.createWorkflow();
   }
 
   getQueueState(): QueueState {
@@ -863,8 +857,8 @@ export class WorkflowOrchestrator {
       Log.debug(
         `loadWorkingFile: "${workflowId}" is CLI-managed (session exists) — switching view`
       );
-      this.dashboardProvider?.notifyActiveWorkflowChanged(workflowId);
-      this.dashboardProvider?.notifyWorkflowSummaryUpdated(
+      this.dashboardBroadcastHub.notifyActiveWorkflowChanged(workflowId);
+      this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(
         existingCliEntry.summary
       );
       return;
@@ -1070,13 +1064,11 @@ export class WorkflowOrchestrator {
       instance.setCurrentPromptFile(result.filePath, { prompts: [] });
       instance.initializeFileWatcher(result.filePath);
 
-      if (this.dashboardProvider) {
-        this.dashboardProvider.updateFileSelected(
-          result.fileName,
-          [],
-          undefined
-        );
-      }
+      await this.dashboardBroadcastHub.updateFileSelected(
+        result.fileName,
+        [],
+        undefined
+      );
     }
   }
 
@@ -1163,10 +1155,7 @@ export class WorkflowOrchestrator {
   private buildWorkflowInstance(): WorkflowInstance {
     const instance = new WorkflowInstance(
       new VsCodeAdapter(this.context),
-      // Phase 1: the first registered provider is always FlightPathWebviewProvider,
-      // which satisfies IDashboardSink structurally. Cast is safe until Phase 2
-      // introduces a broadcast proxy IDashboardSink.
-      this.dashboardProvider as unknown as IDashboardSink | undefined,
+      this.dashboardBroadcastHub as IDashboardSink,
       this.integrationFactory,
       (harnessOverride?: Harness) =>
         this.resolveDetectorIntegration(harnessOverride),
@@ -1213,10 +1202,10 @@ export class WorkflowOrchestrator {
           `onDidChangeState: registered inst:${instance.id.slice(0, 8)} in running registry on ${state.status} ` +
             `name="${summary.workflowName || "(empty)"}" (total: ${this.workflows.size})`
         );
-        this.dashboardProvider?.notifyWorkflowAdded(summary);
+        this.dashboardBroadcastHub.notifyWorkflowAdded(summary);
       }
 
-      this.dashboardProvider?.notifyWorkflowSummaryUpdated(summary);
+      this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(summary);
 
       // Auto-retire when a workflow completes, errors, or stops.
       // All dashboard messages (notifyWorkflowSummaryUpdated) have already been
@@ -1494,14 +1483,11 @@ export class WorkflowOrchestrator {
           managedBy: "cli",
         };
         entry.summary = updatedSummary;
-        this.dashboardProvider?.notifyWorkflowSummaryUpdated(updatedSummary);
+        this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(updatedSummary);
 
         // If the CLI extended the queue, send the new prompts so the PromptsPanel reflects them
-        if (
-          updatedSummary.totalSteps > prevTotalSteps &&
-          this.dashboardProvider
-        ) {
-          const provider = this.dashboardProvider;
+        if (updatedSummary.totalSteps > prevTotalSteps) {
+          const provider = this.dashboardBroadcastHub;
           fs.promises
             .readFile(workingFilePath, "utf8")
             .then((content) => {
@@ -1533,7 +1519,7 @@ export class WorkflowOrchestrator {
     await session.start();
 
     // Notify the dashboard so the workflow appears in the Running section
-    this.dashboardProvider?.notifyWorkflowAdded(summary);
+    this.dashboardBroadcastHub.notifyWorkflowAdded(summary);
     Log.info(
       `[WorkflowOrchestrator] CLI watch session started for "${workflowId}"`
     );
@@ -1602,7 +1588,7 @@ export class WorkflowOrchestrator {
     }));
 
     const fileName = path.basename(workingFilePath);
-    await this.dashboardProvider?.updateSessionRestored(
+    await this.dashboardBroadcastHub.updateSessionRestored(
       fileName,
       prompts,
       results,
@@ -1654,12 +1640,10 @@ export class WorkflowOrchestrator {
 
         // Send ALL outputs from the beginning (full replay, not diff)
         for (let i = 0; i < outputs.length; i++) {
-          this.dashboardProvider?.notifyCliWatchOutput(
+          this.dashboardBroadcastHub.notifyCliWatchOutput(
             workflowId,
             stepIndex,
-            outputs[i] as Parameters<
-              IDashboardProvider["notifyCliWatchOutput"]
-            >[2]
+            outputs[i] as CliOutput
           );
         }
       }
@@ -1705,12 +1689,10 @@ export class WorkflowOrchestrator {
 
           // Send only new outputs
           for (let i = lastKnown; i < outputs.length; i++) {
-            this.dashboardProvider?.notifyCliWatchOutput(
+            this.dashboardBroadcastHub.notifyCliWatchOutput(
               workflowId,
               stepIndex,
-              outputs[i] as Parameters<
-                IDashboardProvider["notifyCliWatchOutput"]
-              >[2]
+              outputs[i] as CliOutput
             );
           }
         }
@@ -1788,8 +1770,8 @@ export class WorkflowOrchestrator {
         };
 
         // Update the dashboard: send final state then dismiss from Running section
-        this.dashboardProvider?.notifyWorkflowSummaryUpdated(finalSummary);
-        this.dashboardProvider?.notifyWorkflowDismissed(workflowId);
+        this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(finalSummary);
+        this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowId);
 
         void this.saveState();
       })
@@ -1799,7 +1781,7 @@ export class WorkflowOrchestrator {
           err
         );
         // Still dismiss from the dashboard
-        this.dashboardProvider?.notifyWorkflowDismissed(workflowId);
+        this.dashboardBroadcastHub.notifyWorkflowDismissed(workflowId);
       });
   }
 }

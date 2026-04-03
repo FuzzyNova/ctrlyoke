@@ -5,7 +5,7 @@ import { PromptQueue } from "../PromptQueue";
 import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { PromptFile, EXECUTION_STATES } from "../../types/FlightPathTypes";
-import { FlightPathWebviewProvider } from "../../ui/FlightPathWebviewProvider";
+import type { IDashboardSink } from "../../types/IDashboardSink";
 
 /**
  * PromptFileLoader
@@ -22,8 +22,7 @@ export class PromptFileLoader {
   constructor(
     private promptFileParser: PromptFileParser,
     private promptQueue: PromptQueue,
-    private getDashboard: () => FlightPathWebviewProvider | undefined = () =>
-      undefined
+    private getDashboard: () => IDashboardSink | undefined = () => undefined
   ) {}
 
   /**
@@ -219,7 +218,7 @@ export class PromptFileLoader {
           );
 
           // Load output history if available (auto-loads most recent run from disk)
-          await dashboard.loadOutputHistoryForWorkflow(workingFilePath);
+          await dashboard.loadOutputHistoryForWorkflow?.(workingFilePath);
         }
       } else {
         // Scenario 2: Queue extended during execution (MCP/append to same file)

@@ -1,6 +1,14 @@
-import type { CliEvent } from "./WebviewMessageTypes";
+import type {
+  CliEvent,
+  UndoExecutionTarget,
+} from "./WebviewMessageTypes";
 import type { PromptItem } from "./FlightPathTypes";
-import type { FinalPromptPhase, StepStatus } from "./DashboardConstants";
+import type {
+  FinalPromptPhase,
+  StepStatus,
+  StatusMessageSeverity,
+} from "./DashboardConstants";
+import type { WorkspaceSnapshot } from "./OutputHistoryTypes";
 
 /**
  * IDashboardSink
@@ -39,6 +47,8 @@ export interface IDashboardSink {
       phase: FinalPromptPhase;
     }
   ): Promise<void>;
+
+  loadOutputHistoryForWorkflow?(workflowFilePath: string): Promise<void>;
 
   updateExecutionStarted(
     workflowId: string,
@@ -83,6 +93,12 @@ export interface IDashboardSink {
 
   updateCliStreamingEvents(stepIndex: number, events: CliEvent[]): void;
 
+  updateStatusMessage(
+    stepIndex: number,
+    message: string,
+    severity?: StatusMessageSeverity
+  ): void;
+
   updatePromptsExtended(
     prompts: any[],
     finalPrompt?: PromptItem | null,
@@ -119,4 +135,9 @@ export interface IDashboardSink {
   notifyUndoRedoSynced(): void;
 
   updateWorkflowName(name: string): void;
+
+  sendStepUndoDataUpdated(
+    target: UndoExecutionTarget,
+    workspaceSnapshot?: WorkspaceSnapshot
+  ): void;
 }

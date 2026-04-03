@@ -38,6 +38,8 @@ import { WebviewSettingsSync } from "./WebviewSettingsSync";
 import { WorkflowSerializer } from "./WorkflowSerializer";
 import { WebviewMessageRouter } from "./WebviewMessageRouter";
 import type { IDashboardProvider } from "./IDashboardProvider";
+import type { IDashboardSink } from "../types/IDashboardSink";
+import type { PostMessageFn } from "./WebviewSettingsSync";
 
 // Re-export CliOutput for external use
 export type { CliOutput } from "../types/WebviewMessageTypes";
@@ -54,7 +56,7 @@ export type { HarnessStatus } from "./WebviewSettingsSync";
  * Save/export/template/history delegated to WorkflowSerializer.
  */
 export class FlightPathWebviewProvider
-  implements vscode.WebviewViewProvider, IDashboardProvider
+  implements vscode.WebviewViewProvider, IDashboardProvider, IDashboardSink
 {
   private view?: vscode.WebviewView;
   private workflowOrchestrator?: WorkflowOrchestrator;
@@ -152,7 +154,7 @@ export class FlightPathWebviewProvider
 
     // Handle messages from webview
     webviewView.webview.onDidReceiveMessage((message) => {
-      this.router.route(message);
+      void this.routeMessage(message);
     });
 
     Log.debug("resolveWebviewView() complete — view is now set");
@@ -794,6 +796,17 @@ window.vscodeApi = acquireVsCodeApi();
    */
   public setWorkflowOrchestrator(manager: WorkflowOrchestrator): void {
     this.workflowOrchestrator = manager;
+  }
+
+  public async routeMessage(message: any): Promise<void> {
+    await this.router.route(message);
+  }
+
+  public async routeExternalMessage(
+    message: any,
+    postMessage: PostMessageFn
+  ): Promise<void> {
+    await this.router.route(message, { postMessage });
   }
 
   /**

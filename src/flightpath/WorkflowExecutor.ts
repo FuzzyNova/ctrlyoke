@@ -23,7 +23,6 @@ import {
   SendRetryPromptCallback,
 } from "./EndConditionHandler";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
-import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { Log } from "../utils/Log";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
@@ -41,11 +40,12 @@ import {
   WorkspaceSnapshot,
   OutputExecutionTarget,
 } from "../types/OutputHistoryTypes";
+import type { IDashboardSink } from "../types/IDashboardSink";
 
 export interface WorkflowExecutionContext {
   workspaceFolderPath: string | undefined;
   currentPromptFilePath: string | undefined;
-  dashboardProvider?: FlightPathWebviewProvider;
+  dashboardProvider?: IDashboardSink;
   shouldShowCliCommand: boolean;
   showCliOutput: boolean;
   dynamicQueueConfig: DynamicQueueConfig;

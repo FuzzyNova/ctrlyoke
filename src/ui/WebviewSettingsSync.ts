@@ -129,6 +129,13 @@ export class WebviewSettingsSync {
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined
   ) {}
 
+  private emitMessage(
+    message: any,
+    postMessage: PostMessageFn = this.postMessage
+  ): void {
+    postMessage(message);
+  }
+
   // ============================================================================
   // Public API — Discovery
   // ============================================================================
@@ -181,7 +188,7 @@ export class WebviewSettingsSync {
    * Send full initial state to the webview (INIT message).
    * Called on READY and during resolveWebviewView().
    */
-  sendInitialState(): void {
+  sendInitialState(postMessage: PostMessageFn = this.postMessage): void {
     const harnessStatuses = Object.entries(this.harnessStatus)
       .map(([id, s]) => `${id}=${s.status}`)
       .join(", ");
@@ -193,7 +200,7 @@ export class WebviewSettingsSync {
     const globalSettings = this.buildGlobalSettings();
     const modelOptions = this.buildModelOptions();
 
-    this.postMessage({
+    this.emitMessage({
       type: MESSAGE_TYPES.INIT,
       data: {
         ...workflowState,
@@ -204,30 +211,30 @@ export class WebviewSettingsSync {
         availableAgents: this.availableAgents,
         availableSkills: this.availableSkills,
       },
-    });
+    }, postMessage);
   }
 
   /**
    * Send only global settings to the webview without workflow data.
    * Used for configuration changes to avoid resetting the output panel.
    */
-  sendGlobalSettingsUpdate(): void {
-    this.postMessage({
+  sendGlobalSettingsUpdate(postMessage: PostMessageFn = this.postMessage): void {
+    this.emitMessage({
       type: MESSAGE_TYPES.GLOBAL_SETTINGS_UPDATED,
       globalSettings: this.buildGlobalSettings(),
       modelOptions: this.buildModelOptions(),
-    });
+    }, postMessage);
   }
 
   /**
    * Send updated model options to the webview (e.g. when ModelRegistry loads).
    */
-  sendModelOptionsUpdate(): void {
+  sendModelOptionsUpdate(postMessage: PostMessageFn = this.postMessage): void {
     const modelOptions = this.buildModelOptions();
-    this.postMessage({
+    this.emitMessage({
       type: MESSAGE_TYPES.MODEL_OPTIONS_UPDATE,
       data: { modelOptions },
-    });
+    }, postMessage);
     this.writeCapabilities(modelOptions).catch((err) =>
       Log.warn("Failed to write capabilities.json:", err)
     );
@@ -236,11 +243,13 @@ export class WebviewSettingsSync {
   /**
    * Send harness status update to the webview.
    */
-  sendHarnessStatusUpdate(): void {
-    this.postMessage({
+  sendHarnessStatusUpdate(
+    postMessage: PostMessageFn = this.postMessage
+  ): void {
+    this.emitMessage({
       type: MESSAGE_TYPES.HARNESS_STATUS_UPDATE,
       data: { harnessStatus: this.harnessStatus },
-    });
+    }, postMessage);
     this.writeCapabilities(this.buildModelOptions()).catch((err) =>
       Log.warn("Failed to write capabilities.json:", err)
     );
@@ -249,27 +258,29 @@ export class WebviewSettingsSync {
   /**
    * Send agents update to the webview.
    */
-  sendAgentsUpdate(): void {
-    this.postMessage({
+  sendAgentsUpdate(postMessage: PostMessageFn = this.postMessage): void {
+    this.emitMessage({
       type: MESSAGE_TYPES.AGENTS_UPDATE,
       data: { availableAgents: this.availableAgents },
-    });
+    }, postMessage);
   }
 
   /**
    * Send skills update to the webview.
    */
-  sendSkillsUpdate(): void {
-    this.postMessage({
+  sendSkillsUpdate(postMessage: PostMessageFn = this.postMessage): void {
+    this.emitMessage({
       type: MESSAGE_TYPES.SKILLS_UPDATE,
       data: { availableSkills: this.availableSkills },
-    });
+    }, postMessage);
   }
 
   /**
    * Read workflow properties from the working file and send to the settings panel.
    */
-  async sendWorkflowPropertiesToSettings(): Promise<void> {
+  async sendWorkflowPropertiesToSettings(
+    postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
       return;
@@ -298,14 +309,14 @@ export class WebviewSettingsSync {
         toolPermissions: workingFile.toolPermissions,
       };
 
-      this.postMessage({
+      this.emitMessage({
         type: MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE,
         workflowProperties,
-      });
+      }, postMessage);
 
-      this.postMessage({
+      this.emitMessage({
         type: MESSAGE_TYPES.WORKFLOW_LOADED,
-      });
+      }, postMessage);
     } catch (error) {
       Log.error("Failed to send workflow properties to settings:", error);
     }
@@ -314,10 +325,12 @@ export class WebviewSettingsSync {
   /**
    * Send WORKFLOW_UNLOADED to disable settings UI.
    */
-  sendWorkflowUnloadedToSettings(): void {
-    this.postMessage({
+  sendWorkflowUnloadedToSettings(
+    postMessage: PostMessageFn = this.postMessage
+  ): void {
+    this.emitMessage({
       type: MESSAGE_TYPES.WORKFLOW_UNLOADED,
-    });
+    }, postMessage);
   }
 
   /**
@@ -390,13 +403,15 @@ export class WebviewSettingsSync {
 
   async handleUpdateWorkflowProperty(
     property: string,
-    value: any
+    value: any,
+    postMessage: PostMessageFn = this.postMessage
   ): Promise<void> {
-    await this.handleUpdateWorkflowProperties({ [property]: value });
+    await this.handleUpdateWorkflowProperties({ [property]: value }, postMessage);
   }
 
   async handleUpdateWorkflowProperties(
-    properties: Record<string, unknown>
+    properties: Record<string, unknown>,
+    postMessage: PostMessageFn = this.postMessage
   ): Promise<void> {
     if (Object.keys(properties).length === 0) {
       return;
@@ -426,7 +441,7 @@ export class WebviewSettingsSync {
       ),
     });
 
-    await this.sendWorkflowPropertiesToSettings();
+    await this.sendWorkflowPropertiesToSettings(postMessage);
   }
 
   async handleSetAsDefault(
@@ -473,7 +488,10 @@ export class WebviewSettingsSync {
     }
   }
 
-  async handleGetConfig(key: string): Promise<void> {
+  async handleGetConfig(
+    key: string,
+    postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
     if (!key.startsWith("flightpath.")) {
       Log.warn(`Rejected config read for non-flightpath key: ${key}`);
       return;
@@ -481,11 +499,11 @@ export class WebviewSettingsSync {
 
     const value = ConfigurationUtils.getConfigValue(key);
 
-    this.postMessage({
+    this.emitMessage({
       type: MESSAGE_TYPES.CONFIG_VALUE,
       key,
       value,
-    });
+    }, postMessage);
   }
 
   async handleUpdateConfig(key: string, value: unknown): Promise<void> {

@@ -32,8 +32,7 @@ import {
   type ActionType,
   type QueuePosition,
 } from "../types/DashboardConstants";
-import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
-import { IDashboardSink } from "../types/IDashboardSink";
+import type { IDashboardSink } from "../types/IDashboardSink";
 import type { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -308,9 +307,9 @@ export class WorkflowInstance {
    * (viewed) workflow. Background instances return undefined so their
    * output is not routed to the UI.
    */
-  private get activeDashboard(): FlightPathWebviewProvider | undefined {
+  private get activeDashboard(): IDashboardSink | undefined {
     return this.isActive
-      ? (this.dashboardSink as unknown as FlightPathWebviewProvider | undefined)
+      ? this.dashboardSink
       : undefined;
   }
 

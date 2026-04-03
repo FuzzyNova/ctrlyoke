@@ -13,8 +13,8 @@ import {
 } from "./EndConditionEvaluator";
 import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
-import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import type { WorkflowStateMachine } from "./WorkflowStateMachine";
+import type { IDashboardSink } from "../types/IDashboardSink";
 
 /** Dialog action labels used in error/retry dialogs (single-sourced to prevent typo drift) */
 const DIALOG_ACTIONS = {
@@ -78,9 +78,8 @@ export class EndConditionHandler {
   constructor(
     private readonly endConditionEvaluator: EndConditionEvaluator,
     private readonly promptQueue: PromptQueue,
-    private readonly getDashboard: () =>
-      | FlightPathWebviewProvider
-      | undefined = () => undefined,
+    private readonly getDashboard: () => IDashboardSink | undefined =
+      () => undefined,
     private readonly platform?: PlatformAdapter,
     private readonly openFile?: (filePath: string) => Promise<void>
   ) {}

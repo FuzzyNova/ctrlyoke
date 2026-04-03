@@ -43,6 +43,8 @@ export const MESSAGE_TYPES = {
   APPEND_FILE: "appendFile",
   EDIT_FILE: "editFile",
   CLEAR_WORKFLOW: "clearWorkflow", // Clear current workflow, start blank
+  ENABLE_SERVER: "enableServer",
+  DISABLE_SERVER: "disableServer",
   RUN: "run",
   PAUSE: "pause",
   RESUME: "resume",
@@ -512,6 +514,7 @@ export const CLI_EVENT_TYPES = {
 export const RUNNER_IDS = {
   VSCODE: "vscode",
   CLI: "cli",
+  SERVER: "server",
 } as const;
 
 // ============================================================================
