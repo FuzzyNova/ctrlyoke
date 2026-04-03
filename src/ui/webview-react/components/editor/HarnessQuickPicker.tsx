@@ -41,8 +41,17 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
     : (HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness);
 
   const handleHarnessChange = (newHarness: string) => {
-    setProperty("harness", newHarness === "default" ? undefined : newHarness);
-    setProperty("model", undefined);
+    if (newHarness === "default") {
+      setProperty("harness", undefined);
+      setProperty("model", undefined);
+      setProperty("additionalArgs", undefined);
+    } else {
+      setProperty("harness", newHarness);
+      const defaultModel = globalSettings.harnessDefaultModels[newHarness];
+      setProperty("model", defaultModel || undefined);
+      const defaultArgs = globalSettings.harnessDefaultAdditionalArgs[newHarness];
+      setProperty("additionalArgs", defaultArgs || null);
+    }
     setFooterOpenPicker(null);
   };
 

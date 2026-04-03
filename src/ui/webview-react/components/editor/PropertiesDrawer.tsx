@@ -315,10 +315,19 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const models = getModelsForHarness(currentHarness);
   const modelNamespace = modelNamespaceForHarness(currentHarness);
 
-  // Handle harness change - also reset model to default
+  // Handle harness change - also set model and additionalArgs to global defaults for the new harness
   const handleHarnessChange = (newHarness: string) => {
-    setProperty("harness", newHarness === "default" ? undefined : newHarness);
-    setProperty("model", undefined);
+    if (newHarness === "default") {
+      setProperty("harness", undefined);
+      setProperty("model", undefined);
+      setProperty("additionalArgs", undefined);
+    } else {
+      setProperty("harness", newHarness);
+      const defaultModel = globalSettings.harnessDefaultModels[newHarness];
+      setProperty("model", defaultModel || undefined);
+      const defaultArgs = globalSettings.harnessDefaultAdditionalArgs[newHarness];
+      setProperty("additionalArgs", defaultArgs || null);
+    }
   };
 
   // Handle end condition enable/disable
@@ -329,6 +338,22 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       setEndCondition({ ...END_CONDITION_DEFAULTS });
     }
   };
+
+  // Local string state for number inputs — prevents auto-reset when clearing the field
+  const [endTimeoutInput, setEndTimeoutInput] = useState(
+    String(properties.endCondition?.timeout ?? 30000)
+  );
+  const [endMaxRetriesInput, setEndMaxRetriesInput] = useState(
+    String(properties.endCondition?.maxRetries ?? 0)
+  );
+
+  useEffect(() => {
+    setEndTimeoutInput(String(properties.endCondition?.timeout ?? 30000));
+  }, [properties.endCondition?.timeout]);
+
+  useEffect(() => {
+    setEndMaxRetriesInput(String(properties.endCondition?.maxRetries ?? 0));
+  }, [properties.endCondition?.maxRetries]);
 
   return (
     <div
@@ -717,49 +742,32 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     : "Enable End Condition to configure validation"
                 }
               >
-                {/* Script + Returns */}
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Script */}
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="prop-end-script"
-                      className="text-xs font-medium text-foreground"
-                    >
-                      Script
-                    </label>
-                    <input
-                      type="text"
-                      id="prop-end-script"
-                      value={properties.endCondition?.script || ""}
-                      onChange={(e) =>
-                        updateEndConditionField("script", e.target.value)
-                      }
-                      placeholder="npm test"
-                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-                    />
-                  </div>
+                {/* Script (full width) */}
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor="prop-end-script"
+                    className="text-xs font-medium text-foreground"
+                  >
+                    Script
+                  </label>
+                  <input
+                    type="text"
+                    id="prop-end-script"
+                    value={properties.endCondition?.script || ""}
+                    onChange={(e) =>
+                      updateEndConditionField("script", e.target.value)
+                    }
+                    placeholder="npm test"
+                    className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                  />
+                </div>
 
-                  {/* Returns + Compare Source */}
+                {/* Compare Source + Expected Return */}
+                <DrawerRow narrow={isNarrow}>
                   <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="prop-end-returns"
-                      className="text-xs font-medium text-foreground"
-                    >
-                      Expected Return
-                    </label>
-                    <input
-                      type="text"
-                      id="prop-end-returns"
-                      value={properties.endCondition?.returns || ""}
-                      onChange={(e) =>
-                        updateEndConditionField("returns", e.target.value)
-                      }
-                      placeholder="true"
-                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-                    />
                     <label
                       htmlFor="prop-end-compare-source"
-                      className="text-xs font-medium text-foreground mt-1"
+                      className="text-xs font-medium text-foreground"
                       title="Auto: 'true'/'false' check exit code; other values check stdout. Stdout: always compare stdout (requires clean exit). Stderr: compare stderr output. Exit Code: compare the numeric exit code directly."
                     >
                       Compare Source
@@ -789,11 +797,29 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                             : "Compares numeric exit code — use '0', '1', or 'true'/'false'"}
                     </span>
                   </div>
-                </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label
+                      htmlFor="prop-end-returns"
+                      className="text-xs font-medium text-foreground"
+                    >
+                      Expected Return
+                    </label>
+                    <input
+                      type="text"
+                      id="prop-end-returns"
+                      value={properties.endCondition?.returns || ""}
+                      onChange={(e) =>
+                        updateEndConditionField("returns", e.target.value)
+                      }
+                      placeholder="true"
+                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                    />
+                  </div>
+                </DrawerRow>
 
                 {/* Timeout + Max Retries */}
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Timeout */}
+                <DrawerRow narrow={isNarrow}>
                   <div className="flex flex-col gap-1">
                     <label
                       htmlFor="prop-end-timeout"
@@ -804,20 +830,20 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     <input
                       type="number"
                       id="prop-end-timeout"
-                      value={properties.endCondition?.timeout ?? 30000}
-                      onChange={(e) =>
-                        updateEndConditionField(
-                          "timeout",
-                          parseInt(e.target.value) || 30000
-                        )
-                      }
+                      value={endTimeoutInput}
+                      onChange={(e) => setEndTimeoutInput(e.target.value)}
+                      onBlur={() => {
+                        const parsed = parseInt(endTimeoutInput);
+                        const value = isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
+                        setEndTimeoutInput(String(value));
+                        updateEndConditionField("timeout", value);
+                      }}
                       min={1000}
                       max={300000}
                       className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                     />
                   </div>
 
-                  {/* Max Retries */}
                   <div className="flex flex-col gap-1">
                     <label
                       htmlFor="prop-end-retries"
@@ -828,13 +854,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     <input
                       type="number"
                       id="prop-end-retries"
-                      value={properties.endCondition?.maxRetries ?? 0}
-                      onChange={(e) =>
-                        updateEndConditionField(
-                          "maxRetries",
-                          parseInt(e.target.value) || 0
-                        )
-                      }
+                      value={endMaxRetriesInput}
+                      onChange={(e) => setEndMaxRetriesInput(e.target.value)}
+                      onBlur={() => {
+                        const parsed = parseInt(endMaxRetriesInput);
+                        const value = isNaN(parsed) ? 0 : parsed;
+                        setEndMaxRetriesInput(String(value));
+                        updateEndConditionField("maxRetries", value);
+                      }}
                       min={-1}
                       max={100}
                       className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
@@ -843,7 +870,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       Use -1 for unlimited retries
                     </span>
                   </div>
-                </div>
+                </DrawerRow>
 
                 {/* Retry Prompt (Full Width) */}
                 <div className="flex flex-col gap-1">

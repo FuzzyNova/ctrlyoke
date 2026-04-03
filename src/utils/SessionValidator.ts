@@ -9,6 +9,8 @@ import { Log } from "./Log";
  * - Claude CLI: UUID v4 (strict format)
  * - Codex CLI: Thread ID string (thread_xxx format, flexible)
  * - OpenCode CLI: ses_ prefix + alphanumeric string (e.g., ses_34106de37ffeG7oh0Bvq9cmRki)
+ * - Qwen CLI: UUID v4 (strict format)
+ * - Gemini CLI: UUID v4 (strict format)
  *
  * This validator ensures session IDs match the expected format for each harness
  * before passing to CLI commands, preventing CLI errors and enabling graceful fallback.
@@ -48,6 +50,8 @@ export class SessionValidator {
    * - **Claude CLI**: Strict UUID v4 format required (rejects invalid with error)
    * - **Codex CLI**: Any non-empty string (typically thread_xxx)
    * - **OpenCode CLI**: Must start with "ses_" followed by alphanumeric characters
+   * - **Qwen CLI**: Strict UUID v4 format required
+   * - **Gemini CLI**: Strict UUID v4 format required
    * - **Copilot Chat**: Not applicable (no session IDs)
    *
    * @param sessionId Session ID to validate
@@ -67,6 +71,12 @@ export class SessionValidator {
 
       case Harness.OpenCodeCli:
         return this.validateOpenCodeSessionId(sessionId);
+
+      case Harness.QwenCli:
+        return this.validateUuid(sessionId, "Qwen CLI");
+
+      case Harness.GeminiCli:
+        return this.validateUuid(sessionId, "Gemini CLI");
 
       case Harness.CopilotChat:
         // Chat mode doesn't use session IDs

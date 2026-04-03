@@ -8,7 +8,7 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 
 2. **Standalone Server** (`flightpath server` CLI subcommand) — a fully independent Node.js process with no VS Code dependency. Useful for headless/CI scenarios and remote access where VS Code is not running. The only exclusions are capabilities that are inherently VS Code-specific (file pickers, Copilot Chat harness).
 
-`IDashboardProvider` is the shared architectural enabler for both modes and must be implemented first.
+`IDashboardProvider` is already present in the current codebase. The remaining shared prerequisite is finishing the multi-client dashboard fan-out (`IDashboardProvider` + `IDashboardSink`) and removing the remaining VS Code-only seams needed for standalone mode.
 
 ## Mode Comparison
 
@@ -25,7 +25,7 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 
 ## Goals
 
-- Extract `IDashboardProvider` as the shared architectural seam enabling both server modes
+- Finish the shared dashboard transport seam (`IDashboardProvider` + `IDashboardSink`) so one orchestrator can drive the VS Code panel and browser clients simultaneously
 - Serve the existing React webview at `http://localhost:<port>` in any browser with zero React code changes
 - Full feature parity with the VS Code dashboard (parallel workflows, switcher, history, all message types)
 - Replace VS Code-specific APIs with browser-compatible equivalents via a minimal shim (standalone only)
@@ -39,6 +39,33 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 - A full VS Code extension replacement
 - Supporting the `copilot-chat` harness in the standalone server (directly automates VS Code's UI)
 
+## Current Codebase Audit (2026-04-03)
+
+### Already in place
+
+- `src/ui/IDashboardProvider.ts` already exists.
+- `src/ui/FlightPathWebviewProvider.ts` already implements `IDashboardProvider`.
+- `src/types/IDashboardSink.ts` already exists for per-step/live-output dashboard updates.
+- `src/flightpath/WorkflowOrchestrator.ts` already stores `IDashboardProvider[]` and exposes `addDashboardProvider()`.
+- The React app already depends only on the `window.vscodeApi` contract (`postMessage`, `getState`, `setState`), so the browser shim approach is still valid.
+
+### Still missing before implementation
+
+- `WorkflowOrchestrator` still routes many registry and CLI-watch updates through `dashboardProvider` (the first provider) instead of fanning them out to every registered provider.
+- `WorkflowInstance` still receives a single `IDashboardSink` cast from the first provider, so active-workflow step updates, streaming output, and full-state replays would only reach the VS Code sidebar unless we add a broadcast-capable sink.
+- `WorkflowOrchestrator.buildWorkflowInstance()` still hard-codes `new VsCodeAdapter(this.context)`, which blocks standalone reuse of the current constructor path.
+- `PromptFileWatcher` and `CliWatchSession` still create VS Code file watchers directly.
+- `WebviewSettingsSync` still uses `vscode.workspace.workspaceFolders` directly for agent/skill/workspace discovery.
+- There is no hosted/standalone server code yet, no `flightpath.enableServer` command, no `flightpath.serverPort` setting, no `MESSAGE_TYPES.ENABLE_SERVER`, and no `_internalRouteMessage` command.
+- `RUNNER_IDS.SERVER` does not exist yet.
+- `express`, `ws`, `fast-glob`, and `ignore` are not installed. (`chokidar` is already present.)
+- Hosted-server request/response messages such as completions, file-ref validation, and attachment token counts must reply to the requesting WebSocket client only; they cannot be blindly broadcast to every connected tab.
+
+### Readiness verdict
+
+- **VS Code-hosted server:** ready to start after a shared-foundation cleanup, especially the broadcast sink/provider work and a callable hosted-server routing surface.
+- **Standalone server:** not ready until that same cleanup is complete and the watcher / `PlatformAdapter` seams are threaded through the orchestration layer.
+
 ---
 
 ## Architecture
@@ -49,16 +76,16 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 VS Code Extension Process (running normally)
   ├── FlightPathWebviewProvider  — existing VS Code sidebar panel
   ├── WorkflowOrchestrator       — already running, manages all workflows
-  │     └── notifyX() → IDashboardProvider (broadcast to ALL providers below)
+  │     └── notifyX() → Dashboard broadcast hub (Phase 1 target state)
   ├── FlightPathWebviewProvider  — implements IDashboardProvider (VS Code panel)
   └── FlightPathHostedServer     — NEW: implements IDashboardProvider (HTTP + WS)
         ├── HTTP: serves React app assets (same Vite bundle)
         └── WS: browser tabs connect here, receive same orchestrator events
 ```
 
-The `WorkflowOrchestrator` holds a list of `IDashboardProvider` implementations and broadcasts `notifyX()` calls to all of them. The VS Code panel and any browser tabs always see identical state.
+After Phase 1, the orchestrator and workflow instances publish through the shared broadcast hub so the VS Code panel and hosted browser tabs see identical live state.
 
-Since `FlightPathHostedServer` runs inside the extension process, its message router can call `vscode.commands.executeCommand()` directly — no need to replace those with direct orchestrator calls.
+Since `FlightPathHostedServer` runs inside the extension process, its hosted router can still invoke VS Code commands/services directly; it just needs a callable router surface rather than a fake webview re-dispatch command.
 
 ### Standalone Server
 
@@ -95,13 +122,14 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 
 | Pattern                          | Where It Exists                          | How Server Uses It                                                                                                    |
 | -------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `IDashboardProvider` interface   | `src/ui/IDashboardProvider.ts` (Phase 1) | Both `FlightPathHostedServer` and `FlightPathServer` implement it                                                     |
-| `WorkflowOrchestrator` broadcast | `src/flightpath/WorkflowOrchestrator.ts` | Holds `IDashboardProvider[]`; broadcasts to all registered providers                                                  |
-| `WebviewMessageRouter`           | `src/ui/WebviewMessageRouter.ts`         | VS Code-hosted server re-dispatches browser messages through it via `vscode.commands.executeCommand` — no duplication |
-| `PlatformAdapter` interface      | `src/platform/PlatformAdapter.ts`        | `StandaloneServerAdapter` is the third implementation (standalone only)                                               |
+| `IDashboardProvider` interface   | `src/ui/IDashboardProvider.ts`           | Already present; both server implementations plug into this surface                                                   |
+| `IDashboardSink` interface       | `src/types/IDashboardSink.ts`            | Existing live step/output sink; needs a broadcast-capable implementation before hosted tabs can mirror the sidebar   |
+| `WorkflowOrchestrator` registry  | `src/flightpath/WorkflowOrchestrator.ts` | Already stores `IDashboardProvider[]` and `addDashboardProvider()`, but most notify paths still target the first provider |
+| `WebviewMessageRouter`           | `src/ui/WebviewMessageRouter.ts`         | Hosted server can reuse its logic only after exposing a direct callable entrypoint and preserving per-connection replies |
+| `PlatformAdapter` interface      | `src/platform/PlatformAdapter.ts`        | `StandaloneServerAdapter` is the third implementation; this seam also needs file-watcher support                     |
 | `vscode-shim` alias              | `esbuild.js` CLI bundle                  | Standalone server bundle uses the same `alias: { vscode: 'src/platform/vscode-shim.ts' }`                             |
 | Commander.js subcommands         | `src/cli.ts`                             | `server` added as `program.command('server')` (standalone only)                                                       |
-| `setRuntimeMode`                 | `src/cli.ts` line 21                     | Standalone server calls `setRuntimeMode(RUNNER_IDS.SERVER)`                                                           |
+| `setRuntimeMode`                 | `src/cli.ts` line 27                     | Standalone server should call `setRuntimeMode(RUNNER_IDS.SERVER)` once that constant exists                           |
 
 ---
 
@@ -122,16 +150,16 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 | File                                                | VS Code API Used                                                   | Server Approach                                                        |
 | --------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
 | `src/ui/FlightPathWebviewProvider.ts`               | `vscode.WebviewView`, `webview.postMessage()`, `notifyX()` methods | Replaced by `FlightPathServer` + WebSocket broadcast                   |
-| `src/flightpath/WorkflowOrchestrator.ts`            | `vscode.ExtensionContext`, `FlightPathWebviewProvider`             | Refactored to depend on `IDashboardProvider` interface (Phase 2)       |
-| `src/ui/WebviewMessageRouter.ts`                    | `vscode.commands.executeCommand()` (9 handlers)                    | `WebSocketMessageRouter` calls `WorkflowOrchestrator` methods directly |
-| `src/ui/WebviewSettingsSync.ts`                     | `vscode.workspace.getConfiguration()`                              | Reads from `StandaloneServerAdapter.getConfig()`                       |
+| `src/flightpath/WorkflowOrchestrator.ts`            | `vscode.ExtensionContext`, `VsCodeAdapter`, primary-provider assumptions | Finish provider fanout, add a broadcast sink for `WorkflowInstance`, and inject adapter/context cleanly for server use |
+| `src/ui/WebviewMessageRouter.ts`                    | `vscode.commands.executeCommand()` + webview-local reply channel   | Hosted server needs a callable router wrapper; standalone needs a WebSocket router with per-connection replies |
+| `src/ui/WebviewSettingsSync.ts`                     | `vscode.workspace.workspaceFolders`, command execution, `ConfigurationUtils` | Move workspace discovery behind adapter/constructor inputs; keep settings reads routed through `ConfigurationUtils` |
 | `src/utils/ConfigurationUtils.ts`                   | `vscode.workspace.getConfiguration()`                              | Already bypassed when called through `CliAdapter.getConfig()`          |
 | `src/flightpath/orchestration/PromptFileWatcher.ts` | `vscode.workspace.createFileSystemWatcher()`                       | `chokidar` (already in dependencies)                                   |
+| `src/flightpath/orchestration/CliWatchSession.ts`   | `vscode.workspace.createFileSystemWatcher()` (multiple watchers)   | Same watcher abstraction; inject adapter into constructor              |
 | `src/completions/CompletionHelpers.ts`              | `vscode.workspace.findFiles()`, Git extension                      | Node.js `fs` + `fast-glob` + `ignore`                                  |
 
 ### Already Platform-Agnostic (zero changes)
 
-- `src/flightpath/WorkflowInstance.ts`
 - `src/flightpath/PromptQueue.ts` / `WorkflowExecutor.ts`
 - `src/flightpath/PromptFileParser.ts` / `EndConditionEvaluator.ts`
 - `src/flightpath/harness/CliIntegration.ts` + all CLI harnesses
@@ -142,175 +170,60 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 
 ## Implementation Plan
 
-### Phase 1 — Extract `IDashboardProvider` Interface (Refactor)
+### Phase 1 — Finish Shared Dashboard Fanout (already partially implemented)
 
-**This is the critical architectural enabler.** `WorkflowOrchestrator` currently takes `FlightPathWebviewProvider` (a VS Code class) as a constructor parameter and calls `notifyX()` methods on it to push state to the webview.
+**Status today**
 
-To reuse `WorkflowOrchestrator` in the server without modification, extract its dependency on `FlightPathWebviewProvider` into a minimal interface:
+- `src/ui/IDashboardProvider.ts` already exists.
+- `FlightPathWebviewProvider` already `implements IDashboardProvider`.
+- `WorkflowOrchestrator` already stores `IDashboardProvider[]` and exposes `addDashboardProvider()`.
+- `src/types/IDashboardSink.ts` already exists for the finer-grained `WorkflowInstance` update surface.
 
-**New file:** `src/ui/IDashboardProvider.ts`
+**Remaining work**
 
-```typescript
-import type { WorkflowSummary } from "../types/FlightPathTypes";
+1. Add a broadcast-capable hub (for example `src/ui/DashboardBroadcastHub.ts`) that implements both `IDashboardProvider` and `IDashboardSink`.
+2. Route **all ongoing orchestrator notifications** through that hub instead of `dashboardProvider` (the first provider). Registry events and CLI-watch updates must fan out to every registered provider.
+3. Change `WorkflowOrchestrator.buildWorkflowInstance()` to pass the broadcast hub as the `IDashboardSink` instead of casting the first provider. This is required so active-workflow step updates, streaming output, run history, and full-state replays reach hosted browser tabs as well as the VS Code sidebar.
+4. Keep targeted bootstrap / request-response traffic separate from global broadcast. `sendInitialState()`, completions, file-ref validation, and attachment token-count replies should go only to the requesting webview or socket.
+5. Start threading `PlatformAdapter`-based watcher creation through `PromptFileWatcher` and `CliWatchSession` now, since standalone mode depends on the same construction path.
 
-/**
- * Platform-agnostic interface for pushing workflow state updates to the dashboard.
- * Implemented by FlightPathWebviewProvider (VS Code) and FlightPathServer (standalone).
- */
-export interface IDashboardProvider {
-  notifyWorkflowAdded(summary: WorkflowSummary): void;
-  notifyWorkflowDismissed(workflowId: string): void;
-  notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void;
-  notifyActiveWorkflowChanged(workflowId: string): void;
-  postMessage(message: unknown): void;
-}
-```
+**Implementation notes**
 
-**Update `WorkflowOrchestrator`:**
-
-- Change constructor parameter from `FlightPathWebviewProvider` to `IDashboardProvider`
-- No other changes — all `dashboardProvider.notifyX()` calls remain identical
-
-**Update `FlightPathWebviewProvider`:**
-
-- Add `implements IDashboardProvider` (it already has all these methods — zero implementation changes)
-
-**Update `PromptFileWatcher`:**
-
-- Replace the `getDashboard: () => FlightPathWebviewProvider | undefined` constructor parameter with `getDashboard: () => IDashboardProvider | undefined`
-- The only call site is `dashboard.updateFileSelected("No file selected", [])` on working file deletion — either add `updateFileSelected` to `IDashboardProvider`, or replace it with an equivalent `postMessage` call using an existing message type. Determine which at implementation time.
-
-**Update `WorkflowOrchestrator`:**
-
-- Change constructor parameter from `FlightPathWebviewProvider` to `IDashboardProvider[]` (a list, not a single provider)
-- All `dashboardProvider.notifyX()` calls become `for (const p of this.dashboardProviders) p.notifyX(...)`
-- This allows `FlightPathHostedServer` to be registered alongside `FlightPathWebviewProvider` so both receive every event
-
-**Update `WorkflowOrchestrator` constructor** to remove `vscode.ExtensionContext` if it is only used for VS Code-specific concerns (file watching, CLI watch session storage). If `ExtensionContext` is also used for extension path resolution, pass that via `PlatformAdapter.getExtensionPath()` instead.
-
-> This is a clean pre-release refactor. The interface is tiny (5 methods) and the only mechanical changes are the `implements` keyword, the constructor parameter type, and the broadcast loop. Zero business logic changes.
+- `PromptFileWatcher` already depends on `IDashboardProvider`, and `updateFileSelected()` is already part of the interface.
+- `WorkflowOrchestrator` can keep `vscode.ExtensionContext` for the hosted-server milestone, but it should stop hard-coding `VsCodeAdapter` creation in the same step if standalone reuse is next.
+- Do not duplicate provider/sink methods across multiple classes if the broadcast hub can single-source that fanout.
 
 ---
 
 ### Phase 2 — VS Code-Hosted Server
 
-**New file:** `src/server/FlightPathHostedServer.ts`
+**New files**
 
-Starts an HTTP + WebSocket server inside the running VS Code extension process. The live `WorkflowOrchestrator` is the backend — no new orchestration logic. Registered as a second `IDashboardProvider` alongside `FlightPathWebviewProvider`.
+- `src/server/FlightPathHostedServer.ts`
+- `src/server/HostedServerRouter.ts` (or an equivalent wrapper/factory around `WebviewMessageRouter`)
 
-```typescript
-export class FlightPathHostedServer implements IDashboardProvider {
-  private app = express();
-  private httpServer = createServer(this.app);
-  private wss = new WebSocketServer({ server: this.httpServer });
-  private connections = new Set<WebSocket>();
+Starts an HTTP + WebSocket server inside the running VS Code extension process. The live `WorkflowOrchestrator` remains the backend, but hosted tabs are **not** just another broadcast target — they also need a per-connection request/response channel.
 
-  constructor(
-    private orchestrator: WorkflowOrchestrator,
-    private context: vscode.ExtensionContext,
-    private port: number
-  ) {
-    this.setupRoutes();
-    this.setupWebSocket();
-  }
+**Design**
 
-  // ── IDashboardProvider — broadcasts every orchestrator event to browser tabs ──
-  notifyWorkflowAdded(summary: WorkflowSummary) {
-    this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary });
-  }
-  notifyWorkflowDismissed(workflowId: string) {
-    this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId });
-  }
-  notifyWorkflowSummaryUpdated(summary: WorkflowSummary) {
-    this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
-  }
-  notifyActiveWorkflowChanged(workflowId: string) {
-    this.broadcast({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
-  }
-  postMessage(message: unknown) {
-    this.broadcast(message);
-  }
+- `FlightPathHostedServer` implements `IDashboardProvider` and registers with the shared broadcast hub from Phase 1 so all global workflow events reach browser tabs.
+- Each WebSocket client gets its own reply callback for client-scoped messages such as completions, attachment token counts, and file-ref validation.
+- Reuse `WebviewMessageRouter` logic by exposing a direct callable entrypoint (for example `FlightPathWebviewProvider.routeExternalMessage(message, reply)` or a shared router factory). Do **not** rely on a synthetic `flightpath._internalRouteMessage` command unless one is intentionally added and tested.
+- Hosted mode can keep using the in-process VS Code services for prompt file selection, output panel commands, open file, Git diff, settings sync, and completions because the server is still running inside the extension.
+- Add duplicate-start protection, explicit stop/dispose, and extension deactivation cleanup.
 
-  private broadcast(message: unknown) {
-    const json = JSON.stringify(message);
-    for (const ws of this.connections) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(json);
-    }
-  }
+**Extension wiring**
 
-  // ── WebSocket — messages from browser tabs ─────────────────────────────────
-  // Routes messages using the existing WebviewMessageRouter since we ARE inside
-  // the extension process and can call vscode.commands.executeCommand() directly.
-  private setupWebSocket() {
-    this.wss.on("connection", (ws) => {
-      this.connections.add(ws);
-      this.sendInitialState(ws);
-      ws.on("message", (raw) => {
-        const msg = JSON.parse(raw.toString());
-        // Re-dispatch as a window message so WebviewMessageRouter handles it
-        vscode.commands.executeCommand("flightpath._internalRouteMessage", msg);
-      });
-      ws.on("close", () => this.connections.delete(ws));
-    });
-  }
+- Register `flightpath.enableServer` and `flightpath.disableServer` commands.
+- Add `MESSAGE_TYPES.ENABLE_SERVER` (and a stop counterpart if needed) for the dashboard button.
+- Add `flightpath.serverPort` setting in `package.json`.
+- Surface the running URL in the dashboard/status UI.
 
-  listen() {
-    this.httpServer.listen(this.port, "127.0.0.1", () => {
-      const url = `http://localhost:${this.port}`;
-      vscode.window
-        .showInformationMessage(
-          `FlightPath server running at ${url}`,
-          "Open in Browser"
-        )
-        .then((action) => {
-          if (action) vscode.env.openExternal(vscode.Uri.parse(url));
-        });
-    });
-  }
+**Theme**
 
-  dispose() {
-    this.httpServer.close();
-  }
-}
-```
+Since the extension is running, the hosted server can either inject actual VS Code theme variables into the served HTML or map the active theme to the Phase 4 fallback CSS files. Pick one approach and keep it shared with the standalone theme assets where possible.
 
-**Extension wiring** (`src/extension.ts`):
-
-```typescript
-// Register command: flightpath.enableServer
-context.subscriptions.push(
-  vscode.commands.registerCommand("flightpath.enableServer", async () => {
-    const port = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<number>("serverPort", 3000);
-    const hosted = new FlightPathHostedServer(
-      manager.orchestrator,
-      context,
-      port
-    );
-    // Register as second IDashboardProvider so orchestrator broadcasts to it
-    manager.orchestrator.addDashboardProvider(hosted);
-    hosted.listen();
-    context.subscriptions.push(hosted);
-  })
-);
-```
-
-**New setting** (`package.json`):
-
-```json
-"flightpath.serverPort": {
-  "type": "number",
-  "default": 3000,
-  "description": "Port for the FlightPath browser server (Enable Server button)"
-}
-```
-
-**Webview button** — add "Enable Server" button to the dashboard toolbar. Sends `MESSAGE_TYPES.ENABLE_SERVER` → extension handles it by running `flightpath.enableServer`. Once active, button changes to "Server: localhost:3000" with a stop option.
-
-**Theme**: Since the extension is running, inject the actual VS Code CSS variables by reading `vscode.window.activeColorTheme` and mapping to the closest default theme CSS file (same files as Phase 4).
-
-> **Key advantage over standalone**: No `StandaloneServerAdapter`, no vscode-shim, no message router rewrite. The hosted server is purely an additional transport layer over the existing orchestrator.
+> **Key advantage over standalone**: No standalone harness limitations and no replacement for VS Code-only commands. The hosted server is primarily a transport + connection-management layer over the existing extension runtime.
 
 ---
 
@@ -777,7 +690,11 @@ program
 
 ```
 src/ui/
-└── IDashboardProvider.ts              ← NEW: extracted interface (Phase 1)
+├── IDashboardProvider.ts              ← Existing shared provider interface
+└── DashboardBroadcastHub.ts           ← NEW: shared fanout for IDashboardProvider + IDashboardSink (Phase 1)
+
+src/types/
+└── IDashboardSink.ts                  ← Existing live-step sink interface
 
 src/server/
 │   # ── Shared (VS Code-hosted + standalone) ──────────────────────────────
@@ -798,8 +715,9 @@ src/server/
 src/cli/ServerCommand.ts               ← resolveServerConfig() for `flightpath server` (Phase 10)
 src/cli.ts                             ← Add program.command('server') block (Phase 10)
 
-src/flightpath/WorkflowOrchestrator.ts ← Update: IDashboardProvider[] list + broadcast loop (Phase 1)
-src/ui/FlightPathWebviewProvider.ts    ← Update: add `implements IDashboardProvider` (Phase 1)
+src/flightpath/WorkflowOrchestrator.ts ← Finish provider fanout and stop primary-provider-only routing (Phase 1)
+src/flightpath/WorkflowInstance.ts     ← Use the shared broadcast sink instead of first-provider casting (Phase 1)
+src/ui/FlightPathWebviewProvider.ts    ← Reuse existing provider implementation + expose hosted-router entrypoint (Phase 2)
 src/extension.ts                       ← Update: register flightpath.enableServer command (Phase 2)
 src/platform/PlatformAdapter.ts        ← Update: add optional createFileWatcher() (Phase 9)
 ```
@@ -809,6 +727,11 @@ src/platform/PlatformAdapter.ts        ← Update: add optional createFileWatche
 ## Build Changes
 
 ### esbuild — no new bundle target
+
+Current repo state:
+
+- `chokidar` is already installed.
+- `express`, `ws`, `fast-glob`, and `ignore` are **not** installed yet.
 
 The `server` command is added to `src/cli.ts` (same entry point, same bundle). `express` and `ws` go in `external` — installed in `node_modules`, not bundled:
 
@@ -830,6 +753,12 @@ The existing `vscode-shim` alias handles all `vscode` imports in the server code
 }
 ```
 
+Notes:
+
+- `express` + `ws` are needed as soon as the hosted server work starts.
+- `fast-glob` + `ignore` are only required once the standalone completion service lands.
+- Add `flightpath.serverPort` setting and `RUNNER_IDS.SERVER` in the same plumbing pass so the doc and runtime surface stay aligned.
+
 Optional:
 
 ```json
@@ -846,7 +775,10 @@ Optional:
 
 ## Message Protocol Compatibility
 
-The protocol (`MESSAGE_TYPES`, `WebviewMessageTypes`) is unchanged. All existing message types work over WebSocket with the same payload shapes. The only transport change is `vscode.postMessage` → `ws.send` (shim handles this).
+The protocol (`MESSAGE_TYPES`, `WebviewMessageTypes`) is unchanged at the payload level. The only transport change is `vscode.postMessage` → `ws.send` (shim handles this), **but** hosted/standalone server implementations must preserve the existing distinction between:
+
+- **broadcast state updates** (workflow summaries, step progress, CLI output, active-workflow changes), and
+- **client-scoped replies** (completions, token counts, validation, other request/response messages).
 
 Full message coverage including multi-workflow types:
 
@@ -897,7 +829,7 @@ Server validates harness at startup and rejects `copilot-chat` with a clear erro
 | `vscode.setState()` | `sessionStorage.setItem('fpState', ...)` |
 | `vscode.getState()` | `sessionStorage.getItem('fpState')`      |
 
-Handled entirely by the Phase 1 shim. No changes to any store.
+Handled entirely by the Phase 3 shim. No changes to any store.
 
 ---
 
@@ -905,43 +837,42 @@ Handled entirely by the Phase 1 shim. No changes to any store.
 
 ### Track 1 — Shared Foundation (required for both modes)
 
-1. **`IDashboardProvider` interface** (Phase 1) — extract interface; change `WorkflowOrchestrator` to hold `IDashboardProvider[]` and broadcast to all; add `implements` to `FlightPathWebviewProvider` (1.5 hours)
+1. **Dashboard broadcast hub** (Phase 1) — finish `IDashboardProvider` / `IDashboardSink` fanout; remove first-provider-only assumptions in `WorkflowOrchestrator` and `WorkflowInstance`
+2. **Adapter / watcher seam** (Phase 1) — add `PlatformAdapter.createFileWatcher()`, thread adapter-driven watcher creation into `PromptFileWatcher` and `CliWatchSession`, and stop hard-coding `VsCodeAdapter` in the reusable orchestration path
+3. **Build/runtime plumbing** — add `RUNNER_IDS.SERVER`, hosted-server message types/settings, and runtime deps (`express`, `ws`; `fast-glob` / `ignore` when standalone completions begin)
 
 ### Track 2 — VS Code-Hosted Server (delivers browser access without leaving VS Code)
 
-2. **`FlightPathHostedServer`** (Phase 2) — HTTP + WS inside the extension; registers as second `IDashboardProvider`; `sendInitialState` on connect; reuses `WebviewMessageRouter` via `vscode.commands.executeCommand` dispatch (2 hours)
-3. **Extension wiring** (Phase 2) — `flightpath.enableServer` command; "Enable Server" button in webview toolbar; `flightpath.serverPort` setting; status indicator once running (1 hour)
-4. **Theme CSS files** (Phase 4) — audit `tailwind.config.js`, create both theme files; hosted server injects correct file based on `vscode.window.activeColorTheme` (2–3 hours)
-5. **Shim** (Phase 3) — `standalone-shim.js`, smoke-test in browser with a mock WS (1 hour) _(shared with standalone but needed here for browser tab connection)_
+4. **`FlightPathHostedServer`** (Phase 2) — HTTP + WS inside the extension; registers with the shared dashboard hub; sends targeted initial state on connect
+5. **Hosted router bridge** (Phase 2) — expose reusable `WebviewMessageRouter` logic with per-connection replies; avoid blind broadcast of request/response messages
+6. **Extension/UI wiring** (Phase 2) — `flightpath.enableServer` / `flightpath.disableServer`, dashboard button, `flightpath.serverPort`, URL/status display, deactivation cleanup
+7. **Shim + theme assets** (Phases 3–4) — `standalone-shim.js`, browser smoke test, and shared fallback theme CSS used by hosted tabs
 
 ### Track 3 — Standalone Server (headless / CI / no VS Code)
 
-6. **`StandaloneServerAdapter`** (Phase 5) — mirror `CliAdapter`; always `cliExecutionMode: "headless"` (1.5 hours)
-7. **`FlightPathServer`** (Phase 6) — HTTP + WS, connection registry, broadcast, `sendInitialState`, implements `IDashboardProvider` (3 hours)
-8. **`WebSocketMessageRouter`** (Phase 7) — all message handlers; `vscode.commands.executeCommand()` replaced with direct orchestrator calls (4 hours)
-9. **`CompletionService`** (Phase 8) — file/dir completions with fast-glob + ignore; regex symbol heuristic (3 hours)
-   9a. **`LspSymbolClient`** _(optional)_ — LSP stdio client (2 hours)
-10. **`ServerFileWatcher`** + `PlatformAdapter.createFileWatcher()` seam (Phase 9) — chokidar, verify `PromptFileWatcher` usage path (1.5 hours)
-11. **`flightpath server` CLI command** (Phase 10) — `program.command('server')` + `resolveServerConfig()` + `RUNNER_IDS.SERVER` constant (1 hour)
-12. **esbuild + package.json** — add externals, deps, npm script (30 min)
-13. **Manual testing** — VS Code-hosted: open browser tab alongside sidebar, parallel workflows, pause/resume/stop; standalone: same from CLI, theme switching, completions (3 hours)
-
-**VS Code-Hosted deliverable total: ~8 hours** (steps 1–5)
-**Full standalone total: ~21 hours** (all steps)
+8. **`StandaloneServerAdapter`** (Phase 5) — mirror `CliAdapter`; always `cliExecutionMode: "headless"`
+9. **`FlightPathServer`** (Phase 6) — HTTP + WS, connection registry, broadcast hub wiring, targeted initial-state sync
+10. **`WebSocketMessageRouter`** (Phase 7) — all message handlers; replace VS Code command execution with direct orchestrator/service calls while keeping reply scoping correct
+11. **`CompletionService`** (Phase 8) — file/dir completions with fast-glob + ignore; regex symbol heuristic
+    - **Optional:** `LspSymbolClient` — LSP stdio client
+12. **`ServerFileWatcher`** + `PlatformAdapter.createFileWatcher()` seam (Phase 9) — chokidar, verify every watcher construction path
+13. **`flightpath server` CLI command** (Phase 10) — `program.command('server')` + `resolveServerConfig()` + `RUNNER_IDS.SERVER`
+14. **esbuild + package.json** — add externals, deps, npm script
+15. **Manual testing** — VS Code-hosted: open browser tab alongside sidebar, parallel workflows, pause/resume/stop; standalone: same from CLI, theme switching, completions
 
 ---
 
 ## Open Questions
 
-1. **`WorkflowOrchestrator` and `vscode.ExtensionContext`**: The constructor currently takes `vscode.ExtensionContext`. Audit which parts of `WorkflowOrchestrator` actually use it. If it's only used for `context.extensionPath` → replace with `adapter.getExtensionPath()`. If it's used for `context.globalStorageUri` (CLI watch sessions) → pass only that path via config. The goal is removing the `ExtensionContext` param entirely.
+1. **`WorkflowOrchestrator` construction strategy**: For the hosted-server milestone, should we keep the current `vscode.ExtensionContext` constructor and introduce a factory/builder for standalone later, or do the full adapter-first constructor refactor up front? The latter is cleaner for standalone; the former gets hosted mode moving sooner.
 
-2. **`PromptFileWatcher` and `CliWatchSession` construction paths**: Both classes call `vscode.workspace.createFileSystemWatcher()` directly and need `PlatformAdapter` injected. Determine the construction path for each — if either is constructed deep inside `WorkflowOrchestrator` or `WorkflowInstance` without an adapter reference, the adapter needs to be threaded down. `CliWatchSession` is the more involved refactor: it creates three independent watchers (working file, lock file, history run files) and its constructor currently takes only paths and callbacks. `PromptFileWatcher` may be simpler depending on how it's instantiated.
+2. **Broadcast hub shape**: Should the shared fanout object be a single class implementing both `IDashboardProvider` and `IDashboardSink`, or two small collaborators owned by one registry? Either works, but the plan assumes a single source of truth so `WorkflowOrchestrator` and `WorkflowInstance` stop hand-picking a "primary" provider.
 
-3. **File picker (`SELECT_FILE`)**: Server has no file dialog. Options:
-   - **A** (MVP): no-op + console message; user passes `--cwd` to set workspace
-   - **B**: Serve a simple `GET /api/files?q=...` REST endpoint that returns file list; dashboard could show an inline path picker
-   - **C**: Future UX — drag-and-drop `.flightpath.yaml` onto the dashboard
+3. **Hosted router reuse**: Expose `WebviewMessageRouter` through a public method/factory, or add a deliberately private command surface for hosted-server re-entry? The recommended path is a direct callable API, because request/response routing must stay connection-scoped.
 
-4. **`WebviewSettingsSync`**: Broadcasts extension settings to the webview on connect. Verify it only calls `adapter.getConfig()` (via `ConfigurationUtils`) and not `vscode.workspace.getConfiguration()` directly. If it calls VS Code APIs directly, those specific calls need to be routed through the adapter.
+4. **File picker (`SELECT_FILE`) in standalone**: Hosted mode can keep the existing VS Code picker. Standalone still needs a decision between:
+   - **A**: typed path / explicit workspace-relative input for MVP
+   - **B**: small `GET /api/files?q=...` endpoint + inline picker in the dashboard
+   - **C**: future drag-and-drop UX
 
-5. **Recent workflow history storage**: VS Code stores this in `context.globalState`. The server needs a file-based equivalent (e.g., `~/.flightpath/history.json` or `.flightpath/.history/recent.json` in the workspace). Determine where `WorkflowOrchestrator` reads/writes recent workflow history and what needs to change.
+5. **Recent workflow history storage**: VS Code stores this in `context.globalState`. The standalone server needs a file-based equivalent (for example `.flightpath/.history/recent.json` in the workspace or `~/.flightpath/history.json`). Determine where `WorkflowOrchestrator` currently reads/writes recent workflows and mirror that behavior.

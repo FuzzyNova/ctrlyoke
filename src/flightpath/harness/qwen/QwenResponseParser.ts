@@ -376,7 +376,7 @@ export class QwenResponseParser
     return (
       message.includes("invalid session") ||
       message.includes("session not found") ||
-      message.includes("--continue requires a valid session")
+      message.includes("--resume requires a valid session")
     );
   }
 }

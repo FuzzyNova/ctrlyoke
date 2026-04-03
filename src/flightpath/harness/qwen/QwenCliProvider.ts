@@ -52,7 +52,7 @@ const execAsync = promisify(exec);
  * - Uses stream-json output format (NDJSON - one JSON object per line)
  * - Session ID from system init or result event
  * - Mode-based permissions (--approval-mode, -y for YOLO)
- * - Supports --continue flag for session continuation
+ * - Supports --resume flag for session continuation
  * - Log files in ~/.qwen/projects/<workspace>/chats/<session-id>.jsonl
  *
  * Usage:
@@ -96,7 +96,7 @@ export class QwenCliProvider implements ICliProvider {
    * - Output format (--output-format stream-json for headless)
    * - Model selection (with validation and fallback)
    * - Workspace directories (--add-dir)
-   * - Session management (--continue for resumption)
+   * - Session management (--resume for resumption)
    * - Tool permissions (--approval-mode, -y, --allowed-tools, --exclude-tools)
    * - Extra CLI flags from additionalArgs
    *
@@ -183,8 +183,8 @@ export class QwenCliProvider implements ICliProvider {
       `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, sessionId=${sessionId ?? "none"}, shouldResume=${shouldResume}`
     );
     if (shouldResume) {
-      args.push("--continue", sessionId!);
-      Log.debug(`✅ Added continue flag: --continue ${sessionId}`);
+      args.push("--resume", sessionId!);
+      Log.debug(`✅ Added resume flag: --resume ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
       Log.debug(`⚠️ Resume requested but no session ID available`);
     } else {
@@ -227,7 +227,7 @@ export class QwenCliProvider implements ICliProvider {
   /**
    * Set up FlightPath notification hooks (Stop hook + user hooks) for interactive mode.
    * Merges hooks into .qwen/settings.json and pre-trusts them in trusted_hooks.json.
-   * Returns ["--experimental-hooks"] so Qwen activates its hook system.
+   * Hooks are enabled by default in Qwen — no CLI flag needed.
    */
   async buildNotificationHookArgs(
     extensionPath: string,
@@ -267,13 +267,13 @@ export class QwenCliProvider implements ICliProvider {
       userHooks
     );
     Log.debug(`🔔 Configured Stop hook for Qwen completion detection`);
-    return ["--experimental-hooks"];
+    return [];
   }
 
   /**
    * Set up user-only hooks for headless execution.
    * No FlightPath notification hooks are included since headless uses process-exit for completion.
-   * Returns ["--experimental-hooks"] so Qwen activates its hook system.
+   * Hooks are enabled by default in Qwen — no CLI flag needed.
    */
   async buildHeadlessUserHookArgs(
     workspaceRoot: string,
@@ -290,7 +290,7 @@ export class QwenCliProvider implements ICliProvider {
       userHooks
     );
     Log.debug(`🔔 Configured user hooks for Qwen headless mode`);
-    return ["--experimental-hooks"];
+    return [];
   }
 
   /**

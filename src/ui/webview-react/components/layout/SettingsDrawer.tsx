@@ -42,9 +42,18 @@ import {
 import { HooksEditor } from "../editor/HooksEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
+import {
+  COMPARE_SOURCE_LABELS,
+  type EndConditionCompareSource,
+} from "../../utils/endCondition";
+import type { SelectOption } from "../shared";
 
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const SETTINGS_DRAWER_BREAKPOINT = 400;
+
+const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
+  ["auto", "stdout", "stderr", "exitCode"] as EndConditionCompareSource[]
+).map((v) => ({ value: v, label: COMPARE_SOURCE_LABELS[v] }));
 
 const BUTTON_STATE = {
   IDLE: "idle",
@@ -201,6 +210,26 @@ export const SettingsPanel: React.FC<{
         workflowProperties.endCondition !== undefined
     );
   }, [workflowProperties.endCondition]);
+
+  // Local string state for number inputs — prevents auto-reset when clearing the field
+  const [endTimeoutInput, setEndTimeoutInput] = useState(
+    String((workflowProperties.endCondition as any)?.timeout ?? 30000)
+  );
+  const [endMaxRetriesInput, setEndMaxRetriesInput] = useState(
+    String((workflowProperties.endCondition as any)?.maxRetries ?? 0)
+  );
+
+  useEffect(() => {
+    setEndTimeoutInput(
+      String((workflowProperties.endCondition as any)?.timeout ?? 30000)
+    );
+    setEndMaxRetriesInput(
+      String((workflowProperties.endCondition as any)?.maxRetries ?? 0)
+    );
+  }, [
+    (workflowProperties.endCondition as any)?.timeout,
+    (workflowProperties.endCondition as any)?.maxRetries,
+  ]);
 
   // Single breakpoint for all three layout zones (body rows, tab labels, footer toggles)
   const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(
@@ -1067,25 +1096,56 @@ export const SettingsPanel: React.FC<{
                     : "Enable End Condition to configure validation"
                 }
               >
-                {/* Row 1: Script + Returns */}
+                {/* Row 1: Script (full width) */}
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor="settings-end-script"
+                    className="text-[11px] font-semibold text-description-fg"
+                  >
+                    Script:
+                  </label>
+                  <input
+                    type="text"
+                    id="settings-end-script"
+                    value={(endCondition as any).script || ""}
+                    onChange={(e) =>
+                      handleEndConditionFieldChange("script", e.target.value)
+                    }
+                    placeholder="npm test"
+                    className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                  />
+                </div>
+
+                {/* Row 2: Compare Source + Expected Return */}
                 <DrawerRow narrow={isNarrow}>
                   <div className="flex flex-col gap-1">
                     <label
-                      htmlFor="settings-end-script"
+                      htmlFor="settings-end-compare-source"
                       className="text-[11px] font-semibold text-description-fg"
+                      title="Auto: 'true'/'false' check exit code; other values check stdout. Stdout: always compare stdout. Stderr: compare stderr. Exit Code: compare numeric exit code."
                     >
-                      Script:
+                      Compare Source:
                     </label>
-                    <input
-                      type="text"
-                      id="settings-end-script"
-                      value={(endCondition as any).script || ""}
-                      onChange={(e) =>
-                        handleEndConditionFieldChange("script", e.target.value)
+                    <CustomSelect
+                      id="settings-end-compare-source"
+                      value={(endCondition as any).compareSource ?? "auto"}
+                      onChange={(v) =>
+                        handleEndConditionFieldChange(
+                          "compareSource",
+                          v as EndConditionCompareSource
+                        )
                       }
-                      placeholder="npm test"
-                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                      options={COMPARE_SOURCE_OPTIONS}
                     />
+                    <span className="text-[10px] text-description-fg">
+                      {((endCondition as any).compareSource ?? "auto") === "auto"
+                        ? "'true'/'false' use exit code; other values check stdout"
+                        : ((endCondition as any).compareSource ?? "auto") === "stdout"
+                          ? "Compares stdout output (requires clean exit)"
+                          : ((endCondition as any).compareSource ?? "auto") === "stderr"
+                            ? "Compares stderr output (exit code not checked)"
+                            : "Compares numeric exit code — use '0', '1', or 'true'/'false'"}
+                    </span>
                   </div>
 
                   <div className="flex flex-col gap-1">
@@ -1093,7 +1153,7 @@ export const SettingsPanel: React.FC<{
                       htmlFor="settings-end-returns"
                       className="text-[11px] font-semibold text-description-fg"
                     >
-                      Returns:
+                      Expected Return:
                     </label>
                     <input
                       type="text"
@@ -1108,7 +1168,7 @@ export const SettingsPanel: React.FC<{
                   </div>
                 </DrawerRow>
 
-                {/* Row 2: Timeout + Max Retries */}
+                {/* Row 3: Timeout + Max Retries */}
                 <DrawerRow narrow={isNarrow}>
                   <div className="flex flex-col gap-1">
                     <label
@@ -1120,13 +1180,14 @@ export const SettingsPanel: React.FC<{
                     <input
                       type="number"
                       id="settings-end-timeout"
-                      value={(endCondition as any).timeout || 30000}
-                      onChange={(e) =>
-                        handleEndConditionFieldChange(
-                          "timeout",
-                          parseInt(e.target.value) || 30000
-                        )
-                      }
+                      value={endTimeoutInput}
+                      onChange={(e) => setEndTimeoutInput(e.target.value)}
+                      onBlur={() => {
+                        const parsed = parseInt(endTimeoutInput);
+                        const value = isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
+                        setEndTimeoutInput(String(value));
+                        handleEndConditionFieldChange("timeout", value);
+                      }}
                       min={1000}
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                     />
@@ -1142,13 +1203,14 @@ export const SettingsPanel: React.FC<{
                     <input
                       type="number"
                       id="settings-end-retries"
-                      value={(endCondition as any).maxRetries ?? 0}
-                      onChange={(e) =>
-                        handleEndConditionFieldChange(
-                          "maxRetries",
-                          parseInt(e.target.value) ?? 0
-                        )
-                      }
+                      value={endMaxRetriesInput}
+                      onChange={(e) => setEndMaxRetriesInput(e.target.value)}
+                      onBlur={() => {
+                        const parsed = parseInt(endMaxRetriesInput);
+                        const value = isNaN(parsed) ? 0 : parsed;
+                        setEndMaxRetriesInput(String(value));
+                        handleEndConditionFieldChange("maxRetries", value);
+                      }}
                       min={-1}
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                     />
