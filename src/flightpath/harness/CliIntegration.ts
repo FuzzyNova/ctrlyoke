@@ -668,7 +668,7 @@ export class CliIntegration extends HarnessIntegration {
 
     const success = isInteractive
       ? await this.executionRunner.executeInteractive(session, baseArgs)
-      : (() => {
+      : await (() => {
           this.warnIfHeadlessWithoutPermissions(
             session.resolvedProperties?.toolPermissions
           );

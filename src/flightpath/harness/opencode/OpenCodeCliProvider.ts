@@ -183,14 +183,14 @@ export class OpenCodeCliProvider implements ICliProvider {
       Log.debug(`🆕 Starting new session`);
     }
 
-    // Interactive mode: deploy the completion detection plugin
-    if (isInteractive && workspaceRoot) {
-      const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
-      await this.deployCompletionPlugin(
-        workspaceRoot,
-        extensionPath,
-        userHooks
-      );
+    // Deploy the completion plugin for interactive mode (always) and for
+    // headless mode when user hooks are configured. In headless mode the plugin
+    // fires user hook commands via native OpenCode events; FLIGHTPATH_NOTIFY_DIR
+    // is only set in interactive mode so notification file writing is skipped.
+    const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
+    const hasUserHooks = (userHooks?.length ?? 0) > 0;
+    if (workspaceRoot && (isInteractive || hasUserHooks)) {
+      await this.deployCompletionPlugin(workspaceRoot, extensionPath, userHooks);
     }
 
     // Extra CLI flags from additionalArgs (appended before prompt positional arg)
@@ -387,7 +387,7 @@ export class OpenCodeCliProvider implements ICliProvider {
         workspaceRoot,
         ".opencode",
         "plugin",
-        "flightpath-completion-hook.js"
+        "flightpath-completion-hook.ts"
       ),
     ];
   }
@@ -471,12 +471,13 @@ export class OpenCodeCliProvider implements ICliProvider {
   ): Promise<void> {
     try {
       const pluginDir = path.join(workspaceRoot, ".opencode", "plugin");
-      const pluginPath = path.join(pluginDir, "flightpath-completion-hook.js");
+      // OpenCode only loads .ts plugins — .js files are silently ignored.
+      const pluginPath = path.join(pluginDir, "flightpath-completion-hook.ts");
       const sourcePath = path.join(
         extensionPath,
         "out",
         "scripts",
-        "flightpath-opencode-plugin.js"
+        "flightpath-opencode-plugin.ts"
       );
 
       await fs.promises.mkdir(pluginDir, { recursive: true });

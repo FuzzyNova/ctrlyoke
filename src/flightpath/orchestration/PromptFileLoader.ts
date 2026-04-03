@@ -95,14 +95,15 @@ export class PromptFileLoader {
               }
             }
 
-            // Step 2: Populate defaults from VS Code settings for any properties
-            // not explicitly specified in the source file. This ensures the working
-            // file always has explicit values so the SettingsDrawer stays in sync
-            // with the actual configuration (no implicit fallback to global settings).
+            // Step 2: Populate defaults from VS Code/CLI settings for any properties
+            // not explicitly specified in the source file. Apply to both the on-disk
+            // working file AND the in-memory promptFile so getWorkflowFile() reflects
+            // the full resolved configuration (e.g. toolPermissions from --headless).
             const defaults = PromptFileLoader.populateSettingsDefaults(updates);
 
             if (Object.keys(defaults).length > 0) {
               await this.promptQueue.updateWorkingFileProperties(defaults);
+              Object.assign(promptFile, defaults);
               Log.debug(
                 `Populated VS Code defaults for new working file: ${Object.keys(defaults).join(", ")}`
               );
@@ -287,6 +288,9 @@ export class PromptFileLoader {
     }
     if (promptFile.hooks !== undefined) {
       updates.hooks = promptFile.hooks;
+    }
+    if (promptFile.toolPermissions !== undefined) {
+      updates.toolPermissions = promptFile.toolPermissions;
     }
     if (promptFile.endCondition !== undefined) {
       updates.endCondition = promptFile.endCondition;
