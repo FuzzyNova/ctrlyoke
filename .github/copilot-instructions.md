@@ -13,7 +13,7 @@ Automate AI coding assistants (GitHub Copilot, Claude Code, Codex, OpenCode, Qwe
 - **React 19 + Vite** — Webview dashboard UI (compiled separately)
 - **Zustand** — Webview state management
 - **Tailwind CSS + CodeMirror 6** — Webview styling and prompt editor
-- **Mocha** — Test suite (~13,100 lines across 40 test files)
+- **Mocha** — Test suite (~20,000 lines across ~64 test files)
 - **@modelcontextprotocol/sdk** — MCP server for external queue management
 </technicalStack>
 
@@ -42,15 +42,16 @@ User loads workflow (.flightpath.yaml/.json/.prompt.md)
     → PromptFileParser (AJV schema validation)
     → WorkflowOrchestrator (singleton registry, harness lifecycle)
         → WorkflowInstance (per-workflow execution state)
-            → PromptQueue (state machine: idle → running → paused/completed/error)
-            → WorkflowExecutor (sequential prompt loop, two-phase: queue → finalPrompt)
+            → WorkflowStateMachine (sole owner of runtime status transitions)
+            → PromptQueue (prompt list + hash-based deduplication)
+            → WorkflowExecutor (sequential execution loop, two-phase: queue → finalPrompt)
                 → PropertyResolver (3-tier: prompt > workflow > settings)
                 → HarnessIntegration (abstract base, 7 concrete implementations)
                     → CliIntegration / CopilotChatIntegration
                 → EndConditionHandler (retry orchestration)
                     → EndConditionEvaluator (isolated child process)
             → OutputCaptureBuffer (per-step output buffering for replay)
-    → FlightPathWebviewProvider (React dashboard updates)
+    → DashboardBroadcastHub (fan-out hub → FlightPathWebviewProvider + other sinks)
 ```
 
 ## CLI Composition Architecture
@@ -61,7 +62,11 @@ User loads workflow (.flightpath.yaml/.json/.prompt.md)
 src/flightpath/harness/
 ├── CliIntegration.ts          ← Generic, never modified for new harnesses
 ├── shared/interfaces/         ← ICliProvider, IResponseParser, INotificationMonitor, IToolPermissionMapper, ILogParser
-├── shared/                    ← CliNotificationMonitor, CliOutputFormatter, CliResponseParser, CliToolPermissionMapper, CliMcpConfigGenerator, CliProviderUtils, BaseLogParser
+├── shared/                    ← CliNotificationMonitor, CliOutputFormatter, CliResponseParser, CliToolPermissionMapper,
+│                                 CliMcpConfigGenerator, CliProviderUtils, BaseLogParser, CliLogMonitor
+│                                 + coordinator layer: CliTransportCoordinator, CliExecutionRunner, CliPromptPreparer,
+│                                   CliResponseCollector, CliInteractiveStartupCoordinator, CliSessionResolverAdapter,
+│                                   CliResponseTextExtractor, CliPromptRuntimeCoordinator
 ├── copilot/                   ← CopilotCliProvider + 5 supporting classes
 ├── claude/                    ← ClaudeCliProvider + 5 supporting classes
 ├── codex/                     ← CodexCliProvider + 5 supporting classes
@@ -75,8 +80,10 @@ Adding a new harness requires changes across multiple layers (harness directory,
 ## Key Subsystems
 
 - **WorkflowOrchestrator** — Singleton registry managing 7 harness integrations and cross-cutting resources (TemplateImporter, WorkflowCommandHandler, WorkspaceSessionManager)
+- **WorkflowStateMachine** — Sole owner of runtime status transitions (idle → running → paused/completed/error); extracted from PromptQueue
+- **DashboardBroadcastHub** — Fan-out hub implementing `IDashboardProvider` + `IDashboardSink`; decouples orchestrator from webview and other sinks
 - **WorkflowInstance** — Per-workflow execution state container managing PromptQueue, WorkflowExecutor, EndConditionHandler, OutputHistoryManager, OutputCaptureBuffer
-- **PromptQueue** — State container with hash-based deduplication; WorkflowExecutor owns the execution loop
+- **PromptQueue** — Prompt list with hash-based deduplication; WorkflowStateMachine owns status; WorkflowExecutor owns the execution loop
 - **PropertyResolver** — Three-tier precedence: prompt-level → workflow-level → VS Code settings
 - **SessionResolver** — Per-prompt session ID tracking with cross-harness validation
 - **ContextExpander** — Expands `#selection:` and `@path` references before sending to AI
@@ -89,7 +96,7 @@ Adding a new harness requires changes across multiple layers (harness directory,
 - **McpDiscoveryUtils** — Discovers local MCP servers from `.vscode/mcp.json`, `.mcp.json`, VS Code config, `~/.claude.json`; registry pagination
 - **MCP Server** (`src/mcp-server.ts`) — Standalone stdio server for queue management from CLI harnesses
 - **LM Tools** — `flightpath_queue_status` and `flightpath_append_queue` for VS Code Chat integration
-- **React Webview** — Dashboard with 5 Zustand stores, prompt editor (CodeMirror), output viewer, embedded terminal (xterm.js), settings panel
+- **React Webview** — Dashboard with 5 Zustand stores, prompt editor (CodeMirror), output viewer, embedded terminal (xterm.js), settings panel; includes ContextQuickPicker and PermissionsQuickPicker footer controls
 
 </architecture>
 
@@ -107,8 +114,9 @@ Adding a new harness requires changes across multiple layers (harness directory,
 | `src/platform/PlatformAdapter.ts`         | Abstract interface for VS Code / CLI platform abstraction                      |
 | `src/flightpath/WorkflowOrchestrator.ts`  | Singleton registry — harness lifecycle, cross-cutting resources                |
 | `src/flightpath/WorkflowInstance.ts`      | Per-workflow execution state (queue, executor, history, output buffer)         |
+| `src/flightpath/WorkflowStateMachine.ts`  | Sole owner of runtime status transitions                                       |
 | `src/flightpath/HarnessIntegration.ts`    | Abstract base class for all harnesses                                          |
-| `src/flightpath/PromptQueue.ts`           | State machine for prompt execution                                             |
+| `src/flightpath/PromptQueue.ts`           | Prompt list with hash-based deduplication                                      |
 | `src/flightpath/WorkflowExecutor.ts`      | Sequential execution loop (two-phase: queue → finalPrompt)                     |
 | `src/flightpath/PromptFileParser.ts`      | YAML/JSON parsing with AJV validation                                          |
 | `src/flightpath/EndConditionEvaluator.ts` | Script validation in isolated child process                                    |
@@ -118,6 +126,7 @@ Adding a new harness requires changes across multiple layers (harness directory,
 | `src/utils/ConfigurationUtils.ts`         | All VS Code settings access centralized here                                   |
 | `src/utils/ModelConstants.ts`             | Single source of truth for model lists                                         |
 | `src/utils/McpDiscoveryUtils.ts`          | Local and registry MCP server discovery                                        |
+| `src/ui/DashboardBroadcastHub.ts`         | Fan-out hub — decouples orchestrator from webview and other dashboard sinks    |
 | `src/ui/FlightPathWebviewProvider.ts`     | React webview lifecycle and message routing                                    |
 | `/schemas/prompt-schema.json`             | JSON Schema for prompt files (source — never edit `out/schemas/`)              |
 
@@ -183,8 +192,9 @@ src/
 │   ├── HarnessIntegration.ts     # Abstract base for all harnesses
 │   ├── WorkflowOrchestrator.ts   # Singleton registry, harness lifecycle
 │   ├── WorkflowInstance.ts       # Per-workflow execution state
+│   ├── WorkflowStateMachine.ts   # Runtime status transitions (extracted from PromptQueue)
 │   ├── IntegrationFactory.ts     # Factory for harness-specific integrations
-│   ├── PromptQueue.ts            # Execution state machine
+│   ├── PromptQueue.ts            # Prompt list + hash-based deduplication
 │   ├── WorkflowExecutor.ts       # Sequential execution loop
 │   ├── PromptFileParser.ts       # YAML/JSON parsing + validation
 │   ├── EndConditionEvaluator.ts  # Script execution in child process
@@ -193,23 +203,26 @@ src/
 │   ├── QueueOperations.ts        # Shared queue ops (MCP + LM Tools)
 │   ├── WorkingFileManager.ts     # Atomic file I/O with file locking
 │   ├── harness/                  # ALL harnesses: CliIntegration, 6 CLI providers, + chat/
-│   │   ├── shared/               # CliNotificationMonitor, CliOutputFormatter, CliProviderUtils, etc.
+│   │   ├── shared/               # CliNotificationMonitor, CliOutputFormatter, CliLogMonitor,
+│   │   │                         # CliProviderUtils, coordinator classes (CliTransportCoordinator,
+│   │   │                         # CliExecutionRunner, CliPromptPreparer, CliResponseCollector, etc.)
 │   │   └── chat/                 # CopilotChatIntegration + session monitoring
 │   └── orchestration/            # PromptFileLoader, PromptFileWatcher,
 │                                 # TemplateImporter, WorkflowCommandHandler,
 │                                 # WorkspaceSessionManager, OutputHistoryManager,
 │                                 # CliWatchSession, WorkspaceInitializer
-├── scripts/                      # Hook/notify scripts (7 scripts: 6 stdin-based + 1 OpenCode plugin)
+├── scripts/                      # Hook/notify scripts (6 JS scripts + 1 TypeScript OpenCode plugin)
 ├── templates/                    # Built-in workflow/agent templates
 ├── types/                        # Core types and shared constants (7 files)
 ├── ui/
+│   ├── DashboardBroadcastHub.ts      # Fan-out hub implementing IDashboardProvider + IDashboardSink
 │   ├── FlightPathWebviewProvider.ts  # Sidebar panel provider (delegates to 3 classes)
 │   ├── StatusBarManager.ts           # Status bar integration
 │   ├── FlightPathMcpServerProvider.ts # McpServerDefinitionProvider for copilot-chat
 │   ├── icons/                        # SVG sources → auto-converted to CSS (7 harness icons)
 │   └── webview-react/                # React dashboard (Vite bundle, 5 Zustand stores)
 ├── utils/                        # Shared utilities (26+ modules)
-└── test/                         # Mocha test suite (40 files, ~13,100 lines)
+└── test/                         # Mocha test suite (~64 files, ~20,000 lines)
 
 schemas/                          # Prompt schema source (JSON + auto-generated YAML)
 scripts/                          # Build scripts (sync-models, generate-schema)
@@ -373,7 +386,7 @@ See `dev/implemented/ADDING_NEW_CLI_HARNESS.md`. Creates files in `src/flightpat
 ### Testing
 
 - `npm test` → `@vscode/test-electron` → Mocha discovers `**/**.test.js` (TDD style)
-- ~13,100 lines across 40 test files covering parsing, validation, state machines, CLI parsers, session management, tool permissions, hooks, orchestration, log parsers
+- ~20,000 lines across ~64 test files covering parsing, validation, state machines, CLI parsers, session management, tool permissions, hooks, orchestration, log parsers, coordinator classes
 - AI-dependent features (real workflows) require manual testing only
 
 </developmentGuidelines>
@@ -403,21 +416,21 @@ See `dev/implemented/ADDING_NEW_CLI_HARNESS.md`. Creates files in `src/flightpat
 
 The `.github/instructions/` directory contains detailed implementation guidelines scoped by file pattern. Read the relevant instruction file(s) before editing files in that area.
 
-| File Pattern                           | Instruction File                        | Covers                                                                                                  |
-| -------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `src/flightpath/*.ts` (top-level only) | `flightpath-core.instructions.md`       | WorkflowOrchestrator, WorkflowInstance, PromptQueue, WorkflowExecutor, EndCondition, IntegrationFactory |
-| `src/flightpath/harness/**`            | `harness-integrations.instructions.md`  | CliIntegration, all 6 CLI providers, shared utilities, PtyProcessManager                                |
-| `src/flightpath/harness/chat/**`       | `flightpath-chat.instructions.md`       | CopilotChatIntegration (UI automation fallback)                                                         |
-| `src/platform/**`                      | `platform.instructions.md`              | PlatformAdapter, VsCodeAdapter, CliAdapter, vscode-shim                                                 |
-| `src/cli.ts`, `src/cli/**`             | `flightpath-cli-binary.instructions.md` | FlightPath CLI binary, CliAdapter, CliTerminalFormatter                                                 |
-| `src/ui/**` (excl. webview-react)      | `ui.instructions.md`                    | WebviewProvider, StatusBar, McpServerProvider, message routing                                          |
-| `src/ui/webview-react/**`              | `webview-react.instructions.md`         | React dashboard, 5 Zustand stores, CodeMirror editor, xterm.js terminal                                 |
-| `src/types/**`                         | `types.instructions.md`                 | 7 type files: FlightPathTypes, DashboardConstants, CliOutputTypes, etc.                                 |
-| `src/utils/**`                         | `utils.instructions.md`                 | 26+ utilities: ConfigurationUtils, McpDiscoveryUtils, GitUtils, etc.                                    |
-| `src/completions/**`                   | `completions.instructions.md`           | IntelliSense providers and document link navigation                                                     |
-| `src/scripts/**`                       | `scripts.instructions.md`               | 7 hook/notify scripts (6 stdin-based + 1 OpenCode plugin)                                               |
-| `src/templates/**`                     | `templates.instructions.md`             | End condition script templates                                                                          |
-| `src/test/**`                          | `test.instructions.md`                  | 40 test files, testing patterns and conventions                                                         |
-| `src/dev/**`                           | `dev.instructions.md`                   | Dev-only commands (stripped in production)                                                              |
+| File Pattern                           | Instruction File                        | Covers                                                                                                       |
+| -------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `src/flightpath/*.ts` (top-level only) | `flightpath-core.instructions.md`       | WorkflowOrchestrator, WorkflowStateMachine, WorkflowInstance, PromptQueue, WorkflowExecutor, EndCondition    |
+| `src/flightpath/harness/**`            | `harness-integrations.instructions.md`  | CliIntegration, all 6 CLI providers, shared coordinator layer, ICliProvider interface, PtyProcessManager     |
+| `src/flightpath/harness/chat/**`       | `flightpath-chat.instructions.md`       | CopilotChatIntegration (UI automation fallback)                                                              |
+| `src/platform/**`                      | `platform.instructions.md`              | PlatformAdapter, VsCodeAdapter, CliAdapter, vscode-shim                                                      |
+| `src/cli.ts`, `src/cli/**`             | `flightpath-cli-binary.instructions.md` | FlightPath CLI binary, CliAdapter, CliTerminalFormatter                                                      |
+| `src/ui/**` (excl. webview-react)      | `ui.instructions.md`                    | DashboardBroadcastHub, FlightPathWebviewProvider, StatusBar, McpServerProvider, message routing              |
+| `src/ui/webview-react/**`              | `webview-react.instructions.md`         | React dashboard, 5 Zustand stores, CodeMirror editor, xterm.js terminal, ContextQuickPicker, PermissionsQuickPicker |
+| `src/types/**`                         | `types.instructions.md`                 | 7 type files: FlightPathTypes, DashboardConstants, CliOutputTypes, etc.                                      |
+| `src/utils/**`                         | `utils.instructions.md`                 | 26+ utilities: ConfigurationUtils, McpDiscoveryUtils, GitUtils, etc.                                         |
+| `src/completions/**`                   | `completions.instructions.md`           | IntelliSense providers and document link navigation                                                          |
+| `src/scripts/**`                       | `scripts.instructions.md`               | 6 JS hook scripts + 1 TypeScript OpenCode plugin                                                             |
+| `src/templates/**`                     | `templates.instructions.md`             | End condition script templates                                                                               |
+| `src/test/**`                          | `test.instructions.md`                  | ~64 test files, testing patterns and conventions                                                             |
+| `src/dev/**`                           | `dev.instructions.md`                   | Dev-only commands (stripped in production)                                                                   |
 
 </instructionFiles>

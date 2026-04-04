@@ -4,8 +4,10 @@ applyTo: "src/scripts/**"
 
 <purpose>
 Hook/notify scripts executed by CLI harnesses (Copilot, Claude, Codex, Gemini, Qwen, OpenCode) during agent sessions.
-These are plain Node.js scripts (no TypeScript, no bundler) copied to `out/scripts/` during build.
+All files in `src/scripts/` are copied verbatim to `out/scripts/` during build (no bundling or transpilation).
 Each CLI provider references its script via an absolute path resolved at runtime.
+
+Most scripts are plain CommonJS Node.js (`.js`). The **OpenCode plugin is the exception** — it is TypeScript/ESM (`.ts`) because OpenCode only loads `.ts` plugin files.
 </purpose>
 
 <scripts>
@@ -93,16 +95,17 @@ Each CLI provider references its script via an absolute path resolved at runtime
 - Has unconditional invocation logging (writes to log before any diagnostic flag checks for troubleshooting)
 - Ignores any `hook_event_name` other than `SessionStart`, `UserPromptSubmit`, or `Stop` (exits 0)
 
-**`flightpath-opencode-plugin.js`** — OpenCode completion plugin
+**`flightpath-opencode-plugin.ts`** — OpenCode completion plugin (TypeScript/ESM)
 
-- **Not a hook script** — an OpenCode plugin (`exports.FlightPathHook`) deployed to `.opencode/plugin/flightpath-completion-hook.js`
+- **Not a hook script** — an OpenCode plugin (`export const FlightPathHook`) deployed to `.opencode/plugin/flightpath-completion-hook.ts`
+- OpenCode only loads `.ts` plugins; this file uses ESM `import`/`export` syntax (not CommonJS)
 - Uses env vars (not CLI args): `FLIGHTPATH_NOTIFY_DIR` (notification directory), `FLIGHTPATH_RUN_ID` (per-run UUID)
-- Tracks main sessions only (filters child sessions with `parentID` to avoid subagent false positives)
-- Listens for three event types via the plugin `event` callback:
-  - `session.created` (no parentID) → writes `{runId|sessionId}-start.json` with `{ hookEvent: "SessionStart", status: "started" }`
-  - `session.status` (idle, main session) → writes `{sessionId}-stop.json` with `{ hookEvent: "Stop", status: "completed" }`
-  - `session.deleted` → removes session from tracking set
+- Filters child sessions (`parentID`) to avoid subagent false positives (only on `session.created`)
+- Listens for two event types via the plugin `event` callback:
+  - `session.created` (no parentID) → writes `{runId|sessionId}-start.json` with `{ hookEvent: "SessionStart", status: "started" }` ⚠️ known OpenCode bug #14808 — may not fire
+  - `session.idle` → writes `{sessionId}-stop.json` with `{ hookEvent: "Stop", status: "completed" }` (no session tracking Set needed)
 - Self-contained diagnostic logging (derives logs dir from `FLIGHTPATH_NOTIFY_DIR`, does not use `initializeLogger`)
+- **Deployment**: `OpenCodeCliProvider.deployCompletionPlugin()` reads `out/scripts/flightpath-opencode-plugin.ts` and copies it verbatim to `.opencode/plugin/flightpath-completion-hook.ts` when no user hooks are configured. When user hooks are present, `OpenCodePluginGenerator.generate(userHooks)` produces a customized plugin string with hook commands embedded (supports `stop`→`session.idle`, `sessionStart`→`session.created`, `preToolUse`→`tool.execute.before`, `postToolUse`→`tool.execute.after`)
   </scripts>
 
 <notificationMechanism>
@@ -118,6 +121,7 @@ All scripts write JSON notification files that FlightPath's `*NotificationMonito
 - Stop events: `{sessionId}-stop.json`
 - Codex (unique): `{threadId}.json` (single file, completion only)
 - Copilot fallback: `${hookType}-${Date.now()}.json` when no session ID available
+- OpenCode stop: `session.idle` event (no session tracking needed, unlike the older JS version)
 
 **Notify directory source:**
 
@@ -131,10 +135,18 @@ All scripts (except Codex) use the `FLIGHTPATH_RUN_ID` env var — a per-prompt 
 </notificationMechanism>
 
 <buildAndDeploy>
+**Plain JS hook scripts** (Copilot, Claude, Codex, Gemini, Qwen):
 - Source: `src/scripts/*.js`
-- Output: `out/scripts/*.js` (copied verbatim by esbuild config — NOT bundled or transpiled)
+- Output: `out/scripts/*.js` (copied verbatim by the `copy-scripts` esbuild plugin — NOT bundled or transpiled)
 - Referenced by CLI providers using `path.join(context.extensionPath, "out", "scripts", "<filename>")`
 - Must remain plain CommonJS — no ES modules, no TypeScript, no external `npm` dependencies
+
+**OpenCode plugin** (`flightpath-opencode-plugin.ts`):
+- Source: `src/scripts/flightpath-opencode-plugin.ts` (TypeScript/ESM — must stay this way; OpenCode only loads `.ts` plugins)
+- Output: `out/scripts/flightpath-opencode-plugin.ts` (also copied verbatim by the same esbuild plugin)
+- Deployed at runtime by `OpenCodeCliProvider.deployCompletionPlugin()` to `.opencode/plugin/flightpath-completion-hook.ts`
+- When user hooks are configured, `OpenCodePluginGenerator.generate(userHooks)` produces a customized plugin string instead of using the static file
+- Note: `src/scripts/flightpath-opencode-plugin.js` still exists in the repo as a legacy artifact but is no longer deployed
 </buildAndDeploy>
 
 <debugLogging>
@@ -142,12 +154,12 @@ Debug logging is **opt-in**: scripts check the `FLIGHTPATH_DIAGNOSTIC_LOGS` envi
 
 - Stdin-based hooks (Copilot, Claude, Gemini, Qwen) use `initializeLogger()` from utils
 - Codex derives the logs directory from `notification.cwd`
-- OpenCode derives the logs directory from `FLIGHTPATH_NOTIFY_DIR`
+- OpenCode derives the logs directory from `FLIGHTPATH_NOTIFY_DIR`; logging is gated on `notifyDir` being set
 - Qwen additionally writes an unconditional invocation log entry before any flag checks (for troubleshooting hook registration)
   </debugLogging>
 
 <guidelines>
-- Keep scripts self-contained — only Node.js built-ins (`fs`, `path`, `os`, `readline`) plus `flightpath-hook-utils.js`
+- Keep JS hook scripts self-contained — only Node.js built-ins (`fs`, `path`, `os`, `readline`) plus `flightpath-hook-utils.js`
 - Initialize `debugLog = createLogger(null)` at module level; replace with real logger via `initializeLogger()` or after checking `FLIGHTPATH_DIAGNOSTIC_LOGS` env var
 - Prefer `initializeLogger()` + `readStdinJson()` from utils for new stdin-based hooks to avoid boilerplate
 - `process.exit(1)` on fatal argument/parse errors; never throw unhandled exceptions

@@ -52,16 +52,18 @@ src/ui/webview-react/
 │   │   ├── PromptsPanel.tsx      # Prompt list with drag-and-drop
 │   │   └── SettingsDrawer.tsx    # Harness/model settings
 │   ├── editor/              # Editor components
-│   │   ├── AgentQuickPicker.tsx  # Agent override in EditorFooter
+│   │   ├── AgentQuickPicker.tsx  # Agent override in EditorFooter (left side)
 │   │   ├── CodeMirrorEditor.tsx  # CodeMirror 6 instance
-│   │   ├── EditorFooter.tsx      # Token count / status bar + quick pickers
+│   │   ├── ContextQuickPicker.tsx # Resume session / session ID override (right side)
+│   │   ├── EditorFooter.tsx      # Status bar with quick pickers + action buttons
 │   │   ├── FooterQuickPicker.tsx # Reusable popup button for footer pickers
-│   │   ├── HarnessQuickPicker.tsx # Harness override in EditorFooter
+│   │   ├── HarnessQuickPicker.tsx # Harness override in EditorFooter (left side)
 │   │   ├── HooksEditor.tsx       # Lifecycle hooks editor (Default/None/Custom)
-│   │   ├── ModelQuickPicker.tsx  # Model override in EditorFooter
+│   │   ├── ModelQuickPicker.tsx  # Model override in EditorFooter (left side)
+│   │   ├── PermissionsQuickPicker.tsx # Tool permissions override (right side)
 │   │   ├── PromptEditor.tsx      # Editor with toolbar
 │   │   ├── PropertiesDrawer.tsx  # Prompt properties (6-tab drawer)
-│   │   └── SkillsQuickPicker.tsx # Skills override in EditorFooter
+│   │   └── SkillsQuickPicker.tsx # Skills override in EditorFooter (left side)
 │   ├── prompts/             # Prompt list components
 │   │   ├── BoundaryBar.tsx       # Visual separator between queue and final prompt
 │   │   ├── FinalPromptFooter.tsx # Footer for the final prompt section
@@ -110,7 +112,8 @@ src/ui/webview-react/
 │       ├── RunSelector.tsx       # Run history selector
 │       ├── SkillsSelect.tsx      # Hybrid skills dropdown with portal popup
 │       ├── SplitButton.tsx       # Button with dropdown arrow
-│       └── permissionUtils.ts    # Tool permission mode logic per harness
+│       ├── permissionUtils.ts    # Tool permission mode logic per harness
+│       └── tabBadgeUtils.ts      # Tab icon/color override helpers for DrawerTabBar
 ├── hooks/                   # React hooks
 │   ├── terminalMessageHandlers.ts # Terminal PTY message routing
 │   ├── useAttachmentTokenCount.ts # Token counting with attachment caching
@@ -549,7 +552,20 @@ PropertiesDrawer uses a 6-tab layout with `DrawerTabBar` at the bottom:
 | Hooks       | `hooks`       | Lifecycle hooks editor (HooksEditor)              |
 | Permissions | `permissions` | Tool permission mode + allow/deny lists           |
 
-Tab definitions in `types/drawerPages.ts`. `DrawerTabBar` renders icons + responsive labels.
+Tab definitions in `types/drawerPages.ts`. `DrawerTabBar` renders icons with optional per-tab icon/color overrides via the `tabOverrides` prop (`Partial<Record<DrawerPage, TabIconOverride>>`).
+
+**`TabIconOverride`** (from `shared/tabBadgeUtils.ts`):
+- `codicon?` — replace the tab's default icon
+- `color?` — Tailwind text-color class when inactive
+- `hoverColor?` — Tailwind hover class when inactive (defaults to `hover:text-foreground`)
+- `activeColor?` — Tailwind text-color class when active (defaults to `text-foreground`)
+
+**`tabBadgeUtils.ts`** exports helper functions that compute overrides from resolved property state:
+- `getPermissionTabOverride(mode)` — color-codes the Permissions tab by severity (red = dangerously allow all, yellow = allow all, green = custom)
+- `getHooksTabOverride(hooks)` — blue icon when hooks are configured
+- `getMcpTabOverride(mcpServers)` — blue icon when MCP servers are configured
+- `getValidationTabOverride(endCondition)` — blue icon when an end condition script is set
+- `getContextTabOverride(resumeSession, priorContext)` — blue icon when session resumption or prior context is active
 
 ### 3-Tier Property Inheritance
 
@@ -572,16 +588,40 @@ xterm.js instances live **outside React** in `terminalRegistry.ts`:
 
 **Session types**: `ai-cli` sessions clear on each run; `shell` sessions persist across runs. Pending output buffers PTY data before mount.
 
+### EditorSection Header
+
+`EditorSection` header contains three zones:
+
+- **Left** — collapse affordance (chevron + icon + "Editor" label)
+- **Center** — mode indicator + token count; clicking the mode text starts **inline prompt name editing** (input replaces text, saves on Enter/blur, cancels on Escape); disabled when `isCLIManaged`
+- **Right** — `IconToggleButton` for `flightpath.respectGitignoreForCompletions` (hidden when `isCLIManaged`); posts `UPDATE_CONFIG` message to extension on toggle
+
+**Mode indicator text** format:
+- New mode: `"New Prompt"` or `"New: <name>"`
+- Edit mode: `"Editing: <name>"`, `"Editing: Final Prompt"`, or `"Editing: Prompt N of M"`
+- CLI managed: `"Read-only — CLI run in progress"`
+
+### OutputSection Header
+
+`OutputSection` header right side shows an **execution mode toggle** (`IconToggleButton`) that switches between `EXECUTION_MODES.INTERACTIVE` and `EXECUTION_MODES.HEADLESS`. It posts a `CHANGE_EXECUTION_MODE` message to the extension and is always visible regardless of the active tab (Output vs Terminal).
+
+The header left side shows Output/Terminal tab buttons (when a terminal session exists), and font size steppers for both output text and terminal.
+
 ### EditorFooter Quick Pickers
 
-`FooterQuickPicker` provides a reusable popup button pattern for compact property overrides in `EditorFooter`:
+`FooterQuickPicker` provides a reusable popup button pattern for compact property overrides in `EditorFooter`. The footer is split into two sides (all pickers hidden when `propertiesOpen`):
 
+**Left side** (Harness → Model → Agent → Skills):
 - `HarnessQuickPicker` - Harness override (wraps HarnessDropdown)
 - `ModelQuickPicker` - Model override (wraps CustomSelect)
 - `AgentQuickPicker` - Agent selection
 - `SkillsQuickPicker` - Skills multi-select
 
-Each renders a portal-positioned upward popup. Override values show bold/colored styling.
+**Right side** (Permissions → Context → action buttons):
+- `PermissionsQuickPicker` - Tool permissions mode override (shield icon, `footerOpenPicker === "permissions"`)
+- `ContextQuickPicker` - Resume session + session ID override (book icon, `footerOpenPicker === "context"`)
+
+Each picker receives `isNarrow` and `showLabel` props. Labels are shown when the footer is wide enough (`useElementNarrow(768)`). Override values show bold/colored styling. All pickers use `uiStore.footerOpenPicker` to ensure only one popup is open at a time.
 
 </componentPatterns>
 

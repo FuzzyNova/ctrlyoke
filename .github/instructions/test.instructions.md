@@ -30,7 +30,8 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - `CliMcpConfigGenerator.test.ts` (258 lines) - MCP JSON config generation for CLI harnesses
 - `CliResponseParser.test.ts` (226 lines) - JSON object extraction from CLI stdout streams, CliUsage parsing
 - `CliToolPermissionMapper.test.ts` (297 lines) - Copilot→Claude tool permission pattern mapping, COPILOT_TO_CLAUDE_MAP
-- `ToolPermissionMappers.test.ts` (475 lines) - Copilot/Claude/Codex/OpenCode tool permission flag generation
+- `ToolPermissionMappers.test.ts` (564 lines) - Per-mapper flag generation for Copilot/Claude/Codex/OpenCode/Qwen/Gemini + passthrough handling
+- `HarnessToolPermissionMappers.test.ts` (928 lines) - All harness tool permission mappers with cross-mapper consistency checks
 - `FileReferenceParser.test.ts` (280 lines) - Parses `@file`, `@dir/`, `#file:`, `#sym:` references from prompt text
 - `DiscoveryUtils.test.ts` (95 lines) - `formatDisplayName` (kebab→Title Case), `isAccessibleDirectory`
 - `FileLockUtils.test.ts` (119 lines) - `withFileLock` concurrency safety for JSON file operations
@@ -46,7 +47,30 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - `WorkflowExecutor.test.ts` (433 lines) - WorkflowExecutor execution context, prompt cycling, state transitions
 - `WorkflowInstance.test.ts` (432 lines) - WorkflowInstance lifecycle and state management
 - `WorkflowOrchestrator.test.ts` (68 lines) - Startup auto-load gating (dashboard-ready + init coordination)
+- `WorkflowStateMachine.test.ts` (216 lines) - State machine transitions with ordered event emission (previous/current snapshots)
 - `WorkingFileManager.test.ts` (233 lines) - WorkingFile state (startWork, completeWork, reset)
+- `CliArgParser.test.ts` (86 lines) - `parseArgString` CLI arg string tokenization (quoted args, edge cases)
+- `CliExecutionRunner.test.ts` (204 lines) - CliExecutionRunner orchestrates headless/interactive execution lifecycle
+- `CliExecutionSession.test.ts` (92 lines) - CliExecutionSession result/state container
+- `CliFailureTracker.test.ts` (68 lines) - PTY exit classification, startup-stage failures, interactive abort state
+- `CliIntegration.test.ts` (401 lines) - CliIntegration full integration with mock ICliProvider and PlatformAdapter
+- `CliInteractiveStartupCoordinator.test.ts` (158 lines) - Session resume log seeking, startup coordination with log parsers
+- `CliPromptPreparer.test.ts` (239 lines) - Fast-path/full-path prompt preparation, agent/skills content, slash commands
+- `CliPromptRuntimeCoordinator.test.ts` (159 lines) - Runtime metadata (timing, harness) tracking during prompt execution
+- `CliResponseCollector.test.ts` (211 lines) - CLI result building, session ID preference (parsed output over log discovery)
+- `CliSessionResolverAdapter.test.ts` (120 lines) - Workflow properties and auto-resumed session ID resolution
+- `CliTransportCoordinator.test.ts` (344 lines) - Headless/interactive prompt dispatch, PTY coordination, temp file cleanup
+- `CliWatchSession.test.ts` (61 lines) - Run timestamp extraction and ordering helpers (`getHistoryRunTimestamp`, `isNewerHistoryRunPath`)
+- `CopilotChatIntegration.test.ts` (57 lines) - Prior context building for the Chat harness
+- `EndConditionHandler.test.ts` (341 lines) - EndConditionHandler integrating EndConditionEvaluator, PromptQueue, WorkflowStateMachine
+- `ErrorUtils.test.ts` (64 lines) - `getErrorMessage` extraction from Error instances, strings, numbers, and unknown types
+- `ModelConstants.test.ts` (200 lines) - Model display names, validation, context window sizes for Copilot/Claude/Qwen/Gemini
+- `OutputCaptureBuffer.test.ts` (756 lines) - Event routing to dashboard sink, prompt start/complete lifecycle, status messages
+- `RuntimeMode.test.ts` (58 lines) - `setRuntimeMode`/`isCli` switching between CLI and VS Code modes
+- `TimelineRecorder.test.ts` (123 lines) - Timeline event recording and manifest file writing
+- `TtlCache.test.ts` (246 lines) - TTL-based caching, expiry, refresh, and concurrent request deduplication
+- `VarSubstitutor.test.ts` (235 lines) - `{{placeholder}}` substitution in prompt strings and end condition scripts
+- `promptPathUtils.test.ts` (90 lines) - `looksLikeFilePath`, `PROMPT_FILE_EXTENSIONS` constant validation
 
 **Integration Tests** (`src/test/integration/*.test.ts`):
 
@@ -62,6 +86,14 @@ Comprehensive Mocha test suite covering core business logic, state management, p
   - CodexLogParser (nested payload, date-based directories)
   - Coverage: response extraction, completion detection, session ID extraction, session discovery, error handling
 
+**Harness Hook Integration Tests** (`src/test/harness/*.test.ts`):
+
+- `hooks.harness.test.ts` (352 lines) - Real CLI harness integration tests for hook event delivery:
+  - Verifies stop, sessionStart, preToolUse, postToolUse, userPromptSubmit hooks fire correctly
+  - Runs with `npm run test:harness` (not part of `npm test`)
+  - Exit code 3 from CLI = harness not installed → test skipped
+  - Requires compiled CLI (`npm run compile`) and authenticated harness
+
 **Test Infrastructure:**
 
 - `runTest.ts` - @vscode/test-electron runner configuration
@@ -74,37 +106,37 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - Nested `suite()` blocks for logical grouping
 - Descriptive test names: "should [expected behavior] when [condition]"
 - TDD style (Mocha UI: `'tdd'`)
-- Total: ~13,100 lines across 40 test files
+- Total: ~20,000 lines across 64 test files
   </testStructure>
 
 <testCoverage>
 **Fully Tested:**
-- Core parsing: PromptFileParser, PromptFileSplitter, FileReferenceParser
+- Core parsing: PromptFileParser, PromptFileSplitter, FileReferenceParser, CliArgParser, promptPathUtils
 - Validation: ValidationUtils, SessionValidator
-- State management: PromptQueue, PromptIdentity, WorkflowInstance, WorkingFileManager
-- Execution: EndConditionEvaluator, RetryUtils, WorkflowExecutor
-- Orchestration: WorkflowOrchestrator (startup auto-load gating), PromptFileLoader (settings defaults)
-- CLI harness shared: CliEventMapper, CliMcpConfigGenerator, CliResponseParser, CliToolPermissionMapper
-- Tool permissions: Copilot/Claude/Codex/OpenCode mappers
+- State management: PromptQueue, PromptIdentity, WorkflowInstance, WorkingFileManager, WorkflowStateMachine
+- Execution: EndConditionEvaluator, EndConditionHandler, RetryUtils, WorkflowExecutor
+- Orchestration: WorkflowOrchestrator (startup auto-load gating), PromptFileLoader (settings defaults), TimelineRecorder, CliWatchSession helpers
+- CLI harness shared: CliEventMapper, CliMcpConfigGenerator, CliResponseParser, CliToolPermissionMapper, CliExecutionRunner, CliExecutionSession, CliFailureTracker, CliInteractiveStartupCoordinator, CliPromptPreparer, CliPromptRuntimeCoordinator, CliResponseCollector, CliSessionResolverAdapter, CliTransportCoordinator, CliIntegration (full integration)
+- Tool permissions: Copilot/Claude/Codex/OpenCode/Qwen/Gemini mappers (ToolPermissionMappers + HarnessToolPermissionMappers)
 - Hooks: SettingsJsonHooksTracker (baseline capture, injection tracking), PropertyResolver hooks resolution
 - OpenCode: OpenCodeResponseParser, OpenCodeNotificationMonitor
 - Log parsers: ClaudeLogParser, CopilotLogParser, CodexLogParser
-- Utilities: PropertyResolver, SessionResolver, CliOutputFormatter, DiscoveryUtils, FileLockUtils, TempFileManager, TypedEmitter
+- Utilities: PropertyResolver, SessionResolver, CliOutputFormatter, DiscoveryUtils, FileLockUtils, TempFileManager, TypedEmitter, ErrorUtils, RuntimeMode, TtlCache, VarSubstitutor, ModelConstants
 - Context: ContextExpander (@-reference resolution, file/directory expansion)
 - Queue helpers: QueueOperations, OutputHistoryManager
-- HarnessIntegration: prior-context building
-- Chat integration: ChatSessionParser, AgentExpander
+- HarnessIntegration: prior-context building, OutputCaptureBuffer event routing
+- Chat integration: ChatSessionParser, AgentExpander, CopilotChatIntegration
 
 **Partial Coverage:**
 
 - CLI/Chat command registration and extension activation
 - Token parsing for CLI output
+- Real harness hook delivery (requires installed CLI; `test:harness` suite)
 
 **Manual Testing Only:**
 
 - Full workflows with real AI responses
 - UI components (dashboard, settings webview)
-- Real CLI/Chat harness interactions
   </testCoverage>
 
 <testingChallenges>
@@ -114,23 +146,27 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 **Fixtures:** Located in `src/test/fixtures/`, navigate from `out/test` using relative paths
 **Temp Files:** LogParsers and other tests create temp dirs; always clean up in `teardown`/`afterEach`
 **Private Methods:** Use test subclasses (e.g., `class TestHarness extends HarnessIntegration`) to expose protected/private helpers
+**Harness Hook Tests:** `src/test/harness/` tests invoke real CLIs; exit code 3 = not installed (skip); run separately with `npm run test:harness`
 </testingChallenges>
 
 <keyPatterns>
 **Harness Terminology:** Use `Harness` enum (CopilotCli, CopilotChat, ClaudeCli, CodexCli, OpenCodeCli), not "provider"
 **Property Resolution:** Test three-tier precedence (prompt → workflow → VS Code settings)
 **Session Management:** Validate cross-harness references, UUID vs `thread_` formats, auto-resume logic
-**State Machines:** Test all transitions, edge cases, dynamic extension, limit enforcement
+**State Machines:** Test all transitions, edge cases, dynamic extension, limit enforcement (WorkflowStateMachine emits previous+current snapshots on each transition)
 **Security:** Directory traversal, shell injection, command injection (test both reject and accept cases)
 **Parsers:** Format normalization, schema validation errors, file path resolution
 **Retry Logic:** Template substitution, maxRetries, timeout handling, exit codes
-**CLI Harness Shared:** CliEventMapper classifies tool names → event types; CliResponseParser extracts JSON from raw stdout
-**Tool Permissions:** Each harness mapper converts ToolPermissionConfig into CLI flags; test allow/deny/all/none modes
+**CLI Harness Shared:** CliEventMapper classifies tool names → event types; CliResponseParser extracts JSON from raw stdout; CliExecutionRunner delegates to headless/interactive path; CliTransportCoordinator manages PTY/spawn dispatch and temp file cleanup
+**Tool Permissions:** Each harness mapper (Copilot/Claude/Codex/OpenCode/Qwen/Gemini) converts ToolPermissionConfig into CLI flags; test allow/deny/all/none modes; HarnessToolPermissionMappers covers cross-mapper consistency
 **OpenCode:** Uses plugin file for hooks (not hook config JSON); separate JSON stream format from Claude/Codex
+**OutputCaptureBuffer:** Routes prompt lifecycle events and CLI events to IDashboardSink; test start/complete/status-message callbacks separately
+**RuntimeMode:** `setRuntimeMode`/`isCli` must be reset in `teardown` to avoid cross-test pollution
 </keyPatterns>
 
 <runningTests>
 `npm test` → @vscode/test-electron → loads extension → Mocha discovers `**/**.test.js` → runs in TDD mode
+`npm run test:harness` → runs real CLI harness hook integration tests (requires installed + authenticated harness)
 **Debugging:** F5 (Extension Development Host), set breakpoints in TypeScript
 **Watch Mode:** `npm run watch` for rapid compilation feedback
 </runningTests>

@@ -3,7 +3,7 @@ applyTo: "src/flightpath/*.ts"
 ---
 
 <purpose>
-Orchestration, parsing, queue, validation, and template management. Top-level `src/flightpath/` files only (excludes `orchestration/` subdirectory and harness implementations).
+Orchestration, parsing, queue, state machine, validation, and template management. Top-level `src/flightpath/` files only (excludes `orchestration/` subdirectory and harness implementations).
 </purpose>
 
 <harnessIntegration>
@@ -39,15 +39,16 @@ Orchestration, parsing, queue, validation, and template management. Top-level `s
 **WorkflowInstance registry:** `workflows` Map (running/paused instances), `viewedInstance` (displayed in dashboard)
 **CLI session tracking:** `cliSessions` Map for `CliWatchSession` objects that watch CLI-managed workflows
 **Orchestrator-scoped helpers:** `TemplateImporter`, `WorkflowCommandHandler`, `WorkspaceSessionManager`, `PromptFileParser`
+**`DashboardBroadcastHub`:** `WorkflowOrchestrator` owns a single `dashboardBroadcastHub` instance (from `src/ui/DashboardBroadcastHub`). It fans out dashboard notifications to all registered dashboard providers and passes itself as `IDashboardSink` to each `WorkflowInstance`.
 **VS Code-only:** Not used in the CLI binary; CLI uses `IntegrationFactory` directly
 </workflowOrchestrator>
 
 <workflowInstance>
 **`WorkflowInstance.ts`** encapsulates all per-workflow execution state.
-**Owns:** `PromptQueue`, `WorkflowExecutor`, `EndConditionHandler`, `EndConditionEvaluator`, `PromptFileLoader`, `PromptFileWatcher`, `OutputHistoryManager`, `OutputCaptureBuffer`, `activeIntegration`
+**Owns:** `PromptQueue`, `WorkflowStateMachine` (as `workflowRuntime`), `WorkflowExecutor`, `EndConditionHandler`, `EndConditionEvaluator`, `PromptFileLoader`, `PromptFileWatcher`, `OutputHistoryManager`, `OutputCaptureBuffer`, `activeIntegration`
 **`executionIntegrations` map:** Caches per-run integrations keyed by harness ID; reuses the same integration across prompts when harness doesn't change (avoids allocation per prompt in long-running workflows)
 **`lastRunIntegrations`:** Previous run's integrations kept for terminal cleanup (closed at start of next run)
-**Dependencies injected by WorkflowOrchestrator:** `integrationFactory` (for per-run execution integrations), `getDetectorIntegration(harness?)` callback, `onWorkflowNameChange`, `onStatusBarUpdate`, `dashboardSink`
+**Dependencies injected by WorkflowOrchestrator:** `integrationFactory` (for per-run execution integrations), `getDetectorIntegration(harness?)` callback, `onWorkflowNameChange`, `onStatusBarUpdate`, `dashboardSink` (the `DashboardBroadcastHub` cast as `IDashboardSink`)
 **Events:** `onPromptStart`, `onPromptComplete`, `onStreamingEvents`, `onStreamingChunk`, `onWorkflowStatusMessage` — carry typed payloads
 **Background buffering:** `OutputCaptureBuffer` stores per-step output for replay when switching between multiple parallel workflows; `bufferedEvents` array (max 500) for dashboard event replay
 </workflowInstance>
@@ -55,10 +56,23 @@ Orchestration, parsing, queue, validation, and template management. Top-level `s
 <promptQueue>
 **State container** with events (NOT event-driven executor — WorkflowExecutor handles the loop)
 **Why not event-driven:** Retry logic requires staying on the same index; deterministic for-loop control
+**Queue topology:** Owns `currentIndex`, `prompts`, `results`, `completedIndices`
+**Status delegation:** Runtime execution status (`status`, `stopped`, `startTime`, `pausedTime`, `totalPausedDuration`) is owned by `WorkflowStateMachine`; `PromptQueue` delegates all status transitions to it and projects the state onto `QueueState` via `getState()`
 **Working file persistence:** Delegated to `WorkingFileManager` (extracted from PromptQueue)
 **Hash-based deduplication:** Prevents duplicate execution on queue reloads (dynamic queue extension)
 **Smart retry defaults:** `maxRetries`/`retryPrompt` resolve from settings or explicit values via module-level helpers
 </promptQueue>
+
+<workflowStateMachine>
+**`WorkflowStateMachine.ts`** — sole owner of workflow execution status transitions.
+**Owns:** `status` (ExecutionState), `stopped`, `startTime`, `pausedTime`, `totalPausedDuration`
+**Named transitions:** `startExecution()`, `pause()`, `resume()`, `requestStop()`, `confirmStopped()`, `complete()`, `fail()`, `reset()`, `reopenForContinuation()`
+**Attempt tracking:** `beginAttempt()`, `scheduleRetry()`, `completeAttempt()`, `failAttempt()`, `cancelAttempt()`, `cancelActiveAttempt()` — per-step attempt lifecycle for retry/timeline use
+**Events:** `onDidTransition` (runtime state), `onDidAttemptTransition` (per-step attempt state)
+**Snapshot:** `getSnapshot()` returns `WorkflowRuntimeState`; `restore()` rehydrates from persisted state
+**Execution timer:** `startExecutionTimer()` / `getActiveExecutionTime()` compute wall-clock elapsed time minus paused duration
+**`PromptQueue` relationship:** `PromptQueue` receives a `WorkflowStateMachine` instance in its constructor and delegates all status transitions to it; `getState()` projects both queue topology and state machine runtime fields into a single `QueueState`
+</workflowStateMachine>
 
 <workingFileManager>
 **`WorkingFileManager.ts`** handles all working file I/O, extracted from `PromptQueue`.
@@ -93,6 +107,7 @@ Sequential prompt execution with pause/resume support.
   2. **`finalPrompt` phase** — runs the orchestrator gate once the queue is empty; if new prompts were appended (via MCP queue extension), the outer loop repeats
 **Harness resolution:** Uses `PropertyResolver` to determine harness per prompt (prompt > workflow > global settings)
 **Delegation:** Defers to `EndConditionHandler` for retry logic
+**Status transitions:** All status changes go through `WorkflowStateMachine` (no local status fields in executor)
 </workflowExecutor>
 
 <endConditionEvaluator>
@@ -128,6 +143,8 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 - `PromptFileLoader` — Prompt file I/O, auto-save, working file creation, validation (owned by WorkflowInstance)
 - `PromptFileWatcher` — File change detection for dynamic queue updates (owned by WorkflowInstance)
 - `OutputHistoryManager` — Per-run output history in `.flightpath/.history/<workflow-id>/`; disk is authoritative, working files do NOT track `outputHistory`
+- `TimelineRecorder` — Writes structured timeline events (manifest + events files) into each run directory under `.flightpath/.history/`
+- `OutputHistoryTimelineAdapter` — Adapts `TimelineRecorder` output to `WorkflowOutputHistory` for display (bridges new timeline format with history types)
 - `TemplateImporter` — Import built-in agents/templates to workspace (owned by WorkflowOrchestrator)
 - `WorkflowCommandHandler` — Create prompt files and end condition scripts (owned by WorkflowOrchestrator)
 - `WorkspaceSessionManager` — Session discovery, auto-load recent session, resume after restart (owned by WorkflowOrchestrator)
@@ -137,11 +154,12 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 **Root `flightpath/` classes (not in orchestration/):**
 
 - `WorkflowOrchestrator` — Registry + cross-cutting concerns
-- `WorkflowInstance` — Single workflow execution lifecycle
+- `WorkflowInstance` — Single workflow execution lifecycle container
+- `WorkflowStateMachine` — Sole owner of runtime status transitions and timing
 - `WorkflowExecutor` — Execution loop
 - `EndConditionHandler` — Retry logic
 - `EndConditionEvaluator` — Script execution
-- `PromptQueue` + `WorkingFileManager` — Queue state + file persistence
+- `PromptQueue` + `WorkingFileManager` — Queue topology + file persistence
 - `OutputCaptureBuffer` — Output replay for background/parallel workflows
 - `IntegrationFactory` / `VsCodeIntegrationFactory` — Harness integration factories
   </orchestrationClasses>
@@ -151,8 +169,9 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 **`WorkflowExecutionContext`:** Bundle pattern for passing dependencies to `WorkflowExecutor` (avoids long parameter lists)
 **Callback pattern:** `EndConditionHandler` uses `SendRetryPromptCallback` to avoid circular dependencies
 **File locking:** `withFileLock` wrapper prevents concurrent working file corruption; all writes go through `WorkingFileManager.operationQueue`
-**Event emitters:** `PromptQueue` emits state changes; `WorkflowInstance` subscribes and updates dashboard/status bar
+**Event emitters:** `PromptQueue` emits state changes; `WorkflowStateMachine` emits `onDidTransition` and `onDidAttemptTransition`; `WorkflowInstance` subscribes and updates dashboard/status bar
 **Detector vs execution integrations:** Detector singletons live for the extension lifetime; execution integrations are per-run and disposed after the `finally` block
+**DashboardBroadcastHub:** Fan-out hub in `src/ui/`; `WorkflowOrchestrator` creates it, registers/unregisters dashboard providers on it, and passes it as `IDashboardSink` to `WorkflowInstance`
 </keyPatterns>
 
 <terminology>
@@ -169,6 +188,7 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 - `./IntegrationFactory.ts` — CLI harness factory (platform-agnostic)
 - `./VsCodeIntegrationFactory.ts` — Extends IntegrationFactory with copilot-chat support
 - `./WorkflowInstance.ts` — Per-workflow execution lifecycle container
+- `./WorkflowStateMachine.ts` — Sole owner of runtime status transitions, attempt tracking, and timing
 - `./OutputCaptureBuffer.ts` — Per-step output capture and replay for background workflows
 - `./WorkingFileManager.ts` — Working file I/O extracted from PromptQueue
 - `./harness/CliIntegration.ts` — Generic CLI integration (composition-based)
@@ -179,6 +199,9 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 - `./harness/qwen/QwenCliProvider.ts` — Qwen Code CLI harness
 - `./harness/gemini/GeminiCliProvider.ts` — Gemini CLI harness
 - `./harness/chat/CopilotChatIntegration.ts` — Chat harness (VS Code-only)
-- `./orchestration/*.ts` — Orchestration helpers (8 classes)
+- `./orchestration/TimelineRecorder.ts` — Structured timeline event writer
+- `./orchestration/OutputHistoryTimelineAdapter.ts` — Adapts timeline format to `WorkflowOutputHistory`
+- `./orchestration/*.ts` — Other orchestration helpers (8+ classes)
+- `../ui/DashboardBroadcastHub.ts` — Fan-out hub for dashboard notifications (owned by WorkflowOrchestrator)
 - `../types/FlightPathTypes.ts` — Core types (Harness enum, PromptItem, WorkingFile, etc.)
 </relatedFiles>

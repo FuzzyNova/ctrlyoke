@@ -23,6 +23,7 @@ FlightPath uses **composition over inheritance** for harness integrations:
 **CliIntegration** (src/flightpath/harness/CliIntegration.ts):
 - Generic integration class that works with ANY provider
 - Delegates all provider-specific behavior to `ICliProvider` instance
+- Internally composes 5 coordinator services: `CliPromptPreparer`, `CliSessionResolverAdapter`, `CliPromptRuntimeCoordinator`, `CliTransportCoordinator`, `CliExecutionRunner`
 - Handles execution lifecycle (interactive/headless modes, VS Code terminal or CLI spawn)
 - Manages session continuity, cancellation, temp file creation/cleanup, and status updates
 - Terminal tab name: `FP: {Harness}` or `FP: {Harness} · {name} [n/total]`
@@ -61,9 +62,12 @@ FlightPath uses **composition over inheritance** for harness integrations:
 - Main provider contract — defines what a CLI provider must implement
 - **Required**: `config` (HarnessConfig), `responseParser`, `notificationMonitor`, `toolPermissionMapper`
 - **Required methods**: `buildCliArgs()`, `buildHeadlessArgs()`, `buildInteractiveTuiCommand()`, `checkAvailability()`
-- **Optional**: `logParser`, `formatFileReference()`, `getMcpConfigArgs()`, `getMcpConfigFilePath()`, `getAdditionalCleanupFilePaths()`, `cleanupWorkspaceArtifacts()`, `getVersion()`, `getInteractiveSpawnEnv()`, `extractSessionIdFromLogs()`, `augmentParsedOutput()`
+- **Optional**: `logParser`, `formatFileReference()`, `getMcpConfigArgs()`, `getMcpConfigFilePath()`, `getAdditionalCleanupFilePaths()`, `cleanupWorkspaceArtifacts()`, `buildPermissionArgs()`, `buildNotificationHookArgs()`, `buildHeadlessUserHookArgs()`, `getVersion()`, `getInteractiveSpawnEnv()`, `extractSessionIdFromLogs()`, `augmentParsedOutput()`
 - `cleanupWorkspaceArtifacts(workspaceRoot, workingFilePath)` — restores workspace files modified during interactive hook/MCP setup (backup-and-restore pattern for `.gemini/settings.json`, `.qwen/settings.json`)
 - `getInteractiveSpawnEnv()` — environment overrides for interactive spawning (e.g., unset `CLAUDECODE` to allow nested Claude CLI)
+- `buildPermissionArgs?(toolPermissions)` — builds tool permission CLI args; called by CliIntegration for both interactive and headless modes (replaces permission block that was previously embedded in `buildCliArgs()`)
+- `buildNotificationHookArgs?(extensionPath, workspaceRoot, promptIndex, workingFilePath, userHooks)` — sets up FlightPath notification hooks for interactive mode; returns additional CLI args (e.g., `["--settings", path]`); replaces interactive hook block that was previously inside `buildCliArgs()`
+- `buildHeadlessUserHookArgs?(workspaceRoot, promptIndex, workingFilePath, userHooks)` — sets up user-defined hooks for headless execution; returns additional CLI args; replaces headless user-hook block that was previously inside `buildCliArgs()`
 - `HarnessConfig` fields: `name`, `displayName`, `terminalName`, `installHint`, `shouldStreamHeadlessOutput`, `usesInteractiveNotificationMonitor`, `rawTextOutput`
   </coreComponents>
 
@@ -576,6 +580,73 @@ Summary of required layers:
 - `withLock()` — AsyncMutex-based serialization for all read-modify-write operations on settings.json
 - Used by SettingsJsonHooksTracker (hooks) to share the same file lock
 
+**CliExecutionSession** (src/flightpath/harness/shared/CliExecutionSession.ts):
+
+- Immutable value object holding per-prompt execution state: prompt, session ID, temp file paths, start time, parsed output, working file
+- Passed through the execution pipeline so coordinators can read/write state without coupling to CliIntegration
+- Exposes snapshot via `getSnapshot()` for post-execution result reporting
+
+**CliFailureTracker** (src/flightpath/harness/shared/CliFailureTracker.ts):
+
+- Tracks abnormal execution termination: PTY process exits, exit code classification, and captured PTY tail output
+- `getPtyTermination()` — returns exit code if PTY exited unexpectedly (used by CliLogMonitor as `isPtyTerminated` callback)
+- `markCompletionDetectionProcessExit(exitCode)` — classifies exit code and returns failure reason message
+
+**CliExecutionRunner** (src/flightpath/harness/shared/CliExecutionRunner.ts):
+
+- Orchestrates interactive and headless execution via injected `CliTransportCoordinator` and `CliInteractiveStartupCoordinator`
+- `executeInteractive(session, baseArgs)` — runs terminal session, monitors log file, handles session ID extraction
+- `executeHeadless(session, baseArgs)` — runs background process, retries on recoverable Claude session errors
+- Delegates log monitoring to `CliLogMonitor` and response collection to `CliResponseCollector`
+- Stateless orchestrator: all mutable state lives in `CliExecutionSession`
+
+**CliInteractiveStartupCoordinator** (src/flightpath/harness/shared/CliInteractiveStartupCoordinator.ts):
+
+- Resolves interactive session startup: discovers log file and extracts session ID
+- Three strategies: resumed session (direct log file lookup), SessionStart hook (waits for hook then discovers log), no SessionStart (log file discovery by prompt text matching)
+- Polls abort state at 100ms intervals — cancellation or PTY exit during startup returns `null` to abort execution
+- Session start timeout: 60 seconds
+
+**CliPromptPreparer** (src/flightpath/harness/shared/CliPromptPreparer.ts):
+
+- Assembles the full prompt string and creates categorized temp files for agent instructions, skills, context, excerpts, and prompt text
+- Handles simple prompt fast path (no extras → direct inline), pure slash commands (bypass assembly), and complex prompts with prior context
+- Uses `PromptFileSplitter` to chunk large content; uses `TempFileManager` for categorized temp file creation
+- Returns `{ promptWithInstruction, tempFilePaths }` consumed by CliIntegration
+
+**CliPromptRuntimeCoordinator** (src/flightpath/harness/shared/CliPromptRuntimeCoordinator.ts):
+
+- Persists `_runtime` metadata (harness, model, agent, sessionId, startedAt, completedAt) onto `PromptItem` and writes it to the working file
+- `persistSuccessfulPromptRuntime()` — called after successful execution; merges session ID into `UniversalCliOutput` if missing
+- `persistCancelledPromptRuntime()` — called after cancellation; saves partial metadata (startedAt, sessionId if known)
+
+**CliResponseCollector** (src/flightpath/harness/shared/CliResponseCollector.ts):
+
+- Collects a headless execution result: calls `responseParser.parse()`, optionally `provider.augmentParsedOutput()`, extracts session ID (from output or log fallback), formats statistics
+- Returns `CollectedHeadlessResponse` with `{ success, parsedOutput, cliResult, extractedSessionId }`
+- Calls `hostCallbacks.logResponse()` and `hostCallbacks.onResponseComplete()` after collection
+
+**CliResponseTextExtractor** (src/flightpath/harness/shared/CliResponseTextExtractor.ts):
+
+- Pure function `extractTextFromEvents(output)` — iterates `UniversalCliOutput.events` and assembles a human-readable text string
+- Handles TEXT, THINKING, FILE_WRITE, FILE_EDIT (with +/- line counts from structuredPatch), FILE_DELETE event types
+- Used by both `CliResponseCollector` and interactive-mode response assembly
+
+**CliSessionResolverAdapter** (src/flightpath/harness/shared/CliSessionResolverAdapter.ts):
+
+- Thin adapter wrapping `PropertyResolver.resolve()` and `SessionResolver.resolve()` with per-harness session ID validation
+- `resolve(prompt, workflowContext)` — returns `{ resolvedProperties, resolvedSessionId }`
+- Validates session ID format via `SessionValidator.validate(id, harness)`; resets to `undefined` if invalid (logs warning)
+
+**CliTransportCoordinator** (src/flightpath/harness/shared/CliTransportCoordinator.ts):
+
+- Handles the low-level process lifecycle: terminal creation, PTY spawning, headless subprocess spawning, cancellation
+- `startInteractiveProcess()` — spawns PTY session (if `PtyProcessManager` available) or VS Code terminal with shell integration; injects `FLIGHTPATH_RUN_ID` and `FLIGHTPATH_NOTIFY_DIR` env vars
+- `executeStandaloneInteractiveProcess()` — standalone interactive process (CLI binary mode, no VS Code terminal)
+- `executeHeadless()` — spawns headless process with optional streaming via `responseParser.processStreamingChunk()`
+- `cancel()` — kills PTY session or cancels VS Code terminal shell execution
+- `dispose(closeTerminalWhenPromptCompletes)` — cleans up terminal/process resources
+
 **Interfaces** (src/flightpath/harness/shared/interfaces/):
 
 - ICliProvider.ts: Main provider contract
@@ -642,4 +713,7 @@ Summary of required layers:
 18. **Settings.json trackers are parallel-safe**: SettingsJsonHooksTracker and SettingsJsonMcpTracker use AsyncMutex + ref-counting for concurrent workflow execution (Gemini, Qwen)
 19. **ToolBuilder pattern**: Each provider has a `*ToolBuilder.ts` that converts raw tool call payloads into structured `CliEvent` objects, enabling code reuse between LogParser and ResponseParser
 20. **CliEventMapper centralizes tool classification**: Single source of truth mapping tool names to semantic types (BASH_COMMAND, FILE_EDIT, MCP_TOOL_CALL, etc.) — replaces ~500 lines of duplicated switch/case
+21. **CliIntegration composes 5 coordinators**: CliPromptPreparer, CliSessionResolverAdapter, CliPromptRuntimeCoordinator, CliTransportCoordinator, and CliExecutionRunner — each has a single responsibility and is independently testable
+22. **Permission/hook dispatch on ICliProvider**: `buildPermissionArgs?()`, `buildNotificationHookArgs?()`, and `buildHeadlessUserHookArgs?()` are optional ICliProvider methods called by CliIntegration at the integration layer — hooks and permissions are no longer embedded inside `buildCliArgs()`
+23. **Headless user hooks supported on all providers**: `buildHeadlessUserHookArgs?()` enables user-defined hooks in headless mode (not just interactive); providers that support it implement this method on ICliProvider
 </importantNotes>

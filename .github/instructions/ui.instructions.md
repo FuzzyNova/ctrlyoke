@@ -8,8 +8,17 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 </purpose>
 
 <architecture>
+**DashboardBroadcastHub:** Fan-out hub — broadcasts every dashboard update to all registered clients.
+- Implements both `IDashboardProvider` (src/ui/IDashboardProvider.ts) and `IDashboardSink` (src/types/IDashboardSink.ts)
+- `DashboardClient = IDashboardProvider & Partial<IDashboardSink>`
+- `addClient(client)` / `removeClient(client)` manage the client list
+- `WorkflowOrchestrator` creates the hub and registers `FlightPathWebviewProvider` as the first client
+- Future clients (e.g. hosted browser) can be added without touching orchestrator or workflow-instance call sites
+- `WorkflowOrchestrator` depends only on `IDashboardProvider`/`IDashboardSink` interfaces — never on the concrete provider
+
 **FlightPathWebviewProvider:** Coordination hub — lifecycle/HTML generation and public update API.
-- Implements `vscode.WebviewViewProvider` for sidebar panel
+- Implements `vscode.WebviewViewProvider`, `IDashboardProvider`, and `IDashboardSink`
+- Registered as a `DashboardBroadcastHub` client by WorkflowOrchestrator
 - Loads React app from `out/ui/webview-react/` (Vite-built)
 - Injects webview resource URIs into HTML (assets, typo.js, codicons, custom-icons.css, spell-check dictionaries, logo)
 - `localResourceRoots`: webview-react dir + images dir
@@ -145,6 +154,7 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
   </harnessAvailability>
 
 <criticalPatterns>
+**DashboardBroadcastHub pattern:** WorkflowOrchestrator depends only on `IDashboardProvider`/`IDashboardSink` interfaces. Pass the hub — not the provider — so future non-VS Code clients require no orchestrator changes.
 **vscodeApi capture:** Must happen BEFORE React modules load (acquireVsCodeApi only callable once)
 **CSP policy:** Nonce-based script-src (no unsafe-inline), style-src allows inline (Tailwind), img-src allows data URIs and https
 **Circular dependency:** FlightPathWebviewProvider created first, `setWorkflowOrchestrator()` called after
@@ -160,7 +170,10 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - `src/ui/WebviewMessageRouter.ts` — dispatch table for all webview → extension messages
 - `src/ui/WorkflowSerializer.ts` — save/export/template/history operations
 - `src/ui/webview-react/` — React UI implementation (separate instructions file)
-- `src/flightpath/WorkflowOrchestrator.ts` — calls webview update methods and `notifyHarnessAvailability()`
+- `src/ui/DashboardBroadcastHub.ts` — fan-out hub implementing IDashboardProvider + IDashboardSink; manages registered dashboard clients
+- `src/ui/IDashboardProvider.ts` — interface for pushing workflow state updates to the dashboard (WorkflowOrchestrator depends on this)
+- `src/types/IDashboardSink.ts` — interface for fine-grained per-step updates (WorkflowInstance depends on this)
+- `src/flightpath/WorkflowOrchestrator.ts` — creates DashboardBroadcastHub, registers FlightPathWebviewProvider as a client, calls `notifyHarnessAvailability()`
 - `src/types/DashboardConstants.ts` — MESSAGE_TYPES, EXECUTION_STATES, HARNESS_IDS, HARNESS_STATUS_STRINGS
 - `src/utils/ModelRegistry.ts` — runtime model discovery
 - `src/utils/ModelConstants.ts` — model display names and static model lists
