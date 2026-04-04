@@ -1,7 +1,6 @@
 import React, { useCallback } from "react";
 import {
   useWorkflowStore,
-  useWorkflowTemporalStore,
 } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import {
@@ -14,6 +13,7 @@ import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
 import { SaveWorkflowDialog } from "../workflow/SaveWorkflowDialog";
 import { TemplateModal } from "../workflow/TemplateModal";
+import { UndoRedoControl } from "../shared/UndoRedoControl";
 
 /**
  * Execution state badge configuration
@@ -86,31 +86,6 @@ export const Header: React.FC = () => {
     newWorkflowModalOpen,
     closeNewWorkflowModal,
   } = useUiStore();
-
-  // Undo/redo availability — useWorkflowTemporalStore uses useState+useEffect
-  // (not useSyncExternalStore) to avoid React 18 concurrent mode error #185.
-  const canUndo = useWorkflowTemporalStore((s) => s.pastStates.length > 0);
-  const canRedo = useWorkflowTemporalStore((s) => s.futureStates.length > 0);
-
-  const handleUndo = useCallback(() => {
-    useWorkflowStore.temporal.getState().undo();
-    const { prompts, finalPrompt } = useWorkflowStore.getState();
-    vscode.postMessage({
-      type: MESSAGE_TYPES.UNDO_REDO_SYNC,
-      prompts,
-      finalPrompt,
-    });
-  }, [vscode]);
-
-  const handleRedo = useCallback(() => {
-    useWorkflowStore.temporal.getState().redo();
-    const { prompts, finalPrompt } = useWorkflowStore.getState();
-    vscode.postMessage({
-      type: MESSAGE_TYPES.UNDO_REDO_SYNC,
-      prompts,
-      finalPrompt,
-    });
-  }, [vscode]);
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
@@ -213,6 +188,8 @@ export const Header: React.FC = () => {
           >
             <i className="codicon codicon-save" />
           </button>
+          {/* Undo / Redo / History */}
+          <UndoRedoControl isRunning={isRunning} isPaused={isPaused} />
           {/* Settings button */}
           <button
             className="control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
@@ -221,34 +198,6 @@ export const Header: React.FC = () => {
             aria-label="Open settings"
           >
             <i className="codicon codicon-settings-gear" />
-          </button>
-          {/* Undo button */}
-          <button
-            className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
-              canUndo && !isRunning && !isPaused
-                ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
-            }`}
-            onClick={handleUndo}
-            disabled={!canUndo || isRunning || isPaused}
-            title="Undo"
-            aria-label="Undo"
-          >
-            <i className="codicon codicon-discard" />
-          </button>
-          {/* Redo button */}
-          <button
-            className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
-              canRedo && !isRunning && !isPaused
-                ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
-            }`}
-            onClick={handleRedo}
-            disabled={!canRedo || isRunning || isPaused}
-            title="Redo"
-            aria-label="Redo"
-          >
-            <i className="codicon codicon-redo" />
           </button>
         </div>
 

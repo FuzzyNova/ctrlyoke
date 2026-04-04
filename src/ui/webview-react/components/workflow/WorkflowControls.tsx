@@ -82,7 +82,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
         mainLabel={
           <span className="flex items-center gap-1.5">
             <i className="codicon codicon-add" />
-            <span>New</span>
+            <span className="sm:inline hidden">New</span>
           </span>
         }
         mainAction={handleNewWorkflow}

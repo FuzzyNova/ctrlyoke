@@ -679,8 +679,10 @@ export const SettingsPanel: React.FC<{
     [vscode, effectiveHarness]
   );
 
-
-  const tabOverrides = useDrawerTabOverrides(workflowProperties, globalSettings);
+  const tabOverrides = useDrawerTabOverrides(
+    workflowProperties,
+    globalSettings
+  );
 
   // ============================================================================
   // RENDER
@@ -695,7 +697,7 @@ export const SettingsPanel: React.FC<{
     return (
       <PanelBar
         orientation={panelBarOrientation}
-        icon="settings-gear"
+        icon="settings"
         title="Workflow Properties"
         onClick={handleToggle}
       />
@@ -732,7 +734,7 @@ export const SettingsPanel: React.FC<{
       >
         <div className="flex items-center gap-1 text-description-fg hover:text-foreground transition-colors">
           <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
-          <i className="codicon codicon-settings-gear text-[14px]" />
+          <i className="codicon codicon-settings text-[14px]" />
           <span className="text-[11px] font-semibold uppercase tracking-wide ml-0.5">
             Workflow Properties
           </span>
@@ -1110,11 +1112,14 @@ export const SettingsPanel: React.FC<{
                       options={COMPARE_SOURCE_OPTIONS}
                     />
                     <span className="text-[10px] text-description-fg">
-                      {((endCondition as any).compareSource ?? "auto") === "auto"
+                      {((endCondition as any).compareSource ?? "auto") ===
+                      "auto"
                         ? "'true'/'false' use exit code; other values check stdout"
-                        : ((endCondition as any).compareSource ?? "auto") === "stdout"
+                        : ((endCondition as any).compareSource ?? "auto") ===
+                            "stdout"
                           ? "Compares stdout output (requires clean exit)"
-                          : ((endCondition as any).compareSource ?? "auto") === "stderr"
+                          : ((endCondition as any).compareSource ?? "auto") ===
+                              "stderr"
                             ? "Compares stderr output (exit code not checked)"
                             : "Compares numeric exit code — use '0', '1', or 'true'/'false'"}
                     </span>
@@ -1156,7 +1161,8 @@ export const SettingsPanel: React.FC<{
                       onChange={(e) => setEndTimeoutInput(e.target.value)}
                       onBlur={() => {
                         const parsed = parseInt(endTimeoutInput);
-                        const value = isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
+                        const value =
+                          isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
                         setEndTimeoutInput(String(value));
                         handleEndConditionFieldChange("timeout", value);
                       }}
@@ -1439,7 +1445,6 @@ export const SettingsPanel: React.FC<{
         isNarrow={isNarrow}
         tabOverrides={tabOverrides}
       />
-
     </div>
   );
 };
