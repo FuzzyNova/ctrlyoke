@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliFailureTracker } from "../../flightpath/harness/shared/CliFailureTracker";
+import { INTERACTIVE_ABORT_KINDS } from "../../types/DashboardConstants";
 
 suite("CliFailureTracker", () => {
   test("should classify PTY exit as an interactive abort", () => {
@@ -9,7 +10,7 @@ suite("CliFailureTracker", () => {
     tracker.capturePtyExit(0, []);
 
     assert.deepStrictEqual(tracker.getInteractiveAbortState(false), {
-      kind: "process-exited",
+      kind: INTERACTIVE_ABORT_KINDS.PROCESS_EXITED,
       exitCode: 0,
     });
   });

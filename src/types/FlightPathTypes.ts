@@ -5,6 +5,8 @@ import {
   FinalPromptPhase,
   StepStatus,
   type RunnerId,
+  type PromptTerminalStatus,
+  type WorkflowAttemptStatus,
 } from "./DashboardConstants";
 import { ToolPermissionMode } from "../flightpath/harness/shared/interfaces/IToolPermissionMapper";
 export type { ToolPermissionMode };
@@ -271,12 +273,7 @@ export type WorkflowAttemptTarget =
   | { kind: "queue"; stepIndex: number }
   | { kind: "finalPrompt"; loopIndex: number };
 
-export type WorkflowAttemptStatus =
-  | "running"
-  | "retrying"
-  | "completed"
-  | "failed"
-  | "cancelled";
+export type { WorkflowAttemptStatus };
 
 export interface WorkflowAttemptState {
   target: WorkflowAttemptTarget;
@@ -337,7 +334,7 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
    * Terminal state of this prompt. Absent or 'completed' means successful completion.
    * Used to restore the correct visual status after a working file reload.
    */
-  terminalStatus?: "completed" | "cancelled" | "failed";
+  terminalStatus?: PromptTerminalStatus;
 
   /** Retry count if applicable */
   retryCount?: number;

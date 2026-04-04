@@ -1,6 +1,13 @@
+import {
+  INTERACTIVE_ABORT_KINDS,
+  type InteractiveAbortKind,
+} from "../../../types/DashboardConstants";
+
 export type InteractiveAbortState =
-  | { kind: "user-cancelled" }
-  | { kind: "process-exited"; exitCode: number };
+  | { kind: typeof INTERACTIVE_ABORT_KINDS.USER_CANCELLED }
+  | { kind: typeof INTERACTIVE_ABORT_KINDS.PROCESS_EXITED; exitCode: number };
+
+export type { InteractiveAbortKind };
 
 /**
  * Tracks abnormal CLI process exits for a single prompt send attempt.
@@ -38,11 +45,11 @@ export class CliFailureTracker {
     isCancelling: boolean
   ): InteractiveAbortState | null {
     if (isCancelling) {
-      return { kind: "user-cancelled" };
+      return { kind: INTERACTIVE_ABORT_KINDS.USER_CANCELLED };
     }
 
     if (this.ptyExitCode !== null) {
-      return { kind: "process-exited", exitCode: this.ptyExitCode };
+      return { kind: INTERACTIVE_ABORT_KINDS.PROCESS_EXITED, exitCode: this.ptyExitCode };
     }
 
     return null;

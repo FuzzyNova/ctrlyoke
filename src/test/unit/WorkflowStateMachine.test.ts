@@ -1,7 +1,10 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { WorkflowStateMachine } from "../../flightpath/WorkflowStateMachine";
-import { EXECUTION_STATES } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  WORKFLOW_ATTEMPT_STATUS,
+} from "../../types/DashboardConstants";
 
 suite("WorkflowStateMachine", () => {
   test("emits ordered runtime transitions with previous and current snapshots", () => {
@@ -92,28 +95,28 @@ suite("WorkflowStateMachine", () => {
       {
         command: "beginAttempt",
         attemptIndex: 0,
-        status: "running",
+        status: WORKFLOW_ATTEMPT_STATUS.RUNNING,
         retryCount: undefined,
         maxRetries: undefined,
       },
       {
         command: "scheduleRetry",
         attemptIndex: 1,
-        status: "retrying",
+        status: WORKFLOW_ATTEMPT_STATUS.RETRYING,
         retryCount: 1,
         maxRetries: 2,
       },
       {
         command: "beginAttempt",
         attemptIndex: 1,
-        status: "running",
+        status: WORKFLOW_ATTEMPT_STATUS.RUNNING,
         retryCount: 1,
         maxRetries: 2,
       },
       {
         command: "completeAttempt",
         attemptIndex: 1,
-        status: "completed",
+        status: WORKFLOW_ATTEMPT_STATUS.COMPLETED,
         retryCount: 1,
         maxRetries: 2,
       },
@@ -139,8 +142,8 @@ suite("WorkflowStateMachine", () => {
     assert.strictEqual(runtime.getActiveAttempt(), undefined);
 
     assert.deepStrictEqual(transitions, [
-      { command: "beginAttempt", status: "running" },
-      { command: "cancelAttempt", status: "cancelled" },
+      { command: "beginAttempt", status: WORKFLOW_ATTEMPT_STATUS.RUNNING },
+      { command: "cancelAttempt", status: WORKFLOW_ATTEMPT_STATUS.CANCELLED },
     ]);
   });
 

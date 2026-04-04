@@ -1,6 +1,7 @@
 import { execSync } from "child_process";
 import type { IPty } from "node-pty";
 import { Log } from "../../utils/Log";
+import { SESSION_KINDS, type SessionKind } from "../../types/DashboardConstants";
 
 type NodePtyModule = typeof import("node-pty");
 
@@ -58,7 +59,7 @@ function loadNodePty(): NodePtyModule | null {
   }
 }
 
-export type SessionKind = "ai-cli" | "shell";
+export type { SessionKind };
 
 const DEFAULT_COLS = 220;
 const DEFAULT_ROWS = 50;
@@ -225,7 +226,7 @@ export class PtyProcessManager {
     return this.spawnPty({
       workflowId: opts.workflowId,
       stepName: shellDisplayName(shell),
-      kind: "shell",
+      kind: SESSION_KINDS.SHELL,
       command: shell,
       args: [],
       cwd: opts.cwd,
@@ -278,7 +279,7 @@ export class PtyProcessManager {
     }
   ): PtySession | undefined {
     const session = this.sessions.get(sessionId);
-    if (!session || session.kind !== "shell") {
+    if (!session || session.kind !== SESSION_KINDS.SHELL) {
       return undefined;
     }
 

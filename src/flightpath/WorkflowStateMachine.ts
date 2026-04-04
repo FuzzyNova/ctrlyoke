@@ -1,5 +1,5 @@
 import { EXECUTION_STATES } from "../types/FlightPathTypes";
-import type { ExecutionState } from "../types/DashboardConstants";
+import { WORKFLOW_ATTEMPT_STATUS, type ExecutionState } from "../types/DashboardConstants";
 import type {
   WorkflowAttemptCommand,
   WorkflowAttemptState,
@@ -146,7 +146,7 @@ export class WorkflowStateMachine {
     const current: WorkflowAttemptState = {
       target: { ...target },
       attemptIndex,
-      status: "running",
+      status: WORKFLOW_ATTEMPT_STATUS.RUNNING,
       startedAt: timestampMs,
       retryCount:
         previous?.attemptIndex === attemptIndex
@@ -181,7 +181,7 @@ export class WorkflowStateMachine {
     const current: WorkflowAttemptState = {
       target: { ...target },
       attemptIndex,
-      status: "retrying",
+      status: WORKFLOW_ATTEMPT_STATUS.RETRYING,
       startedAt: timestampMs,
       retryCount,
       maxRetries,
@@ -210,7 +210,7 @@ export class WorkflowStateMachine {
     const current: WorkflowAttemptState = {
       target: { ...target },
       attemptIndex,
-      status: "completed",
+      status: WORKFLOW_ATTEMPT_STATUS.COMPLETED,
       startedAt:
         previous?.attemptIndex === attemptIndex
           ? previous.startedAt
@@ -250,7 +250,7 @@ export class WorkflowStateMachine {
     const current: WorkflowAttemptState = {
       target: { ...target },
       attemptIndex,
-      status: "failed",
+      status: WORKFLOW_ATTEMPT_STATUS.FAILED,
       startedAt:
         previous?.attemptIndex === attemptIndex
           ? previous.startedAt
@@ -291,7 +291,7 @@ export class WorkflowStateMachine {
     const current: WorkflowAttemptState = {
       target: { ...target },
       attemptIndex,
-      status: "cancelled",
+      status: WORKFLOW_ATTEMPT_STATUS.CANCELLED,
       startedAt:
         previous?.attemptIndex === attemptIndex
           ? previous.startedAt

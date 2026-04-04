@@ -5,6 +5,7 @@ import {
   MESSAGE_TYPES,
   LOG_LEVELS,
   FINAL_PROMPT_PHASES,
+  SESSION_KINDS,
   type WebviewLogLevel,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -645,7 +646,7 @@ export class WebviewMessageRouter {
         workflowId,
         sessionId: session.id,
         stepName: session.stepName,
-        kind: "shell",
+        kind: SESSION_KINDS.SHELL,
       });
     });
 
@@ -682,7 +683,7 @@ export class WebviewMessageRouter {
           workflowId,
           sessionId: newSession.id,
           stepName: newSession.stepName,
-          kind: "shell",
+          kind: SESSION_KINDS.SHELL,
         });
       }
     });

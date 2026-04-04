@@ -422,6 +422,47 @@ export const EDITOR_PLACEHOLDER_TEXT = {
 } as const;
 
 // ============================================================================
+// WORKFLOW ATTEMPT STATUS - Step-level attempt status values
+// Tracks the lifecycle of a single execution attempt within WorkflowStateMachine.
+// ============================================================================
+export const WORKFLOW_ATTEMPT_STATUS = {
+  RUNNING: "running",
+  RETRYING: "retrying",
+  COMPLETED: "completed",
+  FAILED: "failed",
+  CANCELLED: "cancelled",
+} as const;
+
+export type WorkflowAttemptStatus =
+  (typeof WORKFLOW_ATTEMPT_STATUS)[keyof typeof WORKFLOW_ATTEMPT_STATUS];
+
+// ============================================================================
+// PROMPT TERMINAL STATUS - Terminal (final) state values for prompt runtime
+// Subset of STEP_STATUS values; absent or COMPLETED means successful completion.
+// Used to restore correct visual status after a working file reload.
+// ============================================================================
+export const PROMPT_TERMINAL_STATUS = {
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+  FAILED: "failed",
+} as const;
+
+export type PromptTerminalStatus =
+  (typeof PROMPT_TERMINAL_STATUS)[keyof typeof PROMPT_TERMINAL_STATUS];
+
+// ============================================================================
+// INTERACTIVE ABORT KINDS - Discriminant values for InteractiveAbortState
+// Classifies why an interactive CLI execution was aborted.
+// ============================================================================
+export const INTERACTIVE_ABORT_KINDS = {
+  USER_CANCELLED: "user-cancelled",
+  PROCESS_EXITED: "process-exited",
+} as const;
+
+export type InteractiveAbortKind =
+  (typeof INTERACTIVE_ABORT_KINDS)[keyof typeof INTERACTIVE_ABORT_KINDS];
+
+// ============================================================================
 // TERMINAL SESSION STATUS - Status values for terminal sessions
 // ============================================================================
 export const TERMINAL_SESSION_STATUS = {

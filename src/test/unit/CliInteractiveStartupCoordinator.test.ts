@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliInteractiveStartupCoordinator } from "../../flightpath/harness/shared/CliInteractiveStartupCoordinator";
+import { INTERACTIVE_ABORT_KINDS } from "../../types/DashboardConstants";
 
 suite("CliInteractiveStartupCoordinator", () => {
   test("should seek to end for resumed session logs", async () => {
@@ -94,7 +95,7 @@ suite("CliInteractiveStartupCoordinator", () => {
         },
       },
       getWorkspaceRoot: () => process.cwd(),
-      getAbortState: () => ({ kind: "process-exited", exitCode: 0 }),
+      getAbortState: () => ({ kind: INTERACTIVE_ABORT_KINDS.PROCESS_EXITED, exitCode: 0 }),
       markProcessExitDuringStage: (stage: string, exitCode: number) =>
         `CLI process exited unexpectedly while ${stage} (exit code ${exitCode})`,
       setFailureReason: (reason: string) => {

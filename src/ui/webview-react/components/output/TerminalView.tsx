@@ -9,7 +9,11 @@ import { sendMessage } from "@hooks/useMessageHandler";
 import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
 import { terminalRegistry } from "../../terminalRegistry";
-import { MESSAGE_TYPES, TERMINAL_SESSION_STATUS } from "../../types/messages";
+import {
+  MESSAGE_TYPES,
+  TERMINAL_SESSION_STATUS,
+  SESSION_KINDS,
+} from "../../types/messages";
 import { TerminalInstance } from "./TerminalInstance";
 import type { TerminalSession } from "@store/terminalStore";
 import { SEPARATOR_VERTICAL } from "../../constants";
@@ -75,8 +79,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
     railResizeMountedRef.current = true;
   }, []);
 
-  const aiCliSessions = sessions.filter((s) => s.kind === "ai-cli");
-  const shellSessions = sessions.filter((s) => s.kind === "shell");
+  const aiCliSessions = sessions.filter((s) => s.kind === SESSION_KINDS.AI_CLI);
+  const shellSessions = sessions.filter((s) => s.kind === SESSION_KINDS.SHELL);
   const hasBothKinds = aiCliSessions.length > 0 && shellSessions.length > 0;
 
   function handleCloseShell(session: TerminalSession) {

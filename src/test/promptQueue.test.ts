@@ -1,7 +1,11 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { PromptQueue } from "../flightpath/PromptQueue";
-import { EXECUTION_STATES, STEP_STATUS } from "../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  STEP_STATUS,
+  PROMPT_TERMINAL_STATUS,
+} from "../types/DashboardConstants";
 import { PromptItem, PromptFile } from "../types/FlightPathTypes";
 
 /**
@@ -581,7 +585,7 @@ suite("PromptQueue State Machine Tests", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await failCurrentPrompt(queue);
       const prompt = queue.getState().prompts[0];
-      assert.strictEqual(prompt._runtime?.terminalStatus, "failed");
+      assert.strictEqual(prompt._runtime?.terminalStatus, PROMPT_TERMINAL_STATUS.FAILED);
     });
   });
 

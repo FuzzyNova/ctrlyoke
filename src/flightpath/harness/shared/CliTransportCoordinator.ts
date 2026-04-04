@@ -1,6 +1,6 @@
 import type * as vscode from "vscode";
 import type { CliEvent } from "../../../types/CliOutputTypes";
-import { MESSAGE_TYPES } from "../../../types/DashboardConstants";
+import { MESSAGE_TYPES, SESSION_KINDS } from "../../../types/DashboardConstants";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type { CliProcessManager } from "../../../utils/CliProcessManager";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
@@ -182,14 +182,14 @@ export class CliTransportCoordinator {
         workflowId,
         sessionId: preSessionId,
         stepName,
-        kind: "ai-cli",
+        kind: SESSION_KINDS.AI_CLI,
         promptNumber,
       });
 
       const session = ptyManager.spawnPty({
         workflowId,
         stepName,
-        kind: "ai-cli",
+        kind: SESSION_KINDS.AI_CLI,
         promptNumber,
         sessionId: preSessionId,
         command: shell,

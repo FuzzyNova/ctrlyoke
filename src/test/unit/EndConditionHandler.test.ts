@@ -13,6 +13,7 @@ import {
 } from "../../flightpath/HarnessIntegration";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import { Harness, type PromptItem } from "../../types/FlightPathTypes";
+import { WORKFLOW_ATTEMPT_STATUS } from "../../types/DashboardConstants";
 
 class MockPlatform implements PlatformAdapter {
   constructor(private readonly choice?: string) {}
@@ -235,14 +236,14 @@ suite("EndConditionHandler", () => {
       {
         command: "scheduleRetry",
         attemptIndex: 1,
-        status: "retrying",
+        status: WORKFLOW_ATTEMPT_STATUS.RETRYING,
         retryCount: 1,
         maxRetries: 1,
       },
       {
         command: "completeAttempt",
         attemptIndex: 1,
-        status: "completed",
+        status: WORKFLOW_ATTEMPT_STATUS.COMPLETED,
         retryCount: 1,
         maxRetries: 1,
       },

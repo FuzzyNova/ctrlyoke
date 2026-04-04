@@ -364,10 +364,9 @@ export class CliIntegration extends HarnessIntegration {
   // INTERACTIVE TUI EXECUTION
   // ============================================================
 
-  private getInteractiveAbortState():
-    | { kind: "user-cancelled" }
-    | { kind: "process-exited"; exitCode: number }
-    | null {
+  private getInteractiveAbortState(): ReturnType<
+    typeof this.failureTracker.getInteractiveAbortState
+  > {
     return this.failureTracker.getInteractiveAbortState(this.isCancelling);
   }
 

@@ -1,6 +1,7 @@
 import type { ILogParser } from "./interfaces/ILogParser";
 import type { INotificationMonitor } from "./interfaces/INotificationMonitor";
 import type { InteractiveAbortState } from "./CliFailureTracker";
+import { INTERACTIVE_ABORT_KINDS } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 
 const SESSION_START_TIMEOUT_MS = 60_000;
@@ -254,7 +255,7 @@ export class CliInteractiveStartupCoordinator {
       return false;
     }
 
-    if (abortState.kind === "user-cancelled") {
+    if (abortState.kind === INTERACTIVE_ABORT_KINDS.USER_CANCELLED) {
       Log.info(
         `⏹️ Interactive execution cancelled while ${stage}`
       );

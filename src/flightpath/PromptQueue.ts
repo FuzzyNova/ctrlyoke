@@ -10,6 +10,7 @@ import {
   EXECUTION_STATES,
   STEP_STATUS,
 } from "../types/FlightPathTypes";
+import { PROMPT_TERMINAL_STATUS } from "../types/DashboardConstants";
 
 /**
  * Internal state shape: the queue's own topology fields only.
@@ -229,7 +230,7 @@ export class PromptQueue {
       startedAt: prompt._runtime?.startedAt ?? now,
       ...prompt._runtime,
       completedAt: now,
-      terminalStatus: "cancelled",
+      terminalStatus: PROMPT_TERMINAL_STATUS.CANCELLED,
     };
     this.state.completedIndices.add(String(index));
     this.state.currentIndex++;
@@ -264,7 +265,7 @@ export class PromptQueue {
         startedAt: prompt._runtime?.startedAt ?? now,
         ...prompt._runtime,
         completedAt: now,
-        terminalStatus: "failed",
+        terminalStatus: PROMPT_TERMINAL_STATUS.FAILED,
       };
     }
     this.state.completedIndices.add(String(index));
@@ -415,9 +416,9 @@ export class PromptQueue {
         if (prompt._runtime?.completedAt !== undefined) {
           const terminal = prompt._runtime.terminalStatus;
           status =
-            terminal === "cancelled"
+            terminal === PROMPT_TERMINAL_STATUS.CANCELLED
               ? STEP_STATUS.CANCELLED
-              : terminal === "failed"
+              : terminal === PROMPT_TERMINAL_STATUS.FAILED
                 ? STEP_STATUS.FAILED
                 : STEP_STATUS.COMPLETED;
         }
