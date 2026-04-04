@@ -31,11 +31,11 @@ suite("ToolPermissionMappers", () => {
     const mapper = new CopilotToolPermissionMapper();
 
     suite("buildArgs", () => {
-      test("dangerouslyAllowAll → --allow-all-tools (no deny list)", () => {
+      test("dangerouslyAllowAll → --yolo (no deny list)", () => {
         const args = mapper.buildArgs(
           cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, [], ["write"])
         );
-        assert.ok(args.includes("--allow-all-tools"));
+        assert.ok(args.includes("--yolo"));
         assert.ok(
           !args.includes("--deny-tool"),
           "deny list should be suppressed for dangerouslyAllowAll"

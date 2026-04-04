@@ -50,18 +50,18 @@ suite("HarnessToolPermissionMappers", () => {
     const mapper = new CopilotToolPermissionMapper();
 
     suite("buildArgs", () => {
-      test("dangerouslyAllowAll returns --allow-all-tools only", () => {
+      test("dangerouslyAllowAll returns --yolo only", () => {
         const args = mapper.buildArgs(
           cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
         );
-        assert.deepStrictEqual(args, ["--allow-all-tools"]);
+        assert.deepStrictEqual(args, ["--yolo"]);
       });
 
       test("dangerouslyAllowAll suppresses deny list", () => {
         const args = mapper.buildArgs(
           cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, [], ["write", "shell"])
         );
-        assert.ok(args.includes("--allow-all-tools"));
+        assert.ok(args.includes("--yolo"));
         assert.ok(
           !args.includes("--deny-tool"),
           "deny list ignored in dangerouslyAllowAll"
