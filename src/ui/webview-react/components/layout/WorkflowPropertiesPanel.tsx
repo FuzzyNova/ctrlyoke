@@ -128,7 +128,7 @@ const FormField: React.FC<{
 );
 
 /**
- * SettingsPanel Component
+ * WorkflowPropertiesPanel Component
  *
  * Collapsible panel for configuring:
  * - Harness settings (harness, model, agent)
@@ -136,7 +136,7 @@ const FormField: React.FC<{
  * - End condition configuration
  * - Quick access to VS Code settings
  */
-export const SettingsPanel: React.FC<{
+export const WorkflowPropertiesPanel: React.FC<{
   panelBarOrientation?: "horizontal" | "vertical";
 }> = ({ panelBarOrientation = "vertical" }) => {
   const vscode = useVsCodeApi();

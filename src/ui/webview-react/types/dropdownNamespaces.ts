@@ -5,7 +5,7 @@
  * Using per-harness model namespaces means hiding a model in one harness context
  * has zero effect on other harnesses.
  *
- * Both SettingsDrawer and PropertiesDrawer share these constants so hidden state
+ * Both WorkflowPropertiesPanel and PropertiesDrawer share these constants so hidden state
  * is always in sync between the two panels.
  */
 export const DROPDOWN_NAMESPACES = {
@@ -32,7 +32,7 @@ export function modelNamespaceForHarness(harness: string): string {
 /**
  * Generate Resume Session dropdown options.
  * PropertiesDrawer includes a "Default" option with dynamic label.
- * SettingsDrawer uses only Yes/No (computes effective value separately).
+ * WorkflowPropertiesPanel uses only Yes/No (computes effective value separately).
  */
 export function getResumeSessionOptions(defaultLabel?: string) {
   const base = [

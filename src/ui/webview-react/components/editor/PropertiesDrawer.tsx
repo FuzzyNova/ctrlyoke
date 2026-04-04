@@ -62,7 +62,7 @@ interface PropertiesDrawerProps {
 /**
  * PropertiesDrawer - Slide-up panel for prompt properties
  *
- * Layout (two-column grid throughout, matching SettingsDrawer ordering):
+ * Layout (two-column grid throughout, matching WorkflowPropertiesPanel ordering):
  * - Row 1: Harness + Model
  * - Row 2: Agent + Skills
  * - Row 3: Additional Args + Prior Context

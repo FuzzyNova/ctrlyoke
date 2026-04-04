@@ -50,7 +50,7 @@ src/ui/webview-react/
 │   │   ├── Header.tsx            # Workflow controls, execution badge
 │   │   ├── OutputSection.tsx     # CLI output rendering
 │   │   ├── PromptsPanel.tsx      # Prompt list with drag-and-drop
-│   │   └── SettingsDrawer.tsx    # Harness/model settings
+│   │   └── WorkflowPropertiesPanel.tsx    # Harness/model settings
 │   ├── editor/              # Editor components
 │   │   ├── AgentQuickPicker.tsx  # Agent override in EditorFooter (left side)
 │   │   ├── CodeMirrorEditor.tsx  # CodeMirror 6 instance

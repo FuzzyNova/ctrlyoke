@@ -23,7 +23,7 @@ export interface MultiCheckboxDropdownProps extends HideableProps {
 /**
  * MultiCheckboxDropdown - Multi-select dropdown with checkbox items.
  *
- * Used by SettingsDrawer (workflow-level skills) and PropertiesDrawer (prompt-level skills).
+ * Used by WorkflowPropertiesPanel (workflow-level skills) and PropertiesDrawer (prompt-level skills).
  * The popup is rendered via a portal at document.body with position:fixed so
  * it escapes any overflow:hidden ancestors and is never clipped.
  *

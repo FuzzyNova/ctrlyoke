@@ -21,7 +21,7 @@ interface HooksEditorProps {
   onChange: (value: HooksValue) => void;
   /** Resolved hooks from the tier below (workflow or global) for Default mode preview */
   inheritedValue?: object[];
-  /** When true, hides the Default/None/Custom mode selector (for SettingsDrawer global level) */
+  /** When true, hides the Default/None/Custom mode selector (for WorkflowPropertiesPanel global level) */
   showDefault?: boolean;
 }
 

@@ -206,7 +206,7 @@ interface WorkflowActions {
   ) => void;
   setUndoResult: (requestId: string, result: UndoResult) => void;
   clearUndoResult: (requestId: string) => void;
-  /** Creates an undo snapshot: call when the user changes workflowProperties (SettingsDrawer). */
+  /** Creates an undo snapshot: call when the user changes workflowProperties (WorkflowPropertiesPanel). */
   setUndoWorkflowProperties: (props: WorkflowProperties) => void;
   /** Silently syncs the shadow copy without creating an undo snapshot (for incoming extension messages). */
   syncIncomingWorkflowProperties: (props: WorkflowProperties) => void;

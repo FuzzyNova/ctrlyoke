@@ -28,7 +28,7 @@ import {
   PromptsPanel,
   OutputSection,
   EditorSection,
-  SettingsPanel,
+  WorkflowPropertiesPanel,
   CenterContentArea,
 } from "./components/layout";
 
@@ -263,7 +263,7 @@ function App() {
                 <EditorSection />
               </div>
               <div className="flex-none">
-                <SettingsPanel panelBarOrientation="horizontal" />
+                <WorkflowPropertiesPanel panelBarOrientation="horizontal" />
               </div>
             </div>
           </div>
@@ -386,7 +386,7 @@ function App() {
                 }
               }}
             >
-              <SettingsPanel panelBarOrientation="horizontal" />
+              <WorkflowPropertiesPanel panelBarOrientation="horizontal" />
             </Panel>
           </Group>
         )}
@@ -558,7 +558,7 @@ function App() {
             }
           }}
         >
-          <SettingsPanel />
+          <WorkflowPropertiesPanel />
         </Panel>
       </Group>
     </div>

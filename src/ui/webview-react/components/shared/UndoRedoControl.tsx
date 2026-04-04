@@ -104,7 +104,7 @@ function describeChange(
     if (change) return change;
   }
 
-  // Workflow-level property changes (SettingsDrawer)
+  // Workflow-level property changes (WorkflowPropertiesPanel)
   const prevWP = prev.undoWorkflowProperties ?? {};
   const nextWP = next.undoWorkflowProperties ?? {};
   if (prevWP.harness !== nextWP.harness)

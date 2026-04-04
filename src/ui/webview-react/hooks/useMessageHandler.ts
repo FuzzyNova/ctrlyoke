@@ -123,7 +123,7 @@ function applyWorkflowChange(): void {
   // Reset workflow properties so stale values from the previous workflow don't
   // persist. The extension sends WORKFLOW_PROPERTIES_UPDATE immediately after
   // FILE_SELECTED / SESSION_RESTORED with the new workflow's values (populated
-  // with VS Code defaults for any unset properties), so the SettingsDrawer
+  // with VS Code defaults for any unset properties), so the WorkflowPropertiesPanel
   // will be updated to reflect the new workflow's actual configuration.
   useSettingsStore.getState().clearWorkflowProperties();
   useWorkflowStore.getState().syncIncomingWorkflowProperties({});

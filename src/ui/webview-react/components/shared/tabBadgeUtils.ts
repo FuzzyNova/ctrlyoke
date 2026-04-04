@@ -21,11 +21,11 @@ export function getPermissionTabOverride(
 ): TabIconOverride | undefined {
   switch (mode) {
     case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
-      return { codicon: "workspace-untrusted", color: "text-error-fg" };
+      return { codicon: "workspace-untrusted", color: "text-error-fg", hoverColor: "hover:text-terminal-ansiBrightRed", activeColor: "text-terminal-ansiBrightRed" };
     case PERMISSION_MODES.ALLOW_ALL:
-      return { color: "text-warning-fg" };
+      return { color: "text-warning-fg", hoverColor: "hover:text-terminal-ansiBrightYellow", activeColor: "text-terminal-ansiBrightYellow" };
     case PERMISSION_MODES.CUSTOM:
-      return { color: "text-terminal-ansiGreen" };
+      return { color: "text-terminal-ansiGreen", hoverColor: "hover:text-terminal-ansiBrightGreen", activeColor: "text-terminal-ansiBrightGreen" };
     case PERMISSION_MODES.NONE:
     default:
       return undefined;
