@@ -225,6 +225,11 @@ interface UiState {
   // MCP Workspace registry (undefined = not yet loaded)
   mcpWorkspaceServers: McpServerConfig[] | undefined;
   mcpWorkspaceServersLoading: boolean;
+
+  // Mobile drawer/sidebar state (transient — not persisted)
+  mobilePromptsOpen: boolean;
+  mobilePromptsMode: "sidebar" | "fullwidth";
+  mobileSettingsOpen: boolean;
 }
 
 /**
@@ -368,6 +373,13 @@ interface UiActions {
   ) => void;
   setMcpWorkspaceServers: (servers: McpServerConfig[]) => void;
 
+  // Mobile drawer actions
+  toggleMobilePrompts: () => void;
+  setMobilePromptsMode: (mode: "sidebar" | "fullwidth") => void;
+  toggleMobileSettings: () => void;
+  closeMobilePrompts: () => void;
+  closeMobileSettings: () => void;
+
   // Reset UI to defaults
   resetUi: () => void;
 }
@@ -424,6 +436,9 @@ const initialState: UiState = {
   mcpRegistryPageCursors: [undefined],
   mcpWorkspaceServers: undefined,
   mcpWorkspaceServersLoading: false,
+  mobilePromptsOpen: false,
+  mobilePromptsMode: "sidebar",
+  mobileSettingsOpen: false,
 };
 
 // Fields to persist via vscode.getState()/setState()
@@ -801,6 +816,22 @@ export const useUiStore = create<UiState & UiActions>()(
 
       setMcpWorkspaceServers: (servers) =>
         set({ mcpWorkspaceServers: servers }),
+
+      // ============================================================================
+      // MOBILE DRAWER
+      // ============================================================================
+
+      toggleMobilePrompts: () =>
+        set((state) => ({ mobilePromptsOpen: !state.mobilePromptsOpen })),
+
+      setMobilePromptsMode: (mode) => set({ mobilePromptsMode: mode }),
+
+      toggleMobileSettings: () =>
+        set((state) => ({ mobileSettingsOpen: !state.mobileSettingsOpen })),
+
+      closeMobilePrompts: () => set({ mobilePromptsOpen: false }),
+
+      closeMobileSettings: () => set({ mobileSettingsOpen: false }),
 
       // ============================================================================
       // RESET

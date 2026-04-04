@@ -133,6 +133,43 @@ suite("CliPromptPreparer", () => {
     assert.ok(createdFiles.length >= 2);
   });
 
+  test("should use fast path when only file refs exist and text-minus-refs is simple", async () => {
+    const preparer = new CliPromptPreparer({
+      shouldOmitAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({
+          directFileRefs: ["/workspace/Path/To/Plan.md"],
+          userPromptText: "fully implement @Path/To/Plan.md",
+        }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: (text) => text === "fully implement",
+      buildPriorContextXml: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => {
+        throw new Error("should not format refs on fast path");
+      },
+      formatTempFileRef: () => {
+        throw new Error("should not format refs on fast path");
+      },
+      formatCategorizedReferences: () => {
+        throw new Error("should not build categorized refs on fast path");
+      },
+    });
+
+    const result = await preparer.preparePrompt(
+      { prompt: "fully implement @Path/To/Plan.md" } as PromptItem,
+      undefined,
+      undefined,
+      undefined
+    );
+
+    assert.deepStrictEqual(result, {
+      promptWithInstruction: "fully implement @Path/To/Plan.md",
+      tempFilePaths: [],
+    });
+  });
+
   test("should keep pure slash commands inline and skip prompt assembly", async () => {
     let buildSectionsCalled = false;
 

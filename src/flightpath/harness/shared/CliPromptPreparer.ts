@@ -96,6 +96,23 @@ export class CliPromptPreparer {
       };
     }
 
+    // Fast path: only @file references as extras, and the text itself (minus
+    // those refs) qualifies as a simple prompt — send the prompt directly so
+    // "fully implement @Plan.md" is not wrapped in a categorized instruction.
+    if (
+      sections.directFileRefs.length > 0 &&
+      !sections.agentContent &&
+      !sections.skillContent &&
+      !sections.excerptContent &&
+      !hasPriorContext &&
+      this.isSimplePromptWithOnlyFileRefs(sections.userPromptText)
+    ) {
+      return {
+        promptWithInstruction: sections.userPromptText,
+        tempFilePaths: [],
+      };
+    }
+
     const contextContent = hasPriorContext
       ? this.deps.buildPriorContextXml(
           resolvedPriorContext as Exclude<PriorContext, "none">,
@@ -119,6 +136,12 @@ export class CliPromptPreparer {
       ...preparedPrompt,
       promptWithInstruction: `${slashCommand} ${preparedPrompt.promptWithInstruction.trimStart()}`,
     };
+  }
+
+  /** Strips @token refs from text and checks if the remainder is simple. */
+  private isSimplePromptWithOnlyFileRefs(userPromptText: string): boolean {
+    const textWithoutRefs = userPromptText.replace(/@\S+/g, "").trim();
+    return textWithoutRefs.length === 0 || this.deps.isSimplePrompt(textWithoutRefs);
   }
 
   private async createCategorizedPromptFiles(

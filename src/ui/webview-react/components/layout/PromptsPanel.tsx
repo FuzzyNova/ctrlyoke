@@ -104,7 +104,9 @@ function SortablePromptItemWrapper({
  */
 export const PromptsPanel: React.FC<{
   panelBarOrientation?: "horizontal" | "vertical";
-}> = ({ panelBarOrientation = "vertical" }) => {
+  onRequestSidebar?: () => void;
+  onRequestClose?: () => void;
+}> = ({ panelBarOrientation = "vertical", onRequestSidebar, onRequestClose }) => {
   const {
     prompts,
     currentStep,
@@ -638,6 +640,32 @@ export const PromptsPanel: React.FC<{
         <span>
           <PromptCounter narrow={isHeaderNarrow} />
         </span>
+        {onRequestSidebar && (
+          <button
+            className="flex items-center justify-center w-[20px] h-[20px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors ml-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestSidebar();
+            }}
+            title="Collapse to sidebar"
+            aria-label="Collapse prompts to sidebar"
+          >
+            <i className="codicon codicon-layout-sidebar-left text-[12px]" />
+          </button>
+        )}
+        {onRequestClose && (
+          <button
+            className="flex items-center justify-center w-[20px] h-[20px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors ml-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestClose();
+            }}
+            title="Close prompts"
+            aria-label="Close prompts panel"
+          >
+            <i className="codicon codicon-close text-[12px]" />
+          </button>
+        )}
       </div>
 
       {/* Prompt list */}

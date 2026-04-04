@@ -9,6 +9,7 @@ import {
   RUNNER_IDS,
 } from "../../types/messages";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { useIsMobile } from "@hooks/useMediaQuery";
 import { WebviewLog } from "@utils/logger";
 import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
@@ -70,15 +71,19 @@ const STATE_BADGE_CONFIG: Record<string, StateBadgeConfig> = {
  * Layout:
  *   Wide:   [WorkflowControls] | [WorkflowStatus (centered)] | [Run/Pause/Stop]
  *   Narrow: [WorkflowControls (left)]  [Run/Pause/Stop (right)]
- *           [         WorkflowStatus (full-width, centered)        ]
+ *           [  [Prompts]  WorkflowStatus (centered)  [Settings]  ]  ← mobile only
  *
  * Features:
  * - WorkflowControls: Split button for New/Load/Queue workflow actions
  * - WorkflowStatus: Workflow name + execution state badge (editable name, recent workflows dropdown)
  * - Control buttons: Run/Pause/Stop based on execution state
  */
-export const Header: React.FC = () => {
+export const Header: React.FC<{
+  onToggleMobilePrompts?: () => void;
+  onToggleMobileSettings?: () => void;
+}> = ({ onToggleMobilePrompts, onToggleMobileSettings }) => {
   const vscode = useVsCodeApi();
+  const isMobile = useIsMobile();
   const { fileName, executionState } = useWorkflowStore();
   const hasPrompts = useWorkflowStore((s) => s.prompts.length > 0);
   const {
@@ -86,6 +91,8 @@ export const Header: React.FC = () => {
     activeWorkflowId,
     newWorkflowModalOpen,
     closeNewWorkflowModal,
+    mobilePromptsOpen,
+    mobileSettingsOpen,
   } = useUiStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
@@ -242,8 +249,36 @@ export const Header: React.FC = () => {
         />
 
         {/* Center Section: Workflow Status - own row on narrow, perfectly centered on wide via 1fr/auto/1fr grid */}
-        <div className="header-center order-last sm:order-none col-span-2 sm:col-span-1 justify-self-center w-full sm:w-auto flex items-center justify-center min-w-0">
-          <WorkflowStatus className="w-full sm:max-w-[500px]" />
+        <div className="header-center order-last sm:order-none col-span-2 sm:col-span-1 justify-self-center w-full sm:w-auto flex items-center justify-center min-w-0 gap-1">
+          {isMobile && (
+            <button
+              className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
+                mobilePromptsOpen
+                  ? "bg-btn-bg text-btn-fg"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              }`}
+              onClick={onToggleMobilePrompts}
+              title="Prompts"
+              aria-label="Toggle prompts panel"
+            >
+              <i className="codicon codicon-list-unordered" />
+            </button>
+          )}
+          <WorkflowStatus className="flex-1 sm:max-w-[500px]" />
+          {isMobile && (
+            <button
+              className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
+                mobileSettingsOpen
+                  ? "bg-btn-bg text-btn-fg"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              }`}
+              onClick={onToggleMobileSettings}
+              title="Workflow Properties"
+              aria-label="Toggle workflow properties"
+            >
+              <i className="codicon codicon-settings" />
+            </button>
+          )}
         </div>
 
         {/* Right Section: Control Buttons */}

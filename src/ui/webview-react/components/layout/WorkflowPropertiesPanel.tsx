@@ -138,7 +138,8 @@ const FormField: React.FC<{
  */
 export const WorkflowPropertiesPanel: React.FC<{
   panelBarOrientation?: "horizontal" | "vertical";
-}> = ({ panelBarOrientation = "vertical" }) => {
+  onRequestClose?: () => void;
+}> = ({ panelBarOrientation = "vertical", onRequestClose }) => {
   const vscode = useVsCodeApi();
   const {
     settingsCollapsed,
@@ -764,6 +765,19 @@ export const WorkflowPropertiesPanel: React.FC<{
             Workflow Properties
           </span>
         </div>
+        {onRequestClose && (
+          <button
+            className="flex items-center justify-center w-[20px] h-[20px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestClose();
+            }}
+            title="Close workflow properties"
+            aria-label="Close workflow properties"
+          >
+            <i className="codicon codicon-close text-[12px]" />
+          </button>
+        )}
       </div>
 
       {/* Body - Scrollable (pointer-events disabled in CLI watch mode) */}

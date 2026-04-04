@@ -3,6 +3,7 @@ import { STEP_STATUS } from "../../types/messages";
 import type { StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
 import type { PromptDetails } from "./PromptItem";
+import { calcContextPct } from "@utils/tokenUtils";
 
 /**
  * A single prompt-level property override to display in the overrides row.
@@ -51,10 +52,7 @@ export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
   const durationSeconds = details?.duration ?? latestOutput?.elapsed;
   const sessionId = latestOutput?.structured?.metadata?.sessionId;
   const tokens = latestOutput?.tokens;
-  const contextPct =
-    tokens?.contextWindowUsed !== undefined && tokens?.contextWindowSize
-      ? Math.round((tokens.contextWindowUsed / tokens.contextWindowSize) * 100)
-      : undefined;
+  const contextPct = calcContextPct(tokens?.contextWindowUsed, tokens?.contextWindowSize);
 
   const [copied, setCopied] = useState(false);
   const handleCopySessionId = useCallback(async () => {

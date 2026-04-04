@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState, memo } from "react";
 import { formatTime } from "@utils/outputUtils";
+import { calcContextPct } from "@utils/tokenUtils";
 import { BashOutput } from "./BashOutput";
 import { MarkdownText } from "./MarkdownText";
 import {
@@ -781,13 +782,13 @@ export const CliOutput = memo<CliOutputProps>(
         }
 
         // Context window usage (shown inline) with token details in hover tooltip
-        if (contextWindowUsed !== undefined && contextWindowSize) {
+        const pct = calcContextPct(contextWindowUsed, contextWindowSize);
+        if (pct !== undefined) {
           const fmt = (n: number) =>
             n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-          const pct = Math.round((contextWindowUsed / contextWindowSize) * 100);
           parts.push(
             <span key="context" title={tokenDetails.join(" | ")}>
-              Context: {fmt(contextWindowUsed)}/{fmt(contextWindowSize)} ({pct}
+              Context: {fmt(contextWindowUsed!)}/{fmt(contextWindowSize!)} ({pct}
               %)
             </span>
           );

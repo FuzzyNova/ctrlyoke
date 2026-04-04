@@ -15,11 +15,9 @@ import {
   PANEL_COLLAPSED_SIZE_DEFAULT,
   PANEL_COLLAPSED_SIZE_SIDEBAR,
   PANEL_EXPANDED_SIZE_SINGLE,
-  PANEL_MIN_SIZE_SMALL,
   PANEL_MIN_SIZE_CENTER,
   PANEL_MIN_SIZE_SIDEBAR,
   PANEL_MAX_SIZE_SIDEBAR,
-  PANEL_KEYS,
   SEPARATOR_HORIZONTAL,
   SEPARATOR_VERTICAL,
 } from "./constants";
@@ -30,6 +28,7 @@ import {
   EditorSection,
   WorkflowPropertiesPanel,
   CenterContentArea,
+  MobilePromptsSidebar,
 } from "./components/layout";
 
 function App() {
@@ -49,6 +48,16 @@ function App() {
   const editorCollapsed = useUiStore((s) => s.editorCollapsed);
   const setEditorCollapsed = useUiStore((s) => s.setEditorCollapsed);
 
+  // Mobile drawer state
+  const mobilePromptsOpen = useUiStore((s) => s.mobilePromptsOpen);
+  const mobilePromptsMode = useUiStore((s) => s.mobilePromptsMode);
+  const mobileSettingsOpen = useUiStore((s) => s.mobileSettingsOpen);
+  const toggleMobilePrompts = useUiStore((s) => s.toggleMobilePrompts);
+  const setMobilePromptsMode = useUiStore((s) => s.setMobilePromptsMode);
+  const toggleMobileSettings = useUiStore((s) => s.toggleMobileSettings);
+  const closeMobilePrompts = useUiStore((s) => s.closeMobilePrompts);
+  const closeMobileSettings = useUiStore((s) => s.closeMobileSettings);
+
   const desktop = useDesktopLayout({
     isMobile,
     uiLayoutReady,
@@ -61,10 +70,8 @@ function App() {
   const mobile = useMobileLayout({
     isMobile,
     uiLayoutReady,
-    promptsCollapsed,
     outputCollapsed,
     editorCollapsed,
-    settingsCollapsed,
   });
 
   // Track isMobile to detect layout transitions in render body below
@@ -79,6 +86,15 @@ function App() {
     vscode.postMessage({ type: MESSAGE_TYPES.READY });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // vscode is a stable singleton — never changes
+
+  // Close mobile drawers when switching to desktop so they don't reappear
+  // the next time the user returns to mobile.
+  useEffect(() => {
+    if (!isMobile) {
+      closeMobilePrompts();
+      closeMobileSettings();
+    }
+  }, [isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync output font size CSS variable to the document root so all output
   // area consumers (markdown-text prose, tool call output, etc.) pick it up.
@@ -110,21 +126,20 @@ function App() {
 
     if (isTransitioningToMobile) {
       // Recalculate mobile mount defaults based on current collapsed state
-      // so panels mount at the correct size before collapse() is called.
-      const collapsed = {
-        prompts: promptsCollapsed,
+      // so center panels mount at the correct size before collapse() is called.
+      const centerCollapsed = {
         output: outputCollapsed,
         editor: editorCollapsed,
-        settings: settingsCollapsed,
       };
-      const openKeys = PANEL_KEYS.filter((k) => !collapsed[k]);
+      const centerKeys = ["output", "editor"] as const;
+      const openKeys = centerKeys.filter((k) => !centerCollapsed[k]);
 
       if (openKeys.length > 0) {
         const totalOpen =
           openKeys.reduce((s, k) => s + mobile.lastMobileSizes.current[k], 0) ||
           1;
-        for (const k of PANEL_KEYS) {
-          mobile.mobileMountDefaults.current[k] = collapsed[k]
+        for (const k of centerKeys) {
+          mobile.mobileMountDefaults.current[k] = centerCollapsed[k]
             ? PANEL_COLLAPSED_SIZE_DEFAULT
             : String(
                 Math.round(
@@ -198,28 +213,23 @@ function App() {
   }
 
   // ============================================================================
-  // MOBILE LAYOUT — vertical stacking of all 4 panels
+  // MOBILE LAYOUT — center panels (output + editor) + drawer overlays
   // ============================================================================
 
-  const allMobileCollapsed =
-    promptsCollapsed && outputCollapsed && editorCollapsed && settingsCollapsed;
+  const allMobileCenterCollapsed = outputCollapsed && editorCollapsed;
 
   // Update mobile mount defaults when transitioning from all-collapsed → some-open.
-  // Open panels redistribute proportionally; collapsed panels stay at 30px.
+  // Open center panels redistribute proportionally; collapsed panels stay at 30px.
   {
-    if (mobile.mobileWasAllCollapsed.current && !allMobileCollapsed) {
-      const collapsed = {
-        prompts: promptsCollapsed,
-        output: outputCollapsed,
-        editor: editorCollapsed,
-        settings: settingsCollapsed,
-      };
-      const openKeys = PANEL_KEYS.filter((k) => !collapsed[k]);
+    if (mobile.mobileWasAllCollapsed.current && !allMobileCenterCollapsed) {
+      const centerKeys = ["output", "editor"] as const;
+      const collapsed = { output: outputCollapsed, editor: editorCollapsed };
+      const openKeys = centerKeys.filter((k) => !collapsed[k]);
       const totalOpen =
         openKeys.reduce((s, k) => s + mobile.lastMobileSizes.current[k], 0) ||
         1;
 
-      for (const k of PANEL_KEYS) {
+      for (const k of centerKeys) {
         mobile.mobileMountDefaults.current[k] = collapsed[k]
           ? "30px"
           : String(
@@ -227,169 +237,155 @@ function App() {
             );
       }
     }
-    mobile.mobileWasAllCollapsed.current = allMobileCollapsed;
+    mobile.mobileWasAllCollapsed.current = allMobileCenterCollapsed;
   }
 
   if (isMobile) {
     return (
       <div className="h-screen w-full flex flex-col bg-editor-bg text-foreground border-l border-r">
-        <Header />
+        <Header
+          onToggleMobilePrompts={toggleMobilePrompts}
+          onToggleMobileSettings={toggleMobileSettings}
+        />
 
-        {allMobileCollapsed ? (
-          /* All collapsed: stack 4 horizontal PanelBars vertically */
-          <div className="flex flex-col flex-1 relative bg-editor-bg">
-            {/* Background logo when all panels collapsed */}
-            {(() => {
-              const logoUrl = document.body.getAttribute("data-logo-uri") || "";
-              return (
-                <div
-                  className="background-logo"
-                  style={{
-                    WebkitMaskImage: logoUrl ? `url('${logoUrl}')` : "none",
-                    maskImage: logoUrl ? `url('${logoUrl}')` : "none",
-                  }}
-                  aria-hidden="true"
-                />
-              );
-            })()}
-            <div className="relative z-10 flex flex-col flex-1">
-              <div className="flex-none">
-                <PromptsPanel panelBarOrientation="horizontal" />
-              </div>
-              <div className="flex-none">
-                <OutputSection />
-              </div>
-              <div className="flex-none">
-                <EditorSection />
-              </div>
-              <div className="flex-none">
-                <WorkflowPropertiesPanel panelBarOrientation="horizontal" />
-              </div>
+        {/* Main area — relative container for absolute overlays */}
+        <div className="flex-1 relative overflow-hidden flex">
+
+          {/* Sidebar prompts — flex sibling, takes 72px, pushes center right */}
+          {mobilePromptsOpen && mobilePromptsMode === "sidebar" && (
+            <div className="w-[72px] flex-shrink-0 h-full border-r border-panel-border bg-sidebar-bg overflow-y-auto">
+              <MobilePromptsSidebar />
             </div>
+          )}
+
+          {/* Center content: output + editor vertical split */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {allMobileCenterCollapsed ? (
+              /* Both collapsed: plain flex stack of the two collapsed bars */
+              <div className="flex flex-col flex-1 relative bg-editor-bg">
+                {(() => {
+                  const logoUrl =
+                    document.body.getAttribute("data-logo-uri") || "";
+                  return (
+                    <div
+                      className="background-logo"
+                      style={{
+                        WebkitMaskImage: logoUrl
+                          ? `url('${logoUrl}')`
+                          : "none",
+                        maskImage: logoUrl ? `url('${logoUrl}')` : "none",
+                      }}
+                      aria-hidden="true"
+                    />
+                  );
+                })()}
+                <div className="relative z-10 flex flex-col flex-1">
+                  <div className="flex-none">
+                    <OutputSection />
+                  </div>
+                  <div className="flex-none">
+                    <EditorSection />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* At least one center panel open: vertical resizable Group */
+              <Group
+                groupRef={mobile.mobileCenterGroupRef}
+                orientation="vertical"
+                className="flex-1"
+                id="flightpath-mobile-layout"
+              >
+                <Panel
+                  panelRef={mobile.mobileOutputRef}
+                  defaultSize={mobile.mobileMountDefaults.current.output}
+                  collapsible
+                  collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
+                  minSize={PANEL_MIN_SIZE_CENTER}
+                  id="mobile-output-panel"
+                  onResize={() => {
+                    if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
+                      return;
+                    const isCollapsed =
+                      mobile.mobileOutputRef.current?.isCollapsed() ?? false;
+                    const size =
+                      mobile.mobileOutputRef.current?.getSize().asPercentage ??
+                      null;
+                    if (!isCollapsed && size != null) {
+                      mobile.lastMobileSizes.current.output = size;
+                      useUiStore.getState().setLastMobileSizes({ output: size });
+                    }
+                    if (isCollapsed !== outputCollapsed) {
+                      setOutputCollapsed(isCollapsed);
+                    }
+                  }}
+                >
+                  <OutputSection />
+                </Panel>
+
+                <Separator className={SEPARATOR_HORIZONTAL} />
+
+                <Panel
+                  panelRef={mobile.mobileEditorRef}
+                  defaultSize={mobile.mobileMountDefaults.current.editor}
+                  collapsible
+                  collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
+                  minSize={PANEL_MIN_SIZE_CENTER}
+                  id="mobile-editor-panel"
+                  onResize={() => {
+                    if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
+                      return;
+                    const isCollapsed =
+                      mobile.mobileEditorRef.current?.isCollapsed() ?? false;
+                    const size =
+                      mobile.mobileEditorRef.current?.getSize().asPercentage ??
+                      null;
+                    if (!isCollapsed && size != null) {
+                      mobile.lastMobileSizes.current.editor = size;
+                      useUiStore.getState().setLastMobileSizes({ editor: size });
+                    }
+                    if (isCollapsed !== editorCollapsed) {
+                      setEditorCollapsed(isCollapsed);
+                    }
+                  }}
+                >
+                  <EditorSection />
+                </Panel>
+              </Group>
+            )}
           </div>
-        ) : (
-          /* At least one panel open: vertical resizable Group */
-          <Group
-            groupRef={mobile.mobileGroupRef}
-            orientation="vertical"
-            className="flex-1"
-            id="flightpath-mobile-layout"
-          >
-            <Panel
-              panelRef={mobile.mobilePromptsRef}
-              defaultSize={mobile.mobileMountDefaults.current.prompts}
-              collapsible
-              collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
-              minSize={PANEL_MIN_SIZE_SMALL}
-              id="mobile-prompts-panel"
-              onResize={() => {
-                if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
-                  return;
-                const isCollapsed =
-                  mobile.mobilePromptsRef.current?.isCollapsed() ?? false;
-                const size =
-                  mobile.mobilePromptsRef.current?.getSize().asPercentage ??
-                  null;
-                if (!isCollapsed && size != null) {
-                  mobile.lastMobileSizes.current.prompts = size;
-                  useUiStore.getState().setLastMobileSizes({ prompts: size });
-                }
-                if (isCollapsed !== promptsCollapsed) {
-                  setPromptsCollapsed(isCollapsed);
-                }
-              }}
-            >
-              <PromptsPanel panelBarOrientation="horizontal" />
-            </Panel>
 
-            <Separator className={SEPARATOR_HORIZONTAL} />
+          {/* Full-width prompts overlay */}
+          {mobilePromptsOpen && mobilePromptsMode === "fullwidth" && (
+            <>
+              {/* Backdrop — tap outside returns to sidebar mode */}
+              <div
+                className="absolute inset-0 z-20"
+                onClick={() => setMobilePromptsMode("sidebar")}
+              />
+              <div className="absolute inset-0 z-30 bg-editor-bg flex flex-col">
+                <PromptsPanel
+                  onRequestSidebar={() => setMobilePromptsMode("sidebar")}
+                  onRequestClose={closeMobilePrompts}
+                />
+              </div>
+            </>
+          )}
 
-            <Panel
-              panelRef={mobile.mobileOutputRef}
-              defaultSize={mobile.mobileMountDefaults.current.output}
-              collapsible
-              collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
-              minSize={PANEL_MIN_SIZE_SMALL}
-              id="mobile-output-panel"
-              onResize={() => {
-                if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
-                  return;
-                const isCollapsed =
-                  mobile.mobileOutputRef.current?.isCollapsed() ?? false;
-                const size =
-                  mobile.mobileOutputRef.current?.getSize().asPercentage ??
-                  null;
-                if (!isCollapsed && size != null) {
-                  mobile.lastMobileSizes.current.output = size;
-                  useUiStore.getState().setLastMobileSizes({ output: size });
-                }
-                if (isCollapsed !== outputCollapsed) {
-                  setOutputCollapsed(isCollapsed);
-                }
-              }}
-            >
-              <OutputSection />
-            </Panel>
-
-            <Separator className={SEPARATOR_HORIZONTAL} />
-
-            <Panel
-              panelRef={mobile.mobileEditorRef}
-              defaultSize={mobile.mobileMountDefaults.current.editor}
-              collapsible
-              collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
-              minSize={PANEL_MIN_SIZE_SMALL}
-              id="mobile-editor-panel"
-              onResize={() => {
-                if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
-                  return;
-                const isCollapsed =
-                  mobile.mobileEditorRef.current?.isCollapsed() ?? false;
-                const size =
-                  mobile.mobileEditorRef.current?.getSize().asPercentage ??
-                  null;
-                if (!isCollapsed && size != null) {
-                  mobile.lastMobileSizes.current.editor = size;
-                  useUiStore.getState().setLastMobileSizes({ editor: size });
-                }
-                if (isCollapsed !== editorCollapsed) {
-                  setEditorCollapsed(isCollapsed);
-                }
-              }}
-            >
-              <EditorSection />
-            </Panel>
-
-            <Separator className={SEPARATOR_HORIZONTAL} />
-
-            <Panel
-              panelRef={mobile.mobileSettingsRef}
-              defaultSize={mobile.mobileMountDefaults.current.settings}
-              collapsible
-              collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
-              minSize={PANEL_MIN_SIZE_SMALL}
-              id="mobile-settings-panel"
-              onResize={() => {
-                if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
-                  return;
-                const isCollapsed =
-                  mobile.mobileSettingsRef.current?.isCollapsed() ?? false;
-                const size =
-                  mobile.mobileSettingsRef.current?.getSize().asPercentage ??
-                  null;
-                if (!isCollapsed && size != null) {
-                  mobile.lastMobileSizes.current.settings = size;
-                  useUiStore.getState().setLastMobileSizes({ settings: size });
-                }
-                if (isCollapsed !== settingsCollapsed) {
-                  setSettingsCollapsed(isCollapsed);
-                }
-              }}
-            >
-              <WorkflowPropertiesPanel panelBarOrientation="horizontal" />
-            </Panel>
-          </Group>
-        )}
+          {/* Settings overlay drawer */}
+          {mobileSettingsOpen && (
+            <>
+              {/* Backdrop — tap outside closes */}
+              <div
+                className="absolute inset-0 z-30"
+                onClick={closeMobileSettings}
+              />
+              <div className="absolute inset-0 z-40 bg-editor-bg flex flex-col">
+                <WorkflowPropertiesPanel onRequestClose={closeMobileSettings} />
+              </div>
+            </>
+          )}
+        </div>
       </div>
     );
   }

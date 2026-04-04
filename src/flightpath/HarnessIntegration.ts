@@ -617,6 +617,23 @@ export abstract class HarnessIntegration {
   }
 
   /**
+   * Check if a prompt that contains file references (@path tokens) can be
+   * passed directly without a temp file.
+   *
+   * Strips all `@token` references from the text and checks whether the
+   * remaining text qualifies as a simple prompt. This allows prompts like
+   * "fully implement @Path/To/Plan.md" to be sent inline, rather than being
+   * wrapped in a categorized-instruction string.
+   *
+   * @param userPromptText The raw user prompt text (with @path tokens preserved)
+   * @returns true if the prompt can be passed directly
+   */
+  protected isSimplePromptWithFileRefs(userPromptText: string): boolean {
+    const textWithoutRefs = userPromptText.replace(/@\S+/g, "").trim();
+    return textWithoutRefs.length === 0 || this.isSimplePrompt(textWithoutRefs);
+  }
+
+  /**
    * Resolve relative path to absolute workspace path
    * Uses Node.js path.resolve for cross-platform compatibility
    */
