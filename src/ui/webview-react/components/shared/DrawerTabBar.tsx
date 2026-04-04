@@ -25,7 +25,12 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
   className,
 }) => {
   return (
-    <div className={className ?? "flex items-center border-t border-panel-border bg-sidebar-bg"}>
+    <div
+      className={
+        className ??
+        "flex items-center border-t border-panel-border bg-sidebar-bg"
+      }
+    >
       {DRAWER_TABS.map((tab) => {
         const isActive = activeTab === tab.id;
         const override = tabOverrides?.[tab.id];
@@ -34,14 +39,15 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
         const inactiveColor = overrideColor ?? "text-description-fg";
         const activeColor = override?.activeColor ?? "text-foreground";
         const hoverClass = !isActive
-          ? (override?.hoverColor ?? "hover:text-foreground") + " hover:border-panel-border"
+          ? (override?.hoverColor ?? "hover:text-foreground") +
+            " hover:border-panel-border"
           : "";
         return (
           <button
             key={tab.id}
             type="button"
             title={tab.label}
-            className={`flex-1 flex items-center justify-center py-1.5 transition-colors cursor-pointer border-b-2 ${
+            className={`flex-1 flex items-center justify-center py-2 transition-colors cursor-pointer border-b-2 ${
               isActive
                 ? `border-focus-border ${activeColor}`
                 : `border-transparent ${inactiveColor} ${hoverClass}${tab.placeholder ? " opacity-60" : ""}`
@@ -54,7 +60,13 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
                 style={{ fontSize: 16 }}
               />
             ) : (
-              <HarnessIcon harnessId={harnessId} size={18} className={isActive ? "opacity-100" : "opacity-80 hover:opacity-100"} />
+              <HarnessIcon
+                harnessId={harnessId}
+                size={18}
+                className={
+                  isActive ? "opacity-100" : "opacity-80 hover:opacity-100"
+                }
+              />
             )}
           </button>
         );

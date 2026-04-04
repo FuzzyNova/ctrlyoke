@@ -103,37 +103,51 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
 
       {/* Swappable zone: quick pickers ↔ DrawerTabBar */}
       <div className="relative flex-1 min-w-0 self-stretch">
-        {/* Quick pickers — exit upward when drawer opens */}
+        {/* Quick pickers — unified layout, exits upward as a single unit */}
         <div
-          className={`absolute inset-0 flex items-center gap-1 transition-all duration-300 ${
+          className={`absolute inset-0 flex items-center justify-between transition-all duration-300 ${
             propertiesOpen
               ? "-translate-y-3 opacity-0 pointer-events-none"
               : "translate-y-0 opacity-100"
           }`}
         >
-          <HarnessQuickPicker
-            isNarrow={isNarrow}
-            showLabel={!isNarrow}
-            disabled={isCLIManaged}
-          />
-          <ModelQuickPicker
-            isNarrow={isNarrow}
-            showLabel={!isNarrow}
-            disabled={isCLIManaged}
-          />
-          <AgentQuickPicker
-            isNarrow={isNarrow}
-            showLabel={!isNarrow}
-            disabled={isCLIManaged}
-          />
-          <SkillsQuickPicker
-            isNarrow={isNarrow}
-            showLabel={!isNarrow}
-            disabled={isCLIManaged}
-          />
+          <div className="flex items-center gap-1">
+            <HarnessQuickPicker
+              isNarrow={isNarrow}
+              showLabel={!isNarrow}
+              disabled={isCLIManaged}
+            />
+            <ModelQuickPicker
+              isNarrow={isNarrow}
+              showLabel={!isNarrow}
+              disabled={isCLIManaged}
+            />
+            <AgentQuickPicker
+              isNarrow={isNarrow}
+              showLabel={!isNarrow}
+              disabled={isCLIManaged}
+            />
+            <SkillsQuickPicker
+              isNarrow={isNarrow}
+              showLabel={!isNarrow}
+              disabled={isCLIManaged}
+            />
+          </div>
+          <div className="flex items-center gap-1">
+            <PermissionsQuickPicker
+              isNarrow={isNarrow}
+              showLabel={!isNarrow}
+              disabled={isCLIManaged}
+            />
+            <ContextQuickPicker
+              isNarrow={isNarrow}
+              showLabel={!isNarrow}
+              disabled={isCLIManaged}
+            />
+          </div>
         </div>
 
-        {/* DrawerTabBar — enters from below when drawer opens */}
+        {/* DrawerTabBar — independent full-width layer, enters from below */}
         <div
           className={`absolute inset-0 flex items-center transition-all duration-300 ${
             propertiesOpen
@@ -150,26 +164,6 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             className="flex items-center w-full h-full"
           />
         </div>
-      </div>
-
-      {/* Permissions + Context pickers — right side, animate out with drawer */}
-      <div
-        className={`flex items-center gap-1 transition-all duration-300 overflow-hidden ${
-          propertiesOpen
-            ? "max-w-0 opacity-0 pointer-events-none"
-            : "max-w-96 opacity-100"
-        }`}
-      >
-        <PermissionsQuickPicker
-          isNarrow={isNarrow}
-          showLabel={!isNarrow}
-          disabled={isCLIManaged}
-        />
-        <ContextQuickPicker
-          isNarrow={isNarrow}
-          showLabel={!isNarrow}
-          disabled={isCLIManaged}
-        />
       </div>
 
       {/* Action buttons — always visible */}
