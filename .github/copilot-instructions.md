@@ -409,28 +409,3 @@ See `dev/implemented/ADDING_NEW_CLI_HARNESS.md`. Creates files in `src/flightpat
 | Platform abstraction contract                                     | `src/platform/PlatformAdapter.ts`   |
 
 </singleSourcesOfTruth>
-
-<instructionFiles>
-
-## Detailed Instruction Files
-
-The `.github/instructions/` directory contains detailed implementation guidelines scoped by file pattern. Read the relevant instruction file(s) before editing files in that area.
-
-| File Pattern                           | Instruction File                        | Covers                                                                                                       |
-| -------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `src/flightpath/*.ts` (top-level only) | `flightpath-core.instructions.md`       | WorkflowOrchestrator, WorkflowStateMachine, WorkflowInstance, PromptQueue, WorkflowExecutor, EndCondition    |
-| `src/flightpath/harness/**`            | `harness-integrations.instructions.md`  | CliIntegration, all 6 CLI providers, shared coordinator layer, ICliProvider interface, PtyProcessManager     |
-| `src/flightpath/harness/chat/**`       | `flightpath-chat.instructions.md`       | CopilotChatIntegration (UI automation fallback)                                                              |
-| `src/platform/**`                      | `platform.instructions.md`              | PlatformAdapter, VsCodeAdapter, CliAdapter, vscode-shim                                                      |
-| `src/cli.ts`, `src/cli/**`             | `flightpath-cli-binary.instructions.md` | FlightPath CLI binary, CliAdapter, CliTerminalFormatter                                                      |
-| `src/ui/**` (excl. webview-react)      | `ui.instructions.md`                    | DashboardBroadcastHub, FlightPathWebviewProvider, StatusBar, McpServerProvider, message routing              |
-| `src/ui/webview-react/**`              | `webview-react.instructions.md`         | React dashboard, 5 Zustand stores, CodeMirror editor, xterm.js terminal, ContextQuickPicker, PermissionsQuickPicker |
-| `src/types/**`                         | `types.instructions.md`                 | 7 type files: FlightPathTypes, DashboardConstants, CliOutputTypes, etc.                                      |
-| `src/utils/**`                         | `utils.instructions.md`                 | 26+ utilities: ConfigurationUtils, McpDiscoveryUtils, GitUtils, etc.                                         |
-| `src/completions/**`                   | `completions.instructions.md`           | IntelliSense providers and document link navigation                                                          |
-| `src/scripts/**`                       | `scripts.instructions.md`               | 6 JS hook scripts + 1 TypeScript OpenCode plugin                                                             |
-| `src/templates/**`                     | `templates.instructions.md`             | End condition script templates                                                                               |
-| `src/test/**`                          | `test.instructions.md`                  | ~64 test files, testing patterns and conventions                                                             |
-| `src/dev/**`                           | `dev.instructions.md`                   | Dev-only commands (stripped in production)                                                                   |
-
-</instructionFiles>
