@@ -221,14 +221,17 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       currentStep: s.currentStep ?? 0,
       undoWorkflowProperties: s.undoWorkflowProperties ?? {},
     };
-    const redoStates = ([...futureStates] as UndoableWorkflowState[]).reverse();
+    // futureStates[0] = oldest future (last to redo), futureStates[length-1] = most recently undone (first to redo)
+    // Display oldest-future first (top) so the most steps appear at the top, matching undo ordering.
+    const typedFuture = futureStates as UndoableWorkflowState[];
     const undoStates = ([...pastStates] as UndoableWorkflowState[]).reverse();
 
-    const redoEntries = redoStates.map((state, di) => {
-      const prevState = di === 0 ? current : redoStates[di - 1];
+    const redoEntries = typedFuture.map((state, i) => {
+      // prevState is the state that was current just before this future state was recorded
+      const prevState = i === typedFuture.length - 1 ? current : typedFuture[i + 1];
       return {
         label: describeChange(prevState, state),
-        stepCount: di + 1,
+        stepCount: typedFuture.length - i,
         direction: "redo" as const,
       };
     });
