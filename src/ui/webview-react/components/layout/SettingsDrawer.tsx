@@ -4,6 +4,7 @@ import {
   type WorkflowProperties,
   type GlobalSettings,
 } from "../../store/settingsStore";
+import { useWorkflowStore } from "../../store/workflowStore";
 import { useUiStore } from "../../store/uiStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
@@ -351,6 +352,12 @@ export const SettingsPanel: React.FC<{
         );
       }
 
+      // Snapshot the full workflowProperties after all updates so this action
+      // is tracked as a single undo entry.
+      useWorkflowStore.getState().setUndoWorkflowProperties(
+        useSettingsStore.getState().workflowProperties
+      );
+
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTIES,
         properties: updates,
@@ -358,6 +365,12 @@ export const SettingsPanel: React.FC<{
     },
     [vscode]
   );
+
+  const syncWorkflowPropertiesForUndo = useCallback(() => {
+    useWorkflowStore.getState().setUndoWorkflowProperties(
+      useSettingsStore.getState().workflowProperties
+    );
+  }, []);
 
   // ============================================================================
   // HANDLERS
@@ -404,6 +417,7 @@ export const SettingsPanel: React.FC<{
       // Optimistic update
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty("model", model);
+      syncWorkflowPropertiesForUndo();
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
@@ -411,7 +425,7 @@ export const SettingsPanel: React.FC<{
         value: model,
       });
     },
-    [vscode]
+    [syncWorkflowPropertiesForUndo, vscode]
   );
 
   const handleAgentChange = useCallback(
@@ -421,6 +435,7 @@ export const SettingsPanel: React.FC<{
       // from "explicitly set to None" (""), which allows clearing a global default.
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty("agent", agent);
+      syncWorkflowPropertiesForUndo();
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
@@ -428,7 +443,7 @@ export const SettingsPanel: React.FC<{
         value: agent,
       });
     },
-    [vscode]
+    [syncWorkflowPropertiesForUndo, vscode]
   );
 
   const handleSkillsChange = useCallback(
@@ -438,6 +453,7 @@ export const SettingsPanel: React.FC<{
       // from "explicitly cleared" ([]), which allows clearing a global default.
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty("skills", skills);
+      syncWorkflowPropertiesForUndo();
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
@@ -445,7 +461,7 @@ export const SettingsPanel: React.FC<{
         value: skills,
       });
     },
-    [vscode]
+    [syncWorkflowPropertiesForUndo, vscode]
   );
 
   const handleResumeSessionChange = useCallback(
@@ -486,6 +502,7 @@ export const SettingsPanel: React.FC<{
       // Optimistic update
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty("sessionId", parsedValue);
+      syncWorkflowPropertiesForUndo();
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
@@ -493,7 +510,7 @@ export const SettingsPanel: React.FC<{
         value: parsedValue,
       });
     },
-    [vscode]
+    [syncWorkflowPropertiesForUndo, vscode]
   );
 
   const handleMcpServersChange = useCallback(
@@ -503,6 +520,7 @@ export const SettingsPanel: React.FC<{
         "mcpServers",
         newValue as WorkflowProperties["mcpServers"]
       );
+      syncWorkflowPropertiesForUndo();
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
@@ -510,7 +528,7 @@ export const SettingsPanel: React.FC<{
         value: newValue,
       });
     },
-    [vscode]
+    [syncWorkflowPropertiesForUndo, vscode]
   );
 
   const handleHooksChange = useCallback(
@@ -520,6 +538,7 @@ export const SettingsPanel: React.FC<{
         "hooks",
         newValue as WorkflowProperties["hooks"]
       );
+      syncWorkflowPropertiesForUndo();
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
@@ -527,7 +546,7 @@ export const SettingsPanel: React.FC<{
         value: newValue,
       });
     },
-    [vscode]
+    [syncWorkflowPropertiesForUndo, vscode]
   );
 
   const handleRequestLocalServers = useCallback(() => {
@@ -568,6 +587,7 @@ export const SettingsPanel: React.FC<{
     (value: WorkflowProperties["toolPermissions"]) => {
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty("toolPermissions", value);
+      syncWorkflowPropertiesForUndo();
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
@@ -575,7 +595,7 @@ export const SettingsPanel: React.FC<{
         value: value,
       });
     },
-    [vscode]
+    [syncWorkflowPropertiesForUndo, vscode]
   );
 
   const handleAdditionalArgsChange = useCallback(
@@ -585,6 +605,7 @@ export const SettingsPanel: React.FC<{
       // receives the update and "Set as Default" can appear when the field
       // is cleared while a non-empty VS Code default exists.
       settingsStore.updateWorkflowProperty("additionalArgs", value);
+      syncWorkflowPropertiesForUndo();
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
@@ -592,13 +613,14 @@ export const SettingsPanel: React.FC<{
         value: value,
       });
     },
-    [vscode]
+    [syncWorkflowPropertiesForUndo, vscode]
   );
 
   const handlePriorContextChange = useCallback(
     (value: PriorContext | undefined) => {
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty("priorContext", value);
+      syncWorkflowPropertiesForUndo();
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
@@ -606,7 +628,7 @@ export const SettingsPanel: React.FC<{
         value: value,
       });
     },
-    [vscode]
+    [syncWorkflowPropertiesForUndo, vscode]
   );
 
   const handleEndConditionToggle = useCallback(
@@ -617,6 +639,7 @@ export const SettingsPanel: React.FC<{
       const settingsStore = useSettingsStore.getState();
       if (!enabled) {
         settingsStore.updateWorkflowProperty("endCondition", undefined);
+        syncWorkflowPropertiesForUndo();
         vscode.postMessage({
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
           property: "endCondition",
@@ -635,6 +658,7 @@ export const SettingsPanel: React.FC<{
           "endCondition",
           defaultEndCondition
         );
+        syncWorkflowPropertiesForUndo();
         vscode.postMessage({
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
           property: "endCondition",
@@ -642,7 +666,7 @@ export const SettingsPanel: React.FC<{
         });
       }
     },
-    [vscode]
+    [syncWorkflowPropertiesForUndo, vscode]
   );
 
   const handleEndConditionFieldChange = useCallback(
@@ -656,6 +680,7 @@ export const SettingsPanel: React.FC<{
       // Optimistic update
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty("endCondition", updatedEndCondition);
+      syncWorkflowPropertiesForUndo();
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
@@ -663,7 +688,7 @@ export const SettingsPanel: React.FC<{
         value: updatedEndCondition,
       });
     },
-    [vscode, workflowProperties.endCondition]
+    [syncWorkflowPropertiesForUndo, vscode, workflowProperties.endCondition]
   );
 
   const handleSetAsDefault = useCallback(

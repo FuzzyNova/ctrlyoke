@@ -245,6 +245,26 @@ export class WebviewMessageRouter {
         message.prompts,
         message.finalPrompt ?? null
       );
+      if ("workflowProperties" in message) {
+        const workflowProperties = {
+          harness: message.workflowProperties?.harness,
+          model: message.workflowProperties?.model,
+          agent: message.workflowProperties?.agent,
+          skills: message.workflowProperties?.skills,
+          resumeSession: message.workflowProperties?.resumeSession,
+          sessionId: message.workflowProperties?.sessionId,
+          mcpServers: message.workflowProperties?.mcpServers,
+          hooks: message.workflowProperties?.hooks,
+          endCondition: message.workflowProperties?.endCondition,
+          priorContext: message.workflowProperties?.priorContext,
+          additionalArgs: message.workflowProperties?.additionalArgs,
+          toolPermissions: message.workflowProperties?.toolPermissions,
+        };
+        this.settingsSync.handleUpdateWorkflowProperties(
+          workflowProperties,
+          this.getCurrentPostMessage()
+        );
+      }
     });
 
     // ── Dashboard — CodeMirror Editor ────────────────────────────────────

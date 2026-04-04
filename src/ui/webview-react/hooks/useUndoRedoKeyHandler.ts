@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useWorkflowStore } from "../store/workflowStore";
+import { useSettingsStore } from "../store/settingsStore";
 import { WebviewLog } from "@utils/logger";
 import { MESSAGE_TYPES } from "../types/messages";
 import { getVsCodeApi } from "./useVsCodeApi";
@@ -64,11 +65,15 @@ export function useUndoRedoKeyHandler() {
       );
 
       // Sync restored state to extension host so working file and queue stay consistent
-      const { prompts, finalPrompt } = useWorkflowStore.getState();
+      const ws = useWorkflowStore.getState();
+      const workflowProperties = ws.undoWorkflowProperties;
+      // Sync workflowProperties back to settingsStore so UI reflects the restored state
+      useSettingsStore.getState().setWorkflowProperties(workflowProperties);
       getVsCodeApi().postMessage({
         type: MESSAGE_TYPES.UNDO_REDO_SYNC,
-        prompts,
-        finalPrompt,
+        prompts: ws.prompts,
+        finalPrompt: ws.finalPrompt,
+        workflowProperties,
       });
     };
 

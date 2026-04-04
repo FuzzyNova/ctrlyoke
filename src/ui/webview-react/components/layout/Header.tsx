@@ -9,6 +9,7 @@ import {
   RUNNER_IDS,
 } from "../../types/messages";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { WebviewLog } from "@utils/logger";
 import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
 import { SaveWorkflowDialog } from "../workflow/SaveWorkflowDialog";
@@ -162,6 +163,32 @@ export const Header: React.FC = () => {
     vscode.postMessage({ type: MESSAGE_TYPES.STOP });
   }, [vscode, canStop]);
 
+  const handleUndoRedoAction = useCallback(
+    (
+      action: "undo-click" | "redo-click" | "history-toggle" | "history-jump",
+      details: {
+        canUndo: boolean;
+        canRedo: boolean;
+        pastCount: number;
+        futureCount: number;
+        editingDisabled: boolean;
+        historyEntryCount: number;
+        isOpen?: boolean;
+        undoCount?: number;
+      }
+    ) => {
+      WebviewLog.debug(`[Header] ${action}`, {
+        executionState,
+        isRunning,
+        isPaused,
+        isStopped,
+        isCancelling,
+        ...details,
+      });
+    },
+    [executionState, isCancelling, isPaused, isRunning, isStopped]
+  );
+
   return (
     <>
       <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_1fr] gap-x-4 gap-y-1.5 items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
@@ -189,7 +216,11 @@ export const Header: React.FC = () => {
             <i className="codicon codicon-save" />
           </button>
           {/* Undo / Redo / History */}
-          <UndoRedoControl isRunning={isRunning} isPaused={isPaused} />
+          <UndoRedoControl
+            isRunning={isRunning}
+            isPaused={isPaused}
+            onAction={handleUndoRedoAction}
+          />
           {/* Settings button */}
           <button
             className="control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"

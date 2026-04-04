@@ -27,6 +27,7 @@ import type { UndoResult } from "../types/messages";
 import { useUiStore } from "./uiStore";
 import { WebviewLog } from "@utils/logger";
 import { CLI_EVENT_TYPES } from "../types/cliEvents";
+import type { WorkflowProperties } from "./settingsStore";
 
 /**
  * Merge incoming structured events into an existing CliOutput array.
@@ -108,6 +109,9 @@ interface WorkflowState {
   undoResults: Record<string, UndoResult>;
   /** UndoRecord per execution target (keyed by target key, same format as workspaceSnapshots) */
   undoRecords: Record<string, UndoRecord>;
+  /** Shadow copy of settingsStore.workflowProperties for undo tracking. Kept in sync
+   *  with settingsStore but stored here so zundo can snapshot it alongside prompts. */
+  undoWorkflowProperties: WorkflowProperties;
 }
 
 /**
@@ -202,6 +206,10 @@ interface WorkflowActions {
   ) => void;
   setUndoResult: (requestId: string, result: UndoResult) => void;
   clearUndoResult: (requestId: string) => void;
+  /** Creates an undo snapshot: call when the user changes workflowProperties (SettingsDrawer). */
+  setUndoWorkflowProperties: (props: WorkflowProperties) => void;
+  /** Silently syncs the shadow copy without creating an undo snapshot (for incoming extension messages). */
+  syncIncomingWorkflowProperties: (props: WorkflowProperties) => void;
 }
 
 /**
@@ -255,6 +263,7 @@ const initialState: WorkflowState = {
   finalPromptWorkspaceSnapshots: {},
   undoResults: {},
   undoRecords: {},
+  undoWorkflowProperties: {},
 };
 
 function targetsEqual(a: OutputExecutionTarget, b: OutputExecutionTarget): boolean {
@@ -817,6 +826,11 @@ export const useWorkflowStore = create<
           })
         ),
 
+      setUndoWorkflowProperties: (props) => set({ undoWorkflowProperties: props }),
+
+      syncIncomingWorkflowProperties: (props) =>
+        withUndoPause(() => set({ undoWorkflowProperties: props })),
+
       // ============================================================================
       // COMPUTED SELECTORS
       // ============================================================================
@@ -931,6 +945,7 @@ export const useWorkflowStore = create<
         workflowName: state.workflowName,
         finalPrompt: state.finalPrompt,
         currentStep: state.currentStep,
+        undoWorkflowProperties: state.undoWorkflowProperties,
       }),
       limit: 100,
     }
@@ -959,12 +974,14 @@ export type {
   RetryState,
   StatusMessage,
 } from "../types/messages";
+export type { WorkflowProperties } from "./settingsStore";
 
 export interface UndoableWorkflowState {
   prompts: PromptItem[];
   workflowName: string | null;
   finalPrompt: PromptItem | null;
   currentStep: number;
+  undoWorkflowProperties: WorkflowProperties;
 }
 
 /**

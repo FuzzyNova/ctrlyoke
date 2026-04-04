@@ -12,7 +12,10 @@
 import { useEffect, useCallback, useMemo } from "react";
 import { getVsCodeApi } from "./useVsCodeApi";
 import { useWorkflowStore } from "../store/workflowStore";
-import { useSettingsStore } from "../store/settingsStore";
+import {
+  useSettingsStore,
+  type WorkflowProperties,
+} from "../store/settingsStore";
 import { useUiStore } from "../store/uiStore";
 import { useEditorStore } from "../store/editorStore";
 import {
@@ -66,6 +69,25 @@ export function sendMessage(
   vscode.postMessage({ type, ...payload });
 }
 
+function normalizeWorkflowProperties(
+  workflowProperties?: Partial<WorkflowProperties>
+): WorkflowProperties {
+  return {
+    harness: workflowProperties?.harness,
+    model: workflowProperties?.model,
+    agent: workflowProperties?.agent,
+    skills: workflowProperties?.skills,
+    resumeSession: workflowProperties?.resumeSession,
+    sessionId: workflowProperties?.sessionId,
+    mcpServers: workflowProperties?.mcpServers,
+    hooks: workflowProperties?.hooks,
+    endCondition: workflowProperties?.endCondition,
+    priorContext: workflowProperties?.priorContext,
+    additionalArgs: workflowProperties?.additionalArgs,
+    toolPermissions: workflowProperties?.toolPermissions,
+  };
+}
+
 // ============================================================================
 // Shared Helpers
 // ============================================================================
@@ -104,6 +126,7 @@ function applyWorkflowChange(): void {
   // with VS Code defaults for any unset properties), so the SettingsDrawer
   // will be updated to reflect the new workflow's actual configuration.
   useSettingsStore.getState().clearWorkflowProperties();
+  useWorkflowStore.getState().syncIncomingWorkflowProperties({});
   useSettingsStore.getState().setWorkflowLoaded(true);
 }
 
@@ -144,7 +167,9 @@ function createMessageHandlers(): MessageHandlerMap {
       data.workflowProperties &&
       Object.keys(data.workflowProperties).length > 0
     ) {
-      settingsStore.setWorkflowProperties(data.workflowProperties);
+      const normalized = normalizeWorkflowProperties(data.workflowProperties);
+      settingsStore.setWorkflowProperties(normalized);
+      workflowStore.syncIncomingWorkflowProperties(normalized);
     }
 
     // Update harness status
@@ -824,16 +849,16 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE] = (message) => {
     const settingsStore = useSettingsStore.getState();
+    const workflowStore = useWorkflowStore.getState();
 
     // Handle both message.data and direct message structure (like vanilla implementation)
     const data = message.data || message;
-    if (data.workflowProperties) {
-      // Merge with existing properties (don't replace completely)
-      const currentProperties = settingsStore.workflowProperties;
-      settingsStore.setWorkflowProperties({
-        ...currentProperties,
-        ...data.workflowProperties,
-      });
+    if (Object.prototype.hasOwnProperty.call(data, "workflowProperties")) {
+      const normalized = normalizeWorkflowProperties(data.workflowProperties);
+      settingsStore.setWorkflowProperties(normalized);
+      // Incoming messages represent the full working-file workflow properties.
+      // Replace rather than merge so cleared overrides from undo/redo actually disappear.
+      workflowStore.syncIncomingWorkflowProperties(normalized);
     }
   };
 
@@ -858,6 +883,7 @@ function createMessageHandlers(): MessageHandlerMap {
 
     settingsStore.setWorkflowLoaded(false);
     settingsStore.clearWorkflowProperties();
+    workflowStore.syncIncomingWorkflowProperties({});
     workflowStore.resetWorkflow();
     editorStore.setHasActiveQueue(false);
 
