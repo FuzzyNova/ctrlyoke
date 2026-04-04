@@ -491,8 +491,8 @@ export const OutputSection: React.FC = () => {
 
       const stepOutputs = (stepOutputsMap.get(key) ?? []) as CliOutputType[];
       const undoTarget: UndoExecutionTarget = isFinalPrompt
-        ? { kind: "finalPrompt", loopIndex: stepIndex }
-        : { kind: "queue", stepIndex };
+        ? { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: stepIndex }
+        : { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex };
       const label = isFinalPrompt
         ? `Final Prompt Loop ${stepIndex + 1}`
         : `Prompt ${stepIndex + 1}`;
@@ -748,8 +748,8 @@ export const OutputSection: React.FC = () => {
         ? `finalPrompt-${stepIndex}`
         : `queue-${stepIndex}`;
       const undoTarget: UndoExecutionTarget = isFinalPrompt
-        ? { kind: "finalPrompt", loopIndex: stepIndex }
-        : { kind: "queue", stepIndex };
+        ? { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: stepIndex }
+        : { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex };
 
       let effectiveSnapshot: WorkspaceSnapshot | undefined;
       let effectiveUndoRecord: UndoRecord | undefined;

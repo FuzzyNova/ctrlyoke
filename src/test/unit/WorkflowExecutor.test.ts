@@ -11,7 +11,7 @@ import { HarnessIntegration } from "../../flightpath/HarnessIntegration";
 import { HarnessStatus } from "../../flightpath/HarnessIntegration";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import { PromptItem, PromptFile, Harness } from "../../types/FlightPathTypes";
-import { EXECUTION_STATES, STEP_STATUS } from "../../types/DashboardConstants";
+import { EXECUTION_STATES, FINAL_PROMPT_PHASES, STEP_STATUS } from "../../types/DashboardConstants";
 import { CliEvent } from "../../types/WebviewMessageTypes";
 
 class MockPlatform implements PlatformAdapter {
@@ -563,7 +563,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     assert.strictEqual(historySaves.length, 1);
     assert.strictEqual(appendedStatusMessages.length, 1);
     assert.deepStrictEqual(appendedStatusMessages[0].target, {
-      kind: "queue",
+      kind: FINAL_PROMPT_PHASES.QUEUE,
       stepIndex: 0,
     });
     assert.strictEqual(
@@ -576,7 +576,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     );
     assert.deepStrictEqual(historyCallOrder, ["status", "output"]);
     assert.deepStrictEqual(historySaves[0].target, {
-      kind: "queue",
+      kind: FINAL_PROMPT_PHASES.QUEUE,
       stepIndex: 0,
     });
     assert.strictEqual(historySaves[0].cliOutputs.length, 1);

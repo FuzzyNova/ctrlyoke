@@ -29,6 +29,7 @@ import {
   FINAL_PROMPT_PHASES,
   QUEUE_POSITION,
   STEP_STATUS,
+  WORKFLOW_ATTEMPT_COMMANDS,
   type ActionType,
   type QueuePosition,
 } from "../types/DashboardConstants";
@@ -2124,31 +2125,31 @@ export class WorkflowInstance {
     }
 
     const target = transition.current.target;
-    if (target.kind !== "queue") {
+    if (target.kind !== FINAL_PROMPT_PHASES.QUEUE) {
       return;
     }
 
     switch (transition.command) {
-      case "beginAttempt":
+      case WORKFLOW_ATTEMPT_COMMANDS.BEGIN:
         if (transition.current.attemptIndex > 0) {
           this.dashboardSink.updateStepStatus(target.stepIndex, {
             state: STEP_STATUS.RUNNING,
           });
         }
         break;
-      case "scheduleRetry":
+      case WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY:
         this.dashboardSink.updateRetryAttempt(
           target.stepIndex,
           transition.current.retryCount ?? transition.current.attemptIndex,
           transition.current.maxRetries ?? 0
         );
         break;
-      case "cancelAttempt":
+      case WORKFLOW_ATTEMPT_COMMANDS.CANCEL:
         this.dashboardSink.updateStepStatus(target.stepIndex, {
           state: STEP_STATUS.CANCELLED,
         });
         break;
-      case "completeAttempt":
+      case WORKFLOW_ATTEMPT_COMMANDS.COMPLETE:
         if (transition.current.attemptIndex > 0) {
           this.dashboardSink.updateRetryAttempt(target.stepIndex, 0, 0);
         }
@@ -2162,7 +2163,7 @@ export class WorkflowInstance {
     const finalPromptRuntime = this.promptQueue.getFinalPromptRuntime();
     if (finalPromptRuntime?.phase === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
       return {
-        kind: "finalPrompt",
+        kind: FINAL_PROMPT_PHASES.FINAL_PROMPT,
         loopIndex: finalPromptRuntime.loopCount,
       };
     }
@@ -2173,7 +2174,7 @@ export class WorkflowInstance {
     }
 
     return {
-      kind: "queue",
+      kind: FINAL_PROMPT_PHASES.QUEUE,
       stepIndex: state.currentIndex,
     };
   }

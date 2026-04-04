@@ -3,6 +3,7 @@ import * as path from "path";
 import * as fsSync from "fs";
 import {
   DEFAULT_WORKFLOW_NAME,
+  FINAL_PROMPT_PHASES,
   MESSAGE_TYPES,
   StatusMessageSeverity,
   STATUS_MESSAGE_SEVERITY,
@@ -756,14 +757,14 @@ window.vscodeApi = acquireVsCodeApi();
     };
 
     for (const [idx, stepOutput] of Object.entries(history.promptOutputs)) {
-      sendForOutput({ kind: "queue", stepIndex: Number(idx) }, stepOutput);
+      sendForOutput({ kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: Number(idx) }, stepOutput);
     }
     if (history.finalPromptOutputs) {
       for (const [idx, stepOutput] of Object.entries(
         history.finalPromptOutputs
       )) {
         sendForOutput(
-          { kind: "finalPrompt", loopIndex: Number(idx) },
+          { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: Number(idx) },
           stepOutput
         );
       }

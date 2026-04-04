@@ -1,4 +1,4 @@
-import { ExecutionState, FINAL_PROMPT_PHASES } from "./DashboardConstants";
+import { ExecutionState, FINAL_PROMPT_PHASES, OUTPUT_HISTORY_KINDS } from "./DashboardConstants";
 import type {
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
@@ -20,20 +20,20 @@ export interface OrderedHistoryEntryBase {
 }
 
 export interface OrderedCliHistoryEntry extends OrderedHistoryEntryBase {
-  kind: "cli";
+  kind: typeof OUTPUT_HISTORY_KINDS.CLI;
   target: OutputExecutionTarget;
   attemptIndex: number;
   cliOutput: CliOutput;
 }
 
 export interface OrderedStatusHistoryEntry extends OrderedHistoryEntryBase {
-  kind: "status";
+  kind: typeof OUTPUT_HISTORY_KINDS.STATUS;
   target: OutputExecutionTarget;
   statusMessage: StatusMessage;
 }
 
 export interface OrderedRuntimeHistoryEntry extends OrderedHistoryEntryBase {
-  kind: "runtime";
+  kind: typeof OUTPUT_HISTORY_KINDS.RUNTIME;
   transition: {
     command: WorkflowRuntimeCommand;
     previous: WorkflowRuntimeState;

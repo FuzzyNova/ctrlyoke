@@ -21,7 +21,7 @@ import type {
 } from "../types/cliEvents";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/cliEvents";
-import { HARNESS_INFO } from "../types/messages";
+import { HARNESS_INFO, FINAL_PROMPT_PHASES, type FinalPromptPhase } from "../types/messages";
 import {
   mapOrderedHistoryEntriesToMessages,
 } from "./outputProjection";
@@ -34,7 +34,7 @@ import { extractKeyParameters } from "./outputUtils";
 interface MarkdownExportItem {
   type: "status" | "cli";
   target: {
-    kind: "queue" | "finalPrompt";
+    kind: FinalPromptPhase;
     index: number;
   };
   timestamp: number;
@@ -351,7 +351,7 @@ export function generateMarkdownExport(
           ? "Initial Attempt"
           : `Retry ${item.attemptIndex}`;
       const stepLabel =
-        item.target.kind === "finalPrompt"
+        item.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
           ? `Final Prompt Loop ${item.target.index + 1}`
           : `Prompt ${item.target.index + 1}`;
 

@@ -6,11 +6,11 @@ import type {
   CliOutput,
   OutputStatusMessage,
 } from "../types/messages";
-import { FINAL_PROMPT_PHASES } from "../types/messages";
+import { FINAL_PROMPT_PHASES, type FinalPromptPhase } from "../types/messages";
 import { formatTime } from "./outputUtils";
 
 export interface OutputMessageTarget {
-  kind: "queue" | "finalPrompt";
+  kind: FinalPromptPhase;
   index: number;
 }
 

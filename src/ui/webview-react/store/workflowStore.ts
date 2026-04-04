@@ -6,6 +6,7 @@ import {
   EXECUTION_STATES,
   STEP_STATUS,
   FINAL_PROMPT_PHASES,
+  OUTPUT_HISTORY_KINDS,
   type ExecutionState,
   type StepStatus,
   type FinalPromptPhase,
@@ -431,7 +432,7 @@ export const useWorkflowStore = create<
               attemptIndex: 0,
             };
             const newEntry: OrderedCliHistoryEntry = {
-              kind: "cli",
+              kind: OUTPUT_HISTORY_KINDS.CLI,
               target,
               attemptIndex: 0,
               cliOutput: streamingOutput,
@@ -445,7 +446,7 @@ export const useWorkflowStore = create<
           })
         ),
 
-      appendFinalPromptStreamingChunk: (loopIndex, chunk) =>
+      appendFinalPromptStreamingChunk:(loopIndex, chunk) =>
         withUndoPause(() =>
           set((state) => ({
             finalPromptStreamingChunks: {
@@ -494,7 +495,7 @@ export const useWorkflowStore = create<
               attemptIndex: 0,
             };
             const newEntry: OrderedCliHistoryEntry = {
-              kind: "cli",
+              kind: OUTPUT_HISTORY_KINDS.CLI,
               target,
               attemptIndex: 0,
               cliOutput: streamingOutput,

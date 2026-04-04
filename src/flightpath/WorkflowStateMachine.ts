@@ -1,5 +1,5 @@
 import { EXECUTION_STATES } from "../types/FlightPathTypes";
-import { WORKFLOW_ATTEMPT_STATUS, type ExecutionState } from "../types/DashboardConstants";
+import { FINAL_PROMPT_PHASES, WORKFLOW_ATTEMPT_COMMANDS, WORKFLOW_ATTEMPT_STATUS, type ExecutionState } from "../types/DashboardConstants";
 import type {
   WorkflowAttemptCommand,
   WorkflowAttemptState,
@@ -91,7 +91,7 @@ export class WorkflowStateMachine {
   }
 
   private getAttemptKey(target: WorkflowAttemptTarget): string {
-    return target.kind === "queue"
+    return target.kind === FINAL_PROMPT_PHASES.QUEUE
       ? `queue:${target.stepIndex}`
       : `final:${target.loopIndex}`;
   }
@@ -161,7 +161,7 @@ export class WorkflowStateMachine {
     this.attempts.set(key, current);
     this.activeAttemptKey = key;
     this.emitAttemptTransition(
-      "beginAttempt",
+      WORKFLOW_ATTEMPT_COMMANDS.BEGIN,
       this.cloneAttemptState(current)!,
       previous,
       timestampMs
@@ -192,7 +192,7 @@ export class WorkflowStateMachine {
       this.activeAttemptKey = undefined;
     }
     this.emitAttemptTransition(
-      "scheduleRetry",
+      WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY,
       this.cloneAttemptState(current)!,
       previous,
       timestampMs
@@ -231,7 +231,7 @@ export class WorkflowStateMachine {
       this.activeAttemptKey = undefined;
     }
     this.emitAttemptTransition(
-      "completeAttempt",
+      WORKFLOW_ATTEMPT_COMMANDS.COMPLETE,
       this.cloneAttemptState(current)!,
       previous,
       timestampMs
@@ -272,7 +272,7 @@ export class WorkflowStateMachine {
       this.activeAttemptKey = undefined;
     }
     this.emitAttemptTransition(
-      "failAttempt",
+      WORKFLOW_ATTEMPT_COMMANDS.FAIL,
       this.cloneAttemptState(current)!,
       previous,
       timestampMs
@@ -313,7 +313,7 @@ export class WorkflowStateMachine {
       this.activeAttemptKey = undefined;
     }
     this.emitAttemptTransition(
-      "cancelAttempt",
+      WORKFLOW_ATTEMPT_COMMANDS.CANCEL,
       this.cloneAttemptState(current)!,
       previous,
       timestampMs

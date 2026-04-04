@@ -5,7 +5,7 @@ import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import { OutputHistoryManager } from "../../flightpath/orchestration/OutputHistoryManager";
 import { TimelineRecorder } from "../../flightpath/orchestration/TimelineRecorder";
-import { EXECUTION_STATES } from "../../types/DashboardConstants";
+import { EXECUTION_STATES, FINAL_PROMPT_PHASES, OUTPUT_HISTORY_KINDS } from "../../types/DashboardConstants";
 import {
   TIMELINE_EVENT_TYPES,
   TIMELINE_STORAGE_FILES,
@@ -58,7 +58,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     await manager.appendStatusMessage(
       historyFilePath,
-      { kind: "queue", stepIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       {
         message: "started",
         severity: "info",
@@ -68,7 +68,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     await manager.saveExecutionOutput(
       historyFilePath,
-      { kind: "queue", stepIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       [
         {
           prompt: "queue-1",
@@ -83,7 +83,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     await manager.saveExecutionOutput(
       historyFilePath,
-      { kind: "queue", stepIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       [
         {
           prompt: "queue-1",
@@ -98,7 +98,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     await manager.appendStatusMessage(
       historyFilePath,
-      { kind: "queue", stepIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       {
         message: "done",
         severity: "info",
@@ -108,13 +108,13 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     await manager.saveExecutionOutput(
       historyFilePath,
-      { kind: "queue", stepIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       []
     );
 
     await manager.saveExecutionOutput(
       historyFilePath,
-      { kind: "finalPrompt", loopIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: 0 },
       [
         {
           prompt: "final",
@@ -128,7 +128,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     await manager.saveSnapshotForTarget(
       historyFilePath,
-      { kind: "queue", stepIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       {
         capturedAt: 150,
         strategy: "filesystem",
@@ -138,7 +138,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     await manager.saveUndoRecord(
       historyFilePath,
-      { kind: "queue", stepIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       {
         appliedAt: 160,
         restoredFiles: ["src/file.ts"],
@@ -148,7 +148,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     await manager.markUndoRecordRedone(
       historyFilePath,
-      { kind: "queue", stepIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       170
     );
 
@@ -157,16 +157,16 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     const loaded = await manager.loadHistory(historyFilePath);
     // CLI output for queue:0 is the final deduplicated one (attemptIndex=0, response="final")
     const queueCliEntries = loaded.orderedEntries
-      .filter((e) => e.kind === "cli" && e.target.kind === "queue" && (e.target as any).stepIndex === 0);
+      .filter((e) => e.kind === OUTPUT_HISTORY_KINDS.CLI && e.target.kind === FINAL_PROMPT_PHASES.QUEUE && (e.target as any).stepIndex === 0);
     assert.strictEqual(queueCliEntries.length, 1);
     assert.strictEqual((queueCliEntries[0] as any).cliOutput.response, "final");
 
     const queueStatusEntries = loaded.orderedEntries
-      .filter((e) => e.kind === "status" && e.target.kind === "queue" && (e.target as any).stepIndex === 0);
+      .filter((e) => e.kind === OUTPUT_HISTORY_KINDS.STATUS && e.target.kind === FINAL_PROMPT_PHASES.QUEUE && (e.target as any).stepIndex === 0);
     assert.strictEqual(queueStatusEntries.length, 2);
 
     const finalCliEntries = loaded.orderedEntries
-      .filter((e) => e.kind === "cli" && e.target.kind === "finalPrompt" && (e.target as any).loopIndex === 0);
+      .filter((e) => e.kind === OUTPUT_HISTORY_KINDS.CLI && e.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT && (e.target as any).loopIndex === 0);
     assert.strictEqual(finalCliEntries.length, 1);
 
     assert.strictEqual(
@@ -234,7 +234,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     await manager.appendStatusMessage(
       historyFilePath,
-      { kind: "queue", stepIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       { message: "paused", severity: "info", timestamp: 151 }
     );
 
@@ -272,7 +272,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     const loaded = await manager.loadHistory(historyFilePath);
     const statusEntries = loaded.orderedEntries.filter(
-      (e) => e.kind === "status" && e.target.kind === "queue" && (e.target as any).stepIndex === 0
+      (e) => e.kind === OUTPUT_HISTORY_KINDS.STATUS && e.target.kind === FINAL_PROMPT_PHASES.QUEUE && (e.target as any).stepIndex === 0
     );
     assert.deepStrictEqual(statusEntries.map((e) => (e as any).statusMessage), [
       { message: "paused", severity: "info", timestamp: 151 },
@@ -291,7 +291,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       {
         eventType: TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED,
         timestampMs: 100,
-        target: { kind: "queue", stepIndex: 0 },
+        target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
         payload: {
           statusMessage: {
             message: "before",
@@ -303,7 +303,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       {
         eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
         timestampMs: 100,
-        target: { kind: "queue", stepIndex: 0 },
+        target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
         payload: {
           cliOutput: {
@@ -319,7 +319,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       {
         eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
         timestampMs: 100,
-        target: { kind: "queue", stepIndex: 0 },
+        target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
         payload: {
           cliOutput: {
@@ -337,7 +337,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     const loaded = await manager.loadHistory(historyFilePath);
     assert.deepStrictEqual(
       loaded.orderedEntries.map((entry) =>
-        entry.kind === "cli"
+        entry.kind === OUTPUT_HISTORY_KINDS.CLI
           ? `${entry.kind}:${entry.cliOutput.response}:${entry.sequence}`
           : `${entry.kind}:${entry.sequence}`
       ),
@@ -351,13 +351,13 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     await manager.appendStatusMessage(
       historyFilePath,
-      { kind: "queue", stepIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       { message: "queued", severity: "info", timestamp: 100 }
     );
 
     await manager.saveExecutionOutput(
       historyFilePath,
-      { kind: "queue", stepIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       [
         {
           prompt: "queue-1",
@@ -372,7 +372,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     await manager.appendStatusMessage(
       historyFilePath,
-      { kind: "queue", stepIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       { message: "complete", severity: "info", timestamp: 120 }
     );
 
@@ -392,7 +392,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     const loaded = await manager.loadHistory(historyFilePath);
     const statusEntries = loaded.orderedEntries.filter(
-      (e) => e.kind === "status" && e.target.kind === "queue" && (e.target as any).stepIndex === 0
+      (e) => e.kind === OUTPUT_HISTORY_KINDS.STATUS && e.target.kind === FINAL_PROMPT_PHASES.QUEUE && (e.target as any).stepIndex === 0
     );
     assert.deepStrictEqual(statusEntries.map((e) => (e as any).statusMessage), [
       { message: "queued", severity: "info", timestamp: 100 },
@@ -406,13 +406,13 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     await manager.appendStatusMessage(
       historyFilePath,
-      { kind: "queue", stepIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       { message: "queued", severity: "info", timestamp: 100 }
     );
 
     await manager.saveExecutionOutput(
       historyFilePath,
-      { kind: "queue", stepIndex: 0 },
+      { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       [
         {
           prompt: "queue-1",
@@ -436,7 +436,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     const loaded = await manager.loadHistory(historyFilePath);
     const statusEntries = loaded.orderedEntries.filter(
-      (e) => e.kind === "status" && e.target.kind === "queue" && (e.target as any).stepIndex === 0
+      (e) => e.kind === OUTPUT_HISTORY_KINDS.STATUS && e.target.kind === FINAL_PROMPT_PHASES.QUEUE && (e.target as any).stepIndex === 0
     );
     assert.deepStrictEqual(statusEntries.map((e) => (e as any).statusMessage), [
       { message: "queued", severity: "info", timestamp: 100 },
@@ -455,7 +455,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       {
         eventType: TIMELINE_EVENT_TYPES.UNDO_RECORD_UPDATED,
         timestampMs: 120,
-        target: { kind: "queue", stepIndex: 0 },
+        target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
         payload: {
           undoRecord: {
             appliedAt: 120,

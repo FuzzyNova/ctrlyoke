@@ -39,7 +39,7 @@ import type {
   ToolResultData,
 } from "../../types/cliEvents";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../../types/cliEvents";
-import { HARNESS_INFO } from "../../types/messages";
+import { HARNESS_INFO, FINAL_PROMPT_PHASES } from "../../types/messages";
 import type {
   UndoExecutionTarget,
   WorkspaceSnapshot,
@@ -545,8 +545,8 @@ export const CliOutput = memo<CliOutputProps>(
     const target: UndoExecutionTarget = useMemo(
       () =>
         isFinalPrompt
-          ? { kind: "finalPrompt", loopIndex: stepIndex }
-          : { kind: "queue", stepIndex },
+          ? { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: stepIndex }
+          : { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex },
       [isFinalPrompt, stepIndex]
     );
     const targetKey = isFinalPrompt

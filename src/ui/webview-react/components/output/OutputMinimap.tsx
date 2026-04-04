@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
+import { type FinalPromptPhase } from "../../types/messages";
 
 // ============================================================================
 // Types
@@ -33,7 +34,7 @@ export interface MinimapDiffBlock {
 
 export interface MinimapStep {
   key: string;
-  kind: "queue" | "finalPrompt";
+  kind: FinalPromptPhase;
   stepIndex: number;
   firstMessageIndex: number;
   /** Real pixel fraction (0–1): offsetTop of the step anchor / scrollHeight */

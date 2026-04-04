@@ -3,6 +3,8 @@ import { suite, test } from "mocha";
 import { WorkflowStateMachine } from "../../flightpath/WorkflowStateMachine";
 import {
   EXECUTION_STATES,
+  FINAL_PROMPT_PHASES,
+  WORKFLOW_ATTEMPT_COMMANDS,
   WORKFLOW_ATTEMPT_STATUS,
 } from "../../types/DashboardConstants";
 
@@ -74,7 +76,7 @@ suite("WorkflowStateMachine", () => {
       retryCount?: number;
       maxRetries?: number;
     }> = [];
-    const target = { kind: "queue" as const, stepIndex: 1 };
+    const target = { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 1 };
 
     runtime.onDidAttemptTransition((transition) => {
       transitions.push({
@@ -93,28 +95,28 @@ suite("WorkflowStateMachine", () => {
 
     assert.deepStrictEqual(transitions, [
       {
-        command: "beginAttempt",
+        command: WORKFLOW_ATTEMPT_COMMANDS.BEGIN,
         attemptIndex: 0,
         status: WORKFLOW_ATTEMPT_STATUS.RUNNING,
         retryCount: undefined,
         maxRetries: undefined,
       },
       {
-        command: "scheduleRetry",
+        command: WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY,
         attemptIndex: 1,
         status: WORKFLOW_ATTEMPT_STATUS.RETRYING,
         retryCount: 1,
         maxRetries: 2,
       },
       {
-        command: "beginAttempt",
+        command: WORKFLOW_ATTEMPT_COMMANDS.BEGIN,
         attemptIndex: 1,
         status: WORKFLOW_ATTEMPT_STATUS.RUNNING,
         retryCount: 1,
         maxRetries: 2,
       },
       {
-        command: "completeAttempt",
+        command: WORKFLOW_ATTEMPT_COMMANDS.COMPLETE,
         attemptIndex: 1,
         status: WORKFLOW_ATTEMPT_STATUS.COMPLETED,
         retryCount: 1,
@@ -126,7 +128,7 @@ suite("WorkflowStateMachine", () => {
   test("auto-cancels the active attempt when stop is requested", () => {
     const runtime = new WorkflowStateMachine();
     const transitions: Array<{ command: string; status: string }> = [];
-    const target = { kind: "queue" as const, stepIndex: 0 };
+    const target = { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 };
 
     runtime.onDidAttemptTransition((transition) => {
       transitions.push({
@@ -142,8 +144,8 @@ suite("WorkflowStateMachine", () => {
     assert.strictEqual(runtime.getActiveAttempt(), undefined);
 
     assert.deepStrictEqual(transitions, [
-      { command: "beginAttempt", status: WORKFLOW_ATTEMPT_STATUS.RUNNING },
-      { command: "cancelAttempt", status: WORKFLOW_ATTEMPT_STATUS.CANCELLED },
+      { command: WORKFLOW_ATTEMPT_COMMANDS.BEGIN, status: WORKFLOW_ATTEMPT_STATUS.RUNNING },
+      { command: WORKFLOW_ATTEMPT_COMMANDS.CANCEL, status: WORKFLOW_ATTEMPT_STATUS.CANCELLED },
     ]);
   });
 

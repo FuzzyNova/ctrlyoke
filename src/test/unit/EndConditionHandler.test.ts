@@ -13,7 +13,7 @@ import {
 } from "../../flightpath/HarnessIntegration";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import { Harness, type PromptItem } from "../../types/FlightPathTypes";
-import { WORKFLOW_ATTEMPT_STATUS } from "../../types/DashboardConstants";
+import { WORKFLOW_ATTEMPT_STATUS, FINAL_PROMPT_PHASES, WORKFLOW_ATTEMPT_COMMANDS } from "../../types/DashboardConstants";
 
 class MockPlatform implements PlatformAdapter {
   constructor(private readonly choice?: string) {}
@@ -163,7 +163,7 @@ suite("EndConditionHandler", () => {
         workspaceFolderPath: process.cwd(),
         currentPromptFilePath: "workflow.flightpath.yaml",
         runtime,
-        attemptTarget: { kind: "queue", stepIndex: 0 },
+        attemptTarget: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
       async () => {
@@ -173,7 +173,7 @@ suite("EndConditionHandler", () => {
 
     assert.strictEqual(result.shouldContinue, true);
     assert.deepStrictEqual(transitions, [
-      { command: "completeAttempt", attemptIndex: 0 },
+      { command: WORKFLOW_ATTEMPT_COMMANDS.COMPLETE, attemptIndex: 0 },
     ]);
   });
 
@@ -221,7 +221,7 @@ suite("EndConditionHandler", () => {
         workspaceFolderPath: process.cwd(),
         currentPromptFilePath: "workflow.flightpath.yaml",
         runtime,
-        attemptTarget: { kind: "queue", stepIndex: 0 },
+        attemptTarget: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
       async (_retryPrompt, _currentIndex, attemptIndex) => {
@@ -234,14 +234,14 @@ suite("EndConditionHandler", () => {
     assert.deepStrictEqual(retryAttemptIndices, [1]);
     assert.deepStrictEqual(transitions, [
       {
-        command: "scheduleRetry",
+        command: WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY,
         attemptIndex: 1,
         status: WORKFLOW_ATTEMPT_STATUS.RETRYING,
         retryCount: 1,
         maxRetries: 1,
       },
       {
-        command: "completeAttempt",
+        command: WORKFLOW_ATTEMPT_COMMANDS.COMPLETE,
         attemptIndex: 1,
         status: WORKFLOW_ATTEMPT_STATUS.COMPLETED,
         retryCount: 1,
@@ -282,7 +282,7 @@ suite("EndConditionHandler", () => {
         workspaceFolderPath: process.cwd(),
         currentPromptFilePath: "workflow.flightpath.yaml",
         runtime,
-        attemptTarget: { kind: "queue", stepIndex: 0 },
+        attemptTarget: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
       async () => {
@@ -292,7 +292,7 @@ suite("EndConditionHandler", () => {
 
     assert.strictEqual(result.shouldContinue, false);
     assert.deepStrictEqual(transitions, [
-      { command: "failAttempt", attemptIndex: 0 },
+      { command: WORKFLOW_ATTEMPT_COMMANDS.FAIL, attemptIndex: 0 },
     ]);
   });
 
@@ -325,7 +325,7 @@ suite("EndConditionHandler", () => {
         workspaceFolderPath: process.cwd(),
         currentPromptFilePath: "workflow.flightpath.yaml",
         runtime,
-        attemptTarget: { kind: "queue", stepIndex: 0 },
+        attemptTarget: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
       async () => {

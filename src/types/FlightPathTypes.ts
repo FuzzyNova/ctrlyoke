@@ -1,6 +1,8 @@
 import {
   EXECUTION_STATES,
+  FINAL_PROMPT_PHASES,
   STEP_STATUS,
+  WORKFLOW_ATTEMPT_COMMANDS,
   ExecutionState,
   FinalPromptPhase,
   StepStatus,
@@ -270,8 +272,8 @@ export interface WorkflowRuntimeTransition {
 }
 
 export type WorkflowAttemptTarget =
-  | { kind: "queue"; stepIndex: number }
-  | { kind: "finalPrompt"; loopIndex: number };
+  | { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }
+  | { kind: typeof FINAL_PROMPT_PHASES.FINAL_PROMPT; loopIndex: number };
 
 export type { WorkflowAttemptStatus };
 
@@ -287,11 +289,7 @@ export interface WorkflowAttemptState {
 }
 
 export type WorkflowAttemptCommand =
-  | "beginAttempt"
-  | "scheduleRetry"
-  | "completeAttempt"
-  | "failAttempt"
-  | "cancelAttempt";
+  (typeof WORKFLOW_ATTEMPT_COMMANDS)[keyof typeof WORKFLOW_ATTEMPT_COMMANDS];
 
 export interface WorkflowAttemptTransition {
   command: WorkflowAttemptCommand;

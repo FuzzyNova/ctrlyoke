@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { useWorkflowStore } from "@store/workflowStore";
-import { EXECUTION_STATES, STEP_STATUS } from "@root/types/DashboardConstants";
+import { EXECUTION_STATES, STEP_STATUS, FINAL_PROMPT_PHASES, OUTPUT_HISTORY_KINDS } from "@root/types/DashboardConstants";
 import type { PromptItem } from "@root/types/WebviewMessageTypes";
 
 // ---------------------------------------------------------------------------
@@ -125,8 +125,8 @@ describe("untracked store actions (must not record undo entries)", () => {
   it("appendLiveEntry does not record", () => {
     loadWorkflow([makePrompt()]);
     store().appendLiveEntry({
-      kind: "cli",
-      target: { kind: "queue", stepIndex: 0 },
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       cliOutput: {
         prompt: "p",

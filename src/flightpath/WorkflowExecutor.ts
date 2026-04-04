@@ -218,7 +218,7 @@ export class WorkflowExecutor {
         while (this.promptQueue.hasNext()) {
           const state = this.promptQueue.getState();
           const target: ExecutionTarget = {
-            kind: "queue",
+            kind: FINAL_PROMPT_PHASES.QUEUE,
             stepIndex: state.currentIndex,
           };
           const prompt = state.prompts[state.currentIndex];
@@ -317,7 +317,7 @@ export class WorkflowExecutor {
         }
       }
 
-      const finalTarget: ExecutionTarget = { kind: "finalPrompt", loopIndex };
+      const finalTarget: ExecutionTarget = { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex };
       const shouldContinue = await this.executeSinglePrompt(
         finalTarget,
         currentFinalPrompt,
@@ -678,8 +678,8 @@ export class WorkflowExecutor {
     target: ExecutionTarget
   ): OutputExecutionTarget {
     return target.kind === FINAL_PROMPT_PHASES.QUEUE
-      ? { kind: "queue", stepIndex: target.stepIndex }
-      : { kind: "finalPrompt", loopIndex: target.loopIndex };
+      ? { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: target.stepIndex }
+      : { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: target.loopIndex };
   }
 
   /**

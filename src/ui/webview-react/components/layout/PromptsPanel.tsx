@@ -18,6 +18,7 @@ import {
   STEP_STATUS,
   EXECUTION_STATES,
   FINAL_PROMPT_PHASES,
+  OUTPUT_HISTORY_KINDS,
   RUNNER_IDS,
   type StepStatus,
 } from "../../types/messages";
@@ -295,17 +296,17 @@ export const PromptsPanel: React.FC<{
       if (isCLIManaged) return;
       const prompt = prompts[index];
       if (prompt) {
-        selectPrompt({ kind: "queue", index }, prompt);
+        selectPrompt({ kind: FINAL_PROMPT_PHASES.QUEUE, index }, prompt);
         // Scroll to this step's output if it exists.
         // In history mode, check historyOutputs; otherwise check live liveOrderedEntries.
         let hasOutput: boolean;
         if (isViewingHistory && historyOutputs) {
           hasOutput = historyOutputs.orderedEntries.some(
-            (e) => "target" in e && e.target.kind === "queue" && (e.target as any).stepIndex === index
+            (e) => "target" in e && e.target.kind === FINAL_PROMPT_PHASES.QUEUE && (e.target as any).stepIndex === index
           );
         } else {
           hasOutput = liveOrderedEntries.some(
-            (e) => e.kind === "cli" && "target" in e && (e as any).target.kind === "queue" && (e as any).target.stepIndex === index
+            (e) => e.kind === OUTPUT_HISTORY_KINDS.CLI && "target" in e && (e as any).target.kind === FINAL_PROMPT_PHASES.QUEUE && (e as any).target.stepIndex === index
           );
         }
         if (hasOutput) {
@@ -342,7 +343,7 @@ export const PromptsPanel: React.FC<{
       selectFinalPrompt(finalPrompt);
     } else {
       setFinalPromptFooterExpanded(true);
-      selectPrompt({ kind: "finalPrompt" }, { prompt: "" });
+      selectPrompt({ kind: FINAL_PROMPT_PHASES.FINAL_PROMPT }, { prompt: "" });
     }
   }, [
     isCLIManaged,
@@ -394,7 +395,7 @@ export const PromptsPanel: React.FC<{
   // Get the latest CLI output for the current final prompt loop
   const finalPromptLatestOutput = (() => {
     const cliEntries = liveOrderedEntries.filter(
-      (e) => e.kind === "cli" && "target" in e && (e as any).target.kind === "finalPrompt" && (e as any).target.loopIndex === finalPromptLoopCount
+      (e) => e.kind === OUTPUT_HISTORY_KINDS.CLI && "target" in e && (e as any).target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT && (e as any).target.loopIndex === finalPromptLoopCount
     );
     if (cliEntries.length === 0) return null;
     return (cliEntries[cliEntries.length - 1] as any).cliOutput;
@@ -476,10 +477,10 @@ export const PromptsPanel: React.FC<{
   const getLatestOutput = (index: number) => {
     const cliEntries = isViewingHistory && historyOutputs
       ? historyOutputs.orderedEntries.filter(
-          (e) => e.kind === "cli" && "target" in e && e.target.kind === "queue" && (e.target as any).stepIndex === index
+          (e) => e.kind === OUTPUT_HISTORY_KINDS.CLI && "target" in e && e.target.kind === FINAL_PROMPT_PHASES.QUEUE && (e.target as any).stepIndex === index
         )
       : liveOrderedEntries.filter(
-          (e) => e.kind === "cli" && "target" in e && (e as any).target.kind === "queue" && (e as any).target.stepIndex === index
+          (e) => e.kind === OUTPUT_HISTORY_KINDS.CLI && "target" in e && (e as any).target.kind === FINAL_PROMPT_PHASES.QUEUE && (e as any).target.stepIndex === index
         );
     if (cliEntries.length === 0) return null;
     return (cliEntries[cliEntries.length - 1] as any).cliOutput as any;
@@ -679,7 +680,7 @@ export const PromptsPanel: React.FC<{
                       prompts.length,
                       Math.max(0, ...historyOutputs.orderedEntries
                         .filter((e): e is typeof e & { target: { kind: string; stepIndex: number } } =>
-                          e.kind !== "runtime" && (e as any).target?.kind === "queue"
+                          e.kind !== OUTPUT_HISTORY_KINDS.RUNTIME && (e as any).target?.kind === FINAL_PROMPT_PHASES.QUEUE
                         )
                         .map((e) => (e as any).target.stepIndex + 1)
                         .concat([0]))

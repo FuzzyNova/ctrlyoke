@@ -603,6 +603,26 @@ export const ATTACHMENT_PREFIXES = {
 } as const;
 
 // ============================================================================
+// OUTPUT HISTORY KINDS - kind field values for OrderedHistoryEntry discriminated union
+// ============================================================================
+export const OUTPUT_HISTORY_KINDS = {
+  CLI: "cli",
+  STATUS: "status",
+  RUNTIME: "runtime",
+} as const;
+
+// ============================================================================
+// WORKFLOW ATTEMPT COMMANDS - command values for WorkflowAttemptCommand type
+// ============================================================================
+export const WORKFLOW_ATTEMPT_COMMANDS = {
+  BEGIN: "beginAttempt",
+  SCHEDULE_RETRY: "scheduleRetry",
+  COMPLETE: "completeAttempt",
+  FAIL: "failAttempt",
+  CANCEL: "cancelAttempt",
+} as const;
+
+// ============================================================================
 // DEFAULT WORKFLOW NAME - Placeholder used when no workflow has been named
 // ============================================================================
 export const DEFAULT_WORKFLOW_NAME = "New Workflow";
@@ -636,3 +656,7 @@ export type EditorTargetKind =
 export type TerminalSessionStatus =
   (typeof TERMINAL_SESSION_STATUS)[keyof typeof TERMINAL_SESSION_STATUS];
 export type SessionKind = (typeof SESSION_KINDS)[keyof typeof SESSION_KINDS];
+export type OutputHistoryKind =
+  (typeof OUTPUT_HISTORY_KINDS)[keyof typeof OUTPUT_HISTORY_KINDS];
+export type WorkflowAttemptCommandValue =
+  (typeof WORKFLOW_ATTEMPT_COMMANDS)[keyof typeof WORKFLOW_ATTEMPT_COMMANDS];

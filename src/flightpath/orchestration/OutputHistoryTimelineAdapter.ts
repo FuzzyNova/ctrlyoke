@@ -1,4 +1,4 @@
-import { FINAL_PROMPT_PHASES } from "../../types/DashboardConstants";
+import { FINAL_PROMPT_PHASES, OUTPUT_HISTORY_KINDS } from "../../types/DashboardConstants";
 import type {
   OrderedHistoryEntry,
   OutputExecutionTarget,
@@ -47,7 +47,7 @@ export class OutputHistoryTimelineAdapter {
       switch (event.eventType) {
         case TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED:
           orderedEntries.push({
-            kind: "runtime",
+            kind: OUTPUT_HISTORY_KINDS.RUNTIME,
             timestampMs: event.timestampMs,
             sequence: event.sequence,
             transition: event.payload.transition,
@@ -56,7 +56,7 @@ export class OutputHistoryTimelineAdapter {
         case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED: {
           const attemptIndex = event.attemptIndex;
           cliEntriesByKey.set(getCliEntryKey(event.target, attemptIndex), {
-            kind: "cli",
+            kind: OUTPUT_HISTORY_KINDS.CLI,
             target: event.target,
             attemptIndex,
             cliOutput: event.payload.cliOutput,
@@ -67,7 +67,7 @@ export class OutputHistoryTimelineAdapter {
         }
         case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
           orderedEntries.push({
-            kind: "status",
+            kind: OUTPUT_HISTORY_KINDS.STATUS,
             target: event.target,
             statusMessage: event.payload.statusMessage,
             timestampMs: event.timestampMs,

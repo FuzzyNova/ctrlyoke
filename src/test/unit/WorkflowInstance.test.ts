@@ -302,7 +302,7 @@ suite("WorkflowInstance runtime transitions", () => {
     await instance.promptQueue.commitRuntimeTransition({ persist: false });
 
     await instance.promptQueue.markCurrentAsSent();
-    runtime.beginAttempt({ kind: "queue", stepIndex: 0 }, 0);
+    runtime.beginAttempt({ kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 }, 0);
     instance.promptQueue.markInFlightPromptCancelled();
     assert.strictEqual(runtime.requestStop(), true);
     await instance.promptQueue.commitRuntimeTransition({ persist: false });
@@ -610,7 +610,7 @@ suite("WorkflowInstance runtime transitions", () => {
     });
 
     const runtime = instance.promptQueue.getRuntimeStateMachine();
-    const target = { kind: "queue" as const, stepIndex: 0 };
+    const target = { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 };
 
     runtime.scheduleRetry(target, 1, 1, 2);
     runtime.beginAttempt(target, 1);

@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   mapOrderedHistoryEntriesToMessages,
 } from "@utils/outputProjection";
+import { FINAL_PROMPT_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
 
 describe("outputProjection", () => {
   it("maps canonical ordered entries with sequence-preserved chronology", () => {
     const messages = mapOrderedHistoryEntriesToMessages([
       {
-        kind: "cli",
-        target: { kind: "finalPrompt", loopIndex: 0 },
+        kind: OUTPUT_HISTORY_KINDS.CLI,
+        target: { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: 0 },
         attemptIndex: 0,
         cliOutput: {
           prompt: "",
@@ -21,8 +22,8 @@ describe("outputProjection", () => {
         sequence: 2,
       },
       {
-        kind: "status",
-        target: { kind: "queue", stepIndex: 0 },
+        kind: OUTPUT_HISTORY_KINDS.STATUS,
+        target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
         statusMessage: {
           message: "queue first",
           severity: "info",

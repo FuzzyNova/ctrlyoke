@@ -24,6 +24,8 @@ import {
   STEP_STATUS,
   EDITOR_TARGET_KINDS,
   SESSION_KINDS,
+  FINAL_PROMPT_PHASES,
+  OUTPUT_HISTORY_KINDS,
   type ExecutionState,
   type StepStatus,
   type HarnessId,
@@ -586,8 +588,8 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.FINAL_PROMPT_OUTPUT] = (message) => {
     const store = useWorkflowStore.getState();
     const entry: OrderedCliHistoryEntry = {
-      kind: "cli",
-      target: { kind: "finalPrompt", loopIndex: message.loopIndex },
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: message.loopIndex },
       attemptIndex: message.output.attemptIndex ?? 0,
       cliOutput: message.output,
       timestampMs: message.output.timestampMs ?? Date.now(),
@@ -623,8 +625,8 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.CLI_OUTPUT] = (message) => {
     const store = useWorkflowStore.getState();
     const entry: OrderedCliHistoryEntry = {
-      kind: "cli",
-      target: { kind: "queue", stepIndex: message.stepIndex },
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: message.stepIndex },
       attemptIndex: message.output.attemptIndex ?? 0,
       cliOutput: message.output,
       timestampMs: message.output.timestampMs ?? Date.now(),
@@ -665,8 +667,8 @@ function createMessageHandlers(): MessageHandlerMap {
     }
     const store = useWorkflowStore.getState();
     const entry: OrderedCliHistoryEntry = {
-      kind: "cli",
-      target: { kind: "queue", stepIndex: message.stepIndex },
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: message.stepIndex },
       attemptIndex: message.output.attemptIndex ?? 0,
       cliOutput: message.output,
       timestampMs: message.output.timestampMs ?? Date.now(),
@@ -682,10 +684,10 @@ function createMessageHandlers(): MessageHandlerMap {
     const store = useWorkflowStore.getState();
     const stepIndex = Number(message.stepIndex);
     const target: OutputExecutionTarget = Number.isFinite(stepIndex) && stepIndex < 0
-      ? { kind: "finalPrompt", loopIndex: Math.abs(stepIndex) - 1 }
-      : { kind: "queue", stepIndex: Math.max(0, stepIndex) };
+      ? { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: Math.abs(stepIndex) - 1 }
+      : { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: Math.max(0, stepIndex) };
     const entry: OrderedStatusHistoryEntry = {
-      kind: "status",
+      kind: OUTPUT_HISTORY_KINDS.STATUS,
       target,
       statusMessage: { message: message.message, severity: message.severity ?? "info", timestamp: Date.now() },
       timestampMs: Date.now(),
@@ -982,8 +984,8 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.QUEUE_SIZE_LIMIT_REACHED] = (message) => {
     const store = useWorkflowStore.getState();
     const entry: OrderedStatusHistoryEntry = {
-      kind: "status",
-      target: { kind: "finalPrompt", loopIndex: 0 },
+      kind: OUTPUT_HISTORY_KINDS.STATUS,
+      target: { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: 0 },
       statusMessage: {
         message: `Queue size limit reached: ${message.currentSize}/${message.maxSize}`,
         severity: "warning",
@@ -1001,8 +1003,8 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.EXECUTION_TIME_LIMIT_REACHED] = (message) => {
     const store = useWorkflowStore.getState();
     const entry: OrderedStatusHistoryEntry = {
-      kind: "status",
-      target: { kind: "finalPrompt", loopIndex: 0 },
+      kind: OUTPUT_HISTORY_KINDS.STATUS,
+      target: { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: 0 },
       statusMessage: {
         message: `Execution time limit reached: ${message.elapsedSeconds}/${message.maxSeconds}s (${message.completedCount}/${message.totalCount} prompts)`,
         severity: "warning",
