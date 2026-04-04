@@ -386,7 +386,47 @@ export class CliLogMonitor {
             clearTimeout(timeoutHandle);
           }
           watcher.close();
-          resolve({ success: false, sessionId: sessionId || undefined });
+          // Flush any remaining log events and extract partial output so the
+          // stopped step shows what the AI had produced up to cancellation.
+          void (async () => {
+            try {
+              const newEntries = await parser.readNewLines(logPath);
+              for (const entry of newEntries) {
+                const entryTime = getEntryTimestamp(entry);
+                if (entryTime && entryTime < startTime) {
+                  continue;
+                }
+                events.push(entry);
+              }
+            } catch {
+              // ignore read errors during cancellation
+            }
+
+            const partialResponse =
+              events.length > 0 ? parser.extractResponse(events) : undefined;
+            const partialText = partialResponse
+              ? extractTextFromEvents(partialResponse)
+              : undefined;
+            const effectiveSessionId =
+              partialResponse?.metadata.sessionId || sessionId || undefined;
+
+            const partialResult: CliResult | undefined = partialText
+              ? {
+                  success: false,
+                  response: partialText,
+                  statistics: "",
+                  exitCode: -1,
+                  sessionId: effectiveSessionId,
+                }
+              : undefined;
+
+            resolve({
+              success: false,
+              sessionId: sessionId || undefined,
+              parsedOutput: partialResponse,
+              cliResult: partialResult,
+            });
+          })();
           return;
         }
         const ptyExit = this.deps.runtimeState.isPtyTerminated?.();
@@ -403,9 +443,29 @@ export class CliLogMonitor {
             `⚠️ CLI process exited (code ${ptyExit.exitCode}) before completion — stopping workflow`
           );
           void drainLogEvents().then(() => {
+            const partialResponse =
+              events.length > 0 ? parser.extractResponse(events) : undefined;
+            const partialText = partialResponse
+              ? extractTextFromEvents(partialResponse)
+              : undefined;
+            const effectiveSessionId =
+              partialResponse?.metadata.sessionId || sessionId || undefined;
+
+            const partialResult: CliResult | undefined = partialText
+              ? {
+                  success: false,
+                  response: partialText,
+                  statistics: "",
+                  exitCode: ptyExit.exitCode,
+                  sessionId: effectiveSessionId,
+                }
+              : undefined;
+
             resolve({
               success: false,
               sessionId: sessionId || undefined,
+              parsedOutput: partialResponse,
+              cliResult: partialResult,
               processExited: { exitCode: ptyExit.exitCode },
             });
           });

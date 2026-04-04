@@ -700,6 +700,18 @@ export class CliIntegration extends HarnessIntegration {
         prompt,
         executionStartTime: session.executionStartTime,
         extractedSessionId: session.effectiveSessionId,
+        resolvedProperties: session.resolvedProperties,
+        workingFilePersistence: workflowContext.workingFilePersistence,
+      });
+      return;
+    }
+
+    if (!success && this.failureTracker.wasLastFailureProcessExit() && workflowContext?.workingFilePersistence) {
+      await this.promptRuntimeCoordinator.persistCancelledPromptRuntime({
+        prompt,
+        executionStartTime: session.executionStartTime,
+        extractedSessionId: session.effectiveSessionId,
+        resolvedProperties: session.resolvedProperties,
         workingFilePersistence: workflowContext.workingFilePersistence,
       });
       return;
@@ -827,7 +839,16 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   override getLastFailureOutput(): string | undefined {
-    return this.failureTracker.getLastFailureOutput();
+    const ptyTail = this.failureTracker.getLastFailureOutput();
+    if (ptyTail) {
+      return ptyTail;
+    }
+    // Fall back to partial response captured from the log (user-cancelled stop case).
+    // The log monitor flushes accumulated events on cancel and stores them on the
+    // session; applyExecutionSession() copies them to lastExecutionSnapshot before
+    // sendPrompt() returns, so the partial text is available here.
+    const partialResponse = this.lastExecutionSnapshot?.result?.response;
+    return partialResponse || undefined;
   }
 
   // ============================================================
@@ -959,6 +980,7 @@ export class CliIntegration extends HarnessIntegration {
       Log.debug(
         "⏹️ No active process/execution - firing responseComplete immediately"
       );
+      this.lastFailureReason = "Stopped by user";
       this.responseCompleteEmitter.fire("Cancelled before process started");
       return;
     }

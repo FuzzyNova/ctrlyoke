@@ -672,9 +672,6 @@ export class WorkflowInstance {
     const prevQueueState = this.promptQueue.getState();
     const prevExecutionState = this.getAuthoritativeExecutionState();
     // Only COMPLETED workflows count as having "completed" steps for append-continuation.
-    // Use actual per-step completion status rather than prompts.length because
-    // append-and-run keeps the queue in COMPLETED long enough to add new pending
-    // prompts before execution restarts.
     const prevCompletedCount =
       prevExecutionState === EXECUTION_STATES.COMPLETED
         ? this.promptQueue.getCompletedCount()
@@ -684,10 +681,19 @@ export class WorkflowInstance {
     const fileName = path.basename(filePath);
 
     const filePromptCount = promptFile.prompts?.length ?? 0;
+    // Count pending (never-run) prompts in the queue. Newly appended prompts are
+    // PENDING; prompts that ran but were cancelled/skipped are CANCELLED. Using
+    // pendingCount instead of (filePromptCount > prevCompletedCount) prevents a
+    // false-positive when a completed workflow has cancelled prompts: e.g. 3 prompts
+    // where 1 was cancelled → completedCount=2, filePromptCount=3, but no PENDING
+    // prompts exist, so this is a restart, not an append continuation.
+    const pendingCount = prevQueueState.results.filter(
+      (r) => r.status === STEP_STATUS.PENDING
+    ).length;
     const isAppendContinuation =
       !continueFromCurrent &&
       prevCompletedCount > 0 &&
-      filePromptCount > prevCompletedCount;
+      pendingCount > 0;
 
     // Detect stop → setStartPosition → Run scenario: the queue is IDLE but
     // already has a partial run in progress (currentIndex > 0). This happens
@@ -703,8 +709,8 @@ export class WorkflowInstance {
     Log.debug(
       `[executeLoadedPromptFile] continueFromCurrent=${continueFromCurrent}, ` +
         `prevQueueStatus=${prevExecutionState}, prevCompletedCount=${prevCompletedCount}, ` +
-        `filePromptCount=${filePromptCount}, isAppendContinuation=${isAppendContinuation}, ` +
-        `isIdleContinuation=${isIdleContinuation}`
+        `pendingCount=${pendingCount}, filePromptCount=${filePromptCount}, ` +
+        `isAppendContinuation=${isAppendContinuation}, isIdleContinuation=${isIdleContinuation}`
     );
 
     // Declared outside try so the catch block can finalize history on early errors

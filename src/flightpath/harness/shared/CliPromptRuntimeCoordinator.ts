@@ -20,11 +20,17 @@ export class CliPromptRuntimeCoordinator {
     prompt: PromptItem;
     executionStartTime: Date;
     extractedSessionId?: string;
+    resolvedProperties?: ResolvedProperties;
     workingFilePersistence?: WorkflowWorkingFilePersistence;
   }): Promise<void> {
     if (!params.workingFilePersistence) {
       return;
     }
+
+    const actualHarness =
+      params.resolvedProperties?.harness ?? this.deps.getIntegrationHarness();
+    const actualModel = params.resolvedProperties?.model ?? "";
+    const actualAgent = params.resolvedProperties?.agent;
 
     if (!params.prompt._runtime) {
       params.prompt._runtime = {
@@ -32,6 +38,12 @@ export class CliPromptRuntimeCoordinator {
       };
     } else if (!params.prompt._runtime.startedAt) {
       params.prompt._runtime.startedAt = params.executionStartTime.getTime();
+    }
+
+    params.prompt._runtime.harness = actualHarness;
+    params.prompt._runtime.model = actualModel;
+    if (actualAgent) {
+      params.prompt._runtime.agent = actualAgent;
     }
 
     if (params.extractedSessionId && !params.prompt._runtime.sessionId) {
