@@ -6,6 +6,10 @@ import { AgentQuickPicker } from "./AgentQuickPicker";
 import { SkillsQuickPicker } from "./SkillsQuickPicker";
 import { PermissionsQuickPicker } from "./PermissionsQuickPicker";
 import { ContextQuickPicker } from "./ContextQuickPicker";
+import { DrawerTabBar } from "../shared/DrawerTabBar";
+import type { DrawerPage } from "../../types/drawerPages";
+import type { HarnessId } from "../../types/messages";
+import type { TabIconOverride } from "../shared/tabBadgeUtils";
 
 interface EditorFooterProps {
   isEditMode: boolean;
@@ -29,6 +33,11 @@ interface EditorFooterProps {
   propertiesOpen: boolean;
   /** When true, all edit actions are disabled (CLI watch mode). */
   isCLIManaged?: boolean;
+  /** Active tab page in the properties drawer — drives the inline DrawerTabBar */
+  drawerActivePage: DrawerPage;
+  onDrawerTabChange: (page: DrawerPage) => void;
+  drawerHarnessId: HarnessId;
+  drawerTabOverrides?: Partial<Record<DrawerPage, TabIconOverride>>;
 }
 
 /**
@@ -61,35 +70,42 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   onToggleProperties,
   propertiesOpen,
   isCLIManaged = false,
+  drawerActivePage,
+  onDrawerTabChange,
+  drawerHarnessId,
+  drawerTabOverrides,
 }) => {
   const [footerRef, isNarrow] = useElementNarrow(768);
 
   return (
     <div
       ref={footerRef}
-      className="editor-footer flex items-center justify-between px-3 py-1.5 border-t border-panel-border bg-sidebar-bg"
+      className="editor-footer flex items-center gap-1 px-3 py-1.5 border-t border-panel-border bg-sidebar-bg"
     >
-      {/* Left side: Properties toggle + all four quick pickers */}
-      <div className="editor-footer-left flex items-center gap-1">
-        <button
-          className={`btn-properties px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors ${
-            propertiesOpen
-              ? "bg-btn-secondary-bg text-btn-secondary-fg"
-              : "hover:bg-list-hover-bg text-foreground"
-          }`}
-          onClick={onToggleProperties}
-          title="Toggle prompt properties"
-        >
-          <i className="codicon codicon-settings-gear" />
-          {!isNarrow && <span>Properties</span>}
-          {!isNarrow && (
-            <i
-              className={`codicon ${propertiesOpen ? "codicon-chevron-down" : "codicon-chevron-up"}`}
-            />
-          )}
-        </button>
+      {/* Properties toggle button */}
+      <button
+        className={`btn-properties shrink-0 px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors ${
+          propertiesOpen
+            ? "bg-btn-secondary-bg text-btn-secondary-fg"
+            : "hover:bg-list-hover-bg text-foreground"
+        }`}
+        onClick={onToggleProperties}
+        title="Toggle prompt properties"
+      >
+        <i className="codicon codicon-settings-gear" />
+        {!isNarrow && <span>Properties</span>}
+        {!isNarrow && (
+          <i
+            className={`codicon ${propertiesOpen ? "codicon-chevron-down" : "codicon-chevron-up"}`}
+          />
+        )}
+      </button>
+
+      {/* Swappable zone: quick pickers ↔ DrawerTabBar */}
+      <div className="relative flex-1 min-w-0 self-stretch">
+        {/* Quick pickers — exit upward when drawer opens */}
         <div
-          className={`flex items-center gap-1 transition-all duration-300 ${
+          className={`absolute inset-0 flex items-center gap-1 transition-all duration-300 ${
             propertiesOpen
               ? "-translate-y-3 opacity-0 pointer-events-none"
               : "translate-y-0 opacity-100"
@@ -116,31 +132,48 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             disabled={isCLIManaged}
           />
         </div>
-      </div>
 
-      {/* Right side: Permissions + Context pickers, then action buttons */}
-      <div className="editor-actions flex items-center gap-1">
+        {/* DrawerTabBar — enters from below when drawer opens */}
         <div
-          className={`flex items-center gap-1 transition-all duration-300 ${
+          className={`absolute inset-0 flex items-center transition-all duration-300 ${
             propertiesOpen
-              ? "-translate-y-3 opacity-0 pointer-events-none"
-              : "translate-y-0 opacity-100"
+              ? "translate-y-0 opacity-100"
+              : "translate-y-3 opacity-0 pointer-events-none"
           }`}
         >
-          <PermissionsQuickPicker
+          <DrawerTabBar
+            activeTab={drawerActivePage}
+            onTabChange={onDrawerTabChange}
+            harnessId={drawerHarnessId}
             isNarrow={isNarrow}
-            showLabel={!isNarrow}
-            disabled={isCLIManaged}
-          />
-          <ContextQuickPicker
-            isNarrow={isNarrow}
-            showLabel={!isNarrow}
-            disabled={isCLIManaged}
+            tabOverrides={drawerTabOverrides}
+            className="flex items-center w-full h-full"
           />
         </div>
-        <div
-          className={`flex items-center gap-2 transition-all duration-300 ${!propertiesOpen ? "ml-1 pl-2 border-l border-panel-border" : ""}`}
-        >
+      </div>
+
+      {/* Permissions + Context pickers — right side, animate out with drawer */}
+      <div
+        className={`flex items-center gap-1 transition-all duration-300 overflow-hidden ${
+          propertiesOpen
+            ? "max-w-0 opacity-0 pointer-events-none"
+            : "max-w-96 opacity-100"
+        }`}
+      >
+        <PermissionsQuickPicker
+          isNarrow={isNarrow}
+          showLabel={!isNarrow}
+          disabled={isCLIManaged}
+        />
+        <ContextQuickPicker
+          isNarrow={isNarrow}
+          showLabel={!isNarrow}
+          disabled={isCLIManaged}
+        />
+      </div>
+
+      {/* Action buttons — always visible */}
+      <div className="flex items-center gap-2 shrink-0 ml-1 pl-2 border-l border-panel-border">
           {isEditMode ? (
             // Edit mode buttons
             <>
@@ -242,7 +275,6 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             </>
           )}
         </div>
-      </div>
     </div>
   );
 };

@@ -3,6 +3,9 @@ import { useEditorStore } from "../../store/editorStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
+import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
+import type { HarnessId } from "../../types/messages";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { CodeMirrorEditor } from "./CodeMirrorEditor";
 import { PropertiesDrawer } from "./PropertiesDrawer";
@@ -59,7 +62,27 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     closePropertiesDrawer,
   } = useUiStore();
   useSettingsStore(); // Keep store initialized for reactive updates
-  const { globalSettings } = useSettingsStore();
+  const { globalSettings, workflowProperties } = useSettingsStore();
+
+  // ── Drawer tab state (lifted from PropertiesDrawer for footer tab bar) ─────
+  const [drawerActivePage, setDrawerActivePage] = useState<DrawerPage>(DRAWER_PAGES.HARNESS);
+
+  // Reset to first tab when drawer opens for a new prompt
+  useEffect(() => {
+    if (propertiesDrawerOpen) {
+      setDrawerActivePage(DRAWER_PAGES.HARNESS);
+    }
+  }, [propertiesDrawerOpen, selectionTarget]);
+
+  const drawerCurrentHarness = (properties.harness ??
+    workflowProperties.harness ??
+    globalSettings.harness) as HarnessId;
+
+  const drawerTabOverrides = useDrawerTabOverrides(
+    workflowProperties,
+    globalSettings,
+    properties
+  );
 
   const vscode = getVsCodeApi();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -558,6 +581,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         <PropertiesDrawer
           isOpen={propertiesDrawerOpen}
           onClose={closePropertiesDrawer}
+          activePage={drawerActivePage}
         />
       </div>
 
@@ -621,6 +645,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         onToggleProperties={togglePropertiesDrawer}
         propertiesOpen={propertiesDrawerOpen}
         isCLIManaged={isCLIManaged}
+        drawerActivePage={drawerActivePage}
+        onDrawerTabChange={setDrawerActivePage}
+        drawerHarnessId={drawerCurrentHarness}
+        drawerTabOverrides={drawerTabOverrides}
       />
 
       {/* Delete Confirmation Modal */}

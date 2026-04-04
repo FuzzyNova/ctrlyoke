@@ -13,6 +13,8 @@ interface DrawerTabBarProps {
   isNarrow: boolean;
   /** Per-tab icon/color overrides driven by resolved property state */
   tabOverrides?: Partial<Record<DrawerPage, TabIconOverride>>;
+  /** Override the wrapper div className (default includes border-t and bg-sidebar-bg) */
+  className?: string;
 }
 
 export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
@@ -20,9 +22,10 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
   onTabChange,
   harnessId,
   tabOverrides,
+  className,
 }) => {
   return (
-    <div className="flex items-center border-t border-panel-border bg-sidebar-bg">
+    <div className={className ?? "flex items-center border-t border-panel-border bg-sidebar-bg"}>
       {DRAWER_TABS.map((tab) => {
         const isActive = activeTab === tab.id;
         const override = tabOverrides?.[tab.id];

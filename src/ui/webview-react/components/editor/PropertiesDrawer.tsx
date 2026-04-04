@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
-import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
 import {
   useEditorStore,
   END_CONDITION_DEFAULTS,
@@ -25,7 +24,6 @@ import {
 import { SESSION_ID_SENTINELS } from "../../types/messages";
 import {
   CustomSelect,
-  DrawerTabBar,
   DrawerRow,
   HarnessDropdown,
   HARNESS_DISPLAY_NAMES,
@@ -58,6 +56,7 @@ const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
 interface PropertiesDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  activePage: DrawerPage;
 }
 
 /**
@@ -73,10 +72,10 @@ interface PropertiesDrawerProps {
 export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   isOpen,
   onClose,
+  activePage,
 }) => {
   const {
     properties,
-    selectedPromptIndex,
     setProperty,
     setEndCondition,
     updateEndConditionField,
@@ -270,12 +269,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         ? PERMISSION_MODES.NONE
         : (properties.toolPermissions.mode ?? PERMISSION_MODES.ALLOW_ALL);
 
-  const tabOverrides = useDrawerTabOverrides(
-    workflowProperties,
-    globalSettings,
-    properties
-  );
-
   // ── Hooks page derived values ───────────────────────────────────────────
   const resolvedHooks = useMemo(() => {
     const effective = useSettingsStore.getState().getEffectiveHooks();
@@ -295,18 +288,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       ];
     return `Default (${label ?? resolvedPriorContext})`;
   })();
-
-  // Active page in the drawer tab navigation
-  const [activePage, setActivePage] = useState<DrawerPage>(
-    DRAWER_PAGES.HARNESS
-  );
-
-  // Reset to first page when drawer opens for a new prompt
-  useEffect(() => {
-    if (isOpen) {
-      setActivePage(DRAWER_PAGES.HARNESS);
-    }
-  }, [isOpen, selectedPromptIndex]);
 
   // Get models for current harness
   const currentHarness = (properties.harness ??
@@ -1133,14 +1114,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         )}
       </div>
 
-      {/* Tab Bar */}
-      <DrawerTabBar
-        activeTab={activePage}
-        onTabChange={setActivePage}
-        harnessId={currentHarness}
-        isNarrow={isNarrow}
-        tabOverrides={tabOverrides}
-      />
     </div>
   );
 };
