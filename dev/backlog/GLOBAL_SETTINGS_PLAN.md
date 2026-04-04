@@ -1,6 +1,6 @@
 # Global Settings Plan
 
-Create a first-class **global settings surface** for FlightPath so global configuration is no longer tied to the legacy `SettingsDrawer` footer or to VS Code settings alone. This plan should land before final server-button placement, because the hosted/standalone server controls belong to the global settings architecture, not to the workflow-properties surface.
+Create a first-class **global settings surface** for FlightPath so global configuration is no longer tied to the legacy `SettingsDrawer` footer or to VS Code settings alone. This plan introduces a unified config-file architecture that works identically in VS Code and standalone CLI mode.
 
 ---
 
@@ -17,12 +17,16 @@ That split is manageable inside VS Code, but it becomes awkward for the standalo
 - server settings such as port, URL, theme behavior, and future TLS options are global/app-level concerns
 - `src/utils/ConfigurationUtils.ts` centralizes dozens of global settings, but its backing store is still `vscode.workspace.getConfiguration("flightpath")`
 
+The CLI mode has an even bigger gap: **zero config file support**. Every setting must be passed as a CLI flag. The `CliAdapter` maps only ~14 of the 60+ settings; the rest always return hardcoded defaults. There is no `~/.flightpath/settings.json` or `.flightpath/settings.json` to read.
+
 The right long-term direction is to:
 
 1. treat workflow properties and global settings as separate UX surfaces,
 2. introduce a dedicated FlightPath global settings UI,
 3. put header-level global actions (Settings, Start/Stop Server) in a stable place,
-4. abstract the configuration backend so the same settings model works in VS Code and standalone mode.
+4. **abstract the configuration backend so the same settings model works in VS Code and standalone mode**,
+5. **introduce a FlightPath-native config file format that both VS Code and CLI can read/write**,
+6. **make config files the single source of truth — no VS Code settings dependency (pre-release, clean break)**.
 
 ---
 
@@ -124,9 +128,12 @@ That keeps workflow-local actions and app-global actions visually separate while
 - Replace the legacy "footer settings button opens VS Code settings" path with a real FlightPath settings experience.
 - Rename the mental model: `SettingsDrawer` should become **WorkflowProperties** over time.
 - Introduce a dedicated **Global Settings** surface that works in both VS Code and standalone/server contexts.
-- Separate **configuration model** from **configuration backend** so the UI does not care whether settings come from VS Code or a config file.
+- Separate **configuration model** from **configuration backend** so the UI does not care whether settings come from a config file or CLI flags.
 - Make server controls a natural part of global settings rather than a one-off button placement hack.
 - Keep workflow-level overrides and global defaults clearly distinct.
+- **Introduce a two-tier config file hierarchy: user global > workspace.**
+- **Give the CLI a config-file fallback so users don't need to repeat flags on every invocation.**
+- **Make config files the single source of truth — no VS Code settings dependency.**
 
 ## Non-Goals
 
@@ -134,6 +141,286 @@ That keeps workflow-local actions and app-global actions visually separate while
 - Eliminating `ConfigurationUtils` immediately in one pass
 - Designing multi-user/team-shared config for standalone mode
 - Implementing HTTPS/TLS now (only reserve configuration space for it)
+
+---
+
+## Design Decisions
+
+### Decision 1: Config File Format and Location
+
+**FlightPath will use JSON config files at two scopes, with clear precedence:**
+
+```
+Precedence (highest wins):
+  CLI flags > Workspace config > User global config > Hardcoded defaults
+```
+
+| Scope | Location | Purpose |
+|-------|----------|---------|
+| **User global** | `~/.flightpath/settings.json` | User-wide defaults that apply across all projects |
+| **Workspace** | `<workspace>/.flightpath/settings.json` | Project-specific overrides for this workspace |
+| **CLI flags** | `--harness`, `--model`, `--timeout`, etc. | Per-invocation overrides |
+
+> **Pre-release clean break:** FlightPath is pre-release with no backward compatibility constraints. VS Code settings (`package.json` contributions) are **not** part of the config resolution chain. The config file system is the single source of truth from day one. VS Code settings remain only as `package.json` schema declarations for IntelliSense in the VS Code settings UI, but the extension reads from config files, not `vscode.workspace.getConfiguration()`.
+
+**User global config (`~/.flightpath/settings.json`):**
+```json
+{
+  "harness": "copilot-cli",
+  "models": {
+    "copilot-cli": "claude-sonnet-4.5",
+    "claude-cli": "sonnet",
+    "codex-cli": "gpt-5.2-codex"
+  },
+  "execution": {
+    "mode": "interactive",
+    "maxPromptTimeout": 10800,
+    "scriptTimeout": 30
+  },
+  "tools": {
+    "permissionMode": "allowAll",
+    "allowed": [],
+    "denied": []
+  },
+  "workflow": {
+    "defaultFormat": "yaml",
+    "defaultTemplate": "blank",
+    "defaultAgent": "",
+    "defaultSkills": []
+  },
+  "chat": {
+    "windowLocation": "chatPanel",
+    "inactivityTimeout": 300,
+    "treatTimeoutAsSuccess": true
+  },
+  "mcp": {
+    "defaultServers": []
+  },
+  "history": {
+    "saveOutput": true,
+    "maxRuns": -1
+  },
+  "ui": {
+    "showCliOutput": true,
+    "showCliCommand": false,
+    "confirmDeleteOperations": true
+  }
+}
+```
+
+**Workspace config (`.flightpath/settings.json`):**
+```json
+{
+  "harness": "claude-cli",
+  "models": {
+    "claude-cli": "opus"
+  },
+  "tools": {
+    "permissionMode": "custom",
+    "allowed": ["Write", "Edit"],
+    "denied": ["Exec"]
+  },
+  "execution": {
+    "maxPromptTimeout": 3600
+  }
+}
+```
+
+**Why JSON over YAML:** Settings files are machine-edited by the UI and programmatically read/written. JSON avoids YAML parsing edge cases and aligns with how VS Code's `settings.json` already works. YAML remains the default for *workflow/prompt files* (human-authored multi-line prompts), but settings are structured data better suited to JSON.
+
+### Decision 2: VS Code Settings — Clean Break
+
+**FlightPath is pre-release. There is no migration from VS Code settings.** The config file system (`~/.flightpath/settings.json` + `.flightpath/settings.json`) is the single source of truth from day one.
+
+What happens to VS Code settings:
+- `package.json` `contributes.configuration.properties` **stays** — it provides IntelliSense and documentation when users open VS Code Settings UI
+- `ConfigurationUtils.ts` **stops calling** `vscode.workspace.getConfiguration()` for reading settings — it reads from config files instead
+- `ConfigurationUtils.updateSetting()` **writes to config files**, not VS Code settings
+- The `flightpath.*` keys in `package.json` become **documentation-only** — they describe what settings exist but are not the runtime backing store
+
+**Single source of truth for settings:** `.flightpath/settings.json` (workspace) and `~/.flightpath/settings.json` (user global). Period. No VS Code fallback, no dual-write, no deprecation period.
+
+### Decision 3: Config Service Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│              Global Settings UI                 │
+│         (webview modal / CLI TUI)               │
+└──────────────────────┬──────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────┐
+│         FlightPathConfigService                 │
+│  (platform-agnostic config model)               │
+│                                                 │
+│  get<T>(key): T                                 │
+│  set<T>(key, value): Promise<void>              │
+│  getAll(): FlightPathGlobalSettings             │
+│  resolve(key): { value, source }                │
+│  subscribe(listener): () => void                │
+└──────┬──────────────┬───────────────────────────┘
+       │              │
+       ▼              ▼
+┌──────────────┐  ┌───────────┐
+│ Config File  │  │ CLI Flags │
+│ Backend      │  │ (overlay) │
+│              │  │           │
+│ ~/.flightpath│  │ --harness │
+│ settings.json│  │ --model   │
+│ .flightpath/ │  │ --timeout │
+│ settings.json│  │           │
+└──────────────┘  └───────────┘
+```
+
+**Config resolution algorithm:**
+```
+For any setting key:
+  1. CLI flags (if in CLI mode) — highest priority
+  2. Workspace config (.flightpath/settings.json)
+  3. User global config (~/.flightpath/settings.json)
+  4. Hardcoded default — lowest priority
+```
+
+### Decision 4: CLI Config File Support
+
+**The CLI will read config files automatically, eliminating the need for repetitive flags.**
+
+Current state:
+```bash
+# Today: every invocation needs all flags
+flightpath run workflow.flightpath.yaml \
+  --harness claude-cli \
+  --model opus \
+  --timeout 7200 \
+  --allow-tool Write \
+  --add-dir /path/to/project
+```
+
+Future state with config files:
+```bash
+# User global (~/.flightpath/settings.json) has harness/model/timeout defaults
+# Workspace (.flightpath/settings.json) has project-specific tool permissions
+flightpath run workflow.flightpath.yaml
+# → reads config files, applies defaults, only needs per-run overrides
+```
+
+CLI flags still work and **always override** config file values:
+```bash
+flightpath run workflow.flightpath.yaml --harness codex-cli --model gpt-5.2
+```
+
+### Decision 5: Settings Schema and Types
+
+**A typed `FlightPathGlobalSettings` interface becomes the single source of truth for setting keys.**
+
+```ts
+// src/types/FlightPathSettings.ts
+export interface FlightPathGlobalSettings {
+  // Core
+  harness: HarnessId;
+  
+  // Models (per-harness)
+  models: Record<HarnessId, string>;
+  
+  // Execution
+  execution: {
+    mode: "interactive" | "headless";
+    maxPromptTimeout: number;  // seconds, -1 = unlimited
+    maxWorkflowExecutionTime: number;  // seconds, -1 = unlimited
+    scriptTimeout: number;  // seconds
+    closeTerminalOnComplete: boolean;
+  };
+  
+  // Tools
+  tools: {
+    permissionMode: "dangerouslyAllowAll" | "allowAll" | "custom";
+    allowed: string[];
+    denied: string[];
+    additionalDirs: string[];
+    allowAllPaths: boolean;
+    codexSandboxMode: string;
+    codexApprovalPolicy: string;
+  };
+  
+  // Workflow defaults
+  workflow: {
+    defaultFormat: "yaml" | "json";
+    defaultTemplate: string;
+    defaultAgent: string;
+    defaultSkills: string[];
+    resumeExistingSession: boolean;
+    priorContext: string;
+    autoLoadRecentSession: boolean;
+    maxRetries: number;
+    retryPrompt: string;
+  };
+  
+  // Chat
+  chat: {
+    windowLocation: "chatPanel" | "newTab" | "newWindow";
+    inactivityTimeout: number;  // seconds
+    treatTimeoutAsSuccess: boolean;
+    forceAgentMode: boolean;
+    useNativeAttachments: boolean;
+    omitAgentsSkillsOnResume: boolean;
+  };
+  
+  // MCP & Hooks
+  mcp: {
+    defaultServers: (string | McpServerConfig)[];
+  };
+  hooks: UserHookConfig[];
+  
+  // Queue
+  queue: {
+    maxSize: number;
+    unlimitedMode: boolean;
+    notifyOnExtension: boolean;
+  };
+  
+  // History
+  history: {
+    saveOutput: boolean;
+    maxRuns: number;
+  };
+  
+  // UI
+  ui: {
+    showCliOutput: boolean;
+    showCliCommand: boolean;
+    logRawCliOutput: boolean;
+    openPromptsInSecondGroup: boolean;
+    respectGitignoreForCompletions: boolean;
+    confirmDeleteOperations: boolean;
+    confirmResetOperations: boolean;
+  };
+  
+  // Server (new)
+  server: {
+    enabled: boolean;
+    port: number;
+    standalonePort: number;
+    theme: "auto" | "light" | "dark";
+    // Reserved for future HTTPS/TLS
+    tls?: {
+      enabled: boolean;
+      certPath?: string;
+      keyPath?: string;
+    };
+  };
+  
+  // Advanced
+  additionalArgs: Record<HarnessId, string>;
+  enableDiagnosticLogs: boolean;
+}
+```
+
+**Key design choices:**
+- Nested structure (not flat keys) — matches how the settings UI will group settings into sections
+- All timeouts in seconds (consistent unit, no ms confusion)
+- `models` is a single record instead of 7 separate keys
+- `permissionMode` is a typed union instead of arbitrary strings
+- Reserved `tls` section for future HTTPS support without schema breaking changes
 
 ---
 
@@ -164,54 +451,90 @@ Recommended UX:
 
 Recommended sections:
 
-1. **General**
-2. **Workflow Defaults**
-3. **Harnesses & Models**
-4. **Permissions**
-5. **Chat**
-6. **MCP & Hooks**
-7. **History & Safety**
-8. **Server**
+1. **General** — UI toggles, diagnostic logs
+2. **Workflow Defaults** — format, template, agent, skills, session behavior
+3. **Harnesses & Models** — per-harness model selection, additional args
+4. **Permissions** — tool allow/deny lists, permission mode, sandbox settings
+5. **Execution** — timeouts, execution mode, terminal behavior
+6. **Chat** — chat window, timeouts, agent mode, attachments
+7. **MCP & Hooks** — default servers, default hooks
+8. **History & Safety** — output history, delete/reset confirmations
+9. **Server** — port, enabled, theme, future TLS options
 
 ### 3. Introduce a backend-agnostic config service
 
-Create an abstraction layer between UI/business logic and the actual config store.
-
-Example shape:
+Create `FlightPathConfigService` — a platform-agnostic configuration service that resolves settings through the precedence chain.
 
 ```ts
-interface FlightPathConfigStore {
-  get<T>(key: string, defaultValue?: T): T | undefined;
-  set<T>(key: string, value: T | undefined): Promise<void>;
+// src/config/FlightPathConfigService.ts
+interface ConfigBackend {
+  get<T>(key: string): T | undefined;
+  set<T>(key: string, value: T): Promise<void>;
+  getAll(): Partial<FlightPathGlobalSettings>;
+}
+
+class FlightPathConfigService {
+  private backends: ConfigBackend[] = [];
+  private cliOverlay?: Partial<FlightPathGlobalSettings>;
+  
+  // Register backends in precedence order
+  registerBackend(backend: ConfigBackend, priority: number): void;
+  
+  // Get a setting — walks backends in precedence order
+  get<K extends keyof FlightPathGlobalSettings>(
+    key: K
+  ): FlightPathGlobalSettings[K];
+  
+  // Set a setting — writes to the appropriate backend based on context
+  set<K extends keyof FlightPathGlobalSettings>(
+    key: K,
+    value: FlightPathGlobalSettings[K],
+    scope: "user" | "workspace"
+  ): Promise<void>;
+  
+  // Get all settings merged from all backends
   getAll(): FlightPathGlobalSettings;
+  
+  // For CLI: overlay flags on top of file-based config
+  setCliOverlay(overlay: Partial<FlightPathGlobalSettings>): void;
+  
+  // Subscribe to config changes
   subscribe(listener: () => void): () => void;
 }
 ```
 
-Backends:
+**Backend implementations:**
 
-- **VS Code config backend**: wraps `vscode.workspace.getConfiguration("flightpath")`
-- **Standalone config backend**: wraps a real FlightPath config file
+| Backend | File | Used By |
+|---------|------|---------|
+| `FileConfigBackend` | `src/config/FileConfigBackend.ts` | Both VS Code and CLI |
+| `CliFlagOverlay` | (built into service) | CLI only |
 
-`ConfigurationUtils` can then become:
+### 4. Config file I/O
 
-- a compatibility layer over the new config service, or
-- a narrower adapter used only in VS Code-specific code until migration finishes
+```ts
+// src/config/FileConfigBackend.ts
+class FileConfigBackend implements ConfigBackend {
+  private userConfigPath: string;  // ~/.flightpath/settings.json
+  private workspaceConfigPath: string;  // <workspace>/.flightpath/settings.json
+  private workspaceRoot: string;
+  private cache?: FlightPathGlobalSettings;
+  
+  async get<T>(key: string): Promise<T | undefined>;
+  async set<T>(key: string, value: T, scope: "user" | "workspace"): Promise<void>;
+  getAll(): Partial<FlightPathGlobalSettings>;
+  
+  private loadConfig(path: string): Partial<FlightPathGlobalSettings>;
+  private saveConfig(path: string, config: Partial<FlightPathGlobalSettings>): Promise<void>;
+  private mergeConfigs(...sources: Partial<FlightPathGlobalSettings>[]): FlightPathGlobalSettings;
+}
+```
 
-### 4. Add a real standalone config file
-
-For standalone mode, use a dedicated FlightPath-owned config file rather than depending on VS Code settings.
-
-Recommended direction:
-
-- global config file in a user-scoped location
-- JSON first for simplicity
-- optional future export/import from VS Code settings
-
-The exact path can be finalized during implementation, but the architecture should assume:
-
-- one primary global config file for standalone mode
-- the same logical keys as the global settings UI
+**File creation behavior:**
+- Config files are **optional** — if they don't exist, the backend returns empty and falls through to the next backend
+- When a user changes a setting via the Global Settings UI in VS Code, **create** `.flightpath/settings.json` if it doesn't exist
+- CLI mode creates neither file — it only reads what exists
+- User global config (`~/.flightpath/`) is created only when the user explicitly sets a user-level setting
 
 ### 5. Make server controls part of the global settings model
 
@@ -258,54 +581,84 @@ This rename does not need to block the new global settings UI, but the plan shou
 
 ### Phase 1 — Define the shared global settings model
 
-1. Inventory every setting currently surfaced by `ConfigurationUtils.ts`.
-2. Normalize those keys into a typed `FlightPathGlobalSettings` model.
-3. Separate:
-   - global/app settings,
-   - workflow-default settings,
-   - server settings,
-   - backend-specific implementation details.
-4. Decide which legacy keys remain as-is for backward compatibility and which need aliasing/migration.
+**Deliverables:**
+1. `src/types/FlightPathSettings.ts` — typed `FlightPathGlobalSettings` interface (see Decision 5 above)
+2. Inventory every setting currently surfaced by `ConfigurationUtils.ts` and map to the new nested structure
+3. No backward compatibility layer needed — pre-release, clean break
+4. Update `schemas/prompt-schema.json` if any new global settings affect workflow file structure
+5. Update `package.json` `contributes.configuration.properties` to mark settings as documentation-only (add note pointing to config files)
 
-### Phase 2 — Add a config backend abstraction
+### Phase 2 — Config file I/O and backend abstraction
 
-1. Introduce a config service/store interface shared by VS Code and standalone.
-2. Implement a VS Code-backed adapter using current settings storage.
-3. Refactor the webview/settings sync layer to read from that abstraction instead of reaching into `vscode.workspace` directly where possible.
-4. Keep `ConfigurationUtils` as a transition adapter until all callers are migrated.
+**Deliverables:**
+1. `src/config/FlightPathConfigService.ts` — platform-agnostic config service
+2. `src/config/FileConfigBackend.ts` — reads/writes `~/.flightpath/settings.json` and `.flightpath/settings.json`
+3. Unit tests for config merging, precedence, and file I/O
+4. `ConfigurationUtils` becomes a **thin wrapper** over the config service — all `vscode.workspace.getConfiguration()` calls replaced:
+   ```ts
+   // Before (direct VS Code access):
+   getCliModel(): string {
+     return getConfig().get<string>("copilotCliModel", "claude-sonnet-4.5");
+   }
 
-### Phase 3 — Build the Global Settings UI
+   // After (config service):
+   getCliModel(): string {
+     return configService.get("models")["copilot-cli"] ?? "claude-sonnet-4.5";
+   }
+   ```
+5. `ConfigurationUtils.updateSetting()` writes to config files, not VS Code settings
 
-1. Add a new header button to open Global Settings.
-2. Create a dedicated large settings drawer/modal/page shell.
-3. Build sections from the typed settings model.
-4. Reuse existing controls where possible (`CustomSelect`, toggles, editors, MCP/hook editors).
-5. Show clearly which values are global defaults vs workflow overrides.
+### Phase 3 — CLI config file support
 
-### Phase 4 — Detangle the current footer
+**Deliverables:**
+1. Update `CliAdapter` to use `FlightPathConfigService` instead of its own hardcoded switch statement
+2. CLI reads `~/.flightpath/settings.json` and `.flightpath/settings.json` on startup
+3. CLI flags become an "overlay" on top of file-based config via `configService.setCliOverlay()`
+4. Expand `ResolvedCliConfig` or remove it entirely in favor of config service
+5. Update `src/cli.ts` to initialize the config service before running workflows
+6. Test: CLI with no flags picks up user/workspace config correctly
+7. Test: CLI flags override config file values
 
-1. Remove or relocate the global toggles from the workflow-properties footer.
-2. Decide whether small global quick toggles remain anywhere outside Global Settings.
-3. Keep the workflow-properties surface focused on workflow-scoped concerns only.
-4. Rename the component/files from `SettingsDrawer` to `WorkflowProperties*`.
+### Phase 4 — Build the Global Settings UI
 
-### Phase 5 — Add the Server section
+**Deliverables:**
+1. Add a new header button to open Global Settings
+2. Create a dedicated large settings drawer/modal/page shell
+3. Build sections from the typed settings model (General, Workflow Defaults, Harnesses & Models, etc.)
+4. Reuse existing controls where possible (`CustomSelect`, toggles, editors, MCP/hook editors)
+5. Show clearly which values are user global defaults vs workspace overrides
+6. Indicate the **source** of each setting value (config file, CLI flag, default)
+7. All writes go to config files — no VS Code settings interaction
 
-1. Add server settings to the typed global settings model.
-2. Add **Server** page/section in Global Settings.
+### Phase 5 — Detangle the current footer
+
+**Deliverables:**
+1. Remove or relocate the global toggles from the workflow-properties footer
+2. Decide whether small global quick toggles remain anywhere outside Global Settings
+3. Keep the workflow-properties surface focused on workflow-scoped concerns only
+4. Rename the component/files from `SettingsDrawer` to `WorkflowProperties*`
+
+### Phase 6 — Add the Server section
+
+**Deliverables:**
+1. Add server settings to the typed global settings model
+2. Add **Server** page/section in Global Settings
 3. Put detailed fields there:
    - enabled/running status
    - port
    - displayed URL
    - browser-launch action
    - future HTTPS/TLS placeholders if needed
-4. Add the header Start/Stop Server button only after this settings architecture is in place.
+4. Add the header Start/Stop Server button only after this settings architecture is in place
 
-### Phase 6 — Standalone backend
+### Phase 7 — Replace VS Code settings backend
 
-1. Implement the standalone config-file backend.
-2. Reuse the same settings model and UI.
-3. Ensure standalone server reads/writes the same logical settings without any VS Code dependency.
+**Deliverables:**
+1. Remove all `vscode.workspace.getConfiguration("flightpath")` reads from `ConfigurationUtils.ts`
+2. Remove `ConfigurationUtils.updateSetting()` calls to `vscode.ConfigurationTarget`
+3. `package.json` settings remain as documentation-only — add markdown description noting that settings are managed via FlightPath Global Settings UI or config files
+4. Remove `vscode` import from `ConfigurationUtils.ts` (or keep only for non-settings VS Code API calls if any remain)
+5. Verify no other code paths still read/write VS Code settings for FlightPath config
 
 ---
 
@@ -317,7 +670,10 @@ This rename does not need to block the new global settings UI, but the plan shou
 - hosted server button placement
 - standalone server configuration model
 - `WebviewSettingsSync` cleanup
-- eventual removal of direct `vscode.workspace` assumptions from settings-related code
+- removal of `vscode.workspace.getConfiguration()` from settings-related code
+- CLI config file support (currently nonexistent)
+- `CliAdapter` cleanup (eliminate hardcoded 14-key switch statement)
+- `ConfigurationUtils` refactor (remove VS Code dependency)
 
 ### Depends on
 
@@ -327,21 +683,80 @@ This rename does not need to block the new global settings UI, but the plan shou
 
 - finalizing server button placement in the footer
 - building a dedicated standalone settings page ad hoc
+- any new per-user or per-project configuration features
+- adding any new settings to `package.json` without config file support
 
 ---
 
 ## Recommended Follow-Up Order
 
-1. Land this global settings architecture plan.
-2. Implement the typed global settings model + backend abstraction.
-3. Build the new Global Settings UI shell.
-4. Move server configuration into that surface.
-5. Add header-level Start/Stop Server and circle back to the hosted server implementation.
+1. **Land this global settings architecture plan.**
+2. **Implement the typed global settings model** (`FlightPathGlobalSettings` interface).
+3. **Build the config service + file backend** (`FlightPathConfigService`, `FileConfigBackend`).
+4. **Add CLI config file support** — eliminate the 14-key switch statement in `CliAdapter`.
+5. **Build the Global Settings UI shell** in the webview.
+6. **Replace `ConfigurationUtils` VS Code reads/writes** with config service calls.
+7. **Move server configuration into that surface.**
+8. **Add header-level Start/Stop Server** and circle back to the hosted server implementation.
+9. **Detangle the SettingsDrawer footer** and rename to WorkflowProperties.
+10. **Remove VS Code settings backend** — strip `vscode.workspace.getConfiguration()` from `ConfigurationUtils`.
+
+---
+
+## CLI Usage Examples (After Implementation)
+
+### Scenario 1: User with global defaults
+
+```bash
+# ~/.flightpath/settings.json has:
+# { "harness": "claude-cli", "models": { "claude-cli": "opus" } }
+
+flightpath run refactor.flightpath.yaml
+# → Uses claude-cli with opus model, no flags needed
+```
+
+### Scenario 2: Project-specific overrides
+
+```bash
+# .flightpath/settings.json has:
+# { "harness": "codex-cli", "tools": { "permissionMode": "custom", "denied": ["Exec"] } }
+
+flightpath run deploy.flightpath.yaml
+# → Uses codex-cli, denies Exec tools
+```
+
+### Scenario 3: CLI flags override everything
+
+```bash
+# Config files say claude-cli, but user wants gpt-5.2-codex for this run
+flightpath run deploy.flightpath.yaml --harness codex-cli --model gpt-5.2-codex
+```
+
+### Scenario 4: CI/CD headless with config file
+
+```bash
+# CI has ~/.flightpath/settings.json with headless defaults
+# No flags needed, or override just what's different
+flightpath run ci-workflow.flightpath.yaml --headless --json
+```
+
+### Scenario 5: Standalone server reads config
+
+```bash
+# Server reads .flightpath/settings.json for port, theme, etc.
+flightpath-mcp
+# → Uses port from config, respects theme, logs to .flightpath/logs/
+```
 
 ---
 
 ## Notes
 
-- `ConfigurationUtils.ts` should be treated as the migration inventory, not the final architecture.
+- **Pre-release clean break:** FlightPath is pre-release with no backward compatibility constraints. Config files are the single source of truth from day one. No migration from VS Code settings is needed or planned.
+- `ConfigurationUtils.ts` should be treated as the migration inventory — a list of all settings that need to move to the config file system.
 - The current footer settings button is a temporary VS Code convenience, not the long-term product shape.
 - Server controls are global application controls, not workflow controls, so they should evolve with the global settings UX rather than with the workflow-properties drawer.
+- **Config files are optional** — the system gracefully falls back through available sources (workspace → user global → hardcoded defaults).
+- **CLI flags always win** — config files are defaults, flags are per-run overrides.
+- **VS Code `package.json` settings are documentation-only** — they describe what settings exist and provide IntelliSense in the VS Code Settings UI, but the extension reads/writes config files, not `vscode.workspace.getConfiguration()`.
+- The nested settings structure (`FlightPathGlobalSettings`) matches how the UI will group settings into sections — this is intentional and reduces mapping complexity.
