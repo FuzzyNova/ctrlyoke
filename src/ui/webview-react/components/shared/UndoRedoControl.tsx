@@ -28,6 +28,59 @@ interface UndoRedoControlProps {
   ) => void;
 }
 
+const UNDO_LABEL_TRUNCATE = 20;
+
+function truncateVal(val: string): string {
+  return val.length > UNDO_LABEL_TRUNCATE
+    ? val.slice(0, UNDO_LABEL_TRUNCATE) + "…"
+    : val;
+}
+
+function strVal(val: string | number | null | undefined): string {
+  if (val === null || val === undefined || val === "") return "none";
+  return truncateVal(String(val));
+}
+
+interface PromptChangeFields {
+  prompt?: string | null;
+  harness?: string | null;
+  model?: string | null;
+  agent?: string | null;
+  endCondition?: unknown;
+  skills?: unknown;
+  mcpServers?: unknown;
+  hooks?: unknown;
+  toolPermissions?: unknown;
+  additionalArgs?: string | null;
+  priorContext?: unknown;
+}
+
+function describePromptChange(
+  scope: string,
+  p: PromptChangeFields,
+  n: PromptChangeFields
+): string | null {
+  if (p.prompt !== n.prompt) return `Edited ${scope}`;
+  if (p.harness !== n.harness) return `Changed harness on ${scope} to ${strVal(n.harness)}`;
+  if (p.model !== n.model) return `Changed model on ${scope} to ${strVal(n.model)}`;
+  if (p.agent !== n.agent) return `Changed agent on ${scope} to ${strVal(n.agent)}`;
+  if (JSON.stringify(p.endCondition) !== JSON.stringify(n.endCondition))
+    return `Changed end condition on ${scope}`;
+  if (JSON.stringify(p.skills) !== JSON.stringify(n.skills))
+    return `Changed skills on ${scope}`;
+  if (JSON.stringify(p.mcpServers) !== JSON.stringify(n.mcpServers))
+    return `Changed MCP servers on ${scope}`;
+  if (JSON.stringify(p.hooks) !== JSON.stringify(n.hooks))
+    return `Changed hooks on ${scope}`;
+  if (JSON.stringify(p.toolPermissions) !== JSON.stringify(n.toolPermissions))
+    return `Changed tool permissions on ${scope}`;
+  if (p.additionalArgs !== n.additionalArgs)
+    return `Changed additional args on ${scope} to ${strVal(n.additionalArgs)}`;
+  if (JSON.stringify(p.priorContext) !== JSON.stringify(n.priorContext))
+    return `Changed prior context on ${scope}`;
+  return null;
+}
+
 function describeChange(
   prev: UndoableWorkflowState,
   next: UndoableWorkflowState
@@ -46,24 +99,30 @@ function describeChange(
   const nextFinal = next.finalPrompt;
   if (!prevFinal && nextFinal) return "Added final prompt";
   if (prevFinal && !nextFinal) return "Removed final prompt";
-  if (prevFinal && nextFinal && prevFinal.prompt !== nextFinal.prompt)
-    return "Edited final prompt";
+  if (prevFinal && nextFinal) {
+    const change = describePromptChange("final prompt", prevFinal, nextFinal);
+    if (change) return change;
+  }
 
   // Workflow-level property changes (SettingsDrawer)
   const prevWP = prev.undoWorkflowProperties ?? {};
   const nextWP = next.undoWorkflowProperties ?? {};
-  if (prevWP.harness !== nextWP.harness) return `Changed workflow harness`;
-  if (prevWP.model !== nextWP.model) return `Changed workflow model`;
-  if (prevWP.agent !== nextWP.agent) return `Changed workflow agent`;
+  if (prevWP.harness !== nextWP.harness)
+    return `Changed workflow harness to ${strVal(nextWP.harness)}`;
+  if (prevWP.model !== nextWP.model)
+    return `Changed workflow model to ${strVal(nextWP.model)}`;
+  if (prevWP.agent !== nextWP.agent)
+    return `Changed workflow agent to ${strVal(nextWP.agent)}`;
   if (JSON.stringify(prevWP.skills) !== JSON.stringify(nextWP.skills))
     return `Changed workflow skills`;
   if (prevWP.additionalArgs !== nextWP.additionalArgs)
-    return `Changed workflow additional args`;
+    return `Changed workflow additional args to ${strVal(nextWP.additionalArgs)}`;
   if (JSON.stringify(prevWP.priorContext) !== JSON.stringify(nextWP.priorContext))
     return `Changed workflow prior context`;
   if (prevWP.resumeSession !== nextWP.resumeSession)
     return nextWP.resumeSession ? `Enabled resume session` : `Disabled resume session`;
-  if (prevWP.sessionId !== nextWP.sessionId) return `Changed session ID`;
+  if (prevWP.sessionId !== nextWP.sessionId)
+    return `Changed session ID to ${strVal(nextWP.sessionId)}`;
   if (JSON.stringify(prevWP.endCondition) !== JSON.stringify(nextWP.endCondition))
     return `Changed workflow end condition`;
   if (JSON.stringify(prevWP.mcpServers) !== JSON.stringify(nextWP.mcpServers))
@@ -77,24 +136,8 @@ function describeChange(
     const p = prev.prompts[i];
     const n = next.prompts[i];
     if (!p || !n) continue;
-    if (p.prompt !== n.prompt) return `Edited prompt ${i + 1}`;
-    if (p.harness !== n.harness) return `Changed harness on prompt ${i + 1}`;
-    if (p.model !== n.model) return `Changed model on prompt ${i + 1}`;
-    if (p.agent !== n.agent) return `Changed agent on prompt ${i + 1}`;
-    if (JSON.stringify(p.endCondition) !== JSON.stringify(n.endCondition))
-      return `Changed end condition on prompt ${i + 1}`;
-    if (JSON.stringify(p.skills) !== JSON.stringify(n.skills))
-      return `Changed skills on prompt ${i + 1}`;
-    if (JSON.stringify(p.mcpServers) !== JSON.stringify(n.mcpServers))
-      return `Changed MCP servers on prompt ${i + 1}`;
-    if (JSON.stringify(p.hooks) !== JSON.stringify(n.hooks))
-      return `Changed hooks on prompt ${i + 1}`;
-    if (JSON.stringify(p.toolPermissions) !== JSON.stringify(n.toolPermissions))
-      return `Changed tool permissions on prompt ${i + 1}`;
-    if (p.additionalArgs !== n.additionalArgs)
-      return `Changed additional args on prompt ${i + 1}`;
-    if (JSON.stringify(p.priorContext) !== JSON.stringify(n.priorContext))
-      return `Changed prior context on prompt ${i + 1}`;
+    const change = describePromptChange(`prompt ${i + 1}`, p, n);
+    if (change) return change;
   }
 
   return "Changed workflow";

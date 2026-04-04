@@ -16,6 +16,8 @@ export interface RunSelectorProps {
   runTimestamps?: (number | undefined)[];
   /** executionState for each run, index 0 = most recent. Optional. */
   runStates?: (string | undefined)[];
+  /** When true, show compact "Runs" label instead of "Run X of X". */
+  narrow?: boolean;
 }
 
 /**
@@ -40,6 +42,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
   onClearHistory,
   runTimestamps,
   runStates,
+  narrow,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -119,7 +122,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-bash-status-success animate-pulse mr-0.5" />
         )}
         <span>
-          Run {currentRunNumber} of {availableRuns}
+          {narrow ? "Runs" : `Run ${currentRunNumber} of ${availableRuns}`}
         </span>
         <svg
           className={`w-3 h-3 transition-transform ${isOpen ? "rotate-180" : ""}`}

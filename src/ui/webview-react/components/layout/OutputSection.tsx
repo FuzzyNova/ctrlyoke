@@ -167,7 +167,7 @@ export const OutputSection: React.FC = () => {
   const showTerminalTab = true;
   const terminalSessionActive = terminalActiveWorkflows.has(terminalWorkflowId);
 
-  const [headerRef, isHeaderNarrow] = useElementNarrow(480);
+  const [headerRef, isHeaderNarrow] = useElementNarrow(600);
 
   const outputRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -1032,7 +1032,9 @@ export const OutputSection: React.FC = () => {
                       }
                     >
                       <i className="codicon codicon-discard text-[12px]" />
-                      <span>Undo {count} changes</span>
+                      <span>
+                        {isHeaderNarrow ? "Undo" : `Undo ${count} changes`}
+                      </span>
                     </button>
                   );
                 })()}
@@ -1057,7 +1059,9 @@ export const OutputSection: React.FC = () => {
                       }
                     >
                       <i className="codicon codicon-redo text-[12px]" />
-                      <span>Redo {count} changes</span>
+                      <span>
+                        {isHeaderNarrow ? "Redo" : `Redo ${count} changes`}
+                      </span>
                     </button>
                   );
                 })()}
@@ -1067,6 +1071,7 @@ export const OutputSection: React.FC = () => {
                   currentRunIndex={viewingRunIndex}
                   isViewingHistory={isViewingHistory}
                   isLiveRunActive={executionState === EXECUTION_STATES.RUNNING}
+                  narrow={isHeaderNarrow}
                   runTimestamps={runTimestamps}
                   runStates={runStates}
                   onSelectRun={(runIndex) => {

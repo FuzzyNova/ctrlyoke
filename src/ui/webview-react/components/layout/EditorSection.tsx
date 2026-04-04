@@ -47,7 +47,7 @@ export const EditorSection: React.FC = () => {
 
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
   const totalPrompts = prompts.length;
-  const [sectionRef, isNarrow] = useElementNarrow<HTMLElement>(480);
+  const [sectionRef, isNarrow] = useElementNarrow<HTMLElement>(600);
 
   // Inline name editing state
   const [isEditingName, setIsEditingName] = useState(false);
