@@ -88,50 +88,58 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             />
           )}
         </button>
-        {!propertiesOpen && (
-          <>
-            <HarnessQuickPicker
-              isNarrow={isNarrow}
-              showLabel={!isNarrow}
-              disabled={isCLIManaged}
-            />
-            <ModelQuickPicker
-              isNarrow={isNarrow}
-              showLabel={!isNarrow}
-              disabled={isCLIManaged}
-            />
-            <AgentQuickPicker
-              isNarrow={isNarrow}
-              showLabel={!isNarrow}
-              disabled={isCLIManaged}
-            />
-            <SkillsQuickPicker
-              isNarrow={isNarrow}
-              showLabel={!isNarrow}
-              disabled={isCLIManaged}
-            />
-          </>
-        )}
+        <div
+          className={`flex items-center gap-1 transition-all duration-300 ${
+            propertiesOpen
+              ? "-translate-y-3 opacity-0 pointer-events-none"
+              : "translate-y-0 opacity-100"
+          }`}
+        >
+          <HarnessQuickPicker
+            isNarrow={isNarrow}
+            showLabel={!isNarrow}
+            disabled={isCLIManaged}
+          />
+          <ModelQuickPicker
+            isNarrow={isNarrow}
+            showLabel={!isNarrow}
+            disabled={isCLIManaged}
+          />
+          <AgentQuickPicker
+            isNarrow={isNarrow}
+            showLabel={!isNarrow}
+            disabled={isCLIManaged}
+          />
+          <SkillsQuickPicker
+            isNarrow={isNarrow}
+            showLabel={!isNarrow}
+            disabled={isCLIManaged}
+          />
+        </div>
       </div>
 
       {/* Right side: Permissions + Context pickers, then action buttons */}
       <div className="editor-actions flex items-center gap-1">
-        {!propertiesOpen && (
-          <>
-            <PermissionsQuickPicker
-              isNarrow={isNarrow}
-              showLabel={!isNarrow}
-              disabled={isCLIManaged}
-            />
-            <ContextQuickPicker
-              isNarrow={isNarrow}
-              showLabel={!isNarrow}
-              disabled={isCLIManaged}
-            />
-          </>
-        )}
         <div
-          className={`flex items-center gap-2 ${!propertiesOpen ? "ml-1 pl-2 border-l border-panel-border" : ""}`}
+          className={`flex items-center gap-1 transition-all duration-300 ${
+            propertiesOpen
+              ? "-translate-y-3 opacity-0 pointer-events-none"
+              : "translate-y-0 opacity-100"
+          }`}
+        >
+          <PermissionsQuickPicker
+            isNarrow={isNarrow}
+            showLabel={!isNarrow}
+            disabled={isCLIManaged}
+          />
+          <ContextQuickPicker
+            isNarrow={isNarrow}
+            showLabel={!isNarrow}
+            disabled={isCLIManaged}
+          />
+        </div>
+        <div
+          className={`flex items-center gap-2 transition-all duration-300 ${!propertiesOpen ? "ml-1 pl-2 border-l border-panel-border" : ""}`}
         >
           {isEditMode ? (
             // Edit mode buttons

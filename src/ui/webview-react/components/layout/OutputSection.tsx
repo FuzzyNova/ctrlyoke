@@ -140,21 +140,16 @@ export const OutputSection: React.FC = () => {
   const setTerminalFontSize = useUiStore((s) => s.setTerminalFontSize);
 
   // Execution mode toggle
-  const executionMode = useSettingsStore(
-    (s) => s.globalSettings.executionMode
-  );
-  const handleExecutionModeChange = useCallback(
-    (active: boolean) => {
-      const vscode = getVsCodeApi();
-      vscode?.postMessage({
-        type: MESSAGE_TYPES.CHANGE_EXECUTION_MODE,
-        executionMode: active
-          ? EXECUTION_MODES.INTERACTIVE
-          : EXECUTION_MODES.HEADLESS,
-      });
-    },
-    []
-  );
+  const executionMode = useSettingsStore((s) => s.globalSettings.executionMode);
+  const handleExecutionModeChange = useCallback((active: boolean) => {
+    const vscode = getVsCodeApi();
+    vscode?.postMessage({
+      type: MESSAGE_TYPES.CHANGE_EXECUTION_MODE,
+      executionMode: active
+        ? EXECUTION_MODES.INTERACTIVE
+        : EXECUTION_MODES.HEADLESS,
+    });
+  }, []);
 
   // Terminal tab state
   const workspaceRoot = useSettingsStore((s) => s.globalSettings.workspaceRoot);
@@ -172,7 +167,7 @@ export const OutputSection: React.FC = () => {
   const showTerminalTab = true;
   const terminalSessionActive = terminalActiveWorkflows.has(terminalWorkflowId);
 
-  const [headerRef, isHeaderNarrow] = useElementNarrow(768);
+  const [headerRef, isHeaderNarrow] = useElementNarrow(480);
 
   const outputRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -471,8 +466,7 @@ export const OutputSection: React.FC = () => {
       if (lastOutput.workingDirectory)
         workspacePath = lastOutput.workingDirectory;
 
-      const isFinalPrompt =
-        msgTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT;
+      const isFinalPrompt = msgTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT;
       const stepIndex = msgTarget.index;
 
       let effectiveSnapshot: WorkspaceSnapshot | undefined;
@@ -876,7 +870,10 @@ export const OutputSection: React.FC = () => {
       className="min-h-0 flex-1 bg-editor-bg flex flex-col h-full"
     >
       {/* Section Header */}
-      <div ref={headerRef} className="flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] px-2 border-b border-panel-border flex-shrink-0 bg-sidebar-bg">
+      <div
+        ref={headerRef}
+        className="flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] pl-2 pr-1 border-b border-panel-border flex-shrink-0 bg-sidebar-bg"
+      >
         {/* Left: clickable collapse area + tab buttons + font size controls + execution mode */}
         <div className="flex items-center gap-1">
           {/* Collapse affordance — chevron + icon only (narrower click target) */}
@@ -993,34 +990,24 @@ export const OutputSection: React.FC = () => {
 
         {/* Right: controls */}
         <div className="ml-auto flex items-center gap-2">
-          {/* Execution mode toggle — always visible regardless of active tab */}
-          <IconToggleButton
-            active={executionMode === EXECUTION_MODES.INTERACTIVE}
-            onToggle={handleExecutionModeChange}
-            activeIcon="debug-console"
-            inactiveIcon="terminal"
-            activeTooltip="Interactive mode: terminal visible"
-            inactiveTooltip="Headless mode: runs in background"
-            activeLabel="Interactive"
-            inactiveLabel="Headless"
-            narrow={isHeaderNarrow}
-          />
           {activeOutputTab === "terminal" && (
-            <button
-              className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-description-fg hover:text-foreground transition-colors"
-              title="New Terminal"
-              onClick={() => {
-                const vscode = getVsCodeApi();
-                vscode?.postMessage({
-                  type: MESSAGE_TYPES.TERMINAL_SPAWN_SHELL,
-                  workflowId: terminalWorkflowId,
-                  cwd: workspaceRoot || "",
-                });
-              }}
-            >
-              <i className="codicon codicon-add text-[12px]" />
-              <span>New Terminal</span>
-            </button>
+            <>
+              <button
+                className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-description-fg hover:text-foreground transition-colors"
+                title="New Terminal"
+                onClick={() => {
+                  const vscode = getVsCodeApi();
+                  vscode?.postMessage({
+                    type: MESSAGE_TYPES.TERMINAL_SPAWN_SHELL,
+                    workflowId: terminalWorkflowId,
+                    cwd: workspaceRoot || "",
+                  });
+                }}
+              >
+                <i className="codicon codicon-add text-[12px]" />
+                <span>New Terminal</span>
+              </button>
+            </>
           )}
           {activeOutputTab === "output" && (
             <>
@@ -1107,7 +1094,7 @@ export const OutputSection: React.FC = () => {
               )}
               {hasOutput && (
                 <button
-                  className="icon-btn py-0 px-2"
+                  className="icon-btn py-1 px-1"
                   title={
                     anyDiffCollapsed ? "Expand all diffs" : "Collapse all diffs"
                   }
@@ -1121,16 +1108,28 @@ export const OutputSection: React.FC = () => {
                 </button>
               )}
               <button
-                className="icon-btn py-0 px-2"
+                className="icon-btn py-1 px-1"
                 id="export-btn"
                 title="Export output to markdown"
                 onClick={handleExport}
                 disabled={!hasOutput}
               >
-                <i className="codicon codicon-sm codicon-export" />
+                <i className="codicon codicon-sm codicon-share" />
               </button>
             </>
           )}
+          <IconToggleButton
+            active={executionMode === EXECUTION_MODES.INTERACTIVE}
+            onToggle={handleExecutionModeChange}
+            activeIcon="debug-console"
+            inactiveIcon="terminal"
+            activeTooltip="Interactive mode: terminal visible, steer execution and interact with harness"
+            inactiveTooltip="Headless mode: runs in background, output shown in Output panel"
+            activeLabel="Interactive"
+            inactiveLabel="Headless"
+            narrow={isHeaderNarrow}
+            labelPosition="left"
+          />
         </div>
       </div>
 
@@ -1229,7 +1228,8 @@ export const OutputSection: React.FC = () => {
                   const stepUndoRecord: UndoRecord | undefined =
                     isViewingHistory && historyOutputs
                       ? item.target.kind === FINAL_PROMPT_PHASES.QUEUE
-                        ? historyOutputs.promptOutputs[item.target.index]?.undoRecord
+                        ? historyOutputs.promptOutputs[item.target.index]
+                            ?.undoRecord
                         : historyOutputs.finalPromptOutputs?.[item.target.index]
                             ?.undoRecord
                       : undefined;

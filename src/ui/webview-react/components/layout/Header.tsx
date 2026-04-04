@@ -164,6 +164,10 @@ export const Header: React.FC = () => {
     vscode.postMessage({ type: MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST });
   }, [vscode, canSave]);
 
+  const handleOpenSettings = useCallback(() => {
+    vscode.postMessage({ type: MESSAGE_TYPES.OPEN_SETTINGS });
+  }, [vscode]);
+
   // Handlers
   const handleRun = useCallback(() => {
     if (!canRun) return;
@@ -208,6 +212,15 @@ export const Header: React.FC = () => {
             aria-label="Save workflow"
           >
             <i className="codicon codicon-save" />
+          </button>
+          {/* Settings button */}
+          <button
+            className="control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+            onClick={handleOpenSettings}
+            title="Open VS Code settings"
+            aria-label="Open settings"
+          >
+            <i className="codicon codicon-settings-gear" />
           </button>
           {/* Undo button */}
           <button

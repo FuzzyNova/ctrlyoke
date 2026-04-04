@@ -47,7 +47,7 @@ export const EditorSection: React.FC = () => {
 
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
   const totalPrompts = prompts.length;
-  const [sectionRef] = useElementNarrow<HTMLElement>();
+  const [sectionRef, isNarrow] = useElementNarrow<HTMLElement>(480);
 
   // Inline name editing state
   const [isEditingName, setIsEditingName] = useState(false);
@@ -129,7 +129,7 @@ export const EditorSection: React.FC = () => {
       className="editor-section flex flex-col h-full bg-editor-bg"
     >
       {/* Section Header */}
-      <div className="flex items-center h-[30px] px-2 border-b border-panel-border bg-sidebar-bg">
+      <div className="flex items-center h-[30px] pl-2 pr-1 border-b border-panel-border bg-sidebar-bg">
         {/* Left: Collapse trigger (chevron + icon + label) */}
         <div
           className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors flex-shrink-0"
@@ -201,6 +201,10 @@ export const EditorSection: React.FC = () => {
             inactiveIcon="repo"
             activeTooltip="Respecting .gitignore for completions"
             inactiveTooltip="All files included for completions (ignoring .gitignore)"
+            activeLabel="Excluding ignored files"
+            inactiveLabel="Including all files"
+            narrow={isNarrow}
+            labelPosition="left"
           />
         )}
       </div>

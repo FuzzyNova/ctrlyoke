@@ -679,11 +679,6 @@ export const SettingsPanel: React.FC<{
     [vscode, effectiveHarness]
   );
 
-  const handleOpenSettings = useCallback(() => {
-    vscode.postMessage({
-      type: MESSAGE_TYPES.OPEN_SETTINGS,
-    });
-  }, [vscode]);
 
   const tabOverrides = useDrawerTabOverrides(workflowProperties, globalSettings);
 
@@ -1445,21 +1440,6 @@ export const SettingsPanel: React.FC<{
         tabOverrides={tabOverrides}
       />
 
-      {/* Always-visible footer with quick toggle buttons */}
-      <div
-        className={`flex items-center justify-center gap-1 px-2 border-t border-panel-border flex-shrink-0 py-2${isCLIManaged ? " pointer-events-none opacity-60" : ""}`}
-      >
-        <button
-          onClick={handleOpenSettings}
-          title="Open VS Code settings"
-          className="flex items-center gap-1 px-1 bg-transparent border-none cursor-pointer leading-none transition-colors text-description-fg hover:text-foreground ml-auto"
-        >
-          <i className="codicon codicon-lg codicon-settings-gear" />
-          {!isNarrow && (
-            <span className="text-[10px] font-medium">Settings...</span>
-          )}
-        </button>
-      </div>
     </div>
   );
 };
