@@ -22,7 +22,7 @@ import { PERMISSION_MODES } from "../../../types/DashboardConstants";
  * - --deny-tool "pattern": Deny specific tool (takes precedence)
  *
  * Permission modes:
- * - dangerouslyAllowAll: --allow-all-tools (ignores deny list)
+ * - dangerouslyAllowAll: --yolo (bypasses all restrictions, ignores deny list)
  * - allowAll: --allow-all-tools + --deny-tool patterns
  * - custom: --allow-tool patterns + --deny-tool patterns
  *
@@ -56,10 +56,9 @@ export class CopilotToolPermissionMapper
     const filteredTools: string[] = [];
 
     // Add allow mode first
-    if (
-      config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
-      config.mode === PERMISSION_MODES.ALLOW_ALL
-    ) {
+    if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
+      args.push("--yolo");
+    } else if (config.mode === PERMISSION_MODES.ALLOW_ALL) {
       args.push("--allow-all-tools");
     } else {
       // Custom mode - convert and add specific allow patterns

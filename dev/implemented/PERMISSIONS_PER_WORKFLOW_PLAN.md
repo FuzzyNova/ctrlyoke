@@ -1,5 +1,7 @@
 # Per-Workflow Tool Permissions Plan
 
+> **Status: Implemented** — All steps completed. Bug fix applied 2026-04-04: Copilot CLI `dangerouslyAllowAll` corrected from `--allow-all-tools` to `--yolo` (see Actual Flag Mapping table below).
+
 ## Overview
 
 Currently, tool permissions (`cliToolPermissions`, `cliAllowedTools`, `cliDeniedTools`) are global-only VS Code settings. This plan proposes adding `toolPermissions` to `executionProperties` in `prompt-schema.json`, enabling per-workflow and per-prompt permission overrides that follow the existing three-tier precedence pattern (prompt > workflow > global settings).
@@ -226,13 +228,26 @@ Not all harnesses support `allowedTools`/`deniedTools` patterns. This affects bo
 
 | Harness          | Mode support          | `allowedTools` patterns | `deniedTools` patterns | Notes                                                                                                                                                                                |
 | ---------------- | --------------------- | ----------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Copilot CLI**  | ✅ All 4 (incl. none) | ✅ Yes                  | ✅ Yes                 | Most reliable; `--allow-tool` / `--deny-tool`                                                                                                                                        |
+| **Copilot CLI**  | ✅ All 4 (incl. none) | ✅ Yes                  | ✅ Yes                 | `dangerouslyAllowAll`→`--yolo`, `allowAll`→`--allow-all-tools`, `custom`→`--allow-tool` / `--deny-tool`                                                                              |
 | **Claude CLI**   | ✅ All 4 (incl. none) | ✅ Yes                  | ✅ Yes                 | `--allowedTools` / `--disallowedTools`; none falls back to `~/.claude/settings.json`                                                                                                 |
 | **Codex CLI**    | ✅ All 4 (incl. none) | ❌ Ignored              | ❌ Ignored             | Mode-only; `dangerouslyAllowAll`→bypass, `allowAll`→`--full-auto`, `custom`→sandbox+approval flags. Has its own `codexSandboxMode`/`codexApprovalPolicy`/`codexAllowedDirs` settings |
 | **OpenCode CLI** | ✅ All 4 (incl. none) | ❌ Ignored              | ❌ Ignored             | Permission model is config-file driven (`.opencode/opencode.json`), not CLI flags. `buildArgs()` returns `[]`                                                                        |
 | **Qwen CLI**     | ✅ All 4 (incl. none) | ✅ Yes                  | ✅ Yes                 | `--allowed-tools` / `--exclude-tools` (comma-separated); `shell`→`Bash`, `write`→`Write`, etc.                                                                                       |
 | **Gemini CLI**   | ✅ All 4 (incl. none) | ❌ Ignored (Phase 1)    | ❌ Ignored (Phase 1)   | Phase 1: approval-mode flags only (`--approval-mode yolo/auto_edit/default`). Phase 2 (future): policy engine TOML — see Gemini Policy Engine section below.                         |
 | **Copilot Chat** | ❌ N/A                | ❌ N/A                  | ❌ N/A                 | Chat harness; `toolPermissions` stored but has no effect at runtime                                                                                                                  |
+
+### Actual Flag Mapping (as implemented)
+
+Audit performed 2026-04-04 against all `*ToolPermissionMapper.ts` files.
+
+| Mode | Copilot CLI | Claude CLI | Codex CLI | Gemini CLI | OpenCode CLI | Qwen CLI |
+|---|---|---|---|---|---|---|
+| `dangerouslyAllowAll` | `--yolo` | `--dangerously-skip-permissions` | `--dangerously-bypass-approvals-and-sandbox` | `--approval-mode yolo` | *(no flags — config-file)* | `-y` |
+| `allowAll` | `--allow-all-tools` + deny list | `--permission-mode bypassPermissions --tools "default"` + deny list | `--full-auto` | `--approval-mode auto_edit` | *(no flags)* | `--approval-mode auto-edit` |
+| `custom` | `--allow-tool <patterns>` + `--deny-tool <patterns>` | `--permission-mode bypassPermissions --allowedTools <tools>` + `--disallowedTools` | `-s <sandbox> -a <policy>` (falls back to `--full-auto` if sandbox/approval not configured) | `--approval-mode default` *(patterns ignored)* | *(no flags — opencode.json)* | `--approval-mode default` + `--allowed-tools` / `--exclude-tools` |
+| `none` / `null` | *(no flags)* | *(no flags)* | *(no flags)* | *(no flags)* | *(no flags)* | *(no flags)* |
+
+> **Bug fixed 2026-04-04:** Copilot CLI previously emitted `--allow-all-tools` for both `dangerouslyAllowAll` and `allowAll`, making them indistinguishable. Corrected to `--yolo` for `dangerouslyAllowAll`.
 
 ### `none` mode behavior (all harnesses)
 
