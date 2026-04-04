@@ -46,8 +46,6 @@ import {
 } from "../../utils/endCondition";
 import type { SelectOption } from "../shared";
 
-/** Max height for dropdowns inside the PropertiesDrawer (px, not vh — the drawer has a fixed height). */
-const DRAWER_DROPDOWN_MAX_HEIGHT = "150px";
 
 const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
   ["auto", "stdout", "stderr", "exitCode"] as EndConditionCompareSource[]
@@ -390,7 +388,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   onUnhideOption={(v) =>
                     unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
                   }
-                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
               </div>
 
@@ -430,7 +427,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     unhideDropdownOption(modelNamespace, v)
                   }
                   nonHideableValues={["default", ""]}
-                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
               </div>
             </DrawerRow>
@@ -482,7 +478,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
                   }
                   nonHideableValues={["default"]}
-                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
               </div>
 
@@ -502,7 +497,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     description: s.description || undefined,
                   }))}
                   defaultLabel={defaultSkillsLabel}
-                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
               </div>
             </DrawerRow>
@@ -539,7 +533,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     { value: "none", label: "None (override to empty)" },
                     { value: "custom", label: "Custom" },
                   ]}
-                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
                 {/* Narrow mode: input always below the dropdown */}
                 {isNarrow && (
@@ -644,7 +637,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   options={[
                     ...getResumeSessionOptions(defaultResumeSessionLabel),
                   ]}
-                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
                 {/* Session ID — always visible, grayed out when not applicable */}
                 <div
@@ -683,7 +675,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   onChange={(v) => setProperty("priorContext", v)}
                   showDefault
                   defaultLabel={defaultPriorContextLabel}
-                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
               </div>
             </DrawerRow>
@@ -763,8 +754,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                         )
                       }
                       options={COMPARE_SOURCE_OPTIONS}
-                      dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
-                    />
+                        />
                     <span className="text-[10px] text-description-fg">
                       {(properties.endCondition?.compareSource ?? "auto") ===
                       "auto"
@@ -985,7 +975,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     { value: "default", label: defaultPermissionsLabel },
                     ...PERMISSION_MODE_OPTIONS,
                   ]}
-                  dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
                 />
               </div>
 

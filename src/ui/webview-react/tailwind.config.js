@@ -27,7 +27,8 @@ module.exports = {
         "sidebar-bg": "var(--vscode-sideBar-background)",
         "sidebar-drop-bg": "var(--vscode-sideBar-dropBackground)",
         "focus-border": "var(--vscode-focusBorder)",
-        "focus-highlight": "var(--vscode-list-focusHighlightForeground, #2aaaff)",
+        "focus-highlight":
+          "var(--vscode-list-focusHighlightForeground, #2aaaff)",
         "widget-border": "var(--vscode-widget-border)",
 
         // Buttons
@@ -169,10 +170,14 @@ module.exports = {
 
         // ── Terminal ANSI colors ──
         "terminal-ansiGreen": "var(--vscode-terminal-ansiGreen, #89d185)",
+        "terminal-ansiYellow": "var(--vscode-terminal-ansiYellow, #e5e510)",
         "terminal-ansiRed": "var(--vscode-terminal-ansiRed, #f14c4c)",
-        "terminal-ansiBrightGreen": "var(--vscode-terminal-ansiBrightGreen, #23d18b)",
-        "terminal-ansiBrightYellow": "var(--vscode-terminal-ansiBrightYellow, #f5f543)",
-        "terminal-ansiBrightRed": "var(--vscode-terminal-ansiBrightRed, #f14c4c)",
+        "terminal-ansiBrightGreen":
+          "var(--vscode-terminal-ansiBrightGreen, #23d18b)",
+        "terminal-ansiBrightYellow":
+          "var(--vscode-terminal-ansiBrightYellow, #f5f543)",
+        "terminal-ansiBrightRed":
+          "var(--vscode-terminal-ansiBrightRed, #f14c4c)",
 
         // ── Execution state badge backgrounds (VS Code theme vars with fallbacks) ──
         "exec-idle-bg":
