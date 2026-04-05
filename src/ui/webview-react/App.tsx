@@ -74,6 +74,27 @@ function App() {
     editorCollapsed,
   });
 
+  // Mobile overlay closing animation state.
+  // When true, the overlay stays mounted but plays a slide-out animation.
+  // The real store action fires after onAnimationEnd.
+  const [promptsOverlayClosing, setPromptsOverlayClosing] = useState(false);
+  const [settingsOverlayClosing, setSettingsOverlayClosing] = useState(false);
+  const promptsAfterClose = useRef<(() => void) | null>(null);
+  const settingsAfterClose = useRef<(() => void) | null>(null);
+
+  const handlePromptsRequestSidebar = () => {
+    promptsAfterClose.current = () => setMobilePromptsMode("sidebar");
+    setPromptsOverlayClosing(true);
+  };
+  const handlePromptsRequestClose = () => {
+    promptsAfterClose.current = () => closeMobilePrompts();
+    setPromptsOverlayClosing(true);
+  };
+  const handleSettingsRequestClose = () => {
+    settingsAfterClose.current = () => closeMobileSettings();
+    setSettingsOverlayClosing(true);
+  };
+
   // Track isMobile to detect layout transitions in render body below
   const wasMobileRef = useRef(isMobile);
 
@@ -356,32 +377,50 @@ function App() {
           </div>
 
           {/* Full-width prompts overlay */}
-          {mobilePromptsOpen && mobilePromptsMode === "fullwidth" && (
+          {((mobilePromptsOpen && mobilePromptsMode === "fullwidth") || promptsOverlayClosing) && (
             <>
-              {/* Backdrop — tap outside returns to sidebar mode */}
+              {/* Backdrop — tap outside returns to sidebar mode (hidden while closing) */}
+              {!promptsOverlayClosing && (
+                <div
+                  className="absolute inset-0 z-20"
+                  onClick={handlePromptsRequestSidebar}
+                />
+              )}
               <div
-                className="absolute inset-0 z-20"
-                onClick={() => setMobilePromptsMode("sidebar")}
-              />
-              <div className="absolute inset-0 z-30 bg-editor-bg flex flex-col">
+                className={`absolute inset-0 z-30 bg-editor-bg flex flex-col ${promptsOverlayClosing ? "animate-slide-out-left" : "animate-slide-in-left"}`}
+                onAnimationEnd={promptsOverlayClosing ? () => {
+                  setPromptsOverlayClosing(false);
+                  promptsAfterClose.current?.();
+                  promptsAfterClose.current = null;
+                } : undefined}
+              >
                 <PromptsPanel
-                  onRequestSidebar={() => setMobilePromptsMode("sidebar")}
-                  onRequestClose={closeMobilePrompts}
+                  onRequestSidebar={handlePromptsRequestSidebar}
+                  onRequestClose={handlePromptsRequestClose}
                 />
               </div>
             </>
           )}
 
           {/* Settings overlay drawer */}
-          {mobileSettingsOpen && (
+          {(mobileSettingsOpen || settingsOverlayClosing) && (
             <>
-              {/* Backdrop — tap outside closes */}
+              {/* Backdrop — tap outside closes (hidden while closing) */}
+              {!settingsOverlayClosing && (
+                <div
+                  className="absolute inset-0 z-30"
+                  onClick={handleSettingsRequestClose}
+                />
+              )}
               <div
-                className="absolute inset-0 z-30"
-                onClick={closeMobileSettings}
-              />
-              <div className="absolute inset-0 z-40 bg-editor-bg flex flex-col">
-                <WorkflowPropertiesPanel onRequestClose={closeMobileSettings} />
+                className={`absolute inset-0 z-40 bg-editor-bg flex flex-col ${settingsOverlayClosing ? "animate-slide-out-right" : "animate-slide-in-right"}`}
+                onAnimationEnd={settingsOverlayClosing ? () => {
+                  setSettingsOverlayClosing(false);
+                  settingsAfterClose.current?.();
+                  settingsAfterClose.current = null;
+                } : undefined}
+              >
+                <WorkflowPropertiesPanel onRequestClose={handleSettingsRequestClose} />
               </div>
             </>
           )}

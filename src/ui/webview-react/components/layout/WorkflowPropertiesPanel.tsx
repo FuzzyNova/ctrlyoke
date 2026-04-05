@@ -714,12 +714,17 @@ export const WorkflowPropertiesPanel: React.FC<{
   // RENDER
   // ============================================================================
 
+  // In mobile mode (onRequestClose present), disable all collapse interactions —
+  // the panel is a full-screen overlay and has its own close button.
+  const isMobileMode = Boolean(onRequestClose);
+
   function handleToggle() {
+    if (isMobileMode) return;
     triggerPanelAnimation();
     toggleSettingsCollapse();
   }
 
-  if (settingsCollapsed) {
+  if (settingsCollapsed && !isMobileMode) {
     return (
       <PanelBar
         orientation={panelBarOrientation}
@@ -749,17 +754,17 @@ export const WorkflowPropertiesPanel: React.FC<{
 
   return (
     <div ref={drawerRef} className="flex flex-col h-full bg-sidebar-bg">
-      {/* Section Header - clickable to collapse */}
+      {/* Section Header — clickable to collapse in desktop mode; non-interactive in mobile */}
       <div
-        className="flex items-center justify-between h-[30px] px-2 border-b border-panel-border cursor-pointer select-none"
-        onClick={handleToggle}
-        role="button"
-        aria-label="Collapse workflow properties"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === "Enter" && handleToggle()}
+        className={`flex items-center justify-between h-[30px] px-2 border-b border-panel-border${isMobileMode ? "" : " cursor-pointer select-none"}`}
+        onClick={isMobileMode ? undefined : handleToggle}
+        role={isMobileMode ? undefined : "button"}
+        aria-label={isMobileMode ? undefined : "Collapse workflow properties"}
+        tabIndex={isMobileMode ? undefined : 0}
+        onKeyDown={isMobileMode ? undefined : (e) => e.key === "Enter" && handleToggle()}
       >
         <div className="flex items-center gap-1 text-description-fg hover:text-foreground transition-colors">
-          <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
+          {!isMobileMode && <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />}
           <i className="codicon codicon-settings text-[14px]" />
           <span className="text-[11px] font-semibold uppercase tracking-wide ml-0.5">
             Workflow Properties

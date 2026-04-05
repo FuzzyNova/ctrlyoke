@@ -216,12 +216,32 @@ module.exports = {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.5" },
         },
+        "slide-in-left": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(0)" },
+        },
+        "slide-in-right": {
+          "0%": { transform: "translateX(100%)" },
+          "100%": { transform: "translateX(0)" },
+        },
+        "slide-out-left": {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-100%)" },
+        },
+        "slide-out-right": {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(100%)" },
+        },
       },
 
       animation: {
         "pulse-custom": "pulse-custom 2s ease-in-out infinite",
         "pulse-streaming": "pulse-streaming 1.5s ease-in-out infinite",
         "pulse-cancelling": "pulse-custom 1.5s ease-in-out infinite",
+        "slide-in-left": "slide-in-left 0.25s ease-out",
+        "slide-in-right": "slide-in-right 0.25s ease-out",
+        "slide-out-left": "slide-out-left 0.22s ease-in forwards",
+        "slide-out-right": "slide-out-right 0.22s ease-in forwards",
       },
 
       fontFamily: {

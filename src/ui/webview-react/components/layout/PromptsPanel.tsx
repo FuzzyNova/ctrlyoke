@@ -589,12 +589,17 @@ export const PromptsPanel: React.FC<{
     [sortableIds]
   );
 
+  // In mobile mode (onRequestClose present), disable all collapse interactions —
+  // the panel is a full-screen overlay and has its own close button.
+  const isMobileMode = Boolean(onRequestClose);
+
   function handleToggle() {
+    if (isMobileMode) return;
     triggerPanelAnimation();
     togglePromptsCollapse();
   }
 
-  if (promptsCollapsed) {
+  if (promptsCollapsed && !isMobileMode) {
     return (
       <PanelBar
         orientation={panelBarOrientation}
@@ -607,17 +612,31 @@ export const PromptsPanel: React.FC<{
 
   return (
     <div className="flex flex-col h-full bg-editor-bg">
-      {/* Header - clickable to collapse */}
+      {/* Header — clickable to collapse in desktop mode; non-interactive in mobile */}
       <div
         ref={headerRef}
-        className="flex items-center h-[30px] px-2 border-b border-panel-border bg-sidebar-bg flex-shrink-0 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
-        onClick={handleToggle}
-        role="button"
-        aria-label="Collapse prompts"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === "Enter" && handleToggle()}
+        className={`flex items-center h-[30px] px-2 border-b border-panel-border bg-sidebar-bg flex-shrink-0 transition-colors${isMobileMode ? "" : " cursor-pointer select-none text-description-fg hover:text-foreground"}`}
+        onClick={isMobileMode ? undefined : handleToggle}
+        role={isMobileMode ? undefined : "button"}
+        aria-label={isMobileMode ? undefined : "Collapse prompts"}
+        tabIndex={isMobileMode ? undefined : 0}
+        onKeyDown={isMobileMode ? undefined : (e) => e.key === "Enter" && handleToggle()}
       >
-        <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
+        {/* Left: collapse chevron (desktop) OR collapse-to-sidebar arrow (mobile fullwidth) */}
+        {!isMobileMode && <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />}
+        {onRequestSidebar && (
+          <button
+            className="flex items-center justify-center w-[20px] h-[20px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestSidebar();
+            }}
+            title="Collapse to sidebar"
+            aria-label="Collapse prompts to sidebar"
+          >
+            <i className="codicon codicon-arrow-left text-[12px]" />
+          </button>
+        )}
         <i className="codicon codicon-list-unordered text-[14px] ml-1" />
         <span className="text-[11px] font-semibold uppercase tracking-wide ml-1.5">
           Prompts
@@ -640,19 +659,6 @@ export const PromptsPanel: React.FC<{
         <span>
           <PromptCounter narrow={isHeaderNarrow} />
         </span>
-        {onRequestSidebar && (
-          <button
-            className="flex items-center justify-center w-[20px] h-[20px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors ml-1"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRequestSidebar();
-            }}
-            title="Collapse to sidebar"
-            aria-label="Collapse prompts to sidebar"
-          >
-            <i className="codicon codicon-layout-sidebar-left text-[12px]" />
-          </button>
-        )}
         {onRequestClose && (
           <button
             className="flex items-center justify-center w-[20px] h-[20px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors ml-1"
