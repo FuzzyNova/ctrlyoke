@@ -66,11 +66,11 @@ type SortableWrapperProps = Omit<
   slotNumber: number;
 };
 
-function SortablePromptItemWrapper({
+function SortableWorkflowStepWrapper({
   id,
   disabled,
   slotNumber,
-  ...promptItemProps
+  ...promptStepProps
 }: SortableWrapperProps) {
   const {
     attributes,
@@ -95,7 +95,7 @@ function SortablePromptItemWrapper({
       </div>
       <div ref={setNodeRef} style={style} className="flex-1 min-w-0">
         <PromptStep
-          {...promptItemProps}
+          {...promptStepProps}
           displayNumber={slotNumber}
           dragHandleProps={disabled ? undefined : { listeners, attributes }}
         />
@@ -105,7 +105,7 @@ function SortablePromptItemWrapper({
 }
 
 /**
- * PromptsPanel - Left panel showing the list of prompts in the workflow
+ * WorkflowStepsPanel - Left panel showing the list of prompts in the workflow
  *
  * Features:
  * - Collapsible header with prompt count
@@ -114,7 +114,7 @@ function SortablePromptItemWrapper({
  * - Empty state when no prompts loaded
  * - Retry and end condition result display
  */
-export const PromptsPanel: React.FC<{
+export const WorkflowStepsPanel: React.FC<{
   panelBarOrientation?: "horizontal" | "vertical";
   onRequestSidebar?: () => void;
   onRequestClose?: () => void;
@@ -398,7 +398,9 @@ export const PromptsPanel: React.FC<{
   // Also check prompt statuses directly — after an undo, executionState may
   // still be IDLE even though prompts were restored to a completed/error state.
   const hasCompletedPrompts = prompts.some(
-    (p) => !isScriptStep(p) && p.status && p.status !== STEP_STATUS.PENDING
+    (p) => isScriptStep(p)
+      ? (p._runtime?.completedAt !== undefined)
+      : (p.status && p.status !== STEP_STATUS.PENDING)
   );
   const canClearState =
     !isCLIManaged &&
@@ -757,7 +759,7 @@ export const PromptsPanel: React.FC<{
                   const setPositionTarget = currentStep + visualIdx;
                   const slotNumber = currentStep + visualIdx + 1;
                   return (
-                    <SortablePromptItemWrapper
+                    <SortableWorkflowStepWrapper
                       key={id}
                       id={id}
                       disabled={!canReorder}

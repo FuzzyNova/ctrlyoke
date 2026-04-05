@@ -194,30 +194,30 @@ suite("PromptFileParser Tests", () => {
     });
   });
 
-  suite("validatePromptItems", () => {
+  suite("validateWorkflowSteps", () => {
     test("should validate valid prompt items", () => {
       const items = [{ prompt: "First prompt" }, { prompt: "Second prompt" }];
-      const result = parser.validatePromptItems(items);
+      const result = parser.validateWorkflowSteps(items);
       assert.strictEqual(result.valid, true);
       assert.strictEqual(result.errors.length, 0);
     });
 
     test("should reject empty prompts array", () => {
-      const result = parser.validatePromptItems([]);
+      const result = parser.validateWorkflowSteps([]);
       assert.strictEqual(result.valid, false);
       assert.ok(result.errors.some((e) => e.includes("No prompts")));
     });
 
     test("should reject prompts with empty text", () => {
       const items = [{ prompt: "" }, { prompt: "Valid" }];
-      const result = parser.validatePromptItems(items);
+      const result = parser.validateWorkflowSteps(items);
       assert.strictEqual(result.valid, false);
       assert.ok(result.errors.some((e) => e.includes("Empty prompt")));
     });
 
     test("should reject prompts with only whitespace", () => {
       const items = [{ prompt: "   " }];
-      const result = parser.validatePromptItems(items);
+      const result = parser.validateWorkflowSteps(items);
       assert.strictEqual(result.valid, false);
     });
 
@@ -231,7 +231,7 @@ suite("PromptFileParser Tests", () => {
           },
         },
       ];
-      const result = parser.validatePromptItems(items);
+      const result = parser.validateWorkflowSteps(items);
       assert.strictEqual(result.valid, true);
     });
 
@@ -244,7 +244,7 @@ suite("PromptFileParser Tests", () => {
           } as any,
         },
       ];
-      const result = parser.validatePromptItems(items);
+      const result = parser.validateWorkflowSteps(items);
       assert.strictEqual(result.valid, false);
       assert.ok(result.errors.some((e) => e.includes("script")));
     });
@@ -258,7 +258,7 @@ suite("PromptFileParser Tests", () => {
           } as any,
         },
       ];
-      const result = parser.validatePromptItems(items);
+      const result = parser.validateWorkflowSteps(items);
       assert.strictEqual(result.valid, false);
       assert.ok(result.errors.some((e) => e.includes("return")));
     });

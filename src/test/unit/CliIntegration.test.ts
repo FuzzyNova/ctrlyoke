@@ -279,7 +279,7 @@ suite("CliIntegration", () => {
     let capturedFinalPromptResponseTexts: string[] | undefined;
 
     (integration as any).promptPreparer.preparePrompt = async (
-      promptItem: PromptStep,
+      promptStep: PromptStep,
       _workflowContext: unknown,
       _resolvedProperties: unknown,
       _resolvedSessionId: unknown,
@@ -287,7 +287,7 @@ suite("CliIntegration", () => {
     ) => {
       capturedFinalPromptResponseTexts = finalPromptResponseTexts;
       return {
-        promptWithInstruction: promptItem.prompt,
+        promptWithInstruction: promptStep.prompt,
         tempFilePaths: [],
       };
     };

@@ -15,7 +15,7 @@ function store() {
   return useEditorStore.getState();
 }
 
-function makePromptItem(overrides: Partial<PromptStep> = {}): PromptStep {
+function makePromptStep(overrides: Partial<PromptStep> = {}): PromptStep {
   return {
     prompt: "Do something useful",
     name: "My Prompt",
@@ -166,7 +166,7 @@ describe("clearEndCondition", () => {
 
 describe("enterEditMode", () => {
   it("switches to edit mode and loads prompt data", () => {
-    const item = makePromptItem({ prompt: "Fix bugs", name: "Fix Step" });
+    const item = makePromptStep({ prompt: "Fix bugs", name: "Fix Step" });
     store().enterEditMode(0, item);
 
     expect(store().selectionTarget).toEqual({ kind: FINAL_PROMPT_PHASES.QUEUE, index: 0 });
@@ -178,7 +178,7 @@ describe("enterEditMode", () => {
   });
 
   it("loads harness and model properties from prompt data", () => {
-    const item = makePromptItem({ harness: "codex-cli", model: "gpt-5" });
+    const item = makePromptStep({ harness: "codex-cli", model: "gpt-5" });
     store().enterEditMode(2, item);
     expect(store().properties.harness).toBe("codex-cli");
     expect(store().properties.model).toBe("gpt-5");
@@ -186,19 +186,19 @@ describe("enterEditMode", () => {
 
   it("saves new-prompt draft as savedNewPromptState", () => {
     store().setPromptText("Draft text");
-    store().enterEditMode(0, makePromptItem());
+    store().enterEditMode(0, makePromptStep());
     expect(store().savedNewPromptState?.promptText).toBe("Draft text");
   });
 
   it("marks isDirty=false for a fresh (non-pending) load", () => {
-    store().enterEditMode(0, makePromptItem());
+    store().enterEditMode(0, makePromptStep());
     expect(store().isDirty).toBe(false);
   });
 });
 
 describe("cancelEdit", () => {
   it("returns to new prompt mode", () => {
-    store().enterEditMode(0, makePromptItem());
+    store().enterEditMode(0, makePromptStep());
     store().cancelEdit();
     expect(store().isNewPromptMode()).toBe(true);
     expect(store().selectedPromptIndex).toBeNull();
@@ -206,19 +206,19 @@ describe("cancelEdit", () => {
 
   it("restores the saved new-prompt draft", () => {
     store().setPromptText("Draft before editing");
-    store().enterEditMode(0, makePromptItem());
+    store().enterEditMode(0, makePromptStep());
     store().cancelEdit();
     expect(store().promptText).toBe("Draft before editing");
   });
 
   it("clears the pending edit for the cancelled prompt", () => {
     // Enter edit mode, modify text, then deselect (stores pending edit), re-enter
-    store().enterEditMode(0, makePromptItem());
+    store().enterEditMode(0, makePromptStep());
     store().setPromptText("Unsaved change");
     store().deselect(); // stores pending edit for queue:0
 
     // Re-enter and cancel — should clear pending edit
-    store().enterEditMode(0, makePromptItem());
+    store().enterEditMode(0, makePromptStep());
     store().cancelEdit();
     expect(store().pendingEdits["queue:0"]).toBeUndefined();
   });
@@ -345,7 +345,7 @@ describe("resetEditor", () => {
     store().setPromptText("Some text");
     store().setProperty("harness", "claude-cli");
     store().setValidationError("field", "error");
-    store().enterEditMode(0, makePromptItem());
+    store().enterEditMode(0, makePromptStep());
 
     store().resetEditor();
 
@@ -360,7 +360,7 @@ describe("resetEditor", () => {
 
 describe("resetToDefaults", () => {
   it("clears content and properties without changing selection mode", () => {
-    store().enterEditMode(0, makePromptItem({ prompt: "original" }));
+    store().enterEditMode(0, makePromptStep({ prompt: "original" }));
     store().setPromptText("edited");
     store().resetToDefaults();
 

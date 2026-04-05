@@ -182,7 +182,7 @@ export class ValidationUtils {
     return { valid, errors };
   }
 
-  static validatePromptItems(items: any[]): {
+  static validateWorkflowSteps(items: any[]): {
     valid: boolean;
     errors: string[];
   } {
@@ -292,11 +292,11 @@ export class ValidationUtils {
 
     if (hasSinglePrompt) {
       // Validate single prompt format
-      const promptItem = {
+      const promptStep = {
         prompt: file.prompt,
         endCondition: file.endCondition,
       };
-      const result = ValidationUtils.validatePromptStep(promptItem);
+      const result = ValidationUtils.validatePromptStep(promptStep);
       if (!result.valid) {
         errors.push(...result.errors);
       }
@@ -304,7 +304,7 @@ export class ValidationUtils {
 
     if (hasMultiplePrompts) {
       // Validate multiple prompts format
-      const result = ValidationUtils.validatePromptItems(file.prompts);
+      const result = ValidationUtils.validateWorkflowSteps(file.prompts);
       if (!result.valid) {
         errors.push(...result.errors);
       }

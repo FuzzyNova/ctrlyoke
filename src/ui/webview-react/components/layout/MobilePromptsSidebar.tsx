@@ -140,7 +140,7 @@ function ChipContent({
  *   Row 2: [set-start btn]  [context %]   ← shown when relevant
  *
  * Done prompts (index < currentStep) are static. Pending prompts are sortable
- * via dnd-kit — same reorder logic as the fullwidth PromptsPanel.
+ * via dnd-kit — same reorder logic as the fullwidth WorkflowStepsPanel.
  */
 export const MobilePromptsSidebar: React.FC = () => {
   const { prompts, currentStep, executionState } = useWorkflowStore();
@@ -156,7 +156,7 @@ export const MobilePromptsSidebar: React.FC = () => {
   const getContextPct = useContextPct();
   const handleStepClick = useStepClickHandler();
 
-  // Stable sortable IDs for the pending slice — same pattern as PromptsPanel.
+  // Stable sortable IDs for the pending slice — same pattern as WorkflowStepsPanel.
   const [sortableIds, setSortableIds] = useState<string[]>(() =>
     prompts
       .slice(currentStep)
@@ -205,7 +205,7 @@ export const MobilePromptsSidebar: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header bar — same 30px height as the fullwidth PromptsPanel header. */}
+      {/* Header bar — same 30px height as the fullwidth WorkflowStepsPanel header. */}
       <div className="flex items-center h-[30px] flex-shrink-0 border-b border-panel-border bg-sidebar-bg">
         <button
           className="flex items-center justify-center w-[20px] h-[20px] ml-1 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"

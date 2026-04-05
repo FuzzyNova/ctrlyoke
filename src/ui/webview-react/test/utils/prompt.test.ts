@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  createPromptItem,
+  createPromptStep,
   promptStepToRaw,
   isPromptExecuted,
   isPromptRunning,
@@ -21,9 +21,9 @@ function makeItem(overrides: Partial<PromptStep> = {}): PromptStep {
   };
 }
 
-describe("createPromptItem", () => {
+describe("createPromptStep", () => {
   it("creates a pending item from a string prompt", () => {
-    const item = createPromptItem("Analyze the code", 0);
+    const item = createPromptStep("Analyze the code", 0);
     expect(item.index).toBe(0);
     expect(item.text).toBe("Analyze the code");
     expect(item.status).toBe(STEP_STATUS.PENDING);
@@ -31,7 +31,7 @@ describe("createPromptItem", () => {
   });
 
   it("accepts a custom status when creating from string", () => {
-    const item = createPromptItem("Fix bugs", 2, STEP_STATUS.COMPLETED);
+    const item = createPromptStep("Fix bugs", 2, STEP_STATUS.COMPLETED);
     expect(item.status).toBe(STEP_STATUS.COMPLETED);
     expect(item.index).toBe(2);
   });
@@ -47,7 +47,7 @@ describe("createPromptItem", () => {
       mcpServers: ["flightpath"],
       hooks: [{ event: "stop", command: "npm test" }],
     };
-    const item = createPromptItem(raw, 1);
+    const item = createPromptStep(raw, 1);
     expect(item.text).toBe("Fix bugs");
     expect(item.harness).toBe("claude-cli");
     expect(item.model).toBe("claude-sonnet-4.5");
@@ -63,7 +63,7 @@ describe("createPromptItem", () => {
       prompt: "Run tests",
       endCondition: { script: "npm test", returns: "true", maxRetries: 3 },
     };
-    const item = createPromptItem(raw, 0);
+    const item = createPromptStep(raw, 0);
     expect(item.endCondition?.script).toBe("npm test");
     expect(item.endCondition?.maxRetries).toBe(3);
   });
@@ -100,14 +100,14 @@ describe("promptStepToRaw", () => {
     expect(raw.resumeSession).toBe(true);
   });
 
-  it("round-trips through createPromptItem → promptStepToRaw", () => {
+  it("round-trips through createPromptStep → promptStepToRaw", () => {
     const raw: RawPrompt = {
       prompt: "Do a thing",
       harness: "copilot-cli",
       skills: ["skill-a"],
       hooks: [{ event: "stop", command: "npm test" }],
     };
-    const item = createPromptItem(raw, 0);
+    const item = createPromptStep(raw, 0);
     const back = promptStepToRaw(item);
     expect(back.prompt).toBe(raw.prompt);
     expect(back.harness).toBe(raw.harness);

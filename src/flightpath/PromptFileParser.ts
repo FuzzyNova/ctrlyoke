@@ -297,29 +297,29 @@ export class PromptFileParser {
    * @param source The source object (parsed JSON/YAML)
    * @returns PromptStep with only defined properties
    */
-  private buildPromptItem(promptText: string, source: any): PromptStep {
-    const promptItem: PromptStep = { prompt: promptText };
+  private buildPromptStep(promptText: string, source: any): PromptStep {
+    const promptStep: PromptStep = { prompt: promptText };
 
     // Only include properties that are explicitly set
-    if (source.name !== undefined) promptItem.name = source.name;
-    if (source.harness !== undefined) promptItem.harness = source.harness;
-    if (source.model !== undefined) promptItem.model = source.model;
-    if (source.agent !== undefined) promptItem.agent = source.agent;
-    if (source.skills !== undefined) promptItem.skills = source.skills;
+    if (source.name !== undefined) promptStep.name = source.name;
+    if (source.harness !== undefined) promptStep.harness = source.harness;
+    if (source.model !== undefined) promptStep.model = source.model;
+    if (source.agent !== undefined) promptStep.agent = source.agent;
+    if (source.skills !== undefined) promptStep.skills = source.skills;
     if (source.resumeSession !== undefined)
-      promptItem.resumeSession = source.resumeSession;
-    if (source.sessionId !== undefined) promptItem.sessionId = source.sessionId;
+      promptStep.resumeSession = source.resumeSession;
+    if (source.sessionId !== undefined) promptStep.sessionId = source.sessionId;
     if (source.mcpServers !== undefined)
-      promptItem.mcpServers = source.mcpServers;
-    if (source.hooks !== undefined) promptItem.hooks = source.hooks;
+      promptStep.mcpServers = source.mcpServers;
+    if (source.hooks !== undefined) promptStep.hooks = source.hooks;
     if (source.endCondition !== undefined)
-      promptItem.endCondition = source.endCondition;
+      promptStep.endCondition = source.endCondition;
     if (source.priorContext !== undefined)
-      promptItem.priorContext = source.priorContext;
+      promptStep.priorContext = source.priorContext;
     if (source.additionalArgs !== undefined)
-      promptItem.additionalArgs = source.additionalArgs;
+      promptStep.additionalArgs = source.additionalArgs;
 
-    return promptItem;
+    return promptStep;
   }
 
   /**
@@ -342,7 +342,7 @@ export class PromptFileParser {
 
       // Build PromptFile with workflow-level properties and single prompt
       const promptFile: PromptFile = {
-        prompts: [this.buildPromptItem(resolvedPrompt, parsed)],
+        prompts: [this.buildPromptStep(resolvedPrompt, parsed)],
       };
 
       // Copy workflow-level properties (if present)
@@ -362,7 +362,7 @@ export class PromptFileParser {
             item.prompt,
             promptFilePath
           );
-          return this.buildPromptItem(resolvedPrompt, item);
+          return this.buildPromptStep(resolvedPrompt, item);
         })
       );
 
@@ -381,7 +381,7 @@ export class PromptFileParser {
             rawFinalStep.prompt,
             promptFilePath
           );
-          promptFile.finalStep = this.buildPromptItem(
+          promptFile.finalStep = this.buildPromptStep(
             resolvedFinalPrompt,
             rawFinalStep
           );
@@ -485,7 +485,7 @@ export class PromptFileParser {
   /**
    * Validate prompt items for execution
    */
-  validatePromptItems(items: WorkflowStep[]): {
+  validateWorkflowSteps(items: WorkflowStep[]): {
     valid: boolean;
     errors: string[];
   } {

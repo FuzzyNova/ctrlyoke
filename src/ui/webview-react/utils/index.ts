@@ -36,7 +36,7 @@ export {
 // Prompt utilities
 export {
   PROMPT_PROPERTIES,
-  createPromptItem,
+  createPromptStep,
   promptStepToRaw,
   isPromptExecuted,
   isPromptRunning,

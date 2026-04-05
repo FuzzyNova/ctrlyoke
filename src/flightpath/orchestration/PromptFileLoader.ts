@@ -51,7 +51,7 @@ export class PromptFileLoader {
       }
 
       // Validate prompts
-      const validation = this.promptFileParser.validatePromptItems(
+      const validation = this.promptFileParser.validateWorkflowSteps(
         promptFile.prompts
       );
       if (!validation.valid) {
@@ -168,7 +168,7 @@ export class PromptFileLoader {
 
       // Validate prompts (only if there are prompts to validate)
       if (workingFile.prompts?.length) {
-        const validation = this.promptFileParser.validatePromptItems(
+        const validation = this.promptFileParser.validateWorkflowSteps(
           workingFile.prompts
         );
         if (!validation.valid) {

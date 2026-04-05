@@ -1082,7 +1082,7 @@ export class WorkflowExecutor {
    *   returns false.
    */
   private async executeWithStreaming(
-    promptItem: PromptStep,
+    promptStep: PromptStep,
     integration: HarnessIntegration,
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
@@ -1102,7 +1102,7 @@ export class WorkflowExecutor {
       if (context.dashboardProvider && legacyStepIndex !== undefined) {
         context.dashboardProvider.updateCliStreamingChunk(legacyStepIndex, "");
         context.dashboardProvider.updateCliOutput(legacyStepIndex, {
-          prompt: promptItem.prompt,
+          prompt: promptStep.prompt,
           response: "",
           elapsed: 0,
           tokens: undefined,
@@ -1118,7 +1118,7 @@ export class WorkflowExecutor {
       if (legacyStepIndex !== undefined) {
         context.captureOutputInit?.(
           legacyStepIndex,
-          promptItem.prompt,
+          promptStep.prompt,
           undefined,
           context.workspaceFolderPath,
           initTimestampMs,
@@ -1128,7 +1128,7 @@ export class WorkflowExecutor {
       }
     } else {
       context.dashboardProvider?.updateFinalPromptOutput(target.loopIndex, {
-        prompt: promptItem.prompt,
+        prompt: promptStep.prompt,
         response: "",
         elapsed: 0,
         tokens: undefined,
@@ -1141,7 +1141,7 @@ export class WorkflowExecutor {
       });
       context.captureFinalPromptOutputInit?.(
         target.loopIndex,
-        promptItem.prompt,
+        promptStep.prompt,
         undefined,
         context.workspaceFolderPath,
         initTimestampMs,
@@ -1151,7 +1151,7 @@ export class WorkflowExecutor {
     }
 
     const responsePromise = this.waitForResponseComplete(
-      promptItem,
+      promptStep,
       integration
     );
 
@@ -1167,7 +1167,7 @@ export class WorkflowExecutor {
       if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
         if (context.dashboardProvider && legacyStepIndex !== undefined) {
           context.dashboardProvider.updateCliOutput(legacyStepIndex, {
-            prompt: promptItem.prompt,
+            prompt: promptStep.prompt,
             response: "",
             elapsed: 0,
             tokens: undefined,
@@ -1183,7 +1183,7 @@ export class WorkflowExecutor {
         if (legacyStepIndex !== undefined) {
           context.captureOutputInit?.(
             legacyStepIndex,
-            promptItem.prompt,
+            promptStep.prompt,
             cliCommand,
             context.workspaceFolderPath,
             initTimestampMs,
@@ -1193,7 +1193,7 @@ export class WorkflowExecutor {
         }
       } else {
         context.dashboardProvider?.updateFinalPromptOutput(target.loopIndex, {
-          prompt: promptItem.prompt,
+          prompt: promptStep.prompt,
           response: "",
           elapsed: 0,
           tokens: undefined,
@@ -1207,7 +1207,7 @@ export class WorkflowExecutor {
 
         context.captureFinalPromptOutputInit?.(
           target.loopIndex,
-          promptItem.prompt,
+          promptStep.prompt,
           cliCommand,
           context.workspaceFolderPath,
           initTimestampMs,
@@ -1261,7 +1261,7 @@ export class WorkflowExecutor {
       promptReadyDisposable?.dispose();
     };
 
-    const success = await integration.sendPrompt(promptItem, true, sendOptions);
+    const success = await integration.sendPrompt(promptStep, true, sendOptions);
     if (!success) {
       disposeListeners();
       return null;
@@ -1292,19 +1292,19 @@ export class WorkflowExecutor {
     legacyStepIndex: number | undefined
   ): SendRetryPromptCallback {
     return async (
-      retryPromptItem: PromptStep,
+      retryPromptStep: PromptStep,
       currentIndex: number,
       retryAttemptIndex: number
     ): Promise<string | null> => {
       const state = this.promptQueue.getState();
       const workflowFile = this.promptQueue.getWorkflowFile();
       const resolvedProperties = PropertyResolver.resolve(
-        retryPromptItem,
+        retryPromptStep,
         workflowFile
       );
 
       const result = await this.executeWithStreaming(
-        retryPromptItem,
+        retryPromptStep,
         integration,
         context,
         target,
@@ -1332,7 +1332,7 @@ export class WorkflowExecutor {
           integration,
           context,
           target,
-          retryPromptItem,
+          retryPromptStep,
           legacyStepIndex ?? this.getLegacyStepIndex(target),
           retryAttemptIndex
         );
@@ -1344,7 +1344,7 @@ export class WorkflowExecutor {
         integration,
         target,
         target.kind === FINAL_PROMPT_PHASES.QUEUE ? legacyStepIndex : undefined,
-        retryPromptItem,
+        retryPromptStep,
         result.responseText,
         result.duration,
         retryAttemptIndex

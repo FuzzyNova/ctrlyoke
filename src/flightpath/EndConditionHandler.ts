@@ -43,7 +43,7 @@ export interface RetryContext {
  * Returns the response text on success, null on failure.
  */
 export type SendRetryPromptCallback = (
-  retryPromptItem: PromptStep,
+  retryPromptStep: PromptStep,
   currentIndex: number,
   attemptIndex: number
 ) => Promise<string | null>;
@@ -306,7 +306,7 @@ export class EndConditionHandler {
       }
 
       // Create retry prompt item
-      const retryPromptItem: PromptStep = {
+      const retryPromptStep: PromptStep = {
         prompt: retryPromptText,
         model: prompt.model,
         endCondition: prompt.endCondition, // Keep same end condition
@@ -321,7 +321,7 @@ export class EndConditionHandler {
 
       // Send retry prompt and wait for response
       const retryResponseText = await sendRetryPrompt(
-        retryPromptItem,
+        retryPromptStep,
         currentIndex,
         nextAttemptIndex
       );

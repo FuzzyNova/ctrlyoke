@@ -37,7 +37,7 @@ function makeCallbacks(overrides?: Partial<OutputCaptureCallbacks>): {
     onPromptComplete: (data) => promptCompletes.push(data),
     onStatusMessage: (stepIndex, message, severity) =>
       statusMessages.push({ stepIndex, message, severity }),
-    getPromptItem: () => undefined,
+    getWorkflowStep: () => undefined,
     getTotalSteps: () => 3,
     ...overrides,
   };
@@ -314,11 +314,11 @@ suite("OutputCaptureBuffer", () => {
     });
 
     test("should set retryState when attemptIndex > 0", () => {
-      const promptItem: Partial<PromptStep> = {
+      const promptStep: Partial<PromptStep> = {
         endCondition: { maxRetries: 3 } as any,
       };
       const { callbacks } = makeCallbacks({
-        getPromptItem: () => promptItem as PromptStep,
+        getWorkflowStep: () => promptStep as PromptStep,
       });
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
@@ -726,11 +726,11 @@ suite("OutputCaptureBuffer", () => {
     });
 
     test("should send retryState before streaming output when attemptIndex > 0", () => {
-      const promptItem: Partial<PromptStep> = {
+      const promptStep: Partial<PromptStep> = {
         endCondition: { maxRetries: 2 } as any,
       };
       const { callbacks } = makeCallbacks({
-        getPromptItem: () => promptItem as PromptStep,
+        getWorkflowStep: () => promptStep as PromptStep,
       });
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 

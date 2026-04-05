@@ -1,5 +1,5 @@
 export { Header, ExecutionStateBadge } from "./Header";
-export { PromptsPanel } from "./PromptsPanel";
+export { WorkflowStepsPanel } from "./WorkflowStepsPanel";
 export { OutputSection } from "./OutputSection";
 export { EditorSection } from "./EditorSection";
 export { WorkflowPropertiesPanel } from "./WorkflowPropertiesPanel";

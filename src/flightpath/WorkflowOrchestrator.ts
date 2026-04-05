@@ -1486,7 +1486,7 @@ export class WorkflowOrchestrator {
         entry.summary = updatedSummary;
         this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(updatedSummary);
 
-        // If the CLI extended the queue, send the new prompts so the PromptsPanel reflects them
+        // If the CLI extended the queue, send the new prompts so the WorkflowStepsPanel reflects them
         if (updatedSummary.totalSteps > prevTotalSteps) {
           const provider = this.dashboardBroadcastHub;
           fs.promises

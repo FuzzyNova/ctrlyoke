@@ -1149,7 +1149,7 @@ function createMessageHandlers(): MessageHandlerMap {
     // IDLE: do nothing — transient state during load/clear, not a terminal state
 
     // If this is the currently active workflow, sync workflowStore so the
-    // PromptsPanel stays in sync during CLI watch mode step advances.
+    // WorkflowStepsPanel stays in sync during CLI watch mode step advances.
     // WorkflowSummary.currentStep is 0-indexed (matches workflowStore.currentStep).
     if (summary.id === uiStore.activeWorkflowId) {
       const workflowStore = useWorkflowStore.getState();

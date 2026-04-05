@@ -66,7 +66,7 @@ export interface OutputCaptureCallbacks {
     message: string,
     severity: string
   ) => void;
-  getPromptItem: (stepIndex: number) => WorkflowStep | undefined;
+  getWorkflowStep: (stepIndex: number) => WorkflowStep | undefined;
   getTotalSteps: () => number;
 }
 
@@ -172,9 +172,9 @@ export class OutputCaptureBuffer {
     if (attemptIndex > 0) {
       const completedEntry = this.completedStepOutputs.get(stepIndex);
       if (completedEntry) {
-        const promptItem = this.callbacks.getPromptItem(stepIndex);
-        const promptItemTyped = promptItem && !isScriptStep(promptItem) ? promptItem as PromptStep : undefined;
-        const maxRetries = promptItemTyped?.endCondition?.maxRetries ?? attemptIndex;
+        const promptStep = this.callbacks.getWorkflowStep(stepIndex);
+        const promptStepTyped = promptStep && !isScriptStep(promptStep) ? promptStep as PromptStep : undefined;
+        const maxRetries = promptStepTyped?.endCondition?.maxRetries ?? attemptIndex;
         completedEntry.retryState = { currentRetry: attemptIndex, maxRetries };
         Log.debug(
           `${this.instanceTag} captureOutputInit: set retryState for step ${stepIndex} (attempt ${attemptIndex}/${maxRetries})`
@@ -212,9 +212,9 @@ export class OutputCaptureBuffer {
     if (existing) {
       existing.outputs.push(output);
       if (attemptIndex > 0) {
-        const promptItem = this.callbacks.getPromptItem(stepIndex);
-        const promptItemTyped = promptItem && !isScriptStep(promptItem) ? promptItem as PromptStep : undefined;
-        const maxRetries = promptItemTyped?.endCondition?.maxRetries ?? attemptIndex;
+        const promptStep = this.callbacks.getWorkflowStep(stepIndex);
+        const promptStepTyped = promptStep && !isScriptStep(promptStep) ? promptStep as PromptStep : undefined;
+        const maxRetries = promptStepTyped?.endCondition?.maxRetries ?? attemptIndex;
         existing.retryState = { currentRetry: attemptIndex, maxRetries };
       }
     } else {
@@ -402,10 +402,10 @@ export class OutputCaptureBuffer {
           if (!completedEntry?.retryState) {
             // Edge case: retry streaming started but completedStepOutputs
             // doesn't have retryState yet (defend against timing gaps).
-            const promptItem = this.callbacks.getPromptItem(state.currentIndex);
-            const promptItemTyped = promptItem && !isScriptStep(promptItem) ? promptItem as PromptStep : undefined;
+            const promptStep = this.callbacks.getWorkflowStep(state.currentIndex);
+            const promptStepTyped = promptStep && !isScriptStep(promptStep) ? promptStep as PromptStep : undefined;
             const maxRetries =
-              promptItemTyped?.endCondition?.maxRetries ?? buffer.attemptIndex;
+              promptStepTyped?.endCondition?.maxRetries ?? buffer.attemptIndex;
             Log.trace(
               `${instanceTag} sendFullStateToDashboard: sending fallback retryState for step ${state.currentIndex} (attempt ${buffer.attemptIndex}/${maxRetries})`
             );

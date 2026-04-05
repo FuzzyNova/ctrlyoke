@@ -312,7 +312,7 @@ export interface WorkingFile extends PromptFile {
 }
 
 /** Discriminant type for workflow steps */
-export type PromptItemType = (typeof STEP_TYPES)[keyof typeof STEP_TYPES];
+export type WorkflowStepType = (typeof STEP_TYPES)[keyof typeof STEP_TYPES];
 
 export interface PromptStep extends ExecutionProperties {
   /** Step type discriminant — defaults to "prompt" when absent */

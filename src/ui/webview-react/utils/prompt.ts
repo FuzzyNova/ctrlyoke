@@ -118,15 +118,15 @@ export interface PromptStep {
  *
  * @example
  * // From string prompt
- * createPromptItem("Analyze the code", 0)
+ * createPromptStep("Analyze the code", 0)
  *
  * // From object prompt
- * createPromptItem({ prompt: "Fix bugs", model: "gpt-5" }, 1)
+ * createPromptStep({ prompt: "Fix bugs", model: "gpt-5" }, 1)
  *
  * // With status and details
- * createPromptItem(prompt, 2, "completed", { elapsed: 5000 })
+ * createPromptStep(prompt, 2, "completed", { elapsed: 5000 })
  */
-export function createPromptItem(
+export function createPromptStep(
   prompt: RawPrompt | string,
   index: number,
   status: StepStatus = STEP_STATUS.PENDING,

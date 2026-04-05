@@ -284,7 +284,7 @@ export class WorkflowInstance {
           message,
           severity,
         }),
-      getPromptItem: (stepIndex) =>
+      getWorkflowStep: (stepIndex) =>
         this.promptQueue.getState().prompts[stepIndex],
       getTotalSteps: () => this.promptQueue.getProgress().total,
     };
@@ -1438,7 +1438,7 @@ export class WorkflowInstance {
     const updates: Partial<PromptStep> = {
       prompt: text,
       ...(promptName !== undefined && { name: promptName || undefined }),
-      ...this.buildPromptItemProperties(properties),
+      ...this.buildPromptStepProperties(properties),
       ...this.buildClearUpdates(clearProperties),
     };
     await this.promptQueue.updatePrompt(index, updates);
@@ -1462,7 +1462,7 @@ export class WorkflowInstance {
       const normalized: PromptStep = {
         prompt: finalStep.prompt,
         ...(finalStep.name ? { name: finalStep.name } : {}),
-        ...this.buildPromptItemProperties(finalStep as unknown),
+        ...this.buildPromptStepProperties(finalStep as unknown),
         ...this.buildClearUpdates(clearProperties),
       };
       this.promptQueue.updateWorkflowProperty("finalStep", normalized);
@@ -1575,10 +1575,10 @@ export class WorkflowInstance {
       promptName
     );
 
-    const promptItem: PromptStep = {
+    const promptStep: PromptStep = {
       prompt: text,
       ...(promptName?.trim() ? { name: promptName.trim() } : {}),
-      ...this.buildPromptItemProperties(properties),
+      ...this.buildPromptStepProperties(properties),
     };
 
     if (forceNewWorkflow) {
@@ -1624,7 +1624,7 @@ export class WorkflowInstance {
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: no existing workflow — initializing new with name="${workflowName}", shouldRun=${shouldRun}, action=${action}`
       );
-      await this.initializeNewWorkflow([promptItem], workflowName);
+      await this.initializeNewWorkflow([promptStep], workflowName);
 
       if (shouldRun) {
         await this.executeLoadedPromptFile();
@@ -1659,7 +1659,7 @@ export class WorkflowInstance {
       );
       this.reopenRuntimeForContinuationIfNeeded(shouldRun);
       await this.promptQueue.appendPrompts(
-        [promptItem],
+        [promptStep],
         "Dashboard editor",
         position
       );
@@ -2456,7 +2456,7 @@ export class WorkflowInstance {
     ) as Partial<PromptStep>;
   }
 
-  private buildPromptItemProperties(properties: unknown): Partial<PromptStep> {
+  private buildPromptStepProperties(properties: unknown): Partial<PromptStep> {
     const props = properties as Record<string, unknown>;
     // For non-nullable properties: null coerces to undefined (removes key from PromptStep).
     // For tri-state nullable properties like agent, skills, and additionalArgs,

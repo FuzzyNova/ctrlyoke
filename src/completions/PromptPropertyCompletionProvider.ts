@@ -186,8 +186,8 @@ export class PromptPropertyCompletionProvider
     }
 
     // Check if we're inside a prompts list item block
-    const blockInfo = this.findPromptItemBlock(document, position.line);
-    if (!blockInfo.isInsidePromptItem) {
+    const blockInfo = this.findPromptStepBlock(document, position.line);
+    if (!blockInfo.isInsidePromptStep) {
       return undefined;
     }
 
@@ -238,11 +238,11 @@ export class PromptPropertyCompletionProvider
    * determine whether the cursor is inside a `prompts:` list item block, and
    * whether that item already contains `type: script`.
    */
-  private findPromptItemBlock(
+  private findPromptStepBlock(
     document: vscode.TextDocument,
     currentLine: number
-  ): { isInsidePromptItem: boolean; hasTypeScript: boolean } {
-    const NOT_INSIDE = { isInsidePromptItem: false, hasTypeScript: false };
+  ): { isInsidePromptStep: boolean; hasTypeScript: boolean } {
+    const NOT_INSIDE = { isInsidePromptStep: false, hasTypeScript: false };
 
     // Find the start of the current list item by searching backwards for a
     // list-item marker (`- `) that is at the prompt-list indentation level.
@@ -335,7 +335,7 @@ export class PromptPropertyCompletionProvider
       }
     }
 
-    return { isInsidePromptItem: true, hasTypeScript };
+    return { isInsidePromptStep: true, hasTypeScript };
   }
 
   /**
@@ -344,18 +344,18 @@ export class PromptPropertyCompletionProvider
   private getTypeValueCompletions(): vscode.CompletionList {
     const items: vscode.CompletionItem[] = [];
 
-    const promptItem = new vscode.CompletionItem(
+    const promptTypeItem = new vscode.CompletionItem(
       STEP_TYPES.PROMPT,
       vscode.CompletionItemKind.EnumMember
     );
-    promptItem.detail = "AI prompt step (default)";
-    promptItem.documentation = new vscode.MarkdownString(
+    promptTypeItem.detail = "AI prompt step (default)";
+    promptTypeItem.documentation = new vscode.MarkdownString(
       "Standard AI prompt step. The workflow sends the prompt text to the configured AI assistant.\n\n" +
         "This is the default step type — omitting `type` is equivalent to `type: prompt`."
     );
-    promptItem.insertText = STEP_TYPES.PROMPT;
-    promptItem.sortText = `0_${STEP_TYPES.PROMPT}`;
-    items.push(promptItem);
+    promptTypeItem.insertText = STEP_TYPES.PROMPT;
+    promptTypeItem.sortText = `0_${STEP_TYPES.PROMPT}`;
+    items.push(promptTypeItem);
 
     const scriptItem = new vscode.CompletionItem(
       STEP_TYPES.SCRIPT,

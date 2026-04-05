@@ -23,7 +23,7 @@ import {
 } from "./constants";
 import {
   Header,
-  PromptsPanel,
+  WorkflowStepsPanel,
   OutputSection,
   EditorSection,
   WorkflowPropertiesPanel,
@@ -401,7 +401,7 @@ function App() {
                   promptsAfterClose.current = null;
                 } : undefined}
               >
-                <PromptsPanel
+                <WorkflowStepsPanel
                   onRequestSidebar={handlePromptsRequestSidebar}
                   onRequestClose={handlePromptsRequestClose}
                 />
@@ -484,7 +484,7 @@ function App() {
             }
           }}
         >
-          <PromptsPanel />
+          <WorkflowStepsPanel />
         </Panel>
 
         <Separator className={SEPARATOR_VERTICAL} />

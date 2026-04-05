@@ -8,7 +8,7 @@ import { OUTPUT_HISTORY_KINDS, FINAL_PROMPT_PHASES } from "../types/messages";
  * Returns a `handleStepClick(index)` callback that selects the prompt for
  * editing and scrolls the output panel to its anchor.
  *
- * Single source of truth shared by PromptsPanel and MobilePromptsSidebar.
+ * Single source of truth shared by WorkflowStepsPanel and MobilePromptsSidebar.
  * Callers can add their own guards (e.g. isCLIManaged) before invoking it.
  */
 export function useStepClickHandler() {

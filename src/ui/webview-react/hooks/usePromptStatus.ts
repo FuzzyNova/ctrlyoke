@@ -5,7 +5,7 @@ import { STEP_STATUS, EXECUTION_STATES, type StepStatus } from "../types/message
  * Returns a `getPromptStatus(prompt, index)` helper that derives the display
  * status for a prompt chip/row from live workflow state.
  *
- * Single source of truth shared by PromptsPanel and MobilePromptsSidebar.
+ * Single source of truth shared by WorkflowStepsPanel and MobilePromptsSidebar.
  */
 export function usePromptStatus() {
   const { currentStep, executionState } = useWorkflowStore();

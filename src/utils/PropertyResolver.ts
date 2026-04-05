@@ -284,21 +284,21 @@ export class PropertyResolver {
    * Events not mentioned at prompt level inherit from workflow level.
    */
   private static resolveHooks(
-    promptItem: PromptStep,
+    promptStep: PromptStep,
     workflowFile: PromptFile
   ): UserHookConfig[] | null {
     // Explicit null at prompt level → no hooks for this prompt
-    if (promptItem.hooks === null) return null;
+    if (promptStep.hooks === null) return null;
 
     // Explicit null at workflow level (no prompt override) → no hooks
-    if (promptItem.hooks === undefined && workflowFile.hooks === null)
+    if (promptStep.hooks === undefined && workflowFile.hooks === null)
       return null;
 
     // workflowFile.hooks is never undefined here (seeded by populateSettingsDefaults)
     const workflowHooks = workflowFile.hooks ?? [];
 
     // No prompt-level override → return workflow hooks
-    if (promptItem.hooks === undefined || promptItem.hooks.length === 0) {
+    if (promptStep.hooks === undefined || promptStep.hooks.length === 0) {
       return workflowHooks;
     }
 
@@ -312,11 +312,11 @@ export class PropertyResolver {
     }
 
     // Override: prompt-level hooks replace workflow hooks per event
-    const promptEvents = new Set(promptItem.hooks.map((h) => h.event));
+    const promptEvents = new Set(promptStep.hooks.map((h) => h.event));
     for (const event of promptEvents) {
       eventMap.set(
         event,
-        promptItem.hooks.filter((h) => h.event === event)
+        promptStep.hooks.filter((h) => h.event === event)
       );
     }
 
