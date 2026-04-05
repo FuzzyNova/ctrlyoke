@@ -1,18 +1,128 @@
-import React from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { sendMessage } from "@hooks/useMessageHandler";
-import { calcContextPct } from "@utils/tokenUtils";
+import { usePromptStatus, useContextPct, useStepClickHandler } from "@hooks/index";
 import { StatusIcon } from "../prompts/StatusIcon";
 import {
-  STEP_STATUS,
   EXECUTION_STATES,
   MESSAGE_TYPES,
   FINAL_PROMPT_PHASES,
-  OUTPUT_HISTORY_KINDS,
 } from "../../types/messages";
-import type { StepStatus } from "../../types/messages";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+
+// ─── SortableChip ────────────────────────────────────────────────────────────
+
+type ChipProps = {
+  /** 1-based display slot (visual position, not absolute index) */
+  slotNumber: number;
+  status: ReturnType<ReturnType<typeof usePromptStatus>>;
+  contextPct: number | undefined;
+  canSetStart: boolean;
+  startPositionDirection: "rewind" | "forward";
+  canReorder: boolean;
+  onChipClick: () => void;
+  onSetStart: (e: React.MouseEvent) => void;
+};
+
+function SortableChip({
+  id,
+  disabled,
+  ...chipProps
+}: ChipProps & { id: string; disabled: boolean }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id, disabled });
+
+  const style = {
+    transform: transform ? `translate3d(0, ${transform.y}px, 0)` : undefined,
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <ChipContent {...chipProps} />
+    </div>
+  );
+}
+
+function ChipContent({
+  slotNumber,
+  status,
+  contextPct,
+  canSetStart,
+  startPositionDirection,
+  canReorder,
+  onChipClick,
+  onSetStart,
+}: ChipProps) {
+  const hasSecondRow = canSetStart || contextPct !== undefined;
+
+  return (
+    <div
+      className={`flex flex-col px-1 py-1 border-b border-panel-border hover:bg-toolbar-hover-bg transition-colors${canReorder ? " cursor-grab active:cursor-grabbing" : " cursor-pointer"}`}
+      onClick={onChipClick}
+      title={`Prompt ${slotNumber}`}
+    >
+      {/* Row 1: slot number + status icon */}
+      <div className="flex items-center justify-between w-full">
+        <span className="text-[10px] text-description-fg leading-none select-none">
+          {slotNumber}
+        </span>
+        <StatusIcon status={status} className="text-[16px]" />
+      </div>
+
+      {/* Row 2: set-start button + context % (only when relevant) */}
+      {hasSecondRow && (
+        <div className="flex items-center justify-between w-full mt-0.5">
+          {canSetStart ? (
+            <button
+              className="flex items-center justify-center w-[14px] h-[14px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+              onClick={onSetStart}
+              title={`Start from prompt ${slotNumber}`}
+              aria-label={`Set start position to prompt ${slotNumber}`}
+            >
+              <i
+                className={`codicon ${startPositionDirection === "rewind" ? "codicon-debug-reverse-continue" : "codicon-debug-step-over"} text-[9px]`}
+              />
+            </button>
+          ) : (
+            <span />
+          )}
+          {contextPct !== undefined && (
+            <span className="text-[9px] text-description-fg leading-none">
+              {contextPct}%
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MobilePromptsSidebar ────────────────────────────────────────────────────
 
 /**
  * MobilePromptsSidebar — compact 72 px sidebar showing prompt chips.
@@ -21,110 +131,73 @@ import type { StepStatus } from "../../types/messages";
  *   Row 1: [prompt number]  [status icon]
  *   Row 2: [set-start btn]  [context %]   ← shown when relevant
  *
- * At the top: a header bar matching the fullwidth PromptsPanel header height,
- * with an expand arrow and the list-unordered icon.
+ * Done prompts (index < currentStep) are static. Pending prompts are sortable
+ * via dnd-kit — same reorder logic as the fullwidth PromptsPanel.
  */
 export const MobilePromptsSidebar: React.FC = () => {
-  const {
-    prompts,
-    currentStep,
-    executionState,
-    liveOrderedEntries,
-    historyOutputs,
-  } = useWorkflowStore();
-  const { setMobilePromptsMode, isViewingHistory } = useUiStore();
-  const { selectPrompt } = useEditorStore();
+  const { prompts, currentStep, executionState } = useWorkflowStore();
+  const { setMobilePromptsMode } = useUiStore();
 
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
+  const canReorder =
+    canChangeStartPosition && prompts.length - currentStep > 1;
 
-  const getPromptStatus = (
-    prompt: (typeof prompts)[0],
-    index: number
-  ): StepStatus => {
-    if (isRunning) {
-      if (index === currentStep) return STEP_STATUS.RUNNING;
-      if (index < currentStep) return STEP_STATUS.COMPLETED;
-    }
-    if (
-      executionState === EXECUTION_STATES.CANCELLING &&
-      index === currentStep
-    ) {
-      return STEP_STATUS.CANCELLED;
-    }
-    if (executionState === EXECUTION_STATES.ERROR && index === currentStep) {
-      return STEP_STATUS.FAILED;
-    }
-    if (prompt.status) return prompt.status;
-    if (index < currentStep) return STEP_STATUS.COMPLETED;
-    return STEP_STATUS.PENDING;
-  };
+  const getPromptStatus = usePromptStatus();
+  const getContextPct = useContextPct();
+  const handleStepClick = useStepClickHandler();
 
-  const getContextPct = (index: number): number | undefined => {
-    const entries =
-      isViewingHistory && historyOutputs
-        ? historyOutputs.orderedEntries
-        : liveOrderedEntries;
-    const cliEntry = [...entries]
-      .reverse()
-      .find(
-        (e) =>
-          e.kind === OUTPUT_HISTORY_KINDS.CLI &&
-          "target" in e &&
-          (e as any).target?.kind === FINAL_PROMPT_PHASES.QUEUE &&
-          (e as any).target?.stepIndex === index
+  // Stable sortable IDs for the pending slice — same pattern as PromptsPanel.
+  const [sortableIds, setSortableIds] = useState<string[]>(() =>
+    prompts
+      .slice(currentStep)
+      .map((_, i) => `prompt-pending-${currentStep + i}`)
+  );
+
+  useEffect(() => {
+    setSortableIds(
+      prompts
+        .slice(currentStep)
+        .map((_, i) => `prompt-pending-${currentStep + i}`)
+    );
+  }, [prompts, currentStep]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      const oldIdx = sortableIds.indexOf(String(active.id));
+      const newIdx = sortableIds.indexOf(String(over.id));
+      if (oldIdx === -1 || newIdx === -1) return;
+
+      const newSortableIds = arrayMove(sortableIds, oldIdx, newIdx);
+      setSortableIds(newSortableIds);
+
+      const newPendingOrder = newSortableIds.map((id) =>
+        sortableIds.indexOf(id)
       );
-    if (!cliEntry) return undefined;
-    const tokens = (cliEntry as any).cliOutput?.tokens;
-    return calcContextPct(tokens?.contextWindowUsed, tokens?.contextWindowSize);
-  };
+      sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, { newPendingOrder });
 
-  const handlePromptClick = (index: number) => {
-    const prompt = prompts[index];
-    if (!prompt) return;
-    selectPrompt({ kind: FINAL_PROMPT_PHASES.QUEUE, index }, prompt);
-
-    // Scroll the output area to this step's anchor, same as fullwidth PromptsPanel.
-    let hasOutput: boolean;
-    if (isViewingHistory && historyOutputs) {
-      hasOutput = historyOutputs.orderedEntries.some(
-        (e) =>
-          "target" in e &&
-          e.target.kind === FINAL_PROMPT_PHASES.QUEUE &&
-          (e.target as any).stepIndex === index
-      );
-    } else {
-      hasOutput = liveOrderedEntries.some(
-        (e) =>
-          e.kind === OUTPUT_HISTORY_KINDS.CLI &&
-          "target" in e &&
-          (e as any).target?.kind === FINAL_PROMPT_PHASES.QUEUE &&
-          (e as any).target?.stepIndex === index
-      );
-    }
-
-    if (hasOutput) {
-      requestAnimationFrame(() => {
-        const anchor = document.getElementById(`output-step-queue-${index}`);
-        const container = document.getElementById("output-content");
-        if (anchor && container) {
-          const anchorTop = anchor.getBoundingClientRect().top;
-          const containerTop = container.getBoundingClientRect().top;
-          container.scrollTo({
-            top: container.scrollTop + (anchorTop - containerTop),
-            behavior: "smooth",
-          });
-        }
-      });
-    }
-  };
+      // Cancel any active queue-prompt selection — the selected index may now
+      // refer to a different prompt after reorder.
+      const editorStore = useEditorStore.getState();
+      if (editorStore.selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE) {
+        editorStore.cancelEdit();
+      }
+    },
+    [sortableIds]
+  );
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header bar — same 30px height as the fullwidth PromptsPanel header.
-          Expand arrow sits at the same horizontal position as the collapse arrow
-          in fullwidth mode so users can keep their finger in the same spot. */}
+      {/* Header bar — same 30px height as the fullwidth PromptsPanel header. */}
       <div className="flex items-center h-[30px] flex-shrink-0 border-b border-panel-border bg-sidebar-bg">
         <button
           className="flex items-center justify-center w-[20px] h-[20px] ml-1 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
@@ -139,67 +212,78 @@ export const MobilePromptsSidebar: React.FC = () => {
 
       {/* Prompt chips */}
       <div className="flex-1 overflow-y-auto">
-        {prompts.map((prompt, index) => {
-          const status = getPromptStatus(prompt, index);
-          const contextPct = getContextPct(index);
-          // Match PromptsPanel: any prompt that isn't the current active step
-          // can have start position changed (done = rewind, pending = skip ahead).
-          const canSetStart =
-            canChangeStartPosition && index !== currentStep;
-          const hasSecondRow = canSetStart || contextPct !== undefined;
-
-          return (
-            <div
-              key={index}
-              className="flex flex-col px-1 py-1 border-b border-panel-border cursor-pointer hover:bg-toolbar-hover-bg transition-colors"
-              onClick={() => handlePromptClick(index)}
-              title={`Prompt ${index + 1}`}
-            >
-              {/* Row 1: slot number + status icon */}
-              <div className="flex items-center justify-between w-full">
-                <span className="text-[10px] text-description-fg leading-none select-none">
-                  {index + 1}
-                </span>
-                <StatusIcon status={status} className="text-[16px]" />
-              </div>
-
-              {/* Row 2: set-start button + context % (only when relevant) */}
-              {hasSecondRow && (
-                <div className="flex items-center justify-between w-full mt-0.5">
-                  {canSetStart ? (
-                    <button
-                      className="flex items-center justify-center w-[14px] h-[14px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        sendMessage(MESSAGE_TYPES.SET_START_POSITION, {
-                          toIndex: index,
-                        });
-                      }}
-                      title={`Start from prompt ${index + 1}`}
-                      aria-label={`Set start position to prompt ${index + 1}`}
-                    >
-                      <i className="codicon codicon-debug-step-into text-[9px]" />
-                    </button>
-                  ) : (
-                    <span />
-                  )}
-                  {contextPct !== undefined && (
-                    <span className="text-[9px] text-description-fg leading-none">
-                      {contextPct}%
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {prompts.length === 0 && (
+        {prompts.length === 0 ? (
           <div className="flex items-center justify-center py-4">
             <span className="text-[9px] text-description-fg text-center px-1">
               No prompts
             </span>
           </div>
+        ) : (
+          <>
+            {/* Done chips — static, not draggable */}
+            {prompts.slice(0, currentStep).map((prompt, i) => {
+              const status = getPromptStatus(prompt, i);
+              const contextPct = getContextPct(i);
+              return (
+                <ChipContent
+                  key={i}
+                  slotNumber={i + 1}
+                  status={status}
+                  contextPct={contextPct}
+                  canSetStart={canChangeStartPosition}
+                  startPositionDirection="rewind"
+                  canReorder={false}
+                  onChipClick={() => handleStepClick(i)}
+                  onSetStart={(e) => {
+                    e.stopPropagation();
+                    sendMessage(MESSAGE_TYPES.SET_START_POSITION, { toIndex: i });
+                  }}
+                />
+              );
+            })}
+
+            {/* Pending chips — sortable */}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={sortableIds}
+                strategy={verticalListSortingStrategy}
+              >
+                {sortableIds.map((id, visualIdx) => {
+                  const index = parseInt(id.replace("prompt-pending-", ""));
+                  const prompt = prompts[index];
+                  if (!prompt) return null;
+                  const isCurrentStep = visualIdx === 0;
+                  const status = getPromptStatus(prompt, index);
+                  const contextPct = getContextPct(index);
+                  const slotNumber = currentStep + visualIdx + 1;
+                  return (
+                    <SortableChip
+                      key={id}
+                      id={id}
+                      disabled={!canReorder}
+                      slotNumber={slotNumber}
+                      status={status}
+                      contextPct={contextPct}
+                      canSetStart={canChangeStartPosition && !isCurrentStep}
+                      startPositionDirection="forward"
+                      canReorder={canReorder && !isCurrentStep}
+                      onChipClick={() => handleStepClick(index)}
+                      onSetStart={(e) => {
+                        e.stopPropagation();
+                        sendMessage(MESSAGE_TYPES.SET_START_POSITION, {
+                          toIndex: currentStep + visualIdx,
+                        });
+                      }}
+                    />
+                  );
+                })}
+              </SortableContext>
+            </DndContext>
+          </>
         )}
       </div>
     </div>

@@ -4,6 +4,7 @@ import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
+import { usePromptStatus, useStepClickHandler } from "@hooks/index";
 import { HARNESS_INFO } from "../../types/messages";
 import {
   PromptItem,
@@ -20,7 +21,6 @@ import {
   FINAL_PROMPT_PHASES,
   OUTPUT_HISTORY_KINDS,
   RUNNER_IDS,
-  type StepStatus,
 } from "../../types/messages";
 import { sendMessage } from "../../hooks/useMessageHandler";
 import {
@@ -129,6 +129,9 @@ export const PromptsPanel: React.FC<{
     toggleFinalPromptFooterExpanded,
     setFinalPromptFooterExpanded,
   } = useUiStore();
+
+  const getPromptStatus = usePromptStatus();
+  const handleStepClick = useStepClickHandler();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
@@ -296,47 +299,9 @@ export const PromptsPanel: React.FC<{
   const handlePromptClick = useCallback(
     (index: number) => {
       if (isCLIManaged) return;
-      const prompt = prompts[index];
-      if (prompt) {
-        selectPrompt({ kind: FINAL_PROMPT_PHASES.QUEUE, index }, prompt);
-        // Scroll to this step's output if it exists.
-        // In history mode, check historyOutputs; otherwise check live liveOrderedEntries.
-        let hasOutput: boolean;
-        if (isViewingHistory && historyOutputs) {
-          hasOutput = historyOutputs.orderedEntries.some(
-            (e) => "target" in e && e.target.kind === FINAL_PROMPT_PHASES.QUEUE && (e.target as any).stepIndex === index
-          );
-        } else {
-          hasOutput = liveOrderedEntries.some(
-            (e) => e.kind === OUTPUT_HISTORY_KINDS.CLI && "target" in e && (e as any).target.kind === FINAL_PROMPT_PHASES.QUEUE && (e as any).target.stepIndex === index
-          );
-        }
-        if (hasOutput) {
-          requestAnimationFrame(() => {
-            const anchor = document.getElementById(
-              `output-step-queue-${index}`
-            );
-            const container = document.getElementById("output-content");
-            if (anchor && container) {
-              const anchorTop = anchor.getBoundingClientRect().top;
-              const containerTop = container.getBoundingClientRect().top;
-              container.scrollTo({
-                top: container.scrollTop + (anchorTop - containerTop),
-                behavior: "smooth",
-              });
-            }
-          });
-        }
-      }
+      handleStepClick(index);
     },
-    [
-      prompts,
-      selectPrompt,
-      liveOrderedEntries,
-      isViewingHistory,
-      historyOutputs,
-      isCLIManaged,
-    ]
+    [isCLIManaged, handleStepClick]
   );
 
   const handleFinalPromptSelect = useCallback(() => {
@@ -436,44 +401,6 @@ export const PromptsPanel: React.FC<{
       setShowClearConfirm(true);
     }
   }, [globalSettings.confirmResetOperations]);
-
-  // Get the status for a prompt based on workflow state
-  const getPromptStatus = (
-    promptData: (typeof prompts)[0],
-    index: number
-  ): StepStatus => {
-    // When running, position wins for current and past steps.
-    // This prevents stale RUNNING icons when currentStep advances without
-    // an explicit STEP_STATUS_CHANGED being sent (e.g., CLI watch mode).
-    if (isRunning) {
-      if (index === currentStep) return STEP_STATUS.RUNNING;
-      if (index < currentStep) return STEP_STATUS.COMPLETED;
-    }
-    // Eagerly reflect terminal states for the current step before the
-    // per-step STEP_STATUS_CHANGED message arrives.  executionState flips
-    // synchronously, but the step-level status update is a separate postMessage
-    // that lands in a later render cycle — without this, the play icon persists
-    // until that second message arrives (or never clears if it was never sent).
-    if (
-      executionState === EXECUTION_STATES.CANCELLING &&
-      index === currentStep
-    ) {
-      return STEP_STATUS.CANCELLED;
-    }
-    if (executionState === EXECUTION_STATES.ERROR && index === currentStep) {
-      return STEP_STATUS.FAILED;
-    }
-    // Use explicit status for non-running states or future steps
-    // (covers COMPLETED, ERROR, etc. set by STEP_STATUS_CHANGED)
-    if (promptData.status) {
-      return promptData.status;
-    }
-    // Position-based fallback
-    if (index < currentStep) {
-      return STEP_STATUS.COMPLETED;
-    }
-    return STEP_STATUS.PENDING;
-  };
 
   // Get latest output for a step (history-aware)
   const getLatestOutput = (index: number) => {
