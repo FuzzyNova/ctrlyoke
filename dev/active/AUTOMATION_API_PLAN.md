@@ -61,7 +61,7 @@ clean programmatic surface and let them use the tools they already know.
 
 ## The Right Answer: Two CLI Enhancements
 
-### Enhancement 1 — Variable Substitution (`--var`)
+### Enhancement 1 — Variable Substitution (`--var`) - COMPLETED
 
 Allow `{{varName}}` placeholders anywhere in workflow YAML/JSON (prompt text, model,
 harness, endCondition script path). Pass values from the CLI with `--var key=value`.
