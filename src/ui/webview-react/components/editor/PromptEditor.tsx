@@ -55,8 +55,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     hasActiveQueue,
     stepType,
     scriptCommand,
-    setStepType,
+    scriptTimeout,
+    scriptContinueOnFailure,
     setScriptCommand,
+    setScriptTimeout,
+    setScriptContinueOnFailure,
   } = useEditorStore();
 
   const { prompts, executionState, currentStep, finalPromptStatus } =
@@ -70,7 +73,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const { globalSettings, workflowProperties } = useSettingsStore();
 
   // ── Drawer tab state (lifted from PropertiesDrawer for footer tab bar) ─────
-  const [drawerActivePage, setDrawerActivePage] = useState<DrawerPage>(DRAWER_PAGES.HARNESS);
+  const [drawerActivePage, setDrawerActivePage] = useState<DrawerPage>(
+    DRAWER_PAGES.HARNESS
+  );
 
   // Reset to first tab when drawer opens for a new prompt
   useEffect(() => {
@@ -103,6 +108,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
   const isFinalPrompt =
     selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT;
+  const isScriptMode = stepType === STEP_TYPES.SCRIPT;
   const isFileRef = looksLikeFilePath(promptText.trim());
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const selectedPromptStatus =
@@ -369,7 +375,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === MESSAGE_TYPES.EXECUTE_PROMPT_ERROR) {
-        const restored = (event.data.text as string) || lastSubmittedTextRef.current;
+        const restored =
+          (event.data.text as string) || lastSubmittedTextRef.current;
         if (restored) {
           setPromptText(restored);
         }
@@ -379,31 +386,55 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     return () => window.removeEventListener("message", handleMessage);
   }, [setPromptText]);
 
-  // Execute prompt (Run/Queue)
-  const executePrompt = useCallback(
-    (action: string) => {
-      const text = promptText.trim();
-      if (!text) return;
-
-      const { properties: propertyValues } = getPropertyValues();
-      let finalAction = action;
-
-      // Determine final action based on execution state
+  // Compute the final action based on execution state (shared by prompt and script paths)
+  const resolveFinalAction = useCallback(
+    (action: string): string => {
       if (action === ACTION_TYPES.RUN && hasPendingPrompts()) {
         const isIdle = executionState === EXECUTION_STATES.IDLE;
         const isStopped = executionState === EXECUTION_STATES.STOPPED;
         const isPaused = executionState === EXECUTION_STATES.PAUSED;
-
-        if (isStopped) {
-          finalAction = ACTION_TYPES.RUN_BEFORE_CURRENT;
-        } else if (isIdle && currentStep === 0) {
-          finalAction = ACTION_TYPES.RUN_BEFORE_CURRENT;
-        } else if (isPaused || isRunning) {
-          finalAction = ACTION_TYPES.RUN_NEXT;
-        } else {
-          finalAction = ACTION_TYPES.RUN_NEXT;
-        }
+        if (isStopped) return ACTION_TYPES.RUN_BEFORE_CURRENT;
+        if (isIdle && currentStep === 0) return ACTION_TYPES.RUN_BEFORE_CURRENT;
+        if (isPaused || isRunning) return ACTION_TYPES.RUN_NEXT;
+        return ACTION_TYPES.RUN_NEXT;
       }
+      return action;
+    },
+    [hasPendingPrompts, executionState, currentStep, isRunning]
+  );
+
+  // Execute prompt (Run/Queue)
+  const executePrompt = useCallback(
+    (action: string) => {
+      const finalAction = resolveFinalAction(action);
+
+      if (isScriptMode) {
+        const command = scriptCommand.trim();
+        if (!command) return;
+
+        lastSubmittedTextRef.current = command;
+        vscode.postMessage({
+          type: MESSAGE_TYPES.EXECUTE_PROMPT,
+          text: command,
+          properties: {
+            type: STEP_TYPES.SCRIPT,
+            ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
+            ...(scriptContinueOnFailure && { continueOnFailure: true }),
+          },
+          action: finalAction,
+          promptName: promptName.trim(),
+          forceNewWorkflow: false,
+        });
+        resetEditor();
+        markClean();
+        vscode.setState(null);
+        return;
+      }
+
+      const text = promptText.trim();
+      if (!text) return;
+
+      const { properties: propertyValues } = getPropertyValues();
 
       // Save before clearing so we can restore on failure
       lastSubmittedTextRef.current = text;
@@ -425,13 +456,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       vscode.setState(null);
     },
     [
+      isScriptMode,
+      scriptCommand,
+      scriptTimeout,
+      scriptContinueOnFailure,
       promptText,
       promptName,
       getPropertyValues,
-      hasPendingPrompts,
-      executionState,
-      currentStep,
-      isRunning,
+      resolveFinalAction,
       vscode,
       resetEditor,
       markClean,
@@ -440,6 +472,48 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
   // Update existing prompt
   const handleUpdate = useCallback(() => {
+    if (isScriptMode) {
+      const command = scriptCommand.trim();
+      if (!command) return;
+
+      const scriptProperties = {
+        type: STEP_TYPES.SCRIPT,
+        ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
+        ...(scriptContinueOnFailure && { continueOnFailure: true }),
+      };
+
+      if (selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE) {
+        vscode.postMessage({
+          type: MESSAGE_TYPES.UPDATE_PROMPT,
+          index: selectionTarget.index,
+          text: command,
+          properties: scriptProperties,
+          promptName: promptName.trim(),
+        });
+        if (isPromptCompleted) {
+          vscode.postMessage({
+            type: MESSAGE_TYPES.SET_START_POSITION,
+            toIndex: selectionTarget.index,
+          });
+        }
+      } else if (selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+        vscode.postMessage({
+          type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
+          finalStep: {
+            type: STEP_TYPES.SCRIPT,
+            script: command,
+            ...(promptName.trim() ? { name: promptName.trim() } : {}),
+            ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
+            ...(scriptContinueOnFailure && { continueOnFailure: true }),
+          },
+        });
+      } else {
+        return;
+      }
+      cancelEdit();
+      return;
+    }
+
     const text = promptText.trim();
     if (!text) return;
 
@@ -479,6 +553,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     // Return to new prompt mode
     cancelEdit();
   }, [
+    isScriptMode,
+    scriptCommand,
+    scriptTimeout,
+    scriptContinueOnFailure,
     selectionTarget,
     promptText,
     getPropertyValues,
@@ -590,48 +668,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     return "Add prompt to execution queue";
   };
 
-  const isScriptMode = stepType === STEP_TYPES.SCRIPT;
-
   return (
     <div
       ref={editorContainerRef}
       className="prompt-editor flex flex-col flex-1 overflow-hidden"
     >
-      {/* Step type segmented control — Prompt | Script toggle */}
-      {!isCLIManaged && (
-        <div
-          className="flex items-center gap-0.5 px-2 py-1 border-b border-panel-border bg-sidebar-bg"
-          style={{ minHeight: "30px" }}
-        >
-          <button
-            type="button"
-            className={`px-2.5 py-0.5 text-xs rounded transition-colors ${
-              !isScriptMode
-                ? "bg-btn-bg text-btn-fg"
-                : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"
-            }`}
-            onClick={() => setStepType(STEP_TYPES.PROMPT)}
-            title="Prompt step — sends text to an AI harness"
-          >
-            <i className="codicon codicon-comment mr-1" />
-            Prompt
-          </button>
-          <button
-            type="button"
-            className={`px-2.5 py-0.5 text-xs rounded transition-colors ${
-              isScriptMode
-                ? "bg-btn-bg text-btn-fg"
-                : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"
-            }`}
-            onClick={() => setStepType(STEP_TYPES.SCRIPT)}
-            title="Script step — runs a shell command with no AI interaction"
-          >
-            <i className="codicon codicon-terminal mr-1" />
-            Script
-          </button>
-        </div>
-      )}
-
       {/* CodeMirror Editor + Properties Drawer container (prompt mode only) */}
       {!isScriptMode && (
         <div className="prompt-editor-wrapper flex flex-col flex-1 overflow-hidden relative">
@@ -685,6 +726,12 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               type="number"
               min={0}
               step={1000}
+              value={scriptTimeout ?? ""}
+              onChange={(e) =>
+                setScriptTimeout(
+                  e.target.value !== "" ? Number(e.target.value) : undefined
+                )
+              }
               placeholder="Default (from settings)"
               disabled={isCLIManaged}
               className="px-2 py-1.5 text-xs bg-input-bg text-input-fg border border-input-border rounded outline-none focus:border-focus-border disabled:opacity-50 w-48"
@@ -697,6 +744,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             <input
               type="checkbox"
               id="script-continue-on-failure"
+              checked={scriptContinueOnFailure}
+              onChange={(e) => setScriptContinueOnFailure(e.target.checked)}
               disabled={isCLIManaged}
               className="w-3 h-3"
             />
@@ -757,7 +806,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         isPromptCompleted={isPromptCompleted}
         isPromptBeingSent={isPromptBeingSent}
         isPromptActivelyRunning={isPromptActivelyRunning}
-        hasContent={isScriptMode ? scriptCommand.trim().length > 0 : promptText.trim().length > 0}
+        hasContent={
+          isScriptMode
+            ? scriptCommand.trim().length > 0
+            : promptText.trim().length > 0
+        }
         hasPendingPrompts={hasPendingPrompts()}
         runButtonText={getRunButtonText()}
         runButtonTooltip={getRunButtonTooltip()}

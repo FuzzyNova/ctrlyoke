@@ -1285,6 +1285,24 @@ export class PromptQueue {
   }
 
   /**
+   * Replace a step in the queue entirely (no merge).
+   * Use this when the step type changes (e.g. PromptStep → ScriptStep) so stale
+   * fields from the previous type are not carried over.
+   * @param index - Step index (0-based)
+   * @param step  - Replacement step
+   * @throws Error if index is out of range
+   */
+  public async replaceStep(index: number, step: WorkflowStep): Promise<void> {
+    if (index < 0 || index >= this.state.prompts.length) {
+      throw new Error(`Invalid prompt index: ${index}`);
+    }
+    this.state.prompts[index] = step;
+    await this.updateWorkingFile(true);
+    this.emitStateChange();
+    Log.debug(`Replaced step at index ${index}`);
+  }
+
+  /**
    * Delete a prompt from the queue
    * @param index - Prompt index (0-based)
    * @throws Error if index is out of range or if deleting current/completed prompt

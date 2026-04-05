@@ -8,6 +8,7 @@ import { WorkflowExecutor, WorkflowExecutionContext } from "./WorkflowExecutor";
 import {
   PromptFile,
   PromptStep,
+  ScriptStep,
   WorkflowStep,
   isScriptStep,
   QueueState,
@@ -31,6 +32,7 @@ import {
   FINAL_PROMPT_PHASES,
   QUEUE_POSITION,
   STEP_STATUS,
+  STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
   type ActionType,
   type QueuePosition,
@@ -1435,13 +1437,20 @@ export class WorkflowInstance {
     promptName?: string,
     clearProperties?: string[]
   ): Promise<void> {
-    const updates: Partial<PromptStep> = {
-      prompt: text,
-      ...(promptName !== undefined && { name: promptName || undefined }),
-      ...this.buildPromptStepProperties(properties),
-      ...this.buildClearUpdates(clearProperties),
-    };
-    await this.promptQueue.updatePrompt(index, updates);
+    const props = properties as Record<string, unknown>;
+    if (props?.type === STEP_TYPES.SCRIPT) {
+      // Replace the step entirely — merging would leave stale prompt-step fields
+      const scriptStep = this.buildScriptStepFromProperties(text, props, promptName);
+      await this.promptQueue.replaceStep(index, scriptStep);
+    } else {
+      const updates: Partial<PromptStep> = {
+        prompt: text,
+        ...(promptName !== undefined && { name: promptName || undefined }),
+        ...this.buildPromptStepProperties(properties),
+        ...this.buildClearUpdates(clearProperties),
+      };
+      await this.promptQueue.updatePrompt(index, updates);
+    }
     if (this.dashboardSink) {
       const currentState = this.promptQueue.getState();
       this.dashboardSink.updatePromptsExtended(
@@ -1575,12 +1584,15 @@ export class WorkflowInstance {
       promptName
     );
 
-    const promptStep: PromptStep = {
-      prompt: text,
-      ...(promptName?.trim() ? { name: promptName.trim() } : {}),
-      ...this.buildPromptStepProperties(properties),
-    };
-
+    const props = properties as Record<string, unknown>;
+    const step: WorkflowStep =
+      props?.type === STEP_TYPES.SCRIPT
+        ? this.buildScriptStepFromProperties(text, props, promptName)
+        : {
+            prompt: text,
+            ...(promptName?.trim() ? { name: promptName.trim() } : {}),
+            ...this.buildPromptStepProperties(properties),
+          };
     if (forceNewWorkflow) {
       Log.info("Force new workflow requested...");
       this.clearWorkflow();
@@ -1624,7 +1636,7 @@ export class WorkflowInstance {
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: no existing workflow — initializing new with name="${workflowName}", shouldRun=${shouldRun}, action=${action}`
       );
-      await this.initializeNewWorkflow([promptStep], workflowName);
+      await this.initializeNewWorkflow([step], workflowName);
 
       if (shouldRun) {
         await this.executeLoadedPromptFile();
@@ -1659,7 +1671,7 @@ export class WorkflowInstance {
       );
       this.reopenRuntimeForContinuationIfNeeded(shouldRun);
       await this.promptQueue.appendPrompts(
-        [promptStep],
+        [step],
         "Dashboard editor",
         position
       );
@@ -2454,6 +2466,23 @@ export class WorkflowInstance {
     return Object.fromEntries(
       clearProperties.map((key) => [key, undefined])
     ) as Partial<PromptStep>;
+  }
+
+  /** Build a ScriptStep from properties sent in an EXECUTE_PROMPT / UPDATE_PROMPT message. */
+  private buildScriptStepFromProperties(
+    script: string,
+    props: Record<string, unknown>,
+    name?: string
+  ): ScriptStep {
+    return {
+      type: STEP_TYPES.SCRIPT,
+      script,
+      ...(name?.trim() ? { name: name.trim() } : {}),
+      ...(props.timeout !== undefined && props.timeout !== null && {
+        timeout: props.timeout as number,
+      }),
+      ...(props.continueOnFailure === true && { continueOnFailure: true }),
+    };
   }
 
   private buildPromptStepProperties(properties: unknown): Partial<PromptStep> {

@@ -28,8 +28,14 @@ import { triggerPanelAnimation } from "@utils/panelAnimation";
  * - Handles section collapse state persistence
  */
 export const EditorSection: React.FC = () => {
-  const { selectionTarget, promptName, setPromptName, promptText, stepType } =
-    useEditorStore();
+  const {
+    selectionTarget,
+    promptName,
+    setPromptName,
+    promptText,
+    stepType,
+    setStepType,
+  } = useEditorStore();
   const tokenCount = useAttachmentTokenCount(promptText);
   const {
     editorCollapsed,
@@ -149,6 +155,45 @@ export const EditorSection: React.FC = () => {
             Editor
           </span>
         </div>
+
+        {/* Step type toggle — Prompt | Script */}
+        {!isCLIManaged && (
+          <div
+            className="relative inline-flex rounded border border-btn-border overflow-hidden flex-shrink-0 mx-2"
+            role="group"
+            aria-label="Step type"
+          >
+            <button
+              type="button"
+              className={`inline-flex items-center justify-center px-2 py-0.5 text-xs transition-colors focus:outline-none ${
+                !isScriptMode
+                  ? "bg-btn-bg text-btn-fg"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              }`}
+              onClick={() => setStepType(STEP_TYPES.PROMPT)}
+              title="Prompt step — sends text to an AI harness"
+            >
+              <i className="codicon codicon-comment" />
+              {!isNarrow && <span className="ml-1">Prompt</span>}
+            </button>
+            <div className="bg-btn-secondary-bg text-btn-secondary-fg py-1 flex-shrink-0">
+              <div className="w-px h-full bg-current opacity-40" />
+            </div>
+            <button
+              type="button"
+              className={`inline-flex items-center justify-center px-2 py-0.5 text-xs transition-colors focus:outline-none ${
+                isScriptMode
+                  ? "bg-btn-bg text-btn-fg"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              }`}
+              onClick={() => setStepType(STEP_TYPES.SCRIPT)}
+              title="Script step — runs a shell command with no AI interaction"
+            >
+              <i className="codicon codicon-terminal" />
+              {!isNarrow && <span className="ml-1">Script</span>}
+            </button>
+          </div>
+        )}
 
         {/* Center: Mode text (clickable to edit name) + token count */}
         <span className="editor-mode-indicator flex-1 text-center text-xs text-description-fg truncate min-w-0">

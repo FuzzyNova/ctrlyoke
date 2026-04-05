@@ -130,6 +130,8 @@ interface EditorState {
 
   // Script step content
   scriptCommand: string;
+  scriptTimeout: number | undefined;
+  scriptContinueOnFailure: boolean;
 
   // Property values
   properties: PropertyValues;
@@ -164,6 +166,8 @@ interface EditorActions {
   // Step type
   setStepType: (type: typeof STEP_TYPES.PROMPT | typeof STEP_TYPES.SCRIPT) => void;
   setScriptCommand: (command: string) => void;
+  setScriptTimeout: (timeout: number | undefined) => void;
+  setScriptContinueOnFailure: (value: boolean) => void;
 
   // Content updates
   setPromptText: (text: string) => void;
@@ -238,6 +242,8 @@ const initialState: EditorState = {
   promptText: "",
   promptName: "",
   scriptCommand: "",
+  scriptTimeout: undefined,
+  scriptContinueOnFailure: false,
   properties: { ...PROPERTY_DEFAULTS },
   isDirty: false,
   validationErrors: {},
@@ -309,6 +315,8 @@ export const useEditorStore = create<
         promptText: savedNewPromptState.promptText,
         promptName: savedNewPromptState.promptName,
         scriptCommand: "",
+        scriptTimeout: undefined,
+        scriptContinueOnFailure: false,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
         isDirty: savedNewPromptState.promptText.length > 0,
@@ -329,6 +337,8 @@ export const useEditorStore = create<
           promptText: "",
           promptName: "",
           scriptCommand: "",
+          scriptTimeout: undefined,
+          scriptContinueOnFailure: false,
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
           validationErrors: {},
@@ -341,6 +351,8 @@ export const useEditorStore = create<
           originalPromptData: null,
           stepType: STEP_TYPES.PROMPT,
           scriptCommand: "",
+          scriptTimeout: undefined,
+          scriptContinueOnFailure: false,
           savedNewPromptState: null,
         });
       }
@@ -394,6 +406,8 @@ export const useEditorStore = create<
         promptText: "",
         promptName: pendingEdit ? pendingEdit.promptName : (promptData.name ?? ""),
         scriptCommand: pendingEdit ? pendingEdit.promptText : promptData.script,
+        scriptTimeout: pendingEdit ? undefined : promptData.timeout,
+        scriptContinueOnFailure: pendingEdit ? false : (promptData.continueOnFailure ?? false),
         properties: pendingEdit ? pendingEdit.properties : { ...PROPERTY_DEFAULTS },
         isDirty: pendingEdit ? true : false,
         validationErrors: {},
@@ -402,7 +416,7 @@ export const useEditorStore = create<
       // Close PropertiesDrawer when entering script step edit mode
       useUiStore.getState().closePropertiesDrawer();
     } else {
-      // Prompt step: populate promptText, clear scriptCommand, set stepType to prompt
+      // Prompt step: populate promptText, clear scriptCommand/script properties, set stepType to prompt
       const propertiesFromData: PropertyValues = {
         harness: promptData.harness,
         model: promptData.model,
@@ -430,6 +444,8 @@ export const useEditorStore = create<
           ? pendingEdit.promptName
           : (promptData.name ?? ""),
         scriptCommand: "",
+        scriptTimeout: undefined,
+        scriptContinueOnFailure: false,
         properties: pendingEdit ? pendingEdit.properties : propertiesFromData,
         isDirty: pendingEdit ? true : false,
         validationErrors: {},
@@ -460,6 +476,8 @@ export const useEditorStore = create<
         promptText: savedNewPromptState.promptText,
         promptName: savedNewPromptState.promptName,
         scriptCommand: "",
+        scriptTimeout: undefined,
+        scriptContinueOnFailure: false,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
         isDirty: savedNewPromptState.promptText.length > 0,
@@ -482,6 +500,8 @@ export const useEditorStore = create<
           promptText: "",
           promptName: "",
           scriptCommand: "",
+          scriptTimeout: undefined,
+          scriptContinueOnFailure: false,
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
           validationErrors: {},
@@ -495,6 +515,8 @@ export const useEditorStore = create<
           originalPromptData: null,
           stepType: STEP_TYPES.PROMPT,
           scriptCommand: "",
+          scriptTimeout: undefined,
+          scriptContinueOnFailure: false,
           savedNewPromptState: null,
           validationErrors: {},
           pendingEdits: newPendingEdits,
@@ -526,6 +548,8 @@ export const useEditorStore = create<
         promptText: savedNewPromptState.promptText,
         promptName: savedNewPromptState.promptName,
         scriptCommand: "",
+        scriptTimeout: undefined,
+        scriptContinueOnFailure: false,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
         isDirty: savedNewPromptState.promptText.length > 0,
@@ -544,6 +568,8 @@ export const useEditorStore = create<
           promptText: "",
           promptName: "",
           scriptCommand: "",
+          scriptTimeout: undefined,
+          scriptContinueOnFailure: false,
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
           validationErrors: {},
@@ -556,6 +582,8 @@ export const useEditorStore = create<
           originalPromptData: null,
           stepType: STEP_TYPES.PROMPT,
           scriptCommand: "",
+          scriptTimeout: undefined,
+          scriptContinueOnFailure: false,
           savedNewPromptState: null,
           validationErrors: {},
           pendingEdits: newPendingEdits,
@@ -578,10 +606,12 @@ export const useEditorStore = create<
       });
       useUiStore.getState().closePropertiesDrawer();
     } else {
-      // Switching to prompt: clear scriptCommand
+      // Switching to prompt: clear scriptCommand and script properties
       set({
         stepType: STEP_TYPES.PROMPT,
         scriptCommand: "",
+        scriptTimeout: undefined,
+        scriptContinueOnFailure: false,
         isDirty: true,
       });
     }
@@ -590,6 +620,18 @@ export const useEditorStore = create<
   setScriptCommand: (command) =>
     set({
       scriptCommand: command,
+      isDirty: true,
+    }),
+
+  setScriptTimeout: (timeout) =>
+    set({
+      scriptTimeout: timeout,
+      isDirty: true,
+    }),
+
+  setScriptContinueOnFailure: (value) =>
+    set({
+      scriptContinueOnFailure: value,
       isDirty: true,
     }),
 
@@ -795,6 +837,8 @@ export const useEditorStore = create<
       promptText: "",
       promptName: "",
       scriptCommand: "",
+      scriptTimeout: undefined,
+      scriptContinueOnFailure: false,
       properties: { ...PROPERTY_DEFAULTS },
       isDirty: false,
       validationErrors: {},
@@ -807,6 +851,8 @@ export const useEditorStore = create<
       promptText: "",
       promptName: "",
       scriptCommand: "",
+      scriptTimeout: undefined,
+      scriptContinueOnFailure: false,
       properties: { ...PROPERTY_DEFAULTS },
       isDirty: false,
       validationErrors: {},
