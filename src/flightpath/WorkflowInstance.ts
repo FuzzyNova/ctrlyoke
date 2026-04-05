@@ -1262,6 +1262,12 @@ export class WorkflowInstance {
     if (!this.promptQueue) {
       throw new Error("No active queue");
     }
+    // Update instance field first so ensureEphemeralWorkingFile uses the new
+    // name when creating the working file for brand-new workflows.
+    this.workflowName = workflowName;
+    // Eagerly create a working file if one doesn't exist yet, so that renaming
+    // a new workflow before adding prompts isn't lost when switching away.
+    await this.ensureEphemeralWorkingFile();
     await this.promptQueue.updateWorkflowName(workflowName);
     this.propagateWorkflowNameToIntegrations();
   }
