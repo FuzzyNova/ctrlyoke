@@ -69,11 +69,13 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
       {detail && <p className="mt-2 text-sm text-description-fg">{detail}</p>}
 
       {/* Don't ask again toggle */}
-      <label className="mt-4 flex items-center gap-2 cursor-pointer select-none text-sm text-description-fg hover:text-foreground transition-colors">
+      <label htmlFor="delete-dont-ask" className="mt-4 flex items-center gap-2 cursor-pointer select-none text-sm text-description-fg hover:text-foreground transition-colors">
         <input
+          id="delete-dont-ask"
           type="checkbox"
           checked={dontAsk}
           onChange={handleCheckboxChange}
+          aria-label="Don't ask me again for delete operations"
           className="w-3.5 h-3.5 accent-button-bg cursor-pointer"
         />
         Don't ask me again for delete operations

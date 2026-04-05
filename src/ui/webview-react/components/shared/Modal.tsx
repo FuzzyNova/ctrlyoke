@@ -58,7 +58,7 @@ export const Modal: React.FC<ModalProps> = ({
       />
       {/* Modal content wrapper */}
       <div className="fixed inset-0 z-[201] flex items-center justify-center overflow-y-auto pointer-events-none">
-        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- stopPropagation only, no action triggered */}
+        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-noninteractive-element-interactions -- stopPropagation only, no action triggered */}
         <div
           ref={modalRef}
           className={`relative w-full ${sizeClasses[size]} mx-4 bg-editor-bg rounded-lg shadow-xl border border-panel-border pointer-events-auto`}

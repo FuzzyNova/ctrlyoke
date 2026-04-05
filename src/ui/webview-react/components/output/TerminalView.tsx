@@ -273,6 +273,7 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
         <button
           className="icon-btn py-0 px-0.5 opacity-70 hover:opacity-100 flex-shrink-0"
           title="Restart"
+          aria-label="Restart"
           onClick={(e) => {
             e.stopPropagation();
             onRestart();
@@ -284,6 +285,7 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
       <button
         className="icon-btn py-0 px-0.5 opacity-70 hover:opacity-100 flex-shrink-0"
         title="Close"
+        aria-label="Close"
         onClick={(e) => {
           e.stopPropagation();
           onClose();

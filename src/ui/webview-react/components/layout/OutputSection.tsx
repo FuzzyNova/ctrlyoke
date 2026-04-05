@@ -946,6 +946,7 @@ export const OutputSection: React.FC = () => {
               <button
                 className="icon-btn py-0 px-0.5"
                 title="Decrease font size"
+                aria-label="Decrease font size"
                 onClick={() => setOutputFontSize(outputFontSize - 1)}
                 disabled={outputFontSize <= 10}
               >
@@ -957,6 +958,7 @@ export const OutputSection: React.FC = () => {
               <button
                 className="icon-btn py-0 px-0.5"
                 title="Increase font size"
+                aria-label="Increase font size"
                 onClick={() => setOutputFontSize(outputFontSize + 1)}
                 disabled={outputFontSize >= 24}
               >
@@ -968,6 +970,7 @@ export const OutputSection: React.FC = () => {
               <button
                 className="icon-btn py-0 px-0.5"
                 title="Decrease terminal font size"
+                aria-label="Decrease terminal font size"
                 onClick={() => setTerminalFontSize(terminalFontSize - 1)}
                 disabled={terminalFontSize <= 10}
               >
@@ -979,6 +982,7 @@ export const OutputSection: React.FC = () => {
               <button
                 className="icon-btn py-0 px-0.5"
                 title="Increase terminal font size"
+                aria-label="Increase terminal font size"
                 onClick={() => setTerminalFontSize(terminalFontSize + 1)}
                 disabled={terminalFontSize >= 24}
               >
@@ -1103,6 +1107,9 @@ export const OutputSection: React.FC = () => {
                   title={
                     anyDiffCollapsed ? "Expand all diffs" : "Collapse all diffs"
                   }
+                  aria-label={
+                    anyDiffCollapsed ? "Expand all diffs" : "Collapse all diffs"
+                  }
                   onClick={() =>
                     anyDiffCollapsed ? expandAllDiffs() : collapseAllDiffs()
                   }
@@ -1116,6 +1123,7 @@ export const OutputSection: React.FC = () => {
                 className="icon-btn py-1 px-1"
                 id="export-btn"
                 title="Export output to markdown"
+                aria-label="Export output to markdown"
                 onClick={handleExport}
                 disabled={!hasOutput}
               >

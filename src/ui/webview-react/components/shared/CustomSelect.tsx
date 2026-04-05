@@ -219,6 +219,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               <button
                 type="button"
                 title="Hide this option"
+                aria-label="Hide this option"
                 onClick={(e) => {
                   e.stopPropagation();
                   onHideOption?.(option.value);
@@ -245,6 +246,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               <button
                 type="button"
                 title="Unhide this option"
+                aria-label="Unhide this option"
                 onClick={(e) => {
                   e.stopPropagation();
                   onUnhideOption?.(option.value);

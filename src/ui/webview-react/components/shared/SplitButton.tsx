@@ -208,6 +208,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
   );
 
   return (
+    /* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- keyboard handler manages split button group navigation across child controls */
     <div
       ref={containerRef}
       role="group"

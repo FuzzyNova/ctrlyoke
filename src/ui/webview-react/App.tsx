@@ -383,7 +383,14 @@ function App() {
               {!promptsOverlayClosing && (
                 <div
                   className="absolute inset-0 z-20"
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Return to sidebar"
                   onClick={handlePromptsRequestSidebar}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ")
+                      handlePromptsRequestSidebar();
+                  }}
                 />
               )}
               <div
@@ -409,7 +416,14 @@ function App() {
               {!settingsOverlayClosing && (
                 <div
                   className="absolute inset-0 z-30"
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Close settings"
                   onClick={handleSettingsRequestClose}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ")
+                      handleSettingsRequestClose();
+                  }}
                 />
               )}
               <div

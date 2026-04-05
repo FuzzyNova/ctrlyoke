@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 
 const HOOK_EVENTS = [
   { value: "stop", label: "Stop (session end)" },
@@ -41,7 +41,10 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
   showDefault = true,
 }) => {
   const mode = getMode(value);
-  const hooks: HookEntry[] = Array.isArray(value) ? (value as HookEntry[]) : [];
+  const hooks = useMemo<HookEntry[]>(
+    () => (Array.isArray(value) ? (value as HookEntry[]) : []),
+    [value]
+  );
 
   const inherited: HookEntry[] = Array.isArray(inheritedValue)
     ? (inheritedValue as HookEntry[])

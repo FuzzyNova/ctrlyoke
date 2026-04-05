@@ -56,6 +56,39 @@ export default [
       ),
       // Allow autoFocus for form inputs in controlled UI flows
       "jsx-a11y/no-autofocus": "off",
+      // label-has-for is deprecated (replaced by label-has-associated-control).
+      // It was accidentally enabled by the rule-mapping above; turn it off explicitly.
+      "jsx-a11y/label-has-for": "off",
+      // Restore control-has-associated-label with the recommended options so that
+      // standard form elements (<input>, <textarea>, etc.) are not flagged when they
+      // are already associated with a <label> via htmlFor/id.
+      "jsx-a11y/control-has-associated-label": [
+        "warn",
+        {
+          ignoreElements: [
+            "audio",
+            "canvas",
+            "embed",
+            "input",
+            "textarea",
+            "tr",
+            "video",
+          ],
+          ignoreRoles: [
+            "grid",
+            "listbox",
+            "menu",
+            "menubar",
+            "radiogroup",
+            "row",
+            "tablist",
+            "toolbar",
+            "tree",
+            "treegrid",
+          ],
+          includeRoles: ["alert", "dialog"],
+        },
+      ],
     },
   },
   // Prettier config must be last to override other configs

@@ -185,6 +185,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
                 onSetStartPosition?.();
               }}
               title={`Set step ${displayNumber ?? index + 1} as start position`}
+              aria-label={`Set step ${displayNumber ?? index + 1} as start position`}
             >
               <i
                 className={`codicon ${startPositionDirection === "rewind" ? "codicon-debug-reverse-continue" : "codicon-debug-step-over"} text-[12px]`}

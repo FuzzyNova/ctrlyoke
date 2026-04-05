@@ -431,6 +431,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
                 key={`${direction}-${stepCount}`}
                 type="button"
                 role="option"
+                aria-selected={false}
                 onClick={() => {
                   onAction?.(
                     "history-jump",

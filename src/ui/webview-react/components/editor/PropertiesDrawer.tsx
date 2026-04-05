@@ -269,9 +269,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 
   // ── Hooks page derived values ───────────────────────────────────────────
   const resolvedHooks = useMemo(() => {
-    const effective = useSettingsStore.getState().getEffectiveHooks();
+    const effective =
+      workflowProperties.hooks !== undefined
+        ? workflowProperties.hooks
+        : globalSettings.hooks;
     return Array.isArray(effective) ? effective : [];
-  }, [properties.hooks, globalSettings.hooks]);
+  }, [workflowProperties.hooks, globalSettings.hooks]);
 
   const resolvedPriorContext =
     workflowProperties.priorContext ??
@@ -347,9 +350,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
           Prompt Properties
         </h3>
         <button
+          type="button"
           className="btn-close-drawer w-6 h-6 flex items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-toolbar-hover-bg transition-all"
           onClick={onClose}
           title="Close properties drawer"
+          aria-label="Close properties drawer"
         >
           <i className="codicon codicon-close" />
         </button>
@@ -900,9 +905,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {/* Page: MCP */}
         {activePage === DRAWER_PAGES.MCP && (
           <div className="space-y-2">
-            <label className="text-[11px] font-semibold uppercase text-description-fg">
+          <p className="text-[11px] font-semibold uppercase text-description-fg">
               MCP Servers
-            </label>
+            </p>
             <McpServersEditor
               value={properties.mcpServers as McpServersValue}
               onChange={(v) => setProperty("mcpServers", v)}
@@ -1091,9 +1096,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {/* Page: Hooks */}
         {activePage === DRAWER_PAGES.HOOKS && (
           <div className="space-y-2">
-            <label className="text-[11px] font-semibold uppercase text-description-fg">
+          <p className="text-[11px] font-semibold uppercase text-description-fg">
               User Hooks
-            </label>
+            </p>
             <HooksEditor
               value={properties.hooks}
               onChange={(v) => setProperty("hooks", v)}

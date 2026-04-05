@@ -96,6 +96,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                   <button
                     type="button"
                     title="Remove from history"
+                    aria-label="Remove from history"
                     onClick={(e) => {
                       e.stopPropagation();
                       onRemove(workflow.filePath);

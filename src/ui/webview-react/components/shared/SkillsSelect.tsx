@@ -182,6 +182,7 @@ export const SkillsSelect: React.FC<{
                   type="checkbox"
                   checked={isChecked}
                   onChange={() => {}}
+                  aria-hidden={true}
                   className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
                   tabIndex={-1}
                 />

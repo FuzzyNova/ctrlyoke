@@ -83,7 +83,15 @@ function ChipContent({
   return (
     <div
       className={`flex flex-col px-1 py-1 border-b border-panel-border hover:bg-toolbar-hover-bg transition-colors${canReorder ? " cursor-grab active:cursor-grabbing" : " cursor-pointer"}`}
+      role="button"
+      tabIndex={0}
       onClick={onChipClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onChipClick();
+        }
+      }}
       title={`Prompt ${slotNumber}`}
     >
       {/* Row 1: slot number + status icon */}

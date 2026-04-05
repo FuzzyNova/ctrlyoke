@@ -151,6 +151,7 @@ const McpServersReadOnly: React.FC<{ value: McpServersValue }> = ({
             type="checkbox"
             checked={fpEnabled}
             readOnly
+            aria-label="FlightPath built-in enabled"
             className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border pointer-events-none"
             tabIndex={-1}
           />
@@ -731,6 +732,7 @@ export const McpServersEditor: React.FC<{
             <button
               type="button"
               onClick={handleFlightpathToggle}
+              aria-label={flightpathEnabled ? "Disable FlightPath MCP server" : "Enable FlightPath MCP server"}
               className={`flex items-start gap-2 px-2 py-1.5 rounded border text-left transition-colors ${
                 flightpathEnabled
                   ? "border-focus-border bg-editor-bg"
@@ -741,6 +743,7 @@ export const McpServersEditor: React.FC<{
                 type="checkbox"
                 checked={flightpathEnabled}
                 onChange={() => {}}
+                aria-label="FlightPath enabled"
                 className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border pointer-events-none"
                 tabIndex={-1}
               />
@@ -792,6 +795,7 @@ export const McpServersEditor: React.FC<{
                     <input
                       type="text"
                       placeholder="id (required)"
+                      aria-label="Server ID"
                       value={editForm.id}
                       onChange={(e) =>
                         setEditForm((f) => ({ ...f, id: e.target.value }))
@@ -823,6 +827,7 @@ export const McpServersEditor: React.FC<{
                         <input
                           type="text"
                           placeholder="command (e.g. node or npx)"
+                          aria-label="Command"
                           value={editForm.command}
                           onChange={(e) =>
                             setEditForm((f) => ({
@@ -835,6 +840,7 @@ export const McpServersEditor: React.FC<{
                         <input
                           type="text"
                           placeholder="args (space-separated)"
+                          aria-label="Arguments"
                           value={editForm.args}
                           onChange={(e) =>
                             setEditForm((f) => ({
@@ -850,6 +856,7 @@ export const McpServersEditor: React.FC<{
                           </span>
                           <textarea
                             placeholder={"MY_KEY=value\nANOTHER_KEY=value"}
+                            aria-label="Environment variables (KEY=VALUE, one per line)"
                             value={editForm.env}
                             onChange={(e) =>
                               setEditForm((f) => ({
@@ -867,6 +874,7 @@ export const McpServersEditor: React.FC<{
                         <input
                           type="text"
                           placeholder="url (e.g. https://mcp.example.com)"
+                          aria-label="Server URL"
                           value={editForm.url}
                           onChange={(e) =>
                             setEditForm((f) => ({
@@ -895,9 +903,11 @@ export const McpServersEditor: React.FC<{
                         </select>
                       </>
                     )}
-                    <label className="flex items-center gap-1.5 cursor-pointer">
+                    <label htmlFor="edit-auto-approve" className="flex items-center gap-1.5 cursor-pointer">
                       <input
+                        id="edit-auto-approve"
                         type="checkbox"
+                        aria-label="Auto-approve all tools (CLI harnesses only)"
                         checked={editForm.autoApprove}
                         onChange={(e) =>
                           setEditForm((f) => ({
@@ -950,6 +960,7 @@ export const McpServersEditor: React.FC<{
                       type="button"
                       onClick={() => handleToggleServer(server)}
                       className="flex-shrink-0 flex items-center"
+                      aria-label={enabled ? `Disable ${server.id}` : `Enable ${server.id}`}
                       title={
                         enabled ? `Disable ${server.id}` : `Enable ${server.id}`
                       }
@@ -958,6 +969,7 @@ export const McpServersEditor: React.FC<{
                         type="checkbox"
                         checked={enabled}
                         onChange={() => {}}
+                        aria-label={enabled ? `Disable ${server.id}` : `Enable ${server.id}`}
                         className="w-3 h-3 accent-focus-border pointer-events-none"
                         tabIndex={-1}
                       />
@@ -995,6 +1007,7 @@ export const McpServersEditor: React.FC<{
                       type="button"
                       onClick={() => handleStartEdit(server)}
                       className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-toolbar-hover-bg text-description-fg hover:text-foreground"
+                      aria-label={`Edit ${server.id}`}
                       title={`Edit ${server.id}`}
                     >
                       <i className="codicon codicon-edit text-[10px]" />
@@ -1005,6 +1018,7 @@ export const McpServersEditor: React.FC<{
                       type="button"
                       onClick={() => handleRemoveServer(server.id)}
                       className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-toolbar-hover-bg text-description-fg hover:text-error-fg"
+                      aria-label={`Remove ${server.id}`}
                       title={`Remove ${server.id}`}
                     >
                       <i className="codicon codicon-close text-[10px]" />
@@ -1088,6 +1102,7 @@ export const McpServersEditor: React.FC<{
                 <input
                   type="text"
                   placeholder="id (required)"
+                  aria-label="Server ID"
                   value={form.id}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, id: e.target.value }))
@@ -1117,6 +1132,7 @@ export const McpServersEditor: React.FC<{
                     <input
                       type="text"
                       placeholder="command (e.g. node or npx)"
+                      aria-label="Command"
                       value={form.command}
                       onChange={(e) =>
                         setForm((f) => ({ ...f, command: e.target.value }))
@@ -1126,6 +1142,7 @@ export const McpServersEditor: React.FC<{
                     <input
                       type="text"
                       placeholder="args (space-separated, e.g. /path/to/server.js)"
+                      aria-label="Arguments"
                       value={form.args}
                       onChange={(e) =>
                         setForm((f) => ({ ...f, args: e.target.value }))
@@ -1138,6 +1155,7 @@ export const McpServersEditor: React.FC<{
                       </span>
                       <textarea
                         placeholder={"MY_KEY=value\nANOTHER_KEY=value"}
+                        aria-label="Environment variables (KEY=VALUE, one per line)"
                         value={form.env}
                         onChange={(e) =>
                           setForm((f) => ({ ...f, env: e.target.value }))
@@ -1152,6 +1170,7 @@ export const McpServersEditor: React.FC<{
                     <input
                       type="text"
                       placeholder="url (e.g. https://mcp.example.com)"
+                      aria-label="Server URL"
                       value={form.url}
                       onChange={(e) =>
                         setForm((f) => ({ ...f, url: e.target.value }))
@@ -1175,9 +1194,11 @@ export const McpServersEditor: React.FC<{
                     </select>
                   </>
                 )}
-                <label className="flex items-center gap-1.5 cursor-pointer">
+                <label htmlFor="add-auto-approve" className="flex items-center gap-1.5 cursor-pointer">
                   <input
+                    id="add-auto-approve"
                     type="checkbox"
+                    aria-label="Auto-approve all tools (CLI harnesses only)"
                     checked={form.autoApprove}
                     onChange={(e) =>
                       setForm((f) => ({
@@ -1345,6 +1366,7 @@ export const McpServersEditor: React.FC<{
                       ref={searchInputRef}
                       type="text"
                       placeholder="Search servers…"
+                      aria-label="Search MCP registry"
                       value={registryQuery}
                       onChange={(e) =>
                         handleRegistrySearchChange(e.target.value)

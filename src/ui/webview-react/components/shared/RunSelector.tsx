@@ -103,6 +103,9 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
       role="combobox"
       className="relative inline-flex items-center"
       onKeyDown={handleKeyDown}
+      tabIndex={0}
+      aria-expanded={isOpen}
+      aria-controls="run-selector-listbox"
     >
       {/* Trigger button */}
       <button
@@ -143,6 +146,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
       {/* Dropdown menu */}
       {isOpen && (
         <div
+          id="run-selector-listbox"
           role="listbox"
           aria-label="Select run"
           className="absolute top-full right-0 mt-1 w-max

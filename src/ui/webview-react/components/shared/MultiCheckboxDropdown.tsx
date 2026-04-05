@@ -251,6 +251,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => {}}
+                          aria-hidden={true}
                           className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
                           tabIndex={-1}
                         />
@@ -270,6 +271,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                         <button
                           type="button"
                           title="Hide this option"
+                          aria-label="Hide this option"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleHide(option.value);
@@ -299,6 +301,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                         <button
                           type="button"
                           title="Unhide this option"
+                          aria-label="Unhide this option"
                           onClick={(e) => {
                             e.stopPropagation();
                             onUnhideOption?.(option.value);
@@ -317,6 +320,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => {}}
+                            aria-hidden={true}
                             className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
                             tabIndex={-1}
                           />

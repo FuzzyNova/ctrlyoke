@@ -159,13 +159,22 @@ export const EditorSection: React.FC = () => {
               onKeyDown={handleNameKeyDown}
               onBlur={saveNameEdit}
               placeholder="Prompt name (optional)"
+              aria-label="Prompt name"
               className="px-1.5 py-0.5 text-xs bg-input-bg text-input-fg border border-focus-border rounded outline-none w-48"
               style={{ boxShadow: "0 0 0 1px var(--vscode-focusBorder)" }}
             />
           ) : (
             <span
               className="cursor-pointer hover:text-foreground transition-colors"
+              role="button"
+              tabIndex={0}
               onClick={startNameEditing}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  startNameEditing();
+                }
+              }}
               title="Click to set prompt name"
             >
               {getModeText()}

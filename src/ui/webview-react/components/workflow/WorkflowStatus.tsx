@@ -282,6 +282,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         <input
           ref={inputRef}
           type="text"
+          aria-label="Edit workflow name"
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleKeyDown}

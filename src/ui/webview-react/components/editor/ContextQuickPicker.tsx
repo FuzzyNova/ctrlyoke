@@ -135,6 +135,7 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
           >
             <input
               type="text"
+              aria-label="Session ID"
               value={sessionIdDisplayValue}
               onChange={(e) => setProperty("sessionId", e.target.value)}
               disabled={!isSessionIdActive}

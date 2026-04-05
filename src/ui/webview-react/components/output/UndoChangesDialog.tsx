@@ -180,6 +180,7 @@ const FileRowItem: React.FC<FileRowItemProps> = ({
             type="checkbox"
             checked={checked}
             onChange={(e) => onChange(row.path, e.target.checked)}
+            aria-label={`Select ${row.path}`}
             className="mt-0.5 w-3.5 h-3.5 accent-btn-bg cursor-pointer shrink-0"
           />
         ) : (
@@ -605,6 +606,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                                 onChange={(e) =>
                                   handleToggle(row.key, e.target.checked)
                                 }
+                                aria-label={`Select ${row.path}`}
                                 className="mt-0.5 w-3.5 h-3.5 accent-btn-bg cursor-pointer shrink-0"
                               />
                               <span className="flex-1 font-mono text-xs break-all text-foreground">
@@ -673,6 +675,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                       type="checkbox"
                       checked={checkedPaths.has(row.path)}
                       onChange={(e) => handleToggle(row.path, e.target.checked)}
+                      aria-label={`Select ${row.path}`}
                       className="mt-0.5 w-3.5 h-3.5 accent-btn-bg cursor-pointer shrink-0"
                     />
                     <span className="flex-1 font-mono text-xs break-all text-foreground">

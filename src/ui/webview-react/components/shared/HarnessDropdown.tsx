@@ -128,6 +128,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
         <button
           type="button"
           title="Unhide this harness"
+          aria-label="Unhide this harness"
           onClick={(e) => {
             e.stopPropagation();
             onUnhide?.(harness);
@@ -177,6 +178,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
         <button
           type="button"
           title="Hide this harness"
+          aria-label="Hide this harness"
           onClick={(e) => {
             e.stopPropagation();
             onHide?.(harness);

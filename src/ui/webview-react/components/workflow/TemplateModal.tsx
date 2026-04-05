@@ -305,41 +305,41 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         </div>
       }
     >
-      <div role="form" className="space-y-4" onKeyDown={handleKeyDown}>
+      <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
         {/* Template Selection */}
         <div className="form-group">
           <label
             htmlFor="template-select"
-            className="block text-sm font-medium mb-1 text-foreground"
+            className="block text-sm font-medium text-foreground"
           >
-            Template
-          </label>
-          <select
-            id="template-select"
-            value={selectedTemplateId}
-            onChange={(e) => handleTemplateChange(e.target.value)}
-            className="w-full px-2 py-1.5 rounded bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-none focus:border-focus-border"
-          >
-            {builtInTemplates.length > 0 && (
-              <optgroup label="Built-in Templates">
-                {builtInTemplates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
+            <span className="block mb-1">Template</span>
+            <select
+              id="template-select"
+              value={selectedTemplateId}
+              onChange={(e) => handleTemplateChange(e.target.value)}
+              className="w-full px-2 py-1.5 rounded bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-none focus:border-focus-border"
+            >
+              {builtInTemplates.length > 0 && (
+                <optgroup label="Built-in Templates">
+                  {builtInTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
 
-            {customTemplates.length > 0 && (
-              <optgroup label="Custom Templates">
-                {customTemplates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-          </select>
+              {customTemplates.length > 0 && (
+                <optgroup label="Custom Templates">
+                  {customTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </label>
           <button
             type="button"
             onClick={handleCreateNewTemplate}
@@ -367,40 +367,44 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                 <div key={variable.name} className="form-group">
                   <label
                     htmlFor={`var-${variable.name}`}
-                    className="block text-sm mb-1 text-foreground"
+                    className="block text-sm text-foreground"
                   >
-                    {variable.name}
-                    {isFile && (
-                      <span className="ml-1 text-xs text-description-fg">
-                        (file path)
-                      </span>
-                    )}
-                  </label>
-                  <div className={isFile ? "flex gap-1.5" : undefined}>
-                    <input
-                      type="text"
-                      id={`var-${variable.name}`}
-                      value={variables[variable.name] || ""}
-                      onChange={(e) =>
-                        handleVariableChange(variable.name, e.target.value)
-                      }
-                      placeholder={
-                        isFile ? "path/to/spec.md" : `Enter ${variable.name}`
-                      }
-                      className="flex-1 px-2 py-1.5 rounded bg-input-bg text-input-fg border border-input-border focus:outline-none focus:border-focus-border font-mono text-xs"
-                    />
-                    {isFile && (
-                      <Button
-                        variant="secondary"
-                        onClick={() =>
-                          handleBrowseFile(variable.name, variable)
+                    <span className="block mb-1">
+                      {variable.name}
+                      {isFile && (
+                        <span className="ml-1 text-xs text-description-fg">
+                          (file path)
+                        </span>
+                      )}
+                    </span>
+                    <div className={isFile ? "flex gap-1.5" : undefined}>
+                      <input
+                        type="text"
+                        aria-label={variable.name}
+                        id={`var-${variable.name}`}
+                        value={variables[variable.name] || ""}
+                        onChange={(e) =>
+                          handleVariableChange(variable.name, e.target.value)
                         }
-                        title="Browse for file"
-                      >
-                        Browse…
-                      </Button>
-                    )}
-                  </div>
+                        onKeyDown={handleKeyDown}
+                        placeholder={
+                          isFile ? "path/to/spec.md" : `Enter ${variable.name}`
+                        }
+                        className="flex-1 px-2 py-1.5 rounded bg-input-bg text-input-fg border border-input-border focus:outline-none focus:border-focus-border font-mono text-xs"
+                      />
+                      {isFile && (
+                        <Button
+                          variant="secondary"
+                          onClick={() =>
+                            handleBrowseFile(variable.name, variable)
+                          }
+                          title="Browse for file"
+                        >
+                          Browse…
+                        </Button>
+                      )}
+                    </div>
+                  </label>
                 </div>
               );
             })}
@@ -411,23 +415,25 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         <div className="form-group">
           <label
             htmlFor="workflow-name"
-            className="block text-sm font-medium mb-1 text-foreground"
+            className="block text-sm font-medium text-foreground"
           >
-            Workflow Name
+            <span className="block mb-1">Workflow Name</span>
+            <input
+              ref={filenameRef}
+              type="text"
+              aria-label="Workflow Name"
+              id="workflow-name"
+              value={filename}
+              onChange={(e) => handleFilenameChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="my-workflow"
+              className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none ${
+                filenameError
+                  ? "border-input-error-border"
+                  : "border-input-border focus:border-focus-border"
+              }`}
+            />
           </label>
-          <input
-            ref={filenameRef}
-            type="text"
-            id="workflow-name"
-            value={filename}
-            onChange={(e) => handleFilenameChange(e.target.value)}
-            placeholder="my-workflow"
-            className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none ${
-              filenameError
-                ? "border-input-error-border"
-                : "border-input-border focus:border-focus-border"
-            }`}
-          />
           {filenameError && (
             <p className="mt-1 text-xs text-error-fg">{filenameError}</p>
           )}
@@ -435,17 +441,20 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
 
         {/* Format Selection */}
         <div className="form-group">
-          <label className="block text-sm font-medium mb-1 text-foreground">
+          <p className="block text-sm font-medium mb-1 text-foreground">
             Format
-          </label>
+          </p>
           <div className="flex gap-3">
             {(["yaml", "json"] as const).map((f) => (
               <label
                 key={f}
+                htmlFor={`format-${f}`}
                 className="flex items-center gap-1.5 cursor-pointer text-sm text-foreground"
               >
                 <input
                   type="radio"
+                  aria-label={f.toUpperCase()}
+                  id={`format-${f}`}
                   name="workflow-format"
                   value={f}
                   checked={format === f}
@@ -460,14 +469,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
 
         {/* Path Preview */}
         <div className="form-group">
-          <label className="block text-sm mb-1 text-description-fg">
+          <span className="block text-sm mb-1 text-description-fg">
             Save Location
-          </label>
+          </span>
           <p className="text-xs text-description-fg font-mono bg-editor-bg px-2 py-1 rounded">
             {pathPreview}
           </p>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 };

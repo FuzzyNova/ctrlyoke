@@ -467,6 +467,7 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
               type="button"
               onClick={() => handleMarkerClick(step)}
               title={step.label}
+              aria-label={step.label}
               tabIndex={0}
               className="w-[14px] flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-all duration-100"
               style={{

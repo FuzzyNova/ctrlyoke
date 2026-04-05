@@ -219,17 +219,14 @@ export const WorkflowPropertiesPanel: React.FC<{
     String((workflowProperties.endCondition as any)?.maxRetries ?? 0)
   );
 
+  const endConditionAny = workflowProperties.endCondition as any;
+  const endTimeoutValue = endConditionAny?.timeout;
+  const endMaxRetriesValue = endConditionAny?.maxRetries;
+
   useEffect(() => {
-    setEndTimeoutInput(
-      String((workflowProperties.endCondition as any)?.timeout ?? 30000)
-    );
-    setEndMaxRetriesInput(
-      String((workflowProperties.endCondition as any)?.maxRetries ?? 0)
-    );
-  }, [
-    (workflowProperties.endCondition as any)?.timeout,
-    (workflowProperties.endCondition as any)?.maxRetries,
-  ]);
+    setEndTimeoutInput(String(endTimeoutValue ?? 30000));
+    setEndMaxRetriesInput(String(endMaxRetriesValue ?? 0));
+  }, [workflowProperties.endCondition, endTimeoutValue, endMaxRetriesValue]);
 
   // Single breakpoint for all three layout zones (body rows, tab labels, footer toggles)
   const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(
@@ -980,6 +977,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                   <input
                     type="text"
                     id="settings-append-args"
+                    aria-label="Additional arguments"
                     value={effectiveAdditionalArgs}
                     onChange={(e) => handleAdditionalArgsChange(e.target.value)}
                     placeholder="e.g. --effort high --max-turns 10"
@@ -1047,6 +1045,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                     <input
                       type="text"
                       id="settings-session-id"
+                      aria-label="Session ID"
                       value={sessionIdInput}
                       onChange={(e) => handleSessionIdChange(e.target.value)}
                       placeholder="Enter session ID or prompt number"
@@ -1086,22 +1085,21 @@ export const WorkflowPropertiesPanel: React.FC<{
           {activePage === DRAWER_PAGES.VALIDATION && (
             <>
               {/* Enable checkbox */}
-              <div className="flex items-center gap-2">
+              <label
+                htmlFor="settings-end-condition-enabled"
+                className="flex items-center gap-2 text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
+                title="Validation runs after each prompt completes. Individual prompts can override or disable this."
+              >
                 <input
                   type="checkbox"
                   id="settings-end-condition-enabled"
+                  aria-label="Enable End Condition"
                   checked={endConditionEnabled}
                   onChange={(e) => handleEndConditionToggle(e.target.checked)}
                   className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
                 />
-                <label
-                  htmlFor="settings-end-condition-enabled"
-                  className="text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
-                  title="Validation runs after each prompt completes. Individual prompts can override or disable this."
-                >
-                  Enable End Condition
-                </label>
-              </div>
+                Enable End Condition
+              </label>
 
               {/* End condition fields — always visible, grayed out when disabled */}
               <div
@@ -1115,16 +1113,17 @@ export const WorkflowPropertiesPanel: React.FC<{
                 }
               >
                 {/* Row 1: Script (full width) */}
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="settings-end-script"
-                    className="text-[11px] font-semibold text-description-fg"
-                  >
+                <label
+                  htmlFor="settings-end-script"
+                  className="flex flex-col gap-1"
+                >
+                  <span className="text-[11px] font-semibold text-description-fg">
                     Script:
-                  </label>
+                  </span>
                   <input
                     type="text"
                     id="settings-end-script"
+                    aria-label="Script"
                     value={(endCondition as any).script || ""}
                     onChange={(e) =>
                       handleEndConditionFieldChange("script", e.target.value)
@@ -1132,7 +1131,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                     placeholder="npm test"
                     className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                   />
-                </div>
+                </label>
 
                 {/* Row 2: Compare Source + Expected Return */}
                 <DrawerRow narrow={isNarrow}>
@@ -1169,16 +1168,17 @@ export const WorkflowPropertiesPanel: React.FC<{
                     </span>
                   </div>
 
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="settings-end-returns"
-                      className="text-[11px] font-semibold text-description-fg"
-                    >
+                  <label
+                    htmlFor="settings-end-returns"
+                    className="flex flex-col gap-1"
+                  >
+                    <span className="text-[11px] font-semibold text-description-fg">
                       Expected Return:
-                    </label>
+                    </span>
                     <input
                       type="text"
                       id="settings-end-returns"
+                      aria-label="Expected Return"
                       value={(endCondition as any).returns || ""}
                       onChange={(e) =>
                         handleEndConditionFieldChange("returns", e.target.value)
@@ -1186,21 +1186,22 @@ export const WorkflowPropertiesPanel: React.FC<{
                       placeholder="true"
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                     />
-                  </div>
+                  </label>
                 </DrawerRow>
 
                 {/* Row 3: Timeout + Max Retries */}
                 <DrawerRow narrow={isNarrow}>
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="settings-end-timeout"
-                      className="text-[11px] font-semibold text-description-fg"
-                    >
+                  <label
+                    htmlFor="settings-end-timeout"
+                    className="flex flex-col gap-1"
+                  >
+                    <span className="text-[11px] font-semibold text-description-fg">
                       Timeout (ms):
-                    </label>
+                    </span>
                     <input
                       type="number"
                       id="settings-end-timeout"
+                      aria-label="Timeout in milliseconds"
                       value={endTimeoutInput}
                       onChange={(e) => setEndTimeoutInput(e.target.value)}
                       onBlur={() => {
@@ -1213,18 +1214,19 @@ export const WorkflowPropertiesPanel: React.FC<{
                       min={1000}
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                     />
-                  </div>
+                  </label>
 
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="settings-end-retries"
-                      className="text-[11px] font-semibold text-description-fg"
-                    >
+                  <label
+                    htmlFor="settings-end-retries"
+                    className="flex flex-col gap-1"
+                  >
+                    <span className="text-[11px] font-semibold text-description-fg">
                       Max Retries:
-                    </label>
+                    </span>
                     <input
                       type="number"
                       id="settings-end-retries"
+                      aria-label="Maximum retries"
                       value={endMaxRetriesInput}
                       onChange={(e) => setEndMaxRetriesInput(e.target.value)}
                       onBlur={() => {
@@ -1236,19 +1238,20 @@ export const WorkflowPropertiesPanel: React.FC<{
                       min={-1}
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                     />
-                  </div>
+                  </label>
                 </DrawerRow>
 
                 {/* Retry Prompt (full width) */}
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="settings-end-retry-prompt"
-                    className="text-[11px] font-semibold text-description-fg"
-                  >
+                <label
+                  htmlFor="settings-end-retry-prompt"
+                  className="flex flex-col gap-1"
+                >
+                  <span className="text-[11px] font-semibold text-description-fg">
                     Retry Prompt:
-                  </label>
+                  </span>
                   <textarea
                     id="settings-end-retry-prompt"
+                    aria-label="Retry Prompt"
                     value={(endCondition as any).retryPrompt || ""}
                     onChange={(e) =>
                       handleEndConditionFieldChange(
@@ -1262,13 +1265,18 @@ export const WorkflowPropertiesPanel: React.FC<{
                     }
                     className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none"
                   />
-                </div>
+                </label>
 
                 {/* Resume Session on Retry (full width) */}
-                <div className="flex items-center gap-2 mt-1">
+                <label
+                  htmlFor="settings-end-resume-session-on-retry"
+                  className="flex items-center gap-2 mt-1 text-[11px] font-semibold text-description-fg cursor-pointer"
+                  title="When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
+                >
                   <input
                     type="checkbox"
                     id="settings-end-resume-session-on-retry"
+                    aria-label="Resume Session on Retry"
                     checked={(endCondition as any).resumeSessionOnRetry ?? true}
                     onChange={(e) =>
                       handleEndConditionFieldChange(
@@ -1278,14 +1286,8 @@ export const WorkflowPropertiesPanel: React.FC<{
                     }
                     className="w-4 h-4 accent-focus-border cursor-pointer"
                   />
-                  <label
-                    htmlFor="settings-end-resume-session-on-retry"
-                    className="text-[11px] font-semibold text-description-fg cursor-pointer"
-                    title="When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
-                  >
-                    Resume Session on Retry
-                  </label>
-                </div>
+                  Resume Session on Retry
+                </label>
               </div>
             </>
           )}
@@ -1397,6 +1399,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                   >
                     <textarea
                       id="settings-allowed-tools"
+                      aria-label="Allowed Tools"
                       value={effectiveAllowedTools.join("\n")}
                       onChange={(e) => {
                         handleToolPermissionsChange({
@@ -1427,6 +1430,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                   >
                     <textarea
                       id="settings-denied-tools"
+                      aria-label="Denied Tools"
                       value={effectiveDeniedTools.join("\n")}
                       onChange={(e) => {
                         handleToolPermissionsChange({

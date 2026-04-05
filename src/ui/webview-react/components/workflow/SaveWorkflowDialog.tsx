@@ -127,13 +127,13 @@ export const SaveWorkflowDialog: React.FC = () => {
         </div>
       }
     >
-      <div role="form" className="space-y-4" onKeyDown={handleKeyDown}>
+      <div className="space-y-4">
         {/* Format selector */}
         <div className="form-group">
-          <label className="block text-sm font-medium mb-2 text-foreground">
+          <p id="format-label" className="block text-sm font-medium mb-2 text-foreground">
             Format
-          </label>
-          <div className="inline-flex rounded border border-btn-border overflow-hidden">
+          </p>
+          <div role="group" aria-labelledby="format-label" className="inline-flex rounded border border-btn-border overflow-hidden">
             {(["yaml", "json"] as const).map((fmt) => (
               <button
                 key={fmt}
@@ -155,23 +155,25 @@ export const SaveWorkflowDialog: React.FC = () => {
         <div className="form-group">
           <label
             htmlFor="save-workflow-path"
-            className="block text-sm font-medium mb-1 text-foreground"
+            className="block text-sm font-medium text-foreground"
           >
-            Save Path
+            <span className="block mb-1">Save Path</span>
+            <input
+              ref={inputRef}
+              id="save-workflow-path"
+              type="text"
+              aria-label="Save Path"
+              value={filePath}
+              onChange={handlePathChange}
+              onKeyDown={handleKeyDown}
+              spellCheck={false}
+              className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none font-mono text-xs ${
+                pathError
+                  ? "border-input-error-border"
+                  : "border-input-border focus:border-focus-border"
+              }`}
+            />
           </label>
-          <input
-            ref={inputRef}
-            id="save-workflow-path"
-            type="text"
-            value={filePath}
-            onChange={handlePathChange}
-            spellCheck={false}
-            className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none font-mono text-xs ${
-              pathError
-                ? "border-input-error-border"
-                : "border-input-border focus:border-focus-border"
-            }`}
-          />
           {pathError && (
             <p className="mt-1 text-xs text-error-fg">{pathError}</p>
           )}

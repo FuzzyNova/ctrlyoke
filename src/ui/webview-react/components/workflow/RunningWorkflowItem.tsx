@@ -112,17 +112,14 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         </span>
       ) : (
         (isRunning || isPaused) && (
-          <div
-            role="group"
-            className="flex items-center gap-1 flex-shrink-0"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
+          <div className="flex items-center gap-1 flex-shrink-0">
             {isRunning ? (
               <button
                 type="button"
                 title="Pause"
-                onClick={onPause}
+                aria-label="Pause"
+                onClick={(e) => { e.stopPropagation(); onPause(); }}
+                onKeyDown={(e) => e.stopPropagation()}
                 className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
               >
                 <i className="codicon codicon-debug-pause" />
@@ -131,7 +128,9 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
               <button
                 type="button"
                 title="Resume"
-                onClick={onResume}
+                aria-label="Resume"
+                onClick={(e) => { e.stopPropagation(); onResume(); }}
+                onKeyDown={(e) => e.stopPropagation()}
                 className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
               >
                 <i className="codicon codicon-play" />
@@ -141,7 +140,9 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
             <button
               type="button"
               title="Stop"
-              onClick={onStop}
+              aria-label="Stop"
+              onClick={(e) => { e.stopPropagation(); onStop(); }}
+              onKeyDown={(e) => e.stopPropagation()}
               className="p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
             >
               <i className="codicon codicon-debug-stop" />
