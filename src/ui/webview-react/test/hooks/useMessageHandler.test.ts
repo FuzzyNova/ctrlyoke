@@ -64,7 +64,7 @@ describe("FILE_SELECTED", () => {
     expect(wf.fileName).toBe("test.flightpath.yaml");
     expect(wf.workflowName).toBe("My Workflow");
     expect(wf.prompts).toHaveLength(2);
-    expect(wf.prompts[0].prompt).toBe("Step 1");
+    expect((wf.prompts[0] as any).prompt).toBe("Step 1");
   });
 
   it("marks settingsStore.workflowLoaded = true", () => {
@@ -276,9 +276,9 @@ describe("STEP_STATUS_CHANGED", () => {
     });
 
     const prompts = useWorkflowStore.getState().prompts;
-    expect(prompts[0].status).toBe(STEP_STATUS.PENDING);
-    expect(prompts[1].status).toBe(STEP_STATUS.COMPLETED);
-    expect(prompts[2].status).toBe(STEP_STATUS.PENDING);
+    expect((prompts[0] as any).status).toBe(STEP_STATUS.PENDING);
+    expect((prompts[1] as any).status).toBe(STEP_STATUS.COMPLETED);
+    expect((prompts[2] as any).status).toBe(STEP_STATUS.PENDING);
   });
 
   it("accepts a plain string status (not wrapped in state object)", () => {
@@ -298,7 +298,7 @@ describe("STEP_STATUS_CHANGED", () => {
       });
     });
 
-    expect(useWorkflowStore.getState().prompts[0].status).toBe(
+    expect((useWorkflowStore.getState().prompts[0] as any).status).toBe(
       STEP_STATUS.RUNNING
     );
   });
@@ -353,7 +353,7 @@ describe("PROMPTS_EXTENDED", () => {
     });
 
     expect(useWorkflowStore.getState().prompts).toHaveLength(3);
-    expect(useWorkflowStore.getState().prompts[2].prompt).toBe("Step 2");
+    expect((useWorkflowStore.getState().prompts[2] as any).prompt).toBe("Step 2");
   });
 
   it("preserves existing prompt statuses", () => {
@@ -384,7 +384,7 @@ describe("PROMPTS_EXTENDED", () => {
       });
     });
 
-    expect(useWorkflowStore.getState().prompts[0].status).toBe(
+    expect((useWorkflowStore.getState().prompts[0] as any).status).toBe(
       STEP_STATUS.COMPLETED
     );
   });

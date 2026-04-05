@@ -59,7 +59,7 @@ describe("loadWorkflow", () => {
     expect(store().fileName).toBe("test.flightpath.yaml");
     expect(store().workflowName).toBe("My Workflow");
     expect(store().prompts).toHaveLength(2);
-    expect(store().prompts[0].prompt).toBe("Step 1");
+    expect((store().prompts[0] as any).prompt).toBe("Step 1");
   });
 
   it("sets totalSteps to prompts length", () => {
@@ -76,7 +76,7 @@ describe("loadWorkflow", () => {
       prompts: [makePrompt(), makePrompt()],
     });
     for (const p of store().prompts) {
-      expect(p.status).toBe(STEP_STATUS.PENDING);
+      expect((p as any).status).toBe(STEP_STATUS.PENDING);
     }
   });
 
@@ -86,8 +86,8 @@ describe("loadWorkflow", () => {
       prompts: [makePrompt(), makePrompt()],
       results: [{ status: STEP_STATUS.COMPLETED }, {}],
     });
-    expect(store().prompts[0].status).toBe(STEP_STATUS.COMPLETED);
-    expect(store().prompts[1].status).toBe(STEP_STATUS.PENDING);
+    expect((store().prompts[0] as any).status).toBe(STEP_STATUS.COMPLETED);
+    expect((store().prompts[1] as any).status).toBe(STEP_STATUS.PENDING);
   });
 
   it("clears runtime state (liveOrderedEntries, retryStates, etc.)", () => {
@@ -128,15 +128,15 @@ describe("setStepStatus", () => {
 
     store().setStepStatus(1, STEP_STATUS.COMPLETED);
 
-    expect(store().prompts[0].status).toBe(STEP_STATUS.PENDING);
-    expect(store().prompts[1].status).toBe(STEP_STATUS.COMPLETED);
-    expect(store().prompts[2].status).toBe(STEP_STATUS.PENDING);
+    expect((store().prompts[0] as any).status).toBe(STEP_STATUS.PENDING);
+    expect((store().prompts[1] as any).status).toBe(STEP_STATUS.COMPLETED);
+    expect((store().prompts[2] as any).status).toBe(STEP_STATUS.PENDING);
   });
 
   it("sets status to RUNNING for the active step", () => {
     store().loadWorkflow({ fileName: "wf.yaml", prompts: [makePrompt()] });
     store().setStepStatus(0, STEP_STATUS.RUNNING);
-    expect(store().prompts[0].status).toBe(STEP_STATUS.RUNNING);
+    expect((store().prompts[0] as any).status).toBe(STEP_STATUS.RUNNING);
   });
 });
 
@@ -397,7 +397,7 @@ describe("getCurrentPrompt", () => {
       ],
     });
     store().setCurrentStep(1);
-    expect(store().getCurrentPrompt()?.prompt).toBe("second");
+    expect((store().getCurrentPrompt() as any)?.prompt).toBe("second");
   });
 
   it("returns null when prompts are empty", () => {
@@ -411,7 +411,7 @@ describe("getPromptByIndex", () => {
       fileName: "wf.yaml",
       prompts: [makePrompt({ prompt: "zero" }), makePrompt({ prompt: "one" })],
     });
-    expect(store().getPromptByIndex(1)?.prompt).toBe("one");
+    expect((store().getPromptByIndex(1) as any)?.prompt).toBe("one");
   });
 
   it("returns null for out-of-range index", () => {

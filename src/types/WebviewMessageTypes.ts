@@ -23,11 +23,13 @@ import {
   MESSAGE_TYPES,
   STATUS_MESSAGE_SEVERITY,
   EXECUTION_MODES,
+  STEP_TYPES,
 } from "./DashboardConstants";
 import type {
   WorkflowSummary,
   McpServerConfig,
   UserHookConfig,
+  WorkflowStep,
 } from "./FlightPathTypes";
 import type {
   CliEvent as CliOutputEvent,
@@ -62,8 +64,8 @@ export {
   type ActionType,
 } from "./DashboardConstants";
 
-// Re-export WorkflowSummary for multi-workflow coordination messages
-export type { WorkflowSummary } from "./FlightPathTypes";
+// Re-export WorkflowSummary and WorkflowStep for webview consumers
+export type { WorkflowSummary, WorkflowStep, ScriptStep } from "./FlightPathTypes";
 
 // ============================================================================
 // MESSAGE TYPE HELPERS - Extract literal types from MESSAGE_TYPES constants
@@ -136,6 +138,17 @@ export interface CliOutput {
    * When set, the UI renders this with a red border below the CLI command.
    */
   errorMessage?: string;
+  /**
+   * Source of this output — when "script", the output comes from a script step
+   * (shell command, no AI interaction). The UI renders script output as plain
+   * stdout/stderr text with an exit code summary rather than structured events.
+   */
+  source?: "script";
+  /**
+   * Exit code from the script step (source: "script" only).
+   * 0 = success, non-zero = failure.
+   */
+  exitCode?: number;
 }
 
 // ============================================================================
@@ -206,6 +219,8 @@ export interface EndConditionConfig {
  * Matches FlightPathTypes.PromptItem
  */
 export interface PromptItem {
+  /** Step type discriminant — defaults to "prompt" when absent */
+  type?: typeof STEP_TYPES.PROMPT;
   name?: string;
   prompt: string;
   harness?: string;
@@ -261,11 +276,11 @@ export interface StatusMessage {
 export interface InitMessageData {
   fileName: string;
   workflowName: string;
-  prompts: PromptItem[];
+  prompts: WorkflowStep[];
   executionState: ExecutionState;
   currentIndex: number;
   results: any[];
-  finalPrompt?: PromptItem | null;
+  finalStep?: WorkflowStep | null;
   finalPromptStatus?: StepStatus | null;
   finalPromptLoopCount?: number;
   finalPromptPhase?: FinalPromptPhase | null;
@@ -293,9 +308,9 @@ export interface InitMessageData {
 export interface FileSelectedMessage {
   type: typeof MESSAGE_TYPES.FILE_SELECTED;
   fileName: string;
-  prompts: PromptItem[];
+  prompts: WorkflowStep[];
   workflowName?: string;
-  finalPrompt?: PromptItem | null;
+  finalStep?: WorkflowStep | null;
   finalPromptStatus?: StepStatus | null;
   finalPromptLoopCount?: number;
   finalPromptPhase?: FinalPromptPhase | null;
@@ -307,12 +322,12 @@ export interface FileSelectedMessage {
 export interface SessionRestoredMessage {
   type: typeof MESSAGE_TYPES.SESSION_RESTORED;
   fileName: string;
-  prompts: PromptItem[];
+  prompts: WorkflowStep[];
   results: any[];
   executionState: ExecutionState;
   currentIndex: number;
   workflowName?: string;
-  finalPrompt?: PromptItem | null;
+  finalStep?: WorkflowStep | null;
   finalPromptStatus?: StepStatus | null;
   finalPromptLoopCount?: number;
   finalPromptPhase?: FinalPromptPhase | null;
@@ -418,8 +433,8 @@ export interface StatusMessageMessage {
  */
 export interface PromptsExtendedMessage {
   type: typeof MESSAGE_TYPES.PROMPTS_EXTENDED;
-  prompts: PromptItem[];
-  finalPrompt?: PromptItem | null;
+  prompts: WorkflowStep[];
+  finalStep?: WorkflowStep | null;
 }
 
 /**
@@ -428,16 +443,16 @@ export interface PromptsExtendedMessage {
 export interface PromptDeletedMessage {
   type: typeof MESSAGE_TYPES.PROMPT_DELETED;
   fileName: string;
-  prompts: PromptItem[];
-  finalPrompt?: PromptItem | null;
+  prompts: WorkflowStep[];
+  finalStep?: WorkflowStep | null;
 }
 
 /**
- * Update finalPrompt message (extension -> webview OR webview -> extension)
+ * Update finalStep message (extension -> webview OR webview -> extension)
  */
 export interface UpdateFinalPromptMessage {
   type: typeof MESSAGE_TYPES.UPDATE_FINAL_PROMPT;
-  finalPrompt: PromptItem | null;
+  finalStep: WorkflowStep | null;
 }
 
 /**
@@ -654,7 +669,7 @@ export interface GlobalSettingsUpdatedMessage {
  */
 export interface ResetWorkflowStateMessage {
   type: typeof MESSAGE_TYPES.RESET_WORKFLOW_STATE;
-  prompts: PromptItem[];
+  prompts: WorkflowStep[];
 }
 
 /**
@@ -693,7 +708,7 @@ export interface SetStartPositionMessage {
  */
 export interface SetStartPositionConfirmedMessage {
   type: typeof MESSAGE_TYPES.SET_START_POSITION_CONFIRMED;
-  prompts: PromptItem[];
+  prompts: WorkflowStep[];
   currentIndex: number;
 }
 

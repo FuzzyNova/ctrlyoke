@@ -12,6 +12,7 @@ import {
   PromptItem,
   EndCondition,
   type Harness,
+  isScriptStep,
 } from "../types/FlightPathTypes";
 import {
   EXECUTION_STATES,
@@ -146,9 +147,9 @@ export function getQueueStatus(
     },
     prompts: state.prompts.map((p, index) => ({
       index,
-      prompt: p.prompt,
+      prompt: isScriptStep(p) ? p.script : p.prompt,
       status: state.results[index]?.status || STEP_STATUS.PENDING,
-      model: p.model,
+      model: isScriptStep(p) ? undefined : p.model,
       retryCount: state.results[index]?.retryCount,
     })),
   };
@@ -176,13 +177,13 @@ export function readQueueOutput(
   const outputs = indices
     .filter((i) => i >= 0 && i < allPrompts.length)
     .map((i) => {
-      const prompt = allPrompts[i];
+      const step = allPrompts[i];
       const result = state.results[i];
       return {
         index: i,
-        prompt: prompt.prompt,
+        prompt: isScriptStep(step) ? step.script : step.prompt,
         status: result?.status || STEP_STATUS.PENDING,
-        responseText: prompt._runtime?.responseText ?? null,
+        responseText: step._runtime?.responseText ?? null,
       };
     });
 

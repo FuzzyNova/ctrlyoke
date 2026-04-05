@@ -2,6 +2,9 @@ import * as path from "path";
 import { PlatformAdapter } from "../platform/PlatformAdapter";
 import {
   PromptItem,
+  ScriptStep,
+  WorkflowStep,
+  isScriptStep,
   McpServerConfig,
   DynamicQueueConfig,
   FinalPromptRuntimeState,
@@ -25,6 +28,7 @@ import {
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { Log } from "../utils/Log";
 import { PropertyResolver } from "../utils/PropertyResolver";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
 import {
   CliOutputFormatter,
@@ -188,9 +192,9 @@ export class WorkflowExecutor {
       }
     }
 
-    const getFinalPrompt = () => this.promptQueue.getWorkflowFile().finalPrompt;
+    const getFinalStep = () => this.promptQueue.getWorkflowFile().finalStep;
 
-    const initialFinalPrompt = getFinalPrompt();
+    const initialFinalPrompt = getFinalStep();
 
     if (initialFinalPrompt && !this.promptQueue.getFinalPromptRuntime()) {
       await this.setFinalPromptRuntime(context, {
@@ -276,7 +280,7 @@ export class WorkflowExecutor {
         break;
       }
 
-      const currentFinalPrompt = getFinalPrompt();
+      const currentFinalPrompt = getFinalStep();
       if (!currentFinalPrompt) {
         break;
       }
@@ -393,7 +397,7 @@ export class WorkflowExecutor {
 
   private async executeSinglePrompt(
     target: ExecutionTarget,
-    prompt: PromptItem,
+    step: WorkflowStep,
     context: WorkflowExecutionContext
   ): Promise<boolean> {
     const state = this.promptQueue.getState();
@@ -426,6 +430,16 @@ export class WorkflowExecutor {
       return false;
     }
 
+    // Route script steps directly — no AI harness interaction needed
+    if (isScriptStep(step)) {
+      const stepIndex =
+        target.kind === FINAL_PROMPT_PHASES.QUEUE
+          ? target.stepIndex
+          : -1;
+      return this.executeScriptStep(step, stepIndex, context, target);
+    }
+
+    let prompt: PromptItem = step as PromptItem;
     const workflowFile = this.promptQueue.getWorkflowFile();
     let resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
 
@@ -504,7 +518,7 @@ export class WorkflowExecutor {
         workingFilePersistence: this.promptQueue,
         getFinalPromptResponseTexts: () =>
           this.promptQueue.getFinalPromptResponseTexts(),
-        finalPromptSessionId: workflowFile.finalPrompt?._runtime?.sessionId as
+        finalPromptSessionId: workflowFile.finalStep?._runtime?.sessionId as
           | string
           | undefined,
       },
@@ -629,6 +643,133 @@ export class WorkflowExecutor {
     }
 
     return true;
+  }
+
+  /**
+   * Execute a script step — runs a shell command with no AI harness interaction.
+   *
+   * @param step      The ScriptStep to execute
+   * @param stepIndex The queue step index (use -1 for finalStep)
+   * @param context   Workflow execution context
+   * @param target    Execution target for status machine tracking
+   * @returns true to continue the workflow, false to stop
+   */
+  private async executeScriptStep(
+    step: ScriptStep,
+    stepIndex: number,
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget
+  ): Promise<boolean> {
+    const runtime = this.getRuntime();
+    const stepLabel = step.name ?? step.script.split(/\s+/)[0];
+    Log.info(`Executing script step: ${stepLabel}`);
+
+    // Mark step as running in the dashboard
+    if (context.dashboardProvider && stepIndex >= 0) {
+      context.dashboardProvider.updateStepStatus(stepIndex, {
+        state: STEP_STATUS.RUNNING,
+      });
+    }
+
+    // Record startedAt on the step's _runtime
+    await this.promptQueue.persistRuntimeMetadata(
+      stepIndex >= 0 ? stepIndex : this.promptQueue.getState().currentIndex,
+      { startedAt: Date.now() }
+    );
+
+    // Begin attempt in the state machine
+    const attemptIndex = 0;
+    runtime.beginAttempt(target, attemptIndex, Date.now());
+
+    // Build a minimal EndCondition to reuse EndConditionEvaluator's script runner
+    const timeout =
+      step.timeout != null
+        ? step.timeout * 1000
+        : ConfigurationUtils.getScriptTimeoutMs();
+
+    const evalResult = await this.endConditionEvaluator.evaluateCondition(
+      { script: step.script, returns: "0", compareSource: "exitCode", timeout: timeout },
+      context.workspaceFolderPath,
+      this.promptQueue.getWorkflowFile().vars
+    );
+
+    const succeeded = evalResult.exitCode === 0;
+
+    // Stream output to dashboard as a status message
+    const outputText = [evalResult.stdout, evalResult.stderr]
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+
+    if (outputText) {
+      await this.trackStatusMessage(
+        context,
+        target,
+        outputText,
+        succeeded ? STATUS_MESSAGE_SEVERITY.INFO : STATUS_MESSAGE_SEVERITY.ERROR
+      );
+    }
+
+    if (evalResult.timeout) {
+      await this.trackStatusMessage(
+        context,
+        target,
+        `Script step timed out after ${timeout}ms`,
+        STATUS_MESSAGE_SEVERITY.ERROR
+      );
+    }
+
+    const continueOnFailure = step.continueOnFailure ?? false;
+    const shouldContinue = succeeded || continueOnFailure;
+    const terminalStatus = succeeded
+      ? STEP_STATUS.COMPLETED
+      : continueOnFailure
+        ? STEP_STATUS.COMPLETED
+        : STEP_STATUS.FAILED;
+
+    if (!succeeded && !continueOnFailure) {
+      Log.error(`Script step failed (exit code ${evalResult.exitCode}): ${stepLabel}`);
+    } else if (!succeeded && continueOnFailure) {
+      Log.warn(`Script step failed but continueOnFailure=true, continuing: ${stepLabel}`);
+    }
+
+    // Complete or fail the attempt in the state machine
+    if (shouldContinue) {
+      runtime.completeAttempt(target, attemptIndex);
+    } else {
+      runtime.failAttempt(target, attemptIndex, `Script exited with code ${evalResult.exitCode}`);
+    }
+
+    // Update dashboard step status
+    if (context.dashboardProvider && stepIndex >= 0) {
+      context.dashboardProvider.updateStepStatus(stepIndex, {
+        state: terminalStatus,
+        duration: evalResult.duration / 1000,
+      });
+    }
+
+    if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+      if (shouldContinue) {
+        await this.promptQueue.completeCurrentAndMoveNext();
+        if (context.dashboardProvider) {
+          const live = this.promptQueue.getProgress();
+          context.dashboardProvider.updateProgress(live.current, live.total);
+        }
+      } else {
+        this.promptQueue.finalizeFailedInFlightPrompt(
+          `Script exited with code ${evalResult.exitCode}`
+        );
+        runtime.fail();
+        await this.promptQueue.commitRuntimeTransition();
+      }
+
+      if (runtime.status === EXECUTION_STATES.PAUSED) {
+        Log.info("Workflow paused after script step");
+        return false;
+      }
+    }
+
+    return shouldContinue;
   }
 
   private getAttemptStartedAt(target: ExecutionTarget): number | undefined {
@@ -1181,7 +1322,7 @@ export class WorkflowExecutor {
           workingFilePersistence: this.promptQueue,
           getFinalPromptResponseTexts: () =>
             this.promptQueue.getFinalPromptResponseTexts(),
-          finalPromptSessionId: workflowFile.finalPrompt?._runtime
+          finalPromptSessionId: workflowFile.finalStep?._runtime
             ?.sessionId as string | undefined,
         }
       );
@@ -1340,7 +1481,7 @@ export class WorkflowExecutor {
 
   private updateDashboardForPromptStart(
     context: WorkflowExecutionContext,
-    _prompt: PromptItem,
+    _step: WorkflowStep,
     currentIndex: number
   ): void {
     if (!context.dashboardProvider) {

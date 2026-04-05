@@ -1,4 +1,4 @@
-import type { PriorContext, PromptItem } from "../../../types/FlightPathTypes";
+import type { PriorContext, PromptItem, WorkflowStep } from "../../../types/FlightPathTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import {
   PromptFileSplitter,
@@ -25,7 +25,7 @@ export interface CliPromptPreparerDeps {
   isSimplePrompt: (promptText: string) => boolean;
   buildPriorContextXml: (
     resolvedPriorContext: Exclude<PriorContext, "none">,
-    allPrompts: PromptItem[],
+    allPrompts: WorkflowStep[],
     promptIndex: number,
     finalPromptResponseTexts: string[]
   ) => string;

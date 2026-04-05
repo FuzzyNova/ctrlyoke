@@ -127,7 +127,7 @@ export class PromptFileLoader {
           fileName,
           promptFile.prompts,
           undefined,
-          promptFile.finalPrompt ?? null,
+          promptFile.finalStep ?? null,
           this.promptQueue.getFinalPromptRuntime()
         );
       }
@@ -213,7 +213,7 @@ export class PromptFileLoader {
             restoredState.status,
             restoredState.currentIndex,
             restoredState.workflowName || undefined,
-            workingFile.finalPrompt ?? null,
+            workingFile.finalStep ?? null,
             this.promptQueue.getFinalPromptRuntime()
           );
 
@@ -239,7 +239,7 @@ export class PromptFileLoader {
           // Send PROMPTS_EXTENDED message with updated prompt list
           mergeDashboard.updatePromptsExtended(
             updatedState.prompts,
-            this.promptQueue.getWorkflowFile().finalPrompt ?? null
+            this.promptQueue.getWorkflowFile().finalStep ?? null
           );
         } else if (newPromptsCount === 0) {
           Log.debug("Working file changed but no new prompts detected");
@@ -293,9 +293,6 @@ export class PromptFileLoader {
     }
     if (promptFile.endCondition !== undefined) {
       updates.endCondition = promptFile.endCondition;
-    }
-    if (promptFile.finalPrompt !== undefined) {
-      updates.finalPrompt = promptFile.finalPrompt;
     }
 
     return updates;

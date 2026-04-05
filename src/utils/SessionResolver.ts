@@ -1,4 +1,4 @@
-import { PromptFile, PromptItem, Harness } from "../types/FlightPathTypes";
+import { PromptFile, PromptItem, WorkflowStep, Harness } from "../types/FlightPathTypes";
 import { SESSION_ID_SENTINELS } from "../types/DashboardConstants";
 import { PropertyResolver } from "./PropertyResolver";
 import { Log } from "./Log";
@@ -90,7 +90,7 @@ export class SessionResolver {
   static resolve(
     prompt: PromptItem,
     promptIndex: number,
-    allPrompts: PromptItem[],
+    allPrompts: WorkflowStep[],
     workflow?: PromptFile,
     finalPromptSessionId?: string
   ): string | undefined {
@@ -163,7 +163,7 @@ export class SessionResolver {
     prompt: PromptItem,
     refNumber: number,
     promptIndex: number,
-    allPrompts: PromptItem[],
+    allPrompts: WorkflowStep[],
     resolvedHarness?: Harness
   ): string | undefined {
     const refIndex = refNumber - 1; // 1-based to 0-based
@@ -237,7 +237,7 @@ export class SessionResolver {
   private static autoResumeFromPrevious(
     prompt: PromptItem,
     promptIndex: number,
-    allPrompts: PromptItem[],
+    allPrompts: WorkflowStep[],
     resolvedHarness?: Harness
   ): string | undefined {
     if (promptIndex === 0) {

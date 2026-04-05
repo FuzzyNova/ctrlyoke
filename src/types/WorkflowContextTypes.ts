@@ -1,4 +1,4 @@
-import type { PromptItem, PromptFile } from "./FlightPathTypes";
+import type { PromptFile, WorkflowStep } from "./FlightPathTypes";
 import type { ResolvedProperties } from "../utils/PropertyResolver";
 
 /** Narrow working-file persistence contract exposed to harnesses. */
@@ -14,7 +14,7 @@ export interface WorkflowWorkingFilePersistence {
  */
 export interface WorkflowContext {
   promptIndex: number;
-  allPrompts: PromptItem[];
+  allPrompts: WorkflowStep[];
   filePath?: string;
   /** Human-readable workflow name (derived from file basename or first prompt text).
    *  Used for temp file naming — avoids ISO timestamps embedded in working file paths. */
@@ -27,9 +27,10 @@ export interface WorkflowContext {
   workflowFile?: PromptFile;
   /** Minimal working-file persistence hook used for prompt runtime metadata. */
   workingFilePersistence?: WorkflowWorkingFilePersistence;
-  /** Read-only accessor for prior-context finalPrompt loop responses. */
+  /** Read-only accessor for prior-context finalStep loop responses. */
   getFinalPromptResponseTexts?: () => string[];
-  /** Session ID from the most recent finalPrompt execution. Consumed by SessionResolver
-   *  when sessionId is the "finalPrompt" sentinel on any prompt (queue or finalPrompt phase). */
+  /** Session ID from the most recent finalStep execution. Consumed by SessionResolver
+   *  when sessionId is the "finalPrompt" sentinel on any prompt (queue or finalStep phase).
+   *  Note: only applies when finalStep is an AI prompt step (not a ScriptStep). */
   finalPromptSessionId?: string;
 }

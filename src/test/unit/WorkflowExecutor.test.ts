@@ -202,7 +202,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
 
     queue.loadPrompts({
       prompts: [{ prompt: "queue-1" }, { prompt: "queue-2" }],
-      finalPrompt: { prompt: "final-gate" },
+      finalStep: { prompt: "final-gate" },
     });
 
     await executor.execute(integration, makeContext(integration));
@@ -238,7 +238,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
 
     queue.loadPrompts({
       prompts: [{ prompt: "queue-1" }],
-      finalPrompt: { prompt: "final-loop", mcpServers: ["flightpath"] },
+      finalStep: { prompt: "final-loop", mcpServers: ["flightpath"] },
     });
 
     await executor.execute(integration, makeContext(integration));
@@ -262,7 +262,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
 
     queue.loadPrompts({
       prompts: [{ prompt: "queue-1" }],
-      finalPrompt: { prompt: "final-once" },
+      finalStep: { prompt: "final-once" },
     });
 
     await executor.execute(integration, makeContext(integration));
@@ -294,7 +294,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
 
     queue.loadPrompts({
       prompts: [{ prompt: "queue-1" }],
-      finalPrompt: { prompt: "final-pause" },
+      finalStep: { prompt: "final-pause" },
     });
 
     await executor.execute(integration, makeContext(integration));
@@ -325,7 +325,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
 
     queue.loadPrompts({
       prompts: [{ prompt: "queue-1" }],
-      finalPrompt: { prompt: "final-stop-error" },
+      finalStep: { prompt: "final-stop-error" },
     });
 
     await executor.execute(integration, makeContext(integration));
@@ -380,7 +380,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
 
     queue.loadPrompts({
       prompts: [{ prompt: "queue-1" }],
-      finalPrompt: { prompt: "final-observe" },
+      finalStep: { prompt: "final-observe" },
     });
 
     await executor.execute(integration, context);
@@ -454,7 +454,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
 
     queue.loadPrompts({
       prompts: [{ prompt: "queue-1" }],
-      finalPrompt: { prompt: "final-capture" },
+      finalStep: { prompt: "final-capture" },
     });
 
     await executor.execute(integration, context);

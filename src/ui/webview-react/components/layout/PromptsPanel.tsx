@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { useWorkflowStore } from "@store/workflowStore";
+import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
+import { STEP_TYPES } from "@root/types/DashboardConstants";
+import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -42,6 +44,16 @@ import {
 import { BoundaryBar } from "../prompts/BoundaryBar";
 import { ResetConfirmModal } from "../shared/ResetConfirmModal";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
+
+/** Local type guard for script steps */
+function isScriptStep(step: WorkflowStep): step is ScriptStep {
+  return step.type === STEP_TYPES.SCRIPT;
+}
+
+/** Get the displayable text content of a step */
+function getStepText(step: WorkflowStep): string {
+  return isScriptStep(step) ? step.script : step.prompt;
+}
 
 type PromptItemComponentProps = React.ComponentProps<typeof PromptItem>;
 type SortableWrapperProps = Omit<
@@ -114,7 +126,7 @@ export const PromptsPanel: React.FC<{
     retryStates,
     liveOrderedEntries,
     historyOutputs,
-    finalPrompt,
+    finalStep,
     finalPromptStatus,
     finalPromptLoopCount,
     finalPromptPhase,
@@ -153,6 +165,7 @@ export const PromptsPanel: React.FC<{
   // For pending prompts, compute from the three-tier precedence (prompt →
   // workflow → global) so the display stays live and reflects any changes.
   const getPromptHarnessModel = (prompt: (typeof prompts)[0]) => {
+    if (isScriptStep(prompt)) return { harnessLabel: undefined, harnessIsDefault: true, modelLabel: undefined, modelIsDefault: true };
     if (prompt._runtime?.harness ?? prompt._runtime?.model) {
       const h = prompt._runtime!.harness;
       const m = prompt._runtime!.model;
@@ -193,6 +206,7 @@ export const PromptsPanel: React.FC<{
     prompt: (typeof prompts)[0]
   ): PromptOverride[] => {
     const result: PromptOverride[] = [];
+    if (isScriptStep(prompt)) return result;
 
     // agent — show basename only, or explicit none when disabled
     if (prompt.agent === null) {
@@ -306,32 +320,32 @@ export const PromptsPanel: React.FC<{
 
   const handleFinalPromptSelect = useCallback(() => {
     if (isCLIManaged) return;
-    if (finalPrompt) {
-      selectFinalPrompt(finalPrompt);
+    if (finalStep) {
+      selectFinalPrompt(finalStep);
     } else {
       setFinalPromptFooterExpanded(true);
       selectPrompt({ kind: FINAL_PROMPT_PHASES.FINAL_PROMPT }, { prompt: "" });
     }
   }, [
     isCLIManaged,
-    finalPrompt,
+    finalStep,
     selectFinalPrompt,
     setFinalPromptFooterExpanded,
     selectPrompt,
   ]);
 
   const handleDisableFinalPrompt = useCallback(() => {
-    if (isCLIManaged || !finalPrompt) return;
-    sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, { finalPrompt: null });
-  }, [isCLIManaged, finalPrompt]);
+    if (isCLIManaged || !finalStep) return;
+    sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, { finalStep: null });
+  }, [isCLIManaged, finalStep]);
 
   // Compute resolved harness/model for the final prompt using the same
   // three-tier logic as regular prompts, so defaults are shown correctly.
   const getFinalPromptHarnessModel = () => {
-    if (!finalPrompt) return {};
-    if (finalPrompt._runtime?.harness ?? finalPrompt._runtime?.model) {
-      const h = finalPrompt._runtime!.harness;
-      const m = finalPrompt._runtime!.model;
+    if (!finalStep || isScriptStep(finalStep)) return {};
+    if (finalStep._runtime?.harness ?? finalStep._runtime?.model) {
+      const h = finalStep._runtime!.harness;
+      const m = finalStep._runtime!.model;
       return {
         harnessLabel: h
           ? (HARNESS_INFO[h as keyof typeof HARNESS_INFO]?.name ?? h)
@@ -341,14 +355,14 @@ export const PromptsPanel: React.FC<{
         modelIsDefault: false,
       };
     }
-    const harnessIsDefault = finalPrompt.harness === undefined;
-    const modelIsDefault = finalPrompt.model === undefined;
+    const harnessIsDefault = finalStep.harness === undefined;
+    const modelIsDefault = finalStep.model === undefined;
     const effectiveHarness =
-      finalPrompt.harness ??
+      finalStep.harness ??
       workflowProperties.harness ??
       globalSettings.harness;
     const effectiveModel =
-      finalPrompt.model ?? workflowProperties.model ?? globalSettings.model;
+      finalStep.model ?? workflowProperties.model ?? globalSettings.model;
     return {
       harnessLabel:
         HARNESS_INFO[effectiveHarness as keyof typeof HARNESS_INFO]?.name ??
@@ -369,8 +383,8 @@ export const PromptsPanel: React.FC<{
   })();
 
   // Compute overrides for the final prompt (same logic as regular prompts)
-  const finalPromptOverrides = finalPrompt
-    ? getPromptOverrides(finalPrompt)
+  const finalPromptOverrides = finalStep
+    ? getPromptOverrides(finalStep)
     : undefined;
 
   // Determine if workflow is running
@@ -384,7 +398,7 @@ export const PromptsPanel: React.FC<{
   // Also check prompt statuses directly — after an undo, executionState may
   // still be IDLE even though prompts were restored to a completed/error state.
   const hasCompletedPrompts = prompts.some(
-    (p) => p.status && p.status !== STEP_STATUS.PENDING
+    (p) => !isScriptStep(p) && p.status && p.status !== STEP_STATUS.PENDING
   );
   const canClearState =
     !isCLIManaged &&
@@ -671,7 +685,7 @@ export const PromptsPanel: React.FC<{
                     </div>
                     <div className="flex-1 min-w-0">
                       <PromptItem
-                        text={prompt.prompt}
+                        text={getStepText(prompt)}
                         index={index}
                         displayNumber={slotNumber}
                         name={prompt.name}
@@ -695,6 +709,7 @@ export const PromptsPanel: React.FC<{
                           doneStepCount < prompts.length
                         }
                         dimmed
+                        isScript={isScriptStep(prompt)}
                       />
                     </div>
                   </div>
@@ -747,7 +762,7 @@ export const PromptsPanel: React.FC<{
                       id={id}
                       disabled={!canReorder}
                       slotNumber={slotNumber}
-                      text={prompt.prompt}
+                      text={getStepText(prompt)}
                       index={index}
                       name={prompt.name}
                       status={status}
@@ -771,6 +786,7 @@ export const PromptsPanel: React.FC<{
                           ? () => handleSetPositionClick(setPositionTarget)
                           : undefined
                       }
+                      isScript={isScriptStep(prompt)}
                     />
                   );
                 })}
@@ -781,7 +797,7 @@ export const PromptsPanel: React.FC<{
       </div>
 
       <FinalPromptFooter
-        finalPrompt={finalPrompt}
+        finalStep={finalStep}
         status={finalPromptStatus}
         loopCount={finalPromptLoopCount}
         phase={finalPromptPhase}

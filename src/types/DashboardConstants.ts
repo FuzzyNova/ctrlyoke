@@ -494,6 +494,14 @@ export const SESSION_ID_SENTINELS = {
 } as const;
 
 // ============================================================================
+// STEP TYPES - Discriminant values for WorkflowStep union type
+// ============================================================================
+export const STEP_TYPES = {
+  PROMPT: "prompt",
+  SCRIPT: "script",
+} as const;
+
+// ============================================================================
 // PROMPT PROPERTY NAMES - Single source of truth for PromptItem properties
 // Used by dashboard.js to access prompt properties consistently
 // ============================================================================
@@ -501,6 +509,13 @@ export const PROMPT_PROPERTIES = {
   // Core properties
   PROMPT: "prompt",
   ID: "id",
+
+  // Step type discriminant
+  STEP_TYPE: "type",
+
+  // Script step properties
+  SCRIPT: "script",
+  CONTINUE_ON_FAILURE: "continueOnFailure",
 
   // Harness/Model properties
   HARNESS: "harness",
@@ -661,3 +676,4 @@ export type OutputHistoryKind =
   (typeof OUTPUT_HISTORY_KINDS)[keyof typeof OUTPUT_HISTORY_KINDS];
 export type WorkflowAttemptCommandValue =
   (typeof WORKFLOW_ATTEMPT_COMMANDS)[keyof typeof WORKFLOW_ATTEMPT_COMMANDS];
+export type StepType = (typeof STEP_TYPES)[keyof typeof STEP_TYPES];

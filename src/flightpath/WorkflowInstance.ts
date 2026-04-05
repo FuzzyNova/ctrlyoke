@@ -8,6 +8,8 @@ import { WorkflowExecutor, WorkflowExecutionContext } from "./WorkflowExecutor";
 import {
   PromptFile,
   PromptItem,
+  WorkflowStep,
+  isScriptStep,
   QueueState,
   Harness,
   EndCondition,
@@ -373,7 +375,7 @@ export class WorkflowInstance {
       executionState,
       state.currentIndex,
       state.workflowName || undefined,
-      this.promptQueue.getWorkflowFile().finalPrompt ?? null,
+      this.promptQueue.getWorkflowFile().finalStep ?? null,
       this.promptQueue.getFinalPromptRuntime()
     );
     this.outputCaptureBuffer.replayTo(
@@ -473,7 +475,7 @@ export class WorkflowInstance {
     return {
       fileName: path.basename(this.currentPromptFile.filePath),
       prompts: this.currentPromptFile.promptFile.prompts.map((p) => ({
-        prompt: p.prompt,
+        prompt: isScriptStep(p) ? p.script : p.prompt,
       })),
     };
   }
@@ -1227,7 +1229,7 @@ export class WorkflowInstance {
         const updatedState = this.promptQueue.getState();
         this.dashboardSink.updatePromptsExtended(
           updatedState.prompts,
-          this.promptQueue.getWorkflowFile().finalPrompt ?? null
+          this.promptQueue.getWorkflowFile().finalStep ?? null
         );
         this.dashboardSink.updateProgress(
           updatedState.currentIndex,
@@ -1403,26 +1405,26 @@ export class WorkflowInstance {
    * Updates the in-memory queue and persists to the working file without broadcasting to the webview.
    */
   async syncPromptsForUndoRedo(
-    prompts: PromptItem[],
-    finalPrompt: PromptItem | null
+    prompts: WorkflowStep[],
+    finalStep: WorkflowStep | null
   ): Promise<void> {
     await this.promptQueue.syncPromptsForUndoRedo(prompts);
 
-    // Sync finalPrompt if it changed
-    if (finalPrompt !== null) {
-      this.promptQueue.updateWorkflowProperty("finalPrompt", finalPrompt);
-      await this.promptQueue.updateWorkingFileProperties({ finalPrompt });
+    // Sync finalStep if it changed
+    if (finalStep !== null) {
+      this.promptQueue.updateWorkflowProperty("finalStep", finalStep);
+      await this.promptQueue.updateWorkingFileProperties({ finalStep });
     } else {
-      this.promptQueue.updateWorkflowProperty("finalPrompt", undefined);
+      this.promptQueue.updateWorkflowProperty("finalStep", undefined);
       await this.promptQueue.updateWorkingFileProperties(
-        { finalPrompt: undefined },
+        { finalStep: undefined },
         { allowDeletes: true }
       );
     }
 
     this.dashboardSink?.notifyUndoRedoSynced();
     Log.debug(
-      `[WorkflowInstance] syncPromptsForUndoRedo: ${prompts.length} prompts, finalPrompt=${finalPrompt ? "set" : "null"}`
+      `[WorkflowInstance] syncPromptsForUndoRedo: ${prompts.length} prompts, finalStep=${finalStep ? "set" : "null"}`
     );
   }
 
@@ -1444,50 +1446,56 @@ export class WorkflowInstance {
       const currentState = this.promptQueue.getState();
       this.dashboardSink.updatePromptsExtended(
         currentState.prompts,
-        this.promptQueue.getWorkflowFile().finalPrompt ?? null
+        this.promptQueue.getWorkflowFile().finalStep ?? null
       );
     }
     Log.debug(`Updated prompt ${index}: ${text.substring(0, 50)}...`);
   }
 
   async updateFinalPromptInQueue(
-    finalPrompt: PromptItem | null,
+    finalStep: WorkflowStep | null,
     clearProperties?: string[]
   ): Promise<void> {
     await this.ensureEphemeralWorkingFile();
 
-    if (finalPrompt) {
+    if (finalStep && !isScriptStep(finalStep)) {
       const normalized: PromptItem = {
-        prompt: finalPrompt.prompt,
-        ...(finalPrompt.name ? { name: finalPrompt.name } : {}),
-        ...this.buildPromptItemProperties(finalPrompt as unknown),
+        prompt: finalStep.prompt,
+        ...(finalStep.name ? { name: finalStep.name } : {}),
+        ...this.buildPromptItemProperties(finalStep as unknown),
         ...this.buildClearUpdates(clearProperties),
       };
-      this.promptQueue.updateWorkflowProperty("finalPrompt", normalized);
+      this.promptQueue.updateWorkflowProperty("finalStep", normalized);
       await this.promptQueue.updateWorkingFileProperties({
-        finalPrompt: normalized,
+        finalStep: normalized,
       });
       if (this.currentPromptFile) {
-        this.currentPromptFile.promptFile.finalPrompt = normalized;
+        this.currentPromptFile.promptFile.finalStep = normalized;
+      }
+    } else if (finalStep && isScriptStep(finalStep)) {
+      this.promptQueue.updateWorkflowProperty("finalStep", finalStep);
+      await this.promptQueue.updateWorkingFileProperties({ finalStep });
+      if (this.currentPromptFile) {
+        this.currentPromptFile.promptFile.finalStep = finalStep;
       }
     } else {
-      this.promptQueue.updateWorkflowProperty("finalPrompt", undefined);
+      this.promptQueue.updateWorkflowProperty("finalStep", undefined);
       await this.promptQueue.updateWorkingFileProperties(
-        { finalPrompt: undefined },
+        { finalStep: undefined },
         { allowDeletes: true }
       );
       await this.promptQueue.setFinalPromptRuntime(undefined);
       if (this.currentPromptFile) {
-        delete this.currentPromptFile.promptFile.finalPrompt;
+        delete this.currentPromptFile.promptFile.finalStep;
       }
     }
 
-    this.dashboardSink?.updateFinalPrompt(finalPrompt);
-    if (!finalPrompt) {
+    this.dashboardSink?.updateFinalPrompt(finalStep);
+    if (!finalStep) {
       this.dashboardSink?.updateFinalPromptStatus(null, 0, null);
     }
 
-    Log.debug(`Updated finalPrompt (${finalPrompt ? "enabled" : "disabled"})`);
+    Log.debug(`Updated finalStep (${finalStep ? "enabled" : "disabled"})`);
   }
 
   async deletePromptFromQueue(index: number): Promise<void> {
@@ -1503,7 +1511,7 @@ export class WorkflowInstance {
       this.dashboardSink.updatePromptDeleted(
         fileName,
         currentState.prompts,
-        this.promptQueue.getWorkflowFile().finalPrompt ?? null
+        this.promptQueue.getWorkflowFile().finalStep ?? null
       );
     }
     Log.debug(`Deleted prompt ${index}`);
@@ -1661,7 +1669,7 @@ export class WorkflowInstance {
         const updatedState = this.promptQueue.getState();
         this.dashboardSink.updatePromptsExtended(
           updatedState.prompts,
-          this.promptQueue.getWorkflowFile().finalPrompt ?? null
+          this.promptQueue.getWorkflowFile().finalStep ?? null
         );
       }
 
@@ -2235,7 +2243,7 @@ export class WorkflowInstance {
         // Include executionState so both updates reach the webview in one message.
         this.dashboardSink.updatePromptsExtended(
           state.prompts,
-          this.promptQueue.getWorkflowFile().finalPrompt ?? null,
+          this.promptQueue.getWorkflowFile().finalStep ?? null,
           executionState
         );
         this.dashboardSink.updateProgress(
@@ -2309,7 +2317,7 @@ export class WorkflowInstance {
   }
 
   private async initializeNewWorkflow(
-    prompts: PromptItem[],
+    prompts: WorkflowStep[],
     displayName: string,
     originalFilePath?: string,
     reuseExistingWorkingFile: boolean = false,
@@ -2393,7 +2401,7 @@ export class WorkflowInstance {
         displayName,
         prompts,
         queueState.workflowName || undefined,
-        promptFile.finalPrompt ?? null,
+        promptFile.finalStep ?? null,
         this.promptQueue.getFinalPromptRuntime()
       );
     }

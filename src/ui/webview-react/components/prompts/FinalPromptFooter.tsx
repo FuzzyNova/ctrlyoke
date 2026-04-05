@@ -4,14 +4,23 @@ import { PromptItemDetails } from "./PromptItemDetails";
 import type { PromptOverride } from "./PromptItemDetails";
 import {
   FINAL_PROMPT_PHASES,
-  type PromptItem,
   type StepStatus,
   type FinalPromptPhase,
 } from "../../types/messages";
-import type { CliOutput } from "../../store/workflowStore";
+import type { CliOutput, WorkflowStep } from "../../store/workflowStore";
+import { STEP_TYPES } from "@root/types/DashboardConstants";
+import type { ScriptStep } from "@root/types/WebviewMessageTypes";
+
+function isScriptStep(step: WorkflowStep): step is ScriptStep {
+  return step.type === STEP_TYPES.SCRIPT;
+}
+
+function getStepDisplayText(step: WorkflowStep): string {
+  return isScriptStep(step) ? step.script : (step.name ?? step.prompt);
+}
 
 interface FinalPromptFooterProps {
-  finalPrompt: PromptItem | null;
+  finalStep: WorkflowStep | null;
   status: StepStatus | null;
   loopCount: number;
   phase: FinalPromptPhase | null;
@@ -44,7 +53,7 @@ const truncate = (text: string, maxLength: number = 72): string => {
 };
 
 export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
-  finalPrompt,
+  finalStep,
   status,
   loopCount,
   phase,
@@ -61,14 +70,14 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
   latestOutput,
   overrides,
 }) => {
-  const hasFinalPrompt = !!finalPrompt;
+  const hasFinalPrompt = !!finalStep;
   const effectiveStatus: StepStatus = hasFinalPrompt
     ? (status ?? "pending")
     : "pending";
 
   return (
     <div className="border-t border-panel-border bg-sidebar-bg flex-shrink-0">
-      {hasFinalPrompt && isExpanded && finalPrompt && (
+      {hasFinalPrompt && isExpanded && finalStep && (
         <div
           className={`px-3 py-2 border-b border-panel-border ${
             isSelected
@@ -91,7 +100,7 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
         >
           {/* Prompt name / text — pl-5 matches PromptItemDetails indent */}
           <div className="text-[11px] leading-relaxed">
-            {finalPrompt.name ? finalPrompt.name : truncate(finalPrompt.prompt)}
+            {truncate(getStepDisplayText(finalStep))}
           </div>
 
           {/* Phase badge */}
@@ -103,16 +112,16 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
             </div>
           )}
 
-          {/* Shared metadata rows: harness/model, stats, end condition, overrides, etc. */}
+          {/* Shared metadata rows: harness/model (prompt only), stats, end condition, overrides */}
           <PromptItemDetails
             status={effectiveStatus}
-            harnessLabel={harnessLabel}
-            harnessIsDefault={harnessIsDefault}
-            modelLabel={modelLabel}
-            modelIsDefault={modelIsDefault}
+            harnessLabel={isScriptStep(finalStep) ? undefined : harnessLabel}
+            harnessIsDefault={isScriptStep(finalStep) ? undefined : harnessIsDefault}
+            modelLabel={isScriptStep(finalStep) ? undefined : modelLabel}
+            modelIsDefault={isScriptStep(finalStep) ? undefined : modelIsDefault}
             latestOutput={latestOutput}
             isSelected={isSelected}
-            overrides={overrides}
+            overrides={isScriptStep(finalStep) ? undefined : overrides}
           />
         </div>
       )}
@@ -139,9 +148,19 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
       >
         <StatusIcon status={effectiveStatus} disabled={!hasFinalPrompt} />
         <span className="text-[11px] font-semibold uppercase tracking-wide">
-          Final Prompt
+          {hasFinalPrompt && finalStep && isScriptStep(finalStep)
+            ? "Final Script"
+            : "Final Prompt"}
         </span>
-        {hasFinalPrompt && finalPrompt ? (
+        {hasFinalPrompt && finalStep && isScriptStep(finalStep) && (
+          <span
+            className="ml-1 px-1 py-[1px] rounded text-[9px] bg-badge-bg text-badge-fg opacity-75 flex-shrink-0"
+            title="Script step — runs a shell command"
+          >
+            script
+          </span>
+        )}
+        {hasFinalPrompt && finalStep ? (
           <span className="text-[12px] font-bold flex-1 opacity-90 text-terminal-ansiGreen">
             enabled
           </span>

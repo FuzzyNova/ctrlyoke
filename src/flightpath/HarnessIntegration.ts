@@ -1,5 +1,5 @@
 import * as path from "path";
-import { PromptItem, PriorContext } from "../types/FlightPathTypes";
+import { PromptItem, PriorContext, WorkflowStep, isScriptStep } from "../types/FlightPathTypes";
 import { WorkflowContext } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import {
@@ -400,7 +400,7 @@ export abstract class HarnessIntegration {
    */
   protected gatherPriorContextItems(
     priorContext: PriorContext,
-    allPrompts: PromptItem[],
+    allPrompts: WorkflowStep[],
     currentIndex: number,
     finalPromptResponseTexts: string[] = []
   ): PriorContextItem[] {
@@ -462,12 +462,15 @@ export abstract class HarnessIntegration {
     }
 
     const items = targetIndices
-      .map((i) => ({
-        index: i,
-        name: allPrompts[i]?.name,
-        prompt: allPrompts[i]?.prompt,
-        text: allPrompts[i]?._runtime?.responseText ?? "",
-      }))
+      .map((i) => {
+        const step = allPrompts[i];
+        return {
+          index: i,
+          name: step?.name,
+          prompt: step && !isScriptStep(step) ? step.prompt : step?.name ?? `(script: ${(step as any)?.script ?? ""})`,
+          text: step?._runtime?.responseText ?? "",
+        };
+      })
       .filter((item) => item.text.length > 0);
 
     if (items.length === 0 && targetIndices.length > 0) {
@@ -511,7 +514,7 @@ export abstract class HarnessIntegration {
    */
   protected buildWorkflowContextText(
     promptIndex: number,
-    allPrompts: PromptItem[],
+    allPrompts: WorkflowStep[],
     resolvedPriorContext?: PriorContext,
     finalPromptResponseTexts?: string[]
   ): string {

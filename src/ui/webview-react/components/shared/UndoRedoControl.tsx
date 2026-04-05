@@ -95,12 +95,12 @@ function describeChange(
   if (nextLen > prevLen) return `Added prompt ${nextLen}`;
   if (nextLen < prevLen) return `Deleted prompt ${prevLen}`;
 
-  const prevFinal = prev.finalPrompt;
-  const nextFinal = next.finalPrompt;
+  const prevFinal = prev.finalStep;
+  const nextFinal = next.finalStep;
   if (!prevFinal && nextFinal) return "Added final prompt";
   if (prevFinal && !nextFinal) return "Removed final prompt";
   if (prevFinal && nextFinal) {
-    const change = describePromptChange("final prompt", prevFinal, nextFinal);
+    const change = describePromptChange("final prompt", prevFinal as PromptChangeFields, nextFinal as PromptChangeFields);
     if (change) return change;
   }
 
@@ -136,7 +136,7 @@ function describeChange(
     const p = prev.prompts[i];
     const n = next.prompts[i];
     if (!p || !n) continue;
-    const change = describePromptChange(`prompt ${i + 1}`, p, n);
+    const change = describePromptChange(`prompt ${i + 1}`, p as PromptChangeFields, n as PromptChangeFields);
     if (change) return change;
   }
 
@@ -217,7 +217,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     vscode.postMessage({
       type: MESSAGE_TYPES.UNDO_REDO_SYNC,
       prompts: ws.prompts,
-      finalPrompt: ws.finalPrompt,
+      finalStep: ws.finalStep,
       workflowProperties,
     });
   }, [vscode]);
@@ -260,7 +260,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     const current: UndoableWorkflowState = {
       prompts: s.prompts ?? [],
       workflowName: s.workflowName ?? null,
-      finalPrompt: s.finalPrompt ?? null,
+      finalStep: s.finalStep ?? null,
       currentStep: s.currentStep ?? 0,
       undoWorkflowProperties: s.undoWorkflowProperties ?? {},
     };

@@ -14,6 +14,19 @@ import {
   type CliOutput,
   type RetryState,
 } from "../types/messages";
+import type { ScriptStep } from "@root/types/WebviewMessageTypes";
+import { STEP_TYPES } from "@root/types/DashboardConstants";
+
+/**
+ * Webview-local WorkflowStep union: uses WebviewMessageTypes.PromptItem
+ * to avoid _runtime type incompatibility with FlightPathTypes.PromptItem.
+ */
+export type WorkflowStep = PromptItem | ScriptStep;
+
+/** Type guard for script steps (webview-local version) */
+function isScriptStep(step: WorkflowStep): step is ScriptStep {
+  return step.type === STEP_TYPES.SCRIPT;
+}
 import type {
   OrderedHistoryEntry,
   OrderedCliHistoryEntry,
@@ -71,11 +84,11 @@ interface WorkflowState {
   // Core workflow data
   fileName: string | null;
   workflowName: string | null;
-  prompts: PromptItem[];
+  prompts: WorkflowStep[];
   executionState: ExecutionState;
   currentStep: number;
   totalSteps: number;
-  finalPrompt: PromptItem | null;
+  finalStep: WorkflowStep | null;
   finalPromptStatus: StepStatus | null;
   finalPromptLoopCount: number;
   finalPromptPhase: FinalPromptPhase | null;
@@ -122,12 +135,12 @@ interface WorkflowActions {
   // Setters
   setFileName: (fileName: string | null) => void;
   setWorkflowName: (name: string | null) => void;
-  setPrompts: (prompts: PromptItem[]) => void;
+  setPrompts: (prompts: WorkflowStep[]) => void;
   updatePrompt: (index: number, updates: Partial<PromptItem>) => void;
   setExecutionState: (state: ExecutionState) => void;
   setCurrentStep: (step: number) => void;
   setTotalSteps: (total: number) => void;
-  setFinalPrompt: (finalPrompt: PromptItem | null) => void;
+  setFinalStep: (finalStep: WorkflowStep | null) => void;
   setFinalPromptStatus: (
     status: StepStatus | null,
     loopCount: number,
@@ -165,14 +178,14 @@ interface WorkflowActions {
   // Reset execution state only — preserves all CLI outputs and run history.
   // Resets executionState→IDLE, currentStep→0, and all prompt statuses→PENDING.
   // Used by "Clear workflow state" so users can edit prompts without losing output.
-  resetExecutionState: (prompts: PromptItem[]) => void;
+  resetExecutionState: (prompts: WorkflowStep[]) => void;
 
   // Partial runtime state clear (for append-continuation runs)
   clearRuntimeStateFromStep: (startStep: number) => void;
 
   // Apply a start-position change — updates prompts, currentStep, totalSteps, and resets execution state to IDLE.
   applyStartPositionChange: (
-    prompts: PromptItem[],
+    prompts: WorkflowStep[],
     newCurrentStep: number
   ) => void;
 
@@ -185,11 +198,11 @@ interface WorkflowActions {
   loadWorkflow: (data: {
     fileName: string;
     workflowName?: string;
-    prompts: PromptItem[];
+    prompts: WorkflowStep[];
     executionState?: ExecutionState;
     currentStep?: number;
     results?: Array<{ status?: StepStatus }>;
-    finalPrompt?: PromptItem | null;
+    finalStep?: WorkflowStep | null;
     finalPromptStatus?: StepStatus | null;
     finalPromptLoopCount?: number;
     finalPromptPhase?: FinalPromptPhase | null;
@@ -220,9 +233,9 @@ interface WorkflowSelectors {
   // Check if there are pending prompts in the queue
   hasPendingPrompts: () => boolean;
   // Get current prompt being executed
-  getCurrentPrompt: () => PromptItem | null;
+  getCurrentPrompt: () => WorkflowStep | null;
   // Get prompt by index
-  getPromptByIndex: (index: number) => PromptItem | null;
+  getPromptByIndex: (index: number) => WorkflowStep | null;
   // Check if workflow is currently running
   isWorkflowRunning: () => boolean;
   // Check if workflow is paused
@@ -250,7 +263,7 @@ const initialState: WorkflowState = {
   executionState: EXECUTION_STATES.IDLE,
   currentStep: 0,
   totalSteps: 0,
-  finalPrompt: null,
+  finalStep: null,
   finalPromptStatus: null,
   finalPromptLoopCount: 0,
   finalPromptPhase: null,
@@ -303,7 +316,7 @@ export const useWorkflowStore = create<
       updatePrompt: (index, updates) => {
         set((state) => ({
           prompts: state.prompts.map((p, i) =>
-            i === index ? { ...p, ...updates } : p
+            i === index ? ({ ...p, ...updates } as WorkflowStep) : p
           ),
         }));
       },
@@ -316,10 +329,10 @@ export const useWorkflowStore = create<
 
       setTotalSteps: (totalSteps) => withUndoPause(() => set({ totalSteps })),
 
-      setFinalPrompt: (finalPrompt) =>
+      setFinalStep: (finalStep) =>
         set((state) => ({
-          finalPrompt,
-          ...(finalPrompt
+          finalStep,
+          ...(finalStep
             ? {}
             : {
                 finalPromptStatus: null,
@@ -539,7 +552,7 @@ export const useWorkflowStore = create<
         withUndoPause(() =>
           set((state) => ({
             prompts: state.prompts.map((p, i) =>
-              i === stepIndex ? { ...p, status } : p
+              i === stepIndex ? ({ ...p, status } as WorkflowStep) : p
             ),
           }))
         ),
@@ -555,7 +568,7 @@ export const useWorkflowStore = create<
         executionState = EXECUTION_STATES.IDLE,
         currentStep = 0,
         results = [],
-        finalPrompt = null,
+        finalStep = null,
         finalPromptStatus = null,
         finalPromptLoopCount = 0,
         finalPromptPhase = null,
@@ -564,7 +577,7 @@ export const useWorkflowStore = create<
         const promptsWithStatus = prompts.map((prompt, index) => ({
           ...prompt,
           status: (results[index]?.status as StepStatus) || STEP_STATUS.PENDING,
-        }));
+        })) as WorkflowStep[];
 
         withUndoPause(() =>
           set({
@@ -574,7 +587,7 @@ export const useWorkflowStore = create<
             executionState,
             currentStep,
             totalSteps: prompts.length,
-            finalPrompt,
+            finalStep,
             finalPromptStatus,
             finalPromptLoopCount,
             finalPromptPhase,
@@ -631,7 +644,7 @@ export const useWorkflowStore = create<
         // partialize ensures only prompts/workflowName/finalPrompt are snapshotted,
         // so executionState/currentStep changes here are NOT recorded in undo history.
         set(() => ({
-          prompts: prompts.map((p) => ({ ...p, status: STEP_STATUS.PENDING })),
+          prompts: prompts.map((p) => ({ ...p, status: STEP_STATUS.PENDING })) as WorkflowStep[],
           totalSteps: prompts.length,
           executionState: EXECUTION_STATES.IDLE,
           currentStep: 0,
@@ -931,20 +944,23 @@ export const useWorkflowStore = create<
 
       isStepFailed: (stepIndex) => {
         const { prompts } = get();
-        const prompt = prompts[stepIndex];
-        return prompt?.status === STEP_STATUS.FAILED;
+        const step = prompts[stepIndex];
+        if (!step || isScriptStep(step)) return false;
+        return step.status === STEP_STATUS.FAILED;
       },
 
       getCompletedCount: () => {
         const { prompts } = get();
-        return prompts.filter((p) => p.status === STEP_STATUS.COMPLETED).length;
+        return prompts.filter(
+          (p) => !isScriptStep(p) && p.status === STEP_STATUS.COMPLETED
+        ).length;
       },
     }),
     {
       partialize: (state): UndoableWorkflowState => ({
         prompts: state.prompts,
         workflowName: state.workflowName,
-        finalPrompt: state.finalPrompt,
+        finalStep: state.finalStep,
         currentStep: state.currentStep,
         undoWorkflowProperties: state.undoWorkflowProperties,
       }),
@@ -975,12 +991,13 @@ export type {
   RetryState,
   StatusMessage,
 } from "../types/messages";
+// WorkflowStep is exported above as a webview-local union type (PromptItem | ScriptStep)
 export type { WorkflowProperties } from "./settingsStore";
 
 export interface UndoableWorkflowState {
-  prompts: PromptItem[];
+  prompts: WorkflowStep[];
   workflowName: string | null;
-  finalPrompt: PromptItem | null;
+  finalStep: WorkflowStep | null;
   currentStep: number;
   undoWorkflowProperties: WorkflowProperties;
 }

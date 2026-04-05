@@ -161,7 +161,7 @@ suite("WorkflowInstance finalPrompt replay", () => {
 
     instance.promptQueue.loadPrompts({
       prompts: [{ prompt: "queue-1" }],
-      finalPrompt: { prompt: "final-loop" },
+      finalStep: { prompt: "final-loop" },
     });
 
     await startQueueExecution(instance);

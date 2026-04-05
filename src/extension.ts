@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { WorkflowOrchestrator } from "./flightpath/WorkflowOrchestrator";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
+import { PromptPropertyCompletionProvider } from "./completions/PromptPropertyCompletionProvider";
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
 import { FlightPathWebviewProvider } from "./ui/FlightPathWebviewProvider";
@@ -126,7 +127,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
             const updatedState = promptQueue.getState();
             webviewProvider.updatePromptsExtended(
               updatedState.prompts,
-              promptQueue.getWorkflowFile().finalPrompt ?? null
+              promptQueue.getWorkflowFile().finalStep ?? null
             );
             webviewProvider.updateProgress(
               updatedState.currentIndex,
@@ -407,6 +408,26 @@ export async function activate(context: vscode.ExtensionContext) {
     );
     Log.debug(
       "FlightPath: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @, #, and ~ triggers"
+    );
+
+    // Register property key completion provider for YAML workflow files.
+    // No trigger character — activates on demand to offer prompt item property keys,
+    // with context-aware branching based on type: script vs. AI prompt steps.
+    const promptPropertyCompletionProvider =
+      new PromptPropertyCompletionProvider();
+    const yamlWorkflowPatterns = [
+      { pattern: "**/*.flightpath.yaml" },
+      { pattern: "**/*.flightpath.yml" },
+    ];
+    context.subscriptions.push(
+      vscode.languages.registerCompletionItemProvider(
+        yamlWorkflowPatterns,
+        promptPropertyCompletionProvider
+        // No trigger character — VS Code invokes on Ctrl+Space or natural typing
+      )
+    );
+    Log.debug(
+      "FlightPath: Registered property key completion provider for YAML workflow files"
     );
 
     // Register link provider for prompt files (enables Ctrl+Click navigation)

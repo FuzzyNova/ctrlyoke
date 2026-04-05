@@ -1,6 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import type { PromptItem, WorkingFile } from "../types/FlightPathTypes";
+import type { WorkflowStep, WorkingFile } from "../types/FlightPathTypes";
 import type { FinalPromptRuntimeState } from "../types/FlightPathTypes";
 import { Harness } from "../types/FlightPathTypes";
 import { EXECUTION_STATES } from "../types/DashboardConstants";
@@ -22,7 +22,7 @@ export interface IWorkingFileQueueAccess {
   getWorkingFilePath(): string | undefined;
 
   /** Current prompts in the queue */
-  getPrompts(): PromptItem[];
+  getPrompts(): WorkflowStep[];
 
   /** Current execution index */
   getCurrentIndex(): number;
@@ -34,7 +34,7 @@ export interface IWorkingFileQueueAccess {
   getWorkflowName(): string | undefined;
 
   /** Merge disk prompts into memory, returning newly added prompts */
-  mergeDiskPrompts(diskPrompts: PromptItem[]): PromptItem[];
+  mergeDiskPrompts(diskPrompts: WorkflowStep[]): WorkflowStep[];
 
   /** Emit state change notification to listeners */
   emitStateChange(): void;
@@ -167,7 +167,7 @@ export class WorkingFileManager {
    */
   public async createWorkingFile(
     nameForFile: string,
-    prompts: PromptItem[],
+    prompts: WorkflowStep[],
     workspaceFolderPath: string,
     workflowName: string,
     originalFilePath?: string

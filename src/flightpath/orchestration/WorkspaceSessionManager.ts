@@ -3,7 +3,7 @@ import * as path from "path";
 import { PromptFileParser } from "../PromptFileParser";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
-import { PromptItem, WorkingFile } from "../../types/FlightPathTypes";
+import { WorkflowStep, WorkingFile } from "../../types/FlightPathTypes";
 import { EXECUTION_STATES } from "../../types/DashboardConstants";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 
@@ -224,7 +224,7 @@ export class WorkspaceSessionManager {
           // but may exist in older working files on disk. Use prompts' _runtime.completedAt instead.
           const completedCount =
             workingFile.prompts?.filter(
-              (p: PromptItem) => p._runtime?.completedAt
+              (p: WorkflowStep) => p._runtime?.completedAt
             ).length || 0;
           const totalCount = workingFile.prompts?.length || 0;
           const currentIndex = runtime?.currentIndex || 0;
@@ -232,7 +232,7 @@ export class WorkspaceSessionManager {
           // Phase 4: Count prompts with session IDs (per-prompt _runtime metadata)
           const promptsWithSessions =
             workingFile.prompts?.filter(
-              (p: PromptItem) => p._runtime?.sessionId
+              (p: WorkflowStep) => p._runtime?.sessionId
             ).length || 0;
 
           // Format timestamp

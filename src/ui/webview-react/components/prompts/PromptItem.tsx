@@ -7,6 +7,7 @@ import type { PromptOverride } from "./PromptItemDetails";
 export type { PromptOverride };
 import type { StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
+import { STEP_TYPES } from "@root/types/DashboardConstants";
 
 export interface EndConditionResult {
   passed: boolean;
@@ -64,6 +65,8 @@ interface PromptItemProps {
   displayNumber?: number;
   /** When true, suppresses the bottom border (e.g. when a BoundaryBar follows) */
   hideBorderBottom?: boolean;
+  /** When true, renders the script step variant (terminal icon, Script badge, command text) */
+  isScript?: boolean;
   /**
    * When true, applies completed-section styling: slight dim + green left
    * accent to visually distinguish locked/done prompts from pending ones.
@@ -121,6 +124,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
   hideBorderBottom = false,
   dimmed = false,
   dragHandleProps,
+  isScript = false,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -195,23 +199,65 @@ export const PromptItem: React.FC<PromptItemProps> = ({
         </span>
         {/* Content column: title + details */}
         <div className="flex-1 min-w-0">
-          <span
-            className={`text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
-          >
-            {name ? name : truncate(text, 60)}
-          </span>
-          <PromptItemDetails
-            status={status}
-            harnessLabel={harnessLabel}
-            harnessIsDefault={harnessIsDefault}
-            modelLabel={modelLabel}
-            modelIsDefault={modelIsDefault}
-            retryState={retryState}
-            latestOutput={latestOutput}
-            details={details}
-            isSelected={isSelected}
-            overrides={overrides}
-          />
+          {isScript ? (
+            // Script step variant
+            <>
+              <div className="flex items-center gap-1">
+                <i
+                  className="codicon codicon-terminal text-[11px] opacity-60 flex-shrink-0"
+                />
+                <span
+                  className={`text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
+                >
+                  {name ? name : truncate(text, 60)}
+                </span>
+                <span
+                  className="ml-1 px-1 py-[1px] rounded text-[9px] bg-badge-bg text-badge-fg opacity-75 flex-shrink-0"
+                  title="Script step — runs a shell command"
+                >
+                  {STEP_TYPES.SCRIPT}
+                </span>
+              </div>
+              {/* Script command subtitle — only shown when a name is displayed in the title row */}
+              {name && text && (
+                <div
+                  className={`mt-0.5 text-[10px] opacity-60 font-mono truncate ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+                  title={text}
+                >
+                  {truncate(text, 60)}
+                </div>
+              )}
+              {/* Status details (duration, end condition) but no harness/model */}
+              <PromptItemDetails
+                status={status}
+                retryState={retryState}
+                latestOutput={latestOutput}
+                details={details}
+                isSelected={isSelected}
+              />
+            </>
+          ) : (
+            // Prompt step variant (default)
+            <>
+              <span
+                className={`text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
+              >
+                {name ? name : truncate(text, 60)}
+              </span>
+              <PromptItemDetails
+                status={status}
+                harnessLabel={harnessLabel}
+                harnessIsDefault={harnessIsDefault}
+                modelLabel={modelLabel}
+                modelIsDefault={modelIsDefault}
+                retryState={retryState}
+                latestOutput={latestOutput}
+                details={details}
+                isSelected={isSelected}
+                overrides={overrides}
+              />
+            </>
+          )}
         </div>
       </div>
     </div>

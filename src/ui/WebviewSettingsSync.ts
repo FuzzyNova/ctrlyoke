@@ -656,7 +656,7 @@ export class WebviewSettingsSync {
       const currentFile = orchestrator.getCurrentPromptFile();
       const workflowName = queueState.workflowName;
       const promptQueue = orchestrator.getActivePromptQueue();
-      const finalPrompt = promptQueue?.getWorkflowFile().finalPrompt ?? null;
+      const finalPrompt = promptQueue?.getWorkflowFile().finalStep ?? null;
       const finalPromptRuntime = promptQueue?.getFinalPromptRuntime();
       return {
         fileName: currentFile || "",

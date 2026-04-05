@@ -17,6 +17,7 @@ import {
   EXECUTION_STATES,
   STEP_STATUS,
   type PromptItem,
+  type WorkflowStep,
   workflowDisplayStep,
 } from "../types/FlightPathTypes";
 import {
@@ -957,12 +958,12 @@ export class WorkflowOrchestrator {
   }
 
   async syncPromptsForUndoRedo(
-    prompts: PromptItem[],
-    finalPrompt: PromptItem | null
+    prompts: WorkflowStep[],
+    finalStep: WorkflowStep | null
   ): Promise<void> {
     return this.getActiveInstance().syncPromptsForUndoRedo(
       prompts,
-      finalPrompt
+      finalStep
     );
   }
 
@@ -1539,9 +1540,9 @@ export class WorkflowOrchestrator {
     }
 
     // Read the latest working file to get current prompt list and step position
-    let prompts: PromptItem[] = [];
+    let prompts: WorkflowStep[] = [];
     let currentIndex = cliEntry.summary.currentStep ?? 0;
-    let finalPrompt: PromptItem | null = null;
+    let finalPrompt: WorkflowStep | null = null;
     let finalPromptRuntime:
       | {
           status?: StepStatus;
@@ -1553,13 +1554,13 @@ export class WorkflowOrchestrator {
     try {
       const content = await fs.promises.readFile(workingFilePath, "utf8");
       const workingFile = JSON.parse(content) as WorkingFile;
-      prompts = ((workingFile.prompts as PromptItem[]) ?? []).map((p) => ({
+      prompts = ((workingFile.prompts as WorkflowStep[]) ?? []).map((p) => ({
         ...p,
         // Strip any existing status so loadWorkflow sets it from the results array
         status: undefined as unknown as string,
-      }));
+      })) as WorkflowStep[];
       currentIndex = workingFile._runtime?.currentIndex ?? currentIndex;
-      finalPrompt = (workingFile.finalPrompt as PromptItem | undefined) ?? null;
+      finalPrompt = (workingFile.finalStep as WorkflowStep | undefined) ?? null;
       finalPromptRuntime = workingFile._runtime?.finalPrompt
         ? {
             status: workingFile._runtime.finalPrompt.status,

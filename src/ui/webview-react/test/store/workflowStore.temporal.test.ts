@@ -83,7 +83,7 @@ describe("tracked store actions (should record undo entries)", () => {
 
   it("setFinalPrompt records an undo entry (direct call — not via PROMPTS_EXTENDED)", () => {
     loadWorkflow([makePrompt()]);
-    store().setFinalPrompt(makePrompt({ prompt: "final step" }));
+    store().setFinalStep(makePrompt({ prompt: "final step" }));
     expect(temporal().pastStates).toHaveLength(1);
   });
 
@@ -198,7 +198,7 @@ describe("PROMPTS_EXTENDED handler simulation", () => {
 
     // setFinalPrompt is always paused in the handler
     temporal().pause();
-    store().setFinalPrompt(null);
+    store().setFinalStep(null);
     temporal().resume();
 
     expect(temporal().pastStates).toHaveLength(1);
@@ -214,7 +214,7 @@ describe("PROMPTS_EXTENDED handler simulation", () => {
     temporal().resume();
 
     temporal().pause();
-    store().setFinalPrompt(null);
+    store().setFinalStep(null);
     temporal().resume();
 
     expect(temporal().pastStates).toHaveLength(0);
@@ -227,11 +227,11 @@ describe("PROMPTS_EXTENDED handler simulation", () => {
     store().setPrompts([makePrompt({ prompt: "edited text" })]);
 
     temporal().pause();
-    store().setFinalPrompt(null);
+    store().setFinalStep(null);
     temporal().resume();
 
     expect(temporal().pastStates).toHaveLength(1);
-    expect(temporal().pastStates[0]?.prompts?.[0]?.prompt).toBe("hello world");
+    expect((temporal().pastStates[0]?.prompts?.[0] as any)?.prompt).toBe("hello world");
   });
 
   it("four-undo bug is gone: adding one prompt leaves exactly 1 past state", () => {
@@ -240,7 +240,7 @@ describe("PROMPTS_EXTENDED handler simulation", () => {
     // First PROMPTS_EXTENDED — count increased (recorded)
     store().setPrompts([makePrompt(), makePrompt({ prompt: "added" })]);
     temporal().pause();
-    store().setFinalPrompt(null);
+    store().setFinalStep(null);
     temporal().resume();
 
     // Second PROMPTS_EXTENDED — same content re-sync (suppressed)
@@ -248,7 +248,7 @@ describe("PROMPTS_EXTENDED handler simulation", () => {
     store().setPrompts([makePrompt(), makePrompt({ prompt: "added" })]);
     temporal().resume();
     temporal().pause();
-    store().setFinalPrompt(null);
+    store().setFinalStep(null);
     temporal().resume();
 
     expect(temporal().pastStates).toHaveLength(1);
@@ -269,7 +269,7 @@ describe("PROMPT_DELETED handler simulation", () => {
 
     // setFinalPrompt (paused — fix: not a second undo entry)
     temporal().pause();
-    store().setFinalPrompt(null);
+    store().setFinalStep(null);
     temporal().resume();
 
     expect(temporal().pastStates).toHaveLength(1);
@@ -280,13 +280,13 @@ describe("PROMPT_DELETED handler simulation", () => {
 
     store().setPrompts([makePrompt()]);
     temporal().pause();
-    store().setFinalPrompt(null);
+    store().setFinalStep(null);
     temporal().resume();
 
     temporal().undo();
 
     expect(store().prompts).toHaveLength(2);
-    expect(store().prompts[1].prompt).toBe("second");
+    expect((store().prompts[1] as any).prompt).toBe("second");
   });
 });
 
@@ -300,7 +300,7 @@ describe("undo/redo round-trips", () => {
 
     temporal().undo();
 
-    expect(store().prompts[0].prompt).toBe("hello world");
+    expect((store().prompts[0] as any).prompt).toBe("hello world");
     expect(temporal().futureStates).toHaveLength(1);
   });
 
@@ -310,7 +310,7 @@ describe("undo/redo round-trips", () => {
     temporal().undo();
     temporal().redo();
 
-    expect(store().prompts[0].prompt).toBe("edited");
+    expect((store().prompts[0] as any).prompt).toBe("edited");
     expect(temporal().futureStates).toHaveLength(0);
   });
 
@@ -332,10 +332,10 @@ describe("undo/redo round-trips", () => {
     store().updatePrompt(0, { prompt: "v3" });
 
     temporal().undo();
-    expect(store().prompts[0].prompt).toBe("v2");
+    expect((store().prompts[0] as any).prompt).toBe("v2");
 
     temporal().undo();
-    expect(store().prompts[0].prompt).toBe("hello world");
+    expect((store().prompts[0] as any).prompt).toBe("hello world");
   });
 
   it("workflowName changes are tracked and undoable", () => {
@@ -359,6 +359,6 @@ describe("undo/redo round-trips", () => {
 
     // executionState is not in the partialized snapshot — it stays as-is
     expect(store().executionState).toBe(EXECUTION_STATES.RUNNING);
-    expect(store().prompts[0].prompt).toBe("hello world");
+    expect((store().prompts[0] as any).prompt).toBe("hello world");
   });
 });

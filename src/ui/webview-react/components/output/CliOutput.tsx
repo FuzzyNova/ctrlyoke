@@ -895,6 +895,86 @@ export const CliOutput = memo<CliOutputProps>(
     // Format timestamp for header
     const timestamp = output.timestampMs ? formatTime(output.timestampMs) : "";
 
+    // Script step output — simplified rendering: header + stdout/stderr + exit code
+    if (output.source === "script") {
+      return (
+        <div
+          className={`bg-[var(--bg-primary)] py-[var(--spacing-sm)] px-[var(--spacing-md)] border-b border-[var(--border-color)] ${className}`}
+        >
+          {/* Header */}
+          <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex items-center gap-[var(--spacing-sm)]">
+            {timestamp && (
+              <span className="output-timestamp">[{timestamp}] </span>
+            )}
+            <i className="codicon codicon-terminal" />
+            [{stepLabel ?? `Script ${stepIndex + 1}`}]
+            {streamingIndicator}
+          </div>
+
+          {/* CLI command */}
+          {output.cliCommand && (
+            <div
+              className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)]`}
+            >
+              {output.workingDirectory || "workspace"}
+              {">"} {output.cliCommand}
+            </div>
+          )}
+
+          {/* Error message */}
+          {output.errorMessage && (
+            <div
+              className={`${OUTPUT_BLOCK_BASE} border-l-severity-error text-error-fg`}
+            >
+              Error: {output.errorMessage}
+            </div>
+          )}
+
+          {/* Script stdout/stderr — plain text */}
+          {output.response && (
+            <div
+              className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}
+            >
+              <div className="whitespace-pre-wrap text-[var(--fg-primary)]">
+                {output.response}
+              </div>
+            </div>
+          )}
+
+          {/* Exit code summary */}
+          {!output.isStreaming && output.exitCode !== undefined && (
+            <div
+              className={`mt-[var(--spacing-xs)] text-[length:var(--fp-output-font-size-xs)] flex items-center gap-1 ${
+                output.exitCode === 0
+                  ? "text-bash-status-success"
+                  : "text-bash-status-error"
+              }`}
+            >
+              <i
+                className={`codicon ${output.exitCode === 0 ? "codicon-pass" : "codicon-error"}`}
+              />
+              <span>
+                Exit code: {output.exitCode}
+                {output.exitCode === 0 ? " — Success" : " — Failed"}
+              </span>
+              {output.elapsed !== undefined && (
+                <span className="ml-2 text-[var(--fg-secondary)]">
+                  {output.elapsed}s
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Elapsed (when no exit code) */}
+          {!output.isStreaming && output.exitCode === undefined && output.elapsed !== undefined && (
+            <div className="mt-[var(--spacing-xs)] text-[length:var(--fp-output-font-size-xs)] text-[var(--fg-secondary)]">
+              {output.elapsed}s
+            </div>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div
         className={`bg-[var(--bg-primary)] py-[var(--spacing-sm)] px-[var(--spacing-md)] border-b border-[var(--border-color)] ${className}`}

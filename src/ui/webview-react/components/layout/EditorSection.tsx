@@ -14,6 +14,7 @@ import {
   EDITOR_TARGET_KINDS,
   MESSAGE_TYPES,
 } from "../../types/messages";
+import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 
 /**
@@ -27,7 +28,7 @@ import { triggerPanelAnimation } from "@utils/panelAnimation";
  * - Handles section collapse state persistence
  */
 export const EditorSection: React.FC = () => {
-  const { selectionTarget, promptName, setPromptName, promptText } =
+  const { selectionTarget, promptName, setPromptName, promptText, stepType } =
     useEditorStore();
   const tokenCount = useAttachmentTokenCount(promptText);
   const {
@@ -93,17 +94,20 @@ export const EditorSection: React.FC = () => {
     else if (e.key === "Escape") cancelNameEdit();
   };
 
+  const isScriptMode = stepType === STEP_TYPES.SCRIPT;
+
   // Generate mode indicator text (includes name when set)
   const getModeText = () => {
     if (isEditMode) {
       if (promptName) return `Editing: ${promptName}`;
       if (selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
-        return "Editing: Final Prompt";
+        return isScriptMode ? "Editing: Final Script" : "Editing: Final Prompt";
       }
+      if (isScriptMode) return "Editing: Script";
       return `Editing: Prompt ${selectionTarget.index + 1} of ${totalPrompts}`;
     }
     if (promptName) return `New: ${promptName}`;
-    return "New Prompt";
+    return isScriptMode ? "New Script" : "New Prompt";
   };
 
   function handleToggle() {
@@ -180,7 +184,7 @@ export const EditorSection: React.FC = () => {
               {getModeText()}
             </span>
           )}
-          {!isEditingName && (
+          {!isEditingName && !isScriptMode && (
             <>
               {" — "}
               <span

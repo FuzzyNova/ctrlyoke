@@ -16,7 +16,7 @@ import {
   RUNNER_IDS,
 } from "./types/DashboardConstants";
 import type { ExecutionMode } from "./types/DashboardConstants";
-import { Harness } from "./types/FlightPathTypes";
+import { Harness, isScriptStep } from "./types/FlightPathTypes";
 import type { QueueState, WorkflowRunnerLock } from "./types/FlightPathTypes";
 import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
 import { Log } from "./utils/Log";
@@ -436,12 +436,17 @@ async function runCommand(
     // so mutations to PromptItem objects propagate into the queue's internal state.
     const queueState = instance.promptQueue.getState();
     if (config.resume && queueState.prompts.length > 0) {
-      queueState.prompts[0].sessionId = config.resume;
-      queueState.prompts[0].resumeSession = true;
+      const firstStep = queueState.prompts[0];
+      if (!isScriptStep(firstStep)) {
+        firstStep.sessionId = config.resume;
+        firstStep.resumeSession = true;
+      }
     } else if (config.newSession) {
-      for (const prompt of queueState.prompts) {
-        delete prompt.sessionId;
-        prompt.resumeSession = false;
+      for (const step of queueState.prompts) {
+        if (!isScriptStep(step)) {
+          delete step.sessionId;
+          step.resumeSession = false;
+        }
       }
     }
 

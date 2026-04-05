@@ -72,7 +72,7 @@ export function useUndoRedoKeyHandler() {
       getVsCodeApi().postMessage({
         type: MESSAGE_TYPES.UNDO_REDO_SYNC,
         prompts: ws.prompts,
-        finalPrompt: ws.finalPrompt,
+        finalStep: ws.finalStep,
         workflowProperties,
       });
     };

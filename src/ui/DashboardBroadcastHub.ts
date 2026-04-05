@@ -1,4 +1,4 @@
-import type { PromptItem, WorkflowSummary } from "../types/FlightPathTypes";
+import type { WorkflowStep, WorkflowSummary } from "../types/FlightPathTypes";
 import type {
   FinalPromptPhase,
   StatusMessageSeverity,
@@ -65,7 +65,7 @@ export class DashboardBroadcastHub implements IDashboardProvider, IDashboardSink
     fileName: string,
     prompts: any[],
     workflowName?: string,
-    finalPrompt?: PromptItem | null,
+    finalPrompt?: WorkflowStep | null,
     finalPromptRuntime?: {
       status?: StepStatus;
       loopCount: number;
@@ -90,7 +90,7 @@ export class DashboardBroadcastHub implements IDashboardProvider, IDashboardSink
     executionState: string,
     currentIndex: number,
     workflowName?: string,
-    finalPrompt?: PromptItem | null,
+    finalPrompt?: WorkflowStep | null,
     finalPromptRuntime?: {
       status?: StepStatus;
       loopCount: number;
@@ -246,7 +246,7 @@ export class DashboardBroadcastHub implements IDashboardProvider, IDashboardSink
 
   updatePromptsExtended(
     prompts: any[],
-    finalPrompt?: PromptItem | null,
+    finalPrompt?: WorkflowStep | null,
     executionState?: string
   ): void {
     for (const client of this.clients) {
@@ -257,14 +257,14 @@ export class DashboardBroadcastHub implements IDashboardProvider, IDashboardSink
   updatePromptDeleted(
     fileName: string,
     prompts: any[],
-    finalPrompt?: PromptItem | null
+    finalPrompt?: WorkflowStep | null
   ): void {
     for (const client of this.clients) {
       client.updatePromptDeleted?.(fileName, prompts, finalPrompt);
     }
   }
 
-  updateFinalPrompt(finalPrompt: PromptItem | null): void {
+  updateFinalPrompt(finalPrompt: WorkflowStep | null): void {
     for (const client of this.clients) {
       client.updateFinalPrompt?.(finalPrompt);
     }
@@ -307,13 +307,13 @@ export class DashboardBroadcastHub implements IDashboardProvider, IDashboardSink
     }
   }
 
-  notifyStartPositionSet(prompts: PromptItem[], currentIndex: number): void {
+  notifyStartPositionSet(prompts: WorkflowStep[], currentIndex: number): void {
     for (const client of this.clients) {
       client.notifyStartPositionSet?.(prompts, currentIndex);
     }
   }
 
-  notifyPromptsReordered(prompts: PromptItem[]): void {
+  notifyPromptsReordered(prompts: WorkflowStep[]): void {
     for (const client of this.clients) {
       client.notifyPromptsReordered?.(prompts);
     }

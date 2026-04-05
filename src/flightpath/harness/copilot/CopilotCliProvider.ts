@@ -32,6 +32,7 @@ import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   PromptItem,
+  WorkflowStep,
   UserHookConfig,
 } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
@@ -121,7 +122,7 @@ export class CopilotCliProvider implements ICliProvider {
     sessionId: string | undefined,
     workflowContext?: {
       promptIndex: number;
-      allPrompts: PromptItem[];
+      allPrompts: WorkflowStep[];
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;

@@ -25,7 +25,7 @@ import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 import { parseArgString } from "../../../utils/CliArgParser";
-import type { PromptItem, UserHookConfig } from "../../../types/FlightPathTypes";
+import type { PromptItem, WorkflowStep, UserHookConfig } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 const execAsync = promisify(exec);
@@ -117,7 +117,7 @@ export class CodexCliProvider implements ICliProvider {
     sessionId: string | undefined,
     workflowContext?: {
       promptIndex: number;
-      allPrompts: PromptItem[];
+      allPrompts: WorkflowStep[];
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;

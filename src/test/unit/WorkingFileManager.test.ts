@@ -5,7 +5,7 @@ import * as path from "path";
 import { suite, test, afterEach } from "mocha";
 import { WorkingFileManager } from "../../flightpath/WorkingFileManager";
 import type { IWorkingFileQueueAccess } from "../../flightpath/WorkingFileManager";
-import type { WorkingFile } from "../../types/FlightPathTypes";
+import type { PromptItem, WorkingFile } from "../../types/FlightPathTypes";
 import { EXECUTION_STATES } from "../../types/DashboardConstants";
 
 // ─── Minimal mock for IWorkingFileQueueAccess ────────────────────────────────
@@ -82,7 +82,7 @@ suite("WorkingFileManager", () => {
       const result = await manager.readWorkingFile(filePath);
       assert.strictEqual(result.workflowName, "test-workflow");
       assert.strictEqual(result.prompts!.length, 1);
-      assert.strictEqual(result.prompts![0].prompt, "do the thing");
+      assert.strictEqual((result.prompts![0] as PromptItem).prompt, "do the thing");
     });
 
     test("rejects for a non-existent file path", async () => {
@@ -119,7 +119,7 @@ suite("WorkingFileManager", () => {
 
       const result = await manager.readWorkingFile(filePath);
       assert.strictEqual(result.prompts!.length, 3);
-      assert.strictEqual(result.prompts![2].prompt, "step three");
+      assert.strictEqual((result.prompts![2] as PromptItem).prompt, "step three");
     });
 
     test("preserves _runtime section", async () => {

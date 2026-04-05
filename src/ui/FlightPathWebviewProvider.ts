@@ -26,7 +26,7 @@ import type {
   UndoRecord,
   OutputExecutionTarget,
 } from "../types/OutputHistoryTypes";
-import type { PromptItem } from "../types/FlightPathTypes";
+import type { WorkflowStep } from "../types/FlightPathTypes";
 import { TemplateManager } from "../flightpath/TemplateManager";
 import { Log } from "../utils/Log";
 import { onModelsLoaded } from "../utils/ModelRegistry";
@@ -286,7 +286,7 @@ window.vscodeApi = acquireVsCodeApi();
     fileName: string,
     prompts: any[],
     workflowName?: string,
-    finalPrompt?: PromptItem | null,
+    finalPrompt?: WorkflowStep | null,
     finalPromptRuntime?: {
       status?: StepStatus;
       loopCount: number;
@@ -318,7 +318,7 @@ window.vscodeApi = acquireVsCodeApi();
     executionState: string,
     currentIndex: number,
     workflowName?: string,
-    finalPrompt?: PromptItem | null,
+    finalPrompt?: WorkflowStep | null,
     finalPromptRuntime?: {
       status?: StepStatus;
       loopCount: number;
@@ -509,7 +509,7 @@ window.vscodeApi = acquireVsCodeApi();
 
   public updatePromptsExtended(
     prompts: any[],
-    finalPrompt?: PromptItem | null,
+    finalPrompt?: WorkflowStep | null,
     executionState?: string
   ): void {
     this.postMessage({
@@ -535,7 +535,7 @@ window.vscodeApi = acquireVsCodeApi();
   public updatePromptDeleted(
     fileName: string,
     prompts: any[],
-    finalPrompt?: PromptItem | null
+    finalPrompt?: WorkflowStep | null
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.PROMPT_DELETED,
@@ -545,7 +545,7 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public updateFinalPrompt(finalPrompt: PromptItem | null): void {
+  public updateFinalPrompt(finalPrompt: WorkflowStep | null): void {
     this.postMessage({
       type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
       finalPrompt,
@@ -608,7 +608,7 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   public notifyStartPositionSet(
-    prompts: PromptItem[],
+    prompts: WorkflowStep[],
     currentIndex: number
   ): void {
     this.postMessage({
@@ -618,7 +618,7 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public notifyPromptsReordered(prompts: PromptItem[]): void {
+  public notifyPromptsReordered(prompts: WorkflowStep[]): void {
     this.postMessage({
       type: MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED,
       prompts,

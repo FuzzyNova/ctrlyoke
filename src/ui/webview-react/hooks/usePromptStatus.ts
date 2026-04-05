@@ -1,4 +1,4 @@
-import { useWorkflowStore } from "@store/workflowStore";
+import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import { STEP_STATUS, EXECUTION_STATES, type StepStatus } from "../types/messages";
 
 /**
@@ -12,7 +12,7 @@ export function usePromptStatus() {
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
 
   return function getPromptStatus(
-    prompt: { status?: StepStatus },
+    prompt: WorkflowStep | { status?: StepStatus },
     index: number
   ): StepStatus {
     // When running, position wins for current and past steps.
@@ -32,7 +32,7 @@ export function usePromptStatus() {
     if (executionState === EXECUTION_STATES.ERROR && index === currentStep) {
       return STEP_STATUS.FAILED;
     }
-    if (prompt.status) return prompt.status;
+    if ((prompt as any).status) return (prompt as any).status as StepStatus;
     if (index < currentStep) return STEP_STATUS.COMPLETED;
     return STEP_STATUS.PENDING;
   };

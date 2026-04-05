@@ -30,7 +30,6 @@ import {
   type StepStatus,
   type HarnessId,
   type WorkflowSummary,
-  type PromptItem,
   type UndoRecordUpdatedMessage,
 } from "../types/messages";
 import type {
@@ -198,7 +197,7 @@ function createMessageHandlers(): MessageHandlerMap {
         executionState: data.executionState as ExecutionState,
         currentStep: data.currentIndex || 0,
         results: data.results || [],
-        finalPrompt: data.finalPrompt ?? null,
+        finalStep: data.finalStep ?? null,
         finalPromptStatus: data.finalPromptStatus ?? null,
         finalPromptLoopCount: data.finalPromptLoopCount ?? 0,
         finalPromptPhase: data.finalPromptPhase ?? null,
@@ -229,7 +228,7 @@ function createMessageHandlers(): MessageHandlerMap {
       fileName: message.fileName,
       workflowName: message.workflowName,
       prompts: message.prompts || [],
-      finalPrompt: message.finalPrompt ?? null,
+      finalStep: message.finalStep ?? null,
       finalPromptStatus: message.finalPromptStatus ?? null,
       finalPromptLoopCount: message.finalPromptLoopCount ?? 0,
       finalPromptPhase: message.finalPromptPhase ?? null,
@@ -248,7 +247,7 @@ function createMessageHandlers(): MessageHandlerMap {
       executionState: message.executionState as ExecutionState,
       currentStep: message.currentIndex || 0,
       results: message.results || [],
-      finalPrompt: message.finalPrompt ?? null,
+      finalStep: message.finalStep ?? null,
       finalPromptStatus: message.finalPromptStatus ?? null,
       finalPromptLoopCount: message.finalPromptLoopCount ?? 0,
       finalPromptPhase: message.finalPromptPhase ?? null,
@@ -278,7 +277,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const newPrompts = (message.prompts || []).map(
       (prompt: any, index: number) => {
         // Preserve status from existing prompts
-        const existingPrompt = currentPrompts[index];
+        const existingPrompt = currentPrompts[index] as any;
         return {
           ...prompt,
           status: existingPrompt?.status || STEP_STATUS.PENDING,
@@ -297,8 +296,8 @@ function createMessageHandlers(): MessageHandlerMap {
     const promptCountChanged = newPrompts.length !== currentPrompts.length;
     const promptContentChanged =
       !promptCountChanged &&
-      newPrompts.some((p: PromptItem, i: number) => {
-        const cur = currentPrompts[i];
+      newPrompts.some((p: any, i: number) => {
+        const cur = currentPrompts[i] as any;
         return (
           p.prompt !== cur?.prompt ||
           p.name !== cur?.name ||
@@ -328,11 +327,11 @@ function createMessageHandlers(): MessageHandlerMap {
     if (!shouldRecord) {
       useWorkflowStore.temporal.getState().resume();
     }
-    // finalPrompt changes here are system-driven syncs, not user actions —
+    // finalStep changes here are system-driven syncs, not user actions —
     // suppress their undo entries regardless of count change.
-    if (message.finalPrompt !== undefined) {
+    if (message.finalStep !== undefined) {
       useWorkflowStore.temporal.getState().pause();
-      workflowStore.setFinalPrompt(message.finalPrompt ?? null);
+      workflowStore.setFinalStep(message.finalStep ?? null);
       useWorkflowStore.temporal.getState().resume();
     }
   };
@@ -399,12 +398,12 @@ function createMessageHandlers(): MessageHandlerMap {
 
     workflowStore.setFileName(message.fileName);
     workflowStore.setPrompts(message.prompts || []);
-    // Pause around setFinalPrompt — the delete action is already recorded by
-    // setPrompts above; a second entry from setFinalPrompt would require two
+    // Pause around setFinalStep — the delete action is already recorded by
+    // setPrompts above; a second entry from setFinalStep would require two
     // undos to restore a single deleted prompt.
-    if (message.finalPrompt !== undefined) {
+    if (message.finalStep !== undefined) {
       useWorkflowStore.temporal.getState().pause();
-      workflowStore.setFinalPrompt(message.finalPrompt ?? null);
+      workflowStore.setFinalStep(message.finalStep ?? null);
       useWorkflowStore.temporal.getState().resume();
     }
   };
@@ -563,10 +562,10 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
-  // UPDATE_FINAL_PROMPT - Workflow-level finalPrompt updated
+  // UPDATE_FINAL_PROMPT - Workflow-level finalStep updated
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.UPDATE_FINAL_PROMPT] = (message) => {
-    useWorkflowStore.getState().setFinalPrompt(message.finalPrompt ?? null);
+    useWorkflowStore.getState().setFinalStep(message.finalStep ?? null);
   };
 
   // --------------------------------------------------------------------------

@@ -2,7 +2,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import Ajv from "ajv";
 import * as yaml from "js-yaml";
-import { PromptFile, PromptItem } from "../types/FlightPathTypes";
+import { PromptFile, PromptItem, WorkflowStep, ScriptStep, isScriptStep } from "../types/FlightPathTypes";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
@@ -278,6 +278,20 @@ export class PromptFileParser {
   }
 
   /**
+   * Build a ScriptStep from a parsed source object
+   * @param source The source object (parsed JSON/YAML)
+   * @returns ScriptStep with only defined properties
+   */
+  private buildScriptStep(source: any): ScriptStep {
+    const step: ScriptStep = { type: "script", script: source.script };
+    if (source.name !== undefined) step.name = source.name;
+    if (source.timeout !== undefined) step.timeout = source.timeout;
+    if (source.continueOnFailure !== undefined)
+      step.continueOnFailure = source.continueOnFailure;
+    return step;
+  }
+
+  /**
    * Build a PromptItem with only explicitly set properties
    * @param promptText The resolved prompt text
    * @param source The source object (parsed JSON/YAML)
@@ -339,8 +353,11 @@ export class PromptFileParser {
 
     // Handle multiple prompts format
     if (parsed.prompts && Array.isArray(parsed.prompts)) {
-      const resolvedPrompts = await Promise.all(
+      const resolvedPrompts: WorkflowStep[] = await Promise.all(
         parsed.prompts.map(async (item: any) => {
+          if (item.type === "script") {
+            return this.buildScriptStep(item);
+          }
           const resolvedPrompt = await this.resolvePromptContent(
             item.prompt,
             promptFilePath
@@ -354,15 +371,21 @@ export class PromptFileParser {
         prompts: resolvedPrompts,
       };
 
-      if (parsed.finalPrompt && typeof parsed.finalPrompt.prompt === "string") {
-        const resolvedFinalPrompt = await this.resolvePromptContent(
-          parsed.finalPrompt.prompt,
-          promptFilePath
-        );
-        promptFile.finalPrompt = this.buildPromptItem(
-          resolvedFinalPrompt,
-          parsed.finalPrompt
-        );
+      // Support both new "finalStep" and legacy "finalPrompt" field names
+      const rawFinalStep = parsed.finalStep ?? parsed.finalPrompt;
+      if (rawFinalStep) {
+        if (rawFinalStep.type === "script") {
+          promptFile.finalStep = this.buildScriptStep(rawFinalStep);
+        } else if (typeof rawFinalStep.prompt === "string") {
+          const resolvedFinalPrompt = await this.resolvePromptContent(
+            rawFinalStep.prompt,
+            promptFilePath
+          );
+          promptFile.finalStep = this.buildPromptItem(
+            resolvedFinalPrompt,
+            rawFinalStep
+          );
+        }
       }
 
       // Copy workflow-level properties (if present)
@@ -462,7 +485,7 @@ export class PromptFileParser {
   /**
    * Validate prompt items for execution
    */
-  validatePromptItems(items: PromptItem[]): {
+  validatePromptItems(items: WorkflowStep[]): {
     valid: boolean;
     errors: string[];
   } {
@@ -473,6 +496,14 @@ export class PromptFileParser {
     }
 
     items.forEach((item, index) => {
+      // Script steps only require a non-empty script field
+      if (isScriptStep(item)) {
+        if (!item.script || item.script.trim().length === 0) {
+          errors.push(`Step ${index + 1}: Empty script command`);
+        }
+        return;
+      }
+
       if (!item.prompt || item.prompt.trim().length === 0) {
         errors.push(`Prompt ${index + 1}: Empty prompt text`);
       }

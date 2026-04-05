@@ -27,6 +27,7 @@ import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   PromptItem,
+  WorkflowStep,
   McpServerConfig,
   UserHookConfig,
 } from "../../../types/FlightPathTypes";
@@ -77,7 +78,7 @@ export class GeminiCliProvider implements ICliProvider {
     sessionId: string | undefined,
     workflowContext?: {
       promptIndex: number;
-      allPrompts: PromptItem[];
+      allPrompts: WorkflowStep[];
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;

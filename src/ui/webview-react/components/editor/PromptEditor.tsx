@@ -20,6 +20,7 @@ import {
   EDITOR_TARGET_KINDS,
   EDITOR_PLACEHOLDER_TEXT,
 } from "../../types/messages";
+import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 
 interface PromptEditorProps {
@@ -52,6 +53,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     saveToVsCodeState,
     restoreFromVsCodeState,
     hasActiveQueue,
+    stepType,
+    scriptCommand,
+    setStepType,
+    setScriptCommand,
   } = useEditorStore();
 
   const { prompts, executionState, currentStep, finalPromptStatus } =
@@ -102,7 +107,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const selectedPromptStatus =
     selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE
-      ? prompts[selectionTarget.index]?.status
+      ? (prompts[selectionTarget.index] as any)?.status
       : selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
         ? finalPromptStatus
         : null;
@@ -135,7 +140,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     if (prompts.length === 0) return false;
 
     for (let i = currentStep; i < prompts.length; i++) {
-      if (prompts[i]?.status === STEP_STATUS.PENDING) {
+      if ((prompts[i] as any)?.status === STEP_STATUS.PENDING) {
         return true;
       }
     }
@@ -460,7 +465,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     } else if (selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
-        finalPrompt: {
+        finalStep: {
           ...propertyValues,
           ...(promptName.trim() ? { name: promptName.trim() } : {}),
           prompt: text,
@@ -496,7 +501,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       } else {
         vscode.postMessage({
           type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
-          finalPrompt: null,
+          finalStep: null,
         });
       }
       cancelEdit();
@@ -522,7 +527,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     } else {
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
-        finalPrompt: null,
+        finalStep: null,
       });
     }
     setShowDeleteModal(false);
@@ -585,36 +590,128 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     return "Add prompt to execution queue";
   };
 
+  const isScriptMode = stepType === STEP_TYPES.SCRIPT;
+
   return (
     <div
       ref={editorContainerRef}
       className="prompt-editor flex flex-col flex-1 overflow-hidden"
     >
-      {/* CodeMirror Editor + Properties Drawer container */}
-      <div className="prompt-editor-wrapper flex flex-col flex-1 overflow-hidden relative">
-        <CodeMirrorEditor
-          value={promptText}
-          onChange={handleTextChange}
-          placeholder={
-            isFinalPrompt ? EDITOR_PLACEHOLDER_TEXT.FINAL_PROMPT : undefined
-          }
-          affUri={affUri}
-          dicUri={dicUri}
-          readOnly={isCLIManaged}
-          onRun={handleEditorRun}
-          onQueue={handleEditorQueue}
-        />
+      {/* Step type segmented control — Prompt | Script toggle */}
+      {!isCLIManaged && (
+        <div
+          className="flex items-center gap-0.5 px-2 py-1 border-b border-panel-border bg-sidebar-bg"
+          style={{ minHeight: "30px" }}
+        >
+          <button
+            type="button"
+            className={`px-2.5 py-0.5 text-xs rounded transition-colors ${
+              !isScriptMode
+                ? "bg-btn-bg text-btn-fg"
+                : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"
+            }`}
+            onClick={() => setStepType(STEP_TYPES.PROMPT)}
+            title="Prompt step — sends text to an AI harness"
+          >
+            <i className="codicon codicon-comment mr-1" />
+            Prompt
+          </button>
+          <button
+            type="button"
+            className={`px-2.5 py-0.5 text-xs rounded transition-colors ${
+              isScriptMode
+                ? "bg-btn-bg text-btn-fg"
+                : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"
+            }`}
+            onClick={() => setStepType(STEP_TYPES.SCRIPT)}
+            title="Script step — runs a shell command with no AI interaction"
+          >
+            <i className="codicon codicon-terminal mr-1" />
+            Script
+          </button>
+        </div>
+      )}
 
-        {/* Properties Drawer (slides up from bottom, overlays only editor) */}
-        <PropertiesDrawer
-          isOpen={propertiesDrawerOpen}
-          onClose={closePropertiesDrawer}
-          activePage={drawerActivePage}
-        />
-      </div>
+      {/* CodeMirror Editor + Properties Drawer container (prompt mode only) */}
+      {!isScriptMode && (
+        <div className="prompt-editor-wrapper flex flex-col flex-1 overflow-hidden relative">
+          <CodeMirrorEditor
+            value={promptText}
+            onChange={handleTextChange}
+            placeholder={
+              isFinalPrompt ? EDITOR_PLACEHOLDER_TEXT.FINAL_PROMPT : undefined
+            }
+            affUri={affUri}
+            dicUri={dicUri}
+            readOnly={isCLIManaged}
+            onRun={handleEditorRun}
+            onQueue={handleEditorQueue}
+          />
 
-      {/* File-reference badge — shown when editor contains only a file path */}
-      {isFileRef && (
+          {/* Properties Drawer (slides up from bottom, overlays only editor) */}
+          <PropertiesDrawer
+            isOpen={propertiesDrawerOpen}
+            onClose={closePropertiesDrawer}
+            activePage={drawerActivePage}
+          />
+        </div>
+      )}
+
+      {/* Script step fields (script mode only) */}
+      {isScriptMode && (
+        <div className="flex flex-col flex-1 overflow-auto px-3 py-3 gap-4 bg-editor-bg">
+          {/* Script command */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-foreground">
+              Script command
+            </label>
+            <input
+              type="text"
+              value={scriptCommand}
+              onChange={(e) => setScriptCommand(e.target.value)}
+              placeholder="e.g. npm test"
+              disabled={isCLIManaged}
+              className="px-2 py-1.5 text-xs bg-input-bg text-input-fg border border-input-border rounded outline-none focus:border-focus-border disabled:opacity-50"
+              style={{ boxShadow: "none" }}
+            />
+          </div>
+
+          {/* Timeout */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-foreground">
+              Timeout (ms)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={1000}
+              placeholder="Default (from settings)"
+              disabled={isCLIManaged}
+              className="px-2 py-1.5 text-xs bg-input-bg text-input-fg border border-input-border rounded outline-none focus:border-focus-border disabled:opacity-50 w-48"
+              style={{ boxShadow: "none" }}
+            />
+          </div>
+
+          {/* Continue on failure */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="script-continue-on-failure"
+              disabled={isCLIManaged}
+              className="w-3 h-3"
+            />
+            <label
+              htmlFor="script-continue-on-failure"
+              className="text-xs text-foreground cursor-pointer select-none"
+            >
+              Continue on failure
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* File-reference badge — shown when editor contains only a file path (prompt mode only) */}
+      {!isScriptMode && isFileRef && (
         <div
           className="flex items-center gap-1 px-2 py-1 text-xs"
           style={{
@@ -660,7 +757,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         isPromptCompleted={isPromptCompleted}
         isPromptBeingSent={isPromptBeingSent}
         isPromptActivelyRunning={isPromptActivelyRunning}
-        hasContent={promptText.trim().length > 0}
+        hasContent={isScriptMode ? scriptCommand.trim().length > 0 : promptText.trim().length > 0}
         hasPendingPrompts={hasPendingPrompts()}
         runButtonText={getRunButtonText()}
         runButtonTooltip={getRunButtonTooltip()}

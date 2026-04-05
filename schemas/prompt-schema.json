@@ -22,9 +22,9 @@
                 "$ref": "#/definitions/promptItem"
               }
             },
-            "finalPrompt": {
+            "finalStep": {
               "$ref": "#/definitions/promptItem",
-              "description": "A prompt that always runs after all queued prompts complete. If mcpServers includes \"flightpath\" and the finalPrompt appends prompts, those prompts run before finalPrompt executes again."
+              "description": "A step that always runs after all queued prompts complete. Can be an AI prompt or a script step. If mcpServers includes \"flightpath\" and the finalStep appends prompts, those prompts run before finalStep executes again."
             },
             "originalFile": {
               "type": "string",
@@ -257,6 +257,12 @@
       }
     },
     "promptItem": {
+      "oneOf": [
+        { "$ref": "#/definitions/aiPromptItem" },
+        { "$ref": "#/definitions/scriptStep" }
+      ]
+    },
+    "aiPromptItem": {
       "type": "object",
       "allOf": [
         {
@@ -264,6 +270,11 @@
         },
         {
           "properties": {
+            "type": {
+              "type": "string",
+              "const": "prompt",
+              "description": "Optional step type discriminator. When omitted, the step is treated as an AI prompt (backwards compatible)."
+            },
             "name": {
               "type": "string",
               "description": "Optional human-readable display label shown in the FlightPath dashboard. If omitted, the dashboard shows a truncated preview of the prompt text.",
@@ -281,6 +292,29 @@
           "required": ["prompt"]
         }
       ]
+    },
+    "scriptStep": {
+      "type": "object",
+      "description": "A workflow step that runs a shell script/command with no AI interaction.",
+      "properties": {
+        "type": { "type": "string", "const": "script" },
+        "name": { "type": "string", "maxLength": 100 },
+        "script": {
+          "type": "string",
+          "description": "Shell command or path to script. Resolved relative to workspace root or .flightpath/."
+        },
+        "timeout": {
+          "type": "number",
+          "description": "Timeout in milliseconds. Defaults to flightpath.scriptTimeout setting."
+        },
+        "continueOnFailure": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, non-zero exit is a warning only — workflow continues."
+        }
+      },
+      "required": ["type", "script"],
+      "additionalProperties": false
     },
     "endCondition": {
       "type": "object",

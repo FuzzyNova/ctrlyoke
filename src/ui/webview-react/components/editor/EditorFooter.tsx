@@ -10,6 +10,8 @@ import { DrawerTabBar } from "../shared/DrawerTabBar";
 import type { DrawerPage } from "../../types/drawerPages";
 import type { HarnessId } from "../../types/messages";
 import type { TabIconOverride } from "../shared/tabBadgeUtils";
+import { useEditorStore } from "../../store/editorStore";
+import { STEP_TYPES } from "@root/types/DashboardConstants";
 
 interface EditorFooterProps {
   isEditMode: boolean;
@@ -76,95 +78,104 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   drawerTabOverrides,
 }) => {
   const [footerRef, isNarrow] = useElementNarrow(768);
+  const stepType = useEditorStore((s) => s.stepType);
+  const isScriptMode = stepType === STEP_TYPES.SCRIPT;
 
   return (
     <div
       ref={footerRef}
       className="editor-footer flex items-center gap-1 px-3 py-1.5 border-t border-panel-border bg-sidebar-bg"
     >
-      {/* Properties toggle button */}
-      <button
-        className={`btn-properties shrink-0 px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors ${
-          propertiesOpen
-            ? "bg-btn-secondary-bg text-btn-secondary-fg"
-            : "hover:bg-list-hover-bg text-foreground"
-        }`}
-        onClick={onToggleProperties}
-        title="Toggle prompt properties"
-      >
-        <i className="codicon codicon-settings" />
-        {!isNarrow && <span>Properties</span>}
-        {!isNarrow && (
-          <i
-            className={`codicon ${propertiesOpen ? "codicon-chevron-down" : "codicon-chevron-up"}`}
-          />
-        )}
-      </button>
-
-      {/* Swappable zone: quick pickers ↔ DrawerTabBar */}
-      <div className="relative flex-1 min-w-0 self-stretch">
-        {/* Quick pickers — unified layout, exits upward as a single unit */}
-        <div
-          className={`absolute inset-0 flex items-center justify-between transition-all duration-300 ${
+      {/* Properties toggle button — hidden in script mode */}
+      {!isScriptMode && (
+        <button
+          className={`btn-properties shrink-0 px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors ${
             propertiesOpen
-              ? "-translate-y-3 opacity-0 pointer-events-none"
-              : "translate-y-0 opacity-100"
+              ? "bg-btn-secondary-bg text-btn-secondary-fg"
+              : "hover:bg-list-hover-bg text-foreground"
           }`}
+          onClick={onToggleProperties}
+          title="Toggle prompt properties"
         >
-          <div className="flex items-center gap-1">
-            <HarnessQuickPicker
-              isNarrow={isNarrow}
-              showLabel={!isNarrow}
-              disabled={isCLIManaged}
+          <i className="codicon codicon-settings" />
+          {!isNarrow && <span>Properties</span>}
+          {!isNarrow && (
+            <i
+              className={`codicon ${propertiesOpen ? "codicon-chevron-down" : "codicon-chevron-up"}`}
             />
-            <ModelQuickPicker
-              isNarrow={isNarrow}
-              showLabel={!isNarrow}
-              disabled={isCLIManaged}
-            />
-            <AgentQuickPicker
-              isNarrow={isNarrow}
-              showLabel={!isNarrow}
-              disabled={isCLIManaged}
-            />
-            <SkillsQuickPicker
-              isNarrow={isNarrow}
-              showLabel={!isNarrow}
-              disabled={isCLIManaged}
-            />
+          )}
+        </button>
+      )}
+
+      {/* Swappable zone: quick pickers ↔ DrawerTabBar — hidden in script mode */}
+      {!isScriptMode && (
+        <div className="relative flex-1 min-w-0 self-stretch">
+          {/* Quick pickers — unified layout, exits upward as a single unit */}
+          <div
+            className={`absolute inset-0 flex items-center justify-between transition-all duration-300 ${
+              propertiesOpen
+                ? "-translate-y-3 opacity-0 pointer-events-none"
+                : "translate-y-0 opacity-100"
+            }`}
+          >
+            <div className="flex items-center gap-1">
+              <HarnessQuickPicker
+                isNarrow={isNarrow}
+                showLabel={!isNarrow}
+                disabled={isCLIManaged}
+              />
+              <ModelQuickPicker
+                isNarrow={isNarrow}
+                showLabel={!isNarrow}
+                disabled={isCLIManaged}
+              />
+              <AgentQuickPicker
+                isNarrow={isNarrow}
+                showLabel={!isNarrow}
+                disabled={isCLIManaged}
+              />
+              <SkillsQuickPicker
+                isNarrow={isNarrow}
+                showLabel={!isNarrow}
+                disabled={isCLIManaged}
+              />
+            </div>
+            <div className="flex items-center gap-1">
+              <PermissionsQuickPicker
+                isNarrow={isNarrow}
+                showLabel={!isNarrow}
+                disabled={isCLIManaged}
+              />
+              <ContextQuickPicker
+                isNarrow={isNarrow}
+                showLabel={!isNarrow}
+                disabled={isCLIManaged}
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            <PermissionsQuickPicker
+
+          {/* DrawerTabBar — independent full-width layer, enters from below */}
+          <div
+            className={`absolute inset-0 flex items-center transition-all duration-300 ${
+              propertiesOpen
+                ? "translate-y-0 opacity-100"
+                : "translate-y-3 opacity-0 pointer-events-none"
+            }`}
+          >
+            <DrawerTabBar
+              activeTab={drawerActivePage}
+              onTabChange={onDrawerTabChange}
+              harnessId={drawerHarnessId}
               isNarrow={isNarrow}
-              showLabel={!isNarrow}
-              disabled={isCLIManaged}
-            />
-            <ContextQuickPicker
-              isNarrow={isNarrow}
-              showLabel={!isNarrow}
-              disabled={isCLIManaged}
+              tabOverrides={drawerTabOverrides}
+              className="flex items-center w-full h-full"
             />
           </div>
         </div>
+      )}
 
-        {/* DrawerTabBar — independent full-width layer, enters from below */}
-        <div
-          className={`absolute inset-0 flex items-center transition-all duration-300 ${
-            propertiesOpen
-              ? "translate-y-0 opacity-100"
-              : "translate-y-3 opacity-0 pointer-events-none"
-          }`}
-        >
-          <DrawerTabBar
-            activeTab={drawerActivePage}
-            onTabChange={onDrawerTabChange}
-            harnessId={drawerHarnessId}
-            isNarrow={isNarrow}
-            tabOverrides={drawerTabOverrides}
-            className="flex items-center w-full h-full"
-          />
-        </div>
-      </div>
+      {/* Spacer for script mode — pushes action buttons to the right */}
+      {isScriptMode && <div className="flex-1" />}
 
       {/* Action buttons — always visible */}
       <div className="flex items-center gap-2 shrink-0 ml-1 pl-2 border-l border-panel-border">

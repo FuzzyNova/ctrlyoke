@@ -9,6 +9,7 @@ import {
   type RunnerId,
   type PromptTerminalStatus,
   type WorkflowAttemptStatus,
+  STEP_TYPES,
 } from "./DashboardConstants";
 import { ToolPermissionMode } from "../flightpath/harness/shared/interfaces/IToolPermissionMapper";
 export type { ToolPermissionMode };
@@ -206,8 +207,8 @@ export interface ExecutionProperties {
 
 export interface PromptFile extends ExecutionProperties {
   prompt?: string;
-  prompts?: PromptItem[];
-  finalPrompt?: PromptItem;
+  prompts?: WorkflowStep[];
+  finalStep?: WorkflowStep;
   /**
    * Workflow-level variable defaults for `{{varName}}` substitution.
    * CLI `--var key=value` flags override these at runtime (highest precedence).
@@ -310,11 +311,37 @@ export interface WorkingFile extends PromptFile {
   _runtime?: WorkingFileRuntime; // Optional runtime state (can be omitted for manual runs)
 }
 
+/** Discriminant type for workflow steps */
+export type PromptItemType = (typeof STEP_TYPES)[keyof typeof STEP_TYPES];
+
 export interface PromptItem extends ExecutionProperties {
+  /** Step type discriminant — defaults to "prompt" when absent */
+  type?: typeof STEP_TYPES.PROMPT;
   name?: string; // Optional human-readable display label
   prompt: string;
   sessionId?: string | number; // Session ID for resuming conversations (string for CLI, number for legacy chat)
   _runtime?: PromptRuntimeMetadata; // Per-prompt runtime metadata
+}
+
+/**
+ * Script step — runs a shell command with no AI harness interaction.
+ * Shares _runtime with PromptRuntimeMetadata for startedAt/completedAt tracking.
+ */
+export interface ScriptStep {
+  type: typeof STEP_TYPES.SCRIPT;
+  name?: string;
+  script: string;
+  timeout?: number;
+  continueOnFailure?: boolean;
+  _runtime?: PromptRuntimeMetadata; // Reuse for startedAt/completedAt/terminalStatus
+}
+
+/** Union type for all workflow steps */
+export type WorkflowStep = PromptItem | ScriptStep;
+
+/** Type guard: returns true if the step is a ScriptStep */
+export function isScriptStep(step: WorkflowStep): step is ScriptStep {
+  return step.type === STEP_TYPES.SCRIPT;
 }
 
 /**
@@ -380,7 +407,7 @@ export interface EndCondition {
  */
 export interface QueueState extends WorkflowRuntimeState {
   currentIndex: number;
-  prompts: PromptItem[];
+  prompts: WorkflowStep[];
   results: PromptResult[];
   completedIndices: Set<string>; // Fast-lookup cache of completed prompt indices (as strings: "0", "1", ...)
   totalExecutionTime: number; // Milliseconds of active execution time (pause-aware)
@@ -455,4 +482,4 @@ export interface WorkflowRunnerLock {
 }
 
 // Re-export constants for convenience
-export { EXECUTION_STATES, STEP_STATUS };
+export { EXECUTION_STATES, STEP_STATUS, STEP_TYPES };

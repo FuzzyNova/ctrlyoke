@@ -9,6 +9,8 @@ import {
   PromptResult,
   EXECUTION_STATES,
   STEP_STATUS,
+  WorkflowStep,
+  isScriptStep,
 } from "../types/FlightPathTypes";
 import { PROMPT_TERMINAL_STATUS } from "../types/DashboardConstants";
 
@@ -116,7 +118,7 @@ export class PromptQueue {
       getCurrentIndex: () => this.state.currentIndex,
       getStatus: () => this.stateMachine.status,
       getWorkflowName: () => this.state.workflowName,
-      mergeDiskPrompts: (diskPrompts: PromptItem[]) =>
+      mergeDiskPrompts: (diskPrompts: WorkflowStep[]) =>
         this.mergeDiskPrompts(diskPrompts),
       emitStateChange: () => this.emitStateChange(),
       getFinalPromptRuntime: () => this.getFinalPromptRuntime(),
@@ -295,8 +297,8 @@ export class PromptQueue {
     this.state = {
       currentIndex: 0,
       prompts: [...prompts],
-      results: prompts.map((prompt) => ({
-        prompt: prompt.prompt,
+      results: prompts.map((step) => ({
+        prompt: isScriptStep(step) ? step.script : step.prompt,
         status: STEP_STATUS.PENDING,
         timestamp: new Date(),
       })),
@@ -437,7 +439,7 @@ export class PromptQueue {
         }
 
         return {
-          prompt: prompt.prompt,
+          prompt: isScriptStep(prompt) ? prompt.script : prompt.prompt,
           status,
           timestamp: new Date(),
         };
@@ -481,8 +483,8 @@ export class PromptQueue {
     this.currentRetryCount = 0;
 
     // Reset all results to pending
-    this.state.results = this.state.prompts.map((prompt) => ({
-      prompt: prompt.prompt,
+    this.state.results = this.state.prompts.map((step) => ({
+      prompt: isScriptStep(step) ? step.script : step.prompt,
       status: STEP_STATUS.PENDING,
       timestamp: new Date(),
     }));
@@ -496,10 +498,10 @@ export class PromptQueue {
     // Clear per-prompt _runtime data (sessionId, harness, model, etc.)
     // Stale session IDs from a previous run would cause log discovery and session
     // resumption to find the wrong session when re-running the same workflow.
-    this.state.prompts = this.state.prompts.map((prompt) => {
-      // Destructure to remove _runtime, preserving all other PromptItem fields
-      const { _runtime, ...rest } = prompt;
-      return rest;
+    this.state.prompts = this.state.prompts.map((step) => {
+      // Destructure to remove _runtime, preserving all other step fields
+      const { _runtime, ...rest } = step;
+      return rest as WorkflowStep;
     });
 
     this.emitStateChange();
@@ -562,7 +564,7 @@ export class PromptQueue {
   /**
    * Get current prompt
    */
-  getCurrentPrompt(): PromptItem | null {
+  getCurrentPrompt(): WorkflowStep | null {
     if (!this.hasNext()) {
       return null;
     }
@@ -833,30 +835,32 @@ export class PromptQueue {
     const reloadedPrompts = reloadedFile.prompts;
 
     // 2. Identify new prompts (not in completedIndices AND not already in current queue)
-    const newPrompts: PromptItem[] = [];
+    const newPrompts: WorkflowStep[] = [];
     const currentPromptHashes = new Set<string>();
 
     // Build set of content hashes for prompts currently in queue
-    for (const existingPrompt of this.state.prompts) {
-      const hash = hashPromptContent(existingPrompt.prompt);
+    for (const existingStep of this.state.prompts) {
+      const content = isScriptStep(existingStep) ? existingStep.script : existingStep.prompt;
+      const hash = hashPromptContent(content);
       currentPromptHashes.add(hash);
     }
 
     // Find truly new prompts (not completed, not already in queue)
-    for (const prompt of reloadedPrompts) {
+    for (const step of reloadedPrompts) {
       // Skip if already completed (per-prompt _runtime.completedAt is authoritative)
-      if (prompt._runtime?.completedAt !== undefined) {
+      if (step._runtime?.completedAt !== undefined) {
         continue;
       }
 
       // Skip if already in current pending queue (by content hash)
-      const hash = hashPromptContent(prompt.prompt);
+      const content = isScriptStep(step) ? step.script : step.prompt;
+      const hash = hashPromptContent(content);
       if (currentPromptHashes.has(hash)) {
         continue;
       }
 
-      // This is a truly new prompt
-      newPrompts.push(prompt);
+      // This is a truly new step
+      newPrompts.push(step);
     }
 
     if (newPrompts.length === 0) {
@@ -880,8 +884,8 @@ export class PromptQueue {
     this.state.prompts.push(...newPrompts);
 
     // Add new results for the new prompts
-    const newResults: PromptResult[] = newPrompts.map((prompt) => ({
-      prompt: prompt.prompt,
+    const newResults: PromptResult[] = newPrompts.map((step) => ({
+      prompt: isScriptStep(step) ? step.script : step.prompt,
       status: STEP_STATUS.PENDING,
       timestamp: new Date(),
     }));
@@ -927,20 +931,22 @@ export class PromptQueue {
    * @param diskPrompts Prompts read from the working file on disk
    * @returns Array of newly-discovered prompts (empty if none)
    */
-  private mergeDiskPrompts(diskPrompts: PromptItem[]): PromptItem[] {
+  private mergeDiskPrompts(diskPrompts: WorkflowStep[]): WorkflowStep[] {
     // Build map of prompts we have in memory (by content hash)
-    const memoryPromptMap = new Map<string, PromptItem>();
-    for (const prompt of this.state.prompts) {
-      const hash = hashPromptContent(prompt.prompt);
-      memoryPromptMap.set(hash, prompt);
+    const memoryPromptMap = new Map<string, WorkflowStep>();
+    for (const step of this.state.prompts) {
+      const content = isScriptStep(step) ? step.script : step.prompt;
+      const hash = hashPromptContent(content);
+      memoryPromptMap.set(hash, step);
     }
 
     // Find prompts on disk that don't exist in memory
-    const newPromptsFromDisk: PromptItem[] = [];
-    for (const diskPrompt of diskPrompts) {
-      const hash = hashPromptContent(diskPrompt.prompt);
+    const newPromptsFromDisk: WorkflowStep[] = [];
+    for (const diskStep of diskPrompts) {
+      const content = isScriptStep(diskStep) ? diskStep.script : diskStep.prompt;
+      const hash = hashPromptContent(content);
       if (!memoryPromptMap.has(hash)) {
-        newPromptsFromDisk.push(diskPrompt);
+        newPromptsFromDisk.push(diskStep);
       }
     }
 
@@ -952,30 +958,32 @@ export class PromptQueue {
     // This preserves the insertion positions chosen by MCP (e.g., "next" vs "end")
     // But preserve in-memory state for existing prompts — specifically _runtime (session IDs,
     // completedAt, etc.) that may not have been persisted to disk yet at the time of this merge.
-    this.state.prompts = diskPrompts.map((diskPrompt) => {
-      const hash = hashPromptContent(diskPrompt.prompt);
-      const memoryPrompt = memoryPromptMap.get(hash);
-      return memoryPrompt ?? diskPrompt;
+    this.state.prompts = diskPrompts.map((diskStep) => {
+      const content = isScriptStep(diskStep) ? diskStep.script : diskStep.prompt;
+      const hash = hashPromptContent(content);
+      const memoryStep = memoryPromptMap.get(hash);
+      return memoryStep ?? diskStep;
     });
 
     // Rebuild results array to match new prompt order
     // Preserve existing results where we have them, add pending for new prompts
-    const newResults: PromptResult[] = diskPrompts.map((prompt) => {
-      const hash = hashPromptContent(prompt.prompt);
+    const newResults: PromptResult[] = diskPrompts.map((step) => {
+      const content = isScriptStep(step) ? step.script : step.prompt;
+      const hash = hashPromptContent(content);
 
-      // Find existing result for this prompt
+      // Find existing result for this step
       const existingResultIndex = this.state.results.findIndex((r) => {
         const resultHash = hashPromptContent(r.prompt);
-        return resultHash === hash || r.prompt === prompt.prompt;
+        return resultHash === hash || r.prompt === content;
       });
 
       if (existingResultIndex >= 0) {
         // Use existing result (preserves completion status)
         return this.state.results[existingResultIndex];
       } else {
-        // New prompt - create pending result
+        // New step - create pending result
         return {
-          prompt: prompt.prompt,
+          prompt: content,
           status: STEP_STATUS.PENDING,
           timestamp: new Date(),
         };
@@ -1052,7 +1060,7 @@ export class PromptQueue {
    * @throws Error if queue is in invalid state for appending
    */
   public async appendPrompts(
-    prompts: PromptItem[],
+    prompts: WorkflowStep[],
     source: string = "User append",
     position: QueuePosition = QUEUE_POSITION.END
   ): Promise<void> {
@@ -1079,8 +1087,8 @@ export class PromptQueue {
       this.state.prompts.splice(insertIndex, 0, ...prompts);
 
       // Create new results for the inserted prompts
-      const newResults: PromptResult[] = prompts.map((prompt) => ({
-        prompt: prompt.prompt,
+      const newResults: PromptResult[] = prompts.map((step) => ({
+        prompt: isScriptStep(step) ? step.script : step.prompt,
         status: STEP_STATUS.PENDING,
         timestamp: new Date(),
       }));
@@ -1126,7 +1134,7 @@ export class PromptQueue {
    */
   public async createWorkingFile(
     nameForFile: string,
-    prompts: PromptItem[],
+    prompts: WorkflowStep[],
     workspaceFolderPath: string,
     originalFilePath?: string
   ): Promise<string> {
@@ -1255,17 +1263,17 @@ export class PromptQueue {
    */
   public async updatePrompt(
     index: number,
-    updates: Partial<PromptItem>
+    updates: Partial<WorkflowStep>
   ): Promise<void> {
     if (index < 0 || index >= this.state.prompts.length) {
       throw new Error(`Invalid prompt index: ${index}`);
     }
 
-    // Merge updates into existing prompt
+    // Merge updates into existing step
     this.state.prompts[index] = {
       ...this.state.prompts[index],
       ...updates,
-    };
+    } as WorkflowStep;
 
     // Persist to working file (skip merge to avoid undoing the update)
     await this.updateWorkingFile(true);
@@ -1353,11 +1361,11 @@ export class PromptQueue {
     if (toIndex === currentIndex) return;
 
     if (toIndex < currentIndex) {
-      this.state.prompts = this.state.prompts.map((prompt, index) => {
-        if (index < toIndex) return prompt;
-        const { _runtime, ...rest } = prompt;
+      this.state.prompts = this.state.prompts.map((step, index) => {
+        if (index < toIndex) return step;
+        const { _runtime, ...rest } = step;
         void _runtime;
-        return rest;
+        return rest as WorkflowStep;
       });
       this.state.results = this.state.results.map((result, index) =>
         index < toIndex ? result : { ...result, status: STEP_STATUS.PENDING }
@@ -1417,14 +1425,14 @@ export class PromptQueue {
    * Does NOT emit a state change event — the webview already has the correct state.
    * The working file watcher ignores changes in non-running states, so no re-broadcast occurs.
    */
-  public async syncPromptsForUndoRedo(newPrompts: PromptItem[]): Promise<void> {
+  public async syncPromptsForUndoRedo(newPrompts: WorkflowStep[]): Promise<void> {
     const currentIndex = this.state.currentIndex;
     this.state.prompts = newPrompts;
 
     // Preserve completed results; reset pending slots to PENDING
     const completedResults = this.state.results.slice(0, currentIndex);
-    const pendingResults = newPrompts.slice(currentIndex).map((p) => ({
-      prompt: p.prompt,
+    const pendingResults = newPrompts.slice(currentIndex).map((step) => ({
+      prompt: isScriptStep(step) ? step.script : step.prompt,
       status: STEP_STATUS.PENDING,
       timestamp: new Date(),
     }));

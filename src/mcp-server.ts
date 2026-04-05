@@ -25,9 +25,11 @@ import * as fsSync from "fs";
 import * as path from "path";
 import type {
   PromptItem,
+  WorkflowStep,
   WorkingFile,
   WorkingFileRuntime,
 } from "./types/FlightPathTypes";
+import { isScriptStep } from "./types/FlightPathTypes";
 import {
   EXECUTION_STATES,
   QUEUE_POSITION,
@@ -349,12 +351,12 @@ class FlightPathMCPServer {
       executionState: EXECUTION_STATES.IDLE,
     };
 
-    const allPrompts = queueData.prompts || [];
+    const allPrompts = (queueData.prompts || []) as WorkflowStep[];
     const prompts = allPrompts.map((p, index) => ({
       index,
-      prompt: p.prompt,
+      prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,
       status: this.getPromptStatus(index, runtime, allPrompts),
-      model: p.model,
+      model: isScriptStep(p) ? undefined : p.model,
     }));
 
     const completedCount = allPrompts.filter(
@@ -518,7 +520,7 @@ class FlightPathMCPServer {
       log("Starting deduplication validation...");
       const validationResults = this.validatePrompts(
         prompts,
-        queueData.prompts || []
+        (queueData.prompts || []) as WorkflowStep[]
       );
       log("Validation results:", validationResults);
 
@@ -699,7 +701,7 @@ class FlightPathMCPServer {
 
     const fileContent = await fs.readFile(workingFile, "utf8");
     const queueData: WorkingFile = JSON.parse(fileContent);
-    const allPrompts = queueData.prompts || [];
+    const allPrompts = (queueData.prompts || []) as WorkflowStep[];
 
     const runtime = queueData._runtime || {
       currentIndex: 0,
@@ -717,7 +719,7 @@ class FlightPathMCPServer {
         const p = allPrompts[i];
         return {
           index: i,
-          prompt: p.prompt,
+          prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,
           status: this.getPromptStatus(i, runtime, allPrompts),
           responseText: p._runtime?.responseText ?? null,
         };
@@ -740,7 +742,7 @@ class FlightPathMCPServer {
    */
   private validatePrompts(
     newPrompts: PromptItem[],
-    existingPrompts: PromptItem[]
+    existingPrompts: WorkflowStep[]
   ): Array<{ prompt: PromptItem; accepted: boolean; reason?: string }> {
     const results: Array<{
       prompt: PromptItem;
@@ -752,7 +754,9 @@ class FlightPathMCPServer {
       // Check 1: Already completed (per-prompt _runtime.completedAt is authoritative)
       const alreadyCompleted = existingPrompts.some(
         (p) =>
-          p._runtime?.completedAt !== undefined && p.prompt === newPrompt.prompt
+          p._runtime?.completedAt !== undefined &&
+          !isScriptStep(p) &&
+          p.prompt === newPrompt.prompt
       );
 
       if (alreadyCompleted) {
@@ -867,7 +871,7 @@ class FlightPathMCPServer {
   private getPromptStatus(
     index: number,
     runtime: WorkingFileRuntime,
-    prompts: PromptItem[]
+    prompts: WorkflowStep[]
   ): string {
     if (prompts[index]?._runtime?.completedAt !== undefined) {
       return "completed";
