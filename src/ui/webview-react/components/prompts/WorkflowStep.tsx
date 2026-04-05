@@ -199,7 +199,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
             <>
               <div className="flex items-center gap-1">
                 <i
-                  className="codicon codicon-terminal text-[11px] opacity-60 flex-shrink-0"
+                  className="codicon codicon-terminal-powershell text-[11px] opacity-60 flex-shrink-0"
                 />
                 <span
                   className={`text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
@@ -234,11 +234,16 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
           ) : (
             // Prompt step variant (default)
             <>
-              <span
-                className={`text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
-              >
-                {name ? name : truncate(text, 60)}
-              </span>
+              <div className="flex items-center gap-1">
+                <i
+                  className="codicon codicon-comment text-[11px] opacity-60 flex-shrink-0"
+                />
+                <span
+                  className={`text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
+                >
+                  {name ? name : truncate(text, 60)}
+                </span>
+              </div>
               <PromptStepDetails
                 status={status}
                 harnessLabel={harnessLabel}

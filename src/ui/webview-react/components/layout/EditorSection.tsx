@@ -159,7 +159,7 @@ export const EditorSection: React.FC = () => {
         {/* Step type toggle — Prompt | Script */}
         {!isCLIManaged && (
           <div
-            className="relative inline-flex rounded border border-btn-border overflow-hidden flex-shrink-0 mx-2"
+            className="relative inline-flex rounded border overflow-hidden flex-shrink-0 mx-2"
             role="group"
             aria-label="Step type"
           >
@@ -189,7 +189,7 @@ export const EditorSection: React.FC = () => {
               onClick={() => setStepType(STEP_TYPES.SCRIPT)}
               title="Script step — runs a shell command with no AI interaction"
             >
-              <i className="codicon codicon-terminal" />
+              <i className="codicon codicon-terminal-powershell" />
               {!isNarrow && <span className="ml-1">Script</span>}
             </button>
           </div>
