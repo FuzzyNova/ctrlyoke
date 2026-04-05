@@ -1,6 +1,6 @@
 # Global Settings Plan
 
-Create a first-class **global settings surface** for FlightPath so global configuration is no longer tied to the legacy `SettingsDrawer` footer or to VS Code settings alone. This plan introduces a unified config-file architecture that works identically in VS Code and standalone CLI mode.
+Create a first-class **global settings surface** for FlightPath so global configuration is no longer tied to the legacy `WorkflowPropertiesPanel` footer or to VS Code settings alone. This plan introduces a unified config-file architecture that works identically in VS Code and standalone CLI mode.
 
 ---
 
@@ -8,7 +8,7 @@ Create a first-class **global settings surface** for FlightPath so global config
 
 Today the UI mixes two different concepts:
 
-- `SettingsDrawer` is effectively a **workflow properties** panel
+- `WorkflowPropertiesPanel` (formerly `SettingsDrawer`, already renamed ✅) is a **workflow properties** panel
 - its footer still exposes **global settings** and a VS Code-only "Settings..." entrypoint
 
 That split is manageable inside VS Code, but it becomes awkward for the standalone server:
@@ -126,7 +126,7 @@ That keeps workflow-local actions and app-global actions visually separate while
 ## Goals
 
 - Replace the legacy "footer settings button opens VS Code settings" path with a real FlightPath settings experience.
-- Rename the mental model: `SettingsDrawer` should become **WorkflowProperties** over time.
+- `SettingsDrawer` has already been renamed to `WorkflowPropertiesPanel` ✅ — the code now matches the product language.
 - Introduce a dedicated **Global Settings** surface that works in both VS Code and standalone/server contexts.
 - Separate **configuration model** from **configuration backend** so the UI does not care whether settings come from a config file or CLI flags.
 - Make server controls a natural part of global settings rather than a one-off button placement hack.
@@ -241,6 +241,24 @@ What happens to VS Code settings:
 **Single source of truth for settings:** `.flightpath/settings.json` (workspace) and `~/.flightpath/settings.json` (user global). Period. No VS Code fallback, no dual-write, no deprecation period.
 
 ### Decision 3: Config Service Architecture
+
+#### Does `ConfigurationUtils` survive?
+
+**Yes — `ConfigurationUtils.ts` keeps its class name and its entire public API.** It is called in dozens of places across the codebase; renaming it would mean a massive churn refactor for no real gain.
+
+What changes is its *implementation*: after this plan is complete, `ConfigurationUtils` delegates to `FlightPathConfigService` instead of calling `vscode.workspace.getConfiguration()`. The callers never know the difference. Think of `FlightPathConfigService` as the new *backend* that `ConfigurationUtils` wraps — not a replacement for the class itself.
+
+```
+ConfigurationUtils (name unchanged, same public methods)
+  └── internally calls FlightPathConfigService.get(key)
+        └── FlightPathConfigService resolves from:
+              1. CLI flags overlay
+              2. Workspace config file
+              3. User global config file
+              4. Hardcoded defaults
+```
+
+Zero call-site changes needed in the rest of the codebase. The only class that changes internals is `ConfigurationUtils` itself.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -435,7 +453,7 @@ Treat these as separate surfaces:
 
 This means:
 
-- the current `SettingsDrawer` should be conceptually renamed to `WorkflowProperties`
+- `SettingsDrawer` has already been renamed to `WorkflowPropertiesPanel` ✅
 - global toggles should gradually move out of its footer
 - the existing footer should eventually become workflow-only or disappear entirely
 
@@ -553,27 +571,18 @@ This avoids overloading the header button while still making the feature easy to
 
 ## Proposed UI Decision
 
-### Short-term decision
-
-Do **not** finalize the hosted-server button in the `SettingsDrawer` footer.
-
 ### Target state
 
 - `Header.tsx`
   - keep Save / Undo / Redo
-  - add **Global Settings**
-  - add **Start/Stop Server**
+  - add **Global Settings** (the `codicon-settings-gear` button already exists — update its behavior)
+  - add **Start/Stop Server** beside it
 - workflow run controls remain on the right side
-- detailed server configuration lives inside Global Settings, not next to workflow properties
+- detailed server configuration lives inside Global Settings > Server, not next to workflow properties
 
-### Naming cleanup
+### Naming
 
-As follow-up work, rename the legacy settings UI so the code matches the product language:
-
-- `SettingsDrawer` -> `WorkflowPropertiesDrawer` (or similar)
-- visible UI label: **Workflow Properties**
-
-This rename does not need to block the new global settings UI, but the plan should assume it will happen.
+`SettingsDrawer` has already been renamed to `WorkflowPropertiesPanel` ✅. No further rename work needed.
 
 ---
 
@@ -586,7 +595,8 @@ This rename does not need to block the new global settings UI, but the plan shou
 2. Inventory every setting currently surfaced by `ConfigurationUtils.ts` and map to the new nested structure
 3. No backward compatibility layer needed — pre-release, clean break
 4. Update `schemas/prompt-schema.json` if any new global settings affect workflow file structure
-5. Update `package.json` `contributes.configuration.properties` to mark settings as documentation-only (add note pointing to config files)
+5. Update `package.json` `contributes.configuration.properties` to mark settings as documentation-only (add note to `markdownDescription` pointing to config files). New server settings (`flightpath.serverPort`, `flightpath.serverEnabled`) should also be added here for VS Code settings UI documentation consistency.
+6. Add `schemas/settings-schema.json` — a JSON Schema for `.flightpath/settings.json` so users editing config files directly get IntelliSense and validation in VS Code. Register it via a `jsonValidation` contribution in `package.json` (pointing at `*.flightpath/settings.json` and `~/.flightpath/settings.json`).
 
 ### Phase 2 — Config file I/O and backend abstraction
 
@@ -594,7 +604,7 @@ This rename does not need to block the new global settings UI, but the plan shou
 1. `src/config/FlightPathConfigService.ts` — platform-agnostic config service
 2. `src/config/FileConfigBackend.ts` — reads/writes `~/.flightpath/settings.json` and `.flightpath/settings.json`
 3. Unit tests for config merging, precedence, and file I/O
-4. `ConfigurationUtils` becomes a **thin wrapper** over the config service — all `vscode.workspace.getConfiguration()` calls replaced:
+4. `ConfigurationUtils` becomes a **thin wrapper** over the config service — all `vscode.workspace.getConfiguration()` calls replaced. The class name and all public method signatures stay unchanged; only the internals change:
    ```ts
    // Before (direct VS Code access):
    getCliModel(): string {
@@ -607,6 +617,7 @@ This rename does not need to block the new global settings UI, but the plan shou
    }
    ```
 5. `ConfigurationUtils.updateSetting()` writes to config files, not VS Code settings
+6. `FileConfigBackend` watches for file changes to both config paths via `chokidar` (already in dependencies) and fires `subscribe` listeners on change — live-reload without restarting the extension or the CLI process.
 
 ### Phase 3 — CLI config file support
 
@@ -622,13 +633,14 @@ This rename does not need to block the new global settings UI, but the plan shou
 ### Phase 4 — Build the Global Settings UI
 
 **Deliverables:**
-1. Add a new header button to open Global Settings
-2. Create a dedicated large settings drawer/modal/page shell
-3. Build sections from the typed settings model (General, Workflow Defaults, Harnesses & Models, etc.)
-4. Reuse existing controls where possible (`CustomSelect`, toggles, editors, MCP/hook editors)
-5. Show clearly which values are user global defaults vs workspace overrides
-6. Indicate the **source** of each setting value (config file, CLI flag, default)
-7. All writes go to config files — no VS Code settings interaction
+1. The **Global Settings button already exists** in `Header.tsx` (the `codicon-settings-gear` button, currently posting `MESSAGE_TYPES.OPEN_SETTINGS` to open VS Code settings). Update its tooltip and handler to post the new `MESSAGE_TYPES.OPEN_GLOBAL_SETTINGS` message instead. No new button DOM needed.
+2. Add new message types to `src/types/DashboardConstants.ts` per the single-source-of-truth rule: `OPEN_GLOBAL_SETTINGS`, `GLOBAL_SETTINGS_LOADED`, `UPDATE_GLOBAL_SETTING`, `GLOBAL_SETTING_UPDATED`.
+3. Create a dedicated large settings drawer/modal/page shell
+4. Build sections from the typed settings model (General, Workflow Defaults, Harnesses & Models, etc.)
+5. Reuse existing controls where possible (`CustomSelect`, toggles, editors, MCP/hook editors)
+6. Show clearly which values are user global defaults vs workspace overrides
+7. Indicate the **source** of each setting value (config file, CLI flag, default)
+8. All writes go to config files — no VS Code settings interaction
 
 ### Phase 5 — Detangle the current footer
 
@@ -636,7 +648,7 @@ This rename does not need to block the new global settings UI, but the plan shou
 1. Remove or relocate the global toggles from the workflow-properties footer
 2. Decide whether small global quick toggles remain anywhere outside Global Settings
 3. Keep the workflow-properties surface focused on workflow-scoped concerns only
-4. Rename the component/files from `SettingsDrawer` to `WorkflowProperties*`
+4. ~~Rename `SettingsDrawer` to `WorkflowProperties*`~~ — **already done** (`WorkflowPropertiesPanel`) ✅
 
 ### Phase 6 — Add the Server section
 
@@ -659,6 +671,8 @@ This rename does not need to block the new global settings UI, but the plan shou
 3. `package.json` settings remain as documentation-only — add markdown description noting that settings are managed via FlightPath Global Settings UI or config files
 4. Remove `vscode` import from `ConfigurationUtils.ts` (or keep only for non-settings VS Code API calls if any remain)
 5. Verify no other code paths still read/write VS Code settings for FlightPath config
+6. Update `WebviewSettingsSync` — it currently reads `vscode.workspace.workspaceFolders` and dispatches workspace/agent/skill discovery data to the webview. Route any settings reads through `FlightPathConfigService`; move workspace-path discovery behind constructor inputs or the platform adapter so it works in standalone mode.
+7. Update `PropertyResolver` — its settings tier (lowest priority in the prompt → workflow → settings chain) must call `FlightPathConfigService.get(key)` rather than any `ConfigurationUtils` method that still delegates to VS Code. After Phase 2 this may already be satisfied if `ConfigurationUtils` fully wraps the service, but confirm explicitly.
 
 ---
 
@@ -681,7 +695,6 @@ This rename does not need to block the new global settings UI, but the plan shou
 
 ### Should happen before
 
-- finalizing server button placement in the footer
 - building a dedicated standalone settings page ad hoc
 - any new per-user or per-project configuration features
 - adding any new settings to `package.json` without config file support
@@ -698,7 +711,7 @@ This rename does not need to block the new global settings UI, but the plan shou
 6. **Replace `ConfigurationUtils` VS Code reads/writes** with config service calls.
 7. **Move server configuration into that surface.**
 8. **Add header-level Start/Stop Server** and circle back to the hosted server implementation.
-9. **Detangle the SettingsDrawer footer** and rename to WorkflowProperties.
+9. **Detangle the `WorkflowPropertiesPanel` footer** — rename already done ✅, move global toggles out.
 10. **Remove VS Code settings backend** — strip `vscode.workspace.getConfiguration()` from `ConfigurationUtils`.
 
 ---

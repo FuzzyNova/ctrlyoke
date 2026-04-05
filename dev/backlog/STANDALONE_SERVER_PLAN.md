@@ -219,15 +219,15 @@ Starts an HTTP + WebSocket server inside the running VS Code extension process. 
 
 - Register `flightpath.enableServer` and `flightpath.disableServer` commands.
 - Add `MESSAGE_TYPES.ENABLE_SERVER` (and a stop counterpart if needed) for the dashboard button.
-- Add `flightpath.serverPort` setting in `package.json`.
-- Surface the running URL in the dashboard/status UI.
+- Server port and enabled/disabled state are owned by the global settings architecture (`GLOBAL_SETTINGS_PLAN.md`). Do **not** add a standalone `flightpath.serverPort` setting to `package.json` here — it belongs to the global settings inventory already defined there.
+- Surface the running URL in the dashboard header and in Global Settings > Server.
 
 **Dashboard UI placement**
 
-- Put the hosted-server control in `src/ui/webview-react/components/layout/SettingsDrawer.tsx`, in the always-visible footer next to the existing global toggles.
-- Do **not** put it in `src/ui/webview-react/components/layout/Header.tsx`. The header cluster is workflow-local (save, undo/redo, run/pause/stop), while server start/stop is workspace/global transport state.
-- Keep the server control outside any CLI-managed read-only disable wrapper. Viewing a CLI-managed workflow should not prevent starting or stopping the hosted server.
-- When the server is running, the same footer cluster should also surface the active URL (or copy/open-browser affordances) so the control and its status stay together.
+- Put the **Start/Stop Server** quick-action button in `src/ui/webview-react/components/layout/Header.tsx`, beside the existing Global Settings button (the `codicon-settings-gear` button). These are both app-global controls, not workflow-local.
+- The header already has a stable cluster for app-global actions (Save, Undo/Redo, Global Settings). The server toggle belongs in that cluster.
+- Detailed server configuration (port, displayed URL, copy/open-browser affordances, future TLS options) lives in **Global Settings > Server**, not in the header button itself.
+- Keep the server toggle outside any CLI-managed read-only disable wrapper. Viewing a CLI-managed workflow should not prevent starting or stopping the hosted server.
 
 **Theme**
 
