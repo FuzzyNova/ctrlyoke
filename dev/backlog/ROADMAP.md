@@ -1,6 +1,6 @@
 # FlightPath Extension — Strategic Roadmap
 
-**Last updated:** March 7, 2026  
+**Last updated:** April 5, 2026  
 **Current version:** 0.1.0 (pre-release)  
 **Status:** Active development — no backward compatibility constraints
 
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-FlightPath is a VS Code extension that automates AI coding assistants (GitHub Copilot, Claude Code, Codex, OpenCode) through structured YAML/JSON prompt workflows. The core engine is fully functional: multi-harness CLI/Chat execution, parallel workflow execution, per-prompt session management, dynamic queue extension, React webview dashboard with CodeMirror 6 editor, script-based end conditions, agent injection, a standalone CLI binary, and stale-state recovery are all working. The project is pre-release and approaching a marketable v0.1.0 milestone — the primary remaining gap is CHANGELOG population and a handful of high-value features that would significantly expand what users can do with the tool. The architecture is clean and SOLID-compliant, making new features straightforward to add.
+FlightPath is a VS Code extension that automates AI coding assistants (GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Gemini) through structured YAML/JSON prompt workflows. The core engine is fully functional: multi-harness CLI/Chat execution, parallel workflow execution, per-prompt session management, dynamic queue extension, React webview dashboard with CodeMirror 6 editor, script-based end conditions, agent injection, a standalone CLI binary, stale-state recovery, an embedded terminal, and mobile-responsive layout are all working. The project is pre-release and approaching a marketable v0.1.0 milestone — the primary remaining gap is CHANGELOG population and the documentation site. The architecture is clean and SOLID-compliant, making new features straightforward to add.
 
 ---
 
@@ -29,6 +29,11 @@ FlightPath is a VS Code extension that automates AI coding assistants (GitHub Co
 - **MCP server entrypoint**: `flightpath-mcp` binary for tool-based queue operations
 - **Stale state recovery**: `WorkflowLockManager` with atomic writes, PID probing, 30s heartbeat, and `normalizeStaleLocks` on startup
 - **Standalone CLI binary**: `src/cli.ts` with Commander (`run`, `validate` commands); `PlatformAdapter`/`CliAdapter`/`VsCodeAdapter`; `out/cli.js` esbuild target; `flightpath` bin entry in `package.json`
+- **Gemini CLI harness**: `gemini-cli` — JSON streaming, hook-based completion, MCP config support
+- **Qwen Code CLI harness**: `qwen-cli` — JSONL events, log-based session discovery, hook completion
+- **Variable substitution**: `--var key=value` CLI flag; `{{varName}}` placeholders in workflow YAML; workflow-level `vars:` defaults; env var injection for end condition scripts
+- **Custom CLI args**: `extraArgs?: string[]` on `PromptItem` and `PromptFile`; per-provider pass-through in `buildCommand()`
+- **User-defined hooks**: `ExecutionProperties.hooks` for pre/post execution alongside agent/skills/mcpServers; headless mode support
 
 ### UI & Developer Experience (Shipped)
 
@@ -39,6 +44,13 @@ FlightPath is a VS Code extension that automates AI coding assistants (GitHub Co
 - **Status bar integration**: Real-time execution state (Initializing → Ready → Running → Paused)
 - **Dropdown hide/show**: `DROPDOWN_NAMESPACES` in `types/dropdownNamespaces.ts`; `hiddenDropdownOptions` in `uiStore`; `HideableProps` on `CustomSelect` and `MultiCheckboxDropdown`
 - **Output history**: `OutputHistoryManager`, run selector UI, persistent run history
+- **Mobile-responsive layout**: Responsive breakpoints, overlay sidebar, drag-and-drop prompt reordering on mobile
+- **Embedded/interactive terminal**: `PtyProcessManager` singleton; xterm.js display; `kind: 'ai-cli'` and `kind: 'shell'` sessions
+- **Custom icons system**: SVG sources → auto-converted CSS; 7 harness-specific icons
+- **DashboardBroadcastHub**: Fan-out hub decoupling orchestrator from webview and other sinks
+- **Permission/Context quick pickers**: `PermissionsQuickPicker` and `ContextQuickPicker` footer controls
+- **Undo/redo controls**: `UndoRedoControl` in editor with action logging and workflow properties sync
+- **Drawer tab architecture**: `DrawerTabBar` in `EditorFooter`; per-tab state management; workflow properties panel rename
 
 ### CLI Infrastructure (Shipped)
 
@@ -227,22 +239,9 @@ End conditions are powerful but have a steep learning curve. Several improvement
 
 ---
 
-#### 2.5 Custom CLI Args (`extraArgs`)
+#### ~~2.5 Custom CLI Args (`extraArgs`)~~ ✅ DONE
 
-**Priority: LOW–MEDIUM** | **Effort: 2–3 days** | **Doc: [`CUSTOM_CLI_ARGS_PLAN.md`](CUSTOM_CLI_ARGS_PLAN.md)**
-
-Allow per-prompt or per-workflow `extraArgs`/`cliArgs` to be passed directly to the underlying CLI process. Useful for edge cases like `--no-custom-instructions`, debug flags, or provider-specific options not yet surfaced in FlightPath's schema.
-
-**What to build:**
-
-- Add `extraArgs?: string[]` to `PromptItem` and `PromptFile` (workflow-level)
-- Pass through in each `ICliProvider.buildCommand()` implementation
-- Add to `prompt-schema.json`
-- Validate that args don't conflict with FlightPath's own injected flags
-
-**Why it matters:** Escape hatch for power users who need CLI flags not yet modeled in the schema. Prevents "this provider supports X but FlightPath can't do it" friction.
-
-**Dependencies:** None — additive, per-provider injection.
+Implemented. See `dev/implemented/CUSTOM_CLI_ARGS_PLAN.md`.
 
 ---
 
@@ -445,11 +444,12 @@ Getting FlightPath listed on the VS Code Marketplace is the primary distribution
 ## Dependency Graph
 
 ```
+1.2 Pre-Release Prep (CHANGELOG)
+  └─► 2.10 Documentation Site (docs lock in what v0.1.0 ships)
+      └─► 4.3 Marketplace Listing
+
 1.1 BMAD Templates
   └─► 2.2 AGENTS.md Generation (agent personas improve generation quality)
-
-1.2 Pre-Release Prep
-  └─► 4.3 Marketplace Listing
 
 2.1 Template Setup Scripts
   └─► 2.2 AGENTS.md Generation (generation workflow uses setup scripts)
@@ -457,8 +457,8 @@ Getting FlightPath listed on the VS Code Marketplace is the primary distribution
 2.6 Prior Context Passing
   └─► 2.9 Thinking Level (both feed into richer multi-step chains)
 
-3.1 MCP Server Hardening
-  └─► 4.3 Marketplace Listing (MCP docs improve discoverability)
+3.1 Standalone Server
+  └─► 4.3 Marketplace Listing (server docs improve discoverability)
 
 4.1 Premium Licensing
   └── depends on stable v0.1.0 being shipped
@@ -468,13 +468,13 @@ Getting FlightPath listed on the VS Code Marketplace is the primary distribution
 
 ## Estimated Timeline
 
-| Milestone                  | Items                        | Target         |
-| -------------------------- | ---------------------------- | -------------- |
-| **v0.1.0 Release**         | 1.2 (pub prep) + CHANGELOG   | March 2026     |
-| **v0.2.0 Templates & UX**  | 1.1 + 2.1 + 2.7 + 2.8        | April 2026     |
-| **v0.3.0 Project Context** | 2.2 + 2.3 + 2.4 + 2.6        | May 2026       |
-| **v0.4.0 Power Features**  | 2.5 + 2.9 + 2.10 + 3.1 (MCP) | July 2026      |
-| **v0.5.0 Platform & Pro**  | 4.1 + 4.2 + 4.3              | September 2026 |
+| Milestone                  | Items                               | Target      |
+| -------------------------- | ----------------------------------- | ----------- |
+| **v0.1.0 Release**         | 1.2 (CHANGELOG) + 2.10 (docs site) | April 2026  |
+| **v0.2.0 Templates & UX**  | 1.1 + 2.1 + 2.7 + 2.8              | May 2026    |
+| **v0.3.0 Project Context** | 2.2 + 2.4 + 2.6                     | June 2026   |
+| **v0.4.0 Power Features**  | 2.9 + 3.1 (standalone server)       | August 2026 |
+| **v0.5.0 Platform & Pro**  | 4.1 + 4.2 + 4.3                     | Oct 2026    |
 
 _Timeline is aspirational. Pre-release — prioritize quality over schedule._
 
@@ -482,26 +482,33 @@ _Timeline is aspirational. Pre-release — prioritize quality over schedule._
 
 ## Research Documents Index
 
-| Document                                                                                                | Status          | Roadmap Item |
-| ------------------------------------------------------------------------------------------------------- | --------------- | ------------ |
-| [`GEMINI_INTEGRATION_PLAN.md`](GEMINI_INTEGRATION_PLAN.md)                                              | READY_FOR_IMPL  | —            |
-| [`AGENTS_MD_GENERATION.md`](AGENTS_MD_GENERATION.md)                                                    | NOT_IMPLEMENTED | 2.2          |
-| [`BMAD_FOR_FLIGHTPATH.md`](BMAD_FOR_FLIGHTPATH.md)                                                      | NOT_IMPLEMENTED | 1.1          |
-| [`CUSTOM_CLI_ARGS_PLAN.md`](CUSTOM_CLI_ARGS_PLAN.md)                                                    | NOT_IMPLEMENTED | 2.5          |
-| [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md)                                      | NOT_IMPLEMENTED | 2.10         |
-| [`PROMPT_CONTEXT_PASSING_PLAN.md`](PROMPT_CONTEXT_PASSING_PLAN.md)                                      | NOT_IMPLEMENTED | 2.6          |
-| [`PROMPT_QUEUE_POSITION_AND_REORDER_PLAN.md`](PROMPT_QUEUE_POSITION_AND_REORDER_PLAN.md)                | NOT_IMPLEMENTED | 2.7          |
-| [`PROMPT_UNDO_CHANGES_PLAN.md`](PROMPT_UNDO_CHANGES_PLAN.md)                                            | NOT_IMPLEMENTED | 2.8          |
-| [`TEMPLATE_SETUP_SCRIPTS.md`](TEMPLATE_SETUP_SCRIPTS.md)                                                | NOT_IMPLEMENTED | 2.1          |
-| [`THINKING_LEVEL_PLAN.md`](THINKING_LEVEL_PLAN.md)                                                      | NOT_IMPLEMENTED | 2.9          |
-| [`UI_SECURITY_REVIEW.md`](UI_SECURITY_REVIEW.md)                                                        | ⚠️ IN PROGRESS  | —            |
-| [`FLIGHTPATH_CLI_DESIGN.md`](../FLIGHTPATH_CLI_DESIGN.md)                                               | ✅ IMPLEMENTED  | —            |
-| [`GLOBAL_AGENT_INCLUSION.md`](../GLOBAL_AGENT_INCLUSION.md)                                             | ✅ IMPLEMENTED  | —            |
-| [`PARALLEL_WORKFLOWS_ARCHITECTURE.md`](../PARALLEL_WORKFLOWS_ARCHITECTURE.md)                           | ✅ IMPLEMENTED  | —            |
-| [`CLI_LOG_FILES_INVESTIGATION.md`](../CLI_LOG_FILES_INVESTIGATION.md)                                   | ✅ IMPLEMENTED  | —            |
-| [`CLI_LOG_FILE_MIGRATION_PLAN.md`](../CLI_LOG_FILE_MIGRATION_PLAN.md)                                   | ✅ IMPLEMENTED  | —            |
-| [`CLI_OUTPUT_STANDARDIZATION.md`](../CLI_OUTPUT_STANDARDIZATION.md)                                     | ✅ IMPLEMENTED  | —            |
-| [`CODEX_CLI_OUTPUT_FIXES.md`](../CODEX_CLI_OUTPUT_FIXES.md)                                             | ✅ IMPLEMENTED  | —            |
-| [`GITIGNORE_COMPLETIONS_RESEARCH.md`](../GITIGNORE_COMPLETIONS_RESEARCH.md)                             | ✅ IMPLEMENTED  | —            |
-| [`NAME_FIELD_AND_COMPLETION_TRACKING_MIGRATION.md`](../NAME_FIELD_AND_COMPLETION_TRACKING_MIGRATION.md) | ✅ IMPLEMENTED  | —            |
-| [`OUTPUT_HISTORY_ARCHITECTURE.md`](../OUTPUT_HISTORY_ARCHITECTURE.md)                                   | ✅ IMPLEMENTED  | —            |
+> **Convention:** Plans move to `dev/implemented/` when done. This index lists active/backlog items only — see `dev/implemented/` for the full archive.
+
+### Active (in progress)
+
+| Document                                                                        | Status    | Roadmap Item |
+| ------------------------------------------------------------------------------- | --------- | ------------ |
+| [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md) | 🔄 ACTIVE | 2.10         |
+| [`../active/AUTOMATION_API_PLAN.md`](../active/AUTOMATION_API_PLAN.md)          | 🔄 ACTIVE | —            |
+
+### Backlog (not yet started)
+
+| Document                                                                                 | Status          | Roadmap Item |
+| ---------------------------------------------------------------------------------------- | --------------- | ------------ |
+| [`AGENTS_MD_GENERATION.md`](AGENTS_MD_GENERATION.md)                                    | NOT_IMPLEMENTED | 2.2          |
+| [`BMAD_FOR_FLIGHTPATH.md`](BMAD_FOR_FLIGHTPATH.md)                                      | NOT_IMPLEMENTED | 1.1          |
+| [`TEMPLATE_SETUP_SCRIPTS.md`](TEMPLATE_SETUP_SCRIPTS.md)                                | NOT_IMPLEMENTED | 2.1          |
+| [`INLINE_PRIOR_CONTEXT_PLAN.md`](INLINE_PRIOR_CONTEXT_PLAN.md)                          | NOT_IMPLEMENTED | 2.6          |
+| [`STANDALONE_SERVER_PLAN.md`](STANDALONE_SERVER_PLAN.md)                                | NOT_IMPLEMENTED | 3.1          |
+| [`GLOBAL_SETTINGS_PLAN.md`](GLOBAL_SETTINGS_PLAN.md)                                   | NOT_IMPLEMENTED | —            |
+| [`ADDITIONAL_INSTRUCTIONS_PLAN.md`](ADDITIONAL_INSTRUCTIONS_PLAN.md)                   | NOT_IMPLEMENTED | —            |
+| [`INLINE_SUGGESTIONS_PLAN.md`](INLINE_SUGGESTIONS_PLAN.md)                             | NOT_IMPLEMENTED | —            |
+| [`LIVE_CONTEXT_WINDOW_PLAN.md`](LIVE_CONTEXT_WINDOW_PLAN.md)                           | NOT_IMPLEMENTED | —            |
+| [`PARALLEL_STEPS_PLAN.md`](PARALLEL_STEPS_PLAN.md)                                     | NOT_IMPLEMENTED | —            |
+| [`SCM_COMMIT_MESSAGE_BUTTON.md`](SCM_COMMIT_MESSAGE_BUTTON.md)                         | NOT_IMPLEMENTED | —            |
+| [`SCRIPT_STEP_PLAN.md`](SCRIPT_STEP_PLAN.md)                                           | NOT_IMPLEMENTED | —            |
+| [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md)                                       | NOT_IMPLEMENTED | —            |
+| [`DROPDOWN_VALIDATION_STYLING_PLAN.md`](DROPDOWN_VALIDATION_STYLING_PLAN.md)           | NOT_IMPLEMENTED | —            |
+| [`CLINE_INTEGRATION_PLAN.md`](CLINE_INTEGRATION_PLAN.md)                               | NOT_IMPLEMENTED | —            |
+| [`VSCODE_LM_API_FEATURES.md`](VSCODE_LM_API_FEATURES.md)                              | NOT_IMPLEMENTED | —            |
+| [`VSCODE_TESTING_E2E_MCP.md`](VSCODE_TESTING_E2E_MCP.md)                              | NOT_IMPLEMENTED | —            |

@@ -109,6 +109,12 @@ Worse than Option A: verbose (must repeat `group` and `parallel` on each step), 
 - Per-step harness/model overrides (each step gets its own harness instance)
 - Per-step `endCondition` (each step's end condition is evaluated independently)
 - Per-step `agent` and `context` references
+- **`type: script` steps** — script steps compose cleanly in parallel groups. They require
+  no harness instance, so the "allocate N harness instances" logic simply skips them
+  (`steps.filter(s => !isScriptStep(s)).length`). The interactive-mode terminal concern
+  (N panels) does not apply to script steps — they output to the Output tab regardless.
+  The forbidden constraints (`resumeSession`, `allowDynamicExtension`) don't need
+  script-specific handling since those fields don't exist on `ScriptStep`.
 - The step after a parallel group can use `resumeSession: false` (default) for a clean
   synthesis, or the group results can be referenced via context file references in the
   prompt text
@@ -164,7 +170,7 @@ type QueueItem = PromptItem | ParallelGroup;
 
 interface ParallelGroup {
   kind: "parallel";
-  steps: PromptItem[];
+  steps: WorkflowStep[]; // WorkflowStep = PromptItem | ScriptStep (see SCRIPT_STEP_PLAN)
   status: "pending" | "running" | "completed" | "failed";
   stepStatuses: Map<string, StepStatus>; // stepId → status
 }
@@ -261,7 +267,7 @@ Add `ParallelGroup` as a valid item in the `prompts` array alongside `PromptItem
       "properties": {
         "parallel": {
           "type": "array",
-          "items": { "$ref": "#/$defs/PromptItem" },
+          "items": { "$ref": "#/$defs/WorkflowStep" },
           "minItems": 2
         },
         "failFast": {
@@ -270,6 +276,8 @@ Add `ParallelGroup` as a valid item in the `prompts` array alongside `PromptItem
         }
       }
     }
+    // Note: WorkflowStep is the oneOf union of aiPromptItem and scriptStep,
+    // defined in SCRIPT_STEP_PLAN. Script steps in parallel groups are fully supported.
   }
 }
 ```

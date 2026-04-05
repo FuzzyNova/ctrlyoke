@@ -2,78 +2,77 @@
 
 ## Overview
 
-Add a first-class "script step" to FlightPath workflows: a prompt item that runs a shell
-script/command directly — no AI interaction. Script steps can appear anywhere in the queue
-and as the `finalPrompt`. This replaces the current workaround of pairing a no-op prompt
-with an `endCondition` that always passes.
+Add a first-class `type: script` step to FlightPath workflows: a queue item that runs a
+shell script/command directly with no AI interaction. Script steps can appear anywhere in
+the queue and as the final step. This replaces the current workaround of pairing a no-op
+prompt with an `endCondition` that always passes.
+
+### `finalPrompt` → `finalStep` rename
+
+The `finalPrompt` schema field and `PromptFile.finalPrompt` type are renamed to
+`finalStep` / `PromptFile.finalStep` as part of this work. Since the field can now hold
+either an AI prompt or a script step, `finalPrompt` is a misnomer. Pre-release — no
+backward compatibility constraints. The rename is mechanical across ~20 references.
+
+Internal runtime identifiers that describe the AI-specific loop behaviour
+(`FinalPromptPhase`, `finalPromptSessionId`, `finalPromptRuntime`, `finalPromptAll`,
+`finalPromptPrevious`) are **not renamed** — they specifically describe the loop mechanism
+which only applies to AI final steps.
+
+---
+
+## Scope: `type: script` Only — `postScript` Removed
+
+An earlier draft of this plan included a `postScript` field on AI prompt steps. This has
+been **removed** — the hooks system (see `dev/implemented/HOOKS_EXPOSURE_PLAN.md`) already
+covers the use cases:
+
+| Need | Covered by |
+|---|---|
+| Run formatter after every AI step | `Stop` hook (fires after AI finishes, before end condition) |
+| Notify on step completion | Completion notifications feature (`COMPLETION_NOTIFICATIONS_PLAN.md`) |
+| Run side-effect after success only | `Stop` hook + check result in script |
+| Blocking gate with visible output | `type: script` step |
+| Per-prompt validation with retries | `endCondition` |
+
+The one timing distinction — `postScript` fires after end condition passes; `Stop` hook
+fires before end condition and on each retry — does not justify the added schema complexity.
+Formatters are idempotent (running 3× on retries is fine) and notifications are handled
+natively. `postScript` is not built.
 
 ---
 
 ## Use Cases
 
-**Script steps** (`type: script`) — a queue item that IS a script, not an AI interaction:
-
-- Gate workflow progression on test/build results (`npm test`, `pytest`, etc.)
-- Run a script at a specific point in the queue with its own output block and step number
-- Have the `finalPrompt` be a script (e.g., post-workflow cleanup or CI trigger)
-
-**`postScript`** — a hook that runs after every AI prompt's end condition passes:
-
-- Run a formatter after every AI step (`npm run format`, `prettier --write .`)
-- Send a notification after every prompt completes
-- Any side-effect that should happen consistently without being a queue gate
+- Gate workflow progression on test/build results (`npm test`, `pytest`, `cargo test`)
+- Run a linter, type-checker, or build as a blocking step
+- Run a cleanup script or CI trigger as the `finalStep`
+- Replace the no-op-prompt workaround with clean `type: script` syntax
 
 ---
 
-## Schema Design Decision: `type` Field vs. `harness: "script"`
+## Schema Design
 
-### Option A — `harness: "script"` (new harness value)
+### Decision: `type` discriminant field (not `harness: "script"`)
 
-Add `"script"` to the `harness` enum.
+`harness` means "which AI execution framework." Adding `"script"` to that enum would be
+semantically wrong, pollute `Harness` enum, and break harness availability checks.
 
-**Pro:** Fits the existing 3-tier precedence model; reuses the harness selector dropdown.
-**Con:** Semantically wrong — "harness" means AI execution framework. `harness: "script"` implies
-a script-based AI framework, which is confusing. Pollutes `Harness` enum and `HARNESS_IDS`
-with a non-AI concept. Would break harness availability checks and CLI composition.
+`type` is a separate discriminant: "is this an AI step or a script step?" These are
+orthogonal concepts. **Option B — `type: "prompt" | "script"` — is the decision.**
 
-### Option B — `type: "prompt" | "script"` (discriminant field) ✅ RECOMMENDED
-
-Add a `type` discriminant to `PromptItem`. Default is `"prompt"` (backwards compatible).
-When `type === "script"`, the `prompt` field is replaced by `script`.
-
-**Pro:** Semantically clean. The step kind and the AI framework are orthogonal concepts.
-No AI harness properties (`harness`, `model`, `agent`, `skills`, `resumeSession`,
-`sessionId`, `allowDynamicExtension`) apply to script steps — they are simply ignored
-(or schema-validated away). Clear UI affordance: step type is distinct from harness.
-**Con:** More invasive schema change; `prompt` required-ness becomes conditional.
-
-**Decision: Option B.** The `harness` field answers "which AI to use"; `type` answers "is
-this an AI step or a script step?" These are separate concerns.
-
----
-
-## Schema Changes (`schemas/prompt-schema.json`)
-
-### New `scriptStep` definition
+### `scriptStep` definition (`schemas/prompt-schema.json`)
 
 ```json
 "scriptStep": {
   "type": "object",
-  "description": "A workflow step that runs a shell script/command directly with no AI interaction.",
+  "description": "A workflow step that runs a shell script/command with no AI interaction.",
   "properties": {
-    "type": {
-      "type": "string",
-      "const": "script",
-      "description": "Marks this step as a script execution step (no AI harness)."
-    },
-    "name": {
-      "type": "string",
-      "description": "Optional display label shown in the FlightPath dashboard.",
-      "maxLength": 100
-    },
+    "type": { "type": "string", "const": "script" },
+    "name": { "type": "string", "maxLength": 100 },
     "script": {
       "type": "string",
-      "description": "Shell command or path to script file to execute. Resolved relative to workspace root or .flightpath directory."
+      "description": "Shell command or path to script. Resolved relative to workspace root or .flightpath/."
     },
     "timeout": {
       "type": "number",
@@ -81,8 +80,8 @@ this an AI step or a script step?" These are separate concerns.
     },
     "continueOnFailure": {
       "type": "boolean",
-      "description": "When true, a non-zero exit code is shown as a warning in the dashboard but does NOT fail the workflow. Use for formatters, notifiers, and other side-effect scripts where failure is acceptable.",
-      "default": false
+      "default": false,
+      "description": "When true, non-zero exit is a warning only — workflow continues."
     }
   },
   "required": ["type", "script"],
@@ -90,99 +89,42 @@ this an AI step or a script step?" These are separate concerns.
 }
 ```
 
-### Changes to `promptItem`
+`promptItem` becomes a `oneOf` — the existing definition renamed `aiPromptItem`, `prompt`
+stays required on it. `type: "prompt"` remains optional (absence = AI prompt, fully
+backwards compatible).
 
-`promptItem` becomes a `oneOf` between the existing prompt object and the new `scriptStep`:
-
-```json
-"promptItem": {
-  "oneOf": [
-    { "$ref": "#/definitions/aiPromptItem" },
-    { "$ref": "#/definitions/scriptStep" }
-  ]
-}
-```
-
-The existing `promptItem` definition is renamed `aiPromptItem` (no functional change, just
-renamed). `prompt` remains required on `aiPromptItem`. `type: "prompt"` is optional
-(backwards compatible — its absence means AI prompt).
-
-**Note:** `endCondition` is NOT reused for script steps. Script steps ARE the action; they
-don't validate after a separate AI interaction. The semantics are inverted. Success is
-determined solely by exit code 0.
-
-### `postScript` on `aiPromptItem` and workflow root
-
-`postScript` is a string field added to `ExecutionProperties` (workflow root + per-prompt).
-It follows the existing 3-tier precedence model — same as `harness`, `model`, `endCondition`.
-
-```json
-"postScript": {
-  "type": ["string", "null"],
-  "description": "Shell command to run after this prompt's end condition passes. Runs as a non-blocking side effect — failure is shown as a warning but does not stop the workflow. Set to null at the prompt level to disable an inherited workflow-level postScript."
-}
-```
-
-**Key properties:**
-
-- Added to `ExecutionProperties` — inherits at workflow level, overridable per prompt
-- `postScript: null` at prompt level disables an inherited workflow-level `postScript` (same pattern as `endCondition: null`)
-- Always non-blocking — failure is a warning, never a workflow stop (unlike `type: script` which is blocking by default)
-- Does NOT apply to `type: script` steps — they have no end condition to hook into
-- Runs **after** end condition passes (or immediately after the AI prompt completes if no end condition is set)
-- `postScript` is NOT available on `scriptStep` — `additionalProperties: false` on `scriptStep` enforces this
+`endCondition` is NOT on script steps — exit code 0 is the success condition. The concepts
+are inverted: script steps ARE the action; end conditions validate after a separate AI
+interaction.
 
 ---
 
-## Type System Changes (`src/types/FlightPathTypes.ts`)
+## Type System (`src/types/FlightPathTypes.ts`)
 
 ```typescript
-/** Step type discriminant */
 export type PromptItemType = "prompt" | "script";
 
-// Add to ExecutionProperties (inherited by PromptFile and PromptItem):
-export interface ExecutionProperties {
-  // ... existing fields ...
-  /**
-   * Shell command to run after this prompt's end condition passes.
-   * Always non-blocking — failure is a warning, never stops the workflow.
-   * Set to null at the prompt level to disable an inherited workflow-level postScript.
-   */
-  postScript?: string | null;
-}
-
-/** Existing PromptItem (AI prompt) — `type` defaults to "prompt" */
-export interface PromptItem extends ExecutionProperties {
-  type?: "prompt"; // optional, absence = "prompt"
-  name?: string;
-  prompt: string;
-  sessionId?: string | number;
-  _runtime?: PromptRuntimeMetadata;
-}
-
-/** New script step — no AI harness properties apply */
+/** New script step — no AI harness properties */
 export interface ScriptStep {
   type: "script";
   name?: string;
   script: string;
   timeout?: number;
-  /** When true, non-zero exit is a warning only — workflow continues regardless. */
   continueOnFailure?: boolean;
   _runtime?: PromptRuntimeMetadata; // reuse for startedAt/completedAt
 }
 
-/** Union: either an AI prompt step or a script step */
+/** Union type for all workflow steps */
 export type WorkflowStep = PromptItem | ScriptStep;
 
-/** Type guard */
 export function isScriptStep(step: WorkflowStep): step is ScriptStep {
   return step.type === "script";
 }
 ```
 
-`PromptFile.prompts` and `PromptFile.finalPrompt` become `WorkflowStep[]` / `WorkflowStep`.
-`QueueState.prompts` becomes `WorkflowStep[]`. All consumers that currently receive
-`PromptItem[]` are updated to `WorkflowStep[]`.
+`PromptFile.prompts`, `PromptFile.finalPrompt`, `QueueState.prompts`, and
+`WorkflowContext` are updated from `PromptItem[]` / `PromptItem` to `WorkflowStep[]` /
+`WorkflowStep`.
 
 ---
 
@@ -191,219 +133,192 @@ export function isScriptStep(step: WorkflowStep): step is ScriptStep {
 ### `WorkflowExecutor` routing
 
 ```typescript
-// In executePrompt():
 if (isScriptStep(step)) {
   return this.executeScriptStep(step, stepIndex);
 } else {
-  return this.executeAiPrompt(step, stepIndex); // existing path
+  return this.executeAiPrompt(step, stepIndex); // unchanged
 }
 ```
 
 ### `executeScriptStep(step, stepIndex)`
 
-No harness involvement. Directly uses `EndConditionEvaluator`:
+No harness involvement. Reuses `EndConditionEvaluator` infrastructure:
 
 1. Emit `STEP_STATUS_CHANGED` → `"running"`
-2. Update working file `_runtime` with `startedAt`
-3. Call `EndConditionEvaluator.evaluate({ script: step.script, returns: "0", timeout: step.timeout })` — success = exit code 0
-4. Capture stdout/stderr into a synthetic `DashboardOutput` so the output panel shows
-   script output (same shape as CLI output but with a `"script"` source marker)
-5. On success (exit 0) → `STEP_STATUS_CHANGED` → `"completed"`, advance queue
-6. On failure (non-zero exit):
-   - If `continueOnFailure: true` → `STEP_STATUS_CHANGED` → `"completed"` with a warning badge, advance queue
-   - Otherwise → `STEP_STATUS_CHANGED` → `"failed"`
+2. Write `startedAt` to working file `_runtime`
+3. Spawn child process via `EndConditionEvaluator.evaluate({ script: step.script, returns: "0", timeout })`
+4. **Stream stdout/stderr** progressively to the Output panel as `DashboardOutput` entries with `source: "script"` — do not batch until process exits
+5. On exit code 0 → `STEP_STATUS_CHANGED` → `"completed"`, advance queue
+6. On non-zero exit:
+   - `continueOnFailure: true` → `"completed"` with warning badge, advance queue
+   - `continueOnFailure: false` (default) → `"failed"`, stop workflow
 
-**No session tracking, no MCP config, no agent/model resolution** for script steps.
-
-### `postScript` execution (in `executeAiPrompt`)
-
-After the AI prompt completes and its end condition passes (or immediately on completion if no end condition), `WorkflowExecutor` checks for a resolved `postScript`:
-
-```typescript
-const resolvedPostScript = PropertyResolver.resolve(
-  step,
-  workflowFile
-).postScript;
-if (resolvedPostScript != null) {
-  await this.runPostScript(resolvedPostScript, step.timeout);
-}
-```
-
-`runPostScript(script, timeout)`:
-
-1. Calls `EndConditionEvaluator.evaluate({ script, returns: "0", timeout })` — reuses same infrastructure as script steps
-2. On failure: emits a `STATUS_MESSAGE` with `severity: "warning"` (e.g., "postScript exited with code 1") — does NOT fail the step or stop the workflow
-3. Output is appended to the current step's output block (not a new step)
-
-`postScript` is resolved by `PropertyResolver` like any other `ExecutionProperties` field — prompt-level overrides workflow-level; `null` explicitly disables inheritance.
+No session tracking, no MCP config, no `PropertyResolver` call — none of the AI execution
+machinery applies.
 
 ### `PropertyResolver` bypass
 
-`PropertyResolver.resolve()` is not called for script steps — there are no AI execution
-properties to resolve. `EndConditionEvaluator` is called directly.
+`PropertyResolver.resolve()` is not called for script steps. Script commands are used
+verbatim (with `{{var}}` substitution from the existing variable substitution pipeline,
+consistent with how prompt text is handled).
+
+### `EndConditionHandler` refactor
+
+Extract a reusable `evaluateScript(script, timeout)` helper shared by:
+- `endCondition` evaluation (existing)
+- `executeScriptStep()` (new)
+
+The retry loop in `EndConditionHandler` does NOT apply to script steps — they run once,
+success determined by exit code alone.
 
 ---
 
-## Dashboard / UI Changes
+## Dashboard / UI
 
-### Step list rendering
+### EditorSection — no new tabs
 
-Script steps render differently from AI prompt steps. Instead of showing harness/model
-pills, they show:
+The OutputSection has Output/Terminal tabs to switch between two *views of output*.
+Step type is a *property of the step being edited* — a different concept. **No tab is
+added to EditorSection's header.**
 
-```
-[terminal icon]  Run tests                    Script
-                 npm test
-```
+Instead: a **segmented control ("Prompt | Script")** at the top of the editor content
+area inside `PromptEditor`. Visible when creating a new step or editing an existing one.
 
-- No harness badge, no model badge, no session badge
-- A "Script" type badge (grey/neutral) in the top-right where harness normally appears
-- The script command is shown as the subtitle (like prompt text preview)
-- Status icons/colors are identical to AI prompt steps
+### When "Script" is selected in PromptEditor
 
-### Prompt editor (CodeMirror panel)
+- CodeMirror editor is hidden
+- `PropertiesDrawer` and its footer tab bar (`DrawerTabBar`) are hidden entirely — no
+  harness/model/session/agent properties apply to script steps
+- The editor content area shows three fields:
+  - **Script command** — single-line text input (or minimal CodeMirror with shell syntax)
+  - **Timeout** — number input (ms), placeholder showing inherited default
+  - **Continue on failure** — checkbox with label
+- `EditorFooter` action buttons (Add / Update / Cancel / Delete) are identical to prompt
+  steps — same CRUD controls
+- All 6 footer quick pickers (Harness, Model, Agent, Skills, Permissions, Context) and
+  the DrawerTabBar are hidden — none of their properties apply to script steps
+- The token count in `EditorSection`'s header is hidden for script steps (token count
+  lives in the section header, not the footer)
 
-When creating or editing a step, a **Step Type** selector appears at the top of the
-settings panel (above harness/model):
+### `editorStore` additions
 
-```
-Step Type:  [ AI Prompt ▼ ]   or   [ Script ▼ ]
-```
+`editorStore` needs two new fields alongside `promptText`:
+- `stepType: "prompt" | "script"` — determines which editor mode renders
+- `scriptCommand: string` — the script field value for script steps
 
-When "Script" is selected:
+When a script step is selected for editing, `scriptCommand` is populated; `promptText` is
+cleared. When switching type via the segmented control, both fields reset.
 
-- The CodeMirror prompt textarea is replaced with a single-line (or multi-line) script
-  command input
-- All AI-specific settings (harness, model, agent, skills, resumeSession, etc.) are hidden
-- Script-specific settings appear: Script command, Timeout, Continue on failure (checkbox)
+### Prompts list (`PromptItem` component)
 
-When "AI Prompt" is selected:
+Script steps render a distinct variant in the list:
+- Terminal icon instead of text preview
+- `Script` badge (grey/neutral) where harness badge normally appears
+- Command text as subtitle (`npm test`) instead of truncated prompt text
+- No model badge, no session badge
+- Status icons, drag handle, and start-position controls are identical to prompt steps
 
-- Normal prompt editor with all AI settings (current behavior)
+The component accepts a new `stepType?: "prompt" | "script"` prop (or a `scriptCommand`
+prop). `PromptsPanel` passes the appropriate data when iterating `WorkflowStep[]`.
 
-### `finalPrompt` footer
+### `workflowStore` update
 
-`FinalPromptFooter` checks `isScriptStep(finalPrompt)` and renders a "Script" badge
-instead of harness/model info. The label shows "Final Script" instead of "Final Prompt".
+`workflowStore.prompts` is typed as `WorkflowStep[]`. Components reading prompt text for
+display guard with `isScriptStep()` before accessing `step.prompt`.
 
-### Dashboard constants additions
+### Output panel rendering
 
-```typescript
-// DashboardConstants.ts
-export const STEP_TYPES = {
-  PROMPT: "prompt",
-  SCRIPT: "script",
-} as const;
-export type StepType = (typeof STEP_TYPES)[keyof typeof STEP_TYPES];
+Script step output renders in the **Output tab** (not Terminal tab — that's for AI CLI
+PTY sessions). A `source: "script"` marker on `DashboardOutput` entries triggers
+simplified rendering: plain stdout/stderr text with an exit code summary line. No tool
+call events, no thinking blocks, no structured events.
 
-// PROMPT_PROPERTIES additions
-STEP_TYPE: "type",
-SCRIPT: "script",
-CONTINUE_ON_FAILURE: "continueOnFailure",
-POST_SCRIPT: "postScript",
-```
+### `FinalPromptFooter`
+
+Checks `isScriptStep(finalStep)` → renders `"Final Script"` label and Script badge
+instead of harness/model info.
+
+### `EditorSection` mode text
+
+`getModeText()` currently returns `"Editing: Final Prompt"` for the final prompt phase.
+Must return `"Editing: Final Script"` when `stepType === "script"` and the selection
+target is `FINAL_PROMPT_PHASES.FINAL_PROMPT`.
+
+### Type switching mid-edit (Prompt → Script)
+
+When the user switches the segmented control from Prompt to Script while the
+`PropertiesDrawer` is open, the drawer must close and `drawerActivePage` reset to the
+default tab. `PromptEditor` should call `closePropertiesDrawer()` on type change.
+Conversely, switching Script → Prompt should not auto-open the drawer.
 
 ---
 
-## YAML Authoring UX
+## `WorkingFileManager` update
 
-### Inline queue step
+`WorkingFileManager` serializes `PromptItem[]` today. After this change it must handle
+`WorkflowStep[]` — specifically preserve `type: "script"` and `script` fields through
+disk write/read cycles without stripping unknown keys.
+
+---
+
+## IntelliSense (`src/completions/`)
+
+When `type: script` is present in a prompt item:
+- Suppress AI-only completions: `harness`, `model`, `agent`, `skills`, `resumeSession`,
+  `sessionId`, `allowDynamicExtension`, `endCondition`, `prompt`
+- Offer script-specific completions: `script`, `timeout`, `continueOnFailure`
+
+---
+
+## YAML Examples
+
+### Inline script gate
 
 ```yaml
 prompts:
-  - name: Implement feature
-    prompt: |
-      Implement the feature described in #file:spec.md
+  - name: implement
+    prompt: Implement the feature in #file:spec.md
     harness: claude-cli
 
-  - name: Run tests
+  - name: run-tests
     type: script
     script: npm test
 
-  - name: Fix failing tests
-    prompt: |
-      Tests are failing. Review the output and fix them.
+  - name: fix-tests
+    prompt: Tests are failing. Fix them.
     harness: claude-cli
     resumeSession: true
 
-  - name: Format code
+  - name: format
     type: script
     script: npm run format
-    continueOnFailure: true # formatter failure is non-blocking
-
-  - name: Verify coverage
-    type: script
-    script: npm run coverage
+    continueOnFailure: true   # formatter failure is non-blocking
 ```
 
-### `postScript` — run a command after every AI prompt
+### Script as `finalStep`
 
-```yaml
-harness: claude-cli
-postScript: npm run format # runs after every prompt's end condition passes
-
-prompts:
-  - name: Implement feature
-    prompt: |
-      Implement the feature described in #file:spec.md
-
-  - name: Add tests
-    prompt: |
-      Write tests for the feature.
-    postScript: npm run format && npm run lint # override: different script for this step
-
-  - name: Final cleanup
-    prompt: |
-      Review and clean up the implementation.
-    postScript: null # disable inherited postScript for this step
-```
-
-### `postScript` + `type: script` together
-
-```yaml
-postScript: npm run format # side-effect after every AI step
-
-prompts:
-  - prompt: Implement the feature
-    harness: claude-cli
-    # → runs AI, then runs "npm run format" (warning-only if it fails)
-
-  - type: script
-    script: npm test
-    # → runs npm test as a blocking gate; postScript does NOT apply to script steps
-
-  - prompt: Fix failing tests
-    harness: claude-cli
-    resumeSession: true
-    # → runs AI, then runs "npm run format"
-```
-
-### Script as `finalPrompt`
+Note: `finalPrompt` is renamed to `finalStep` in this work. A script `finalStep` runs
+**exactly once** — the AI loop mechanism (`FinalPromptPhase`, `loopCount`) is bypassed.
 
 ```yaml
 prompts:
-  - prompt: Implement the feature
+  - name: implement
+    prompt: Implement the feature.
 
-finalPrompt:
+finalStep:
   type: script
   script: npm run notify
 ```
 
 ### No-op prompt replacement
 
-The current workaround:
-
 ```yaml
 # BEFORE (workaround)
-- prompt: just say hi
+- prompt: "just say hi"
   endCondition:
     script: npm test
     returns: "true"
-```
 
-Becomes:
-
-```yaml
 # AFTER (clean)
 - type: script
   script: npm test
@@ -411,79 +326,58 @@ Becomes:
 
 ---
 
-## IntelliSense (`src/completions/`)
-
-The YAML/JSON completion providers need to:
-
-- Offer `type: script` as an option when inside a prompt item
-- When `type: script` is detected, suppress AI-only completions (`harness`, `model`, `agent`,
-  `skills`, `resumeSession`, `sessionId`, `allowDynamicExtension`, `endCondition`, `prompt`)
-- Instead offer: `script`, `timeout`, `continueOnFailure`
-
----
-
-## Output History
-
-Script step output is stored identically to AI prompt output via `OutputHistoryManager`.
-The synthetic `DashboardOutput` carries:
-
-- `source: "script"` (new field, optional, for display differentiation)
-- `rawTextOutput: true` (script stdout/stderr as plain text)
-- No structured events (no file edits, tool calls, etc.)
-
-The output panel renders script output in a simpler format — no tool call events, no
-thinking blocks. Just stdout/stderr text with an exit code summary line.
-
----
-
 ## File Change Summary
 
-| File                                                            | Change                                                                                                                                                                           |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schemas/prompt-schema.json`                                    | Add `scriptStep` definition; `promptItem` becomes `oneOf`; add `postScript` to `executionProperties`                                                                             |
-| `src/types/FlightPathTypes.ts`                                  | Add `postScript?: string \| null` to `ExecutionProperties`; add `ScriptStep`, `WorkflowStep` union, `isScriptStep()` guard; update `PromptFile`, `QueueState`, `WorkflowContext` |
-| `src/types/DashboardConstants.ts`                               | Add `STEP_TYPES`, `StepType`; add `STEP_TYPE`, `SCRIPT`, `CONTINUE_ON_FAILURE`, `POST_SCRIPT` to `PROMPT_PROPERTIES`                                                             |
-| `src/flightpath/WorkflowExecutor.ts`                            | Route `isScriptStep` to `executeScriptStep()`; add `runPostScript()` call in `executeAiPrompt()` after end condition passes                                                      |
-| `src/flightpath/PromptFileParser.ts`                            | Validate `scriptStep` via AJV; type narrowing after parse                                                                                                                        |
-| `src/flightpath/PromptQueue.ts`                                 | `prompts` array typed as `WorkflowStep[]`                                                                                                                                        |
-| `src/flightpath/PropertyResolver.ts`                            | Skip resolution for script steps; resolve `postScript` for AI prompts                                                                                                            |
-| `src/flightpath/EndConditionHandler.ts`                         | Extract reusable `evaluateScript()` helper (shared by `endCondition`, script steps, and `postScript`)                                                                            |
-| `src/ui/webview-react/components/prompts/PromptItem.tsx`        | Render script step variant (terminal icon, Script badge, command preview); show `postScript` indicator on AI prompt items that have one                                          |
-| `src/ui/webview-react/components/prompts/PromptEditor.tsx`      | Add Step Type selector; swap editor UI based on type; add `postScript` field to AI prompt settings                                                                               |
-| `src/ui/webview-react/components/prompts/FinalPromptFooter.tsx` | Handle `isScriptStep(finalPrompt)` → show Script badge                                                                                                                           |
-| `src/ui/webview-react/components/output/CliOutput.tsx`          | Handle `source: "script"` for simplified rendering                                                                                                                               |
-| `src/completions/`                                              | Suppress/replace AI completions when `type: script` detected; offer `postScript` for AI prompt items                                                                             |
+| File | Change |
+|---|---|
+| `schemas/prompt-schema.json` | Add `scriptStep`; `promptItem` → `oneOf`; rename existing to `aiPromptItem`; rename `finalPrompt` → `finalStep` |
+| `src/types/FlightPathTypes.ts` | Add `ScriptStep`, `WorkflowStep`, `isScriptStep()`; rename `PromptFile.finalPrompt` → `finalStep`; update `QueueState` |
+| `src/types/WebviewMessageTypes.ts` | Rename `finalPrompt` → `finalStep` in all message types; `finalPrompt?: PromptItem` → `finalStep?: WorkflowStep` (~6 message interfaces) |
+| `src/types/WorkflowContextTypes.ts` | Guard `finalPromptSessionId` — only populated when finalStep is an AI prompt |
+| `src/types/DashboardConstants.ts` | Add `STEP_TYPES`; add `STEP_TYPE`, `SCRIPT`, `CONTINUE_ON_FAILURE` to `PROMPT_PROPERTIES` |
+| `src/flightpath/WorkflowExecutor.ts` | Route `isScriptStep` → `executeScriptStep()`; rename `executeFinalPrompt` → `executeFinalStep()`; bypass loop mechanism for script finalStep; streaming output |
+| `src/flightpath/PromptFileParser.ts` | Validate `scriptStep` via AJV; type narrowing after parse; parse `finalStep` field |
+| `src/flightpath/PromptQueue.ts` | `prompts` typed as `WorkflowStep[]`; `finalPrompt` accessors → `finalStep` |
+| `src/flightpath/PropertyResolver.ts` | Bypass for script steps; `{{var}}` substitution still applies to `script` field |
+| `src/flightpath/EndConditionHandler.ts` | Extract `evaluateScript()` helper shared by end conditions and script steps |
+| `src/flightpath/WorkingFileManager.ts` | Serialize/deserialize `WorkflowStep[]`; rename `finalPrompt` → `finalStep` in working file format |
+| `src/ui/webview-react/store/editorStore.ts` | Add `stepType`, `scriptCommand` fields; close PropertiesDrawer on type switch |
+| `src/ui/webview-react/store/workflowStore.ts` | `prompts: WorkflowStep[]`; `finalPrompt` → `finalStep`; guard script step fields at access sites |
+| `src/ui/webview-react/components/editor/PromptEditor.tsx` | Segmented Prompt/Script control; conditional editor UI; close drawer on type switch to Script |
+| `src/ui/webview-react/components/editor/EditorFooter.tsx` | When `stepType === "script"`: hide all 6 quick pickers (Harness, Model, Agent, Skills, Permissions, Context) and the DrawerTabBar — only action buttons (Add/Update/Cancel/Delete) remain |
+| `src/ui/webview-react/components/layout/EditorSection.tsx` | `getModeText()` returns `"Editing: Final Script"` / `"New Script"` for script steps; hide token count display (rendered in this header, not in the footer) |
+| `src/ui/webview-react/components/prompts/PromptItem.tsx` | Script step variant (terminal icon, Script badge, command subtitle) |
+| `src/ui/webview-react/components/prompts/PromptsPanel.tsx` | Iterate `WorkflowStep[]`; pass `stepType` to `PromptItem` |
+| `src/ui/webview-react/components/prompts/FinalPromptFooter.tsx` | `isScriptStep` check → `"Final Script"` label |
+| `src/ui/webview-react/components/output/CliOutput.tsx` | `source: "script"` → simplified rendering |
+| `src/completions/` | Suppress AI completions / offer script completions when `type: script` |
 
 ---
 
 ## Edge Cases
 
-| Scenario                                                    | Handling                                                                                                                                                |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `type: script` with `harness`, `model`, etc.                | Schema validation error (additionalProperties: false on `scriptStep`)                                                                                   |
-| `type: script` with no `script` field                       | Schema validation error (required)                                                                                                                      |
-| Script step as only item in queue                           | Executes normally; no AI harness spun up                                                                                                                |
-| Script step mid-queue with `resumeSession` next             | `resumeSession` applies to the _AI_ prompt only; script step has no session                                                                             |
-| Script exits non-zero, `continueOnFailure: false` (default) | Step fails, workflow stops                                                                                                                              |
-| Script exits non-zero, `continueOnFailure: true`            | Step completes with warning badge, workflow continues                                                                                                   |
-| Script step as `finalPrompt`                                | `WorkflowExecutor.executeFinalPrompt()` routes through `executeScriptStep`                                                                              |
-| `postScript` on a `type: script` step                       | Schema error — `additionalProperties: false` on `scriptStep` rejects it                                                                                 |
-| `postScript` fails                                          | Warning status message emitted; step still marked `completed`; workflow continues                                                                       |
-| `postScript: null` at prompt level                          | Disables inherited workflow-level `postScript` for that step (mirrors `endCondition: null`)                                                             |
-| `postScript` + `endCondition` together                      | End condition runs first (with retries); `postScript` runs only after end condition passes                                                              |
-| `postScript` when no end condition                          | Runs immediately after AI prompt completes                                                                                                              |
-| Undo changes for script step                                | Script steps are not AI-driven; no file events. Workspace snapshot still captures any filesystem mutations. Undo dialog works via Tier 2 snapshot only. |
-| Undo changes after `postScript` ran                         | `postScript` filesystem changes captured in Tier 2 snapshot, attributed to the enclosing AI prompt step                                                 |
+| Scenario | Handling |
+|---|---|
+| `type: script` with `harness`, `model`, etc. | Schema validation error (`additionalProperties: false`) |
+| `type: script` with no `script` field | Schema validation error (`required`) |
+| Script step as only item in queue | Executes normally; no AI harness interaction occurs |
+| **All steps are `type: script`** | Works correctly — scripts run in order, no AI harness interaction. However, `WorkflowOrchestrator` currently initializes the harness eagerly before any steps run. For scripts-only workflows this is wasted work; if the configured harness CLI isn't installed it may log spurious errors. Proper fix is lazy harness initialization (initialize only when the first AI step is dispatched). Non-blocking for this feature but worth a follow-up. |
+| `resumeSession: true` on step after a script step | Resumes from last *AI* step's session; script step has no session |
+| Non-zero exit, `continueOnFailure: false` | Step fails, workflow stops |
+| Non-zero exit, `continueOnFailure: true` | Step completes with warning badge, workflow continues |
+| Script step as `finalPrompt` | `executeFinalPrompt()` routes through `executeScriptStep()` |
+| `{{var}}` in script command | Substituted by existing variable pipeline before execution |
+| Script step as `finalStep` (loop) | The AI loop mechanism (`FinalPromptPhase`, `loopCount`, `finalPromptAll`/`Previous`) is bypassed entirely. `executeFinalStep()` calls `executeScriptStep()` once and the workflow completes. `finalPromptSessionId` is not populated. |
+| `enabled` on a script step (future) | `ScriptStep` has `additionalProperties: false` — adding `enabled` (from `CONDITIONAL_STEPS_PLAN`) requires a schema update to `scriptStep`. This is a known future touch point; add `enabled?: boolean \| string` to `scriptStep` when that plan is implemented. |
 
 ---
 
-## Not In Scope (YAGNI)
+## Not In Scope
 
-- `returns` / output-matching success conditions — exit code 0 + `continueOnFailure` covers all v1 use cases
-- `maxRetries` / `retryScript` — retrying the same script against the same state is pointless without a distinct success condition or a recovery action between retries
+- `postScript` field on AI prompt steps — covered by hooks (`Stop` event) and the completion notifications feature
+- `returns` / output-matching success conditions — exit code 0 + `continueOnFailure` covers all cases
+- `maxRetries` / `retryScript` — retrying a script without a recovery action between retries is pointless
 - Async/parallel script steps
-- Script step output piped to next prompt context
-- `stdin` input to script steps
-- Script steps as `endCondition` replacement (they are separate concepts)
-- Environment variable injection (users can set them in the script itself)
-- Shell selector (`bash` vs `powershell`) — use existing EndConditionEvaluator behavior
+- Script output piped into next prompt context (use `{{var}}` + a script that writes to a file instead)
+- Shell selector (`bash` vs `powershell`) — use existing `EndConditionEvaluator` behavior
+- Environment variable injection (set them in the script itself)

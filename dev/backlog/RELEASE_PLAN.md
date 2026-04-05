@@ -91,6 +91,38 @@ Run `npm run package` and install the resulting `.vsix` file locally via **Exten
 
 ---
 
+### 1.4 macOS Testing
+
+**Priority: CRITICAL** | **Effort: 2–4 hours**
+
+FlightPath has only been developed and tested on Linux/WSL. macOS is the primary platform for VS Code users and must be verified before Marketplace publication. macOS-specific risks:
+
+- **`node-pty` native binaries** — prebuilt binaries differ per platform/architecture (x64 vs arm64). Must verify PTY-based terminal works on both Intel and Apple Silicon.
+- **CLI tool paths** — Homebrew installs to `/opt/homebrew/bin` (Apple Silicon) or `/usr/local/bin` (Intel). `PATH` may not include these in the extension host process. Test that `gh copilot`, `claude`, `codex`, etc. are discovered correctly.
+- **File path handling** — macOS is case-insensitive but case-preserving. Test that workspace-relative paths, `.flightpath/` resolution, and temp file creation all work correctly.
+- **PTY behavior** — Terminal resize, ANSI escape handling, and process spawning behave differently on macOS. Verify interactive terminal display and headless output capture.
+- **File watching** — `chokidar` behaves differently on macOS (uses `FSEvents` instead of `inotify`). Verify log file monitoring and workflow file change detection.
+- **Permissions** — macOS may prompt for folder access permissions. Test on a clean user account without pre-granted permissions.
+
+**Test checklist (macOS):**
+
+- [ ] Extension installs and activates without errors
+- [ ] Dashboard panel loads correctly
+- [ ] Interactive terminal renders (PTY works on target architecture)
+- [ ] Run a workflow end-to-end in `copilot-cli` harness (interactive mode)
+- [ ] Run a workflow end-to-end in `claude-cli` harness (interactive mode)
+- [ ] Headless mode produces output and exits cleanly
+- [ ] Log file monitoring detects AI completions (file watch works)
+- [ ] Temp prompt files are created and cleaned up correctly
+- [ ] `.flightpath/` directory is created in workspace root
+- [ ] End condition scripts execute successfully
+
+**Test on both architectures if possible:**
+- [ ] Apple Silicon (arm64) — M1/M2/M3 Mac
+- [ ] Intel (x64) — or verify Rosetta compatibility
+
+---
+
 ## Phase 2 — Publisher & Marketplace Setup
 
 Steps required to get the publisher account and tooling configured for the first `vsce publish`.
@@ -504,7 +536,8 @@ jobs:
 | ------- | --------------------------------------------------------------- | ----- | ------ | -------- | ------- |
 | 1.1     | Fix `.vscodeignore` (webview bundle missing)                    | 1     | 30 min | **YES**  | ✅ DONE |
 | 1.2     | Populate CHANGELOG for v0.1.0                                   | 1     | 2–4 hr | **YES**  |         |
-| 1.3     | Verify production build end-to-end                              | 1     | 1–2 hr | **YES**  |         |
+| 1.3     | Verify production build end-to-end (Linux/WSL)                  | 1     | 1–2 hr | **YES**  |         |
+| 1.4     | macOS testing (PTY, paths, file watch, both architectures)      | 1     | 2–4 hr | **YES**  |         |
 | 2.1     | Create/verify Azure DevOps publisher                            | 2     | 30 min | **YES**  |         |
 | 2.2     | Generate PAT                                                    | 2     | 15 min | **YES**  |         |
 | 2.3     | Install vsce + login                                            | 2     | 15 min | **YES**  |         |
