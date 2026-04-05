@@ -1,8 +1,8 @@
 export {
-  PromptItem,
+  PromptStep,
   type PromptDetails,
   type EndConditionResult,
-} from "./PromptItem";
-export { PromptItemDetails } from "./PromptItemDetails";
+} from "./PromptStep";
+export { PromptStepDetails } from "./PromptStepDetails";
 export { StatusIcon } from "./StatusIcon";
 export { PromptCounter } from "./PromptCounter";

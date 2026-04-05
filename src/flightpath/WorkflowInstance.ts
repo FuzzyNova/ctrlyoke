@@ -7,7 +7,7 @@ import { EndConditionHandler } from "./EndConditionHandler";
 import { WorkflowExecutor, WorkflowExecutionContext } from "./WorkflowExecutor";
 import {
   PromptFile,
-  PromptItem,
+  PromptStep,
   WorkflowStep,
   isScriptStep,
   QueueState,
@@ -1435,7 +1435,7 @@ export class WorkflowInstance {
     promptName?: string,
     clearProperties?: string[]
   ): Promise<void> {
-    const updates: Partial<PromptItem> = {
+    const updates: Partial<PromptStep> = {
       prompt: text,
       ...(promptName !== undefined && { name: promptName || undefined }),
       ...this.buildPromptItemProperties(properties),
@@ -1459,7 +1459,7 @@ export class WorkflowInstance {
     await this.ensureEphemeralWorkingFile();
 
     if (finalStep && !isScriptStep(finalStep)) {
-      const normalized: PromptItem = {
+      const normalized: PromptStep = {
         prompt: finalStep.prompt,
         ...(finalStep.name ? { name: finalStep.name } : {}),
         ...this.buildPromptItemProperties(finalStep as unknown),
@@ -1575,7 +1575,7 @@ export class WorkflowInstance {
       promptName
     );
 
-    const promptItem: PromptItem = {
+    const promptItem: PromptStep = {
       prompt: text,
       ...(promptName?.trim() ? { name: promptName.trim() } : {}),
       ...this.buildPromptItemProperties(properties),
@@ -1750,7 +1750,7 @@ export class WorkflowInstance {
       outputHistoryManager: this.outputHistoryManager,
       mcpServerProvider: this.mcpServerProvider,
       getIntegrationForPrompt: (
-        prompt: PromptItem,
+        prompt: PromptStep,
         harnessOverride?: Harness
       ) => {
         const currentIntegration = this.activeIntegration ?? activeIntegration;
@@ -2448,17 +2448,17 @@ export class WorkflowInstance {
   }
 
   /** Produces `{ key: undefined }` entries for each key in clearProperties, which
-   *  when spread into a Partial<PromptItem> removes those fields from the stored prompt. */
-  private buildClearUpdates(clearProperties?: string[]): Partial<PromptItem> {
+   *  when spread into a Partial<PromptStep> removes those fields from the stored prompt. */
+  private buildClearUpdates(clearProperties?: string[]): Partial<PromptStep> {
     if (!clearProperties?.length) return {};
     return Object.fromEntries(
       clearProperties.map((key) => [key, undefined])
-    ) as Partial<PromptItem>;
+    ) as Partial<PromptStep>;
   }
 
-  private buildPromptItemProperties(properties: unknown): Partial<PromptItem> {
+  private buildPromptItemProperties(properties: unknown): Partial<PromptStep> {
     const props = properties as Record<string, unknown>;
-    // For non-nullable properties: null coerces to undefined (removes key from PromptItem).
+    // For non-nullable properties: null coerces to undefined (removes key from PromptStep).
     // For tri-state nullable properties like agent, skills, and additionalArgs,
     // null is stored as-is to represent an explicit "none/disabled" override.
     // "Clear to inherit" is handled separately via buildClearUpdates / clearProperties.
@@ -2495,7 +2495,7 @@ export class WorkflowInstance {
         priorContext: coerce<PriorContext>(props.priorContext),
       }),
       // additionalArgs is three-state: null = explicitly disabled, string = custom, undefined = inherit.
-      // Do NOT coerce null to undefined — null must be preserved in PromptItem so the working
+      // Do NOT coerce null to undefined — null must be preserved in PromptStep so the working
       // file retains the "explicitly none" override and the PropertyResolver stops resolution.
       ...(props?.additionalArgs !== undefined && {
         additionalArgs: props.additionalArgs as string | null,

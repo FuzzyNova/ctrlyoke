@@ -1,5 +1,5 @@
 import type { CliEvent } from "../types/WebviewMessageTypes";
-import type { WorkflowStep, PromptItem } from "../types/FlightPathTypes";
+import type { WorkflowStep, PromptStep } from "../types/FlightPathTypes";
 import { isScriptStep } from "../types/FlightPathTypes";
 import { EXECUTION_STATES } from "../types/FlightPathTypes";
 import { FINAL_PROMPT_PHASES } from "../types/DashboardConstants";
@@ -173,7 +173,7 @@ export class OutputCaptureBuffer {
       const completedEntry = this.completedStepOutputs.get(stepIndex);
       if (completedEntry) {
         const promptItem = this.callbacks.getPromptItem(stepIndex);
-        const promptItemTyped = promptItem && !isScriptStep(promptItem) ? promptItem as PromptItem : undefined;
+        const promptItemTyped = promptItem && !isScriptStep(promptItem) ? promptItem as PromptStep : undefined;
         const maxRetries = promptItemTyped?.endCondition?.maxRetries ?? attemptIndex;
         completedEntry.retryState = { currentRetry: attemptIndex, maxRetries };
         Log.debug(
@@ -213,7 +213,7 @@ export class OutputCaptureBuffer {
       existing.outputs.push(output);
       if (attemptIndex > 0) {
         const promptItem = this.callbacks.getPromptItem(stepIndex);
-        const promptItemTyped = promptItem && !isScriptStep(promptItem) ? promptItem as PromptItem : undefined;
+        const promptItemTyped = promptItem && !isScriptStep(promptItem) ? promptItem as PromptStep : undefined;
         const maxRetries = promptItemTyped?.endCondition?.maxRetries ?? attemptIndex;
         existing.retryState = { currentRetry: attemptIndex, maxRetries };
       }
@@ -403,7 +403,7 @@ export class OutputCaptureBuffer {
             // Edge case: retry streaming started but completedStepOutputs
             // doesn't have retryState yet (defend against timing gaps).
             const promptItem = this.callbacks.getPromptItem(state.currentIndex);
-            const promptItemTyped = promptItem && !isScriptStep(promptItem) ? promptItem as PromptItem : undefined;
+            const promptItemTyped = promptItem && !isScriptStep(promptItem) ? promptItem as PromptStep : undefined;
             const maxRetries =
               promptItemTyped?.endCondition?.maxRetries ?? buffer.attemptIndex;
             Log.trace(

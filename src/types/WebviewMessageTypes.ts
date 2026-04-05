@@ -4,7 +4,7 @@
  *
  * This file consolidates:
  * - CLI output data types (CliOutput)
- * - Prompt item types (PromptItem, ExecutionProperties)
+ * - Prompt item types (PromptStep, ExecutionProperties)
  * - Message payload interfaces (InitMessageData, FileSelectedMessage, etc.)
  * - CLI event data interfaces (re-exported from CliOutputTypes for consistency)
  * - Retry and status types (RetryState, StatusMessage, etc.)
@@ -216,9 +216,9 @@ export interface EndConditionConfig {
 
 /**
  * Prompt item shape (used in workflowStore and throughout webview)
- * Matches FlightPathTypes.PromptItem
+ * Matches FlightPathTypes.PromptStep
  */
-export interface PromptItem {
+export interface PromptStep {
   /** Step type discriminant — defaults to "prompt" when absent */
   type?: typeof STEP_TYPES.PROMPT;
   name?: string;

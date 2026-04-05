@@ -502,7 +502,7 @@ export const STEP_TYPES = {
 } as const;
 
 // ============================================================================
-// PROMPT PROPERTY NAMES - Single source of truth for PromptItem properties
+// PROMPT PROPERTY NAMES - Single source of truth for PromptStep properties
 // Used by dashboard.js to access prompt properties consistently
 // ============================================================================
 export const PROMPT_PROPERTIES = {

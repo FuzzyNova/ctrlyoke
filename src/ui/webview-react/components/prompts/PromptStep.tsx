@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import type { DraggableAttributes } from "@dnd-kit/core";
 type SyntheticListenerMap = Record<string, Function>;
 import { StatusIcon } from "./StatusIcon";
-import { PromptItemDetails } from "./PromptItemDetails";
-import type { PromptOverride } from "./PromptItemDetails";
+import { PromptStepDetails } from "./PromptStepDetails";
+import type { PromptOverride } from "./PromptStepDetails";
 export type { PromptOverride };
 import type { StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
@@ -20,7 +20,7 @@ export interface PromptDetails {
   message?: string;
 }
 
-interface PromptItemProps {
+interface PromptStepProps {
   /** Prompt text content */
   text: string;
   /** Prompt index (0-based) */
@@ -91,7 +91,7 @@ const truncate = (text: string, maxLength: number = 60): string => {
 };
 
 /**
- * PromptItem - Individual prompt in the prompts list
+ * PromptStep - Individual prompt in the prompts list
  *
  * Features:
  * - Status icon (pending/running/completed/failed)
@@ -101,7 +101,7 @@ const truncate = (text: string, maxLength: number = 60): string => {
  * - Duration if available
  * - Visual indication for current/selected state
  */
-export const PromptItem: React.FC<PromptItemProps> = ({
+export const PromptStep: React.FC<PromptStepProps> = ({
   text,
   index,
   status,
@@ -228,7 +228,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
                 </div>
               )}
               {/* Status details (duration, end condition) but no harness/model */}
-              <PromptItemDetails
+              <PromptStepDetails
                 status={status}
                 retryState={retryState}
                 latestOutput={latestOutput}
@@ -244,7 +244,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
               >
                 {name ? name : truncate(text, 60)}
               </span>
-              <PromptItemDetails
+              <PromptStepDetails
                 status={status}
                 harnessLabel={harnessLabel}
                 harnessIsDefault={harnessIsDefault}

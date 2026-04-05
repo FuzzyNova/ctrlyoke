@@ -37,7 +37,7 @@ export {
 export {
   PROMPT_PROPERTIES,
   createPromptItem,
-  promptItemToRaw,
+  promptStepToRaw,
   isPromptExecuted,
   isPromptRunning,
   isPromptPending,
@@ -46,7 +46,7 @@ export {
   type PromptRuntime,
   type RawPrompt,
   type PromptDetails,
-  type PromptItem,
+  type PromptStep,
 } from "./prompt";
 
 // Status/icon utilities

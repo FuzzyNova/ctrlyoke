@@ -16,7 +16,7 @@ import {
   WorkflowRunnerLock,
   EXECUTION_STATES,
   STEP_STATUS,
-  type PromptItem,
+  type PromptStep,
   type WorkflowStep,
   workflowDisplayStep,
 } from "../types/FlightPathTypes";
@@ -930,7 +930,7 @@ export class WorkflowOrchestrator {
   }
 
   async updateFinalPromptInQueue(
-    finalPrompt: PromptItem | null,
+    finalPrompt: PromptStep | null,
     clearProperties?: string[]
   ): Promise<void> {
     return this.getActiveInstance().updateFinalPromptInQueue(

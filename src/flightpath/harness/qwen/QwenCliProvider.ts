@@ -25,7 +25,7 @@ import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
-  PromptItem,
+  PromptStep,
   WorkflowStep,
   McpServerConfig,
   UserHookConfig,
@@ -110,7 +110,7 @@ export class QwenCliProvider implements ICliProvider {
    * @returns Complete CLI arguments array (without prompt - that's handled separately)
    */
   async buildCliArgs(
-    _prompt: PromptItem,
+    _prompt: PromptStep,
     _isInteractive: boolean,
     extensionPath: string,
     workspaceRoot: string | undefined,

@@ -22,7 +22,7 @@ export type { TerminalSession, SessionKind } from "./terminalStore";
 
 // Types from workflowStore
 export type {
-  PromptItem,
+  PromptStep,
   CliOutput,
   RetryState,
   StatusMessage,

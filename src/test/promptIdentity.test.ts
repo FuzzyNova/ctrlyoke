@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { hashPromptContent } from "../utils/PromptIdentity";
-import { PromptItem } from "../types/FlightPathTypes";
+import { PromptStep } from "../types/FlightPathTypes";
 
 suite("PromptIdentity Tests", () => {
   suite("hashPromptContent", () => {
@@ -59,7 +59,7 @@ suite("PromptIdentity Tests", () => {
 
   suite("completion tracking via completedAt", () => {
     test("a prompt with completedAt is completed", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "Test prompt",
         _runtime: { startedAt: 1000, completedAt: 2000 },
       };
@@ -67,7 +67,7 @@ suite("PromptIdentity Tests", () => {
     });
 
     test("a prompt without completedAt is not completed", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "Test prompt",
         _runtime: { startedAt: 1000 },
       };
@@ -75,7 +75,7 @@ suite("PromptIdentity Tests", () => {
     });
 
     test("a prompt with no _runtime is not completed", () => {
-      const prompt: PromptItem = { prompt: "Test prompt" };
+      const prompt: PromptStep = { prompt: "Test prompt" };
       assert.strictEqual(prompt._runtime?.completedAt !== undefined, false);
     });
   });

@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
-import { PromptItem, Harness, type UserHookConfig } from "../../../types/FlightPathTypes";
+import { PromptStep, Harness, type UserHookConfig } from "../../../types/FlightPathTypes";
 import { HarnessIntegration, HarnessStatus } from "../../HarnessIntegration";
 import { isModelAvailable } from "../../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
@@ -409,7 +409,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
   /** Send prompt via direct automation. See flightpath-chat.instructions.md for timing. */
   async sendPrompt(
-    prompt: PromptItem,
+    prompt: PromptStep,
     needsCompletionDetection?: boolean,
     workflowContext?: WorkflowContext
   ): Promise<boolean> {
@@ -824,7 +824,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
    *   This gives a uniform experience matching CLI harnesses.
    */
   private async buildPromptText(
-    prompt: PromptItem,
+    prompt: PromptStep,
     resolvedAgent?: string,
     resolvedSkills?: string[]
   ): Promise<string> {
@@ -1135,7 +1135,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
    *   large context attachments).
    */
   private async buildCopilotChatPrompt(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflowContext?: WorkflowContext,
     isResumedSession?: boolean
   ): Promise<string> {

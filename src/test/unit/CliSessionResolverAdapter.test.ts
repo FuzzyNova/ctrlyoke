@@ -4,7 +4,7 @@ import { CliSessionResolverAdapter } from "../../flightpath/harness/shared/CliSe
 import {
   Harness,
   type PromptFile,
-  type PromptItem,
+  type PromptStep,
 } from "../../types/FlightPathTypes";
 import type { WorkflowContext } from "../../types/WorkflowContextTypes";
 import { Log } from "../../utils/Log";
@@ -15,7 +15,7 @@ suite("CliSessionResolverAdapter", () => {
       getIntegrationHarness: () => Harness.CopilotCli,
     });
 
-    const previousPrompt: PromptItem = {
+    const previousPrompt: PromptStep = {
       prompt: "previous",
       _runtime: {
         harness: Harness.CopilotCli,
@@ -25,7 +25,7 @@ suite("CliSessionResolverAdapter", () => {
         completedAt: Date.now(),
       },
     };
-    const currentPrompt: PromptItem = {
+    const currentPrompt: PromptStep = {
       prompt: "current",
       resumeSession: true,
     };
@@ -64,7 +64,7 @@ suite("CliSessionResolverAdapter", () => {
         getIntegrationHarness: () => Harness.ClaudeCli,
       });
 
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         resumeSession: true,
         sessionId: "not-a-valid-uuid",
@@ -96,7 +96,7 @@ suite("CliSessionResolverAdapter", () => {
       getIntegrationHarness: () => Harness.CodexCli,
     });
 
-    const prompt: PromptItem = {
+    const prompt: PromptStep = {
       prompt: "continue",
     };
 

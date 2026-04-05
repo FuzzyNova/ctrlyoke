@@ -1,12 +1,12 @@
 import * as assert from "assert";
 import { PropertyResolver } from "../../utils/PropertyResolver";
-import { Harness, PromptFile, PromptItem } from "../../types/FlightPathTypes";
+import { Harness, PromptFile, PromptStep } from "../../types/FlightPathTypes";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
 suite("PropertyResolver Tests", () => {
   suite("resolveHarness", () => {
     test("should use prompt-level harness when specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         harness: Harness.ClaudeCli,
       };
@@ -20,7 +20,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should use workflow-level harness when prompt-level not specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -33,7 +33,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should fall back to VS Code setting when neither prompt nor workflow specify harness", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -48,7 +48,7 @@ suite("PropertyResolver Tests", () => {
 
   suite("resolveModel", () => {
     test("should use prompt-level model when specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         model: "gpt-5",
       };
@@ -62,7 +62,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should use workflow-level model when prompt-level not specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -75,7 +75,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should fall back to harness-specific model when neither prompt nor workflow specify model", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         harness: Harness.CopilotCli,
       };
@@ -91,7 +91,7 @@ suite("PropertyResolver Tests", () => {
 
   suite("resolveAgent", () => {
     test("should use prompt-level agent when specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         agent: "code-reviewer",
       };
@@ -105,7 +105,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should use workflow-level agent when prompt-level not specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -118,7 +118,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should return undefined when no agent specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -136,7 +136,7 @@ suite("PropertyResolver Tests", () => {
 
   suite("resolveResumeSession", () => {
     test("should use prompt-level resumeSession when specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         resumeSession: true,
       };
@@ -150,7 +150,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should use workflow-level resumeSession when prompt-level not specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -163,7 +163,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should fall back to VS Code setting when neither prompt nor workflow specify resumeSession", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -178,7 +178,7 @@ suite("PropertyResolver Tests", () => {
 
   suite("resolveMcpServers", () => {
     test("should use prompt-level mcpServers when specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         mcpServers: ["flightpath"],
       };
@@ -192,7 +192,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should use workflow-level mcpServers when prompt-level not specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -205,7 +205,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should default to empty array when neither prompt nor workflow specify mcpServers", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -217,7 +217,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should return null when prompt explicitly disables mcpServers", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         mcpServers: null,
       };
@@ -242,7 +242,7 @@ suite("PropertyResolver Tests", () => {
         returns: "true",
       };
 
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         endCondition: promptCondition,
       };
@@ -261,7 +261,7 @@ suite("PropertyResolver Tests", () => {
         returns: "true",
       };
 
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -274,7 +274,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should return undefined when no endCondition specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -291,7 +291,7 @@ suite("PropertyResolver Tests", () => {
         returns: "true",
       };
 
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         endCondition: undefined,
       };
@@ -310,7 +310,7 @@ suite("PropertyResolver Tests", () => {
 
   suite("resolveSessionId", () => {
     test("should use prompt-level sessionId when specified (string)", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         sessionId: "550e8400-e29b-41d4-a716-446655440000",
       };
@@ -327,7 +327,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should use prompt-level sessionId when specified (number)", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         sessionId: 1,
       };
@@ -341,7 +341,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should use workflow-level sessionId when prompt-level not specified (string)", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -354,7 +354,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should use workflow-level sessionId when prompt-level not specified (number)", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -367,7 +367,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should return undefined when no sessionId specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -379,7 +379,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should return undefined when workflow sessionId is empty string", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -392,7 +392,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should return undefined when prompt sessionId is empty string and prompt overrides resumeSession", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         sessionId: "",
         resumeSession: true, // prompt controls the resume tier, so its empty sessionId wins
@@ -407,7 +407,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should fall through to workflow sessionId when prompt sessionId is empty but resumeSession is default", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         sessionId: "", // user cleared the field but did not override resumeSession
       };
@@ -424,7 +424,7 @@ suite("PropertyResolver Tests", () => {
 
   suite("resolveToolPermissions", () => {
     test("should return null (none) when prompt toolPermissions is null", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         toolPermissions: null,
       };
@@ -442,7 +442,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should return null (none) when workflow toolPermissions is null and prompt is undefined", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -455,7 +455,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should return null (none) when both levels are undefined", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -467,7 +467,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should return null (none) when mode is 'none'", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         toolPermissions: { mode: PERMISSION_MODES.NONE },
       };
@@ -481,7 +481,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should return null (none) when workflow mode is 'none' and prompt is undefined", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -494,7 +494,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should use prompt-level config when it overrides workflow-level", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         toolPermissions: {
           mode: PERMISSION_MODES.CUSTOM,
@@ -516,7 +516,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should use workflow-level config when prompt is undefined", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
       const workflow: PromptFile = {
@@ -537,7 +537,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should default mode to 'allowAll' when mode is omitted in override object", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         toolPermissions: { allowedTools: ["write"] },
       };
@@ -555,7 +555,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should default allowedTools and deniedTools to [] when omitted", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         toolPermissions: { mode: PERMISSION_MODES.CUSTOM },
       };
@@ -574,7 +574,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should preserve full config when all fields are specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         toolPermissions: {
           mode: PERMISSION_MODES.CUSTOM,
@@ -597,7 +597,7 @@ suite("PropertyResolver Tests", () => {
 
   suite("resolveHooks", () => {
     test("should use prompt-level hooks when specified", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         hooks: [{ event: "stop", command: "npm test" }],
       };
@@ -613,7 +613,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should use workflow-level hooks when prompt-level not specified", () => {
-      const prompt: PromptItem = { prompt: "test" };
+      const prompt: PromptStep = { prompt: "test" };
       const workflow: PromptFile = {
         prompts: [],
         hooks: [{ event: "stop", command: "npm test" }],
@@ -625,14 +625,14 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should default to empty array when neither prompt nor workflow specify hooks", () => {
-      const prompt: PromptItem = { prompt: "test" };
+      const prompt: PromptStep = { prompt: "test" };
       const workflow: PromptFile = { prompts: [] };
       const resolved = PropertyResolver.resolve(prompt, workflow);
       assert.deepStrictEqual(resolved.hooks, []);
     });
 
     test("should return null when prompt explicitly disables hooks", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         hooks: null,
       };
@@ -645,7 +645,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should return null when workflow explicitly disables hooks and prompt has no override", () => {
-      const prompt: PromptItem = { prompt: "test" };
+      const prompt: PromptStep = { prompt: "test" };
       const workflow: PromptFile = {
         prompts: [],
         hooks: null,
@@ -655,7 +655,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should perform per-event override — prompt stop replaces workflow stop but keeps workflow sessionStart", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         hooks: [{ event: "stop", command: "node extra-validation.js" }],
       };
@@ -679,7 +679,7 @@ suite("PropertyResolver Tests", () => {
     });
 
     test("should support multiple hooks on the same event", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         hooks: [
           { event: "stop", command: "npm test" },
@@ -695,7 +695,7 @@ suite("PropertyResolver Tests", () => {
 
   suite("full precedence chain", () => {
     test("should correctly apply three-tier precedence for all properties", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         harness: Harness.ClaudeCli, // Override
         // model: not specified - should use workflow

@@ -5,7 +5,7 @@ import {
   END_CONDITION_DEFAULTS,
 } from "@store/editorStore";
 import { FINAL_PROMPT_PHASES } from "@/types/messages";
-import type { PromptItem } from "@/types/messages";
+import type { PromptStep } from "@/types/messages";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -15,7 +15,7 @@ function store() {
   return useEditorStore.getState();
 }
 
-function makePromptItem(overrides: Partial<PromptItem> = {}): PromptItem {
+function makePromptItem(overrides: Partial<PromptStep> = {}): PromptStep {
   return {
     prompt: "Do something useful",
     name: "My Prompt",

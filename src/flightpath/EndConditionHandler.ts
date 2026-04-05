@@ -2,7 +2,7 @@ import * as path from "path";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { SCRIPT_EXTENSIONS } from "../utils/ValidationUtils";
 import {
-  PromptItem,
+  PromptStep,
   type WorkflowAttemptTarget,
 } from "../types/FlightPathTypes";
 import { STATUS_MESSAGE_SEVERITY } from "../types/DashboardConstants";
@@ -43,7 +43,7 @@ export interface RetryContext {
  * Returns the response text on success, null on failure.
  */
 export type SendRetryPromptCallback = (
-  retryPromptItem: PromptItem,
+  retryPromptItem: PromptStep,
   currentIndex: number,
   attemptIndex: number
 ) => Promise<string | null>;
@@ -89,7 +89,7 @@ export class EndConditionHandler {
    * @returns Result object with shouldContinue and optional failureReason
    */
   async handleEndConditionResult(
-    prompt: PromptItem,
+    prompt: PromptStep,
     evaluationResult: EvaluationResult,
     retryContext: RetryContext,
     sendRetryPrompt: SendRetryPromptCallback
@@ -146,7 +146,7 @@ export class EndConditionHandler {
    * @returns Result object with shouldContinue and optional failureReason
    */
   async handleExecutionError(
-    prompt: PromptItem,
+    prompt: PromptStep,
     evaluationResult: EvaluationResult,
     retryContext: RetryContext
   ): Promise<EndConditionHandlerResult> {
@@ -225,7 +225,7 @@ export class EndConditionHandler {
    * @returns Result object with shouldContinue and optional failureReason
    */
   async handleValidationFailureIterative(
-    prompt: PromptItem,
+    prompt: PromptStep,
     initialEvaluationResult: EvaluationResult,
     retryContext: RetryContext,
     sendRetryPrompt: SendRetryPromptCallback
@@ -306,7 +306,7 @@ export class EndConditionHandler {
       }
 
       // Create retry prompt item
-      const retryPromptItem: PromptItem = {
+      const retryPromptItem: PromptStep = {
         prompt: retryPromptText,
         model: prompt.model,
         endCondition: prompt.endCondition, // Keep same end condition
@@ -396,7 +396,7 @@ export class EndConditionHandler {
    * @returns Result object with shouldContinue and optional failureReason
    */
   async handleMaxRetriesExhausted(
-    prompt: PromptItem,
+    prompt: PromptStep,
     evaluationResult: EvaluationResult,
     retryContext: RetryContext,
     attemptIndex: number
@@ -449,7 +449,7 @@ export class EndConditionHandler {
    * Build retry prompt from template with placeholder replacement
    */
   buildRetryPrompt(
-    prompt: PromptItem,
+    prompt: PromptStep,
     evaluationResult: EvaluationResult
   ): string {
     // Get effective retry prompt (including defaults from settings)

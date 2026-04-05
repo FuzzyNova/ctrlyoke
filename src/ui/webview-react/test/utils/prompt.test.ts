@@ -1,17 +1,17 @@
 import { describe, it, expect } from "vitest";
 import {
   createPromptItem,
-  promptItemToRaw,
+  promptStepToRaw,
   isPromptExecuted,
   isPromptRunning,
   isPromptPending,
   getPromptLabel,
-  type PromptItem,
+  type PromptStep,
   type RawPrompt,
 } from "@utils/prompt";
 import { STEP_STATUS } from "@/types/messages";
 
-function makeItem(overrides: Partial<PromptItem> = {}): PromptItem {
+function makeItem(overrides: Partial<PromptStep> = {}): PromptStep {
   return {
     index: 0,
     text: "Do something useful",
@@ -69,10 +69,10 @@ describe("createPromptItem", () => {
   });
 });
 
-describe("promptItemToRaw", () => {
+describe("promptStepToRaw", () => {
   it("converts a minimal item to raw format", () => {
     const item = makeItem({ text: "Hello" });
-    const raw = promptItemToRaw(item);
+    const raw = promptStepToRaw(item);
     expect(raw.prompt).toBe("Hello");
   });
 
@@ -82,7 +82,7 @@ describe("promptItemToRaw", () => {
       harness: undefined,
       model: undefined,
     });
-    const raw = promptItemToRaw(item);
+    const raw = promptStepToRaw(item);
     expect("harness" in raw).toBe(false);
     expect("model" in raw).toBe(false);
   });
@@ -94,13 +94,13 @@ describe("promptItemToRaw", () => {
       model: "claude-opus-4",
       resumeSession: true,
     });
-    const raw = promptItemToRaw(item);
+    const raw = promptStepToRaw(item);
     expect(raw.harness).toBe("claude-cli");
     expect(raw.model).toBe("claude-opus-4");
     expect(raw.resumeSession).toBe(true);
   });
 
-  it("round-trips through createPromptItem → promptItemToRaw", () => {
+  it("round-trips through createPromptItem → promptStepToRaw", () => {
     const raw: RawPrompt = {
       prompt: "Do a thing",
       harness: "copilot-cli",
@@ -108,7 +108,7 @@ describe("promptItemToRaw", () => {
       hooks: [{ event: "stop", command: "npm test" }],
     };
     const item = createPromptItem(raw, 0);
-    const back = promptItemToRaw(item);
+    const back = promptStepToRaw(item);
     expect(back.prompt).toBe(raw.prompt);
     expect(back.harness).toBe(raw.harness);
     expect(back.skills).toEqual(raw.skills);

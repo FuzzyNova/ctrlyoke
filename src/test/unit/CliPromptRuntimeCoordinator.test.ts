@@ -2,7 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliPromptRuntimeCoordinator } from "../../flightpath/harness/shared/CliPromptRuntimeCoordinator";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
-import { Harness, type PromptItem } from "../../types/FlightPathTypes";
+import { Harness, type PromptStep } from "../../types/FlightPathTypes";
 import { Log } from "../../utils/Log";
 
 function createCoordinator(options?: {
@@ -32,7 +32,7 @@ function createParsedOutput(
 suite("CliPromptRuntimeCoordinator", () => {
   test("should persist cancelled prompt runtime for resumable sessions", async () => {
     const debugMessages: string[] = [];
-    const prompt: PromptItem = {
+    const prompt: PromptStep = {
       prompt: "cancelled",
     };
     let updateCount = 0;
@@ -68,7 +68,7 @@ suite("CliPromptRuntimeCoordinator", () => {
 
   test("should store successful runtime metadata and merge session ID into parsed output", async () => {
     const debugMessages: string[] = [];
-    const prompt: PromptItem = {
+    const prompt: PromptStep = {
       prompt: "done",
     };
     let updateCount = 0;
@@ -120,7 +120,7 @@ suite("CliPromptRuntimeCoordinator", () => {
   });
 
   test("should preserve existing parsed output session ID on successful completion", async () => {
-    const prompt: PromptItem = {
+    const prompt: PromptStep = {
       prompt: "rerun",
       _runtime: {
         harness: Harness.CopilotCli,

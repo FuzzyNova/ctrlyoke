@@ -24,7 +24,7 @@ import * as fs from "fs/promises";
 import * as fsSync from "fs";
 import * as path from "path";
 import type {
-  PromptItem,
+  PromptStep,
   WorkflowStep,
   WorkingFile,
   WorkingFileRuntime,
@@ -404,7 +404,7 @@ class FlightPathMCPServer {
       source = "MCP Tool",
     } = args as {
       prompts: Array<
-        PromptItem & {
+        PromptStep & {
           resumeSession?: boolean;
           sessionId?: number;
           harness?: string;
@@ -741,11 +741,11 @@ class FlightPathMCPServer {
    * Completion is determined by per-prompt _runtime.completedAt (source of truth).
    */
   private validatePrompts(
-    newPrompts: PromptItem[],
+    newPrompts: PromptStep[],
     existingPrompts: WorkflowStep[]
-  ): Array<{ prompt: PromptItem; accepted: boolean; reason?: string }> {
+  ): Array<{ prompt: PromptStep; accepted: boolean; reason?: string }> {
     const results: Array<{
-      prompt: PromptItem;
+      prompt: PromptStep;
       accepted: boolean;
       reason?: string;
     }> = [];

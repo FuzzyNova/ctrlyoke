@@ -2,7 +2,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import Ajv from "ajv";
 import * as yaml from "js-yaml";
-import { PromptFile, PromptItem, WorkflowStep, ScriptStep, isScriptStep } from "../types/FlightPathTypes";
+import { PromptFile, PromptStep, WorkflowStep, ScriptStep, isScriptStep } from "../types/FlightPathTypes";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
@@ -292,13 +292,13 @@ export class PromptFileParser {
   }
 
   /**
-   * Build a PromptItem with only explicitly set properties
+   * Build a PromptStep with only explicitly set properties
    * @param promptText The resolved prompt text
    * @param source The source object (parsed JSON/YAML)
-   * @returns PromptItem with only defined properties
+   * @returns PromptStep with only defined properties
    */
-  private buildPromptItem(promptText: string, source: any): PromptItem {
-    const promptItem: PromptItem = { prompt: promptText };
+  private buildPromptItem(promptText: string, source: any): PromptStep {
+    const promptItem: PromptStep = { prompt: promptText };
 
     // Only include properties that are explicitly set
     if (source.name !== undefined) promptItem.name = source.name;

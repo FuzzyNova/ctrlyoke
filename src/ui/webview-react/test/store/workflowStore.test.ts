@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useWorkflowStore } from "@store/workflowStore";
 import { EXECUTION_STATES, STEP_STATUS, FINAL_PROMPT_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
-import type { PromptItem, CliOutput } from "@/types/messages";
+import type { PromptStep, CliOutput } from "@/types/messages";
 import type { WorkflowOutputHistory, OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 
 // ---------------------------------------------------------------------------
@@ -16,7 +16,7 @@ function store() {
   return useWorkflowStore.getState();
 }
 
-function makePrompt(overrides: Partial<PromptItem> = {}): PromptItem {
+function makePrompt(overrides: Partial<PromptStep> = {}): PromptStep {
   return { prompt: "hello world", ...overrides };
 }
 

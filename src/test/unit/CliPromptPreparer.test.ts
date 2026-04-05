@@ -2,7 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliPromptPreparer } from "../../flightpath/harness/shared/CliPromptPreparer";
 import type { PromptSections } from "../../flightpath/HarnessIntegration";
-import type { PromptItem } from "../../types/FlightPathTypes";
+import type { PromptStep } from "../../types/FlightPathTypes";
 import type { WorkflowContext } from "../../types/WorkflowContextTypes";
 
 function createSections(overrides?: Partial<PromptSections>): PromptSections {
@@ -38,7 +38,7 @@ suite("CliPromptPreparer", () => {
     });
 
     const result = await preparer.preparePrompt(
-      { prompt: "just say hi" } as PromptItem,
+      { prompt: "just say hi" } as PromptStep,
       undefined,
       undefined,
       undefined
@@ -57,7 +57,7 @@ suite("CliPromptPreparer", () => {
     const preparer = new CliPromptPreparer({
       shouldOmitAgentsAndSkillsOnResume: () => true,
       buildPromptSections: async (
-        _prompt: PromptItem,
+        _prompt: PromptStep,
         agent?: string,
         skills?: string[]
       ) => {
@@ -76,7 +76,7 @@ suite("CliPromptPreparer", () => {
     });
 
     await preparer.preparePrompt(
-      { prompt: "resume" } as PromptItem,
+      { prompt: "resume" } as PromptStep,
       undefined,
       { agent: "reviewer", skills: ["git", "testing"] } as any,
       "existing-session"
@@ -117,11 +117,11 @@ suite("CliPromptPreparer", () => {
     });
 
     const result = await preparer.preparePrompt(
-      { prompt: "please inspect files" } as PromptItem,
+      { prompt: "please inspect files" } as PromptStep,
       {
         workflowName: "test-workflow",
         promptIndex: 0,
-        allPrompts: [{ prompt: "please inspect files" } as PromptItem],
+        allPrompts: [{ prompt: "please inspect files" } as PromptStep],
       } as WorkflowContext,
       { priorContext: "allPrevious" } as any,
       undefined,
@@ -158,7 +158,7 @@ suite("CliPromptPreparer", () => {
     });
 
     const result = await preparer.preparePrompt(
-      { prompt: "fully implement @Path/To/Plan.md" } as PromptItem,
+      { prompt: "fully implement @Path/To/Plan.md" } as PromptStep,
       undefined,
       undefined,
       undefined
@@ -190,7 +190,7 @@ suite("CliPromptPreparer", () => {
     });
 
     const result = await preparer.preparePrompt(
-      { prompt: "/handoff" } as PromptItem,
+      { prompt: "/handoff" } as PromptStep,
       undefined,
       undefined,
       undefined
@@ -219,7 +219,7 @@ suite("CliPromptPreparer", () => {
     });
 
     const result = await preparer.preparePrompt(
-      { prompt: "/handoff summarize the session" } as PromptItem,
+      { prompt: "/handoff summarize the session" } as PromptStep,
       undefined,
       undefined,
       undefined
@@ -257,7 +257,7 @@ suite("CliPromptPreparer", () => {
     });
 
     const result = await preparer.preparePrompt(
-      { prompt: "/handoff inspect repo state" } as PromptItem,
+      { prompt: "/handoff inspect repo state" } as PromptStep,
       undefined,
       undefined,
       undefined

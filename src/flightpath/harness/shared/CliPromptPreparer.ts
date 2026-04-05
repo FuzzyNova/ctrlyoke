@@ -1,4 +1,4 @@
-import type { PriorContext, PromptItem, WorkflowStep } from "../../../types/FlightPathTypes";
+import type { PriorContext, PromptStep, WorkflowStep } from "../../../types/FlightPathTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import {
   PromptFileSplitter,
@@ -17,7 +17,7 @@ export interface PromptFileResult {
 export interface CliPromptPreparerDeps {
   shouldOmitAgentsAndSkillsOnResume: () => boolean;
   buildPromptSections: (
-    prompt: PromptItem,
+    prompt: PromptStep,
     resolvedAgent?: string,
     resolvedSkills?: string[]
   ) => Promise<PromptSections>;
@@ -47,7 +47,7 @@ export class CliPromptPreparer {
   constructor(private readonly deps: CliPromptPreparerDeps) {}
 
   async preparePrompt(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflowContext: WorkflowContext | undefined,
     resolvedProperties: ResolvedProperties | undefined,
     resolvedSessionId: string | undefined,

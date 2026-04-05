@@ -6,12 +6,12 @@ import {
   STEP_STATUS,
   PROMPT_TERMINAL_STATUS,
 } from "../types/DashboardConstants";
-import { PromptItem, PromptFile } from "../types/FlightPathTypes";
+import { PromptStep, PromptFile } from "../types/FlightPathTypes";
 
 /**
  * Helper to wrap prompts array into PromptFile for tests
  */
-function createPromptFile(prompts: PromptItem[]): PromptFile {
+function createPromptFile(prompts: PromptStep[]): PromptFile {
   return { prompts };
 }
 
@@ -81,7 +81,7 @@ async function failCurrentPrompt(
 
 suite("PromptQueue State Machine Tests", () => {
   let queue: PromptQueue;
-  const samplePrompts: PromptItem[] = [
+  const samplePrompts: PromptStep[] = [
     { prompt: "First prompt" },
     { prompt: "Second prompt" },
     { prompt: "Third prompt" },
@@ -466,7 +466,7 @@ suite("PromptQueue State Machine Tests", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       const current = queue.getCurrentPrompt();
       assert.ok(current);
-      assert.strictEqual((current as PromptItem).prompt, "First prompt");
+      assert.strictEqual((current as PromptStep).prompt, "First prompt");
     });
 
     test("getCurrentPrompt() should return null at end of queue", async () => {
@@ -620,7 +620,7 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("canRetry() should return false when no retryPrompt", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "Test",
         endCondition: { script: "test.py", returns: "true" },
       };
@@ -629,7 +629,7 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("canRetry() should return true when retries remain", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "Test",
         endCondition: {
           script: "test.py",
@@ -643,7 +643,7 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("canRetry() should return false when maxRetries exhausted", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "Test",
         endCondition: {
           script: "test.py",
@@ -659,7 +659,7 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("canRetry() should always return true for unlimited retries (-1)", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "Test",
         endCondition: {
           script: "test.py",
@@ -869,7 +869,7 @@ suite("PromptQueue State Machine Tests", () => {
 
   suite("setStartPosition", () => {
     test("should be a no-op when toIndex equals currentIndex", async () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
@@ -885,7 +885,7 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("should rewind: strip _runtime and reset results to PENDING for prompts at/after toIndex", async () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
@@ -951,7 +951,7 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("should skip-ahead: mark prompts currentIndex..toIndex-1 as SKIPPED in results", async () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
@@ -991,7 +991,7 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("should rebuild completedIndices correctly for rewind", async () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
@@ -1012,7 +1012,7 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("should set status to IDLE and stopped to false after position change", async () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
@@ -1039,7 +1039,7 @@ suite("PromptQueue State Machine Tests", () => {
 
   suite("reorderPendingPrompts", () => {
     test("should keep done-prefix unchanged and reorder pending section", async () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
@@ -1054,15 +1054,15 @@ suite("PromptQueue State Machine Tests", () => {
       await queue.reorderPendingPrompts([2, 0, 1]);
 
       const state = queue.getState();
-      assert.strictEqual((state.prompts[0] as PromptItem).prompt, "p0");
-      assert.strictEqual((state.prompts[1] as PromptItem).prompt, "p1");
-      assert.strictEqual((state.prompts[2] as PromptItem).prompt, "p4");
-      assert.strictEqual((state.prompts[3] as PromptItem).prompt, "p2");
-      assert.strictEqual((state.prompts[4] as PromptItem).prompt, "p3");
+      assert.strictEqual((state.prompts[0] as PromptStep).prompt, "p0");
+      assert.strictEqual((state.prompts[1] as PromptStep).prompt, "p1");
+      assert.strictEqual((state.prompts[2] as PromptStep).prompt, "p4");
+      assert.strictEqual((state.prompts[3] as PromptStep).prompt, "p2");
+      assert.strictEqual((state.prompts[4] as PromptStep).prompt, "p3");
     });
 
     test("should reorder results in sync with prompts", async () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
@@ -1085,7 +1085,7 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("should produce correct order after successive reorders", async () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
@@ -1096,17 +1096,17 @@ suite("PromptQueue State Machine Tests", () => {
       // First reorder: move p0 to last → [1, 2, 0]
       await queue.reorderPendingPrompts([1, 2, 0]);
       let state = queue.getState();
-      assert.strictEqual((state.prompts[0] as PromptItem).prompt, "p1");
-      assert.strictEqual((state.prompts[1] as PromptItem).prompt, "p2");
-      assert.strictEqual((state.prompts[2] as PromptItem).prompt, "p0");
+      assert.strictEqual((state.prompts[0] as PromptStep).prompt, "p1");
+      assert.strictEqual((state.prompts[1] as PromptStep).prompt, "p2");
+      assert.strictEqual((state.prompts[2] as PromptStep).prompt, "p0");
 
       // Second reorder: move the new first (p1) to last → [1, 2, 0]
       // Current pending slice: [p1, p2, p0]; move slice[0]=p1 to end
       await queue.reorderPendingPrompts([1, 2, 0]);
       state = queue.getState();
-      assert.strictEqual((state.prompts[0] as PromptItem).prompt, "p2");
-      assert.strictEqual((state.prompts[1] as PromptItem).prompt, "p0");
-      assert.strictEqual((state.prompts[2] as PromptItem).prompt, "p1");
+      assert.strictEqual((state.prompts[0] as PromptStep).prompt, "p2");
+      assert.strictEqual((state.prompts[1] as PromptStep).prompt, "p0");
+      assert.strictEqual((state.prompts[2] as PromptStep).prompt, "p1");
     });
   });
 
@@ -1124,7 +1124,7 @@ suite("PromptQueue State Machine Tests", () => {
       };
 
       // Disk has both prompt-0 (without _runtime — not written yet) and a new MCP prompt
-      const diskPrompts: PromptItem[] = [
+      const diskPrompts: PromptStep[] = [
         { prompt: "prompt-0" }, // matches memory, but no _runtime on disk copy
         { prompt: "prompt-1-mcp" }, // new from MCP
       ];

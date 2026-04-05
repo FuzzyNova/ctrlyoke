@@ -1,5 +1,5 @@
 import * as path from "path";
-import { PromptItem, PriorContext, WorkflowStep, isScriptStep } from "../types/FlightPathTypes";
+import { PromptStep, PriorContext, WorkflowStep, isScriptStep } from "../types/FlightPathTypes";
 import { WorkflowContext } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import {
@@ -196,7 +196,7 @@ export abstract class HarnessIntegration {
    * @returns True if prompt was sent successfully
    */
   abstract sendPrompt(
-    prompt: PromptItem,
+    prompt: PromptStep,
     needsCompletionDetection?: boolean,
     workflowContext?: WorkflowContext
   ): Promise<boolean>;
@@ -240,7 +240,7 @@ export abstract class HarnessIntegration {
    * @returns Categorized prompt sections
    */
   protected async buildPromptSections(
-    prompt: PromptItem,
+    prompt: PromptStep,
     resolvedAgent?: string,
     resolvedSkills?: string[]
   ): Promise<PromptSections> {

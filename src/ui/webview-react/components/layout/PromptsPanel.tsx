@@ -9,10 +9,10 @@ import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { usePromptStatus, useStepClickHandler } from "@hooks/index";
 import { HARNESS_INFO } from "../../types/messages";
 import {
-  PromptItem,
+  PromptStep,
   type PromptDetails,
   type PromptOverride,
-} from "../prompts/PromptItem";
+} from "../prompts/PromptStep";
 import { FinalPromptFooter } from "../prompts/FinalPromptFooter";
 import { PromptCounter } from "../prompts/PromptCounter";
 import { PanelBar } from "../shared";
@@ -55,9 +55,9 @@ function getStepText(step: WorkflowStep): string {
   return isScriptStep(step) ? step.script : step.prompt;
 }
 
-type PromptItemComponentProps = React.ComponentProps<typeof PromptItem>;
+type PromptStepComponentProps = React.ComponentProps<typeof PromptStep>;
 type SortableWrapperProps = Omit<
-  PromptItemComponentProps,
+  PromptStepComponentProps,
   "dragHandleProps"
 > & {
   id: string;
@@ -94,7 +94,7 @@ function SortablePromptItemWrapper({
         {slotNumber}
       </div>
       <div ref={setNodeRef} style={style} className="flex-1 min-w-0">
-        <PromptItem
+        <PromptStep
           {...promptItemProps}
           displayNumber={slotNumber}
           dragHandleProps={disabled ? undefined : { listeners, attributes }}
@@ -109,7 +109,7 @@ function SortablePromptItemWrapper({
  *
  * Features:
  * - Collapsible header with prompt count
- * - List of PromptItem components with status
+ * - List of PromptStep components with status
  * - Click to select prompt for editing
  * - Empty state when no prompts loaded
  * - Retry and end condition result display
@@ -684,7 +684,7 @@ export const PromptsPanel: React.FC<{
                       {slotNumber}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <PromptItem
+                      <PromptStep
                         text={getStepText(prompt)}
                         index={index}
                         displayNumber={slotNumber}

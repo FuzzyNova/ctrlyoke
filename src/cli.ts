@@ -433,7 +433,7 @@ async function runCommand(
 
     // Apply --resume / --new-session overrides to the first prompt before execution.
     // getState() returns a shallow copy but prompts[] is the same array reference,
-    // so mutations to PromptItem objects propagate into the queue's internal state.
+    // so mutations to PromptStep objects propagate into the queue's internal state.
     const queueState = instance.promptQueue.getState();
     if (config.resume && queueState.prompts.length > 0) {
       const firstStep = queueState.prompts[0];

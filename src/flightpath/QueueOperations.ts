@@ -9,7 +9,7 @@
 
 import { PromptQueue } from "./PromptQueue";
 import {
-  PromptItem,
+  PromptStep,
   EndCondition,
   type Harness,
   isScriptStep,
@@ -224,8 +224,8 @@ export async function appendToQueue(
     );
   }
 
-  // 3. Convert request prompts to PromptItem format
-  const promptItems: PromptItem[] = request.prompts.map((p) => ({
+  // 3. Convert request prompts to PromptStep format
+  const promptItems: PromptStep[] = request.prompts.map((p) => ({
     prompt: p.prompt,
     model: p.model,
     harness: p.harness as Harness | undefined,

@@ -12,7 +12,7 @@ import {
   HarnessStatus,
 } from "../../flightpath/HarnessIntegration";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
-import { Harness, type PromptItem } from "../../types/FlightPathTypes";
+import { Harness, type PromptStep } from "../../types/FlightPathTypes";
 import { WORKFLOW_ATTEMPT_STATUS, FINAL_PROMPT_PHASES, WORKFLOW_ATTEMPT_COMMANDS } from "../../types/DashboardConstants";
 
 class MockPlatform implements PlatformAdapter {
@@ -118,7 +118,7 @@ function validationFailure(result: string = "bad"): EvaluationResult {
   };
 }
 
-function createPrompt(maxRetries: number): PromptItem {
+function createPrompt(maxRetries: number): PromptStep {
   return {
     prompt: "run task",
     endCondition: {

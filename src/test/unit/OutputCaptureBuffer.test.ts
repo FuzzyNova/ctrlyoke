@@ -10,7 +10,7 @@ import { EXECUTION_STATES } from "../../types/FlightPathTypes";
 import { FINAL_PROMPT_PHASES } from "../../types/DashboardConstants";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import type { CliEvent } from "../../types/WebviewMessageTypes";
-import type { PromptItem } from "../../types/FlightPathTypes";
+import type { PromptStep } from "../../types/FlightPathTypes";
 
 // ─── Test helpers ────────────────────────────────────────────────────────────
 
@@ -314,11 +314,11 @@ suite("OutputCaptureBuffer", () => {
     });
 
     test("should set retryState when attemptIndex > 0", () => {
-      const promptItem: Partial<PromptItem> = {
+      const promptItem: Partial<PromptStep> = {
         endCondition: { maxRetries: 3 } as any,
       };
       const { callbacks } = makeCallbacks({
-        getPromptItem: () => promptItem as PromptItem,
+        getPromptItem: () => promptItem as PromptStep,
       });
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
@@ -726,11 +726,11 @@ suite("OutputCaptureBuffer", () => {
     });
 
     test("should send retryState before streaming output when attemptIndex > 0", () => {
-      const promptItem: Partial<PromptItem> = {
+      const promptItem: Partial<PromptStep> = {
         endCondition: { maxRetries: 2 } as any,
       };
       const { callbacks } = makeCallbacks({
-        getPromptItem: () => promptItem as PromptItem,
+        getPromptItem: () => promptItem as PromptStep,
       });
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 

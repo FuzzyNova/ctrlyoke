@@ -2,7 +2,7 @@ import React, { useState, useCallback } from "react";
 import { STEP_STATUS } from "../../types/messages";
 import type { StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
-import type { PromptDetails } from "./PromptItem";
+import type { PromptDetails } from "./PromptStep";
 import { calcContextPct } from "@utils/tokenUtils";
 
 /**
@@ -15,7 +15,7 @@ export interface PromptOverride {
   title?: string;
 }
 
-interface PromptItemDetailsProps {
+interface PromptStepDetailsProps {
   status: StepStatus;
   harnessLabel?: string;
   harnessIsDefault?: boolean;
@@ -30,14 +30,14 @@ interface PromptItemDetailsProps {
 }
 
 /**
- * PromptItemDetails - Shared secondary metadata rows for prompt display.
+ * PromptStepDetails - Shared secondary metadata rows for prompt display.
  *
  * Renders harness/model info, retry state, compact stats (context %, session ID,
  * duration), end condition result, status message, and property overrides.
- * Used by both PromptItem and FinalPromptFooter so future additions automatically
+ * Used by both PromptStep and FinalPromptFooter so future additions automatically
  * appear in both places.
  */
-export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
+export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
   status,
   harnessLabel,
   harnessIsDefault,

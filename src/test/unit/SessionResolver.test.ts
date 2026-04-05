@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { SessionResolver } from "../../utils/SessionResolver";
-import { PromptFile, PromptItem, Harness } from "../../types/FlightPathTypes";
+import { PromptFile, PromptStep, Harness } from "../../types/FlightPathTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 suite("SessionResolver Tests", () => {
@@ -12,7 +12,7 @@ suite("SessionResolver Tests", () => {
         resumeSession: true,
       };
 
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test prompt",
       };
 
@@ -28,7 +28,7 @@ suite("SessionResolver Tests", () => {
       };
 
       // Create a completed prompt with runtime session
-      const completedPrompt: PromptItem = {
+      const completedPrompt: PromptStep = {
         prompt: "first prompt",
         _runtime: {
           harness: Harness.CopilotCli,
@@ -39,7 +39,7 @@ suite("SessionResolver Tests", () => {
         },
       };
 
-      const currentPrompt: PromptItem = {
+      const currentPrompt: PromptStep = {
         prompt: "second prompt",
       };
 
@@ -59,7 +59,7 @@ suite("SessionResolver Tests", () => {
         resumeSession: true,
       };
 
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test prompt",
         sessionId: "prompt-session-uuid",
       };
@@ -75,7 +75,7 @@ suite("SessionResolver Tests", () => {
         resumeSession: true,
       };
 
-      const completedPrompt: PromptItem = {
+      const completedPrompt: PromptStep = {
         prompt: "first prompt",
         _runtime: {
           harness: Harness.CopilotCli,
@@ -86,7 +86,7 @@ suite("SessionResolver Tests", () => {
         },
       };
 
-      const currentPrompt: PromptItem = {
+      const currentPrompt: PromptStep = {
         prompt: "second prompt",
         sessionId: 1, // Override workflow's sessionId: 2
       };
@@ -108,7 +108,7 @@ suite("SessionResolver Tests", () => {
         resumeSession: true, // Necessary to enable session resumption
       };
 
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         sessionId: "550e8400-e29b-41d4-a716-446655440000",
       };
@@ -122,7 +122,7 @@ suite("SessionResolver Tests", () => {
         prompts: [],
       };
 
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         sessionId: "my-session-id",
         resumeSession: true,
@@ -140,7 +140,7 @@ suite("SessionResolver Tests", () => {
         resumeSession: true,
       };
 
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         {
           prompt: "first",
           _runtime: {
@@ -167,7 +167,7 @@ suite("SessionResolver Tests", () => {
     });
 
     test("should return undefined when referenced prompt has no session", () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         {
           prompt: "first",
           _runtime: {
@@ -189,7 +189,7 @@ suite("SessionResolver Tests", () => {
     });
 
     test("should warn on cross-harness reference", () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         {
           prompt: "first",
           harness: Harness.ClaudeCli,
@@ -220,7 +220,7 @@ suite("SessionResolver Tests", () => {
         prompts: [],
       };
 
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         {
           prompt: "first",
           _runtime: {
@@ -247,7 +247,7 @@ suite("SessionResolver Tests", () => {
     });
 
     test("should skip prompts with different harnesses when auto-resuming", () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         {
           prompt: "first",
           _runtime: {
@@ -281,7 +281,7 @@ suite("SessionResolver Tests", () => {
     });
 
     test("should return undefined when no previous prompt with matching harness", () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         {
           prompt: "first",
           _runtime: {
@@ -305,7 +305,7 @@ suite("SessionResolver Tests", () => {
     });
 
     test("should return undefined for first prompt with auto-resume", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "first",
         resumeSession: true,
       };
@@ -317,7 +317,7 @@ suite("SessionResolver Tests", () => {
 
   suite("resolve - resumeSession precedence", () => {
     test("should return undefined when resumeSession=false at prompt level", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         resumeSession: false,
         sessionId: "ignored-session", // Should be ignored
@@ -334,7 +334,7 @@ suite("SessionResolver Tests", () => {
         sessionId: "ignored-session",
       };
 
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
 
@@ -349,7 +349,7 @@ suite("SessionResolver Tests", () => {
         sessionId: "workflow-session",
       };
 
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
 
@@ -360,7 +360,7 @@ suite("SessionResolver Tests", () => {
 
   suite("shouldResumeSession", () => {
     test("should return false when prompt.resumeSession=false", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         resumeSession: false,
       };
@@ -375,7 +375,7 @@ suite("SessionResolver Tests", () => {
     });
 
     test("should return true when prompt.resumeSession=true", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         resumeSession: true,
       };
@@ -390,7 +390,7 @@ suite("SessionResolver Tests", () => {
     });
 
     test("should use workflow.resumeSession when prompt-level not set", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
 
@@ -404,7 +404,7 @@ suite("SessionResolver Tests", () => {
     });
 
     test("should return false when no workflow provided and prompt not set", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
       };
 
@@ -415,7 +415,7 @@ suite("SessionResolver Tests", () => {
 
   suite("validate", () => {
     test("should return valid for exact session ID", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         sessionId: "550e8400-e29b-41d4-a716-446655440000",
       };
@@ -426,7 +426,7 @@ suite("SessionResolver Tests", () => {
     });
 
     test("should warn when both resumeSession=false and sessionId set", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "test",
         sessionId: "my-session",
         resumeSession: false,
@@ -439,7 +439,7 @@ suite("SessionResolver Tests", () => {
     });
 
     test("should return error for out-of-range numeric reference", () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         { prompt: "first" },
         { prompt: "second" },
         { prompt: "third", sessionId: 5 }, // Out of range
@@ -459,7 +459,7 @@ suite("SessionResolver Tests", () => {
     });
 
     test("should return error for backward-looking numeric reference", () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         { prompt: "first", sessionId: 2 }, // Can't reference prompt 2 from prompt 1
         { prompt: "second" },
       ];
@@ -474,7 +474,7 @@ suite("SessionResolver Tests", () => {
     });
 
     test("should return valid for proper numeric reference", () => {
-      const prompts: PromptItem[] = [
+      const prompts: PromptStep[] = [
         {
           prompt: "first",
           _runtime: {
@@ -532,7 +532,7 @@ suite("SessionResolver Tests", () => {
     };
 
     test("should return finalPromptSessionId when sentinel is used and prior session exists", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "finalPrompt text",
         sessionId: "finalPrompt",
       };
@@ -549,7 +549,7 @@ suite("SessionResolver Tests", () => {
     });
 
     test("should return undefined when sentinel is used but no prior session (first iteration)", () => {
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "finalPrompt text",
         sessionId: "finalPrompt",
       };
@@ -569,7 +569,7 @@ suite("SessionResolver Tests", () => {
         prompts: [],
         resumeSession: false,
       };
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "finalPrompt text",
         sessionId: "finalPrompt",
       };
@@ -586,7 +586,7 @@ suite("SessionResolver Tests", () => {
 
     test("should ignore finalPromptSessionId when sessionId is not the sentinel", () => {
       const exactId = "660e8400-e29b-41d4-a716-446655440000";
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "finalPrompt text",
         sessionId: exactId,
         resumeSession: true,
@@ -608,7 +608,7 @@ suite("SessionResolver Tests", () => {
         sessionId: "finalPrompt",
         resumeSession: true,
       };
-      const prompt: PromptItem = {
+      const prompt: PromptStep = {
         prompt: "finalPrompt text",
       };
       const priorSessionId = "770e8400-e29b-41d4-a716-446655440000";

@@ -1,7 +1,7 @@
 import * as path from "path";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import {
-  PromptItem,
+  PromptStep,
   PromptFile,
   FinalPromptRuntimeState,
   QueueState,
@@ -36,7 +36,7 @@ import { WorkflowStateMachine } from "./WorkflowStateMachine";
  * Get effective maxRetries value with smart defaults
  */
 function getEffectiveMaxRetries(
-  endCondition?: PromptItem["endCondition"]
+  endCondition?: PromptStep["endCondition"]
 ): number {
   if (!endCondition) {
     return 0;
@@ -63,7 +63,7 @@ function getEffectiveMaxRetries(
  * Get effective retry prompt with smart defaults
  */
 function getEffectiveRetryPrompt(
-  endCondition?: PromptItem["endCondition"]
+  endCondition?: PromptStep["endCondition"]
 ): string | undefined {
   if (!endCondition) {
     return undefined;
@@ -687,7 +687,7 @@ export class PromptQueue {
   /**
    * Check if current prompt can be retried
    */
-  canRetry(prompt: PromptItem): boolean {
+  canRetry(prompt: PromptStep): boolean {
     const retryPrompt = getEffectiveRetryPrompt(prompt.endCondition);
     if (!retryPrompt) {
       return false;
@@ -706,14 +706,14 @@ export class PromptQueue {
   /**
    * Get effective maxRetries for current prompt (including defaults)
    */
-  getEffectiveMaxRetries(prompt: PromptItem): number {
+  getEffectiveMaxRetries(prompt: PromptStep): number {
     return getEffectiveMaxRetries(prompt.endCondition);
   }
 
   /**
    * Get effective retry prompt for current prompt (including defaults)
    */
-  getEffectiveRetryPrompt(prompt: PromptItem): string | undefined {
+  getEffectiveRetryPrompt(prompt: PromptStep): string | undefined {
     return getEffectiveRetryPrompt(prompt.endCondition);
   } /**
    * Increment retry count for current prompt
@@ -1258,7 +1258,7 @@ export class PromptQueue {
   /**
    * Update an existing prompt in the queue
    * @param index - Prompt index (0-based)
-   * @param updates - Partial PromptItem updates to apply
+   * @param updates - Partial PromptStep updates to apply
    * @throws Error if index is out of range
    */
   public async updatePrompt(

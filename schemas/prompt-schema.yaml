@@ -8,7 +8,7 @@ description: >-
   content before sending to the AI.
 oneOf:
   - title: Single Prompt
-    $ref: '#/definitions/promptItem'
+    $ref: '#/definitions/workflowStep'
   - title: Multiple Prompts (or Working File)
     allOf:
       - $ref: '#/definitions/executionProperties'
@@ -16,9 +16,9 @@ oneOf:
           prompts:
             type: array
             items:
-              $ref: '#/definitions/promptItem'
+              $ref: '#/definitions/workflowStep'
           finalStep:
-            $ref: '#/definitions/promptItem'
+            $ref: '#/definitions/workflowStep'
             description: >-
               A step that always runs after all queued prompts complete. Can be an AI prompt or a
               script step. If mcpServers includes "flightpath" and the finalStep appends prompts,
@@ -270,11 +270,11 @@ definitions:
           inherited overrides and fall back to global VS Code settings. Set mode to 'passthrough' to
           omit all FlightPath permission flags and rely entirely on the harness's own local
           configuration.
-  promptItem:
+  workflowStep:
     oneOf:
-      - $ref: '#/definitions/aiPromptItem'
+      - $ref: '#/definitions/promptStep'
       - $ref: '#/definitions/scriptStep'
-  aiPromptItem:
+  promptStep:
     type: object
     allOf:
       - $ref: '#/definitions/executionProperties'

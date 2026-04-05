@@ -10,7 +10,7 @@ import { EndConditionHandler } from "../../flightpath/EndConditionHandler";
 import { HarnessIntegration } from "../../flightpath/HarnessIntegration";
 import { HarnessStatus } from "../../flightpath/HarnessIntegration";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
-import { PromptItem, PromptFile, Harness } from "../../types/FlightPathTypes";
+import { PromptStep, PromptFile, Harness } from "../../types/FlightPathTypes";
 import { EXECUTION_STATES, FINAL_PROMPT_PHASES, STEP_STATUS } from "../../types/DashboardConstants";
 import { CliEvent } from "../../types/WebviewMessageTypes";
 
@@ -48,14 +48,14 @@ class MockHarnessIntegration extends HarnessIntegration {
   public lastFailureOutput?: string;
   public lastCliCommandValue?: string;
   public onSend?: (
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflowContext?: Parameters<HarnessIntegration["sendPrompt"]>[2]
   ) => Promise<SendOutcome>;
 
   async initialize(): Promise<void> {}
 
   async sendPrompt(
-    prompt: PromptItem,
+    prompt: PromptStep,
     _needsCompletionDetection?: boolean,
     workflowContext?: Parameters<HarnessIntegration["sendPrompt"]>[2]
   ): Promise<boolean> {

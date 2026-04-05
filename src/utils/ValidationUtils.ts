@@ -1,5 +1,5 @@
 import Ajv, { JSONSchemaType } from "ajv";
-import { PromptItem, Harness } from "../types/FlightPathTypes";
+import { PromptStep, Harness } from "../types/FlightPathTypes";
 import { Log } from "./Log";
 import {
   COPILOT_CLI_MODEL_IDS,
@@ -36,8 +36,8 @@ const ALL_MODEL_IDS: string[] = [
 export class ValidationUtils {
   private static ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
 
-  // Schema for PromptItem
-  private static promptItemSchema: JSONSchemaType<PromptItem> = {
+  // Schema for PromptStep
+  private static promptStepSchema: JSONSchemaType<PromptStep> = {
     type: "object",
     properties: {
       type: {
@@ -168,14 +168,14 @@ export class ValidationUtils {
   };
 
   // Compiled validators
-  private static promptItemValidator = ValidationUtils.ajv.compile(
-    ValidationUtils.promptItemSchema
+  private static promptStepValidator = ValidationUtils.ajv.compile(
+    ValidationUtils.promptStepSchema
   );
 
-  static validatePromptItem(item: any): { valid: boolean; errors: string[] } {
-    const valid = ValidationUtils.promptItemValidator(item);
+  static validatePromptStep(item: any): { valid: boolean; errors: string[] } {
+    const valid = ValidationUtils.promptStepValidator(item);
     const errors =
-      ValidationUtils.promptItemValidator.errors?.map(
+      ValidationUtils.promptStepValidator.errors?.map(
         (err) => `${err.instancePath || "root"}: ${err.message}`
       ) || [];
 
@@ -194,7 +194,7 @@ export class ValidationUtils {
     let allValid = true;
 
     items.forEach((item, index) => {
-      const result = ValidationUtils.validatePromptItem(item);
+      const result = ValidationUtils.validatePromptStep(item);
       if (!result.valid) {
         allValid = false;
         allErrors.push(
@@ -296,7 +296,7 @@ export class ValidationUtils {
         prompt: file.prompt,
         endCondition: file.endCondition,
       };
-      const result = ValidationUtils.validatePromptItem(promptItem);
+      const result = ValidationUtils.validatePromptStep(promptItem);
       if (!result.valid) {
         errors.push(...result.errors);
       }

@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import * as path from "path";
 import { PromptFileParser } from "../flightpath/PromptFileParser";
-import type { PromptItem } from "../types/FlightPathTypes";
+import type { PromptStep } from "../types/FlightPathTypes";
 
 suite("PromptFileParser Tests", () => {
   let parser: PromptFileParser;
@@ -41,10 +41,10 @@ suite("PromptFileParser Tests", () => {
       assert.ok(result.prompts, "Should have prompts array");
       assert.strictEqual(result.prompts.length, 1);
       assert.strictEqual(
-        (result.prompts[0] as PromptItem).prompt,
+        (result.prompts[0] as PromptStep).prompt,
         "Explain this code and suggest improvements"
       );
-      assert.strictEqual((result.prompts[0] as PromptItem).model, "claude-sonnet-4.5");
+      assert.strictEqual((result.prompts[0] as PromptStep).model, "claude-sonnet-4.5");
     });
 
     test("should parse multiple prompts format", async () => {
@@ -55,11 +55,11 @@ suite("PromptFileParser Tests", () => {
       assert.ok(result.prompts, "Should have prompts array");
       assert.strictEqual(result.prompts.length, 2);
       assert.strictEqual(
-        (result.prompts[0] as PromptItem).prompt,
+        (result.prompts[0] as PromptStep).prompt,
         "Step 1: Analyze code structure"
       );
       assert.strictEqual(
-        (result.prompts[1] as PromptItem).prompt,
+        (result.prompts[1] as PromptStep).prompt,
         "Step 2: Implement improvements"
       );
     });
@@ -111,7 +111,7 @@ suite("PromptFileParser Tests", () => {
       assert.ok(result, "Result should not be null");
       assert.ok(result.prompts, "Should have prompts array");
       assert.strictEqual(result.prompts.length, 1);
-      assert.ok((result.prompts[0] as PromptItem).prompt.includes("simple markdown prompt"));
+      assert.ok((result.prompts[0] as PromptStep).prompt.includes("simple markdown prompt"));
     });
 
     test("should trim whitespace from prompt text", async () => {
@@ -120,7 +120,7 @@ suite("PromptFileParser Tests", () => {
 
       assertValidResult(result);
       // Should be trimmed - no leading/trailing whitespace
-      const promptText = (result.prompts[0] as PromptItem).prompt;
+      const promptText = (result.prompts[0] as PromptStep).prompt;
       assert.strictEqual(promptText, promptText.trim());
     });
 

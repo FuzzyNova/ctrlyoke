@@ -13,7 +13,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { MESSAGE_TYPES, EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
-import type { PromptItem } from "@/types/messages";
+import type { PromptStep } from "@/types/messages";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -27,8 +27,8 @@ function dispatch(type: string, payload: Record<string, unknown> = {}) {
 
 function makePrompt(
   prompt: string,
-  overrides: Partial<PromptItem> = {}
-): PromptItem {
+  overrides: Partial<PromptStep> = {}
+): PromptStep {
   return { prompt, ...overrides };
 }
 

@@ -1,7 +1,7 @@
 import * as path from "path";
 import { PlatformAdapter } from "../platform/PlatformAdapter";
 import {
-  PromptItem,
+  PromptStep,
   ScriptStep,
   WorkflowStep,
   isScriptStep,
@@ -54,7 +54,7 @@ export interface WorkflowExecutionContext {
   showCliOutput: boolean;
   dynamicQueueConfig: DynamicQueueConfig;
   getIntegrationForPrompt: (
-    prompt: PromptItem,
+    prompt: PromptStep,
     harnessOverride?: Harness
   ) => HarnessIntegration;
   historyFilePath: string;
@@ -439,7 +439,7 @@ export class WorkflowExecutor {
       return this.executeScriptStep(step, stepIndex, context, target);
     }
 
-    let prompt: PromptItem = step as PromptItem;
+    let prompt: PromptStep = step as PromptStep;
     const workflowFile = this.promptQueue.getWorkflowFile();
     let resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
 
@@ -914,7 +914,7 @@ export class WorkflowExecutor {
   }
 
   private async evaluateEndCondition(
-    prompt: PromptItem,
+    prompt: PromptStep,
     integration: HarnessIntegration,
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
@@ -1039,7 +1039,7 @@ export class WorkflowExecutor {
    * users can stop manually at any time.
    */
   private async waitForResponseComplete(
-    _prompt: PromptItem,
+    _prompt: PromptStep,
     integration: HarnessIntegration
   ): Promise<string> {
     return new Promise<string>((resolve) => {
@@ -1082,7 +1082,7 @@ export class WorkflowExecutor {
    *   returns false.
    */
   private async executeWithStreaming(
-    promptItem: PromptItem,
+    promptItem: PromptStep,
     integration: HarnessIntegration,
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
@@ -1292,7 +1292,7 @@ export class WorkflowExecutor {
     legacyStepIndex: number | undefined
   ): SendRetryPromptCallback {
     return async (
-      retryPromptItem: PromptItem,
+      retryPromptItem: PromptStep,
       currentIndex: number,
       retryAttemptIndex: number
     ): Promise<string | null> => {
@@ -1497,7 +1497,7 @@ export class WorkflowExecutor {
     integration: HarnessIntegration,
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
-    prompt: PromptItem,
+    prompt: PromptStep,
     legacyStepIndex: number,
     attemptIndex: number
   ): Promise<boolean> {
@@ -1750,7 +1750,7 @@ export class WorkflowExecutor {
     integration: HarnessIntegration,
     target: ExecutionTarget,
     legacyStepIndex: number | undefined,
-    prompt: PromptItem,
+    prompt: PromptStep,
     responseText: string,
     duration: number,
     attemptIndex: number = 0

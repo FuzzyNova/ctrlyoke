@@ -1,6 +1,6 @@
 import {
   PromptFile,
-  PromptItem,
+  PromptStep,
   Harness,
   EndCondition,
   PriorContext,
@@ -92,7 +92,7 @@ export class PropertyResolver {
    * @param workflow The parent workflow file (may contain workflow-level defaults)
    * @returns Fully resolved properties with all required fields populated
    */
-  static resolve(prompt: PromptItem, workflow: PromptFile): ResolvedProperties {
+  static resolve(prompt: PromptStep, workflow: PromptFile): ResolvedProperties {
     const harness = this.resolveHarness(prompt, workflow);
     const model = this.resolveModel(prompt, workflow, harness);
 
@@ -125,7 +125,7 @@ export class PropertyResolver {
    * @returns Resolved harness (always defined, guaranteed fallback to settings)
    */
   private static resolveHarness(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflow: PromptFile
   ): Harness {
     // 1. Prompt-level override (highest priority)
@@ -156,7 +156,7 @@ export class PropertyResolver {
    * @returns Resolved model (always defined, guaranteed fallback to harness-specific setting)
    */
   private static resolveModel(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflow: PromptFile,
     harness: Harness
   ): string {
@@ -191,7 +191,7 @@ export class PropertyResolver {
    * @returns Resolved agent filename or undefined
    */
   private static resolveAgent(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflow: PromptFile
   ): string | undefined {
     // 1. Prompt-level override (highest priority)
@@ -226,7 +226,7 @@ export class PropertyResolver {
    * @returns Resolved skills array or undefined
    */
   private static resolveSkills(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflow: PromptFile
   ): string[] | undefined {
     // 1. Prompt-level override (highest priority)
@@ -261,7 +261,7 @@ export class PropertyResolver {
    * @returns Resolved resumeSession flag (always defined, defaults to setting)
    */
   private static resolveResumeSession(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflow: PromptFile
   ): boolean {
     // 1. Prompt-level override (highest priority)
@@ -284,7 +284,7 @@ export class PropertyResolver {
    * Events not mentioned at prompt level inherit from workflow level.
    */
   private static resolveHooks(
-    promptItem: PromptItem,
+    promptItem: PromptStep,
     workflowFile: PromptFile
   ): UserHookConfig[] | null {
     // Explicit null at prompt level → no hooks for this prompt
@@ -342,7 +342,7 @@ export class PropertyResolver {
    * @returns Resolved mcpServers array or null
    */
   private static resolveMcpServers(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflow: PromptFile
   ): (string | McpServerConfig)[] | null {
     // 1. Prompt-level override (highest priority)
@@ -375,7 +375,7 @@ export class PropertyResolver {
    * @returns Resolved sessionId (string | number) or undefined
    */
   private static resolveSessionId(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflow: PromptFile
   ): string | number | undefined {
     // 1. Prompt-level override (non-empty) — always takes precedence.
@@ -422,7 +422,7 @@ export class PropertyResolver {
    * @returns Resolved end condition or undefined
    */
   static resolveEndCondition(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflow: PromptFile
   ): EndCondition | undefined {
     // 1. Prompt-level override (highest priority)
@@ -459,7 +459,7 @@ export class PropertyResolver {
    * @returns Resolved PriorContext or undefined
    */
   private static resolvePriorContext(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflow: PromptFile
   ): PriorContext | undefined {
     // 1. Prompt-level override (highest priority)
@@ -501,7 +501,7 @@ export class PropertyResolver {
    * @returns Resolved additionalArgs string or undefined
    */
   private static resolveAdditionalArgs(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflow: PromptFile,
     harness: Harness
   ): string | undefined {
@@ -548,7 +548,7 @@ export class PropertyResolver {
    * @returns Resolved ToolPermissionConfig, or null for none
    */
   private static resolveToolPermissions(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflow: PromptFile
   ): ToolPermissionConfig | null {
     // Prompt takes precedence; use explicit undefined check — null is meaningful ("none")

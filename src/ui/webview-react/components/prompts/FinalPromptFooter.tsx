@@ -1,7 +1,7 @@
 import React from "react";
 import { StatusIcon } from "./StatusIcon";
-import { PromptItemDetails } from "./PromptItemDetails";
-import type { PromptOverride } from "./PromptItemDetails";
+import { PromptStepDetails } from "./PromptStepDetails";
+import type { PromptOverride } from "./PromptStepDetails";
 import {
   FINAL_PROMPT_PHASES,
   type StepStatus,
@@ -98,7 +98,7 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
             }
           }}
         >
-          {/* Prompt name / text — pl-5 matches PromptItemDetails indent */}
+          {/* Prompt name / text — pl-5 matches PromptStepDetails indent */}
           <div className="text-[11px] leading-relaxed">
             {truncate(getStepDisplayText(finalStep))}
           </div>
@@ -113,7 +113,7 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
           )}
 
           {/* Shared metadata rows: harness/model (prompt only), stats, end condition, overrides */}
-          <PromptItemDetails
+          <PromptStepDetails
             status={effectiveStatus}
             harnessLabel={isScriptStep(finalStep) ? undefined : harnessLabel}
             harnessIsDefault={isScriptStep(finalStep) ? undefined : harnessIsDefault}

@@ -1,4 +1,4 @@
-import { PromptFile, PromptItem, WorkflowStep, Harness } from "../types/FlightPathTypes";
+import { PromptFile, PromptStep, WorkflowStep, Harness } from "../types/FlightPathTypes";
 import { SESSION_ID_SENTINELS } from "../types/DashboardConstants";
 import { PropertyResolver } from "./PropertyResolver";
 import { Log } from "./Log";
@@ -88,7 +88,7 @@ export class SessionResolver {
    * @returns Resolved session ID or undefined for new session
    */
   static resolve(
-    prompt: PromptItem,
+    prompt: PromptStep,
     promptIndex: number,
     allPrompts: WorkflowStep[],
     workflow?: PromptFile,
@@ -160,7 +160,7 @@ export class SessionResolver {
    * @returns Session ID from referenced prompt or undefined if invalid
    */
   private static resolveNumericReference(
-    prompt: PromptItem,
+    prompt: PromptStep,
     refNumber: number,
     promptIndex: number,
     allPrompts: WorkflowStep[],
@@ -235,7 +235,7 @@ export class SessionResolver {
    * @returns Session ID from previous prompt or undefined if none found
    */
   private static autoResumeFromPrevious(
-    prompt: PromptItem,
+    prompt: PromptStep,
     promptIndex: number,
     allPrompts: WorkflowStep[],
     resolvedHarness?: Harness
@@ -298,7 +298,7 @@ export class SessionResolver {
    * @returns True if session should be resumed, false to start new session
    */
   static shouldResumeSession(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflow?: PromptFile
   ): boolean {
     if (workflow) {
@@ -330,9 +330,9 @@ export class SessionResolver {
    * @returns Validation result with valid flag and optional error/warning messages
    */
   static validate(
-    prompt: PromptItem,
+    prompt: PromptStep,
     promptIndex: number,
-    allPrompts: PromptItem[],
+    allPrompts: PromptStep[],
     workflow?: PromptFile
   ): SessionValidationResult {
     // Resolve sessionId (check prompt first, then workflow if available)

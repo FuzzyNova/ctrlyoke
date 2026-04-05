@@ -2,13 +2,13 @@ import type {
   CliResult,
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
-import type { PromptItem } from "../../../types/FlightPathTypes";
+import type { PromptStep } from "../../../types/FlightPathTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import type { CollectedHeadlessResponse } from "./CliResponseCollector";
 
 export interface CliExecutionSessionParams {
-  prompt: PromptItem;
+  prompt: PromptStep;
   workflowContext?: WorkflowContext;
   resolvedProperties?: ResolvedProperties;
   resolvedSessionId?: string;
@@ -22,7 +22,7 @@ export interface CliExecutionSessionSnapshot {
 }
 
 export class CliExecutionSession {
-  readonly prompt: PromptItem;
+  readonly prompt: PromptStep;
   readonly workflowContext?: WorkflowContext;
   readonly resolvedProperties?: ResolvedProperties;
   readonly resolvedSessionId?: string;

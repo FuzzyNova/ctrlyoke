@@ -75,7 +75,7 @@ export interface PromptDetails {
 /**
  * Prompt item with all properties for display and editing
  */
-export interface PromptItem {
+export interface PromptStep {
   /** Index in the prompts array */
   index: number;
   /** The prompt text */
@@ -114,7 +114,7 @@ export interface PromptItem {
  * @param index - Index in the prompts array
  * @param status - Initial step status (defaults to pending)
  * @param details - Additional execution details
- * @returns Fully populated PromptItem
+ * @returns Fully populated PromptStep
  *
  * @example
  * // From string prompt
@@ -131,7 +131,7 @@ export function createPromptItem(
   index: number,
   status: StepStatus = STEP_STATUS.PENDING,
   details: PromptDetails = {}
-): PromptItem {
+): PromptStep {
   // Handle string prompts
   if (typeof prompt === "string") {
     return {
@@ -170,13 +170,13 @@ export function createPromptItem(
 }
 
 /**
- * Convert PromptItem back to raw format for saving
+ * Convert PromptStep back to raw format for saving
  * Only includes properties that are defined
  *
- * @param item - PromptItem to convert
+ * @param item - PromptStep to convert
  * @returns Raw prompt object suitable for workflow file
  */
-export function promptItemToRaw(item: PromptItem): RawPrompt {
+export function promptStepToRaw(item: PromptStep): RawPrompt {
   const raw: RawPrompt = {
     prompt: item.text,
   };
@@ -199,7 +199,7 @@ export function promptItemToRaw(item: PromptItem): RawPrompt {
 /**
  * Check if a prompt has been executed (completed or failed)
  */
-export function isPromptExecuted(item: PromptItem): boolean {
+export function isPromptExecuted(item: PromptStep): boolean {
   return (
     item.status === STEP_STATUS.COMPLETED || item.status === STEP_STATUS.FAILED
   );
@@ -208,7 +208,7 @@ export function isPromptExecuted(item: PromptItem): boolean {
 /**
  * Check if a prompt is currently running
  */
-export function isPromptRunning(item: PromptItem): boolean {
+export function isPromptRunning(item: PromptStep): boolean {
   return (
     item.status === STEP_STATUS.RUNNING || item.status === STEP_STATUS.SENT
   );
@@ -217,7 +217,7 @@ export function isPromptRunning(item: PromptItem): boolean {
 /**
  * Check if a prompt is pending (not yet started)
  */
-export function isPromptPending(item: PromptItem): boolean {
+export function isPromptPending(item: PromptStep): boolean {
   return item.status === STEP_STATUS.PENDING;
 }
 
@@ -230,7 +230,7 @@ export function isPromptPending(item: PromptItem): boolean {
  * @returns Display label
  */
 export function getPromptLabel(
-  item: PromptItem,
+  item: PromptStep,
   maxLength: number = 50
 ): string {
   if (!item.text) {

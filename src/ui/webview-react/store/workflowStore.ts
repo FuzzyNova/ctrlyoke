@@ -10,7 +10,7 @@ import {
   type ExecutionState,
   type StepStatus,
   type FinalPromptPhase,
-  type PromptItem,
+  type PromptStep,
   type CliOutput,
   type RetryState,
 } from "../types/messages";
@@ -18,10 +18,10 @@ import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 
 /**
- * Webview-local WorkflowStep union: uses WebviewMessageTypes.PromptItem
- * to avoid _runtime type incompatibility with FlightPathTypes.PromptItem.
+ * Webview-local WorkflowStep union: uses WebviewMessageTypes.PromptStep
+ * to avoid _runtime type incompatibility with FlightPathTypes.PromptStep.
  */
-export type WorkflowStep = PromptItem | ScriptStep;
+export type WorkflowStep = PromptStep | ScriptStep;
 
 /** Type guard for script steps (webview-local version) */
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
@@ -136,7 +136,7 @@ interface WorkflowActions {
   setFileName: (fileName: string | null) => void;
   setWorkflowName: (name: string | null) => void;
   setPrompts: (prompts: WorkflowStep[]) => void;
-  updatePrompt: (index: number, updates: Partial<PromptItem>) => void;
+  updatePrompt: (index: number, updates: Partial<PromptStep>) => void;
   setExecutionState: (state: ExecutionState) => void;
   setCurrentStep: (step: number) => void;
   setTotalSteps: (total: number) => void;
@@ -986,12 +986,12 @@ function withUndoPause<T>(fn: () => T): T {
 
 // Re-export types for convenience (imported from consolidated sources)
 export type {
-  PromptItem,
+  PromptStep,
   CliOutput,
   RetryState,
   StatusMessage,
 } from "../types/messages";
-// WorkflowStep is exported above as a webview-local union type (PromptItem | ScriptStep)
+// WorkflowStep is exported above as a webview-local union type (PromptStep | ScriptStep)
 export type { WorkflowProperties } from "./settingsStore";
 
 export interface UndoableWorkflowState {

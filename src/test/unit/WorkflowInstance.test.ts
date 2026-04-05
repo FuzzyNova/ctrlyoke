@@ -16,7 +16,7 @@ import {
   FINAL_PROMPT_PHASES,
   STEP_STATUS,
 } from "../../types/DashboardConstants";
-import { Harness, PromptItem } from "../../types/FlightPathTypes";
+import { Harness, PromptStep } from "../../types/FlightPathTypes";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 
 class MockPlatform implements PlatformAdapter {
@@ -45,7 +45,7 @@ class MockHarnessIntegration extends HarnessIntegration {
   async initialize(): Promise<void> {}
 
   async sendPrompt(
-    _prompt: PromptItem,
+    _prompt: PromptStep,
     _needsCompletionDetection?: boolean
   ): Promise<boolean> {
     return true;
@@ -340,8 +340,8 @@ suite("WorkflowInstance runtime transitions", () => {
       updateCliStreamingChunk: () => {},
       updateCliStreamingEvents: () => {},
       updatePromptsExtended: (
-        prompts: PromptItem[],
-        _finalPrompt: PromptItem | null,
+        prompts: PromptStep[],
+        _finalPrompt: PromptStep | null,
         executionState?: string
       ) => {
         promptsExtendedCalls.push({

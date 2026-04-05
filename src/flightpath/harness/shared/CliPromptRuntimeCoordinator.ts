@@ -1,5 +1,5 @@
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
-import type { Harness, PromptItem } from "../../../types/FlightPathTypes";
+import type { Harness, PromptStep } from "../../../types/FlightPathTypes";
 import type { WorkflowWorkingFilePersistence } from "../../../types/WorkflowContextTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { Log } from "../../../utils/Log";
@@ -17,7 +17,7 @@ export class CliPromptRuntimeCoordinator {
   }
 
   async persistCancelledPromptRuntime(params: {
-    prompt: PromptItem;
+    prompt: PromptStep;
     executionStartTime: Date;
     extractedSessionId?: string;
     resolvedProperties?: ResolvedProperties;
@@ -57,7 +57,7 @@ export class CliPromptRuntimeCoordinator {
   }
 
   async persistSuccessfulPromptRuntime(params: {
-    prompt: PromptItem;
+    prompt: PromptStep;
     resolvedProperties?: ResolvedProperties;
     extractedSessionId?: string;
     parsedOutput?: UniversalCliOutput;

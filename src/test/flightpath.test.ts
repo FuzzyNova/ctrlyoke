@@ -41,7 +41,7 @@ suite("FlightPath Core Tests", () => {
       },
     };
 
-    const result = ValidationUtils.validatePromptItem(validPrompt);
+    const result = ValidationUtils.validatePromptStep(validPrompt);
     assert.strictEqual(result.valid, true);
     assert.strictEqual(result.errors.length, 0);
   });
@@ -55,7 +55,7 @@ suite("FlightPath Core Tests", () => {
       },
     };
 
-    const result = ValidationUtils.validatePromptItem(invalidPrompt);
+    const result = ValidationUtils.validatePromptStep(invalidPrompt);
     assert.strictEqual(result.valid, false);
     assert.ok(result.errors.length > 0);
   });

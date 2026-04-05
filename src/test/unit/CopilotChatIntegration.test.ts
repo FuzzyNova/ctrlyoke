@@ -2,7 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import type * as vscode from "vscode";
 import { CopilotChatIntegration } from "../../flightpath/harness/chat/CopilotChatIntegration";
-import type { PromptItem } from "../../types/FlightPathTypes";
+import type { PromptStep } from "../../types/FlightPathTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 suite("CopilotChatIntegration", () => {
@@ -34,7 +34,7 @@ suite("CopilotChatIntegration", () => {
         return sections.userPromptText;
       };
 
-      const prompt: PromptItem = { prompt: "follow up" };
+      const prompt: PromptStep = { prompt: "follow up" };
       const builtPrompt = await (integration as any).buildCopilotChatPrompt(
         prompt,
         {

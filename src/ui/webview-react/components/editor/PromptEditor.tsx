@@ -247,13 +247,13 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   // Get property values for sending to extension
   // includeNullsForDefaults: if true, send null for default values to clear overrides
   // Returns two separate collections:
-  //   properties    — values to set in PromptItem (null is stored as-is, e.g. additionalArgs: null)
-  //   clearProperties — keys to delete from PromptItem (set to undefined), used when the user
+  //   properties    — values to set in PromptStep (null is stored as-is, e.g. additionalArgs: null)
+  //   clearProperties — keys to delete from PromptStep (set to undefined), used when the user
   //                     switches a property back to "Default / inherit from workflow"
   //
   // This separation is required because null has distinct meanings for three-state properties:
-  //   - null in `properties`    → "explicitly none/disabled" (stored as null in PromptItem)
-  //   - key in `clearProperties` → "inherit from workflow/settings" (key removed from PromptItem)
+  //   - null in `properties`    → "explicitly none/disabled" (stored as null in PromptStep)
+  //   - key in `clearProperties` → "inherit from workflow/settings" (key removed from PromptStep)
   const getPropertyValues = useCallback(
     (includeNullsForDefaults = false) => {
       const result: Record<string, unknown> = {};
@@ -335,7 +335,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       // Additional Args — three-state:
       //   null   → "explicitly none" (stored as null, stops three-tier resolution)
       //   string → custom args
-      //   key in clearProperties → "Default / inherit" (key removed from PromptItem)
+      //   key in clearProperties → "Default / inherit" (key removed from PromptStep)
       if (properties.additionalArgs === null) {
         result.additionalArgs = null;
       } else if (properties.additionalArgs) {

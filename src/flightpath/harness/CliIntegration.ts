@@ -7,7 +7,7 @@ import {
   CliResult,
   UniversalCliOutput,
 } from "../../types/CliOutputTypes";
-import { PromptItem, Harness } from "../../types/FlightPathTypes";
+import { PromptStep, Harness } from "../../types/FlightPathTypes";
 import { WorkflowContext } from "../../types/WorkflowContextTypes";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -448,7 +448,7 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   private createExecutionSession(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflowContext: WorkflowContext | undefined,
     resolvedProperties: ResolvedProperties | undefined,
     resolvedSessionId: string | undefined
@@ -592,7 +592,7 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   private async createPreparedExecutionSession(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflowContext?: WorkflowContext
   ): Promise<CliExecutionSession> {
     const { resolvedProperties, resolvedSessionId } =
@@ -686,7 +686,7 @@ export class CliIntegration extends HarnessIntegration {
 
   private async persistExecutionOutcome(
     session: CliExecutionSession,
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflowContext: WorkflowContext | undefined,
     success: boolean
   ): Promise<void> {
@@ -1072,7 +1072,7 @@ export class CliIntegration extends HarnessIntegration {
    * @returns True if prompt was sent successfully
    */
   async sendPrompt(
-    prompt: PromptItem,
+    prompt: PromptStep,
     _needsCompletionDetection: boolean = true,
     workflowContext?: WorkflowContext
   ): Promise<boolean> {

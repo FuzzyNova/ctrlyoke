@@ -9,7 +9,7 @@ import { EXECUTION_MODES } from "../../types/DashboardConstants";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
-import type { PromptItem } from "../../types/FlightPathTypes";
+import type { PromptStep } from "../../types/FlightPathTypes";
 
 class MockVsCodePlatform implements PlatformAdapter {
   getConfig<T>(_key: string, defaultValue: T): T {
@@ -190,7 +190,7 @@ suite("CliIntegration", () => {
 
   test("should reuse resolved session IDs when the runner does not extract a new one", async () => {
     const integration = createHeadlessIntegration();
-    const prompt: PromptItem = { prompt: "say hi" };
+    const prompt: PromptStep = { prompt: "say hi" };
 
     (integration as any).sessionResolverAdapter.resolve = () => ({
       resolvedProperties: undefined,
@@ -244,7 +244,7 @@ suite("CliIntegration", () => {
 
   test("should persist cancelled prompt runtime when a sendPrompt attempt is cancelled", async () => {
     const integration = createHeadlessIntegration();
-    const prompt: PromptItem = { prompt: "say hi" };
+    const prompt: PromptStep = { prompt: "say hi" };
     let updateWorkingFileCalls = 0;
 
     (integration as any).sessionResolverAdapter.resolve = () => ({
@@ -275,11 +275,11 @@ suite("CliIntegration", () => {
 
   test("should use the dedicated finalPrompt response callback during prompt preparation", async () => {
     const integration = createHeadlessIntegration();
-    const prompt: PromptItem = { prompt: "say hi" };
+    const prompt: PromptStep = { prompt: "say hi" };
     let capturedFinalPromptResponseTexts: string[] | undefined;
 
     (integration as any).promptPreparer.preparePrompt = async (
-      promptItem: PromptItem,
+      promptItem: PromptStep,
       _workflowContext: unknown,
       _resolvedProperties: unknown,
       _resolvedSessionId: unknown,

@@ -25,7 +25,7 @@ import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 import { parseArgString } from "../../../utils/CliArgParser";
-import type { PromptItem, WorkflowStep, UserHookConfig } from "../../../types/FlightPathTypes";
+import type { PromptStep, WorkflowStep, UserHookConfig } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 const execAsync = promisify(exec);
@@ -110,7 +110,7 @@ export class CodexCliProvider implements ICliProvider {
    * @returns Complete CLI arguments array (without prompt - that's handled separately)
    */
   async buildCliArgs(
-    _prompt: PromptItem,
+    _prompt: PromptStep,
     isInteractive: boolean,
     extensionPath: string,
     workspaceRoot: string | undefined,

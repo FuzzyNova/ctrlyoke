@@ -314,7 +314,7 @@ export interface WorkingFile extends PromptFile {
 /** Discriminant type for workflow steps */
 export type PromptItemType = (typeof STEP_TYPES)[keyof typeof STEP_TYPES];
 
-export interface PromptItem extends ExecutionProperties {
+export interface PromptStep extends ExecutionProperties {
   /** Step type discriminant — defaults to "prompt" when absent */
   type?: typeof STEP_TYPES.PROMPT;
   name?: string; // Optional human-readable display label
@@ -337,7 +337,7 @@ export interface ScriptStep {
 }
 
 /** Union type for all workflow steps */
-export type WorkflowStep = PromptItem | ScriptStep;
+export type WorkflowStep = PromptStep | ScriptStep;
 
 /** Type guard: returns true if the step is a ScriptStep */
 export function isScriptStep(step: WorkflowStep): step is ScriptStep {

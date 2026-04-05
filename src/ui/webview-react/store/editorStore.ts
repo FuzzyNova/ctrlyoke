@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { VsCodeApi } from "../types/vscode";
-import type { PromptItem } from "./workflowStore";
+import type { PromptStep } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type { PriorContext, ToolPermissionsOverride } from "../types/messages";
 import type { EndConditionCompareSource } from "../utils/prompt";
@@ -23,7 +23,7 @@ export type Disableable<T> = T | null | undefined;
 
 /**
  * End condition configuration
- * All fields optional except script to match PromptItem.endCondition
+ * All fields optional except script to match PromptStep.endCondition
  */
 export interface EndConditionConfig {
   script: string;
@@ -219,8 +219,8 @@ interface EditorSelectors {
   // Check if in edit mode
   isEditMode: () => boolean;
   isFinalPromptMode: () => boolean;
-  // Get current property values as PromptItem properties
-  getPromptProperties: () => Partial<PromptItem>;
+  // Get current property values as PromptStep properties
+  getPromptProperties: () => Partial<PromptStep>;
   // Check if editor has content
   hasContent: () => boolean;
   // Check if end condition is configured
@@ -828,7 +828,7 @@ export const useEditorStore = create<
   getPromptProperties: () => {
     const { promptText, promptName, properties } = get();
 
-    const result: Partial<PromptItem> = {
+    const result: Partial<PromptStep> = {
       prompt: promptText,
     };
 

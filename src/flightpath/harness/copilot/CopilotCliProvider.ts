@@ -31,7 +31,7 @@ import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
-  PromptItem,
+  PromptStep,
   WorkflowStep,
   UserHookConfig,
 } from "../../../types/FlightPathTypes";
@@ -115,7 +115,7 @@ export class CopilotCliProvider implements ICliProvider {
    * @returns Complete CLI arguments array (without prompt - that's handled separately)
    */
   async buildCliArgs(
-    _prompt: PromptItem,
+    _prompt: PromptStep,
     _isInteractive: boolean,
     extensionPath: string,
     workspaceRoot: string | undefined,

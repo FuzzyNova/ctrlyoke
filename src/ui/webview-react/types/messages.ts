@@ -79,7 +79,7 @@ export {
   type IncomingMessage,
 
   // Prompt and workflow types
-  type PromptItem,
+  type PromptStep,
   type EndConditionConfig,
   type RetryState,
   type StatusMessage,

@@ -2,7 +2,7 @@ import type { IResponseParser } from "./IResponseParser";
 import type { INotificationMonitor } from "./INotificationMonitor";
 import type { IToolPermissionMapper, ToolPermissionConfig } from "./IToolPermissionMapper";
 import type { ILogParser } from "./ILogParser";
-import type { PromptItem, UserHookConfig, WorkflowStep } from "../../../../types/FlightPathTypes";
+import type { PromptStep, UserHookConfig, WorkflowStep } from "../../../../types/FlightPathTypes";
 import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 
 /** Timeout for CLI version-check subprocesses (checkAvailability + getVersion) */
@@ -106,7 +106,7 @@ export interface ICliProvider {
    * @returns Complete CLI arguments array (without prompt - that's handled separately)
    */
   buildCliArgs(
-    prompt: PromptItem,
+    prompt: PromptStep,
     isInteractive: boolean,
     extensionPath: string,
     workspaceRoot: string | undefined,

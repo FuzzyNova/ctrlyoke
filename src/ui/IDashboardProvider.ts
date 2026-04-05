@@ -1,4 +1,4 @@
-import type { WorkflowSummary, PromptItem } from "../types/FlightPathTypes";
+import type { WorkflowSummary, PromptStep } from "../types/FlightPathTypes";
 import type { CliOutput } from "../types/WebviewMessageTypes";
 import type { StepStatus, FinalPromptPhase } from "../types/DashboardConstants";
 
@@ -31,7 +31,7 @@ export interface IDashboardProvider {
     fileName: string,
     prompts: any[],
     workflowName?: string,
-    finalPrompt?: PromptItem | null,
+    finalPrompt?: PromptStep | null,
     finalPromptRuntime?: {
       status?: StepStatus;
       loopCount: number;
@@ -47,7 +47,7 @@ export interface IDashboardProvider {
     executionState: string,
     currentIndex: number,
     workflowName?: string,
-    finalPrompt?: PromptItem | null,
+    finalPrompt?: PromptStep | null,
     finalPromptRuntime?: {
       status?: StepStatus;
       loopCount: number;

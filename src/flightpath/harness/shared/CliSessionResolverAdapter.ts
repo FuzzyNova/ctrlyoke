@@ -1,4 +1,4 @@
-import type { Harness, PromptItem } from "../../../types/FlightPathTypes";
+import type { Harness, PromptStep } from "../../../types/FlightPathTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import {
   PropertyResolver,
@@ -21,7 +21,7 @@ export class CliSessionResolverAdapter {
   constructor(private readonly deps: CliSessionResolverAdapterDeps) {}
 
   resolve(
-    prompt: PromptItem,
+    prompt: PromptStep,
     workflowContext?: WorkflowContext
   ): CliSessionResolution {
     const resolvedProperties = workflowContext?.workflowFile

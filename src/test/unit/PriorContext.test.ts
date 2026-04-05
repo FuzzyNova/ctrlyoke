@@ -5,7 +5,7 @@ import {
   HarnessStatus,
 } from "../../flightpath/HarnessIntegration";
 import {
-  PromptItem,
+  PromptStep,
   PromptFile,
   PriorContext,
   Harness,
@@ -48,7 +48,7 @@ class TestHarness extends HarnessIntegration {
   // Expose private methods for testing
   public exposeGather(
     priorContext: PriorContext,
-    allPrompts: PromptItem[],
+    allPrompts: PromptStep[],
     currentIndex: number,
     finalPromptResponseTexts: string[] = []
   ) {
@@ -86,8 +86,8 @@ function makePrompt(
   text: string,
   responseText?: string,
   name?: string
-): PromptItem {
-  const p: PromptItem = { prompt: text };
+): PromptStep {
+  const p: PromptStep = { prompt: text };
   if (name) {
     p.name = name;
   }
@@ -213,7 +213,7 @@ suite("gatherPriorContextItems", () => {
   // --- finalPromptAll ---
 
   test("'finalPromptAll' returns all finalPrompt loop responses", () => {
-    const prompts: PromptItem[] = [];
+    const prompts: PromptStep[] = [];
     const fpTexts = ["loop 0 output", "loop 1 output", "loop 2 output"];
     const items = harness.exposeGather("finalPromptAll", prompts, 0, fpTexts);
     assert.strictEqual(items.length, 3);
@@ -372,7 +372,7 @@ suite("insertPriorContext", () => {
 
 suite("PropertyResolver priorContext", () => {
   test("uses prompt-level priorContext when specified", () => {
-    const prompt: PromptItem = { prompt: "test", priorContext: "previous" };
+    const prompt: PromptStep = { prompt: "test", priorContext: "previous" };
     const workflow: PromptFile = {
       prompts: [],
       priorContext: "all", // should be ignored
@@ -382,28 +382,28 @@ suite("PropertyResolver priorContext", () => {
   });
 
   test("falls back to workflow-level priorContext when prompt-level not specified", () => {
-    const prompt: PromptItem = { prompt: "test" };
+    const prompt: PromptStep = { prompt: "test" };
     const workflow: PromptFile = { prompts: [], priorContext: "all" };
     const resolved = PropertyResolver.resolve(prompt, workflow);
     assert.strictEqual(resolved.priorContext, "all");
   });
 
   test("returns undefined when neither prompt nor workflow specify priorContext", () => {
-    const prompt: PromptItem = { prompt: "test" };
+    const prompt: PromptStep = { prompt: "test" };
     const workflow: PromptFile = { prompts: [] };
     const resolved = PropertyResolver.resolve(prompt, workflow);
     assert.strictEqual(resolved.priorContext, undefined);
   });
 
   test("resolves array form from prompt level", () => {
-    const prompt: PromptItem = { prompt: "test", priorContext: [1, 3] };
+    const prompt: PromptStep = { prompt: "test", priorContext: [1, 3] };
     const workflow: PromptFile = { prompts: [] };
     const resolved = PropertyResolver.resolve(prompt, workflow);
     assert.deepStrictEqual(resolved.priorContext, [1, 3]);
   });
 
   test("prompt 'none' overrides workflow 'all'", () => {
-    const prompt: PromptItem = { prompt: "test", priorContext: "none" };
+    const prompt: PromptStep = { prompt: "test", priorContext: "none" };
     const workflow: PromptFile = { prompts: [], priorContext: "all" };
     const resolved = PropertyResolver.resolve(prompt, workflow);
     assert.strictEqual(resolved.priorContext, "none");

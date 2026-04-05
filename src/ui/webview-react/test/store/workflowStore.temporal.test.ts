@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useWorkflowStore } from "@store/workflowStore";
 import { EXECUTION_STATES, STEP_STATUS, FINAL_PROMPT_PHASES, OUTPUT_HISTORY_KINDS } from "@root/types/DashboardConstants";
-import type { PromptItem } from "@root/types/WebviewMessageTypes";
+import type { PromptStep } from "@root/types/WebviewMessageTypes";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -27,11 +27,11 @@ function store() {
   return useWorkflowStore.getState();
 }
 
-function makePrompt(overrides: Partial<PromptItem> = {}): PromptItem {
+function makePrompt(overrides: Partial<PromptStep> = {}): PromptStep {
   return { prompt: "hello world", ...overrides };
 }
 
-function loadWorkflow(prompts: PromptItem[]) {
+function loadWorkflow(prompts: PromptStep[]) {
   store().loadWorkflow({
     fileName: "test.flightpath.yaml",
     workflowName: "Test",
