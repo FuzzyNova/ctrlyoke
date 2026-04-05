@@ -1110,11 +1110,7 @@ export class PromptQueue {
    * @returns true if queue state allows appending
    */
   public canAppend(): boolean {
-    const invalidStates: string[] = [
-      EXECUTION_STATES.CANCELLING,
-      EXECUTION_STATES.ERROR,
-    ];
-    return !invalidStates.includes(this.stateMachine.status);
+    return this.stateMachine.status !== EXECUTION_STATES.CANCELLING;
   }
 
   // ==================== Working File Operations (delegated to WorkingFileManager) ====================

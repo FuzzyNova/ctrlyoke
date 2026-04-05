@@ -724,6 +724,10 @@ export class WebviewMessageRouter {
       vscode.window.showErrorMessage(
         `Failed to execute prompt: ${getErrorMessage(error)}`
       );
+      this.emitMessage({
+        type: MESSAGE_TYPES.EXECUTE_PROMPT_ERROR,
+        text,
+      });
     }
   }
 

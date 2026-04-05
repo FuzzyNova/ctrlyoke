@@ -55,6 +55,7 @@ export const MESSAGE_TYPES = {
 
   // Prompt Editor - Webview -> Extension
   EXECUTE_PROMPT: "executePrompt", // Send/Add with properties
+  EXECUTE_PROMPT_ERROR: "executePromptError", // Extension -> Webview: Notify failure so editor can restore content
   UPDATE_PROMPT: "updatePrompt", // Update existing prompt in queue
   CANCEL_EDIT: "cancelEdit", // Exit edit mode
   SELECT_PROMPT_FOR_EDIT: "selectPromptForEdit", // Load prompt into editor

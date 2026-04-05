@@ -1663,12 +1663,13 @@ export class WorkflowInstance {
         const statusNow = this.getAuthoritativeExecutionState();
         const isStopped = statusNow === EXECUTION_STATES.STOPPED;
         const isIdleNow = statusNow === EXECUTION_STATES.IDLE;
+        const isError = statusNow === EXECUTION_STATES.ERROR;
         Log.debug(
           `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: post-append shouldRun=true, ` +
-            `isIdle=${isIdleNow}, isCompleted=${isCompleted}, isStopped=${isStopped}, ` +
+            `isIdle=${isIdleNow}, isCompleted=${isCompleted}, isStopped=${isStopped}, isError=${isError}, ` +
             `queueStatusNow=${statusNow}`
         );
-        if (isIdleNow || isCompleted || isStopped) {
+        if (isIdleNow || isCompleted || isStopped || isError) {
           await this.executeLoadedPromptFile();
         }
         Log.debug(
@@ -2067,12 +2068,16 @@ export class WorkflowInstance {
       return;
     }
 
-    if (this.workflowRuntime.status !== EXECUTION_STATES.COMPLETED) {
+    const status = this.workflowRuntime.status;
+    if (
+      status !== EXECUTION_STATES.COMPLETED &&
+      status !== EXECUTION_STATES.ERROR
+    ) {
       return;
     }
 
     Log.info(
-      `appendPrompts: Setting to STOPPED (appended to COMPLETED queue, ${this.promptQueue.getCompletedCount()} prompts previously completed, user can Resume)`
+      `appendPrompts: Setting to STOPPED (appended to ${status} queue, ${this.promptQueue.getCompletedCount()} prompts previously completed, user can Resume)`
     );
     this.workflowRuntime.reopenForContinuation();
   }

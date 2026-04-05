@@ -357,6 +357,23 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     [properties]
   );
 
+  // Ref to hold the last submitted text so we can restore it on failure
+  const lastSubmittedTextRef = useRef<string>("");
+
+  // Listen for EXECUTE_PROMPT_ERROR and restore the editor if the submission failed
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === MESSAGE_TYPES.EXECUTE_PROMPT_ERROR) {
+        const restored = (event.data.text as string) || lastSubmittedTextRef.current;
+        if (restored) {
+          setPromptText(restored);
+        }
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [setPromptText]);
+
   // Execute prompt (Run/Queue)
   const executePrompt = useCallback(
     (action: string) => {
@@ -382,6 +399,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           finalAction = ACTION_TYPES.RUN_NEXT;
         }
       }
+
+      // Save before clearing so we can restore on failure
+      lastSubmittedTextRef.current = text;
 
       vscode.postMessage({
         type: MESSAGE_TYPES.EXECUTE_PROMPT,
@@ -430,6 +450,13 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         clearProperties,
         promptName: promptName.trim(),
       });
+      // If editing a completed prompt, reset execution back to this step so it can be re-run
+      if (isPromptCompleted) {
+        vscode.postMessage({
+          type: MESSAGE_TYPES.SET_START_POSITION,
+          toIndex: selectionTarget.index,
+        });
+      }
     } else if (selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
@@ -453,6 +480,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     vscode,
     cancelEdit,
     promptName,
+    isPromptCompleted,
   ]);
 
   // Delete prompt - shows confirmation modal (or deletes immediately when confirmDeleteOperations is false)

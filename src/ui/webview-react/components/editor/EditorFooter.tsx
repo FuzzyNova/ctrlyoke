@@ -191,16 +191,15 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               disabled={
                 isCLIManaged ||
                 !hasContent ||
-                isPromptBeingSent ||
-                isPromptCompleted
+                isPromptBeingSent
               }
               title={
                 isCLIManaged
                   ? "Read-only — workflow is running via FlightPath CLI"
-                  : isPromptCompleted
-                    ? "Cannot edit a completed prompt — use Clear workflow state to reset"
-                    : isPromptBeingSent
-                      ? "Cannot update a prompt that is currently being sent"
+                  : isPromptBeingSent
+                    ? "Cannot update a prompt that is currently being sent"
+                    : isPromptCompleted
+                      ? "Update prompt and reset execution to this step"
                       : "Update prompt in queue"
               }
             >
@@ -213,19 +212,16 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               onClick={onDelete}
               disabled={
                 isCLIManaged ||
-                isPromptActivelyRunning ||
-                (!isFinalPromptMode && isPromptCompleted)
+                isPromptActivelyRunning
               }
               title={
                 isCLIManaged
                   ? "Read-only — workflow is running via FlightPath CLI"
                   : isFinalPromptMode
                     ? "Disable final prompt"
-                    : isPromptCompleted
-                      ? "Cannot delete a completed prompt — use Clear workflow state to reset"
-                      : isPromptActivelyRunning
-                        ? "Cannot delete a prompt that is currently running"
-                        : "Delete prompt from queue"
+                    : isPromptActivelyRunning
+                      ? "Cannot delete a prompt that is currently running"
+                      : "Delete prompt from queue"
               }
             >
               <i className="codicon codicon-trash" />
