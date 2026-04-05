@@ -14,13 +14,13 @@ export interface EndConditionResult {
   message?: string;
 }
 
-export interface PromptDetails {
+export interface StepDetails {
   duration?: number;
   endConditionResult?: EndConditionResult;
   message?: string;
 }
 
-interface PromptStepProps {
+interface WorkflowStepProps {
   /** Prompt text content */
   text: string;
   /** Prompt index (0-based) */
@@ -32,7 +32,7 @@ interface PromptStepProps {
   /** Retry state if retrying */
   retryState?: RetryState;
   /** Additional details (duration, end condition result) */
-  details?: PromptDetails;
+  details?: StepDetails;
   /** Latest CLI output for this prompt */
   latestOutput?: CliOutput | null;
   /** Whether this is the currently running prompt */
@@ -91,17 +91,12 @@ const truncate = (text: string, maxLength: number = 60): string => {
 };
 
 /**
- * PromptStep - Individual prompt in the prompts list
+ * WorkflowStep - Individual step in the workflow steps list.
  *
- * Features:
- * - Status icon (pending/running/completed/failed)
- * - Prompt text (truncated)
- * - Retry indicator when retrying
- * - End condition result display
- * - Duration if available
- * - Visual indication for current/selected state
+ * Renders both AI prompt steps and script steps via the `isScript` prop.
+ * Shared chrome (drag handle, status icon, set-start-position button) is always present.
  */
-export const PromptStep: React.FC<PromptStepProps> = ({
+export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
   text,
   index,
   status,

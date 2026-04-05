@@ -1,8 +1,8 @@
 export {
-  PromptStep,
-  type PromptDetails,
+  WorkflowStepItem,
+  type StepDetails,
   type EndConditionResult,
-} from "./PromptStep";
+} from "./WorkflowStep";
 export { PromptStepDetails } from "./PromptStepDetails";
 export { StatusIcon } from "./StatusIcon";
 export { PromptCounter } from "./PromptCounter";

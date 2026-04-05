@@ -9,10 +9,10 @@ import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { usePromptStatus, useStepClickHandler } from "@hooks/index";
 import { HARNESS_INFO } from "../../types/messages";
 import {
-  PromptStep,
-  type PromptDetails,
+  WorkflowStepItem,
+  type StepDetails,
   type PromptOverride,
-} from "../prompts/PromptStep";
+} from "../prompts/WorkflowStep";
 import { FinalPromptFooter } from "../prompts/FinalPromptFooter";
 import { PromptCounter } from "../prompts/PromptCounter";
 import { PanelBar } from "../shared";
@@ -55,9 +55,9 @@ function getStepText(step: WorkflowStep): string {
   return isScriptStep(step) ? step.script : step.prompt;
 }
 
-type PromptStepComponentProps = React.ComponentProps<typeof PromptStep>;
+type WorkflowStepComponentProps = React.ComponentProps<typeof WorkflowStepItem>;
 type SortableWrapperProps = Omit<
-  PromptStepComponentProps,
+  WorkflowStepComponentProps,
   "dragHandleProps"
 > & {
   id: string;
@@ -94,7 +94,7 @@ function SortableWorkflowStepWrapper({
         {slotNumber}
       </div>
       <div ref={setNodeRef} style={style} className="flex-1 min-w-0">
-        <PromptStep
+        <WorkflowStepItem
           {...promptStepProps}
           displayNumber={slotNumber}
           dragHandleProps={disabled ? undefined : { listeners, attributes }}
@@ -435,10 +435,10 @@ export const WorkflowStepsPanel: React.FC<{
   const getPromptDetails = (
     _prompt: (typeof prompts)[0],
     index: number
-  ): PromptDetails => {
+  ): StepDetails => {
     void _prompt; // Reserved for future use (end condition results)
     const output = getLatestOutput(index);
-    const details: PromptDetails = {};
+    const details: StepDetails = {};
 
     if (output?.elapsed) {
       details.duration = output.elapsed;
@@ -547,7 +547,7 @@ export const WorkflowStepsPanel: React.FC<{
       <PanelBar
         orientation={panelBarOrientation}
         icon="list-unordered"
-        title="Prompts"
+        title="Steps"
         onClick={handleToggle}
       />
     );
@@ -561,7 +561,7 @@ export const WorkflowStepsPanel: React.FC<{
         className={`flex items-center h-[30px] px-2 border-b border-panel-border bg-sidebar-bg flex-shrink-0 transition-colors${isMobileMode ? "" : " cursor-pointer select-none text-description-fg hover:text-foreground"}`}
         onClick={isMobileMode ? undefined : handleToggle}
         role={isMobileMode ? undefined : "button"}
-        aria-label={isMobileMode ? undefined : "Collapse prompts"}
+        aria-label={isMobileMode ? undefined : "Collapse steps"}
         tabIndex={isMobileMode ? undefined : 0}
         onKeyDown={isMobileMode ? undefined : (e) => e.key === "Enter" && handleToggle()}
       >
@@ -575,14 +575,14 @@ export const WorkflowStepsPanel: React.FC<{
               onRequestSidebar();
             }}
             title="Collapse to sidebar"
-            aria-label="Collapse prompts to sidebar"
+            aria-label="Collapse steps to sidebar"
           >
             <i className="codicon codicon-arrow-left text-[12px]" />
           </button>
         )}
         <i className="codicon codicon-list-unordered text-[14px] ml-1" />
         <span className="text-[11px] font-semibold uppercase tracking-wide ml-1.5">
-          Prompts
+          Steps
         </span>
         <div className="flex-1 flex justify-center">
           {canClearState && (
@@ -686,7 +686,7 @@ export const WorkflowStepsPanel: React.FC<{
                       {slotNumber}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <PromptStep
+                      <WorkflowStepItem
                         text={getStepText(prompt)}
                         index={index}
                         displayNumber={slotNumber}

@@ -107,7 +107,7 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
           {phase && (
             <div className="mt-0.5text-[10px] opacity-75">
               {phase === FINAL_PROMPT_PHASES.FINAL_PROMPT
-                ? "Final Prompt"
+                ? "Final Step"
                 : "Queue"}
             </div>
           )}
@@ -148,9 +148,7 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
       >
         <StatusIcon status={effectiveStatus} disabled={!hasFinalPrompt} />
         <span className="text-[11px] font-semibold uppercase tracking-wide">
-          {hasFinalPrompt && finalStep && isScriptStep(finalStep)
-            ? "Final Script"
-            : "Final Prompt"}
+          {"Final Step"}
         </span>
         {hasFinalPrompt && finalStep && isScriptStep(finalStep) && (
           <span
@@ -183,8 +181,8 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
                 e.stopPropagation();
                 onDisable();
               }}
-              title="Disable final prompt"
-              aria-label="Disable final prompt"
+              title="Disable final step"
+              aria-label="Disable final step"
             >
               <i className="codicon codicon-trash text-[12px]" />
             </button>
@@ -199,13 +197,13 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
               }}
               title={
                 isExpanded
-                  ? "Collapse final prompt details"
-                  : "Expand final prompt details"
+                  ? "Collapse final step details"
+                  : "Expand final step details"
               }
               aria-label={
                 isExpanded
-                  ? "Collapse final prompt details"
-                  : "Expand final prompt details"
+                  ? "Collapse final step details"
+                  : "Expand final step details"
               }
             >
               <i

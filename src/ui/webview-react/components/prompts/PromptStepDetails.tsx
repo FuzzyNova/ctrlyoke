@@ -2,7 +2,7 @@ import React, { useState, useCallback } from "react";
 import { STEP_STATUS } from "../../types/messages";
 import type { StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
-import type { PromptDetails } from "./PromptStep";
+import type { StepDetails } from "./WorkflowStep";
 import { calcContextPct } from "@utils/tokenUtils";
 
 /**
@@ -23,7 +23,7 @@ interface PromptStepDetailsProps {
   modelIsDefault?: boolean;
   retryState?: RetryState;
   latestOutput?: CliOutput | null;
-  details?: PromptDetails;
+  details?: StepDetails;
   isSelected?: boolean;
   /** Prompt-level property overrides to display as compact chips */
   overrides?: PromptOverride[];
