@@ -19,7 +19,7 @@ function getStepDisplayText(step: WorkflowStep): string {
   return isScriptStep(step) ? step.script : (step.name ?? step.prompt);
 }
 
-interface FinalPromptFooterProps {
+interface FinalStepFooterProps {
   finalStep: WorkflowStep | null;
   status: StepStatus | null;
   loopCount: number;
@@ -52,7 +52,7 @@ const truncate = (text: string, maxLength: number = 72): string => {
   return `${normalized.slice(0, maxLength)}...`;
 };
 
-export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
+export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
   finalStep,
   status,
   loopCount,

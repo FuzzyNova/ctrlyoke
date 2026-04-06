@@ -212,8 +212,8 @@ export class WebviewMessageRouter {
       this.handleUpdatePrompt(message);
     });
 
-    table.set(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, (message) => {
-      this.handleUpdateFinalPrompt(message);
+    table.set(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, async (message) => {
+      await this.handleUpdateFinalPrompt(message);
     });
 
     table.set(MESSAGE_TYPES.SELECT_PROMPT_FOR_EDIT, (message) => {
@@ -244,7 +244,7 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.UNDO_REDO_SYNC, async (message) => {
       await this.getOrchestrator()?.syncStepsForUndoRedo(
         message.steps,
-        message.finalPrompt ?? null
+        message.finalStep ?? null
       );
       if ("workflowProperties" in message) {
         const workflowProperties = {
@@ -765,7 +765,7 @@ export class WebviewMessageRouter {
 
     try {
       await orchestrator.updateFinalPromptInQueue(
-        message.finalPrompt ?? null,
+        message.finalStep ?? null,
         message.clearProperties
       );
     } catch (error) {

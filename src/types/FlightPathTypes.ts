@@ -225,7 +225,7 @@ export interface FinalPromptRuntimeState {
   startedAt?: number;
   completedAt?: number;
   /** Response texts from each finalPrompt loop execution, indexed by loopIndex (0-based).
-   *  Used by priorContext "finalPromptAll" and "finalPromptPrevious" keywords. */
+   *  Used by priorContext "finalStepAll" and "finalStepPrevious" keywords. */
   responseTexts?: string[];
 }
 

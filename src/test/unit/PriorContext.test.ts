@@ -211,61 +211,61 @@ suite("gatherPriorContextItems", () => {
     assert.deepStrictEqual(items, []);
   });
 
-  // --- finalPromptAll ---
+  // --- finalStepAll ---
 
-  test("'finalPromptAll' returns all finalPrompt loop responses", () => {
+  test("'finalStepAll' returns all final step loop responses", () => {
     const prompts: PromptStep[] = [];
     const fpTexts = ["loop 0 output", "loop 1 output", "loop 2 output"];
-    const items = harness.exposeGather("finalPromptAll", prompts, 0, fpTexts);
+    const items = harness.exposeGather("finalStepAll", prompts, 0, fpTexts);
     assert.strictEqual(items.length, 3);
     assert.strictEqual(items[0].index, 0);
     assert.strictEqual(items[0].text, "loop 0 output");
-    assert.strictEqual(items[0].type, PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT);
+    assert.strictEqual(items[0].type, PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP);
     assert.strictEqual(items[2].index, 2);
     assert.strictEqual(items[2].text, "loop 2 output");
   });
 
-  test("'finalPromptAll' returns [] when no loops have run", () => {
-    const items = harness.exposeGather("finalPromptAll", [], 0, []);
+  test("'finalStepAll' returns [] when no loops have run", () => {
+    const items = harness.exposeGather("finalStepAll", [], 0, []);
     assert.deepStrictEqual(items, []);
   });
 
-  test("'finalPromptAll' filters empty loop responses", () => {
+  test("'finalStepAll' filters empty loop responses", () => {
     const fpTexts = ["loop 0 output", "", "loop 2 output"];
-    const items = harness.exposeGather("finalPromptAll", [], 0, fpTexts);
+    const items = harness.exposeGather("finalStepAll", [], 0, fpTexts);
     assert.strictEqual(items.length, 2);
     assert.strictEqual(items[0].index, 0);
     assert.strictEqual(items[1].index, 2);
   });
 
-  // --- finalPromptPrevious ---
+  // --- finalStepPrevious ---
 
-  test("'finalPromptPrevious' returns only the last loop response", () => {
+  test("'finalStepPrevious' returns only the last loop response", () => {
     const fpTexts = ["loop 0 output", "loop 1 output"];
-    const items = harness.exposeGather("finalPromptPrevious", [], 0, fpTexts);
+    const items = harness.exposeGather("finalStepPrevious", [], 0, fpTexts);
     assert.strictEqual(items.length, 1);
     assert.strictEqual(items[0].index, 1);
     assert.strictEqual(items[0].text, "loop 1 output");
-    assert.strictEqual(items[0].type, PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT);
+    assert.strictEqual(items[0].type, PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP);
   });
 
-  test("'finalPromptPrevious' returns [] when no loops have run", () => {
-    const items = harness.exposeGather("finalPromptPrevious", [], 0, []);
+  test("'finalStepPrevious' returns [] when no loops have run", () => {
+    const items = harness.exposeGather("finalStepPrevious", [], 0, []);
     assert.deepStrictEqual(items, []);
   });
 
-  test("'finalPromptPrevious' works on queue prompts (returns last finalPrompt loop)", () => {
+  test("'finalStepPrevious' works on queue prompts (returns last final step loop)", () => {
     const prompts = [makePrompt("p1", "r1"), makePrompt("p2")];
     const fpTexts = ["orchestrator decided X"];
     const items = harness.exposeGather(
-      "finalPromptPrevious",
+      "finalStepPrevious",
       prompts,
       1,
       fpTexts
     );
     assert.strictEqual(items.length, 1);
     assert.strictEqual(items[0].text, "orchestrator decided X");
-    assert.strictEqual(items[0].type, PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT);
+    assert.strictEqual(items[0].type, PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP);
   });
 });
 
@@ -331,13 +331,13 @@ suite("insertPriorContext", () => {
       {
         index: 0,
         text: "orchestrator output",
-        type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT,
+        type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
       },
     ];
     const result = harness.exposeInsert("Do work.", items);
-    assert.ok(result.includes(`type="${PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT}"`));
+    assert.ok(result.includes(`type="${PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP}"`));
     assert.ok(
-      result.includes(`<step index="1" type="${PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT}">`)
+      result.includes(`<step index="1" type="${PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP}">`)
     );
     assert.ok(result.includes("<response>\norchestrator output\n</response>"));
   });

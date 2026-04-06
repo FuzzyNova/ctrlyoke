@@ -526,7 +526,7 @@ suite("SessionResolver Tests", () => {
     });
   });
 
-  suite("resolve - SESSION_ID_SENTINELS.FINAL_PROMPT sentinel", () => {
+  suite("resolve - SESSION_ID_SENTINELS.FINAL_STEP sentinel", () => {
     const workflow: PromptFile = {
       steps: [],
       resumeSession: true,
@@ -535,7 +535,7 @@ suite("SessionResolver Tests", () => {
     test("should return finalPromptSessionId when sentinel is used and prior session exists", () => {
       const prompt: PromptStep = {
         prompt: "finalPrompt text",
-        sessionId: SESSION_ID_SENTINELS.FINAL_PROMPT,
+        sessionId: SESSION_ID_SENTINELS.FINAL_STEP,
       };
       const priorSessionId = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -552,7 +552,7 @@ suite("SessionResolver Tests", () => {
     test("should return undefined when sentinel is used but no prior session (first iteration)", () => {
       const prompt: PromptStep = {
         prompt: "finalPrompt text",
-        sessionId: SESSION_ID_SENTINELS.FINAL_PROMPT,
+        sessionId: SESSION_ID_SENTINELS.FINAL_STEP,
       };
 
       const sessionId = SessionResolver.resolve(
@@ -572,7 +572,7 @@ suite("SessionResolver Tests", () => {
       };
       const prompt: PromptStep = {
         prompt: "finalPrompt text",
-        sessionId: SESSION_ID_SENTINELS.FINAL_PROMPT,
+        sessionId: SESSION_ID_SENTINELS.FINAL_STEP,
       };
 
       const sessionId = SessionResolver.resolve(
@@ -606,7 +606,7 @@ suite("SessionResolver Tests", () => {
     test("should use sentinel from workflow-level sessionId", () => {
       const workflowWithSentinel: PromptFile = {
         steps: [],
-        sessionId: SESSION_ID_SENTINELS.FINAL_PROMPT,
+        sessionId: SESSION_ID_SENTINELS.FINAL_STEP,
         resumeSession: true,
       };
       const prompt: PromptStep = {

@@ -30,6 +30,7 @@ import {
   ACTION_TYPES,
   DEFAULT_WORKFLOW_NAME,
   FINAL_STEP_PHASES,
+  OUTPUT_HISTORY_KINDS,
   QUEUE_POSITION,
   STEP_STATUS,
   STEP_TYPES,
@@ -875,7 +876,7 @@ export class WorkflowInstance {
             >();
             for (const entry of history.orderedEntries) {
               if (
-                entry.kind === "cli" &&
+                entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
                 entry.target.kind === FINAL_STEP_PHASES.QUEUE
               ) {
                 const stepIndex = (

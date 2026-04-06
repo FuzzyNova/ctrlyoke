@@ -394,7 +394,7 @@ export abstract class HarnessIntegration {
    * Gather prior prompt response texts based on the priorContext field.
    *
    * Queue-prompt keywords ("all", "previous", number[]) resolve against allPrompts._runtime.responseText.
-   * finalPrompt keywords ("finalPromptAll", "finalPromptPrevious") resolve against finalPromptResponseTexts.
+   * finalStep keywords ("finalStepAll", "finalStepPrevious") resolve against finalPromptResponseTexts.
    *
    * Prompts/loops with no captured output are silently skipped.
    *
@@ -419,7 +419,7 @@ export abstract class HarnessIntegration {
         .map((text, i) => ({
           index: i,
           text,
-          type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT,
+          type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
         }))
         .filter((item) => item.text.length > 0);
       if (items.length === 0 && finalPromptResponseTexts.length > 0) {
@@ -443,7 +443,7 @@ export abstract class HarnessIntegration {
         {
           index: lastIndex,
           text,
-          type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT,
+          type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
         },
       ];
     }
@@ -499,7 +499,7 @@ export abstract class HarnessIntegration {
 
   /**
    * Build the <priorContext> XML block from gathered context items.
-   * finalPrompt loop items carry type="finalPrompt" on the <step> element.
+   * finalStep loop items carry type="finalStep" on the <step> element.
    */
   protected buildPriorContextXml(contextItems: PriorContextItem[]): string {
     const steps = contextItems
@@ -549,7 +549,7 @@ export abstract class HarnessIntegration {
       resolvedPriorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL ||
       resolvedPriorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS;
     Log.debug(
-      `🔗 Injecting ${isFinalPromptContext ? "finalPrompt" : "prior"} context for prompt ${promptIndex + 1}: ` +
+      `🔗 Injecting ${isFinalPromptContext ? "finalStep" : "prior"} context for prompt ${promptIndex + 1}: ` +
         `${contextItems.length} step(s) from indices [${contextItems.map((c) => c.index + 1).join(", ")}]`
     );
     return this.buildPriorContextXml(contextItems);

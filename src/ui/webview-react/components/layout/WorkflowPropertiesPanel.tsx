@@ -464,11 +464,11 @@ export const WorkflowPropertiesPanel: React.FC<{
 
   const handleResumeSessionChange = useCallback(
     (v: string) => {
-      if (v === SESSION_ID_SENTINELS.FINAL_PROMPT) {
-        setSessionIdInput(SESSION_ID_SENTINELS.FINAL_PROMPT);
+      if (v === SESSION_ID_SENTINELS.FINAL_STEP) {
+        setSessionIdInput(SESSION_ID_SENTINELS.FINAL_STEP);
         postWorkflowPropertiesUpdate({
           resumeSession: true,
-          sessionId: SESSION_ID_SENTINELS.FINAL_PROMPT,
+          sessionId: SESSION_ID_SENTINELS.FINAL_STEP,
         });
         return;
       }
@@ -479,7 +479,7 @@ export const WorkflowPropertiesPanel: React.FC<{
       // extension receives the clear instruction (undefined is stripped by JSON.stringify).
       if (
         !checked ||
-        workflowProperties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT
+        workflowProperties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP
       ) {
         setSessionIdInput("");
         updates.sessionId = "";
@@ -1014,9 +1014,9 @@ export const WorkflowPropertiesPanel: React.FC<{
                     id="settings-resume-session"
                     value={
                       workflowProperties.sessionId ===
-                        SESSION_ID_SENTINELS.FINAL_PROMPT &&
+                        SESSION_ID_SENTINELS.FINAL_STEP &&
                       effectiveResumeSession
-                        ? SESSION_ID_SENTINELS.FINAL_PROMPT
+                        ? SESSION_ID_SENTINELS.FINAL_STEP
                         : effectiveResumeSession
                           ? "yes"
                           : "no"
@@ -1029,7 +1029,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                     className={`mt-1 ${
                       effectiveResumeSession &&
                       workflowProperties.sessionId !==
-                        SESSION_ID_SENTINELS.FINAL_PROMPT
+                        SESSION_ID_SENTINELS.FINAL_STEP
                         ? ""
                         : "opacity-50 pointer-events-none"
                     }`}
@@ -1037,7 +1037,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                       !effectiveResumeSession
                         ? "Enable Resume Session to specify a Session ID"
                         : workflowProperties.sessionId ===
-                            SESSION_ID_SENTINELS.FINAL_PROMPT
+                            SESSION_ID_SENTINELS.FINAL_STEP
                           ? "Using Final Prompt Session — no explicit Session ID needed"
                           : undefined
                     }

@@ -30,7 +30,7 @@ export interface WorkflowContext {
   /** Read-only accessor for prior-context finalStep loop responses. */
   getFinalPromptResponseTexts?: () => string[];
   /** Session ID from the most recent finalStep execution. Consumed by SessionResolver
-   *  when sessionId is the "finalPrompt" sentinel on any prompt (queue or finalStep phase).
+   *  when sessionId is the "finalStep" sentinel on any prompt (queue or finalStep phase).
    *  Note: only applies when finalStep is an AI prompt step (not a ScriptStep). */
   finalPromptSessionId?: string;
 }

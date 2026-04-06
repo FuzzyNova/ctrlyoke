@@ -1,7 +1,7 @@
 import { execSync } from "child_process";
 import type { IPty } from "node-pty";
 import { Log } from "../../utils/Log";
-import { SESSION_KINDS, type SessionKind } from "../../types/DashboardConstants";
+import { SESSION_KINDS, TERMINAL_SESSION_STATUS, type SessionKind, type TerminalSessionStatus } from "../../types/DashboardConstants";
 
 type NodePtyModule = typeof import("node-pty");
 
@@ -75,7 +75,7 @@ export class PtySession {
   readonly kind: SessionKind;
   readonly promptNumber?: number;
   readonly pty: IPty;
-  status: "running" | "completed" | "failed";
+  status: TerminalSessionStatus;
 
   // Ring buffer for webview reconnection: recent output replayed when webview JS context is recreated
   readonly reconnectBuffer: string[] = [];
@@ -95,7 +95,7 @@ export class PtySession {
     this.kind = kind;
     this.promptNumber = promptNumber;
     this.pty = ptyInstance;
-    this.status = "running";
+    this.status = TERMINAL_SESSION_STATUS.RUNNING;
   }
 
   /**
@@ -195,7 +195,7 @@ export class PtyProcessManager {
     });
 
     ptyInstance.onExit(({ exitCode }: { exitCode: number }) => {
-      session.status = exitCode === 0 ? "completed" : "failed";
+      session.status = exitCode === 0 ? TERMINAL_SESSION_STATUS.COMPLETED : TERMINAL_SESSION_STATUS.FAILED;
       this.sessions.delete(sessionId);
       options.onExit(session, exitCode ?? 1);
       Log.debug(

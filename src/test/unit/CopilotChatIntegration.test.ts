@@ -40,7 +40,7 @@ suite("CopilotChatIntegration", () => {
         {
           promptIndex: 0,
           allPrompts: [prompt],
-          resolvedProperties: { priorContext: "finalPromptAll" },
+          resolvedProperties: { priorContext: "finalStepAll" },
           getFinalPromptResponseTexts: () => ["final loop response"],
         }
       );

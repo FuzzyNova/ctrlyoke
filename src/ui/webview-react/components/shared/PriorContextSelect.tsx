@@ -18,8 +18,8 @@ export type KeywordMode =
   | "none"
   | "previous"
   | "all"
-  | "finalPromptPrevious"
-  | "finalPromptAll"
+  | "finalStepPrevious"
+  | "finalStepAll"
   | "custom";
 
 export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
@@ -27,8 +27,8 @@ export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
   none: "None",
   previous: "Previous prompt",
   all: "All prior prompts",
-  finalPromptPrevious: "Previous finalPrompt output",
-  finalPromptAll: "All finalPrompt outputs",
+  finalStepPrevious: "Previous final step output",
+  finalStepAll: "All final step outputs",
   custom: "Custom",
 };
 
@@ -106,8 +106,8 @@ function formatAsRangeNotation(nums: number[]): string {
  * The popup is rendered via a portal at document.body with position:fixed so
  * it escapes any overflow:hidden ancestors and is never clipped.
  *
- * Keyword options: Default (optional), None, Previous, All, finalPromptPrevious,
- * finalPromptAll, Custom. When "Custom" is selected, a text input appears below
+ * Keyword options: Default (optional), None, Previous, All, finalStepPrevious,
+ * finalStepAll, Custom. When "Custom" is selected, a text input appears below
  * the dropdown where the user can enter range notation like "1,2,4-10".
  */
 export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
@@ -267,16 +267,16 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         "none",
         "previous",
         "all",
-        "finalPromptPrevious",
-        "finalPromptAll",
+        "finalStepPrevious",
+        "finalStepAll",
         "custom",
       ]
     : [
         "none",
         "previous",
         "all",
-        "finalPromptPrevious",
-        "finalPromptAll",
+        "finalStepPrevious",
+        "finalStepAll",
         "custom",
       ];
 

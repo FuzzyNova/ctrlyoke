@@ -24,6 +24,7 @@ import {
   HARNESS_IDS,
   LOCK_STATUS,
   FINAL_STEP_PHASES,
+  OUTPUT_HISTORY_KINDS,
   type QueuePosition,
   type ActionType,
   type StepStatus,
@@ -1625,7 +1626,7 @@ export class WorkflowOrchestrator {
       const cliOutputsByStep = new Map<number, unknown[]>();
       for (const historyEntry of history.orderedEntries) {
         if (
-          historyEntry.kind === "cli" &&
+          historyEntry.kind === OUTPUT_HISTORY_KINDS.CLI &&
           historyEntry.target.kind === FINAL_STEP_PHASES.QUEUE
         ) {
           const stepIndex = (
@@ -1684,7 +1685,7 @@ export class WorkflowOrchestrator {
         const cliOutputsByStep = new Map<number, unknown[]>();
         for (const historyEntry of history.orderedEntries) {
           if (
-            historyEntry.kind === "cli" &&
+            historyEntry.kind === OUTPUT_HISTORY_KINDS.CLI &&
             historyEntry.target.kind === FINAL_STEP_PHASES.QUEUE
           ) {
             const stepIndex = (

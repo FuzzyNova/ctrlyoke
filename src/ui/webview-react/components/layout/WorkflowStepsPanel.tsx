@@ -13,7 +13,7 @@ import {
   type StepDetails,
   type PromptOverride,
 } from "../prompts/WorkflowStep";
-import { FinalPromptFooter } from "../prompts/FinalPromptFooter";
+import { FinalStepFooter } from "../prompts/FinalStepFooter";
 import { PromptCounter } from "../prompts/PromptCounter";
 import { PanelBar } from "../shared";
 import {
@@ -277,13 +277,13 @@ export const WorkflowStepsPanel: React.FC<{
       if (Array.isArray(prompt.priorContext)) {
         ctxLabel = `ctx: [${prompt.priorContext.join(",")}]`;
       } else {
-        // "all" | "previous" | "none" | "finalPromptAll" | "finalPromptPrevious"
+        // "all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"
         const shortMap: Record<string, string> = {
           all: "all",
           previous: "prev",
           none: "none",
-          finalPromptAll: "fp-all",
-          finalPromptPrevious: "fp-prev",
+          finalStepAll: "fs-all",
+          finalStepPrevious: "fs-prev",
         };
         ctxLabel = `ctx: ${shortMap[prompt.priorContext as string] ?? String(prompt.priorContext)}`;
       }
@@ -812,7 +812,7 @@ export const WorkflowStepsPanel: React.FC<{
         )}
       </div>
 
-      <FinalPromptFooter
+      <FinalStepFooter
         finalStep={finalStep}
         status={finalPromptStatus}
         loopCount={finalPromptLoopCount}

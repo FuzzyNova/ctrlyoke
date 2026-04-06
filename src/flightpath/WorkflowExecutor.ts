@@ -559,7 +559,7 @@ export class WorkflowExecutor {
         responseText,
       });
     } else {
-      // finalPrompt loops: store indexed by loopIndex for "finalPromptAll" / "finalPromptPrevious"
+      // finalStep loops: store indexed by loopIndex for "finalStepAll" / "finalStepPrevious"
       await this.promptQueue.storeFinalPromptResponseText(
         target.loopIndex,
         responseText

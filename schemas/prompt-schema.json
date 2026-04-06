@@ -167,7 +167,7 @@
         },
         "sessionId": {
           "type": ["string", "number"],
-          "description": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalPrompt\" (resume the session established by the most recent finalPrompt execution — works on any prompt, not just the finalPrompt item; on first pass when no finalPrompt session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution."
+          "description": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution."
         },
         "skills": {
           "oneOf": [
@@ -200,10 +200,10 @@
                 "all",
                 "previous",
                 "none",
-                "finalPromptAll",
-                "finalPromptPrevious"
+                "finalStepAll",
+                "finalStepPrevious"
               ],
-              "description": "Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately preceding queue prompt output, 'none' = no injection, 'finalPromptAll' = all previous finalPrompt loop outputs, 'finalPromptPrevious' = immediately preceding finalPrompt loop output"
+              "description": "Keyword shorthand: 'all' = all prior queue prompt outputs, 'previous' = immediately preceding queue prompt output, 'none' = no injection, 'finalStepAll' = all previous final step loop outputs, 'finalStepPrevious' = immediately preceding final step loop output"
             },
             {
               "type": "array",
@@ -409,18 +409,18 @@
           ],
           "description": "Current execution state"
         },
-        "finalPrompt": {
+        "finalStep": {
           "type": "object",
-          "description": "Runtime metadata for finalPrompt execution state (optional, added automatically during execution)",
+          "description": "Runtime metadata for final step execution state (optional, added automatically during execution)",
           "properties": {
             "phase": {
               "type": "string",
-              "enum": ["queue", "finalPrompt"],
+              "enum": ["queue", "finalStep"],
               "description": "Current workflow execution phase"
             },
             "loopCount": {
               "type": "number",
-              "description": "0-based finalPrompt execution loop count"
+              "description": "0-based final step execution loop count"
             },
             "status": {
               "type": "string",
@@ -432,22 +432,22 @@
                 "failed",
                 "cancelled"
               ],
-              "description": "Current finalPrompt step status"
+              "description": "Current final step status"
             },
             "startedAt": {
               "type": "number",
-              "description": "Timestamp when finalPrompt execution started"
+              "description": "Timestamp when final step execution started"
             },
             "completedAt": {
               "type": "number",
-              "description": "Timestamp when finalPrompt execution completed"
+              "description": "Timestamp when final step execution completed"
             },
             "responseTexts": {
               "type": "array",
               "items": {
                 "type": "string"
               },
-              "description": "Response texts from each finalPrompt loop execution, indexed by loop number (0-based). Written automatically during workflow execution. Used by the priorContext 'finalPromptAll' and 'finalPromptPrevious' keywords."
+              "description": "Response texts from each final step loop execution, indexed by loop number (0-based). Written automatically during workflow execution. Used by the priorContext 'finalStepAll' and 'finalStepPrevious' keywords."
             }
           },
           "required": ["phase", "loopCount"],

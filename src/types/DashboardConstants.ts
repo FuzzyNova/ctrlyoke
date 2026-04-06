@@ -485,12 +485,12 @@ export const SESSION_KINDS = {
 // ============================================================================
 export const SESSION_ID_SENTINELS = {
   /**
-   * Resume the session established by the most recent finalPrompt execution.
-   * Works on any prompt (queue or finalPrompt phase): if a finalPrompt session
+   * Resume the session established by the most recent final step execution.
+   * Works on any prompt (queue or finalStep phase): if a finalStep session
    * exists it is reused, otherwise a new session starts. Useful for workflows
-   * where newly-appended queue prompts should continue the finalPrompt conversation.
+   * where newly-appended queue prompts should continue the final step conversation.
    */
-  FINAL_PROMPT: "finalPrompt",
+  FINAL_STEP: "finalStep",
 } as const;
 
 // ============================================================================
@@ -500,21 +500,18 @@ export const PRIOR_CONTEXT_KEYWORDS = {
   ALL: "all",
   PREVIOUS: "previous",
   NONE: "none",
-  /** All outputs from finalPrompt/finalStep loop iterations. */
-  FINAL_STEP_ALL: "finalPromptAll",
-  /** Most recent output from the finalPrompt/finalStep loop. */
-  FINAL_STEP_PREVIOUS: "finalPromptPrevious",
+  /** All outputs from finalStep loop iterations. */
+  FINAL_STEP_ALL: "finalStepAll",
+  /** Most recent output from the finalStep loop. */
+  FINAL_STEP_PREVIOUS: "finalStepPrevious",
 } as const;
 
 // ============================================================================
 // PRIOR CONTEXT ITEM TYPES - Discriminant for PriorContextItem.type
 // ============================================================================
 export const PRIOR_CONTEXT_ITEM_TYPES = {
-  /**
-   * Item originates from the finalPrompt/finalStep phase (not a queue prompt).
-   * Kept as "finalPrompt" because priorContext semantics are prompt-specific.
-   */
-  FINAL_PROMPT: "finalPrompt",
+  /** Item originates from the finalStep phase (not a queue prompt). */
+  FINAL_STEP: "finalStep",
 } as const;
 
 // ============================================================================
@@ -533,6 +530,12 @@ export const PROMPT_PROPERTIES = {
   // Core properties
   PROMPT: "prompt",
   ID: "id",
+  NAME: "name",
+
+  // Workflow-level properties (multi-step format)
+  STEPS: "steps",
+  FINAL_STEP: "finalStep",
+  VARS: "vars",
 
   // Step type discriminant
   STEP_TYPE: "type",
@@ -540,6 +543,7 @@ export const PROMPT_PROPERTIES = {
   // Script step properties
   SCRIPT: "script",
   CONTINUE_ON_FAILURE: "continueOnFailure",
+  TIMEOUT: "timeout",
 
   // Harness/Model properties
   HARNESS: "harness",
@@ -555,6 +559,13 @@ export const PROMPT_PROPERTIES = {
 
   // End condition root
   END_CONDITION: "endCondition",
+
+  // Context injection
+  PRIOR_CONTEXT: "priorContext",
+
+  // CLI overrides
+  ADDITIONAL_ARGS: "additionalArgs",
+  TOOL_PERMISSIONS: "toolPermissions",
 } as const;
 
 // End condition property names

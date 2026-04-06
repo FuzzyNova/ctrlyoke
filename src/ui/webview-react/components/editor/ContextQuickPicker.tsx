@@ -37,7 +37,7 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
       : workflowProperties.sessionId;
 
   const effectiveIsFinal =
-    effectiveSessionId === SESSION_ID_SENTINELS.FINAL_PROMPT;
+    effectiveSessionId === SESSION_ID_SENTINELS.FINAL_STEP;
 
   const valueLabel = effectiveResume
     ? effectiveIsFinal
@@ -51,31 +51,31 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
   const resolvedSessionId = workflowProperties.sessionId;
   const defaultResumeSessionLabel =
     resolvedResumeSession &&
-    resolvedSessionId === SESSION_ID_SENTINELS.FINAL_PROMPT
+    resolvedSessionId === SESSION_ID_SENTINELS.FINAL_STEP
       ? "Default (Final Prompt Session)"
       : `Default (${resolvedResumeSession ? "Yes" : "No"})`;
 
   const resumeSessionValue =
     properties.resumeSession === undefined
       ? "default"
-      : properties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT &&
+      : properties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP &&
           properties.resumeSession
-        ? SESSION_ID_SENTINELS.FINAL_PROMPT
+        ? SESSION_ID_SENTINELS.FINAL_STEP
         : properties.resumeSession
           ? "yes"
           : "no";
 
   const handleResumeSessionChange = (v: string) => {
-    if (v === SESSION_ID_SENTINELS.FINAL_PROMPT) {
+    if (v === SESSION_ID_SENTINELS.FINAL_STEP) {
       setProperty("resumeSession", true);
-      setProperty("sessionId", SESSION_ID_SENTINELS.FINAL_PROMPT);
+      setProperty("sessionId", SESSION_ID_SENTINELS.FINAL_STEP);
     } else if (v === "default") {
       setProperty("resumeSession", undefined);
-      if (properties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT) {
+      if (properties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP) {
         setProperty("sessionId", "");
       }
     } else {
-      if (properties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT) {
+      if (properties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP) {
         setProperty("sessionId", "");
       }
       setProperty("resumeSession", v === "yes");
@@ -85,14 +85,14 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
   // ── Session ID input ──────────────────────────────────────────────────────
   const isSessionIdActive =
     properties.resumeSession === true &&
-    properties.sessionId !== SESSION_ID_SENTINELS.FINAL_PROMPT;
+    properties.sessionId !== SESSION_ID_SENTINELS.FINAL_STEP;
 
   const isSessionIdDefault = properties.resumeSession === undefined;
   const sessionIdDisplayValue = isSessionIdActive
     ? (properties.sessionId ?? "")
     : isSessionIdDefault &&
         resolvedResumeSession &&
-        resolvedSessionId !== SESSION_ID_SENTINELS.FINAL_PROMPT
+        resolvedSessionId !== SESSION_ID_SENTINELS.FINAL_STEP
       ? (resolvedSessionId ?? "")
       : "";
 

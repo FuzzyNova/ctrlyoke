@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
 import * as yaml from "js-yaml";
-import { MESSAGE_TYPES, EXECUTION_STATES } from "../types/DashboardConstants";
+import { MESSAGE_TYPES, EXECUTION_STATES, PROMPT_PROPERTIES } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
   PATH_CONSTANTS,
@@ -150,32 +150,48 @@ export class WorkflowSerializer {
       const workingFile = await readJsonFile(workingFilePath);
 
       // Build clean PromptFile — strip all working-file-only and runtime fields.
+      // WORKFLOW_FIELDS: top-level properties to preserve (excludes originalFile,
+      // workflowName, startedAt, _runtime, and other working-file-only fields).
       const WORKFLOW_FIELDS = [
-        "prompt",
-        "steps",
-        "finalStep",
-        "harness",
-        "model",
-        "agent",
-        "resumeSession",
-        "mcpServers",
-        "hooks",
-        "sessionId",
-        "endCondition",
+        PROMPT_PROPERTIES.PROMPT,
+        PROMPT_PROPERTIES.STEPS,
+        PROMPT_PROPERTIES.FINAL_STEP,
+        PROMPT_PROPERTIES.VARS,
+        PROMPT_PROPERTIES.HARNESS,
+        PROMPT_PROPERTIES.MODEL,
+        PROMPT_PROPERTIES.AGENT,
+        PROMPT_PROPERTIES.SKILLS,
+        PROMPT_PROPERTIES.RESUME_SESSION,
+        PROMPT_PROPERTIES.MCP_SERVERS,
+        PROMPT_PROPERTIES.HOOKS,
+        PROMPT_PROPERTIES.SESSION_ID,
+        PROMPT_PROPERTIES.END_CONDITION,
+        PROMPT_PROPERTIES.PRIOR_CONTEXT,
+        PROMPT_PROPERTIES.ADDITIONAL_ARGS,
+        PROMPT_PROPERTIES.TOOL_PERMISSIONS,
       ] as const;
 
+      // PROMPT_FIELDS: per-step properties to preserve (covers both prompt steps
+      // and script steps; fields absent from a step are silently skipped).
       const PROMPT_FIELDS = [
-        "name",
-        "prompt",
-        "harness",
-        "model",
-        "agent",
-        "resumeSession",
-        "mcpServers",
-        "hooks",
-        "sessionId",
-        "skills",
-        "endCondition",
+        PROMPT_PROPERTIES.NAME,
+        PROMPT_PROPERTIES.STEP_TYPE,
+        PROMPT_PROPERTIES.PROMPT,
+        PROMPT_PROPERTIES.SCRIPT,
+        PROMPT_PROPERTIES.TIMEOUT,
+        PROMPT_PROPERTIES.CONTINUE_ON_FAILURE,
+        PROMPT_PROPERTIES.HARNESS,
+        PROMPT_PROPERTIES.MODEL,
+        PROMPT_PROPERTIES.AGENT,
+        PROMPT_PROPERTIES.SKILLS,
+        PROMPT_PROPERTIES.RESUME_SESSION,
+        PROMPT_PROPERTIES.MCP_SERVERS,
+        PROMPT_PROPERTIES.HOOKS,
+        PROMPT_PROPERTIES.SESSION_ID,
+        PROMPT_PROPERTIES.END_CONDITION,
+        PROMPT_PROPERTIES.PRIOR_CONTEXT,
+        PROMPT_PROPERTIES.ADDITIONAL_ARGS,
+        PROMPT_PROPERTIES.TOOL_PERMISSIONS,
       ] as const;
 
       const clean: Record<string, unknown> = {};
@@ -183,8 +199,8 @@ export class WorkflowSerializer {
       for (const field of WORKFLOW_FIELDS) {
         if (
           field in workingFile &&
-          field !== "steps" &&
-          field !== "finalStep"
+          field !== PROMPT_PROPERTIES.STEPS &&
+          field !== PROMPT_PROPERTIES.FINAL_STEP
         ) {
           clean[field] = workingFile[field];
         }

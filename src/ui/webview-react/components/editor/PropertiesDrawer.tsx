@@ -194,7 +194,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const resolvedSessionId = workflowProperties.sessionId;
   const defaultResumeSessionLabel =
     resolvedResumeSession &&
-    resolvedSessionId === SESSION_ID_SENTINELS.FINAL_PROMPT
+    resolvedSessionId === SESSION_ID_SENTINELS.FINAL_STEP
       ? "Default (Final Prompt Session)"
       : `Default (${resolvedResumeSession ? "Yes" : "No"})`;
 
@@ -202,12 +202,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const isSessionIdDefault = properties.resumeSession === undefined;
   const isSessionIdActive =
     properties.resumeSession === true &&
-    properties.sessionId !== SESSION_ID_SENTINELS.FINAL_PROMPT;
+    properties.sessionId !== SESSION_ID_SENTINELS.FINAL_STEP;
   const sessionIdDisplayValue = isSessionIdActive
     ? (properties.sessionId ?? "")
     : isSessionIdDefault &&
         resolvedResumeSession &&
-        resolvedSessionId !== SESSION_ID_SENTINELS.FINAL_PROMPT
+        resolvedSessionId !== SESSION_ID_SENTINELS.FINAL_STEP
       ? (resolvedSessionId ?? "")
       : "";
   const sessionIdTooltip = isSessionIdActive
@@ -215,7 +215,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     : isSessionIdDefault
       ? "Using workflow-level Resume Session setting. Select Yes to override."
       : properties.resumeSession === true &&
-          properties.sessionId === SESSION_ID_SENTINELS.FINAL_PROMPT
+          properties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP
         ? "Using Final Prompt Session — no explicit Session ID needed"
         : "Set Resume Session to Yes to specify a Session ID";
 
@@ -607,32 +607,32 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     properties.resumeSession === undefined
                       ? "default"
                       : properties.sessionId ===
-                            SESSION_ID_SENTINELS.FINAL_PROMPT &&
+                            SESSION_ID_SENTINELS.FINAL_STEP &&
                           properties.resumeSession
-                        ? SESSION_ID_SENTINELS.FINAL_PROMPT
+                        ? SESSION_ID_SENTINELS.FINAL_STEP
                         : properties.resumeSession
                           ? "yes"
                           : "no"
                   }
                   onChange={(v) => {
-                    if (v === SESSION_ID_SENTINELS.FINAL_PROMPT) {
+                    if (v === SESSION_ID_SENTINELS.FINAL_STEP) {
                       setProperty("resumeSession", true);
                       setProperty(
                         "sessionId",
-                        SESSION_ID_SENTINELS.FINAL_PROMPT
+                        SESSION_ID_SENTINELS.FINAL_STEP
                       );
                     } else if (v === "default") {
                       setProperty("resumeSession", undefined);
                       if (
                         properties.sessionId ===
-                        SESSION_ID_SENTINELS.FINAL_PROMPT
+                        SESSION_ID_SENTINELS.FINAL_STEP
                       ) {
                         setProperty("sessionId", "");
                       }
                     } else {
                       if (
                         properties.sessionId ===
-                        SESSION_ID_SENTINELS.FINAL_PROMPT
+                        SESSION_ID_SENTINELS.FINAL_STEP
                       ) {
                         setProperty("sessionId", "");
                       }

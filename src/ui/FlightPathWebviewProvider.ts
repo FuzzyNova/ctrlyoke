@@ -298,7 +298,7 @@ window.vscodeApi = acquireVsCodeApi();
       fileName,
       steps,
       workflowName,
-      finalPrompt: finalPrompt ?? null,
+      finalStep: finalPrompt ?? null,
       finalPromptStatus: finalPromptRuntime?.status ?? null,
       finalPromptLoopCount: finalPromptRuntime?.loopCount ?? 0,
       finalPromptPhase: finalPromptRuntime?.phase ?? null,
@@ -333,7 +333,7 @@ window.vscodeApi = acquireVsCodeApi();
       executionState,
       currentIndex,
       workflowName,
-      finalPrompt: finalPrompt ?? null,
+      finalStep: finalPrompt ?? null,
       finalPromptStatus: finalPromptRuntime?.status ?? null,
       finalPromptLoopCount: finalPromptRuntime?.loopCount ?? 0,
       finalPromptPhase: finalPromptRuntime?.phase ?? null,
@@ -515,7 +515,7 @@ window.vscodeApi = acquireVsCodeApi();
     this.postMessage({
       type: MESSAGE_TYPES.STEPS_EXTENDED,
       steps,
-      finalPrompt: finalPrompt ?? null,
+      finalStep: finalPrompt ?? null,
       ...(executionState !== undefined ? { executionState } : {}),
     });
   }
@@ -541,14 +541,14 @@ window.vscodeApi = acquireVsCodeApi();
       type: MESSAGE_TYPES.PROMPT_DELETED,
       fileName,
       steps,
-      finalPrompt: finalPrompt ?? null,
+      finalStep: finalPrompt ?? null,
     });
   }
 
   public updateFinalPrompt(finalPrompt: WorkflowStep | null): void {
     this.postMessage({
       type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
-      finalPrompt,
+      finalStep: finalPrompt,
     });
   }
 

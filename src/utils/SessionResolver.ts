@@ -74,7 +74,7 @@ export class SessionResolver {
    *
    * Resolution order:
    * 1. If resumeSession=false → undefined (new session)
-   * 2. If sessionId is "finalPrompt" sentinel → return finalPromptSessionId (prior loop's session)
+   * 2. If sessionId is "finalStep" sentinel → return finalStepSessionId (prior loop's session)
    * 3. If sessionId is number → resolve from referenced prompt
    * 4. If sessionId is string → use directly
    * 5. Otherwise → auto-resume from previous prompt (same harness)
@@ -84,7 +84,7 @@ export class SessionResolver {
    * @param allPrompts All prompts in queue (with runtime metadata)
    * @param workflow Workflow file for workflow-level defaults (optional)
    * @param finalPromptSessionId Session ID from the most recent finalPrompt execution.
-   *   Used when sessionId is the "finalPrompt" sentinel on any prompt.
+   *   Used when sessionId is the "finalStep" sentinel on any prompt.
    * @returns Resolved session ID or undefined for new session
    */
   static resolve(
@@ -106,15 +106,15 @@ export class SessionResolver {
     // 2. Use resolved sessionId (includes workflow-level sessionId via PropertyResolver)
     const resolvedSessionId = resolved?.sessionId;
     if (resolvedSessionId !== undefined) {
-      // 2a. "finalPrompt" sentinel — resume the previous finalPrompt loop's session
-      if (resolvedSessionId === SESSION_ID_SENTINELS.FINAL_PROMPT) {
+      // 2a. "finalStep" sentinel — resume the previous final step loop's session
+      if (resolvedSessionId === SESSION_ID_SENTINELS.FINAL_STEP) {
         if (finalPromptSessionId) {
           Log.debug(
             `✅ Resuming finalPrompt loop session: ${finalPromptSessionId}`
           );
         } else {
           Log.debug(
-            `ℹ️ sessionId "finalPrompt": no prior loop session, starting new session`
+            `ℹ️ sessionId "finalStep": no prior loop session, starting new session`
           );
         }
         return finalPromptSessionId;
