@@ -127,14 +127,19 @@ module.exports = {
         "status-cancelling": "#ff9900",
 
         // ── Severity colors (status messages) ──
-        "severity-info": "rgb(156, 220, 254)",
-        "severity-info-bg": "rgba(156, 220, 254, 0.15)",
-        "severity-warning": "rgb(252, 175, 62)",
-        "severity-warning-bg": "rgba(252, 175, 62, 0.15)",
-        "severity-error": "rgb(244, 71, 71)",
-        "severity-error-bg": "rgba(244, 71, 71, 0.15)",
+        // Use VS Code theme vars so text is readable in all themes.
+        // color-mix generates a 15% tint of the foreground color for the background.
+        "severity-info": "var(--vscode-editorInfo-foreground, #59a4f9)",
+        "severity-info-bg":
+          "color-mix(in srgb, var(--vscode-editorInfo-foreground, #59a4f9) 15%, transparent)",
+        "severity-warning": "var(--vscode-editorWarning-foreground, #cca700)",
+        "severity-warning-bg":
+          "color-mix(in srgb, var(--vscode-editorWarning-foreground, #cca700) 15%, transparent)",
+        "severity-error": "var(--vscode-editorError-foreground, #f14c4c)",
+        "severity-error-bg":
+          "color-mix(in srgb, var(--vscode-editorError-foreground, #f14c4c) 15%, transparent)",
 
-        // ── Output block border colors ──
+        // ── Output block border colors (constant, theme independent) ──
         "output-prompt-border": "rgb(100, 100, 255)",
         "output-command-border": "rgb(255, 200, 100)",
         "output-streaming": "#4ec9b0",

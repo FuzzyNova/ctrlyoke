@@ -665,7 +665,7 @@ async function dumpVsCodeCssVariables(
 
       const outputPath = path.join(
         workspaceFolders[0].uri.fsPath,
-        "docs",
+        "dev",
         "reference",
         "vscode-css-vars.json"
       );
@@ -685,7 +685,7 @@ async function dumpVsCodeCssVariables(
         Log.info(`✅ Dumped ${message.count} CSS variables to ${outputPath}`);
 
         const action = await vscode.window.showInformationMessage(
-          `Dumped ${message.count} --vscode-* CSS variables to docs/reference/vscode-css-vars.json`,
+          `Dumped ${message.count} --vscode-* CSS variables to ${outputPath}`,
           "Open File"
         );
         if (action === "Open File") {
