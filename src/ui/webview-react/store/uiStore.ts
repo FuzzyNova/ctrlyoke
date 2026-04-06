@@ -102,7 +102,7 @@ export interface RecentWorkflow {
 
 /** Panel size snapshot (percentage values) for desktop or mobile layout */
 export interface PanelSizes {
-  prompts: number;
+  steps: number;
   output: number;
   editor: number;
   settings: number;
@@ -115,7 +115,7 @@ interface UiState {
   // Dropdown hide feature — persisted to vscode state
   hiddenDropdownOptions: Record<string, string[]>; // namespace → hidden value[]
   // Section collapse states
-  promptsCollapsed: boolean;
+  stepsCollapsed: boolean;
   finalPromptFooterExpanded: boolean;
   outputCollapsed: boolean;
   editorCollapsed: boolean;
@@ -388,7 +388,7 @@ const initialState: UiState = {
   hiddenDropdownOptions: {},
   saveWorkflowDialogOpen: false,
   saveWorkflowDialogData: null,
-  promptsCollapsed: false,
+  stepsCollapsed: false,
   finalPromptFooterExpanded: false,
   outputCollapsed: false,
   editorCollapsed: false,
@@ -443,7 +443,7 @@ const initialState: UiState = {
 
 // Fields to persist via vscode.getState()/setState()
 const persistedFields = [
-  "promptsCollapsed",
+  "stepsCollapsed",
   "outputCollapsed",
   "editorCollapsed",
   "settingsCollapsed",
@@ -469,7 +469,7 @@ export const useUiStore = create<UiState & UiActions>()(
       // ============================================================================
 
       togglePromptsCollapse: () =>
-        set((state) => ({ promptsCollapsed: !state.promptsCollapsed })),
+        set((state) => ({ stepsCollapsed: !state.stepsCollapsed })),
 
       toggleFinalPromptFooterExpanded: () =>
         set((state) => ({
@@ -485,7 +485,7 @@ export const useUiStore = create<UiState & UiActions>()(
       toggleEditorCollapse: () =>
         set((state) => ({ editorCollapsed: !state.editorCollapsed })),
 
-      setPromptsCollapsed: (collapsed) => set({ promptsCollapsed: collapsed }),
+      setPromptsCollapsed: (collapsed) => set({ stepsCollapsed: collapsed }),
 
       setOutputCollapsed: (collapsed) => set({ outputCollapsed: collapsed }),
 

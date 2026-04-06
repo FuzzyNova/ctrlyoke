@@ -374,7 +374,7 @@ suite("PropertyResolver priorContext", () => {
   test("uses prompt-level priorContext when specified", () => {
     const prompt: PromptStep = { prompt: "test", priorContext: "previous" };
     const workflow: PromptFile = {
-      prompts: [],
+      steps: [],
       priorContext: "all", // should be ignored
     };
     const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -383,28 +383,28 @@ suite("PropertyResolver priorContext", () => {
 
   test("falls back to workflow-level priorContext when prompt-level not specified", () => {
     const prompt: PromptStep = { prompt: "test" };
-    const workflow: PromptFile = { prompts: [], priorContext: "all" };
+    const workflow: PromptFile = { steps: [], priorContext: "all" };
     const resolved = PropertyResolver.resolve(prompt, workflow);
     assert.strictEqual(resolved.priorContext, "all");
   });
 
   test("returns undefined when neither prompt nor workflow specify priorContext", () => {
     const prompt: PromptStep = { prompt: "test" };
-    const workflow: PromptFile = { prompts: [] };
+    const workflow: PromptFile = { steps: [] };
     const resolved = PropertyResolver.resolve(prompt, workflow);
     assert.strictEqual(resolved.priorContext, undefined);
   });
 
   test("resolves array form from prompt level", () => {
     const prompt: PromptStep = { prompt: "test", priorContext: [1, 3] };
-    const workflow: PromptFile = { prompts: [] };
+    const workflow: PromptFile = { steps: [] };
     const resolved = PropertyResolver.resolve(prompt, workflow);
     assert.deepStrictEqual(resolved.priorContext, [1, 3]);
   });
 
   test("prompt 'none' overrides workflow 'all'", () => {
     const prompt: PromptStep = { prompt: "test", priorContext: "none" };
-    const workflow: PromptFile = { prompts: [], priorContext: "all" };
+    const workflow: PromptFile = { steps: [], priorContext: "all" };
     const resolved = PropertyResolver.resolve(prompt, workflow);
     assert.strictEqual(resolved.priorContext, "none");
   });

@@ -284,7 +284,7 @@ window.vscodeApi = acquireVsCodeApi();
    */
   public async updateFileSelected(
     fileName: string,
-    prompts: any[],
+    steps: any[],
     workflowName?: string,
     finalPrompt?: WorkflowStep | null,
     finalPromptRuntime?: {
@@ -296,7 +296,7 @@ window.vscodeApi = acquireVsCodeApi();
     this.postMessage({
       type: MESSAGE_TYPES.FILE_SELECTED,
       fileName,
-      prompts,
+      steps,
       workflowName,
       finalPrompt: finalPrompt ?? null,
       finalPromptStatus: finalPromptRuntime?.status ?? null,
@@ -313,7 +313,7 @@ window.vscodeApi = acquireVsCodeApi();
    */
   public async updateSessionRestored(
     fileName: string,
-    prompts: any[],
+    steps: any[],
     results: any[],
     executionState: string,
     currentIndex: number,
@@ -328,7 +328,7 @@ window.vscodeApi = acquireVsCodeApi();
     this.postMessage({
       type: MESSAGE_TYPES.SESSION_RESTORED,
       fileName,
-      prompts,
+      steps,
       results,
       executionState,
       currentIndex,
@@ -508,13 +508,13 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   public updatePromptsExtended(
-    prompts: any[],
+    steps: any[],
     finalPrompt?: WorkflowStep | null,
     executionState?: string
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.PROMPTS_EXTENDED,
-      prompts,
+      steps,
       finalPrompt: finalPrompt ?? null,
       ...(executionState !== undefined ? { executionState } : {}),
     });
@@ -524,23 +524,23 @@ window.vscodeApi = acquireVsCodeApi();
    * Called when a CLI-managed workflow dynamically extends its queue.
    * Includes the workflowId so the webview can ignore updates for inactive workflows.
    */
-  public notifyCliPromptsExtended(workflowId: string, prompts: any[]): void {
+  public notifyCliPromptsExtended(workflowId: string, steps: any[]): void {
     this.postMessage({
       type: MESSAGE_TYPES.PROMPTS_EXTENDED,
       workflowId,
-      prompts,
+      steps,
     });
   }
 
   public updatePromptDeleted(
     fileName: string,
-    prompts: any[],
+    steps: any[],
     finalPrompt?: WorkflowStep | null
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.PROMPT_DELETED,
       fileName,
-      prompts,
+      steps,
       finalPrompt: finalPrompt ?? null,
     });
   }
@@ -600,28 +600,28 @@ window.vscodeApi = acquireVsCodeApi();
    * Only resets prompt statuses and execution state — does not touch CLI outputs
    * or run history so the output panel and run dropdown are preserved.
    */
-  public notifyWorkflowStateReset(prompts: any[]): void {
+  public notifyWorkflowStateReset(steps: any[]): void {
     this.postMessage({
       type: MESSAGE_TYPES.RESET_WORKFLOW_STATE,
-      prompts,
+      steps,
     });
   }
 
   public notifyStartPositionSet(
-    prompts: WorkflowStep[],
+    steps: WorkflowStep[],
     currentIndex: number
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.SET_START_POSITION_CONFIRMED,
-      prompts,
+      steps,
       currentIndex,
     });
   }
 
-  public notifyPromptsReordered(prompts: WorkflowStep[]): void {
+  public notifyPromptsReordered(steps: WorkflowStep[]): void {
     this.postMessage({
       type: MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED,
-      prompts,
+      steps,
     });
   }
 

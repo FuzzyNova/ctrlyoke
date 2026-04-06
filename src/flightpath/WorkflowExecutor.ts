@@ -120,7 +120,6 @@ export interface WorkflowExecutionContext {
 
 type ExecutionTarget = WorkflowAttemptTarget;
 
-
 /**
  * Drives the sequential execution loop for a FlightPath workflow.
  *
@@ -137,7 +136,6 @@ export class WorkflowExecutor {
   private pendingResponseResolver: ((text: string) => void) | null = null;
   private pendingResponseText: string | null = null;
   private isWaitingForResponse: boolean = false;
-
 
   constructor(
     private readonly promptQueue: PromptQueue,
@@ -225,7 +223,7 @@ export class WorkflowExecutor {
             kind: FINAL_PROMPT_PHASES.QUEUE,
             stepIndex: state.currentIndex,
           };
-          const prompt = state.prompts[state.currentIndex];
+          const prompt = state.steps[state.currentIndex];
 
           let beforeState: RawWorkspaceState | undefined;
           if (
@@ -295,7 +293,7 @@ export class WorkflowExecutor {
 
       const finalPromptRuntime = this.promptQueue.getFinalPromptRuntime();
       const loopIndex = finalPromptRuntime?.loopCount ?? 0;
-      const queueSizeBefore = this.promptQueue.getState().prompts.length;
+      const queueSizeBefore = this.promptQueue.getState().steps.length;
 
       await this.setFinalPromptRuntime(context, {
         phase: FINAL_PROMPT_PHASES.FINAL_PROMPT,
@@ -321,7 +319,10 @@ export class WorkflowExecutor {
         }
       }
 
-      const finalTarget: ExecutionTarget = { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex };
+      const finalTarget: ExecutionTarget = {
+        kind: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+        loopIndex,
+      };
       const shouldContinue = await this.executeSinglePrompt(
         finalTarget,
         currentFinalPrompt,
@@ -357,7 +358,7 @@ export class WorkflowExecutor {
         break;
       }
 
-      const queueSizeAfter = this.promptQueue.getState().prompts.length;
+      const queueSizeAfter = this.promptQueue.getState().steps.length;
       if (queueSizeAfter > queueSizeBefore) {
         const hitQueueSizeLimit = await this.checkQueueSizeLimit(
           context.dynamicQueueConfig,
@@ -433,9 +434,7 @@ export class WorkflowExecutor {
     // Route script steps directly — no AI harness interaction needed
     if (isScriptStep(step)) {
       const stepIndex =
-        target.kind === FINAL_PROMPT_PHASES.QUEUE
-          ? target.stepIndex
-          : -1;
+        target.kind === FINAL_PROMPT_PHASES.QUEUE ? target.stepIndex : -1;
       return this.executeScriptStep(step, stepIndex, context, target);
     }
 
@@ -497,7 +496,7 @@ export class WorkflowExecutor {
     const sendPromptIndex =
       target.kind === FINAL_PROMPT_PHASES.QUEUE
         ? target.stepIndex
-        : state.prompts.length;
+        : state.steps.length;
 
     const result = await this.executeWithStreaming(
       prompt,
@@ -508,7 +507,7 @@ export class WorkflowExecutor {
       0,
       {
         promptIndex: sendPromptIndex,
-        allPrompts: state.prompts,
+        allPrompts: state.steps,
         filePath: context.currentPromptFilePath,
         workflowName: this.promptQueue.getState().workflowName,
         instanceId: context.instanceId,
@@ -550,7 +549,7 @@ export class WorkflowExecutor {
 
     // Store response text for priorContext injection in subsequent prompts.
     if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
-      // Queue prompts: store on _runtime for "all" / "previous" / array-index access
+      // Queue steps: store on _runtime for "all" / "previous" / array-index access
       if (!prompt._runtime) {
         prompt._runtime = { startedAt: Date.now() };
       }
@@ -688,7 +687,12 @@ export class WorkflowExecutor {
         : ConfigurationUtils.getScriptTimeoutMs();
 
     const evalResult = await this.endConditionEvaluator.evaluateCondition(
-      { script: step.script, returns: "0", compareSource: "exitCode", timeout: timeout },
+      {
+        script: step.script,
+        returns: "0",
+        compareSource: "exitCode",
+        timeout: timeout,
+      },
       context.workspaceFolderPath,
       this.promptQueue.getWorkflowFile().vars
     );
@@ -720,7 +724,10 @@ export class WorkflowExecutor {
     };
 
     if (context.dashboardProvider && legacyStepIndex >= 0) {
-      context.dashboardProvider.updateCliOutput(legacyStepIndex, scriptCliOutput);
+      context.dashboardProvider.updateCliOutput(
+        legacyStepIndex,
+        scriptCliOutput
+      );
     }
 
     // Capture for output history replay (same pattern as updateDashboardWithResponse)
@@ -735,7 +742,9 @@ export class WorkflowExecutor {
           this.toOutputExecutionTarget(target),
           [scriptCliOutput]
         )
-        .catch((err) => Log.warn("Failed to save script step output to history:", err));
+        .catch((err) =>
+          Log.warn("Failed to save script step output to history:", err)
+        );
     }
 
     if (evalResult.timeout) {
@@ -756,16 +765,24 @@ export class WorkflowExecutor {
         : STEP_STATUS.FAILED;
 
     if (!succeeded && !continueOnFailure) {
-      Log.error(`Script step failed (exit code ${evalResult.exitCode}): ${stepLabel}`);
+      Log.error(
+        `Script step failed (exit code ${evalResult.exitCode}): ${stepLabel}`
+      );
     } else if (!succeeded && continueOnFailure) {
-      Log.warn(`Script step failed but continueOnFailure=true, continuing: ${stepLabel}`);
+      Log.warn(
+        `Script step failed but continueOnFailure=true, continuing: ${stepLabel}`
+      );
     }
 
     // Complete or fail the attempt in the state machine
     if (shouldContinue) {
       runtime.completeAttempt(target, attemptIndex);
     } else {
-      runtime.failAttempt(target, attemptIndex, `Script exited with code ${evalResult.exitCode}`);
+      runtime.failAttempt(
+        target,
+        attemptIndex,
+        `Script exited with code ${evalResult.exitCode}`
+      );
     }
 
     // Update dashboard step status
@@ -928,7 +945,7 @@ export class WorkflowExecutor {
       timestamp: timestampMs ?? Date.now(),
     };
 
-    if(context.historyFilePath && context.outputHistoryManager) {
+    if (context.historyFilePath && context.outputHistoryManager) {
       await context.outputHistoryManager
         .appendStatusMessage(
           context.historyFilePath,
@@ -1018,7 +1035,7 @@ export class WorkflowExecutor {
 
     const retryContext = {
       integration,
-      totalPrompts: this.promptQueue.getState().prompts.length,
+      totalPrompts: this.promptQueue.getState().steps.length,
       workspaceFolderPath: context.workspaceFolderPath,
       currentPromptFilePath: context.currentPromptFilePath,
       runtime: this.promptQueue.getRuntimeStateMachine(),
@@ -1340,7 +1357,7 @@ export class WorkflowExecutor {
         retryAttemptIndex,
         {
           promptIndex: currentIndex,
-          allPrompts: state.prompts,
+          allPrompts: state.steps,
           filePath: context.currentPromptFilePath,
           workflowName: this.promptQueue.getState().workflowName,
           instanceId: context.instanceId,
@@ -1350,8 +1367,9 @@ export class WorkflowExecutor {
           workingFilePersistence: this.promptQueue,
           getFinalPromptResponseTexts: () =>
             this.promptQueue.getFinalPromptResponseTexts(),
-          finalPromptSessionId: workflowFile.finalStep?._runtime
-            ?.sessionId as string | undefined,
+          finalPromptSessionId: workflowFile.finalStep?._runtime?.sessionId as
+            | string
+            | undefined,
         }
       );
 
@@ -1558,7 +1576,10 @@ export class WorkflowExecutor {
       };
 
       if (context.dashboardProvider && legacyStepIndex >= 0) {
-        context.dashboardProvider.updateCliOutput(legacyStepIndex, stoppedOutput);
+        context.dashboardProvider.updateCliOutput(
+          legacyStepIndex,
+          stoppedOutput
+        );
       } else if (
         context.dashboardProvider &&
         target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT

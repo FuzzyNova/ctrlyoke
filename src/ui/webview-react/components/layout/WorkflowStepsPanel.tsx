@@ -118,9 +118,13 @@ export const WorkflowStepsPanel: React.FC<{
   panelBarOrientation?: "horizontal" | "vertical";
   onRequestSidebar?: () => void;
   onRequestClose?: () => void;
-}> = ({ panelBarOrientation = "vertical", onRequestSidebar, onRequestClose }) => {
+}> = ({
+  panelBarOrientation = "vertical",
+  onRequestSidebar,
+  onRequestClose,
+}) => {
   const {
-    prompts,
+    steps: prompts,
     currentStep,
     executionState,
     retryStates,
@@ -132,7 +136,7 @@ export const WorkflowStepsPanel: React.FC<{
     finalPromptPhase,
   } = useWorkflowStore();
   const {
-    promptsCollapsed,
+    stepsCollapsed: promptsCollapsed,
     togglePromptsCollapse,
     isViewingHistory,
     loadedWorkflows,
@@ -165,7 +169,13 @@ export const WorkflowStepsPanel: React.FC<{
   // For pending prompts, compute from the three-tier precedence (prompt →
   // workflow → global) so the display stays live and reflects any changes.
   const getPromptHarnessModel = (prompt: (typeof prompts)[0]) => {
-    if (isScriptStep(prompt)) return { harnessLabel: undefined, harnessIsDefault: true, modelLabel: undefined, modelIsDefault: true };
+    if (isScriptStep(prompt))
+      return {
+        harnessLabel: undefined,
+        harnessIsDefault: true,
+        modelLabel: undefined,
+        modelIsDefault: true,
+      };
     if (prompt._runtime?.harness ?? prompt._runtime?.model) {
       const h = prompt._runtime!.harness;
       const m = prompt._runtime!.model;
@@ -358,9 +368,7 @@ export const WorkflowStepsPanel: React.FC<{
     const harnessIsDefault = finalStep.harness === undefined;
     const modelIsDefault = finalStep.model === undefined;
     const effectiveHarness =
-      finalStep.harness ??
-      workflowProperties.harness ??
-      globalSettings.harness;
+      finalStep.harness ?? workflowProperties.harness ?? globalSettings.harness;
     const effectiveModel =
       finalStep.model ?? workflowProperties.model ?? globalSettings.model;
     return {
@@ -376,7 +384,11 @@ export const WorkflowStepsPanel: React.FC<{
   // Get the latest CLI output for the current final prompt loop
   const finalPromptLatestOutput = (() => {
     const cliEntries = liveOrderedEntries.filter(
-      (e) => e.kind === OUTPUT_HISTORY_KINDS.CLI && "target" in e && (e as any).target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT && (e as any).target.loopIndex === finalPromptLoopCount
+      (e) =>
+        e.kind === OUTPUT_HISTORY_KINDS.CLI &&
+        "target" in e &&
+        (e as any).target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT &&
+        (e as any).target.loopIndex === finalPromptLoopCount
     );
     if (cliEntries.length === 0) return null;
     return (cliEntries[cliEntries.length - 1] as any).cliOutput;
@@ -397,10 +409,10 @@ export const WorkflowStepsPanel: React.FC<{
   // Hidden in CLI watch mode (read-only).
   // Also check prompt statuses directly — after an undo, executionState may
   // still be IDLE even though prompts were restored to a completed/error state.
-  const hasCompletedPrompts = prompts.some(
-    (p) => isScriptStep(p)
-      ? (p._runtime?.completedAt !== undefined)
-      : (p.status && p.status !== STEP_STATUS.PENDING)
+  const hasCompletedPrompts = prompts.some((p) =>
+    isScriptStep(p)
+      ? p._runtime?.completedAt !== undefined
+      : p.status && p.status !== STEP_STATUS.PENDING
   );
   const canClearState =
     !isCLIManaged &&
@@ -420,13 +432,22 @@ export const WorkflowStepsPanel: React.FC<{
 
   // Get latest output for a step (history-aware)
   const getLatestOutput = (index: number) => {
-    const cliEntries = isViewingHistory && historyOutputs
-      ? historyOutputs.orderedEntries.filter(
-          (e) => e.kind === OUTPUT_HISTORY_KINDS.CLI && "target" in e && e.target.kind === FINAL_PROMPT_PHASES.QUEUE && (e.target as any).stepIndex === index
-        )
-      : liveOrderedEntries.filter(
-          (e) => e.kind === OUTPUT_HISTORY_KINDS.CLI && "target" in e && (e as any).target.kind === FINAL_PROMPT_PHASES.QUEUE && (e as any).target.stepIndex === index
-        );
+    const cliEntries =
+      isViewingHistory && historyOutputs
+        ? historyOutputs.orderedEntries.filter(
+            (e) =>
+              e.kind === OUTPUT_HISTORY_KINDS.CLI &&
+              "target" in e &&
+              e.target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+              (e.target as any).stepIndex === index
+          )
+        : liveOrderedEntries.filter(
+            (e) =>
+              e.kind === OUTPUT_HISTORY_KINDS.CLI &&
+              "target" in e &&
+              (e as any).target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+              (e as any).target.stepIndex === index
+          );
     if (cliEntries.length === 0) return null;
     return (cliEntries[cliEntries.length - 1] as any).cliOutput as any;
   };
@@ -514,7 +535,7 @@ export const WorkflowStepsPanel: React.FC<{
 
       // Send positions within the current pending slice (0-based), not original
       // absolute indices. The stable IDs (e.g. "prompt-pending-4") encode the
-      // original absolute index, but state.prompts may have been reordered by a
+      // original absolute index, but state.steps may have been reordered by a
       // prior drag — so the backend must index into the pending slice it holds,
       // not into the full prompts array by original position.
       const newPendingOrder = newSortableIds.map((id) =>
@@ -563,10 +584,14 @@ export const WorkflowStepsPanel: React.FC<{
         role={isMobileMode ? undefined : "button"}
         aria-label={isMobileMode ? undefined : "Collapse steps"}
         tabIndex={isMobileMode ? undefined : 0}
-        onKeyDown={isMobileMode ? undefined : (e) => e.key === "Enter" && handleToggle()}
+        onKeyDown={
+          isMobileMode ? undefined : (e) => e.key === "Enter" && handleToggle()
+        }
       >
         {/* Left: collapse chevron (desktop) OR collapse-to-sidebar arrow (mobile fullwidth) */}
-        {!isMobileMode && <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />}
+        {!isMobileMode && (
+          <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
+        )}
         {onRequestSidebar && (
           <button
             className="flex items-center justify-center w-[20px] h-[20px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"

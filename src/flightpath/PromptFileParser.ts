@@ -2,7 +2,13 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import Ajv from "ajv";
 import * as yaml from "js-yaml";
-import { PromptFile, PromptStep, WorkflowStep, ScriptStep, isScriptStep } from "../types/FlightPathTypes";
+import {
+  PromptFile,
+  PromptStep,
+  WorkflowStep,
+  ScriptStep,
+  isScriptStep,
+} from "../types/FlightPathTypes";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
@@ -129,7 +135,7 @@ export class PromptFileParser {
       }
 
       return {
-        prompts: [
+        steps: [
           {
             prompt: promptText,
             // Properties omitted will be undefined - global setting used at execution time
@@ -342,7 +348,7 @@ export class PromptFileParser {
 
       // Build PromptFile with workflow-level properties and single prompt
       const promptFile: PromptFile = {
-        prompts: [this.buildPromptStep(resolvedPrompt, parsed)],
+        steps: [this.buildPromptStep(resolvedPrompt, parsed)],
       };
 
       // Copy workflow-level properties (if present)
@@ -352,9 +358,9 @@ export class PromptFileParser {
     }
 
     // Handle multiple prompts format
-    if (parsed.prompts && Array.isArray(parsed.prompts)) {
+    if (parsed.steps && Array.isArray(parsed.steps)) {
       const resolvedPrompts: WorkflowStep[] = await Promise.all(
-        parsed.prompts.map(async (item: any) => {
+        parsed.steps.map(async (item: any) => {
           if (item.type === "script") {
             return this.buildScriptStep(item);
           }
@@ -368,7 +374,7 @@ export class PromptFileParser {
 
       // Build PromptFile with workflow-level properties and prompts array
       const promptFile: PromptFile = {
-        prompts: resolvedPrompts,
+        steps: resolvedPrompts,
       };
 
       // Support both new "finalStep" and legacy "finalPrompt" field names

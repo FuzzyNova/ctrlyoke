@@ -29,7 +29,7 @@ export interface IDashboardProvider {
   /** Update the dashboard when a workflow file is selected/loaded. */
   updateFileSelected(
     fileName: string,
-    prompts: any[],
+    steps: any[],
     workflowName?: string,
     finalPrompt?: PromptStep | null,
     finalPromptRuntime?: {
@@ -42,7 +42,7 @@ export interface IDashboardProvider {
   /** Update the dashboard when a session is restored from a working file. */
   updateSessionRestored(
     fileName: string,
-    prompts: any[],
+    steps: any[],
     results: any[],
     executionState: string,
     currentIndex: number,
@@ -65,7 +65,7 @@ export interface IDashboardProvider {
   ): void;
 
   /** Notify that a CLI-managed workflow dynamically extended its queue. */
-  notifyCliPromptsExtended(workflowId: string, prompts: any[]): void;
+  notifyCliPromptsExtended(workflowId: string, steps: any[]): void;
 
   // ── Harness availability ──────────────────────────────────────────────────
 

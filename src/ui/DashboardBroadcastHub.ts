@@ -21,7 +21,9 @@ export type DashboardClient = IDashboardProvider & Partial<IDashboardSink>;
  * The VS Code sidebar is the first client today. Hosted browser clients can be
  * added later without changing orchestrator or workflow-instance call sites.
  */
-export class DashboardBroadcastHub implements IDashboardProvider, IDashboardSink {
+export class DashboardBroadcastHub
+  implements IDashboardProvider, IDashboardSink
+{
   private readonly clients: DashboardClient[] = [];
 
   addClient(client: DashboardClient): void {
@@ -63,7 +65,7 @@ export class DashboardBroadcastHub implements IDashboardProvider, IDashboardSink
 
   async updateFileSelected(
     fileName: string,
-    prompts: any[],
+    steps: any[],
     workflowName?: string,
     finalPrompt?: WorkflowStep | null,
     finalPromptRuntime?: {
@@ -75,7 +77,7 @@ export class DashboardBroadcastHub implements IDashboardProvider, IDashboardSink
     for (const client of this.clients) {
       await client.updateFileSelected?.(
         fileName,
-        prompts,
+        steps,
         workflowName,
         finalPrompt,
         finalPromptRuntime
@@ -85,7 +87,7 @@ export class DashboardBroadcastHub implements IDashboardProvider, IDashboardSink
 
   async updateSessionRestored(
     fileName: string,
-    prompts: any[],
+    steps: any[],
     results: any[],
     executionState: string,
     currentIndex: number,
@@ -100,7 +102,7 @@ export class DashboardBroadcastHub implements IDashboardProvider, IDashboardSink
     for (const client of this.clients) {
       await client.updateSessionRestored?.(
         fileName,
-        prompts,
+        steps,
         results,
         executionState,
         currentIndex,
@@ -127,9 +129,9 @@ export class DashboardBroadcastHub implements IDashboardProvider, IDashboardSink
     }
   }
 
-  notifyCliPromptsExtended(workflowId: string, prompts: any[]): void {
+  notifyCliPromptsExtended(workflowId: string, steps: any[]): void {
     for (const client of this.clients) {
-      client.notifyCliPromptsExtended(workflowId, prompts);
+      client.notifyCliPromptsExtended(workflowId, steps);
     }
   }
 
@@ -245,22 +247,22 @@ export class DashboardBroadcastHub implements IDashboardProvider, IDashboardSink
   }
 
   updatePromptsExtended(
-    prompts: any[],
+    steps: any[],
     finalPrompt?: WorkflowStep | null,
     executionState?: string
   ): void {
     for (const client of this.clients) {
-      client.updatePromptsExtended?.(prompts, finalPrompt, executionState);
+      client.updatePromptsExtended?.(steps, finalPrompt, executionState);
     }
   }
 
   updatePromptDeleted(
     fileName: string,
-    prompts: any[],
+    steps: any[],
     finalPrompt?: WorkflowStep | null
   ): void {
     for (const client of this.clients) {
-      client.updatePromptDeleted?.(fileName, prompts, finalPrompt);
+      client.updatePromptDeleted?.(fileName, steps, finalPrompt);
     }
   }
 
@@ -301,21 +303,21 @@ export class DashboardBroadcastHub implements IDashboardProvider, IDashboardSink
     }
   }
 
-  notifyWorkflowStateReset(prompts: any[]): void {
+  notifyWorkflowStateReset(steps: any[]): void {
     for (const client of this.clients) {
-      client.notifyWorkflowStateReset?.(prompts);
+      client.notifyWorkflowStateReset?.(steps);
     }
   }
 
-  notifyStartPositionSet(prompts: WorkflowStep[], currentIndex: number): void {
+  notifyStartPositionSet(steps: WorkflowStep[], currentIndex: number): void {
     for (const client of this.clients) {
-      client.notifyStartPositionSet?.(prompts, currentIndex);
+      client.notifyStartPositionSet?.(steps, currentIndex);
     }
   }
 
-  notifyPromptsReordered(prompts: WorkflowStep[]): void {
+  notifyPromptsReordered(steps: WorkflowStep[]): void {
     for (const client of this.clients) {
-      client.notifyPromptsReordered?.(prompts);
+      client.notifyPromptsReordered?.(steps);
     }
   }
 

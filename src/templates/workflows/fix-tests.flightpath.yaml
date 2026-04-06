@@ -3,7 +3,7 @@ _templateMeta:
   description: Run tests and fix failures with retry
 
 # prompts
-prompts:
+steps:
   - name: fix-tests
     prompt: |
       There are currently failing tests. Run {testCommand} to see which tests are failing, then fix them.

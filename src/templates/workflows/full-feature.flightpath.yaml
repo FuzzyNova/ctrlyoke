@@ -3,7 +3,7 @@ _templateMeta:
   description: "Plan → Implement → Review → Docs → Commit"
 
 # prompts
-prompts:
+steps:
   - name: plan
     prompt: |
       {featureDescription}

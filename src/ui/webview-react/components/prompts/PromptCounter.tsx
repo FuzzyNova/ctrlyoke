@@ -18,7 +18,7 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
   className = "",
   narrow = false,
 }) => {
-  const { prompts, totalSteps, executionState } = useWorkflowStore();
+  const { steps: prompts, totalSteps, executionState } = useWorkflowStore();
 
   // Calculate completed count based on prompt statuses
   const completedCount = prompts.filter(

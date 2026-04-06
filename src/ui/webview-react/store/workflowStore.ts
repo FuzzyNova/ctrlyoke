@@ -84,7 +84,7 @@ interface WorkflowState {
   // Core workflow data
   fileName: string | null;
   workflowName: string | null;
-  prompts: WorkflowStep[];
+  steps: WorkflowStep[];
   executionState: ExecutionState;
   currentStep: number;
   totalSteps: number;
@@ -135,7 +135,7 @@ interface WorkflowActions {
   // Setters
   setFileName: (fileName: string | null) => void;
   setWorkflowName: (name: string | null) => void;
-  setPrompts: (prompts: WorkflowStep[]) => void;
+  setPrompts: (steps: WorkflowStep[]) => void;
   updatePrompt: (index: number, updates: Partial<PromptStep>) => void;
   setExecutionState: (state: ExecutionState) => void;
   setCurrentStep: (step: number) => void;
@@ -178,14 +178,14 @@ interface WorkflowActions {
   // Reset execution state only — preserves all CLI outputs and run history.
   // Resets executionState→IDLE, currentStep→0, and all prompt statuses→PENDING.
   // Used by "Clear workflow state" so users can edit prompts without losing output.
-  resetExecutionState: (prompts: WorkflowStep[]) => void;
+  resetExecutionState: (steps: WorkflowStep[]) => void;
 
   // Partial runtime state clear (for append-continuation runs)
   clearRuntimeStateFromStep: (startStep: number) => void;
 
   // Apply a start-position change — updates prompts, currentStep, totalSteps, and resets execution state to IDLE.
   applyStartPositionChange: (
-    prompts: WorkflowStep[],
+    steps: WorkflowStep[],
     newCurrentStep: number
   ) => void;
 
@@ -198,7 +198,7 @@ interface WorkflowActions {
   loadWorkflow: (data: {
     fileName: string;
     workflowName?: string;
-    prompts: WorkflowStep[];
+    steps: WorkflowStep[];
     executionState?: ExecutionState;
     currentStep?: number;
     results?: Array<{ status?: StepStatus }>;
@@ -259,7 +259,7 @@ interface WorkflowSelectors {
 const initialState: WorkflowState = {
   fileName: null,
   workflowName: null,
-  prompts: [],
+  steps: [],
   executionState: EXECUTION_STATES.IDLE,
   currentStep: 0,
   totalSteps: 0,
@@ -280,12 +280,21 @@ const initialState: WorkflowState = {
   undoWorkflowProperties: {},
 };
 
-function targetsEqual(a: OutputExecutionTarget, b: OutputExecutionTarget): boolean {
+function targetsEqual(
+  a: OutputExecutionTarget,
+  b: OutputExecutionTarget
+): boolean {
   if (a.kind !== b.kind) return false;
-  if (a.kind === FINAL_PROMPT_PHASES.QUEUE && b.kind === FINAL_PROMPT_PHASES.QUEUE) {
+  if (
+    a.kind === FINAL_PROMPT_PHASES.QUEUE &&
+    b.kind === FINAL_PROMPT_PHASES.QUEUE
+  ) {
     return a.stepIndex === b.stepIndex;
   }
-  if (a.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT && b.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+  if (
+    a.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT &&
+    b.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
+  ) {
     return a.loopIndex === b.loopIndex;
   }
   return false;
@@ -306,16 +315,16 @@ export const useWorkflowStore = create<
 
       setWorkflowName: (workflowName) => set({ workflowName }),
 
-      setPrompts: (prompts) => {
+      setPrompts: (steps) => {
         set({
-          prompts,
-          totalSteps: prompts.length,
+          steps,
+          totalSteps: steps.length,
         });
       },
 
       updatePrompt: (index, updates) => {
         set((state) => ({
-          prompts: state.prompts.map((p, i) =>
+          steps: state.steps.map((p, i) =>
             i === index ? ({ ...p, ...updates } as WorkflowStep) : p
           ),
         }));
@@ -340,10 +349,12 @@ export const useWorkflowStore = create<
                 finalPromptPhase: null,
                 finalPromptStreamingChunks: {},
                 liveOrderedEntries: state.liveOrderedEntries.filter(
-                  (e) => "target" in e && e.target.kind !== FINAL_PROMPT_PHASES.FINAL_PROMPT
+                  (e) =>
+                    "target" in e &&
+                    e.target.kind !== FINAL_PROMPT_PHASES.FINAL_PROMPT
                 ),
               }),
-          prompts: state.prompts,
+          steps: state.steps,
         })),
 
       setFinalPromptStatus: (status, loopCount, phase) =>
@@ -368,14 +379,21 @@ export const useWorkflowStore = create<
                 (e): e is OrderedCliHistoryEntry =>
                   e.kind === "cli" &&
                   "target" in e &&
-                  targetsEqual((e as OrderedCliHistoryEntry).target, cliEntry.target) &&
-                  (e as OrderedCliHistoryEntry).attemptIndex === cliEntry.attemptIndex &&
+                  targetsEqual(
+                    (e as OrderedCliHistoryEntry).target,
+                    cliEntry.target
+                  ) &&
+                  (e as OrderedCliHistoryEntry).attemptIndex ===
+                    cliEntry.attemptIndex &&
                   (e as OrderedCliHistoryEntry).cliOutput.isStreaming === true
               );
               if (streamingIdx >= 0) {
                 const newEntries = [...state.liveOrderedEntries];
                 newEntries[streamingIdx] = entry;
-                return { liveOrderedEntries: newEntries, liveSequence: state.liveSequence + 1 };
+                return {
+                  liveOrderedEntries: newEntries,
+                  liveSequence: state.liveSequence + 1,
+                };
               }
             }
             return {
@@ -385,7 +403,8 @@ export const useWorkflowStore = create<
           })
         ),
 
-      clearLiveEntries: () => withUndoPause(() => set({ liveOrderedEntries: [], liveSequence: 0 })),
+      clearLiveEntries: () =>
+        withUndoPause(() => set({ liveOrderedEntries: [], liveSequence: 0 })),
 
       appendStreamingChunk: (stepIndex, chunk) =>
         withUndoPause(() =>
@@ -410,35 +429,55 @@ export const useWorkflowStore = create<
       appendStreamingEvents: (stepIndex, events) =>
         withUndoPause(() =>
           set((state) => {
-            const target: OutputExecutionTarget = { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex };
+            const target: OutputExecutionTarget = {
+              kind: FINAL_PROMPT_PHASES.QUEUE,
+              stepIndex,
+            };
             const existingIdx = state.liveOrderedEntries.findIndex(
               (e): e is OrderedCliHistoryEntry =>
                 e.kind === "cli" &&
                 "target" in e &&
-                (e as OrderedCliHistoryEntry).target.kind === FINAL_PROMPT_PHASES.QUEUE &&
-                ((e as OrderedCliHistoryEntry).target as { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }).stepIndex === stepIndex &&
+                (e as OrderedCliHistoryEntry).target.kind ===
+                  FINAL_PROMPT_PHASES.QUEUE &&
+                (
+                  (e as OrderedCliHistoryEntry).target as {
+                    kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                    stepIndex: number;
+                  }
+                ).stepIndex === stepIndex &&
                 (e as OrderedCliHistoryEntry).cliOutput.isStreaming === true &&
                 (e as OrderedCliHistoryEntry).attemptIndex === 0
             );
             if (existingIdx >= 0) {
-              const existing = state.liveOrderedEntries[existingIdx] as OrderedCliHistoryEntry;
+              const existing = state.liveOrderedEntries[
+                existingIdx
+              ] as OrderedCliHistoryEntry;
               const existingStructured = existing.cliOutput.structured as any;
               const updatedOutput: CliOutput = {
                 ...existing.cliOutput,
                 structured: {
                   ...existingStructured,
-                  events: mergeStreamingEvents(existingStructured?.events || [], events),
+                  events: mergeStreamingEvents(
+                    existingStructured?.events || [],
+                    events
+                  ),
                   metadata: existingStructured?.metadata || {},
                 },
               };
               const newEntries = [...state.liveOrderedEntries];
-              newEntries[existingIdx] = { ...existing, cliOutput: updatedOutput };
+              newEntries[existingIdx] = {
+                ...existing,
+                cliOutput: updatedOutput,
+              };
               return { liveOrderedEntries: newEntries };
             }
             const streamingOutput: CliOutput = {
               prompt: "",
               response: "",
-              structured: { events: mergeStreamingEvents([], events), metadata: {} },
+              structured: {
+                events: mergeStreamingEvents([], events),
+                metadata: {},
+              },
               elapsed: 0,
               isStreaming: true,
               timestampMs: Date.now(),
@@ -459,7 +498,7 @@ export const useWorkflowStore = create<
           })
         ),
 
-      appendFinalPromptStreamingChunk:(loopIndex, chunk) =>
+      appendFinalPromptStreamingChunk: (loopIndex, chunk) =>
         withUndoPause(() =>
           set((state) => ({
             finalPromptStreamingChunks: {
@@ -473,35 +512,55 @@ export const useWorkflowStore = create<
       appendFinalPromptStreamingEvents: (loopIndex, events) =>
         withUndoPause(() =>
           set((state) => {
-            const target: OutputExecutionTarget = { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex };
+            const target: OutputExecutionTarget = {
+              kind: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+              loopIndex,
+            };
             const existingIdx = state.liveOrderedEntries.findIndex(
               (e): e is OrderedCliHistoryEntry =>
                 e.kind === "cli" &&
                 "target" in e &&
-                (e as OrderedCliHistoryEntry).target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT &&
-                ((e as OrderedCliHistoryEntry).target as { kind: typeof FINAL_PROMPT_PHASES.FINAL_PROMPT; loopIndex: number }).loopIndex === loopIndex &&
+                (e as OrderedCliHistoryEntry).target.kind ===
+                  FINAL_PROMPT_PHASES.FINAL_PROMPT &&
+                (
+                  (e as OrderedCliHistoryEntry).target as {
+                    kind: typeof FINAL_PROMPT_PHASES.FINAL_PROMPT;
+                    loopIndex: number;
+                  }
+                ).loopIndex === loopIndex &&
                 (e as OrderedCliHistoryEntry).cliOutput.isStreaming === true &&
                 (e as OrderedCliHistoryEntry).attemptIndex === 0
             );
             if (existingIdx >= 0) {
-              const existing = state.liveOrderedEntries[existingIdx] as OrderedCliHistoryEntry;
+              const existing = state.liveOrderedEntries[
+                existingIdx
+              ] as OrderedCliHistoryEntry;
               const existingStructured = existing.cliOutput.structured as any;
               const updatedOutput: CliOutput = {
                 ...existing.cliOutput,
                 structured: {
                   ...existingStructured,
-                  events: mergeStreamingEvents(existingStructured?.events || [], events),
+                  events: mergeStreamingEvents(
+                    existingStructured?.events || [],
+                    events
+                  ),
                   metadata: existingStructured?.metadata || {},
                 },
               };
               const newEntries = [...state.liveOrderedEntries];
-              newEntries[existingIdx] = { ...existing, cliOutput: updatedOutput };
+              newEntries[existingIdx] = {
+                ...existing,
+                cliOutput: updatedOutput,
+              };
               return { liveOrderedEntries: newEntries };
             }
             const streamingOutput: CliOutput = {
               prompt: "",
               response: "",
-              structured: { events: mergeStreamingEvents([], events), metadata: {} },
+              structured: {
+                events: mergeStreamingEvents([], events),
+                metadata: {},
+              },
               elapsed: 0,
               isStreaming: true,
               timestampMs: Date.now(),
@@ -551,7 +610,7 @@ export const useWorkflowStore = create<
       setStepStatus: (stepIndex, status) =>
         withUndoPause(() =>
           set((state) => ({
-            prompts: state.prompts.map((p, i) =>
+            steps: state.steps.map((p, i) =>
               i === stepIndex ? ({ ...p, status } as WorkflowStep) : p
             ),
           }))
@@ -564,7 +623,7 @@ export const useWorkflowStore = create<
       loadWorkflow: ({
         fileName,
         workflowName,
-        prompts,
+        steps,
         executionState = EXECUTION_STATES.IDLE,
         currentStep = 0,
         results = [],
@@ -574,7 +633,7 @@ export const useWorkflowStore = create<
         finalPromptPhase = null,
       }) => {
         // Apply status from results to prompts
-        const promptsWithStatus = prompts.map((prompt, index) => ({
+        const promptsWithStatus = steps.map((prompt, index) => ({
           ...prompt,
           status: (results[index]?.status as StepStatus) || STEP_STATUS.PENDING,
         })) as WorkflowStep[];
@@ -583,10 +642,10 @@ export const useWorkflowStore = create<
           set({
             fileName,
             workflowName: workflowName ?? null,
-            prompts: promptsWithStatus,
+            steps: promptsWithStatus,
             executionState,
             currentStep,
-            totalSteps: prompts.length,
+            totalSteps: steps.length,
             finalStep,
             finalPromptStatus,
             finalPromptLoopCount,
@@ -639,13 +698,16 @@ export const useWorkflowStore = create<
       clearHistoryOutputs: () =>
         withUndoPause(() => set(() => ({ historyOutputs: null }))),
 
-      resetExecutionState: (prompts) => {
+      resetExecutionState: (steps) => {
         // Not wrapped in pause/resume — this is a user-initiated action.
         // partialize ensures only prompts/workflowName/finalPrompt are snapshotted,
         // so executionState/currentStep changes here are NOT recorded in undo history.
         set(() => ({
-          prompts: prompts.map((p) => ({ ...p, status: STEP_STATUS.PENDING })) as WorkflowStep[],
-          totalSteps: prompts.length,
+          steps: steps.map((p) => ({
+            ...p,
+            status: STEP_STATUS.PENDING,
+          })) as WorkflowStep[],
+          totalSteps: steps.length,
           executionState: EXECUTION_STATES.IDLE,
           currentStep: 0,
           finalPromptStatus: null,
@@ -676,11 +738,18 @@ export const useWorkflowStore = create<
 
             return {
               liveOrderedEntries: state.liveOrderedEntries.filter(
-                (e) => !("target" in e && (
-                  (e.target.kind === FINAL_PROMPT_PHASES.QUEUE &&
-                   (e.target as { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }).stepIndex >= startStep) ||
-                  e.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
-                ))
+                (e) =>
+                  !(
+                    "target" in e &&
+                    ((e.target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+                      (
+                        e.target as {
+                          kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                          stepIndex: number;
+                        }
+                      ).stepIndex >= startStep) ||
+                      e.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT)
+                  )
               ),
               retryStates: newRetryStates,
               streamingChunks: newStreamingChunks,
@@ -692,14 +761,14 @@ export const useWorkflowStore = create<
           })
         ),
 
-      applyStartPositionChange: (prompts, newCurrentStep) => {
+      applyStartPositionChange: (steps, newCurrentStep) => {
         // Not wrapped in pause/resume — this is a user-initiated action.
         // partialize ensures only prompts/workflowName/finalPrompt are snapshotted,
         // so currentStep/executionState changes here are NOT recorded in undo history.
         set(() => ({
-          prompts,
+          steps,
           currentStep: newCurrentStep,
-          totalSteps: prompts.length,
+          totalSteps: steps.length,
           executionState: EXECUTION_STATES.IDLE,
           finalPromptStatus: null,
         }));
@@ -716,9 +785,15 @@ export const useWorkflowStore = create<
             }
 
             const entriesToPromote = state.historyOutputs.orderedEntries.filter(
-              (e) => "target" in e &&
-                     e.target.kind === FINAL_PROMPT_PHASES.QUEUE &&
-                     (e.target as { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }).stepIndex < stepCount
+              (e) =>
+                "target" in e &&
+                e.target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+                (
+                  e.target as {
+                    kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                    stepIndex: number;
+                  }
+                ).stepIndex < stepCount
             );
 
             WebviewLog.debug(
@@ -729,10 +804,16 @@ export const useWorkflowStore = create<
               liveOrderedEntries: [
                 ...entriesToPromote,
                 ...state.liveOrderedEntries.filter(
-                  (e) => !("target" in e) ||
-                         e.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT ||
-                         (e.target.kind === FINAL_PROMPT_PHASES.QUEUE &&
-                          (e.target as { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }).stepIndex >= stepCount)
+                  (e) =>
+                    !("target" in e) ||
+                    e.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT ||
+                    (e.target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+                      (
+                        e.target as {
+                          kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                          stepIndex: number;
+                        }
+                      ).stepIndex >= stepCount)
                 ),
               ],
             };
@@ -840,7 +921,8 @@ export const useWorkflowStore = create<
           })
         ),
 
-      setUndoWorkflowProperties: (props) => set({ undoWorkflowProperties: props }),
+      setUndoWorkflowProperties: (props) =>
+        set({ undoWorkflowProperties: props }),
 
       syncIncomingWorkflowProperties: (props) =>
         withUndoPause(() => set({ undoWorkflowProperties: props })),
@@ -855,7 +937,12 @@ export const useWorkflowStore = create<
        * Used to determine whether Run button should say "Run" or "Run Next".
        */
       hasPendingPrompts: () => {
-        const { prompts, executionState, currentStep, totalSteps } = get();
+        const {
+          steps: prompts,
+          executionState,
+          currentStep,
+          totalSteps,
+        } = get();
 
         if (prompts.length === 0) {
           return false;
@@ -889,7 +976,7 @@ export const useWorkflowStore = create<
       },
 
       getCurrentPrompt: () => {
-        const { prompts, currentStep } = get();
+        const { steps: prompts, currentStep } = get();
         if (currentStep >= 0 && currentStep < prompts.length) {
           return prompts[currentStep];
         }
@@ -897,7 +984,7 @@ export const useWorkflowStore = create<
       },
 
       getPromptByIndex: (index) => {
-        const { prompts } = get();
+        const { steps: prompts } = get();
         if (index >= 0 && index < prompts.length) {
           return prompts[index];
         }
@@ -920,11 +1007,18 @@ export const useWorkflowStore = create<
       getStepOutputs: (stepIndex) => {
         const entries = get().liveOrderedEntries;
         return entries
-          .filter((e): e is OrderedCliHistoryEntry =>
-            e.kind === "cli" &&
-            "target" in e &&
-            (e as OrderedCliHistoryEntry).target.kind === FINAL_PROMPT_PHASES.QUEUE &&
-            ((e as OrderedCliHistoryEntry).target as { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }).stepIndex === stepIndex
+          .filter(
+            (e): e is OrderedCliHistoryEntry =>
+              e.kind === "cli" &&
+              "target" in e &&
+              (e as OrderedCliHistoryEntry).target.kind ===
+                FINAL_PROMPT_PHASES.QUEUE &&
+              (
+                (e as OrderedCliHistoryEntry).target as {
+                  kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                  stepIndex: number;
+                }
+              ).stepIndex === stepIndex
           )
           .map((e) => e.cliOutput);
       },
@@ -932,25 +1026,32 @@ export const useWorkflowStore = create<
       getLatestOutput: (stepIndex) => {
         const entries = get().liveOrderedEntries;
         const cliEntries = entries
-          .filter((e): e is OrderedCliHistoryEntry =>
-            e.kind === "cli" &&
-            "target" in e &&
-            (e as OrderedCliHistoryEntry).target.kind === FINAL_PROMPT_PHASES.QUEUE &&
-            ((e as OrderedCliHistoryEntry).target as { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }).stepIndex === stepIndex
+          .filter(
+            (e): e is OrderedCliHistoryEntry =>
+              e.kind === "cli" &&
+              "target" in e &&
+              (e as OrderedCliHistoryEntry).target.kind ===
+                FINAL_PROMPT_PHASES.QUEUE &&
+              (
+                (e as OrderedCliHistoryEntry).target as {
+                  kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                  stepIndex: number;
+                }
+              ).stepIndex === stepIndex
           )
           .map((e) => e.cliOutput);
         return cliEntries.length > 0 ? cliEntries[cliEntries.length - 1] : null;
       },
 
       isStepFailed: (stepIndex) => {
-        const { prompts } = get();
+        const { steps: prompts } = get();
         const step = prompts[stepIndex];
         if (!step || isScriptStep(step)) return false;
         return step.status === STEP_STATUS.FAILED;
       },
 
       getCompletedCount: () => {
-        const { prompts } = get();
+        const { steps: prompts } = get();
         return prompts.filter(
           (p) => !isScriptStep(p) && p.status === STEP_STATUS.COMPLETED
         ).length;
@@ -958,7 +1059,7 @@ export const useWorkflowStore = create<
     }),
     {
       partialize: (state): UndoableWorkflowState => ({
-        prompts: state.prompts,
+        steps: state.steps,
         workflowName: state.workflowName,
         finalStep: state.finalStep,
         currentStep: state.currentStep,
@@ -995,7 +1096,7 @@ export type {
 export type { WorkflowProperties } from "./settingsStore";
 
 export interface UndoableWorkflowState {
-  prompts: WorkflowStep[];
+  steps: WorkflowStep[];
   workflowName: string | null;
   finalStep: WorkflowStep | null;
   currentStep: number;

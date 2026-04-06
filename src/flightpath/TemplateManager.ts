@@ -301,7 +301,7 @@ export class TemplateManager {
   getBlankTemplateContent(): string {
     return JSON.stringify(
       {
-        prompts: [{ prompt: "" }, { prompt: "" }],
+        steps: [{ prompt: "" }, { prompt: "" }],
       },
       null,
       2
@@ -460,7 +460,7 @@ export class TemplateManager {
           },
         },
       },
-      prompts: [
+      steps: [
         {
           name: "plan",
           prompt:

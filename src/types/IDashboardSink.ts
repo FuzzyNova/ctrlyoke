@@ -1,7 +1,4 @@
-import type {
-  CliEvent,
-  UndoExecutionTarget,
-} from "./WebviewMessageTypes";
+import type { CliEvent, UndoExecutionTarget } from "./WebviewMessageTypes";
 import type { WorkflowStep } from "./FlightPathTypes";
 import type {
   FinalPromptPhase,
@@ -23,7 +20,7 @@ import type { WorkspaceSnapshot } from "./OutputHistoryTypes";
 export interface IDashboardSink {
   updateFileSelected(
     fileName: string,
-    prompts: any[],
+    steps: any[],
     workflowName?: string,
     finalStep?: WorkflowStep | null,
     finalPromptRuntime?: {
@@ -35,7 +32,7 @@ export interface IDashboardSink {
 
   updateSessionRestored(
     fileName: string,
-    prompts: any[],
+    steps: any[],
     results: any[],
     executionState: string,
     currentIndex: number,
@@ -100,14 +97,14 @@ export interface IDashboardSink {
   ): void;
 
   updatePromptsExtended(
-    prompts: any[],
+    steps: any[],
     finalStep?: WorkflowStep | null,
     executionState?: string
   ): void;
 
   updatePromptDeleted(
     fileName: string,
-    prompts: any[],
+    steps: any[],
     finalStep?: WorkflowStep | null
   ): void;
 
@@ -125,11 +122,11 @@ export interface IDashboardSink {
 
   updateFinalPromptStreamingEvents(loopIndex: number, events: CliEvent[]): void;
 
-  notifyWorkflowStateReset(prompts: any[]): void;
+  notifyWorkflowStateReset(steps: any[]): void;
 
-  notifyStartPositionSet(prompts: WorkflowStep[], currentIndex: number): void;
+  notifyStartPositionSet(steps: WorkflowStep[], currentIndex: number): void;
 
-  notifyPromptsReordered(prompts: WorkflowStep[]): void;
+  notifyPromptsReordered(steps: WorkflowStep[]): void;
 
   /** Called after webview undo/redo to acknowledge the sync (no-op response needed; kept for extensibility). */
   notifyUndoRedoSynced(): void;

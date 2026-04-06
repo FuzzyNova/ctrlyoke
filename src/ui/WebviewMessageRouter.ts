@@ -243,7 +243,7 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.UNDO_REDO_SYNC, async (message) => {
       await this.getOrchestrator()?.syncPromptsForUndoRedo(
-        message.prompts,
+        message.steps,
         message.finalPrompt ?? null
       );
       if ("workflowProperties" in message) {

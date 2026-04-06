@@ -11,7 +11,11 @@ import { HarnessIntegration } from "../../flightpath/HarnessIntegration";
 import { HarnessStatus } from "../../flightpath/HarnessIntegration";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import { PromptStep, PromptFile, Harness } from "../../types/FlightPathTypes";
-import { EXECUTION_STATES, FINAL_PROMPT_PHASES, STEP_STATUS } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  FINAL_PROMPT_PHASES,
+  STEP_STATUS,
+} from "../../types/DashboardConstants";
 import { CliEvent } from "../../types/WebviewMessageTypes";
 
 class MockPlatform implements PlatformAdapter {
@@ -184,7 +188,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     const executor = makeExecutor(queue);
 
     const promptFile: PromptFile = {
-      prompts: [{ prompt: "queue-1" }, { prompt: "queue-2" }],
+      steps: [{ prompt: "queue-1" }, { prompt: "queue-2" }],
     };
     queue.loadPrompts(promptFile);
 
@@ -201,7 +205,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     const executor = makeExecutor(queue);
 
     queue.loadPrompts({
-      prompts: [{ prompt: "queue-1" }, { prompt: "queue-2" }],
+      steps: [{ prompt: "queue-1" }, { prompt: "queue-2" }],
       finalStep: { prompt: "final-gate" },
     });
 
@@ -237,7 +241,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     };
 
     queue.loadPrompts({
-      prompts: [{ prompt: "queue-1" }],
+      steps: [{ prompt: "queue-1" }],
       finalStep: { prompt: "final-loop", mcpServers: ["flightpath"] },
     });
 
@@ -261,7 +265,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     const executor = makeExecutor(queue);
 
     queue.loadPrompts({
-      prompts: [{ prompt: "queue-1" }],
+      steps: [{ prompt: "queue-1" }],
       finalStep: { prompt: "final-once" },
     });
 
@@ -293,7 +297,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     };
 
     queue.loadPrompts({
-      prompts: [{ prompt: "queue-1" }],
+      steps: [{ prompt: "queue-1" }],
       finalStep: { prompt: "final-pause" },
     });
 
@@ -324,7 +328,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     };
 
     queue.loadPrompts({
-      prompts: [{ prompt: "queue-1" }],
+      steps: [{ prompt: "queue-1" }],
       finalStep: { prompt: "final-stop-error" },
     });
 
@@ -379,7 +383,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     } as any;
 
     queue.loadPrompts({
-      prompts: [{ prompt: "queue-1" }],
+      steps: [{ prompt: "queue-1" }],
       finalStep: { prompt: "final-observe" },
     });
 
@@ -453,7 +457,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     };
 
     queue.loadPrompts({
-      prompts: [{ prompt: "queue-1" }],
+      steps: [{ prompt: "queue-1" }],
       finalStep: { prompt: "final-capture" },
     });
 
@@ -535,7 +539,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     } as any;
 
     queue.loadPrompts({
-      prompts: [{ prompt: "bad-args" }, { prompt: "next-step" }],
+      steps: [{ prompt: "bad-args" }, { prompt: "next-step" }],
     });
 
     await executor.execute(integration, context);

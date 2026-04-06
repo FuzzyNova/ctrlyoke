@@ -65,7 +65,11 @@ export {
 } from "./DashboardConstants";
 
 // Re-export WorkflowSummary and WorkflowStep for webview consumers
-export type { WorkflowSummary, WorkflowStep, ScriptStep } from "./FlightPathTypes";
+export type {
+  WorkflowSummary,
+  WorkflowStep,
+  ScriptStep,
+} from "./FlightPathTypes";
 
 // ============================================================================
 // MESSAGE TYPE HELPERS - Extract literal types from MESSAGE_TYPES constants
@@ -276,7 +280,7 @@ export interface StatusMessage {
 export interface InitMessageData {
   fileName: string;
   workflowName: string;
-  prompts: WorkflowStep[];
+  steps: WorkflowStep[];
   executionState: ExecutionState;
   currentIndex: number;
   results: any[];
@@ -308,7 +312,7 @@ export interface InitMessageData {
 export interface FileSelectedMessage {
   type: typeof MESSAGE_TYPES.FILE_SELECTED;
   fileName: string;
-  prompts: WorkflowStep[];
+  steps: WorkflowStep[];
   workflowName?: string;
   finalStep?: WorkflowStep | null;
   finalPromptStatus?: StepStatus | null;
@@ -322,7 +326,7 @@ export interface FileSelectedMessage {
 export interface SessionRestoredMessage {
   type: typeof MESSAGE_TYPES.SESSION_RESTORED;
   fileName: string;
-  prompts: WorkflowStep[];
+  steps: WorkflowStep[];
   results: any[];
   executionState: ExecutionState;
   currentIndex: number;
@@ -433,7 +437,7 @@ export interface StatusMessageMessage {
  */
 export interface PromptsExtendedMessage {
   type: typeof MESSAGE_TYPES.PROMPTS_EXTENDED;
-  prompts: WorkflowStep[];
+  steps: WorkflowStep[];
   finalStep?: WorkflowStep | null;
 }
 
@@ -443,7 +447,7 @@ export interface PromptsExtendedMessage {
 export interface PromptDeletedMessage {
   type: typeof MESSAGE_TYPES.PROMPT_DELETED;
   fileName: string;
-  prompts: WorkflowStep[];
+  steps: WorkflowStep[];
   finalStep?: WorkflowStep | null;
 }
 
@@ -669,7 +673,7 @@ export interface GlobalSettingsUpdatedMessage {
  */
 export interface ResetWorkflowStateMessage {
   type: typeof MESSAGE_TYPES.RESET_WORKFLOW_STATE;
-  prompts: WorkflowStep[];
+  steps: WorkflowStep[];
 }
 
 /**
@@ -708,7 +712,7 @@ export interface SetStartPositionMessage {
  */
 export interface SetStartPositionConfirmedMessage {
   type: typeof MESSAGE_TYPES.SET_START_POSITION_CONFIRMED;
-  prompts: WorkflowStep[];
+  steps: WorkflowStep[];
   currentIndex: number;
 }
 

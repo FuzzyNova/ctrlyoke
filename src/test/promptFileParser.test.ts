@@ -20,12 +20,10 @@ suite("PromptFileParser Tests", () => {
   /**
    * Helper to assert result is valid and has prompts
    */
-  function assertValidResult(
-    result: any
-  ): asserts result is { prompts: any[] } {
+  function assertValidResult(result: any): asserts result is { steps: any[] } {
     assert.ok(result, "Result should not be null");
-    assert.ok(result.prompts, "Should have prompts array");
-    assert.ok(result.prompts.length > 0, "Should have at least one prompt");
+    assert.ok(result.steps, "Should have prompts array");
+    assert.ok(result.steps.length > 0, "Should have at least one prompt");
   }
 
   setup(() => {
@@ -38,13 +36,16 @@ suite("PromptFileParser Tests", () => {
       const result = await parser.parsePromptFile(filePath);
 
       assert.ok(result, "Result should not be null");
-      assert.ok(result.prompts, "Should have prompts array");
-      assert.strictEqual(result.prompts.length, 1);
+      assert.ok(result.steps, "Should have prompts array");
+      assert.strictEqual(result.steps.length, 1);
       assert.strictEqual(
-        (result.prompts[0] as PromptStep).prompt,
+        (result.steps[0] as PromptStep).prompt,
         "Explain this code and suggest improvements"
       );
-      assert.strictEqual((result.prompts[0] as PromptStep).model, "claude-sonnet-4.5");
+      assert.strictEqual(
+        (result.steps[0] as PromptStep).model,
+        "claude-sonnet-4.5"
+      );
     });
 
     test("should parse multiple prompts format", async () => {
@@ -52,14 +53,14 @@ suite("PromptFileParser Tests", () => {
       const result = await parser.parsePromptFile(filePath);
 
       assert.ok(result, "Result should not be null");
-      assert.ok(result.prompts, "Should have prompts array");
-      assert.strictEqual(result.prompts.length, 2);
+      assert.ok(result.steps, "Should have prompts array");
+      assert.strictEqual(result.steps.length, 2);
       assert.strictEqual(
-        (result.prompts[0] as PromptStep).prompt,
+        (result.steps[0] as PromptStep).prompt,
         "Step 1: Analyze code structure"
       );
       assert.strictEqual(
-        (result.prompts[1] as PromptStep).prompt,
+        (result.steps[1] as PromptStep).prompt,
         "Step 2: Implement improvements"
       );
     });
@@ -76,8 +77,8 @@ suite("PromptFileParser Tests", () => {
       const result = await parser.parsePromptFile(filePath);
 
       assert.ok(result);
-      assert.ok(Array.isArray(result.prompts));
-      assert.strictEqual(result.prompts.length, 1);
+      assert.ok(Array.isArray(result.steps));
+      assert.strictEqual(result.steps.length, 1);
     });
 
     test("should preserve endCondition in parsed result", async () => {
@@ -85,7 +86,7 @@ suite("PromptFileParser Tests", () => {
       const result = await parser.parsePromptFile(filePath);
 
       assertValidResult(result);
-      const endCondition = result.prompts[0].endCondition;
+      const endCondition = result.steps[0].endCondition;
       assert.ok(endCondition);
       assert.strictEqual(endCondition.script, "check_explanation.py");
       assert.strictEqual(endCondition.returns, "true");
@@ -98,8 +99,8 @@ suite("PromptFileParser Tests", () => {
 
       assertValidResult(result);
       // Prompts without explicit resumeSession should be undefined (will use global setting at execution time)
-      assert.strictEqual(result.prompts[0].resumeSession, undefined);
-      assert.strictEqual(result.prompts[1].resumeSession, undefined);
+      assert.strictEqual(result.steps[0].resumeSession, undefined);
+      assert.strictEqual(result.steps[1].resumeSession, undefined);
     });
   });
 
@@ -109,9 +110,13 @@ suite("PromptFileParser Tests", () => {
       const result = await parser.parsePromptFile(filePath);
 
       assert.ok(result, "Result should not be null");
-      assert.ok(result.prompts, "Should have prompts array");
-      assert.strictEqual(result.prompts.length, 1);
-      assert.ok((result.prompts[0] as PromptStep).prompt.includes("simple markdown prompt"));
+      assert.ok(result.steps, "Should have prompts array");
+      assert.strictEqual(result.steps.length, 1);
+      assert.ok(
+        (result.steps[0] as PromptStep).prompt.includes(
+          "simple markdown prompt"
+        )
+      );
     });
 
     test("should trim whitespace from prompt text", async () => {
@@ -120,7 +125,7 @@ suite("PromptFileParser Tests", () => {
 
       assertValidResult(result);
       // Should be trimmed - no leading/trailing whitespace
-      const promptText = (result.prompts[0] as PromptStep).prompt;
+      const promptText = (result.steps[0] as PromptStep).prompt;
       assert.strictEqual(promptText, promptText.trim());
     });
 
@@ -138,7 +143,7 @@ suite("PromptFileParser Tests", () => {
 
       assertValidResult(result);
       // The fixture has multiple lines
-      assert.ok(result.prompts[0].prompt.includes("\n"));
+      assert.ok(result.steps[0].prompt.includes("\n"));
     });
 
     test("should not have endCondition for markdown files", async () => {
@@ -146,7 +151,7 @@ suite("PromptFileParser Tests", () => {
       const result = await parser.parsePromptFile(filePath);
 
       assertValidResult(result);
-      assert.strictEqual(result.prompts[0].endCondition, undefined);
+      assert.strictEqual(result.steps[0].endCondition, undefined);
     });
   });
 
@@ -161,7 +166,7 @@ suite("PromptFileParser Tests", () => {
 
       assertValidResult(result);
       // The prompt should be resolved from external-prompt.prompt.md
-      assert.ok(result.prompts[0].prompt.includes("external prompt"));
+      assert.ok(result.steps[0].prompt.includes("external prompt"));
     });
 
     test("should preserve prompt text as-is when not a file path", async () => {
@@ -171,7 +176,7 @@ suite("PromptFileParser Tests", () => {
 
       assertValidResult(result);
       // The prompt text should be preserved as-is, not treated as a file path
-      assert.ok(result.prompts[0].prompt.includes("Explain this code"));
+      assert.ok(result.steps[0].prompt.includes("Explain this code"));
     });
   });
 
@@ -183,7 +188,7 @@ suite("PromptFileParser Tests", () => {
       assertValidResult(result);
       // The external-prompt.prompt.md is in the same directory as with-file-reference.json
       // So it should be resolved relative to the prompt file directory
-      assert.ok(result.prompts[0].prompt.includes("external prompt"));
+      assert.ok(result.steps[0].prompt.includes("external prompt"));
     });
 
     test("should return literal text when file not found", async () => {

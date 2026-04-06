@@ -883,7 +883,7 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().loadWorkingFile(filePath);
   }
 
-  getCurrentPromptFile(): { fileName: string; prompts: unknown[] } | null {
+  getCurrentPromptFile(): { fileName: string; steps: unknown[] } | null {
     return this.getActiveInstance().getCurrentPromptFile();
   }
 
@@ -958,13 +958,10 @@ export class WorkflowOrchestrator {
   }
 
   async syncPromptsForUndoRedo(
-    prompts: WorkflowStep[],
+    steps: WorkflowStep[],
     finalStep: WorkflowStep | null
   ): Promise<void> {
-    return this.getActiveInstance().syncPromptsForUndoRedo(
-      prompts,
-      finalStep
-    );
+    return this.getActiveInstance().syncPromptsForUndoRedo(steps, finalStep);
   }
 
   async setStartPosition(toIndex: number): Promise<void> {
@@ -1062,7 +1059,7 @@ export class WorkflowOrchestrator {
       // Expose draft file into the active workflow instance via public accessors
       // so the instance owns currentPromptFile, watcher setup, etc.
       const instance = this.getActiveInstance();
-      instance.setCurrentPromptFile(result.filePath, { prompts: [] });
+      instance.setCurrentPromptFile(result.filePath, { steps: [] });
       instance.initializeFileWatcher(result.filePath);
 
       await this.dashboardBroadcastHub.updateFileSelected(
@@ -1438,7 +1435,7 @@ export class WorkflowOrchestrator {
     let workingFile: {
       workflowName?: string;
       startedAt?: number;
-      prompts?: unknown[];
+      steps?: unknown[];
       _runtime?: { currentIndex?: number; executionState?: string };
     };
     try {
@@ -1453,7 +1450,7 @@ export class WorkflowOrchestrator {
     }
 
     const currentIndex = workingFile._runtime?.currentIndex ?? 0;
-    const totalSteps = workingFile.prompts?.length ?? 0;
+    const totalSteps = workingFile.steps?.length ?? 0;
 
     const summary: WorkflowSummary = {
       id: workflowId,
@@ -1492,12 +1489,12 @@ export class WorkflowOrchestrator {
           fs.promises
             .readFile(workingFilePath, "utf8")
             .then((content) => {
-              const wf = JSON.parse(content) as { prompts?: unknown[] };
-              if (wf.prompts) {
+              const wf = JSON.parse(content) as { steps?: unknown[] };
+              if (wf.steps) {
                 Log.debug(
                   `[WorkflowOrchestrator] CLI extended queue for "${workflowId}": ${prevTotalSteps} → ${updatedSummary.totalSteps} steps`
                 );
-                provider.notifyCliPromptsExtended(workflowId, wf.prompts);
+                provider.notifyCliPromptsExtended(workflowId, wf.steps);
               }
             })
             .catch((err) => {
@@ -1540,7 +1537,7 @@ export class WorkflowOrchestrator {
     }
 
     // Read the latest working file to get current prompt list and step position
-    let prompts: WorkflowStep[] = [];
+    let steps: WorkflowStep[] = [];
     let currentIndex = cliEntry.summary.currentStep ?? 0;
     let finalPrompt: WorkflowStep | null = null;
     let finalPromptRuntime:
@@ -1554,7 +1551,7 @@ export class WorkflowOrchestrator {
     try {
       const content = await fs.promises.readFile(workingFilePath, "utf8");
       const workingFile = JSON.parse(content) as WorkingFile;
-      prompts = ((workingFile.prompts as WorkflowStep[]) ?? []).map((p) => ({
+      steps = ((workingFile.steps as WorkflowStep[]) ?? []).map((p) => ({
         ...p,
         // Strip any existing status so loadWorkflow sets it from the results array
         status: undefined as unknown as string,
@@ -1579,7 +1576,7 @@ export class WorkflowOrchestrator {
     //   < currentIndex  → completed
     //   = currentIndex  → running
     //   > currentIndex  → pending
-    const results = prompts.map((_, i) => ({
+    const results = steps.map((_, i) => ({
       status:
         i < currentIndex
           ? STEP_STATUS.COMPLETED
@@ -1591,7 +1588,7 @@ export class WorkflowOrchestrator {
     const fileName = path.basename(workingFilePath);
     await this.dashboardBroadcastHub.updateSessionRestored(
       fileName,
-      prompts,
+      steps,
       results,
       cliEntry.summary.executionState,
       currentIndex,
@@ -1626,8 +1623,16 @@ export class WorkflowOrchestrator {
 
       const cliOutputsByStep = new Map<number, unknown[]>();
       for (const historyEntry of history.orderedEntries) {
-        if (historyEntry.kind === "cli" && historyEntry.target.kind === FINAL_PROMPT_PHASES.QUEUE) {
-          const stepIndex = (historyEntry.target as { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }).stepIndex;
+        if (
+          historyEntry.kind === "cli" &&
+          historyEntry.target.kind === FINAL_PROMPT_PHASES.QUEUE
+        ) {
+          const stepIndex = (
+            historyEntry.target as {
+              kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+              stepIndex: number;
+            }
+          ).stepIndex;
           const arr = cliOutputsByStep.get(stepIndex) ?? [];
           arr.push(historyEntry.cliOutput);
           cliOutputsByStep.set(stepIndex, arr);
@@ -1637,7 +1642,10 @@ export class WorkflowOrchestrator {
       for (const [stepIndex, outputs] of cliOutputsByStep) {
         // Update lastKnown so subsequent incremental handleCliWatchOutput calls
         // don't re-send these outputs
-        entry.session.getAndUpdateLastKnownOutputCount(stepIndex, outputs.length);
+        entry.session.getAndUpdateLastKnownOutputCount(
+          stepIndex,
+          outputs.length
+        );
 
         // Send ALL outputs from the beginning (full replay, not diff)
         for (let i = 0; i < outputs.length; i++) {
@@ -1674,8 +1682,16 @@ export class WorkflowOrchestrator {
       .then((history) => {
         const cliOutputsByStep = new Map<number, unknown[]>();
         for (const historyEntry of history.orderedEntries) {
-          if (historyEntry.kind === "cli" && historyEntry.target.kind === FINAL_PROMPT_PHASES.QUEUE) {
-            const stepIndex = (historyEntry.target as { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }).stepIndex;
+          if (
+            historyEntry.kind === "cli" &&
+            historyEntry.target.kind === FINAL_PROMPT_PHASES.QUEUE
+          ) {
+            const stepIndex = (
+              historyEntry.target as {
+                kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                stepIndex: number;
+              }
+            ).stepIndex;
             const arr = cliOutputsByStep.get(stepIndex) ?? [];
             arr.push(historyEntry.cliOutput);
             cliOutputsByStep.set(stepIndex, arr);
@@ -1731,7 +1747,7 @@ export class WorkflowOrchestrator {
       .then(async (content) => {
         const workingFile = JSON.parse(content) as {
           _runtime?: { executionState?: string; currentIndex?: number };
-          prompts?: unknown[];
+          steps?: unknown[];
           workflowName?: string;
           startedAt?: number;
         };
@@ -1766,7 +1782,7 @@ export class WorkflowOrchestrator {
           executionState: finalState as WorkflowSummary["executionState"],
           currentStep:
             workingFile._runtime?.currentIndex ?? entry.summary.currentStep,
-          totalSteps: workingFile.prompts?.length ?? entry.summary.totalSteps,
+          totalSteps: workingFile.steps?.length ?? entry.summary.totalSteps,
           managedBy: undefined, // no longer CLI-managed
         };
 

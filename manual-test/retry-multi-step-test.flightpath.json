@@ -1,5 +1,5 @@
 {
-  "prompts": [
+  "steps": [
     {
       "prompt": "This is step 1 of a multi-step workflow with retries.\n\nPlease read @multi-step-counter.txt and set the value to 5.\n\nThe file should contain ONLY the number 5, nothing else.",
       "endCondition": {

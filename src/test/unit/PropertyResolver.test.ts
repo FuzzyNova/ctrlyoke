@@ -11,7 +11,7 @@ suite("PropertyResolver Tests", () => {
         harness: Harness.ClaudeCli,
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         harness: Harness.CopilotCli, // Should be ignored
       };
 
@@ -24,7 +24,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         harness: Harness.ClaudeCli,
       };
 
@@ -37,7 +37,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -53,7 +53,7 @@ suite("PropertyResolver Tests", () => {
         model: "gpt-5",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         model: "claude-haiku-4.5", // Should be ignored
       };
 
@@ -66,7 +66,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         model: "claude-haiku-4.5",
       };
 
@@ -80,7 +80,7 @@ suite("PropertyResolver Tests", () => {
         harness: Harness.CopilotCli,
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -96,7 +96,7 @@ suite("PropertyResolver Tests", () => {
         agent: "code-reviewer",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         agent: "bug-hunter", // Should be ignored
       };
 
@@ -109,7 +109,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         agent: "bug-hunter",
       };
 
@@ -122,7 +122,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -141,7 +141,7 @@ suite("PropertyResolver Tests", () => {
         resumeSession: true,
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         resumeSession: false, // Should be ignored
       };
 
@@ -154,7 +154,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         resumeSession: true,
       };
 
@@ -167,7 +167,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -183,7 +183,7 @@ suite("PropertyResolver Tests", () => {
         mcpServers: ["flightpath"],
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         mcpServers: null, // Should be ignored
       };
 
@@ -196,7 +196,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         mcpServers: ["flightpath"],
       };
 
@@ -209,7 +209,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -222,7 +222,7 @@ suite("PropertyResolver Tests", () => {
         mcpServers: null,
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         mcpServers: ["flightpath"],
       };
 
@@ -247,7 +247,7 @@ suite("PropertyResolver Tests", () => {
         endCondition: promptCondition,
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         endCondition: workflowCondition, // Should be ignored
       };
 
@@ -265,7 +265,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         endCondition: workflowCondition,
       };
 
@@ -278,7 +278,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -296,7 +296,7 @@ suite("PropertyResolver Tests", () => {
         endCondition: undefined,
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         endCondition: workflowCondition,
       };
 
@@ -315,7 +315,7 @@ suite("PropertyResolver Tests", () => {
         sessionId: "550e8400-e29b-41d4-a716-446655440000",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         sessionId: "other-session-id", // Should be ignored
       };
 
@@ -332,7 +332,7 @@ suite("PropertyResolver Tests", () => {
         sessionId: 1,
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         sessionId: "workflow-session-id", // Should be ignored
       };
 
@@ -345,7 +345,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         sessionId: "workflow-session-id",
       };
 
@@ -358,7 +358,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         sessionId: 2,
       };
 
@@ -371,7 +371,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -383,7 +383,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         sessionId: "",
       };
 
@@ -398,7 +398,7 @@ suite("PropertyResolver Tests", () => {
         resumeSession: true, // prompt controls the resume tier, so its empty sessionId wins
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         sessionId: "workflow-session-id", // should not be used when prompt owns resume tier
       };
 
@@ -412,7 +412,7 @@ suite("PropertyResolver Tests", () => {
         sessionId: "", // user cleared the field but did not override resumeSession
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         sessionId: "workflow-session-id",
         resumeSession: true,
       };
@@ -429,7 +429,7 @@ suite("PropertyResolver Tests", () => {
         toolPermissions: null,
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         toolPermissions: {
           mode: PERMISSION_MODES.ALLOW_ALL,
           allowedTools: [],
@@ -446,7 +446,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         toolPermissions: null,
       };
 
@@ -459,7 +459,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -472,7 +472,7 @@ suite("PropertyResolver Tests", () => {
         toolPermissions: { mode: PERMISSION_MODES.NONE },
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         toolPermissions: { mode: PERMISSION_MODES.ALLOW_ALL },
       };
 
@@ -485,7 +485,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         toolPermissions: { mode: PERMISSION_MODES.NONE },
       };
 
@@ -503,7 +503,7 @@ suite("PropertyResolver Tests", () => {
         },
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         toolPermissions: { mode: PERMISSION_MODES.ALLOW_ALL },
       };
 
@@ -520,7 +520,7 @@ suite("PropertyResolver Tests", () => {
         prompt: "test",
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         toolPermissions: {
           mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
           allowedTools: [],
@@ -542,7 +542,7 @@ suite("PropertyResolver Tests", () => {
         toolPermissions: { allowedTools: ["write"] },
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -560,7 +560,7 @@ suite("PropertyResolver Tests", () => {
         toolPermissions: { mode: PERMISSION_MODES.CUSTOM },
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -583,7 +583,7 @@ suite("PropertyResolver Tests", () => {
         },
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -602,7 +602,7 @@ suite("PropertyResolver Tests", () => {
         hooks: [{ event: "stop", command: "npm test" }],
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         hooks: [{ event: "stop", command: "echo default" }],
       };
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -615,7 +615,7 @@ suite("PropertyResolver Tests", () => {
     test("should use workflow-level hooks when prompt-level not specified", () => {
       const prompt: PromptStep = { prompt: "test" };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         hooks: [{ event: "stop", command: "npm test" }],
       };
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -626,7 +626,7 @@ suite("PropertyResolver Tests", () => {
 
     test("should default to empty array when neither prompt nor workflow specify hooks", () => {
       const prompt: PromptStep = { prompt: "test" };
-      const workflow: PromptFile = { prompts: [] };
+      const workflow: PromptFile = { steps: [] };
       const resolved = PropertyResolver.resolve(prompt, workflow);
       assert.deepStrictEqual(resolved.hooks, []);
     });
@@ -637,7 +637,7 @@ suite("PropertyResolver Tests", () => {
         hooks: null,
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         hooks: [{ event: "stop", command: "npm test" }],
       };
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -647,7 +647,7 @@ suite("PropertyResolver Tests", () => {
     test("should return null when workflow explicitly disables hooks and prompt has no override", () => {
       const prompt: PromptStep = { prompt: "test" };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         hooks: null,
       };
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -660,7 +660,7 @@ suite("PropertyResolver Tests", () => {
         hooks: [{ event: "stop", command: "node extra-validation.js" }],
       };
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         hooks: [
           { event: "stop", command: "npm test" },
           { event: "sessionStart", command: "node notify.js" },
@@ -686,7 +686,7 @@ suite("PropertyResolver Tests", () => {
           { event: "stop", command: "node notify.js" },
         ],
       };
-      const workflow: PromptFile = { prompts: [] };
+      const workflow: PromptFile = { steps: [] };
       const resolved = PropertyResolver.resolve(prompt, workflow);
       assert.ok(Array.isArray(resolved.hooks));
       assert.strictEqual(resolved.hooks!.length, 2);
@@ -706,7 +706,7 @@ suite("PropertyResolver Tests", () => {
       };
 
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         // harness: not specified - prompt overrides anyway
         model: "opus", // Should be used
         // agent: not specified - prompt overrides anyway

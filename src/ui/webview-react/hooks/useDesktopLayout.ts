@@ -41,7 +41,7 @@ export function useDesktopLayout({
 }: DesktopLayoutParams) {
   // Panel imperative refs for JSX panelRef / groupRef props
   const settingsRef = useRef<PanelImperativeHandle>(null);
-  const promptsRef = useRef<PanelImperativeHandle>(null);
+  const stepsRef = useRef<PanelImperativeHandle>(null);
   const outputRef = useRef<PanelImperativeHandle>(null);
   const editorRef = useRef<PanelImperativeHandle>(null);
   const verticalGroupRef = useRef<GroupImperativeHandle>(null);
@@ -66,7 +66,7 @@ export function useDesktopLayout({
   // transitions; keeping them constant while the Group is alive prevents the
   // library from re-initialising and clobbering imperative calls.
   const desktopMountDefaults = useRef({
-    prompts: String(lastDesktopSizes.current.prompts),
+    steps: String(lastDesktopSizes.current.steps),
     settings: String(lastDesktopSizes.current.settings),
   });
   const mountDefaultOutput = useRef(
@@ -100,8 +100,8 @@ export function useDesktopLayout({
     if (isMobile) return;
     if (settingsCollapsed) settingsRef.current?.collapse();
     else settingsRef.current?.expand();
-    if (promptsCollapsed) promptsRef.current?.collapse();
-    else promptsRef.current?.expand();
+    if (promptsCollapsed) stepsRef.current?.collapse();
+    else stepsRef.current?.expand();
   }, [isMobile, uiLayoutReady]);
 
   // Open the horizontal onResize gate after mount events have settled.
@@ -123,8 +123,8 @@ export function useDesktopLayout({
 
   useEffect(() => {
     if (!uiLayoutReady) return;
-    if (promptsCollapsed) promptsRef.current?.collapse();
-    else promptsRef.current?.expand();
+    if (promptsCollapsed) stepsRef.current?.collapse();
+    else stepsRef.current?.expand();
   }, [promptsCollapsed, uiLayoutReady]);
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -195,7 +195,7 @@ export function useDesktopLayout({
   return {
     // Panel / group refs
     settingsRef,
-    promptsRef,
+    stepsRef,
     outputRef,
     editorRef,
     verticalGroupRef,

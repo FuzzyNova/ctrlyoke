@@ -185,7 +185,7 @@ export class PromptPropertyCompletionProvider
       return undefined;
     }
 
-    // Check if we're inside a prompts list item block
+    // Check if we're inside a steps list item block
     const blockInfo = this.findPromptStepBlock(document, position.line);
     if (!blockInfo.isInsidePromptStep) {
       return undefined;
@@ -235,7 +235,7 @@ export class PromptPropertyCompletionProvider
 
   /**
    * Searches the document backwards and forwards from the given line to
-   * determine whether the cursor is inside a `prompts:` list item block, and
+   * determine whether the cursor is inside a `steps:` list item block, and
    * whether that item already contains `type: script`.
    */
   private findPromptStepBlock(
@@ -261,7 +261,7 @@ export class PromptPropertyCompletionProvider
       }
 
       // If we hit a YAML key at column 0 that is a parent key (not indented),
-      // we've left the prompts list area entirely.
+      // we've left the steps list area entirely.
       if (/^\w/.test(text) && text.includes(":")) {
         return NOT_INSIDE;
       }
@@ -271,11 +271,11 @@ export class PromptPropertyCompletionProvider
       return NOT_INSIDE;
     }
 
-    // Verify that this list item is under a `prompts:` key by searching further back
+    // Verify that this list item is under a `steps:` key by searching further back
     let underPromptsKey = false;
     for (let i = itemStartLine - 1; i >= Math.max(0, itemStartLine - 50); i--) {
       const text = document.lineAt(i).text;
-      if (/^\s*prompts\s*:/.test(text)) {
+      if (/^\s*steps\s*:/.test(text)) {
         underPromptsKey = true;
         break;
       }

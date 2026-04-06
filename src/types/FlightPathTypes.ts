@@ -207,7 +207,7 @@ export interface ExecutionProperties {
 
 export interface PromptFile extends ExecutionProperties {
   prompt?: string;
-  prompts?: WorkflowStep[];
+  steps?: WorkflowStep[];
   finalStep?: WorkflowStep;
   /**
    * Workflow-level variable defaults for `{{varName}}` substitution.
@@ -407,7 +407,7 @@ export interface EndCondition {
  */
 export interface QueueState extends WorkflowRuntimeState {
   currentIndex: number;
-  prompts: WorkflowStep[];
+  steps: WorkflowStep[];
   results: PromptResult[];
   completedIndices: Set<string>; // Fast-lookup cache of completed prompt indices (as strings: "0", "1", ...)
   totalExecutionTime: number; // Milliseconds of active execution time (pause-aware)

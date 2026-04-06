@@ -11,12 +11,12 @@ import { PromptStep, PromptFile } from "../types/FlightPathTypes";
 /**
  * Helper to wrap prompts array into PromptFile for tests
  */
-function createPromptFile(prompts: PromptStep[]): PromptFile {
-  return { prompts };
+function createPromptFile(steps: PromptStep[]): PromptFile {
+  return { steps };
 }
 
 async function startQueueExecution(queue: PromptQueue): Promise<void> {
-  if (queue.getState().prompts.length === 0) {
+  if (queue.getState().steps.length === 0) {
     return;
   }
 
@@ -99,7 +99,7 @@ suite("PromptQueue State Machine Tests", () => {
 
     test("should start with empty prompts and results", () => {
       const state = queue.getState();
-      assert.strictEqual(state.prompts.length, 0);
+      assert.strictEqual(state.steps.length, 0);
       assert.strictEqual(state.results.length, 0);
     });
 
@@ -118,7 +118,7 @@ suite("PromptQueue State Machine Tests", () => {
     test("should load prompts correctly", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       const state = queue.getState();
-      assert.strictEqual(state.prompts.length, 3);
+      assert.strictEqual(state.steps.length, 3);
     });
 
     test("should create corresponding results for each prompt", () => {
@@ -365,7 +365,7 @@ suite("PromptQueue State Machine Tests", () => {
     test("should keep prompts loaded", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await queue.restart();
-      assert.strictEqual(queue.getState().prompts.length, 3);
+      assert.strictEqual(queue.getState().steps.length, 3);
     });
 
     test("should reset to IDLE status", async () => {
@@ -434,7 +434,7 @@ suite("PromptQueue State Machine Tests", () => {
     test("should empty prompts array", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       queue.clear();
-      assert.strictEqual(queue.getState().prompts.length, 0);
+      assert.strictEqual(queue.getState().steps.length, 0);
     });
 
     test("should empty results array", () => {
@@ -584,8 +584,11 @@ suite("PromptQueue State Machine Tests", () => {
     test("should record terminalStatus as failed on the prompt runtime", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await failCurrentPrompt(queue);
-      const prompt = queue.getState().prompts[0];
-      assert.strictEqual(prompt._runtime?.terminalStatus, PROMPT_TERMINAL_STATUS.FAILED);
+      const prompt = queue.getState().steps[0];
+      assert.strictEqual(
+        prompt._runtime?.terminalStatus,
+        PROMPT_TERMINAL_STATUS.FAILED
+      );
     });
   });
 
@@ -768,7 +771,7 @@ suite("PromptQueue State Machine Tests", () => {
   suite("Event Emission", () => {
     test("should emit state change on loadPrompts", (done) => {
       const disposable = queue.onDidChangeState((state) => {
-        assert.strictEqual(state.prompts.length, 3);
+        assert.strictEqual(state.steps.length, 3);
         disposable.dispose();
         done();
       });
@@ -869,14 +872,14 @@ suite("PromptQueue State Machine Tests", () => {
 
   suite("setStartPosition", () => {
     test("should be a no-op when toIndex equals currentIndex", async () => {
-      const prompts: PromptStep[] = [
+      const steps: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
         { prompt: "p3" },
         { prompt: "p4" },
       ];
-      queue.loadPrompts(createPromptFile(prompts));
+      queue.loadPrompts(createPromptFile(steps));
       (queue as any).state.currentIndex = 2;
       await queue.setStartPosition(2);
       const state = queue.getState();
@@ -885,24 +888,24 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("should rewind: strip _runtime and reset results to PENDING for prompts at/after toIndex", async () => {
-      const prompts: PromptStep[] = [
+      const steps: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
         { prompt: "p3" },
         { prompt: "p4" },
       ];
-      queue.loadPrompts(createPromptFile(prompts));
+      queue.loadPrompts(createPromptFile(steps));
       (queue as any).state.currentIndex = 3;
-      (queue as any).state.prompts[0]._runtime = {
+      (queue as any).state.steps[0]._runtime = {
         startedAt: 100,
         completedAt: 200,
       };
-      (queue as any).state.prompts[1]._runtime = {
+      (queue as any).state.steps[1]._runtime = {
         startedAt: 300,
         completedAt: 400,
       };
-      (queue as any).state.prompts[2]._runtime = {
+      (queue as any).state.steps[2]._runtime = {
         startedAt: 500,
         completedAt: 600,
       };
@@ -918,16 +921,16 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.status, EXECUTION_STATES.IDLE);
       assert.strictEqual(state.stopped, false);
       assert.ok(
-        state.prompts[0]._runtime?.completedAt !== undefined,
+        state.steps[0]._runtime?.completedAt !== undefined,
         "prompts[0]._runtime should be preserved"
       );
       assert.strictEqual(
-        state.prompts[1]._runtime,
+        state.steps[1]._runtime,
         undefined,
         "prompts[1]._runtime should be stripped"
       );
       assert.strictEqual(
-        state.prompts[2]._runtime,
+        state.steps[2]._runtime,
         undefined,
         "prompts[2]._runtime should be stripped"
       );
@@ -951,14 +954,14 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("should skip-ahead: mark prompts currentIndex..toIndex-1 as SKIPPED in results", async () => {
-      const prompts: PromptStep[] = [
+      const steps: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
         { prompt: "p3" },
         { prompt: "p4" },
       ];
-      queue.loadPrompts(createPromptFile(prompts));
+      queue.loadPrompts(createPromptFile(steps));
       (queue as any).state.currentIndex = 1;
       (queue as any).state.completedIndices = new Set(["0"]);
       (queue as any).state.results[0].status = STEP_STATUS.COMPLETED;
@@ -977,11 +980,11 @@ suite("PromptQueue State Machine Tests", () => {
         "results[3] should not be skipped"
       );
       assert.ok(
-        state.prompts[1]._runtime?.completedAt !== undefined,
+        state.steps[1]._runtime?.completedAt !== undefined,
         "prompts[1]._runtime.completedAt should be set"
       );
       assert.ok(
-        state.prompts[2]._runtime?.completedAt !== undefined,
+        state.steps[2]._runtime?.completedAt !== undefined,
         "prompts[2]._runtime.completedAt should be set"
       );
       assert.ok(state.completedIndices.has("0"));
@@ -991,14 +994,14 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("should rebuild completedIndices correctly for rewind", async () => {
-      const prompts: PromptStep[] = [
+      const steps: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
         { prompt: "p3" },
         { prompt: "p4" },
       ];
-      queue.loadPrompts(createPromptFile(prompts));
+      queue.loadPrompts(createPromptFile(steps));
       (queue as any).state.currentIndex = 3;
       (queue as any).state.completedIndices = new Set(["0", "1", "2"]);
 
@@ -1012,12 +1015,12 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("should set status to IDLE and stopped to false after position change", async () => {
-      const prompts: PromptStep[] = [
+      const steps: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
       ];
-      queue.loadPrompts(createPromptFile(prompts));
+      queue.loadPrompts(createPromptFile(steps));
       (queue as any).state.currentIndex = 2;
       queue.getRuntimeStateMachine().restore({
         status: EXECUTION_STATES.STOPPED,
@@ -1039,14 +1042,14 @@ suite("PromptQueue State Machine Tests", () => {
 
   suite("reorderPendingPrompts", () => {
     test("should keep done-prefix unchanged and reorder pending section", async () => {
-      const prompts: PromptStep[] = [
+      const steps: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
         { prompt: "p3" },
         { prompt: "p4" },
       ];
-      queue.loadPrompts(createPromptFile(prompts));
+      queue.loadPrompts(createPromptFile(steps));
       (queue as any).state.currentIndex = 2;
 
       // Pending slice is [p2, p3, p4] at slice positions [0, 1, 2].
@@ -1054,22 +1057,22 @@ suite("PromptQueue State Machine Tests", () => {
       await queue.reorderPendingPrompts([2, 0, 1]);
 
       const state = queue.getState();
-      assert.strictEqual((state.prompts[0] as PromptStep).prompt, "p0");
-      assert.strictEqual((state.prompts[1] as PromptStep).prompt, "p1");
-      assert.strictEqual((state.prompts[2] as PromptStep).prompt, "p4");
-      assert.strictEqual((state.prompts[3] as PromptStep).prompt, "p2");
-      assert.strictEqual((state.prompts[4] as PromptStep).prompt, "p3");
+      assert.strictEqual((state.steps[0] as PromptStep).prompt, "p0");
+      assert.strictEqual((state.steps[1] as PromptStep).prompt, "p1");
+      assert.strictEqual((state.steps[2] as PromptStep).prompt, "p4");
+      assert.strictEqual((state.steps[3] as PromptStep).prompt, "p2");
+      assert.strictEqual((state.steps[4] as PromptStep).prompt, "p3");
     });
 
     test("should reorder results in sync with prompts", async () => {
-      const prompts: PromptStep[] = [
+      const steps: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
         { prompt: "p3" },
         { prompt: "p4" },
       ];
-      queue.loadPrompts(createPromptFile(prompts));
+      queue.loadPrompts(createPromptFile(steps));
       (queue as any).state.currentIndex = 2;
 
       // Pending slice is [p2, p3, p4] at slice positions [0, 1, 2].
@@ -1085,28 +1088,28 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("should produce correct order after successive reorders", async () => {
-      const prompts: PromptStep[] = [
+      const steps: PromptStep[] = [
         { prompt: "p0" },
         { prompt: "p1" },
         { prompt: "p2" },
       ];
-      queue.loadPrompts(createPromptFile(prompts));
+      queue.loadPrompts(createPromptFile(steps));
       (queue as any).state.currentIndex = 0;
 
       // First reorder: move p0 to last → [1, 2, 0]
       await queue.reorderPendingPrompts([1, 2, 0]);
       let state = queue.getState();
-      assert.strictEqual((state.prompts[0] as PromptStep).prompt, "p1");
-      assert.strictEqual((state.prompts[1] as PromptStep).prompt, "p2");
-      assert.strictEqual((state.prompts[2] as PromptStep).prompt, "p0");
+      assert.strictEqual((state.steps[0] as PromptStep).prompt, "p1");
+      assert.strictEqual((state.steps[1] as PromptStep).prompt, "p2");
+      assert.strictEqual((state.steps[2] as PromptStep).prompt, "p0");
 
       // Second reorder: move the new first (p1) to last → [1, 2, 0]
       // Current pending slice: [p1, p2, p0]; move slice[0]=p1 to end
       await queue.reorderPendingPrompts([1, 2, 0]);
       state = queue.getState();
-      assert.strictEqual((state.prompts[0] as PromptStep).prompt, "p2");
-      assert.strictEqual((state.prompts[1] as PromptStep).prompt, "p0");
-      assert.strictEqual((state.prompts[2] as PromptStep).prompt, "p1");
+      assert.strictEqual((state.steps[0] as PromptStep).prompt, "p2");
+      assert.strictEqual((state.steps[1] as PromptStep).prompt, "p0");
+      assert.strictEqual((state.steps[2] as PromptStep).prompt, "p1");
     });
   });
 
@@ -1115,7 +1118,7 @@ suite("PromptQueue State Machine Tests", () => {
     test("should preserve in-memory _runtime.sessionId when MCP appends a new prompt", () => {
       // Simulate: prompt[0] ran, session ID set in memory but not yet persisted to disk
       queue.loadPrompts(createPromptFile([{ prompt: "prompt-0" }]));
-      (queue as any).state.prompts[0]._runtime = {
+      (queue as any).state.steps[0]._runtime = {
         harness: "copilot-cli",
         model: "claude-sonnet-4.5",
         sessionId: "b52bceab-9c03-49b3-8324-4220292e9acb",
@@ -1133,17 +1136,17 @@ suite("PromptQueue State Machine Tests", () => {
 
       const state = queue.getState();
       assert.strictEqual(
-        state.prompts.length,
+        state.steps.length,
         2,
         "should have 2 prompts after merge"
       );
       assert.strictEqual(
-        state.prompts[0]._runtime?.sessionId,
+        state.steps[0]._runtime?.sessionId,
         "b52bceab-9c03-49b3-8324-4220292e9acb",
         "session ID must be preserved from memory, not lost to disk replacement"
       );
       assert.strictEqual(
-        state.prompts[1]._runtime,
+        state.steps[1]._runtime,
         undefined,
         "new MCP prompt should have no _runtime"
       );

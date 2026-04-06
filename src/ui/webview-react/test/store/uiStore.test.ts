@@ -16,11 +16,11 @@ function store() {
 
 describe("togglePromptsCollapse", () => {
   it("flips promptsCollapsed", () => {
-    expect(store().promptsCollapsed).toBe(false);
+    expect(store().stepsCollapsed).toBe(false);
     store().togglePromptsCollapse();
-    expect(store().promptsCollapsed).toBe(true);
+    expect(store().stepsCollapsed).toBe(true);
     store().togglePromptsCollapse();
-    expect(store().promptsCollapsed).toBe(false);
+    expect(store().stepsCollapsed).toBe(false);
   });
 });
 
@@ -43,7 +43,7 @@ describe("toggleEditorCollapse", () => {
 describe("setPromptsCollapsed / setOutputCollapsed / setEditorCollapsed", () => {
   it("set collapse state directly", () => {
     store().setPromptsCollapsed(true);
-    expect(store().promptsCollapsed).toBe(true);
+    expect(store().stepsCollapsed).toBe(true);
     store().setOutputCollapsed(true);
     expect(store().outputCollapsed).toBe(true);
     store().setEditorCollapsed(true);

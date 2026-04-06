@@ -1,5 +1,5 @@
 {
-  "prompts": [
+  "steps": [
     {
       "prompt": "What is 2 + 2? Reply with just the number.",
       "model": "gpt-5-mini"

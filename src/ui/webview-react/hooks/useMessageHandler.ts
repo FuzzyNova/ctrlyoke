@@ -189,11 +189,11 @@ function createMessageHandlers(): MessageHandlerMap {
     }
 
     // Load workflow if data includes prompts
-    if (data.prompts && data.prompts.length > 0) {
+    if (data.steps && data.steps.length > 0) {
       workflowStore.loadWorkflow({
         fileName: data.fileName || "",
         workflowName: data.workflowName,
-        prompts: data.prompts,
+        steps: data.steps,
         executionState: data.executionState as ExecutionState,
         currentStep: data.currentIndex || 0,
         results: data.results || [],
@@ -227,7 +227,7 @@ function createMessageHandlers(): MessageHandlerMap {
     useWorkflowStore.getState().loadWorkflow({
       fileName: message.fileName,
       workflowName: message.workflowName,
-      prompts: message.prompts || [],
+      steps: message.steps || [],
       finalStep: message.finalStep ?? null,
       finalPromptStatus: message.finalPromptStatus ?? null,
       finalPromptLoopCount: message.finalPromptLoopCount ?? 0,
@@ -243,7 +243,7 @@ function createMessageHandlers(): MessageHandlerMap {
     useWorkflowStore.getState().loadWorkflow({
       fileName: message.fileName,
       workflowName: message.workflowName,
-      prompts: message.prompts || [],
+      steps: message.steps || [],
       executionState: message.executionState as ExecutionState,
       currentStep: message.currentIndex || 0,
       results: message.results || [],
@@ -273,8 +273,8 @@ function createMessageHandlers(): MessageHandlerMap {
     const workflowStore = useWorkflowStore.getState();
 
     // Update prompts list (keep existing status for completed prompts)
-    const currentPrompts = workflowStore.prompts;
-    const newPrompts = (message.prompts || []).map(
+    const currentPrompts = workflowStore.steps;
+    const newPrompts = (message.steps || []).map(
       (prompt: any, index: number) => {
         // Preserve status from existing prompts
         const existingPrompt = currentPrompts[index] as any;
@@ -342,7 +342,7 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.RESET_WORKFLOW_STATE] = (message) => {
     const workflowStore = useWorkflowStore.getState();
-    workflowStore.resetExecutionState(message.prompts || []);
+    workflowStore.resetExecutionState(message.steps || []);
 
     // Exit history view — the panel must show the live (reset) state, not the
     // historical run. Without this, isViewingHistory=true keeps doneStepCount
@@ -362,7 +362,7 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED] = (message) => {
     const workflowStore = useWorkflowStore.getState();
-    workflowStore.setPrompts(message.prompts || []);
+    workflowStore.setPrompts(message.steps || []);
   };
 
   // --------------------------------------------------------------------------
@@ -373,10 +373,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const prevCurrentStep = workflowStore.currentStep;
     const newCurrentStep = message.currentIndex as number;
 
-    workflowStore.applyStartPositionChange(
-      message.prompts || [],
-      newCurrentStep
-    );
+    workflowStore.applyStartPositionChange(message.steps || [], newCurrentStep);
 
     // For rewind: clear live CLI outputs for rewound steps
     if (newCurrentStep < prevCurrentStep) {
@@ -397,7 +394,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const workflowStore = useWorkflowStore.getState();
 
     workflowStore.setFileName(message.fileName);
-    workflowStore.setPrompts(message.prompts || []);
+    workflowStore.setPrompts(message.steps || []);
     // Pause around setFinalStep — the delete action is already recorded by
     // setPrompts above; a second entry from setFinalStep would require two
     // undos to restore a single deleted prompt.
@@ -445,7 +442,7 @@ function createMessageHandlers(): MessageHandlerMap {
 
       // Reset only the new (not-yet-run) prompts to pending; preserve completed status.
       // Pause undo recording — execution start is not a user-undoable action.
-      const updatedPrompts = workflowStore.prompts.map((prompt, i) => {
+      const updatedPrompts = workflowStore.steps.map((prompt, i) => {
         if (i < preserveStepCount) {
           return prompt; // Keep completed status and output
         }
@@ -474,7 +471,7 @@ function createMessageHandlers(): MessageHandlerMap {
       workflowStore.setTotalSteps(message.totalSteps);
       workflowStore.setCurrentStep(0);
 
-      const resetPrompts = workflowStore.prompts.map((prompt) => ({
+      const resetPrompts = workflowStore.steps.map((prompt) => ({
         ...prompt,
         status: STEP_STATUS.PENDING as StepStatus,
       }));
@@ -523,7 +520,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const workflowStore = useWorkflowStore.getState();
     const { stepIndex, status, details } = message;
 
-    if (workflowStore.prompts[stepIndex]) {
+    if (workflowStore.steps[stepIndex]) {
       // Pause around updatePrompt — step status changes are runtime events,
       // not user actions. Without this, every running/completed/failed status
       // transition during a workflow run would pollute the undo stack.
@@ -532,7 +529,7 @@ function createMessageHandlers(): MessageHandlerMap {
         status: status.state || status,
         _runtime: details
           ? {
-              ...workflowStore.prompts[stepIndex]._runtime,
+              ...workflowStore.steps[stepIndex]._runtime,
               ...details,
             }
           : undefined,
@@ -588,7 +585,10 @@ function createMessageHandlers(): MessageHandlerMap {
     const store = useWorkflowStore.getState();
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
-      target: { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: message.loopIndex },
+      target: {
+        kind: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+        loopIndex: message.loopIndex,
+      },
       attemptIndex: message.output.attemptIndex ?? 0,
       cliOutput: message.output,
       timestampMs: message.output.timestampMs ?? Date.now(),
@@ -682,13 +682,24 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.STATUS_MESSAGE] = (message) => {
     const store = useWorkflowStore.getState();
     const stepIndex = Number(message.stepIndex);
-    const target: OutputExecutionTarget = Number.isFinite(stepIndex) && stepIndex < 0
-      ? { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: Math.abs(stepIndex) - 1 }
-      : { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: Math.max(0, stepIndex) };
+    const target: OutputExecutionTarget =
+      Number.isFinite(stepIndex) && stepIndex < 0
+        ? {
+            kind: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+            loopIndex: Math.abs(stepIndex) - 1,
+          }
+        : {
+            kind: FINAL_PROMPT_PHASES.QUEUE,
+            stepIndex: Math.max(0, stepIndex),
+          };
     const entry: OrderedStatusHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.STATUS,
       target,
-      statusMessage: { message: message.message, severity: message.severity ?? "info", timestamp: Date.now() },
+      statusMessage: {
+        message: message.message,
+        severity: message.severity ?? "info",
+        timestamp: Date.now(),
+      },
       timestampMs: Date.now(),
       sequence: store.liveSequence,
     };

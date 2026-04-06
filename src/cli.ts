@@ -435,14 +435,14 @@ async function runCommand(
     // getState() returns a shallow copy but prompts[] is the same array reference,
     // so mutations to PromptStep objects propagate into the queue's internal state.
     const queueState = instance.promptQueue.getState();
-    if (config.resume && queueState.prompts.length > 0) {
-      const firstStep = queueState.prompts[0];
+    if (config.resume && queueState.steps.length > 0) {
+      const firstStep = queueState.steps[0];
       if (!isScriptStep(firstStep)) {
         firstStep.sessionId = config.resume;
         firstStep.resumeSession = true;
       }
     } else if (config.newSession) {
-      for (const step of queueState.prompts) {
+      for (const step of queueState.steps) {
         if (!isScriptStep(step)) {
           delete step.sessionId;
           step.resumeSession = false;
@@ -464,7 +464,7 @@ async function runCommand(
         model: config.model,
         status: state.status,
         summary: {
-          total: state.prompts?.length ?? 0,
+          total: state.steps?.length ?? 0,
           completed:
             state.results?.filter((r) => r.status === STEP_STATUS.COMPLETED)
               .length ?? 0,
@@ -521,7 +521,7 @@ async function validateCommand(file: string): Promise<void> {
     const result = await parser.parsePromptFile(resolvedFile);
     if (result) {
       console.log(chalk.green(`✓ ${path.basename(resolvedFile)} is valid`));
-      console.log(chalk.dim(`  ${result.prompts?.length ?? 1} prompt(s)`));
+      console.log(chalk.dim(`  ${result.steps?.length ?? 1} prompt(s)`));
       process.exit(0);
     } else {
       console.error(

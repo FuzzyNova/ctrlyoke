@@ -64,13 +64,13 @@ suite("QueueOperations", () => {
       assert.strictEqual(status.metadata.completedPrompts, 0);
       assert.strictEqual(status.metadata.executionState, "idle");
       assert.ok("workingFile" in status.metadata);
-      assert.ok(Array.isArray(status.prompts));
+      assert.ok(Array.isArray(status.steps));
     });
 
     test("prompts array length matches queue size", () => {
       const queue = new PromptQueue();
       const status = getQueueStatus(queue);
-      assert.strictEqual(status.prompts.length, status.metadata.totalPrompts);
+      assert.strictEqual(status.steps.length, status.metadata.totalPrompts);
     });
   });
 
@@ -79,7 +79,7 @@ suite("QueueOperations", () => {
     test("returns success response when queue is idle", async () => {
       const queue = new PromptQueue();
       const response = await appendToQueue(queue, {
-        prompts: [{ prompt: "do something" }],
+        steps: [{ prompt: "do something" }],
         position: QUEUE_POSITION.END,
         source: "test",
       });
@@ -91,7 +91,7 @@ suite("QueueOperations", () => {
     test("appending multiple prompts at END increments queue accordingly", async () => {
       const queue = new PromptQueue();
       const response = await appendToQueue(queue, {
-        prompts: [
+        steps: [
           { prompt: "step 1" },
           { prompt: "step 2" },
           { prompt: "step 3" },
@@ -105,12 +105,12 @@ suite("QueueOperations", () => {
 
     test("reopens a completed workflow through the runtime before appending", async () => {
       const queue = new PromptQueue();
-      queue.loadPrompts({ prompts: [{ prompt: "completed-step" }] });
+      queue.loadPrompts({ steps: [{ prompt: "completed-step" }] });
       queue.getRuntimeStateMachine().complete();
       await queue.commitRuntimeTransition({ persist: false });
 
       const response = await appendToQueue(queue, {
-        prompts: [{ prompt: "follow-up" }],
+        steps: [{ prompt: "follow-up" }],
         position: QUEUE_POSITION.END,
         source: "test",
       });
@@ -129,7 +129,7 @@ suite("QueueOperations", () => {
       await assert.rejects(
         () =>
           appendToQueue(queue, {
-            prompts: [{ prompt: "should fail" }],
+            steps: [{ prompt: "should fail" }],
             position: QUEUE_POSITION.END,
             source: "test",
           }),

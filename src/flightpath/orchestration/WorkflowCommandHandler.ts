@@ -408,7 +408,7 @@ export class WorkflowCommandHandler {
     return `# FlightPath Workflow
 # Multi-step AI automation with validation
 
-prompts:
+steps:
   - name: analyze
     prompt: |
       Analyze this codebase for potential bugs and code quality issues.
@@ -439,7 +439,7 @@ prompts:
   private createExampleFlightPathJSON(): string {
     return JSON.stringify(
       {
-        prompts: [
+        steps: [
           {
             id: "analyze",
             prompt:

@@ -287,7 +287,7 @@ export class WorkflowInstance {
           severity,
         }),
       getWorkflowStep: (stepIndex) =>
-        this.promptQueue.getState().prompts[stepIndex],
+        this.promptQueue.getState().steps[stepIndex],
       getTotalSteps: () => this.promptQueue.getProgress().total,
     };
     this.outputCaptureBuffer = new OutputCaptureBuffer(
@@ -313,9 +313,7 @@ export class WorkflowInstance {
    * output is not routed to the UI.
    */
   private get activeDashboard(): IDashboardSink | undefined {
-    return this.isActive
-      ? this.dashboardSink
-      : undefined;
+    return this.isActive ? this.dashboardSink : undefined;
   }
 
   /**
@@ -368,11 +366,11 @@ export class WorkflowInstance {
       ? path.basename(this.currentPromptFile.filePath)
       : state.workflowName || "Untitled";
     Log.trace(
-      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${executionState}, currentIndex=${state.currentIndex}, prompts=${state.prompts.length}, bufferSteps=${this.outputCaptureBuffer.stepBufferSize}, finalBufferLoops=${this.outputCaptureBuffer.finalPromptBufferSize}`
+      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${executionState}, currentIndex=${state.currentIndex}, prompts=${state.steps.length}, bufferSteps=${this.outputCaptureBuffer.stepBufferSize}, finalBufferLoops=${this.outputCaptureBuffer.finalPromptBufferSize}`
     );
     this.dashboardSink.updateSessionRestored(
       fileName,
-      state.prompts,
+      state.steps,
       state.results,
       executionState,
       state.currentIndex,
@@ -465,18 +463,18 @@ export class WorkflowInstance {
       workingFilePath: state.workingFilePath || undefined,
       executionState: this.getAuthoritativeExecutionState(),
       currentStep: state.currentIndex,
-      totalSteps: state.prompts.length,
+      totalSteps: state.steps.length,
       startedAt: this.startedAt || undefined,
     };
   }
 
-  getCurrentPromptFile(): { fileName: string; prompts: unknown[] } | null {
-    if (!this.currentPromptFile?.promptFile.prompts) {
+  getCurrentPromptFile(): { fileName: string; steps: unknown[] } | null {
+    if (!this.currentPromptFile?.promptFile.steps) {
       return null;
     }
     return {
       fileName: path.basename(this.currentPromptFile.filePath),
-      prompts: this.currentPromptFile.promptFile.prompts.map((p) => ({
+      steps: this.currentPromptFile.promptFile.steps.map((p) => ({
         prompt: isScriptStep(p) ? p.script : p.prompt,
       })),
     };
@@ -514,7 +512,7 @@ export class WorkflowInstance {
       filePath: nextFilePath,
       promptFile: {
         ...workflowFile,
-        prompts: this.promptQueue.getState().prompts.map((prompt) => ({
+        steps: this.promptQueue.getState().steps.map((prompt) => ({
           ...prompt,
         })),
       },
@@ -572,7 +570,7 @@ export class WorkflowInstance {
   loadPromptString(promptText: string): void {
     this.promptQueue.clearQueue();
     this.filePath = "";
-    const promptFile: PromptFile = { prompts: [{ prompt: promptText }] };
+    const promptFile: PromptFile = { steps: [{ prompt: promptText }] };
     this.currentPromptFile = { filePath: "<inline>", promptFile };
     this.promptQueue.loadPrompts(promptFile);
     this.propagateWorkflowNameToIntegrations();
@@ -586,12 +584,12 @@ export class WorkflowInstance {
     // Read working file FIRST so this.filePath is correct when queue state fires
     // (onDidChangeState → getSummary() → filePath must already be set)
     const workingFile = await this.promptQueue.readWorkingFile(workingFilePath);
-    if (workingFile?.prompts) {
+    if (workingFile?.steps) {
       const filePath = workingFile.originalFile || workingFilePath;
       this.filePath = filePath;
       this.currentPromptFile = {
         filePath,
-        promptFile: { prompts: workingFile.prompts },
+        promptFile: { steps: workingFile.steps },
       };
     }
 
@@ -628,12 +626,12 @@ export class WorkflowInstance {
   async autoLoadFromWorkingFile(workingFilePath: string): Promise<void> {
     // Read working file FIRST so this.filePath is correct when queue state fires
     const workingFile = await this.promptQueue.readWorkingFile(workingFilePath);
-    if (workingFile?.prompts) {
+    if (workingFile?.steps) {
       const filePath = workingFile.originalFile || workingFilePath;
       this.filePath = filePath;
       this.currentPromptFile = {
         filePath,
-        promptFile: { prompts: workingFile.prompts },
+        promptFile: { steps: workingFile.steps },
       };
     }
 
@@ -664,7 +662,7 @@ export class WorkflowInstance {
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] executeLoadedPromptFile: currentPromptFile is null — ` +
           `workingFilePath=${queueState.workingFilePath ?? "(none)"}, ` +
-          `prompts=${queueState.prompts.length}, status=${this.getAuthoritativeExecutionState()}`
+          `prompts=${queueState.steps.length}, status=${this.getAuthoritativeExecutionState()}`
       );
       this.platform.warn(
         "No prompt file loaded. Use 'Change' button to select a file first."
@@ -685,7 +683,7 @@ export class WorkflowInstance {
     const { promptFile } = this.currentPromptFile;
     const fileName = path.basename(filePath);
 
-    const filePromptCount = promptFile.prompts?.length ?? 0;
+    const filePromptCount = promptFile.steps?.length ?? 0;
     // Count pending (never-run) prompts in the queue. Newly appended prompts are
     // PENDING; prompts that ran but were cancelled/skipped are CANCELLED. Using
     // pendingCount instead of (filePromptCount > prevCompletedCount) prevents a
@@ -696,9 +694,7 @@ export class WorkflowInstance {
       (r) => r.status === STEP_STATUS.PENDING
     ).length;
     const isAppendContinuation =
-      !continueFromCurrent &&
-      prevCompletedCount > 0 &&
-      pendingCount > 0;
+      !continueFromCurrent && prevCompletedCount > 0 && pendingCount > 0;
 
     // Detect stop → setStartPosition → Run scenario: the queue is IDLE but
     // already has a partial run in progress (currentIndex > 0). This happens
@@ -829,7 +825,7 @@ export class WorkflowInstance {
       }
 
       const currentQueueState = this.promptQueue.getState();
-      const totalPrompts = currentQueueState.prompts.length;
+      const totalPrompts = currentQueueState.steps.length;
 
       const workingFilePath = currentQueueState.workingFilePath ?? "";
       if (
@@ -873,12 +869,26 @@ export class WorkflowInstance {
             const history =
               await this.outputHistoryManager.loadHistory(historyFilePath);
 
-            const cliEntriesByStep = new Map<number, Array<{ cliOutput: CliOutput; attemptIndex: number }>>();
+            const cliEntriesByStep = new Map<
+              number,
+              Array<{ cliOutput: CliOutput; attemptIndex: number }>
+            >();
             for (const entry of history.orderedEntries) {
-              if (entry.kind === "cli" && entry.target.kind === FINAL_PROMPT_PHASES.QUEUE) {
-                const stepIndex = (entry.target as { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }).stepIndex;
+              if (
+                entry.kind === "cli" &&
+                entry.target.kind === FINAL_PROMPT_PHASES.QUEUE
+              ) {
+                const stepIndex = (
+                  entry.target as {
+                    kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                    stepIndex: number;
+                  }
+                ).stepIndex;
                 const arr = cliEntriesByStep.get(stepIndex) ?? [];
-                arr.push({ cliOutput: entry.cliOutput, attemptIndex: entry.attemptIndex });
+                arr.push({
+                  cliOutput: entry.cliOutput,
+                  attemptIndex: entry.attemptIndex,
+                });
                 cliEntriesByStep.set(stepIndex, arr);
               }
             }
@@ -887,7 +897,9 @@ export class WorkflowInstance {
               const entries = cliEntriesByStep.get(i);
               if (entries && entries.length > 0) {
                 const cliOutputs = entries.map((e) => e.cliOutput);
-                const maxAttemptIndex = Math.max(...entries.map((e) => e.attemptIndex));
+                const maxAttemptIndex = Math.max(
+                  ...entries.map((e) => e.attemptIndex)
+                );
                 this.outputCaptureBuffer.cacheHistoricalStepOutput(
                   i,
                   cliOutputs,
@@ -1178,13 +1190,13 @@ export class WorkflowInstance {
     try {
       const parsed = await this.promptFileParser.parsePromptFile(filePath);
 
-      if (!parsed?.prompts?.length) {
+      if (!parsed?.steps?.length) {
         this.platform.error("No prompts found in file");
         return;
       }
 
       const queueState = this.promptQueue.getState();
-      const currentSize = queueState.prompts.length;
+      const currentSize = queueState.steps.length;
 
       if (currentSize === 0) {
         Log.debug("Empty workflow, creating new workflow in IDLE state");
@@ -1193,11 +1205,11 @@ export class WorkflowInstance {
           : DEFAULT_WORKFLOW_NAME;
 
         await this.initializeNewWorkflow(
-          parsed.prompts,
+          parsed.steps,
           path.basename(filePath),
           filePath,
           true,
-          `Queued ${parsed.prompts.length} prompt(s) to ${workflowType}`
+          `Queued ${parsed.steps.length} prompt(s) to ${workflowType}`
         );
         return;
       }
@@ -1212,7 +1224,7 @@ export class WorkflowInstance {
       const queueConfig = ConfigurationUtils.getDynamicQueueConfig();
       const maxQueueSize = queueConfig.maxQueueSize;
       const unlimitedMode = queueConfig.unlimitedMode;
-      const newSize = currentSize + parsed.prompts.length;
+      const newSize = currentSize + parsed.steps.length;
 
       if (!unlimitedMode && newSize > maxQueueSize) {
         this.platform.warn(
@@ -1224,18 +1236,18 @@ export class WorkflowInstance {
 
       const source = `User append (${position}): ${path.basename(filePath)}`;
       this.reopenRuntimeForContinuationIfNeeded(false);
-      await this.promptQueue.appendPrompts(parsed.prompts, source, position);
+      await this.promptQueue.appendPrompts(parsed.steps, source, position);
       this.syncCurrentPromptFileFromQueue(filePath);
 
       if (this.dashboardSink) {
         const updatedState = this.promptQueue.getState();
         this.dashboardSink.updatePromptsExtended(
-          updatedState.prompts,
+          updatedState.steps,
           this.promptQueue.getWorkflowFile().finalStep ?? null
         );
         this.dashboardSink.updateProgress(
           updatedState.currentIndex,
-          updatedState.prompts.length
+          updatedState.steps.length
         );
       }
 
@@ -1254,7 +1266,7 @@ export class WorkflowInstance {
           ? "after current prompt"
           : "at end of queue";
       this.platform.log(
-        `Queued ${parsed.prompts.length} prompt(s) ${positionText}`
+        `Queued ${parsed.steps.length} prompt(s) ${positionText}`
       );
     } catch (error) {
       Log.error("Failed to queue prompts:", error);
@@ -1356,7 +1368,7 @@ export class WorkflowInstance {
       if (!this.currentPromptFile) {
         this.currentPromptFile = {
           filePath: workingFilePath,
-          promptFile: { prompts: [] },
+          promptFile: { steps: [] },
         };
         Log.debug(
           `[inst:${this.id.slice(0, 8)}] ensureEphemeralWorkingFile: set currentPromptFile → ${path.basename(workingFilePath)}`
@@ -1407,10 +1419,10 @@ export class WorkflowInstance {
    * Updates the in-memory queue and persists to the working file without broadcasting to the webview.
    */
   async syncPromptsForUndoRedo(
-    prompts: WorkflowStep[],
+    steps: WorkflowStep[],
     finalStep: WorkflowStep | null
   ): Promise<void> {
-    await this.promptQueue.syncPromptsForUndoRedo(prompts);
+    await this.promptQueue.syncPromptsForUndoRedo(steps);
 
     // Sync finalStep if it changed
     if (finalStep !== null) {
@@ -1426,7 +1438,7 @@ export class WorkflowInstance {
 
     this.dashboardSink?.notifyUndoRedoSynced();
     Log.debug(
-      `[WorkflowInstance] syncPromptsForUndoRedo: ${prompts.length} prompts, finalStep=${finalStep ? "set" : "null"}`
+      `[WorkflowInstance] syncPromptsForUndoRedo: ${steps.length} prompts, finalStep=${finalStep ? "set" : "null"}`
     );
   }
 
@@ -1440,7 +1452,11 @@ export class WorkflowInstance {
     const props = properties as Record<string, unknown>;
     if (props?.type === STEP_TYPES.SCRIPT) {
       // Replace the step entirely — merging would leave stale prompt-step fields
-      const scriptStep = this.buildScriptStepFromProperties(text, props, promptName);
+      const scriptStep = this.buildScriptStepFromProperties(
+        text,
+        props,
+        promptName
+      );
       await this.promptQueue.replaceStep(index, scriptStep);
     } else {
       const updates: Partial<PromptStep> = {
@@ -1454,7 +1470,7 @@ export class WorkflowInstance {
     if (this.dashboardSink) {
       const currentState = this.promptQueue.getState();
       this.dashboardSink.updatePromptsExtended(
-        currentState.prompts,
+        currentState.steps,
         this.promptQueue.getWorkflowFile().finalStep ?? null
       );
     }
@@ -1519,7 +1535,7 @@ export class WorkflowInstance {
         : "Untitled";
       this.dashboardSink.updatePromptDeleted(
         fileName,
-        currentState.prompts,
+        currentState.steps,
         this.promptQueue.getWorkflowFile().finalStep ?? null
       );
     }
@@ -1531,7 +1547,7 @@ export class WorkflowInstance {
     await this.promptQueue.restart();
     if (this.dashboardSink) {
       const currentState = this.promptQueue.getState();
-      this.dashboardSink.notifyWorkflowStateReset(currentState.prompts);
+      this.dashboardSink.notifyWorkflowStateReset(currentState.steps);
     }
     Log.debug("WorkflowInstance.resetWorkflowState: Complete");
   }
@@ -1540,7 +1556,7 @@ export class WorkflowInstance {
     await this.promptQueue.reorderPendingPrompts(newPendingOrder);
     if (this.dashboardSink) {
       const state = this.promptQueue.getState();
-      this.dashboardSink.notifyPromptsReordered(state.prompts);
+      this.dashboardSink.notifyPromptsReordered(state.steps);
     }
   }
 
@@ -1559,7 +1575,7 @@ export class WorkflowInstance {
     await this.promptQueue.setStartPosition(toIndex);
     if (this.dashboardSink) {
       const updatedState = this.promptQueue.getState();
-      const promptsWithStatus = updatedState.prompts.map((prompt, index) => ({
+      const promptsWithStatus = updatedState.steps.map((prompt, index) => ({
         ...prompt,
         status: updatedState.results[index]?.status ?? STEP_STATUS.PENDING,
       }));
@@ -1600,7 +1616,7 @@ export class WorkflowInstance {
 
     const currentState = this.promptQueue.getState();
     const hasWorkflow =
-      currentState.prompts.length > 0 || !!currentState.workingFilePath;
+      currentState.steps.length > 0 || !!currentState.workingFilePath;
     const isCompleted =
       this.getAuthoritativeExecutionState() === EXECUTION_STATES.COMPLETED;
 
@@ -1656,7 +1672,7 @@ export class WorkflowInstance {
       // workflowName that differs from the default placeholder means the user named it.
       const hasUserDefinedName =
         this.workflowName && this.workflowName !== DEFAULT_WORKFLOW_NAME;
-      if (currentState.prompts.length === 0 && !hasUserDefinedName) {
+      if (currentState.steps.length === 0 && !hasUserDefinedName) {
         this.workflowName = generatedWorkflowName;
         this.promptQueue.setWorkflowName(generatedWorkflowName);
         await this.promptQueue.updateWorkingFile(true);
@@ -1667,7 +1683,7 @@ export class WorkflowInstance {
 
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: appending to existing workflow ` +
-          `(status=${this.getAuthoritativeExecutionState()}, prompts=${currentState.prompts.length}, shouldRun=${shouldRun}, action=${action})`
+          `(status=${this.getAuthoritativeExecutionState()}, prompts=${currentState.steps.length}, shouldRun=${shouldRun}, action=${action})`
       );
       this.reopenRuntimeForContinuationIfNeeded(shouldRun);
       await this.promptQueue.appendPrompts(
@@ -1680,7 +1696,7 @@ export class WorkflowInstance {
       if (this.dashboardSink) {
         const updatedState = this.promptQueue.getState();
         this.dashboardSink.updatePromptsExtended(
-          updatedState.prompts,
+          updatedState.steps,
           this.promptQueue.getWorkflowFile().finalStep ?? null
         );
       }
@@ -2052,11 +2068,11 @@ export class WorkflowInstance {
 
         const workingFile =
           await this.promptQueue.readWorkingFile(changedFilePath);
-        if (workingFile?.prompts) {
+        if (workingFile?.steps) {
           const fp = workingFile.originalFile || changedFilePath;
           this.currentPromptFile = {
             filePath: fp,
-            promptFile: { prompts: workingFile.prompts },
+            promptFile: { steps: workingFile.steps },
           };
         }
       },
@@ -2134,7 +2150,7 @@ export class WorkflowInstance {
     const state = this.promptQueue.getState();
     Log.debug(
       `[inst:${this.id.slice(0, 8)}] Runtime transition ${transition.command}: ${transition.previous.status} -> ${transition.current.status} ` +
-        `(step ${state.currentIndex}/${state.prompts.length}, isActive=${this.isActive})`
+        `(step ${state.currentIndex}/${state.steps.length}, isActive=${this.isActive})`
     );
 
     const executionState = this.getAuthoritativeExecutionState();
@@ -2200,7 +2216,7 @@ export class WorkflowInstance {
     }
 
     const state = this.promptQueue.getState();
-    if (state.currentIndex >= state.prompts.length) {
+    if (state.currentIndex >= state.steps.length) {
       return undefined;
     }
 
@@ -2229,7 +2245,7 @@ export class WorkflowInstance {
   private onQueueStateChanged(state: QueueState): void {
     const executionState = this.getAuthoritativeExecutionState();
     Log.debug(
-      `[inst:${this.id.slice(0, 8)}] Queue state → ${executionState} (step ${state.currentIndex}/${state.prompts.length}, isActive=${this.isActive})`
+      `[inst:${this.id.slice(0, 8)}] Queue state → ${executionState} (step ${state.currentIndex}/${state.steps.length}, isActive=${this.isActive})`
     );
     this.onStatusBarUpdate();
 
@@ -2246,26 +2262,26 @@ export class WorkflowInstance {
       // When prompts increase, piggyback the current execution state onto the
       // PROMPTS_EXTENDED message so prompt-growth + lifecycle updates still land
       // in one render and avoid the React 19 detached-fiber issue.
-      const hasNewPrompts = state.prompts.length > this.lastKnownPromptCount;
+      const hasNewPrompts = state.steps.length > this.lastKnownPromptCount;
 
       if (hasNewPrompts) {
         Log.debug(
-          `Detected prompt count increase: ${this.lastKnownPromptCount} → ${state.prompts.length}. Notifying dashboard.`
+          `Detected prompt count increase: ${this.lastKnownPromptCount} → ${state.steps.length}. Notifying dashboard.`
         );
         // Include executionState so both updates reach the webview in one message.
         this.dashboardSink.updatePromptsExtended(
-          state.prompts,
+          state.steps,
           this.promptQueue.getWorkflowFile().finalStep ?? null,
           executionState
         );
         this.dashboardSink.updateProgress(
           state.currentIndex,
-          state.prompts.length
+          state.steps.length
         );
       }
     }
 
-    this.lastKnownPromptCount = state.prompts.length;
+    this.lastKnownPromptCount = state.steps.length;
     this.lastKnownWorkflowName = state.workflowName ?? "";
   }
 
@@ -2306,7 +2322,7 @@ export class WorkflowInstance {
         this.dashboardSink.updateExecutionStarted(
           this.id,
           fileName,
-          state.prompts.length,
+          state.steps.length,
           true, // isContinuation
           state.currentIndex // preserveStepCount
         );
@@ -2316,7 +2332,7 @@ export class WorkflowInstance {
         this.dashboardSink.updateExecutionStarted(
           this.id,
           fileName,
-          state.prompts.length
+          state.steps.length
         );
       }
     }
@@ -2329,7 +2345,7 @@ export class WorkflowInstance {
   }
 
   private async initializeNewWorkflow(
-    prompts: WorkflowStep[],
+    steps: WorkflowStep[],
     displayName: string,
     originalFilePath?: string,
     reuseExistingWorkingFile: boolean = false,
@@ -2360,7 +2376,7 @@ export class WorkflowInstance {
       try {
         workingFilePath = await this.promptQueue.createWorkingFile(
           displayName,
-          prompts,
+          steps,
           workspaceFolderPath,
           originalFilePath
         );
@@ -2390,11 +2406,11 @@ export class WorkflowInstance {
     let promptFile: PromptFile;
     if (workingFilePath) {
       promptFile = await this.promptQueue.readWorkingFile(workingFilePath);
-      if (!promptFile.prompts || promptFile.prompts.length === 0) {
-        promptFile = { ...promptFile, prompts };
+      if (!promptFile.steps || promptFile.steps.length === 0) {
+        promptFile = { ...promptFile, steps: steps };
       }
     } else {
-      promptFile = { prompts };
+      promptFile = { steps: steps };
     }
     this.promptQueue.loadPrompts(promptFile, workingFilePath);
 
@@ -2411,7 +2427,7 @@ export class WorkflowInstance {
       const queueState = this.promptQueue.getState();
       this.dashboardSink.updateFileSelected(
         displayName,
-        prompts,
+        steps,
         queueState.workflowName || undefined,
         promptFile.finalStep ?? null,
         this.promptQueue.getFinalPromptRuntime()
@@ -2478,9 +2494,10 @@ export class WorkflowInstance {
       type: STEP_TYPES.SCRIPT,
       script,
       ...(name?.trim() ? { name: name.trim() } : {}),
-      ...(props.timeout !== undefined && props.timeout !== null && {
-        timeout: props.timeout as number,
-      }),
+      ...(props.timeout !== undefined &&
+        props.timeout !== null && {
+          timeout: props.timeout as number,
+        }),
       ...(props.continueOnFailure === true && { continueOnFailure: true }),
     };
   }

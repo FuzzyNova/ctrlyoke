@@ -38,7 +38,7 @@ export interface QueueStatusResponse {
     remainingSlots: number;
     workingFile: string | null;
   };
-  prompts: Array<{
+  steps: Array<{
     index: number;
     prompt: string;
     status: string;
@@ -71,7 +71,7 @@ export interface ReadOutputResponse {
  * Append prompts request (single source for both MCP and Language Model Tools)
  */
 export interface AppendPromptsRequest {
-  prompts: Array<{
+  steps: Array<{
     prompt: string;
     model?: string;
     harness?: string;
@@ -115,7 +115,7 @@ export function getQueueStatus(
 
   const remainingSlots = unlimitedMode
     ? Infinity
-    : Math.max(0, maxQueueSize - state.prompts.length);
+    : Math.max(0, maxQueueSize - state.steps.length);
 
   // Extract workflow name from working file path if available
   let workflowName: string | null = null;
@@ -136,7 +136,7 @@ export function getQueueStatus(
       harness: workflowFile.harness ?? null,
       model: workflowFile.model ?? null,
       currentIndex: state.currentIndex,
-      totalPrompts: state.prompts.length,
+      totalPrompts: state.steps.length,
       completedPrompts: state.results.filter(
         (r) => r.status === STEP_STATUS.COMPLETED
       ).length,
@@ -145,7 +145,7 @@ export function getQueueStatus(
       remainingSlots: remainingSlots === Infinity ? 0 : remainingSlots,
       workingFile: state.workingFilePath || null,
     },
-    prompts: state.prompts.map((p, index) => ({
+    steps: state.steps.map((p, index) => ({
       index,
       prompt: isScriptStep(p) ? p.script : p.prompt,
       status: state.results[index]?.status || STEP_STATUS.PENDING,
@@ -167,7 +167,7 @@ export function readQueueOutput(
   request: ReadOutputRequest
 ): ReadOutputResponse {
   const state = queue.getState();
-  const allPrompts = state.prompts;
+  const allPrompts = state.steps;
 
   const indices =
     !request.indices || request.indices.length === 0
@@ -214,8 +214,8 @@ export async function appendToQueue(
 
   const state = queue.getState();
   const runtime = queue.getRuntimeStateMachine();
-  const currentSize = state.prompts.length;
-  const newSize = currentSize + request.prompts.length;
+  const currentSize = state.steps.length;
+  const newSize = currentSize + request.steps.length;
 
   if (!unlimitedMode && newSize > maxQueueSize) {
     throw new Error(
@@ -225,7 +225,7 @@ export async function appendToQueue(
   }
 
   // 3. Convert request prompts to PromptStep format
-  const promptItems: PromptStep[] = request.prompts.map((p) => ({
+  const promptItems: PromptStep[] = request.steps.map((p) => ({
     prompt: p.prompt,
     model: p.model,
     harness: p.harness as Harness | undefined,
@@ -238,7 +238,7 @@ export async function appendToQueue(
   const insertIndex =
     request.position === QUEUE_POSITION.NEXT
       ? state.currentIndex + 1
-      : state.prompts.length;
+      : state.steps.length;
 
   if (runtime.status === EXECUTION_STATES.COMPLETED) {
     runtime.reopenForContinuation();
@@ -252,8 +252,8 @@ export async function appendToQueue(
 
   return {
     success: true,
-    promptsAdded: request.prompts.length,
-    newQueueSize: updatedState.prompts.length,
+    promptsAdded: request.steps.length,
+    newQueueSize: updatedState.steps.length,
     insertIndex,
     workingFile: updatedState.workingFilePath || null,
   };

@@ -10,7 +10,7 @@ Tests the MCP server's deduplication validation logic.
 
 ```json
 {
-  "prompts": [
+  "steps": [
     { "prompt": "Review the code" },
     { "prompt": "Review the code" } // DUPLICATE
   ],
@@ -40,7 +40,7 @@ Tests the MCP server's deduplication validation logic.
 
 ```json
 {
-  "prompts": [
+  "steps": [
     { "id": "review", "prompt": "Check the implementation" },
     { "id": "review", "prompt": "Different content" } // DUPLICATE ID
   ],
@@ -70,7 +70,7 @@ Tests the MCP server's deduplication validation logic.
 
 ```json
 {
-  "prompts": [{ "prompt": "Exact same completed prompt" }],
+  "steps": [{ "prompt": "Exact same completed prompt" }],
   "position": "next"
 }
 ```
@@ -96,7 +96,7 @@ Tests the MCP server's deduplication validation logic.
 
 ```json
 {
-  "prompts": [{ "id": "analyze", "prompt": "Different analysis" }],
+  "steps": [{ "id": "analyze", "prompt": "Different analysis" }],
   "position": "next"
 }
 ```
@@ -121,7 +121,7 @@ Tests the MCP server's deduplication validation logic.
 
 ```json
 {
-  "prompts": [
+  "steps": [
     { "id": "review-1", "prompt": "Review the code" },
     { "id": "review-2", "prompt": "Review the code" } // SAME CONTENT, DIFFERENT ID
   ],
@@ -147,7 +147,7 @@ Tests the MCP server's deduplication validation logic.
 
 ```json
 {
-  "prompts": [
+  "steps": [
     { "id": "valid-1", "prompt": "First valid prompt" },
     { "prompt": "Duplicate content" },
     { "prompt": "Duplicate content" }, // REJECTED
@@ -229,7 +229,7 @@ Use the MCP Inspector or CLI tools to test these scenarios:
 
 ```bash
 # Test duplicate content
-echo '{"prompts":[{"prompt":"Test"},{"prompt":"Test"}],"position":"next"}' | \
+echo '{"steps":[{"prompt":"Test"},{"prompt":"Test"}],"position":"next"}' | \
   node out/mcp-server.js
 
 # Check logs

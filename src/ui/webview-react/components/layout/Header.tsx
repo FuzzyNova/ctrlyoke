@@ -1,7 +1,5 @@
 import React, { useCallback } from "react";
-import {
-  useWorkflowStore,
-} from "@store/workflowStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import {
   MESSAGE_TYPES,
@@ -85,7 +83,7 @@ export const Header: React.FC<{
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
   const { fileName, executionState } = useWorkflowStore();
-  const hasPrompts = useWorkflowStore((s) => s.prompts.length > 0);
+  const hasPrompts = useWorkflowStore((s) => s.steps.length > 0);
   const {
     loadedWorkflows,
     activeWorkflowId,

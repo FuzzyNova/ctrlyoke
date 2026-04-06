@@ -2,21 +2,21 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "FlightPath Prompt Schema",
   "type": "object",
-  "description": "Schema for FlightPath prompts. Prompts should be in final-form format with all context references (e.g., @path/to/file, @path/to/dir/, #file:path, #selection:path:line-line, #sym:path:symbol:line) included directly in the prompt text. FlightPath expands these references into inline file/symbol content before sending to the AI.",
+  "description": "Schema for FlightPath workflows. Steps should be in final-form format with all context references (e.g., @path/to/file, @path/to/dir/, #file:path, #selection:path:line-line, #sym:path:symbol:line) included directly in the prompt text. FlightPath expands these references into inline file/symbol content before sending to the AI.",
   "oneOf": [
     {
-      "title": "Single Prompt",
+      "title": "Single Step",
       "$ref": "#/definitions/workflowStep"
     },
     {
-      "title": "Multiple Prompts (or Working File)",
+      "title": "Multiple Steps (or Working File)",
       "allOf": [
         {
           "$ref": "#/definitions/executionProperties"
         },
         {
           "properties": {
-            "prompts": {
+            "steps": {
               "type": "array",
               "items": {
                 "$ref": "#/definitions/workflowStep"
@@ -49,7 +49,7 @@
               }
             }
           },
-          "required": ["prompts"]
+          "required": ["steps"]
         }
       ]
     }

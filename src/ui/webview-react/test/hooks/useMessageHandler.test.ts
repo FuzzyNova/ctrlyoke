@@ -56,15 +56,15 @@ describe("FILE_SELECTED", () => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
         fileName: "test.flightpath.yaml",
         workflowName: "My Workflow",
-        prompts: [makePrompt("Step 1"), makePrompt("Step 2")],
+        steps: [makePrompt("Step 1"), makePrompt("Step 2")],
       });
     });
 
     const wf = useWorkflowStore.getState();
     expect(wf.fileName).toBe("test.flightpath.yaml");
     expect(wf.workflowName).toBe("My Workflow");
-    expect(wf.prompts).toHaveLength(2);
-    expect((wf.prompts[0] as any).prompt).toBe("Step 1");
+    expect(wf.steps).toHaveLength(2);
+    expect((wf.steps[0] as any).prompt).toBe("Step 1");
   });
 
   it("marks settingsStore.workflowLoaded = true", () => {
@@ -73,7 +73,7 @@ describe("FILE_SELECTED", () => {
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
         fileName: "test.flightpath.yaml",
-        prompts: [makePrompt("Step 1")],
+        steps: [makePrompt("Step 1")],
       });
     });
 
@@ -86,7 +86,7 @@ describe("FILE_SELECTED", () => {
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
         fileName: "test.flightpath.yaml",
-        prompts: [makePrompt("Step 1")],
+        steps: [makePrompt("Step 1")],
       });
     });
 
@@ -102,7 +102,7 @@ describe("FILE_SELECTED", () => {
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
         fileName: "new.flightpath.yaml",
-        prompts: [makePrompt("Step 1")],
+        steps: [makePrompt("Step 1")],
       });
     });
 
@@ -123,14 +123,14 @@ describe("INIT", () => {
         data: {
           fileName: "init.flightpath.yaml",
           workflowName: "Init Workflow",
-          prompts: [makePrompt("Init Step")],
+          steps: [makePrompt("Init Step")],
           executionState: EXECUTION_STATES.IDLE,
         },
       });
     });
 
     expect(useWorkflowStore.getState().fileName).toBe("init.flightpath.yaml");
-    expect(useWorkflowStore.getState().prompts).toHaveLength(1);
+    expect(useWorkflowStore.getState().steps).toHaveLength(1);
   });
 
   it("updates global settings", () => {
@@ -260,7 +260,7 @@ describe("STEP_STATUS_CHANGED", () => {
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
         fileName: "wf.yaml",
-        prompts: [
+        steps: [
           makePrompt("Step 0"),
           makePrompt("Step 1"),
           makePrompt("Step 2"),
@@ -275,7 +275,7 @@ describe("STEP_STATUS_CHANGED", () => {
       });
     });
 
-    const prompts = useWorkflowStore.getState().prompts;
+    const prompts = useWorkflowStore.getState().steps;
     expect((prompts[0] as any).status).toBe(STEP_STATUS.PENDING);
     expect((prompts[1] as any).status).toBe(STEP_STATUS.COMPLETED);
     expect((prompts[2] as any).status).toBe(STEP_STATUS.PENDING);
@@ -287,7 +287,7 @@ describe("STEP_STATUS_CHANGED", () => {
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
         fileName: "wf.yaml",
-        prompts: [makePrompt("Step 0")],
+        steps: [makePrompt("Step 0")],
       });
     });
 
@@ -298,7 +298,7 @@ describe("STEP_STATUS_CHANGED", () => {
       });
     });
 
-    expect((useWorkflowStore.getState().prompts[0] as any).status).toBe(
+    expect((useWorkflowStore.getState().steps[0] as any).status).toBe(
       STEP_STATUS.RUNNING
     );
   });
@@ -338,13 +338,13 @@ describe("PROMPTS_EXTENDED", () => {
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
         fileName: "wf.yaml",
-        prompts: [makePrompt("Step 0"), makePrompt("Step 1")],
+        steps: [makePrompt("Step 0"), makePrompt("Step 1")],
       });
     });
 
     act(() => {
       dispatch(MESSAGE_TYPES.PROMPTS_EXTENDED, {
-        prompts: [
+        steps: [
           makePrompt("Step 0"),
           makePrompt("Step 1"),
           makePrompt("Step 2"),
@@ -352,8 +352,8 @@ describe("PROMPTS_EXTENDED", () => {
       });
     });
 
-    expect(useWorkflowStore.getState().prompts).toHaveLength(3);
-    expect((useWorkflowStore.getState().prompts[2] as any).prompt).toBe("Step 2");
+    expect(useWorkflowStore.getState().steps).toHaveLength(3);
+    expect((useWorkflowStore.getState().steps[2] as any).prompt).toBe("Step 2");
   });
 
   it("preserves existing prompt statuses", () => {
@@ -362,7 +362,7 @@ describe("PROMPTS_EXTENDED", () => {
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
         fileName: "wf.yaml",
-        prompts: [makePrompt("Step 0"), makePrompt("Step 1")],
+        steps: [makePrompt("Step 0"), makePrompt("Step 1")],
       });
     });
 
@@ -376,7 +376,7 @@ describe("PROMPTS_EXTENDED", () => {
 
     act(() => {
       dispatch(MESSAGE_TYPES.PROMPTS_EXTENDED, {
-        prompts: [
+        steps: [
           makePrompt("Step 0"),
           makePrompt("Step 1"),
           makePrompt("Step 2"),
@@ -384,7 +384,7 @@ describe("PROMPTS_EXTENDED", () => {
       });
     });
 
-    expect((useWorkflowStore.getState().prompts[0] as any).status).toBe(
+    expect((useWorkflowStore.getState().steps[0] as any).status).toBe(
       STEP_STATUS.COMPLETED
     );
   });

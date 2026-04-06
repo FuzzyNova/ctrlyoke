@@ -197,7 +197,7 @@ function renderPromptsList() {
 
 ```tsx
 function PromptsPanel() {
-  const prompts = useWorkflowStore((state) => state.prompts);
+  const steps = useWorkflowStore((state) => state.prompts);
   return (
     <div>
       {prompts.map((prompt, index) => (

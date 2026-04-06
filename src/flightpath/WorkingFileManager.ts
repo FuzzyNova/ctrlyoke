@@ -182,7 +182,7 @@ export class WorkingFileManager {
       workflowName,
       startedAt: Date.now(),
       lastModifiedAt: Date.now(),
-      prompts: prompts,
+      steps: prompts,
       _runtime: {
         currentIndex: 0,
         executionState: EXECUTION_STATES.IDLE,
@@ -242,7 +242,7 @@ export class WorkingFileManager {
         // This preserves MCP-appended prompts that may have been added while we were running
         // BUT: Skip merge for intentional writes (delete/update) to avoid undoing changes
         if (!skipMerge) {
-          const diskPrompts = workingFile.prompts || [];
+          const diskPrompts = workingFile.steps || [];
 
           const newPromptsFromDisk =
             this.queueAccess.mergeDiskPrompts(diskPrompts);
@@ -260,16 +260,16 @@ export class WorkingFileManager {
 
         // Now write back the prompts array (merged or direct from memory)
         // CRITICAL: Preserve _runtime metadata during save (Phase 4: Per-Prompt Session Management)
-        workingFile.prompts = this.queueAccess.getPrompts().map((prompt) => ({
+        workingFile.steps = this.queueAccess.getPrompts().map((prompt) => ({
           ...prompt,
         }));
         // Count prompts with _runtime metadata (Phase 4: Session Management)
-        const promptsWithRuntime = workingFile.prompts.filter(
+        const promptsWithRuntime = workingFile.steps.filter(
           (p) => p._runtime
         ).length;
         Log.debug(
-          `updateWorkingFile - Writing ${workingFile.prompts.length} prompts to ${workingFilePath}, ` +
-            `_runtime: ${promptsWithRuntime}/${workingFile.prompts.length} prompts`
+          `updateWorkingFile - Writing ${workingFile.steps.length} prompts to ${workingFilePath}, ` +
+            `_runtime: ${promptsWithRuntime}/${workingFile.steps.length} prompts`
         );
 
         // Update workflow name if set in state

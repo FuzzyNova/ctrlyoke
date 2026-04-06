@@ -276,7 +276,7 @@ export class ValidationUtils {
 
     // Check if it's a single prompt or multiple prompts format
     const hasSinglePrompt = file.prompt && typeof file.prompt === "string";
-    const hasMultiplePrompts = file.prompts && Array.isArray(file.prompts);
+    const hasMultiplePrompts = file.steps && Array.isArray(file.steps);
 
     if (!hasSinglePrompt && !hasMultiplePrompts) {
       errors.push(
@@ -304,7 +304,7 @@ export class ValidationUtils {
 
     if (hasMultiplePrompts) {
       // Validate multiple prompts format
-      const result = ValidationUtils.validateWorkflowSteps(file.prompts);
+      const result = ValidationUtils.validateWorkflowSteps(file.steps);
       if (!result.valid) {
         errors.push(...result.errors);
       }

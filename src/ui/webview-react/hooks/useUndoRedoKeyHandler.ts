@@ -71,7 +71,7 @@ export function useUndoRedoKeyHandler() {
       useSettingsStore.getState().setWorkflowProperties(workflowProperties);
       getVsCodeApi().postMessage({
         type: MESSAGE_TYPES.UNDO_REDO_SYNC,
-        prompts: ws.prompts,
+        steps: ws.steps,
         finalStep: ws.finalStep,
         workflowProperties,
       });

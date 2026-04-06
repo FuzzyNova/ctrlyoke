@@ -1,5 +1,5 @@
 {
-  "prompts": [
+  "steps": [
     {
       "prompt": "What is the capital of France? Just give me the one-word answer.",
       "resumeSession": false

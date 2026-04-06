@@ -165,7 +165,9 @@ function buildWorkflow(harness: HarnessId, recorderScript: string): PromptFile {
 
   return {
     harness: harness as any,
-    ...(HARNESS_MODELS[harness] !== undefined && { model: HARNESS_MODELS[harness] }),
+    ...(HARNESS_MODELS[harness] !== undefined && {
+      model: HARNESS_MODELS[harness],
+    }),
     hooks: [
       { event: "stop", command: hookCmd("stop") },
       { event: "sessionStart", command: hookCmd("sessionStart") },
@@ -173,7 +175,7 @@ function buildWorkflow(harness: HarnessId, recorderScript: string): PromptFile {
       { event: "postToolUse", command: hookCmd("postToolUse") },
       { event: "userPromptSubmit", command: hookCmd("userPromptSubmit") },
     ],
-    prompts: [
+    steps: [
       {
         name: `hook-test-${harness}`,
         // Explicit bash invocation maximises chance of preToolUse/postToolUse

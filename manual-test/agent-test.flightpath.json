@@ -1,5 +1,5 @@
 {
-  "prompts": [
+  "steps": [
     {
       "prompt": "Analyze the agent definition in @.github/agents/test-agent-alpha.agent.md and confirm you are Test Agent Alpha",
       "agent": "test-agent-alpha",

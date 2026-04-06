@@ -61,9 +61,12 @@ function describePromptChange(
   n: PromptChangeFields
 ): string | null {
   if (p.prompt !== n.prompt) return `Edited ${scope}`;
-  if (p.harness !== n.harness) return `Changed harness on ${scope} to ${strVal(n.harness)}`;
-  if (p.model !== n.model) return `Changed model on ${scope} to ${strVal(n.model)}`;
-  if (p.agent !== n.agent) return `Changed agent on ${scope} to ${strVal(n.agent)}`;
+  if (p.harness !== n.harness)
+    return `Changed harness on ${scope} to ${strVal(n.harness)}`;
+  if (p.model !== n.model)
+    return `Changed model on ${scope} to ${strVal(n.model)}`;
+  if (p.agent !== n.agent)
+    return `Changed agent on ${scope} to ${strVal(n.agent)}`;
   if (JSON.stringify(p.endCondition) !== JSON.stringify(n.endCondition))
     return `Changed end condition on ${scope}`;
   if (JSON.stringify(p.skills) !== JSON.stringify(n.skills))
@@ -89,8 +92,8 @@ function describeChange(
     return `Renamed to "${next.workflowName ?? "Untitled"}"`;
   }
 
-  const prevLen = prev.prompts.length;
-  const nextLen = next.prompts.length;
+  const prevLen = prev.steps.length;
+  const nextLen = next.steps.length;
 
   if (nextLen > prevLen) return `Added prompt ${nextLen}`;
   if (nextLen < prevLen) return `Deleted prompt ${prevLen}`;
@@ -100,7 +103,11 @@ function describeChange(
   if (!prevFinal && nextFinal) return "Added final prompt";
   if (prevFinal && !nextFinal) return "Removed final prompt";
   if (prevFinal && nextFinal) {
-    const change = describePromptChange("final prompt", prevFinal as PromptChangeFields, nextFinal as PromptChangeFields);
+    const change = describePromptChange(
+      "final prompt",
+      prevFinal as PromptChangeFields,
+      nextFinal as PromptChangeFields
+    );
     if (change) return change;
   }
 
@@ -117,26 +124,39 @@ function describeChange(
     return `Changed workflow skills`;
   if (prevWP.additionalArgs !== nextWP.additionalArgs)
     return `Changed workflow additional args to ${strVal(nextWP.additionalArgs)}`;
-  if (JSON.stringify(prevWP.priorContext) !== JSON.stringify(nextWP.priorContext))
+  if (
+    JSON.stringify(prevWP.priorContext) !== JSON.stringify(nextWP.priorContext)
+  )
     return `Changed workflow prior context`;
   if (prevWP.resumeSession !== nextWP.resumeSession)
-    return nextWP.resumeSession ? `Enabled resume session` : `Disabled resume session`;
+    return nextWP.resumeSession
+      ? `Enabled resume session`
+      : `Disabled resume session`;
   if (prevWP.sessionId !== nextWP.sessionId)
     return `Changed session ID to ${strVal(nextWP.sessionId)}`;
-  if (JSON.stringify(prevWP.endCondition) !== JSON.stringify(nextWP.endCondition))
+  if (
+    JSON.stringify(prevWP.endCondition) !== JSON.stringify(nextWP.endCondition)
+  )
     return `Changed workflow end condition`;
   if (JSON.stringify(prevWP.mcpServers) !== JSON.stringify(nextWP.mcpServers))
     return `Changed workflow MCP servers`;
   if (JSON.stringify(prevWP.hooks) !== JSON.stringify(nextWP.hooks))
     return `Changed workflow hooks`;
-  if (JSON.stringify(prevWP.toolPermissions) !== JSON.stringify(nextWP.toolPermissions))
+  if (
+    JSON.stringify(prevWP.toolPermissions) !==
+    JSON.stringify(nextWP.toolPermissions)
+  )
     return `Changed workflow tool permissions`;
 
   for (let i = 0; i < nextLen; i++) {
-    const p = prev.prompts[i];
-    const n = next.prompts[i];
+    const p = prev.steps[i];
+    const n = next.steps[i];
     if (!p || !n) continue;
-    const change = describePromptChange(`prompt ${i + 1}`, p as PromptChangeFields, n as PromptChangeFields);
+    const change = describePromptChange(
+      `prompt ${i + 1}`,
+      p as PromptChangeFields,
+      n as PromptChangeFields
+    );
     if (change) return change;
   }
 
@@ -216,7 +236,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     useSettingsStore.getState().setWorkflowProperties(workflowProperties);
     vscode.postMessage({
       type: MESSAGE_TYPES.UNDO_REDO_SYNC,
-      prompts: ws.prompts,
+      steps: ws.steps,
       finalStep: ws.finalStep,
       workflowProperties,
     });
@@ -258,7 +278,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   const historyEntries = React.useMemo(() => {
     const s = useWorkflowStore.getState();
     const current: UndoableWorkflowState = {
-      prompts: s.prompts ?? [],
+      steps: s.steps ?? [],
       workflowName: s.workflowName ?? null,
       finalStep: s.finalStep ?? null,
       currentStep: s.currentStep ?? 0,
@@ -271,7 +291,8 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
 
     const redoEntries = typedFuture.map((state, i) => {
       // prevState is the state that was current just before this future state was recorded
-      const prevState = i === typedFuture.length - 1 ? current : typedFuture[i + 1];
+      const prevState =
+        i === typedFuture.length - 1 ? current : typedFuture[i + 1];
       return {
         label: describeChange(prevState, state),
         stepCount: typedFuture.length - i,
@@ -297,7 +318,8 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover";
   const disabledClass =
     "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed";
-  const separatorClass = "bg-btn-secondary-bg text-btn-secondary-fg py-1 flex-shrink-0";
+  const separatorClass =
+    "bg-btn-secondary-bg text-btn-secondary-fg py-1 flex-shrink-0";
 
   const undoDisabled = !canUndo || editingDisabled;
   const redoDisabled = !canRedo || editingDisabled;
@@ -382,10 +404,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
         className={`${btnBase} px-1.5 ${chevronDisabled ? disabledClass : activeClass} ${isOpen ? "bg-btn-secondary-hover" : ""}`}
         onClick={() => {
           const nextOpen = !isOpen;
-          onAction?.(
-            "history-toggle",
-            getDebugDetails({ isOpen: nextOpen })
-          );
+          onAction?.("history-toggle", getDebugDetails({ isOpen: nextOpen }));
           if (!chevronDisabled) {
             setIsOpen(nextOpen);
           }
@@ -447,9 +466,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
               >
                 <i
                   className={`codicon ${
-                    direction === "redo"
-                      ? "codicon-redo"
-                      : "codicon-discard"
+                    direction === "redo" ? "codicon-redo" : "codicon-discard"
                   } text-description-fg text-xs flex-shrink-0`}
                 />
                 <span className="flex-1 truncate">{label}</span>

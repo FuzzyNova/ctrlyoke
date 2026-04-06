@@ -25,7 +25,7 @@ export const PANEL_MAX_SIZE_SIDEBAR = "40";
 
 /** Default panel sizes (percentage) for desktop layout — single source of truth for initial layout */
 export const DEFAULT_DESKTOP_SIZES = {
-  prompts: 20,
+  steps: 20,
   output: 60,
   editor: 40,
   settings: 20,
@@ -33,7 +33,7 @@ export const DEFAULT_DESKTOP_SIZES = {
 
 /** Default panel sizes (percentage) for mobile layout */
 export const DEFAULT_MOBILE_SIZES = {
-  prompts: 10,
+  steps: 10,
   output: 50,
   editor: 30,
   settings: 10,

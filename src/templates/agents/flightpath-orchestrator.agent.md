@@ -81,7 +81,7 @@ Every workflow you create follows this pattern:
 
 ```json
 {
-  "prompts": [
+  "steps": [
     {
       "id": "unique-step-id",
       "prompt": "The actual prompt text with @workspace and @path references",
@@ -105,7 +105,7 @@ Every workflow you create follows this pattern:
 
 ### Context Variables for Prompts
 
-Use these in your generated prompts:
+Use these in your generated steps:
 
 - `@path/to/file.ts` - Reference specific file
 - `#selection:path/to/file.ts:10-50` - Reference specific lines
@@ -117,7 +117,7 @@ When generating the workflow file, output it as a fenced JSON code block:
 
 ```json
 {
-  "prompts": [
+  "steps": [
     // Your generated prompts here
   ]
 }
@@ -131,7 +131,7 @@ User: "Add a loading spinner to the dashboard component"
 
 ```json
 {
-  "prompts": [
+  "steps": [
     {
       "id": "plan-spinner",
       "prompt": "@workspace Analyze the dashboard component and identify where to add a loading spinner. Check for existing spinner components or patterns in the codebase. Create a brief implementation plan.",
@@ -166,7 +166,7 @@ User: "Add user authentication with JWT tokens"
 
 ```json
 {
-  "prompts": [
+  "steps": [
     {
       "id": "plan-auth-architecture",
       "prompt": "@workspace Analyze the current project architecture and identify:\n1. Where authentication logic should live\n2. Existing patterns for middleware/interceptors\n3. How routes are currently protected (if at all)\n4. Token storage strategy (localStorage, cookies, etc.)\n\nCreate a detailed architecture plan for JWT authentication.",

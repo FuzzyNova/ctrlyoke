@@ -165,7 +165,7 @@ class FlightPathMCPServer {
             inputSchema: {
               type: "object",
               properties: {
-                prompts: {
+                steps: {
                   type: "array",
                   items: {
                     type: "object",
@@ -202,7 +202,7 @@ class FlightPathMCPServer {
                 position: {
                   type: "string",
                   enum: [QUEUE_POSITION.NEXT, QUEUE_POSITION.END],
-                  description: `Where to insert prompts: '${QUEUE_POSITION.NEXT}' (after current) or '${QUEUE_POSITION.END}' (at end of queue)`,
+                  description: `Where to insert steps: '${QUEUE_POSITION.NEXT}' (after current) or '${QUEUE_POSITION.END}' (at end of queue)`,
                 },
                 source: {
                   type: "string",
@@ -351,8 +351,8 @@ class FlightPathMCPServer {
       executionState: EXECUTION_STATES.IDLE,
     };
 
-    const allPrompts = (queueData.prompts || []) as WorkflowStep[];
-    const prompts = allPrompts.map((p, index) => ({
+    const allPrompts = (queueData.steps || []) as WorkflowStep[];
+    const steps = allPrompts.map((p, index) => ({
       index,
       prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,
       status: this.getPromptStatus(index, runtime, allPrompts),
@@ -372,14 +372,14 @@ class FlightPathMCPServer {
         harness: queueData.harness ?? null,
         model: queueData.model ?? null,
         currentIndex: runtime.currentIndex,
-        totalPrompts: prompts.length,
+        totalPrompts: allPrompts.length,
         completedPrompts: completedCount,
         executionState: runtime.executionState,
         maxQueueSize: unlimited ? "unlimited" : maxSize,
-        remainingSlots: unlimited ? "unlimited" : maxSize - prompts.length,
+        remainingSlots: unlimited ? "unlimited" : maxSize - allPrompts.length,
         workingFile: path.relative(this.workspaceRoot, workingFile),
       },
-      prompts,
+      steps,
     };
 
     return {
@@ -399,11 +399,11 @@ class FlightPathMCPServer {
   private async handleQueueAppend(args: any) {
     log("Processing append_queue request...");
     const {
-      prompts,
+      steps,
       position,
       source = "MCP Tool",
     } = args as {
-      prompts: Array<
+      steps: Array<
         PromptStep & {
           resumeSession?: boolean;
           sessionId?: number;
@@ -415,14 +415,14 @@ class FlightPathMCPServer {
     };
 
     log("Parsed arguments:", {
-      promptCount: prompts?.length || 0,
+      promptCount: steps?.length || 0,
       position,
       source,
     });
 
     // Validate inputs
-    if (!Array.isArray(prompts) || prompts.length === 0) {
-      log("ERROR: Invalid prompts array", prompts);
+    if (!Array.isArray(steps) || steps.length === 0) {
+      log("ERROR: Invalid steps array", steps);
       throw new Error("prompts must be a non-empty array");
     }
 
@@ -447,7 +447,7 @@ class FlightPathMCPServer {
     // Validate harness/model against capabilities.json (best-effort: skip if file absent)
     const capabilities = await this.readCapabilities();
     if (capabilities) {
-      for (const p of prompts) {
+      for (const p of steps) {
         const promptHarness = p.harness;
         const promptModel = p.model;
         if (promptHarness) {
@@ -494,13 +494,13 @@ class FlightPathMCPServer {
       log("Reading current queue state...");
       const fileContent = await fs.readFile(workingFile, "utf8");
       const queueData: WorkingFile = JSON.parse(fileContent);
-      log("Current queue size:", queueData.prompts?.length || 0);
+      log("Current queue size:", queueData.steps?.length || 0);
 
       const runtime = queueData._runtime || {
         currentIndex: 0,
         executionState: EXECUTION_STATES.IDLE,
       };
-      const completedCount = (queueData.prompts || []).filter(
+      const completedCount = (queueData.steps || []).filter(
         (p) => p._runtime?.completedAt !== undefined
       ).length;
       log("Current runtime state:", {
@@ -513,14 +513,14 @@ class FlightPathMCPServer {
       const insertIndex =
         position === QUEUE_POSITION.NEXT
           ? runtime.currentIndex + 1
-          : (queueData.prompts || []).length;
+          : (queueData.steps || []).length;
       log("Insert index calculated:", insertIndex);
 
       // Validate prompts (check for already-completed only)
       log("Starting deduplication validation...");
       const validationResults = this.validatePrompts(
-        prompts,
-        (queueData.prompts || []) as WorkflowStep[]
+        steps,
+        (queueData.steps || []) as WorkflowStep[]
       );
       log("Validation results:", validationResults);
 
@@ -535,17 +535,16 @@ class FlightPathMCPServer {
           .map((r) => `"${r.prompt.prompt.substring(0, 50)}...": ${r.reason}`)
           .join("; ");
         throw new Error(
-          `All ${prompts.length} prompts rejected. Reasons: ${rejectionReasons}`
+          `All ${steps.length} prompts rejected. Reasons: ${rejectionReasons}`
         );
       }
 
       // Validate queue size limit (only for prompts that will actually be added)
       const unlimited = isUnlimitedMode();
       const maxQueueSize = getMaxQueueSize();
-      const newTotalSize =
-        (queueData.prompts || []).length + validPrompts.length;
+      const newTotalSize = (queueData.steps || []).length + validPrompts.length;
       log("Queue size check:", {
-        current: (queueData.prompts || []).length,
+        current: (queueData.steps || []).length,
         adding: validPrompts.length,
         rejected: rejectedPrompts.length,
         newTotal: newTotalSize,
@@ -554,14 +553,14 @@ class FlightPathMCPServer {
 
       if (!unlimited && newTotalSize > maxQueueSize) {
         throw new Error(
-          `Queue size limit exceeded. Current: ${(queueData.prompts || []).length}, Adding: ${validPrompts.length}, Max: ${maxQueueSize}`
+          `Queue size limit exceeded. Current: ${(queueData.steps || []).length}, Adding: ${validPrompts.length}, Max: ${maxQueueSize}`
         );
       }
 
       // Insert valid prompts at calculated position
-      if (!queueData.prompts) {
+      if (!queueData.steps) {
         log("Initializing empty prompts array");
-        queueData.prompts = [];
+        queueData.steps = [];
       }
       log(
         "Inserting",
@@ -569,8 +568,8 @@ class FlightPathMCPServer {
         "valid prompts at index",
         insertIndex
       );
-      queueData.prompts.splice(insertIndex, 0, ...validPrompts);
-      log("New queue size:", queueData.prompts.length);
+      queueData.steps.splice(insertIndex, 0, ...validPrompts);
+      log("New queue size:", queueData.steps.length);
 
       // Update runtime metadata
       queueData._runtime = runtime;
@@ -601,7 +600,7 @@ class FlightPathMCPServer {
         success: true,
         promptsAdded: validPrompts.length,
         promptsRejected: rejectedPrompts.length,
-        newQueueSize: queueData.prompts.length,
+        newQueueSize: queueData.steps.length,
         insertIndex,
         workingFile: path.relative(this.workspaceRoot, workingFile),
         ...(rejectedPrompts.length > 0 && {
@@ -617,7 +616,7 @@ class FlightPathMCPServer {
     });
 
     if (!response) {
-      throw new Error("Failed to append prompts: no response generated");
+      throw new Error("Failed to append steps: no response generated");
     }
 
     return {
@@ -701,7 +700,7 @@ class FlightPathMCPServer {
 
     const fileContent = await fs.readFile(workingFile, "utf8");
     const queueData: WorkingFile = JSON.parse(fileContent);
-    const allPrompts = (queueData.prompts || []) as WorkflowStep[];
+    const allPrompts = (queueData.steps || []) as WorkflowStep[];
 
     const runtime = queueData._runtime || {
       currentIndex: 0,
@@ -871,9 +870,9 @@ class FlightPathMCPServer {
   private getPromptStatus(
     index: number,
     runtime: WorkingFileRuntime,
-    prompts: WorkflowStep[]
+    steps: WorkflowStep[]
   ): string {
-    if (prompts[index]?._runtime?.completedAt !== undefined) {
+    if (steps[index]?._runtime?.completedAt !== undefined) {
       return "completed";
     }
     if (index === runtime.currentIndex) {

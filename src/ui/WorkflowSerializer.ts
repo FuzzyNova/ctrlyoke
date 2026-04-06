@@ -203,18 +203,16 @@ export class WorkflowSerializer {
         clean.finalPrompt = cleanFinalPrompt;
       }
 
-      if (Array.isArray(workingFile.prompts)) {
-        clean.prompts = workingFile.prompts.map(
-          (p: Record<string, unknown>) => {
-            const cleanPrompt: Record<string, unknown> = {};
-            for (const field of PROMPT_FIELDS) {
-              if (field in p) {
-                cleanPrompt[field] = p[field];
-              }
+      if (Array.isArray(workingFile.steps)) {
+        clean.steps = workingFile.steps.map((p: Record<string, unknown>) => {
+          const cleanPrompt: Record<string, unknown> = {};
+          for (const field of PROMPT_FIELDS) {
+            if (field in p) {
+              cleanPrompt[field] = p[field];
             }
-            return cleanPrompt;
           }
-        );
+          return cleanPrompt;
+        });
       } else if (workingFile.prompt !== undefined) {
         clean.prompt = workingFile.prompt;
       }

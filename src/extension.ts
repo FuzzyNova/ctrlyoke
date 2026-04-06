@@ -103,9 +103,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
           }
 
           const request = {
-            prompts: (Array.isArray(params.prompts)
-              ? params.prompts
-              : []) as Array<{
+            steps: (Array.isArray(params.steps) ? params.steps : []) as Array<{
               prompt: string;
               model?: string;
               harness?: string;
@@ -126,12 +124,12 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
           if (webviewProvider) {
             const updatedState = promptQueue.getState();
             webviewProvider.updatePromptsExtended(
-              updatedState.prompts,
+              updatedState.steps,
               promptQueue.getWorkflowFile().finalStep ?? null
             );
             webviewProvider.updateProgress(
               updatedState.currentIndex,
-              updatedState.prompts.length
+              updatedState.steps.length
             );
           }
 

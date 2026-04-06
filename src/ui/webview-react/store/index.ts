@@ -2,7 +2,7 @@
  * Zustand State Stores - Central export point for all state management
  *
  * Architecture:
- * - workflowStore: Core workflow execution data (prompts, state, outputs)
+ * - workflowStore: Core workflow execution data (steps, state, outputs)
  * - uiStore: UI layout and modal states (persisted to localStorage)
  * - editorStore: Prompt editor state (persisted to VS Code webview state)
  * - settingsStore: Harness/model configuration and global settings

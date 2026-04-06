@@ -4,9 +4,17 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { useWorkflowStore } from "@store/workflowStore";
-import { EXECUTION_STATES, STEP_STATUS, FINAL_PROMPT_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
+import {
+  EXECUTION_STATES,
+  STEP_STATUS,
+  FINAL_PROMPT_PHASES,
+  OUTPUT_HISTORY_KINDS,
+} from "@/types/messages";
 import type { PromptStep, CliOutput } from "@/types/messages";
-import type { WorkflowOutputHistory, OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
+import type {
+  WorkflowOutputHistory,
+  OrderedHistoryEntry,
+} from "@root/types/OutputHistoryTypes";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -50,7 +58,7 @@ describe("loadWorkflow", () => {
     store().loadWorkflow({
       fileName: "test.flightpath.yaml",
       workflowName: "My Workflow",
-      prompts: [
+      steps: [
         makePrompt({ prompt: "Step 1" }),
         makePrompt({ prompt: "Step 2" }),
       ],
@@ -58,14 +66,14 @@ describe("loadWorkflow", () => {
 
     expect(store().fileName).toBe("test.flightpath.yaml");
     expect(store().workflowName).toBe("My Workflow");
-    expect(store().prompts).toHaveLength(2);
-    expect((store().prompts[0] as any).prompt).toBe("Step 1");
+    expect(store().steps).toHaveLength(2);
+    expect((store().steps[0] as any).prompt).toBe("Step 1");
   });
 
   it("sets totalSteps to prompts length", () => {
     store().loadWorkflow({
       fileName: "wf.flightpath.yaml",
-      prompts: [makePrompt(), makePrompt(), makePrompt()],
+      steps: [makePrompt(), makePrompt(), makePrompt()],
     });
     expect(store().totalSteps).toBe(3);
   });
@@ -73,9 +81,9 @@ describe("loadWorkflow", () => {
   it("defaults all prompts to PENDING status", () => {
     store().loadWorkflow({
       fileName: "wf.flightpath.yaml",
-      prompts: [makePrompt(), makePrompt()],
+      steps: [makePrompt(), makePrompt()],
     });
-    for (const p of store().prompts) {
+    for (const p of store().steps) {
       expect((p as any).status).toBe(STEP_STATUS.PENDING);
     }
   });
@@ -83,16 +91,16 @@ describe("loadWorkflow", () => {
   it("applies results status to prompts", () => {
     store().loadWorkflow({
       fileName: "wf.flightpath.yaml",
-      prompts: [makePrompt(), makePrompt()],
+      steps: [makePrompt(), makePrompt()],
       results: [{ status: STEP_STATUS.COMPLETED }, {}],
     });
-    expect((store().prompts[0] as any).status).toBe(STEP_STATUS.COMPLETED);
-    expect((store().prompts[1] as any).status).toBe(STEP_STATUS.PENDING);
+    expect((store().steps[0] as any).status).toBe(STEP_STATUS.COMPLETED);
+    expect((store().steps[1] as any).status).toBe(STEP_STATUS.PENDING);
   });
 
   it("clears runtime state (liveOrderedEntries, retryStates, etc.)", () => {
     // Populate some runtime state first
-    store().loadWorkflow({ fileName: "a.yaml", prompts: [makePrompt()] });
+    store().loadWorkflow({ fileName: "a.yaml", steps: [makePrompt()] });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
@@ -104,13 +112,13 @@ describe("loadWorkflow", () => {
     store().setRetryState(0, 1, 3);
 
     // Load new workflow — runtime state should clear
-    store().loadWorkflow({ fileName: "b.yaml", prompts: [makePrompt()] });
+    store().loadWorkflow({ fileName: "b.yaml", steps: [makePrompt()] });
     expect(store().liveOrderedEntries).toEqual([]);
     expect(store().retryStates).toEqual({});
   });
 
   it("sets executionState to IDLE by default", () => {
-    store().loadWorkflow({ fileName: "wf.yaml", prompts: [makePrompt()] });
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
     expect(store().executionState).toBe(EXECUTION_STATES.IDLE);
   });
 });
@@ -123,20 +131,20 @@ describe("setStepStatus", () => {
   it("updates only the targeted prompt", () => {
     store().loadWorkflow({
       fileName: "wf.yaml",
-      prompts: [makePrompt(), makePrompt(), makePrompt()],
+      steps: [makePrompt(), makePrompt(), makePrompt()],
     });
 
     store().setStepStatus(1, STEP_STATUS.COMPLETED);
 
-    expect((store().prompts[0] as any).status).toBe(STEP_STATUS.PENDING);
-    expect((store().prompts[1] as any).status).toBe(STEP_STATUS.COMPLETED);
-    expect((store().prompts[2] as any).status).toBe(STEP_STATUS.PENDING);
+    expect((store().steps[0] as any).status).toBe(STEP_STATUS.PENDING);
+    expect((store().steps[1] as any).status).toBe(STEP_STATUS.COMPLETED);
+    expect((store().steps[2] as any).status).toBe(STEP_STATUS.PENDING);
   });
 
   it("sets status to RUNNING for the active step", () => {
-    store().loadWorkflow({ fileName: "wf.yaml", prompts: [makePrompt()] });
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
     store().setStepStatus(0, STEP_STATUS.RUNNING);
-    expect((store().prompts[0] as any).status).toBe(STEP_STATUS.RUNNING);
+    expect((store().steps[0] as any).status).toBe(STEP_STATUS.RUNNING);
   });
 });
 
@@ -146,7 +154,7 @@ describe("setStepStatus", () => {
 
 describe("appendLiveEntry (cli)", () => {
   it("appends the first cli entry for a step", () => {
-    store().loadWorkflow({ fileName: "wf.yaml", prompts: [makePrompt()] });
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
@@ -160,7 +168,7 @@ describe("appendLiveEntry (cli)", () => {
   });
 
   it("replaces a streaming entry for the same attemptIndex", () => {
-    store().loadWorkflow({ fileName: "wf.yaml", prompts: [makePrompt()] });
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
@@ -185,7 +193,7 @@ describe("appendLiveEntry (cli)", () => {
   it("appends entries for different steps independently", () => {
     store().loadWorkflow({
       fileName: "wf.yaml",
-      prompts: [makePrompt(), makePrompt()],
+      steps: [makePrompt(), makePrompt()],
     });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
@@ -270,14 +278,22 @@ describe("appendLiveEntry (status)", () => {
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.STATUS,
       target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
-      statusMessage: { message: "Starting...", severity: "info", timestamp: Date.now() },
+      statusMessage: {
+        message: "Starting...",
+        severity: "info",
+        timestamp: Date.now(),
+      },
       timestampMs: Date.now(),
       sequence: 1,
     });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.STATUS,
       target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
-      statusMessage: { message: "Retrying...", severity: "warning", timestamp: Date.now() },
+      statusMessage: {
+        message: "Retrying...",
+        severity: "warning",
+        timestamp: Date.now(),
+      },
       timestampMs: Date.now(),
       sequence: 2,
     });
@@ -294,14 +310,22 @@ describe("appendLiveEntry (status)", () => {
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.STATUS,
       target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
-      statusMessage: { message: "step0 msg", severity: "info", timestamp: Date.now() },
+      statusMessage: {
+        message: "step0 msg",
+        severity: "info",
+        timestamp: Date.now(),
+      },
       timestampMs: Date.now(),
       sequence: 1,
     });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.STATUS,
       target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 1 },
-      statusMessage: { message: "step1 msg", severity: "info", timestamp: Date.now() },
+      statusMessage: {
+        message: "step1 msg",
+        severity: "info",
+        timestamp: Date.now(),
+      },
       timestampMs: Date.now(),
       sequence: 2,
     });
@@ -319,14 +343,22 @@ describe("appendLiveEntry (status)", () => {
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.STATUS,
       target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
-      statusMessage: { message: "msg1", severity: "info", timestamp: Date.now() },
+      statusMessage: {
+        message: "msg1",
+        severity: "info",
+        timestamp: Date.now(),
+      },
       timestampMs: Date.now(),
       sequence: 1,
     });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.STATUS,
       target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
-      statusMessage: { message: "msg2", severity: "info", timestamp: Date.now() },
+      statusMessage: {
+        message: "msg2",
+        severity: "info",
+        timestamp: Date.now(),
+      },
       timestampMs: Date.now(),
       sequence: 2,
     });
@@ -391,7 +423,7 @@ describe("getCurrentPrompt", () => {
   it("returns the prompt at currentStep", () => {
     store().loadWorkflow({
       fileName: "wf.yaml",
-      prompts: [
+      steps: [
         makePrompt({ prompt: "first" }),
         makePrompt({ prompt: "second" }),
       ],
@@ -409,13 +441,13 @@ describe("getPromptByIndex", () => {
   it("returns prompt at given index", () => {
     store().loadWorkflow({
       fileName: "wf.yaml",
-      prompts: [makePrompt({ prompt: "zero" }), makePrompt({ prompt: "one" })],
+      steps: [makePrompt({ prompt: "zero" }), makePrompt({ prompt: "one" })],
     });
     expect((store().getPromptByIndex(1) as any)?.prompt).toBe("one");
   });
 
   it("returns null for out-of-range index", () => {
-    store().loadWorkflow({ fileName: "wf.yaml", prompts: [makePrompt()] });
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
     expect(store().getPromptByIndex(99)).toBeNull();
   });
 });
@@ -424,7 +456,7 @@ describe("getCompletedCount", () => {
   it("counts only completed prompts", () => {
     store().loadWorkflow({
       fileName: "wf.yaml",
-      prompts: [makePrompt(), makePrompt(), makePrompt()],
+      steps: [makePrompt(), makePrompt(), makePrompt()],
       results: [
         { status: STEP_STATUS.COMPLETED },
         { status: STEP_STATUS.COMPLETED },
@@ -437,7 +469,7 @@ describe("getCompletedCount", () => {
 
 describe("isWorkflowRunning / isWorkflowPaused / isWorkflowIdle / isWorkflowComplete", () => {
   it("reflects execution state correctly", () => {
-    store().loadWorkflow({ fileName: "wf.yaml", prompts: [makePrompt()] });
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
 
     expect(store().isWorkflowIdle()).toBe(true);
     expect(store().isWorkflowRunning()).toBe(false);
@@ -456,20 +488,20 @@ describe("isWorkflowRunning / isWorkflowPaused / isWorkflowIdle / isWorkflowComp
 
 describe("isStepFailed", () => {
   it("returns true for a failed step", () => {
-    store().loadWorkflow({ fileName: "wf.yaml", prompts: [makePrompt()] });
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
     store().setStepStatus(0, STEP_STATUS.FAILED);
     expect(store().isStepFailed(0)).toBe(true);
   });
 
   it("returns false for non-failed step", () => {
-    store().loadWorkflow({ fileName: "wf.yaml", prompts: [makePrompt()] });
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
     expect(store().isStepFailed(0)).toBe(false);
   });
 });
 
 describe("getLatestOutput", () => {
   it("returns last output for a step", () => {
-    store().loadWorkflow({ fileName: "wf.yaml", prompts: [makePrompt()] });
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
@@ -495,7 +527,7 @@ describe("resetWorkflow", () => {
     store().loadWorkflow({
       fileName: "wf.yaml",
       workflowName: "Test",
-      prompts: [makePrompt()],
+      steps: [makePrompt()],
     });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
@@ -511,7 +543,7 @@ describe("resetWorkflow", () => {
 
     expect(store().fileName).toBeNull();
     expect(store().workflowName).toBeNull();
-    expect(store().prompts).toHaveLength(0);
+    expect(store().steps).toHaveLength(0);
     expect(store().liveOrderedEntries).toEqual([]);
     expect(store().retryStates).toEqual({});
     expect(store().executionState).toBe(EXECUTION_STATES.IDLE);

@@ -223,15 +223,15 @@ export class WorkspaceSessionManager {
           // completedPrompts is a legacy field (no longer on WorkingFileRuntime interface)
           // but may exist in older working files on disk. Use prompts' _runtime.completedAt instead.
           const completedCount =
-            workingFile.prompts?.filter(
+            workingFile.steps?.filter(
               (p: WorkflowStep) => p._runtime?.completedAt
             ).length || 0;
-          const totalCount = workingFile.prompts?.length || 0;
+          const totalCount = workingFile.steps?.length || 0;
           const currentIndex = runtime?.currentIndex || 0;
 
           // Phase 4: Count prompts with session IDs (per-prompt _runtime metadata)
           const promptsWithSessions =
-            workingFile.prompts?.filter(
+            workingFile.steps?.filter(
               (p: WorkflowStep) => p._runtime?.sessionId
             ).length || 0;
 

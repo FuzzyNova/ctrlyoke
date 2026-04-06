@@ -1,5 +1,5 @@
 {
-  "prompts": [
+  "steps": [
     {
       "id": "fix-tests",
       "prompt": "just say hi",

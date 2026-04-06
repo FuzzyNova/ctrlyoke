@@ -7,7 +7,7 @@ suite("SessionResolver Tests", () => {
   suite("resolve - workflow-level sessionId inheritance", () => {
     test("should use workflow-level sessionId when prompt-level not specified (string)", () => {
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         sessionId: "workflow-session-uuid",
         resumeSession: true,
       };
@@ -22,7 +22,7 @@ suite("SessionResolver Tests", () => {
 
     test("should use workflow-level sessionId when prompt-level not specified (numeric)", () => {
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         sessionId: 1,
         resumeSession: true,
       };
@@ -54,7 +54,7 @@ suite("SessionResolver Tests", () => {
 
     test("should use prompt-level sessionId over workflow-level (string)", () => {
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         sessionId: "workflow-session-uuid",
         resumeSession: true,
       };
@@ -70,7 +70,7 @@ suite("SessionResolver Tests", () => {
 
     test("should use prompt-level sessionId over workflow-level (numeric)", () => {
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         sessionId: 2,
         resumeSession: true,
       };
@@ -104,7 +104,7 @@ suite("SessionResolver Tests", () => {
   suite("resolve - exact session ID", () => {
     test("should return exact session ID string when provided", () => {
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         resumeSession: true, // Necessary to enable session resumption
       };
 
@@ -119,7 +119,7 @@ suite("SessionResolver Tests", () => {
 
     test("should return exact session ID even with resumeSession=true", () => {
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
       };
 
       const prompt: PromptStep = {
@@ -136,7 +136,7 @@ suite("SessionResolver Tests", () => {
   suite("resolve - numeric reference", () => {
     test("should resolve numeric reference to runtime session ID", () => {
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         resumeSession: true,
       };
 
@@ -217,7 +217,7 @@ suite("SessionResolver Tests", () => {
   suite("resolve - auto-resume", () => {
     test("should auto-resume from previous prompt when resumeSession=true", () => {
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
       };
 
       const prompts: PromptStep[] = [
@@ -329,7 +329,7 @@ suite("SessionResolver Tests", () => {
 
     test("should respect workflow-level resumeSession when prompt-level not set", () => {
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         resumeSession: false,
         sessionId: "ignored-session",
       };
@@ -344,7 +344,7 @@ suite("SessionResolver Tests", () => {
 
     test("should use sessionId when resumeSession=true at workflow level", () => {
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         resumeSession: true,
         sessionId: "workflow-session",
       };
@@ -366,7 +366,7 @@ suite("SessionResolver Tests", () => {
       };
 
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         resumeSession: true, // Should be ignored
       };
 
@@ -381,7 +381,7 @@ suite("SessionResolver Tests", () => {
       };
 
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         resumeSession: false, // Should be ignored
       };
 
@@ -395,7 +395,7 @@ suite("SessionResolver Tests", () => {
       };
 
       const workflow: PromptFile = {
-        prompts: [],
+        steps: [],
         resumeSession: true,
       };
 
@@ -527,7 +527,7 @@ suite("SessionResolver Tests", () => {
 
   suite('resolve - "finalPrompt" sentinel', () => {
     const workflow: PromptFile = {
-      prompts: [],
+      steps: [],
       resumeSession: true,
     };
 
@@ -566,7 +566,7 @@ suite("SessionResolver Tests", () => {
 
     test("should return undefined when resumeSession=false even with sentinel and prior session", () => {
       const noResumeWorkflow: PromptFile = {
-        prompts: [],
+        steps: [],
         resumeSession: false,
       };
       const prompt: PromptStep = {
@@ -604,7 +604,7 @@ suite("SessionResolver Tests", () => {
 
     test("should use sentinel from workflow-level sessionId", () => {
       const workflowWithSentinel: PromptFile = {
-        prompts: [],
+        steps: [],
         sessionId: "finalPrompt",
         resumeSession: true,
       };

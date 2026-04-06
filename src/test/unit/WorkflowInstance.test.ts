@@ -86,7 +86,7 @@ class MockIntegrationFactory extends IntegrationFactory {
 
 async function startQueueExecution(instance: WorkflowInstance): Promise<void> {
   const queue = instance.promptQueue;
-  if (queue.getState().prompts.length === 0) {
+  if (queue.getState().steps.length === 0) {
     return;
   }
 
@@ -160,7 +160,7 @@ suite("WorkflowInstance finalPrompt replay", () => {
     );
 
     instance.promptQueue.loadPrompts({
-      prompts: [{ prompt: "queue-1" }],
+      steps: [{ prompt: "queue-1" }],
       finalStep: { prompt: "final-loop" },
     });
 
@@ -294,7 +294,7 @@ suite("WorkflowInstance runtime transitions", () => {
 
     instance.setActive(true);
     instance.promptQueue.loadPrompts({
-      prompts: [{ prompt: "queue-1" }],
+      steps: [{ prompt: "queue-1" }],
     });
 
     const runtime = instance.promptQueue.getRuntimeStateMachine();
@@ -374,7 +374,7 @@ suite("WorkflowInstance runtime transitions", () => {
 
     instance.setActive(true);
     instance.promptQueue.loadPrompts({
-      prompts: [{ prompt: "queue-1" }],
+      steps: [{ prompt: "queue-1" }],
     });
 
     const runtime = instance.promptQueue.getRuntimeStateMachine();
@@ -386,7 +386,7 @@ suite("WorkflowInstance runtime transitions", () => {
     (instance as any).onQueueStateChanged({
       ...instance.promptQueue.getState(),
       status: EXECUTION_STATES.IDLE,
-      prompts: [{ prompt: "queue-1" }, { prompt: "queue-2" }],
+      steps: [{ prompt: "queue-1" }, { prompt: "queue-2" }],
     });
 
     assert.deepStrictEqual(executionStates, [EXECUTION_STATES.RUNNING]);
@@ -448,7 +448,7 @@ suite("WorkflowInstance runtime transitions", () => {
 
     instance.setActive(true);
     instance.promptQueue.loadPrompts({
-      prompts: [{ prompt: "queue-1" }],
+      steps: [{ prompt: "queue-1" }],
     });
 
     const runtime = instance.promptQueue.getRuntimeStateMachine();
@@ -483,7 +483,7 @@ suite("WorkflowInstance runtime transitions", () => {
       );
 
       instance.promptQueue.loadPrompts({
-        prompts: [{ prompt: "queue-1" }],
+        steps: [{ prompt: "queue-1" }],
       });
 
       const historyInit = await instance.outputHistoryManager.initializeRun(
@@ -606,7 +606,7 @@ suite("WorkflowInstance runtime transitions", () => {
 
     instance.setActive(true);
     instance.promptQueue.loadPrompts({
-      prompts: [{ prompt: "queue-1" }],
+      steps: [{ prompt: "queue-1" }],
     });
 
     const runtime = instance.promptQueue.getRuntimeStateMachine();
@@ -736,27 +736,27 @@ suite("WorkflowInstance append-and-continue", () => {
     );
 
     instance.promptQueue.loadPrompts({
-      prompts: [{ prompt: "first prompt" }],
+      steps: [{ prompt: "first prompt" }],
     });
     await markQueueCompleted(instance);
     (instance.promptQueue as any).state.results[0].status =
       STEP_STATUS.COMPLETED;
 
     instance.setCurrentPromptFile("ephemeral.prompt.md", {
-      prompts: [{ prompt: "first prompt" }],
+      steps: [{ prompt: "first prompt" }],
     });
 
     let promptCountSeenByRun = 0;
     (instance as any).executeLoadedPromptFile = async () => {
       promptCountSeenByRun =
-        (instance as any).currentPromptFile?.promptFile.prompts?.length ?? 0;
+        (instance as any).currentPromptFile?.promptFile.steps?.length ?? 0;
     };
 
     await instance.executeEphemeralPrompt("follow-up prompt", {}, "run");
 
     assert.strictEqual(promptCountSeenByRun, 2);
     assert.strictEqual(
-      (instance as any).currentPromptFile?.promptFile.prompts?.length,
+      (instance as any).currentPromptFile?.promptFile.steps?.length,
       2
     );
   });
@@ -803,7 +803,7 @@ suite("WorkflowInstance append-and-continue", () => {
     );
 
     instance.promptQueue.loadPrompts({
-      prompts: [{ prompt: "completed prompt" }, { prompt: "appended prompt" }],
+      steps: [{ prompt: "completed prompt" }, { prompt: "appended prompt" }],
     });
     await markQueueCompleted(instance);
     (instance.promptQueue as any).state.results[0].status =
@@ -811,7 +811,7 @@ suite("WorkflowInstance append-and-continue", () => {
     (instance.promptQueue as any).state.results[1].status = STEP_STATUS.PENDING;
 
     instance.setCurrentPromptFile("workflow.prompt.md", {
-      prompts: [{ prompt: "completed prompt" }, { prompt: "appended prompt" }],
+      steps: [{ prompt: "completed prompt" }, { prompt: "appended prompt" }],
     });
 
     let restartCalled = false;

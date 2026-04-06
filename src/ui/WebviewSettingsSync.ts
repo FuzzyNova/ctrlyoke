@@ -200,30 +200,38 @@ export class WebviewSettingsSync {
     const globalSettings = this.buildGlobalSettings();
     const modelOptions = this.buildModelOptions();
 
-    this.emitMessage({
-      type: MESSAGE_TYPES.INIT,
-      data: {
-        ...workflowState,
-        globalSettings,
-        workflowProperties: {},
-        modelOptions,
-        harnessStatus: this.harnessStatus,
-        availableAgents: this.availableAgents,
-        availableSkills: this.availableSkills,
+    this.emitMessage(
+      {
+        type: MESSAGE_TYPES.INIT,
+        data: {
+          ...workflowState,
+          globalSettings,
+          workflowProperties: {},
+          modelOptions,
+          harnessStatus: this.harnessStatus,
+          availableAgents: this.availableAgents,
+          availableSkills: this.availableSkills,
+        },
       },
-    }, postMessage);
+      postMessage
+    );
   }
 
   /**
    * Send only global settings to the webview without workflow data.
    * Used for configuration changes to avoid resetting the output panel.
    */
-  sendGlobalSettingsUpdate(postMessage: PostMessageFn = this.postMessage): void {
-    this.emitMessage({
-      type: MESSAGE_TYPES.GLOBAL_SETTINGS_UPDATED,
-      globalSettings: this.buildGlobalSettings(),
-      modelOptions: this.buildModelOptions(),
-    }, postMessage);
+  sendGlobalSettingsUpdate(
+    postMessage: PostMessageFn = this.postMessage
+  ): void {
+    this.emitMessage(
+      {
+        type: MESSAGE_TYPES.GLOBAL_SETTINGS_UPDATED,
+        globalSettings: this.buildGlobalSettings(),
+        modelOptions: this.buildModelOptions(),
+      },
+      postMessage
+    );
   }
 
   /**
@@ -231,10 +239,13 @@ export class WebviewSettingsSync {
    */
   sendModelOptionsUpdate(postMessage: PostMessageFn = this.postMessage): void {
     const modelOptions = this.buildModelOptions();
-    this.emitMessage({
-      type: MESSAGE_TYPES.MODEL_OPTIONS_UPDATE,
-      data: { modelOptions },
-    }, postMessage);
+    this.emitMessage(
+      {
+        type: MESSAGE_TYPES.MODEL_OPTIONS_UPDATE,
+        data: { modelOptions },
+      },
+      postMessage
+    );
     this.writeCapabilities(modelOptions).catch((err) =>
       Log.warn("Failed to write capabilities.json:", err)
     );
@@ -243,13 +254,14 @@ export class WebviewSettingsSync {
   /**
    * Send harness status update to the webview.
    */
-  sendHarnessStatusUpdate(
-    postMessage: PostMessageFn = this.postMessage
-  ): void {
-    this.emitMessage({
-      type: MESSAGE_TYPES.HARNESS_STATUS_UPDATE,
-      data: { harnessStatus: this.harnessStatus },
-    }, postMessage);
+  sendHarnessStatusUpdate(postMessage: PostMessageFn = this.postMessage): void {
+    this.emitMessage(
+      {
+        type: MESSAGE_TYPES.HARNESS_STATUS_UPDATE,
+        data: { harnessStatus: this.harnessStatus },
+      },
+      postMessage
+    );
     this.writeCapabilities(this.buildModelOptions()).catch((err) =>
       Log.warn("Failed to write capabilities.json:", err)
     );
@@ -259,20 +271,26 @@ export class WebviewSettingsSync {
    * Send agents update to the webview.
    */
   sendAgentsUpdate(postMessage: PostMessageFn = this.postMessage): void {
-    this.emitMessage({
-      type: MESSAGE_TYPES.AGENTS_UPDATE,
-      data: { availableAgents: this.availableAgents },
-    }, postMessage);
+    this.emitMessage(
+      {
+        type: MESSAGE_TYPES.AGENTS_UPDATE,
+        data: { availableAgents: this.availableAgents },
+      },
+      postMessage
+    );
   }
 
   /**
    * Send skills update to the webview.
    */
   sendSkillsUpdate(postMessage: PostMessageFn = this.postMessage): void {
-    this.emitMessage({
-      type: MESSAGE_TYPES.SKILLS_UPDATE,
-      data: { availableSkills: this.availableSkills },
-    }, postMessage);
+    this.emitMessage(
+      {
+        type: MESSAGE_TYPES.SKILLS_UPDATE,
+        data: { availableSkills: this.availableSkills },
+      },
+      postMessage
+    );
   }
 
   /**
@@ -309,14 +327,20 @@ export class WebviewSettingsSync {
         toolPermissions: workingFile.toolPermissions,
       };
 
-      this.emitMessage({
-        type: MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE,
-        workflowProperties,
-      }, postMessage);
+      this.emitMessage(
+        {
+          type: MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE,
+          workflowProperties,
+        },
+        postMessage
+      );
 
-      this.emitMessage({
-        type: MESSAGE_TYPES.WORKFLOW_LOADED,
-      }, postMessage);
+      this.emitMessage(
+        {
+          type: MESSAGE_TYPES.WORKFLOW_LOADED,
+        },
+        postMessage
+      );
     } catch (error) {
       Log.error("Failed to send workflow properties to settings:", error);
     }
@@ -328,9 +352,12 @@ export class WebviewSettingsSync {
   sendWorkflowUnloadedToSettings(
     postMessage: PostMessageFn = this.postMessage
   ): void {
-    this.emitMessage({
-      type: MESSAGE_TYPES.WORKFLOW_UNLOADED,
-    }, postMessage);
+    this.emitMessage(
+      {
+        type: MESSAGE_TYPES.WORKFLOW_UNLOADED,
+      },
+      postMessage
+    );
   }
 
   /**
@@ -406,7 +433,10 @@ export class WebviewSettingsSync {
     value: any,
     postMessage: PostMessageFn = this.postMessage
   ): Promise<void> {
-    await this.handleUpdateWorkflowProperties({ [property]: value }, postMessage);
+    await this.handleUpdateWorkflowProperties(
+      { [property]: value },
+      postMessage
+    );
   }
 
   async handleUpdateWorkflowProperties(
@@ -499,11 +529,14 @@ export class WebviewSettingsSync {
 
     const value = ConfigurationUtils.getConfigValue(key);
 
-    this.emitMessage({
-      type: MESSAGE_TYPES.CONFIG_VALUE,
-      key,
-      value,
-    }, postMessage);
+    this.emitMessage(
+      {
+        type: MESSAGE_TYPES.CONFIG_VALUE,
+        key,
+        value,
+      },
+      postMessage
+    );
   }
 
   async handleUpdateConfig(key: string, value: unknown): Promise<void> {
@@ -661,7 +694,7 @@ export class WebviewSettingsSync {
       return {
         fileName: currentFile || "",
         workflowName: workflowName || "",
-        prompts: queueState.prompts || [],
+        steps: queueState.steps || [],
         executionState: queueState.status || EXECUTION_STATES.IDLE,
         currentIndex: queueState.currentIndex || 0,
         results: queueState.results || [],
@@ -675,7 +708,7 @@ export class WebviewSettingsSync {
     return {
       fileName: "",
       workflowName: "",
-      prompts: [],
+      steps: [],
       executionState: EXECUTION_STATES.IDLE,
       currentIndex: 0,
       results: [],

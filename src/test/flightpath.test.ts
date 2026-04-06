@@ -9,7 +9,7 @@ import { PromptFile } from "../types/FlightPathTypes";
  * Helper to wrap prompts array into PromptFile for tests
  */
 function createPromptFile(prompts: any[]): PromptFile {
-  return { prompts };
+  return { steps: prompts };
 }
 
 suite("FlightPath Core Tests", () => {
@@ -28,7 +28,7 @@ suite("FlightPath Core Tests", () => {
     const state = queue.getState();
     assert.strictEqual(state.status, EXECUTION_STATES.IDLE);
     assert.strictEqual(state.currentIndex, 0);
-    assert.strictEqual(state.prompts.length, 0);
+    assert.strictEqual(state.steps.length, 0);
     assert.strictEqual(state.results.length, 0);
   });
 
@@ -72,25 +72,25 @@ suite("FlightPath Core Tests", () => {
 
   test("PromptQueue should load prompts correctly", () => {
     const queue = new PromptQueue();
-    const prompts = [{ prompt: "First prompt" }, { prompt: "Second prompt" }];
+    const steps = [{ prompt: "First prompt" }, { prompt: "Second prompt" }];
 
-    queue.loadPrompts(createPromptFile(prompts));
+    queue.loadPrompts(createPromptFile(steps));
     const state = queue.getState();
 
-    assert.strictEqual(state.prompts.length, 2);
+    assert.strictEqual(state.steps.length, 2);
     assert.strictEqual(state.results.length, 2);
     assert.strictEqual(state.status, EXECUTION_STATES.IDLE);
   });
 
   test("PromptQueue should track progress correctly", () => {
     const queue = new PromptQueue();
-    const prompts = [
+    const steps = [
       { prompt: "First prompt" },
       { prompt: "Second prompt" },
       { prompt: "Third prompt" },
     ];
 
-    queue.loadPrompts(createPromptFile(prompts));
+    queue.loadPrompts(createPromptFile(steps));
     const progress = queue.getProgress();
 
     assert.strictEqual(progress.total, 3);

@@ -41,7 +41,7 @@ function App() {
   // Collapse state from store (source of truth)
   const settingsCollapsed = useUiStore((s) => s.settingsCollapsed);
   const setSettingsCollapsed = useUiStore((s) => s.setSettingsCollapsed);
-  const promptsCollapsed = useUiStore((s) => s.promptsCollapsed);
+  const promptsCollapsed = useUiStore((s) => s.stepsCollapsed);
   const setPromptsCollapsed = useUiStore((s) => s.setPromptsCollapsed);
   const outputCollapsed = useUiStore((s) => s.outputCollapsed);
   const setOutputCollapsed = useUiStore((s) => s.setOutputCollapsed);
@@ -179,9 +179,9 @@ function App() {
       // Horizontal group panels — mount collapsed panels at their collapsed
       // pixel size so collapse() in useLayoutEffect only sets the flag
       // without needing to resize from a large percentage.
-      desktop.desktopMountDefaults.current.prompts = promptsCollapsed
+      desktop.desktopMountDefaults.current.steps = promptsCollapsed
         ? PANEL_COLLAPSED_SIZE_SIDEBAR
-        : String(desktop.lastDesktopSizes.current.prompts);
+        : String(desktop.lastDesktopSizes.current.steps);
       desktop.desktopMountDefaults.current.settings = settingsCollapsed
         ? PANEL_COLLAPSED_SIZE_SIDEBAR
         : String(desktop.lastDesktopSizes.current.settings);
@@ -271,7 +271,6 @@ function App() {
 
         {/* Main area — relative container for absolute overlays */}
         <div className="flex-1 relative overflow-hidden flex">
-
           {/* Sidebar prompts — flex sibling, takes 72px, pushes center right */}
           {mobilePromptsOpen && mobilePromptsMode === "sidebar" && (
             <div className="w-[72px] flex-shrink-0 h-full border-r border-panel-border bg-sidebar-bg overflow-y-auto">
@@ -291,9 +290,7 @@ function App() {
                     <div
                       className="background-logo"
                       style={{
-                        WebkitMaskImage: logoUrl
-                          ? `url('${logoUrl}')`
-                          : "none",
+                        WebkitMaskImage: logoUrl ? `url('${logoUrl}')` : "none",
                         maskImage: logoUrl ? `url('${logoUrl}')` : "none",
                       }}
                       aria-hidden="true"
@@ -334,7 +331,9 @@ function App() {
                       null;
                     if (!isCollapsed && size != null) {
                       mobile.lastMobileSizes.current.output = size;
-                      useUiStore.getState().setLastMobileSizes({ output: size });
+                      useUiStore
+                        .getState()
+                        .setLastMobileSizes({ output: size });
                     }
                     if (isCollapsed !== outputCollapsed) {
                       setOutputCollapsed(isCollapsed);
@@ -363,7 +362,9 @@ function App() {
                       null;
                     if (!isCollapsed && size != null) {
                       mobile.lastMobileSizes.current.editor = size;
-                      useUiStore.getState().setLastMobileSizes({ editor: size });
+                      useUiStore
+                        .getState()
+                        .setLastMobileSizes({ editor: size });
                     }
                     if (isCollapsed !== editorCollapsed) {
                       setEditorCollapsed(isCollapsed);
@@ -377,7 +378,8 @@ function App() {
           </div>
 
           {/* Full-width prompts overlay */}
-          {((mobilePromptsOpen && mobilePromptsMode === "fullwidth") || promptsOverlayClosing) && (
+          {((mobilePromptsOpen && mobilePromptsMode === "fullwidth") ||
+            promptsOverlayClosing) && (
             <>
               {/* Backdrop — tap outside returns to sidebar mode (hidden while closing) */}
               {!promptsOverlayClosing && (
@@ -395,11 +397,15 @@ function App() {
               )}
               <div
                 className={`absolute inset-0 z-30 bg-editor-bg flex flex-col ${promptsOverlayClosing ? "animate-slide-out-left" : "animate-slide-in-left"}`}
-                onAnimationEnd={promptsOverlayClosing ? () => {
-                  setPromptsOverlayClosing(false);
-                  promptsAfterClose.current?.();
-                  promptsAfterClose.current = null;
-                } : undefined}
+                onAnimationEnd={
+                  promptsOverlayClosing
+                    ? () => {
+                        setPromptsOverlayClosing(false);
+                        promptsAfterClose.current?.();
+                        promptsAfterClose.current = null;
+                      }
+                    : undefined
+                }
               >
                 <WorkflowStepsPanel
                   onRequestSidebar={handlePromptsRequestSidebar}
@@ -428,13 +434,19 @@ function App() {
               )}
               <div
                 className={`absolute inset-0 z-40 bg-editor-bg flex flex-col ${settingsOverlayClosing ? "animate-slide-out-right" : "animate-slide-in-right"}`}
-                onAnimationEnd={settingsOverlayClosing ? () => {
-                  setSettingsOverlayClosing(false);
-                  settingsAfterClose.current?.();
-                  settingsAfterClose.current = null;
-                } : undefined}
+                onAnimationEnd={
+                  settingsOverlayClosing
+                    ? () => {
+                        setSettingsOverlayClosing(false);
+                        settingsAfterClose.current?.();
+                        settingsAfterClose.current = null;
+                      }
+                    : undefined
+                }
               >
-                <WorkflowPropertiesPanel onRequestClose={handleSettingsRequestClose} />
+                <WorkflowPropertiesPanel
+                  onRequestClose={handleSettingsRequestClose}
+                />
               </div>
             </>
           )}
@@ -460,8 +472,8 @@ function App() {
       >
         {/* Prompts Panel (Left - collapsible) */}
         <Panel
-          panelRef={desktop.promptsRef}
-          defaultSize={desktop.desktopMountDefaults.current.prompts}
+          panelRef={desktop.stepsRef}
+          defaultSize={desktop.desktopMountDefaults.current.steps}
           collapsible
           collapsedSize={PANEL_COLLAPSED_SIZE_SIDEBAR}
           minSize={PANEL_MIN_SIZE_SIDEBAR}
@@ -471,12 +483,12 @@ function App() {
             if (!desktop.horizontalInitializedRef.current || !uiLayoutReady)
               return;
             const isCollapsed =
-              desktop.promptsRef.current?.isCollapsed() ?? false;
+              desktop.stepsRef.current?.isCollapsed() ?? false;
             if (!isCollapsed) {
-              const size = desktop.promptsRef.current?.getSize().asPercentage;
+              const size = desktop.stepsRef.current?.getSize().asPercentage;
               if (size != null) {
-                desktop.lastDesktopSizes.current.prompts = size;
-                useUiStore.getState().setLastDesktopSizes({ prompts: size });
+                desktop.lastDesktopSizes.current.steps = size;
+                useUiStore.getState().setLastDesktopSizes({ steps: size });
               }
             }
             if (isCollapsed !== promptsCollapsed) {

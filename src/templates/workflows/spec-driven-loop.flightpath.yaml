@@ -12,7 +12,7 @@ _templateMeta:
       autoFillFilename: true
 
 # prompts
-prompts:
+steps:
   - name: architect
     prompt: |
       Review the following specification document:

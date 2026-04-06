@@ -270,7 +270,7 @@ suite("ValidationUtils Extended Tests", () => {
 
     test("should accept multiple prompts format with prompts array", () => {
       const file = {
-        prompts: [{ prompt: "First prompt" }, { prompt: "Second prompt" }],
+        steps: [{ prompt: "First prompt" }, { prompt: "Second prompt" }],
       };
       const result = ValidationUtils.validatePromptFile(file);
       assert.strictEqual(result.valid, true);
@@ -279,7 +279,7 @@ suite("ValidationUtils Extended Tests", () => {
     test("should reject having both prompt and prompts", () => {
       const file = {
         prompt: "Single prompt",
-        prompts: [{ prompt: "Array prompt" }],
+        steps: [{ prompt: "Array prompt" }],
       };
       const result = ValidationUtils.validatePromptFile(file);
       assert.strictEqual(result.valid, false);
@@ -311,7 +311,7 @@ suite("ValidationUtils Extended Tests", () => {
 
     test("should validate nested prompt items in prompts array", () => {
       const file = {
-        prompts: [
+        steps: [
           { prompt: "Valid prompt" },
           { notPrompt: "Invalid item" }, // Missing required 'prompt' field
         ],

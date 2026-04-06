@@ -3,7 +3,11 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { sendMessage } from "@hooks/useMessageHandler";
-import { usePromptStatus, useContextPct, useStepClickHandler } from "@hooks/index";
+import {
+  usePromptStatus,
+  useContextPct,
+  useStepClickHandler,
+} from "@hooks/index";
 import { StatusIcon } from "../prompts/StatusIcon";
 import {
   EXECUTION_STATES,
@@ -143,14 +147,13 @@ function ChipContent({
  * via dnd-kit — same reorder logic as the fullwidth WorkflowStepsPanel.
  */
 export const MobilePromptsSidebar: React.FC = () => {
-  const { prompts, currentStep, executionState } = useWorkflowStore();
+  const { steps: prompts, currentStep, executionState } = useWorkflowStore();
   const { setMobilePromptsMode } = useUiStore();
 
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
-  const canReorder =
-    canChangeStartPosition && prompts.length - currentStep > 1;
+  const canReorder = canChangeStartPosition && prompts.length - currentStep > 1;
 
   const getPromptStatus = usePromptStatus();
   const getContextPct = useContextPct();
@@ -244,7 +247,9 @@ export const MobilePromptsSidebar: React.FC = () => {
                   onChipClick={() => handleStepClick(i)}
                   onSetStart={(e) => {
                     e.stopPropagation();
-                    sendMessage(MESSAGE_TYPES.SET_START_POSITION, { toIndex: i });
+                    sendMessage(MESSAGE_TYPES.SET_START_POSITION, {
+                      toIndex: i,
+                    });
                   }}
                 />
               );

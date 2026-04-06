@@ -13,7 +13,11 @@ import {
 } from "../../flightpath/HarnessIntegration";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import { Harness, type PromptStep } from "../../types/FlightPathTypes";
-import { WORKFLOW_ATTEMPT_STATUS, FINAL_PROMPT_PHASES, WORKFLOW_ATTEMPT_COMMANDS } from "../../types/DashboardConstants";
+import {
+  WORKFLOW_ATTEMPT_STATUS,
+  FINAL_PROMPT_PHASES,
+  WORKFLOW_ATTEMPT_COMMANDS,
+} from "../../types/DashboardConstants";
 
 class MockPlatform implements PlatformAdapter {
   constructor(private readonly choice?: string) {}
@@ -146,7 +150,7 @@ suite("EndConditionHandler", () => {
     );
     const transitions: Array<{ command: string; attemptIndex: number }> = [];
 
-    queue.loadPrompts({ prompts: [prompt] });
+    queue.loadPrompts({ steps: [prompt] });
     runtime.onDidAttemptTransition((transition) => {
       transitions.push({
         command: transition.command,
@@ -201,7 +205,7 @@ suite("EndConditionHandler", () => {
     }> = [];
     const retryAttemptIndices: number[] = [];
 
-    queue.loadPrompts({ prompts: [prompt] });
+    queue.loadPrompts({ steps: [prompt] });
     runtime.onDidAttemptTransition((transition) => {
       transitions.push({
         command: transition.command,
@@ -265,7 +269,7 @@ suite("EndConditionHandler", () => {
     );
     const transitions: Array<{ command: string; attemptIndex: number }> = [];
 
-    queue.loadPrompts({ prompts: [prompt] });
+    queue.loadPrompts({ steps: [prompt] });
     runtime.onDidAttemptTransition((transition) => {
       transitions.push({
         command: transition.command,
@@ -313,7 +317,7 @@ suite("EndConditionHandler", () => {
     );
     let retryCallbackCount = 0;
 
-    queue.loadPrompts({ prompts: [prompt] });
+    queue.loadPrompts({ steps: [prompt] });
     assert.strictEqual(runtime.requestStop(), true);
 
     const result = await handler.handleEndConditionResult(

@@ -62,8 +62,12 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     setScriptContinueOnFailure,
   } = useEditorStore();
 
-  const { prompts, executionState, currentStep, finalPromptStatus } =
-    useWorkflowStore();
+  const {
+    steps: prompts,
+    executionState,
+    currentStep,
+    finalPromptStatus,
+  } = useWorkflowStore();
   const {
     propertiesDrawerOpen,
     togglePropertiesDrawer,

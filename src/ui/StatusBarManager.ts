@@ -161,7 +161,7 @@ export class StatusBarManager {
     total: number;
     percentage: number;
   } {
-    const total = state.prompts.length;
+    const total = state.steps.length;
     const current = state.currentIndex;
     const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
 

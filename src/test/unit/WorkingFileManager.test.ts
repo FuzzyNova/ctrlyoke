@@ -39,7 +39,7 @@ function makeMinimalWorkingFile(): WorkingFile {
     workflowName: "test-workflow",
     startedAt: Date.now(),
     lastModifiedAt: Date.now(),
-    prompts: [{ prompt: "do the thing" }],
+    steps: [{ prompt: "do the thing" }],
     _runtime: {
       currentIndex: 0,
       executionState: EXECUTION_STATES.IDLE,
@@ -81,8 +81,11 @@ suite("WorkingFileManager", () => {
 
       const result = await manager.readWorkingFile(filePath);
       assert.strictEqual(result.workflowName, "test-workflow");
-      assert.strictEqual(result.prompts!.length, 1);
-      assert.strictEqual((result.prompts![0] as PromptStep).prompt, "do the thing");
+      assert.strictEqual(result.steps!.length, 1);
+      assert.strictEqual(
+        (result.steps![0] as PromptStep).prompt,
+        "do the thing"
+      );
     });
 
     test("rejects for a non-existent file path", async () => {
@@ -108,7 +111,7 @@ suite("WorkingFileManager", () => {
       const manager = new WorkingFileManager(makeMockAccess());
       const wf: WorkingFile = {
         ...makeMinimalWorkingFile(),
-        prompts: [
+        steps: [
           { prompt: "step one" },
           { prompt: "step two" },
           { prompt: "step three" },
@@ -118,8 +121,8 @@ suite("WorkingFileManager", () => {
       await writeTempJson(filePath, wf);
 
       const result = await manager.readWorkingFile(filePath);
-      assert.strictEqual(result.prompts!.length, 3);
-      assert.strictEqual((result.prompts![2] as PromptStep).prompt, "step three");
+      assert.strictEqual(result.steps!.length, 3);
+      assert.strictEqual((result.steps![2] as PromptStep).prompt, "step three");
     });
 
     test("preserves _runtime section", async () => {
@@ -182,7 +185,7 @@ suite("WorkingFileManager", () => {
       const content = await fs.readFile(wfPath, "utf-8");
       const parsed = JSON.parse(content) as WorkingFile;
       assert.strictEqual(parsed.workflowName, "test-workflow");
-      assert.strictEqual(parsed.prompts!.length, 1);
+      assert.strictEqual(parsed.steps!.length, 1);
     });
 
     test("filename is sanitized — spaces and special chars replaced with hyphens", async () => {

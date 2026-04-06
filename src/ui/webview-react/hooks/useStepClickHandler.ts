@@ -12,7 +12,11 @@ import { OUTPUT_HISTORY_KINDS, FINAL_PROMPT_PHASES } from "../types/messages";
  * Callers can add their own guards (e.g. isCLIManaged) before invoking it.
  */
 export function useStepClickHandler() {
-  const { prompts, liveOrderedEntries, historyOutputs } = useWorkflowStore();
+  const {
+    steps: prompts,
+    liveOrderedEntries,
+    historyOutputs,
+  } = useWorkflowStore();
   const { isViewingHistory } = useUiStore();
   const { selectPrompt } = useEditorStore();
 
@@ -55,6 +59,12 @@ export function useStepClickHandler() {
         });
       }
     },
-    [prompts, selectPrompt, liveOrderedEntries, isViewingHistory, historyOutputs]
+    [
+      prompts,
+      selectPrompt,
+      liveOrderedEntries,
+      isViewingHistory,
+      historyOutputs,
+    ]
   );
 }

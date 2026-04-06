@@ -43,7 +43,7 @@ export class PromptFileLoader {
       // Parse prompt file (parser handles all formats including .prompt.md)
       const promptFile = await this.promptFileParser.parsePromptFile(filePath);
 
-      if (!promptFile || !promptFile.prompts) {
+      if (!promptFile || !promptFile.steps) {
         vscode.window.showErrorMessage(
           "FlightPath: Failed to parse prompt file"
         );
@@ -52,7 +52,7 @@ export class PromptFileLoader {
 
       // Validate prompts
       const validation = this.promptFileParser.validateWorkflowSteps(
-        promptFile.prompts
+        promptFile.steps
       );
       if (!validation.valid) {
         const errors = validation.errors.join("\n");
@@ -68,7 +68,7 @@ export class PromptFileLoader {
         try {
           workingFilePath = await this.promptQueue.createWorkingFile(
             filePath,
-            promptFile.prompts,
+            promptFile.steps,
             workspaceFolderPath,
             filePath // real source file path — stored as originalFile
           );
@@ -125,16 +125,14 @@ export class PromptFileLoader {
         // Send full prompt objects with all properties
         dashboard.updateFileSelected(
           fileName,
-          promptFile.prompts,
+          promptFile.steps,
           undefined,
           promptFile.finalStep ?? null,
           this.promptQueue.getFinalPromptRuntime()
         );
       }
 
-      Log.debug(
-        `Loaded ${promptFile.prompts.length} prompt(s) from ${fileName}`
-      );
+      Log.debug(`Loaded ${promptFile.steps.length} prompt(s) from ${fileName}`);
 
       return workingFilePath;
     } catch (error) {
@@ -167,9 +165,9 @@ export class PromptFileLoader {
         await this.promptQueue.readWorkingFile(workingFilePath);
 
       // Validate prompts (only if there are prompts to validate)
-      if (workingFile.prompts?.length) {
+      if (workingFile.steps?.length) {
         const validation = this.promptFileParser.validateWorkflowSteps(
-          workingFile.prompts
+          workingFile.steps
         );
         if (!validation.valid) {
           const errorMessage = validation.errors.join(",");
@@ -191,7 +189,7 @@ export class PromptFileLoader {
         // Scenario 1: Loading a different session (resume/auto-load)
         // Clear queue and restore full state including completed prompts, currentIndex, etc.
         Log.debug(
-          `Restoring session from working file (${workingFile.prompts?.length ?? 0} prompts, mode: ${mode}, isAutoLoad: ${isAutoLoad})`
+          `Restoring session from working file (${workingFile.steps?.length ?? 0} prompts, mode: ${mode}, isAutoLoad: ${isAutoLoad})`
         );
         await this.promptQueue.restoreFromWorkingFile(
           workingFilePath,
@@ -208,7 +206,7 @@ export class PromptFileLoader {
           const restoredState = this.promptQueue.getState();
           dashboard.updateSessionRestored(
             fileName,
-            restoredState.prompts,
+            restoredState.steps,
             restoredState.results,
             restoredState.status,
             restoredState.currentIndex,
@@ -233,12 +231,12 @@ export class PromptFileLoader {
           // Get updated state after merge
           const updatedState = this.promptQueue.getState();
           Log.debug(
-            `Queue extended by ${newPromptsCount} prompts (total: ${updatedState.prompts.length}). Sending PROMPTS_EXTENDED to dashboard.`
+            `Queue extended by ${newPromptsCount} prompts (total: ${updatedState.steps.length}). Sending PROMPTS_EXTENDED to dashboard.`
           );
 
           // Send PROMPTS_EXTENDED message with updated prompt list
           mergeDashboard.updatePromptsExtended(
-            updatedState.prompts,
+            updatedState.steps,
             this.promptQueue.getWorkflowFile().finalStep ?? null
           );
         } else if (newPromptsCount === 0) {
@@ -247,7 +245,7 @@ export class PromptFileLoader {
       }
 
       Log.debug(
-        `Reloaded ${workingFile.prompts?.length ?? 0} prompts from working file`
+        `Reloaded ${workingFile.steps?.length ?? 0} prompts from working file`
       );
     } catch (error) {
       Log.error("Failed to reload working file:", error);

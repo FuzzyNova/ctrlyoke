@@ -167,7 +167,7 @@ export class CliWatchSession implements vscode.Disposable {
       const content = await fs.promises.readFile(this.workingFilePath, "utf8");
       const workingFile = JSON.parse(content) as {
         _runtime?: { currentIndex?: number; executionState?: string };
-        prompts?: unknown[];
+        steps?: unknown[];
       };
 
       const currentIndex = workingFile._runtime?.currentIndex ?? 0;
@@ -177,7 +177,7 @@ export class CliWatchSession implements vscode.Disposable {
 
       this.onUpdate({
         currentStep: currentIndex,
-        totalSteps: workingFile.prompts?.length ?? 0,
+        totalSteps: workingFile.steps?.length ?? 0,
         executionState: executionState as WorkflowSummary["executionState"],
       });
     } catch (err) {

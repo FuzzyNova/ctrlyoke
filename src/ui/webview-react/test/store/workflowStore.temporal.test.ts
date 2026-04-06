@@ -12,7 +12,12 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { useWorkflowStore } from "@store/workflowStore";
-import { EXECUTION_STATES, STEP_STATUS, FINAL_PROMPT_PHASES, OUTPUT_HISTORY_KINDS } from "@root/types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  STEP_STATUS,
+  FINAL_PROMPT_PHASES,
+  OUTPUT_HISTORY_KINDS,
+} from "@root/types/DashboardConstants";
 import type { PromptStep } from "@root/types/WebviewMessageTypes";
 
 // ---------------------------------------------------------------------------
@@ -31,11 +36,11 @@ function makePrompt(overrides: Partial<PromptStep> = {}): PromptStep {
   return { prompt: "hello world", ...overrides };
 }
 
-function loadWorkflow(prompts: PromptStep[]) {
+function loadWorkflow(steps: PromptStep[]) {
   store().loadWorkflow({
     fileName: "test.flightpath.yaml",
     workflowName: "Test",
-    prompts,
+    steps,
   });
 }
 
@@ -155,7 +160,7 @@ describe("STEP_STATUS_CHANGED handler simulation", () => {
     // Simulate EXECUTION_STARTED pause pattern
     temporal().pause();
     store().setPrompts(
-      store().prompts.map((p) => ({ ...p, status: STEP_STATUS.PENDING }))
+      store().steps.map((p) => ({ ...p, status: STEP_STATUS.PENDING }))
     );
     temporal().resume();
 
@@ -205,12 +210,12 @@ describe("PROMPTS_EXTENDED handler simulation", () => {
   });
 
   it("re-sync: records 0 entries when count and content are identical", () => {
-    const prompts = [makePrompt(), makePrompt({ prompt: "second" })];
-    loadWorkflow(prompts);
+    const steps = [makePrompt(), makePrompt({ prompt: "second" })];
+    loadWorkflow(steps);
 
     // Simulate second PROMPTS_EXTENDED with same prompts (shouldRecord = false)
     temporal().pause();
-    store().setPrompts([...prompts]);
+    store().setPrompts([...steps]);
     temporal().resume();
 
     temporal().pause();
@@ -231,7 +236,9 @@ describe("PROMPTS_EXTENDED handler simulation", () => {
     temporal().resume();
 
     expect(temporal().pastStates).toHaveLength(1);
-    expect((temporal().pastStates[0]?.prompts?.[0] as any)?.prompt).toBe("hello world");
+    expect((temporal().pastStates[0]?.steps?.[0] as any)?.prompt).toBe(
+      "hello world"
+    );
   });
 
   it("four-undo bug is gone: adding one prompt leaves exactly 1 past state", () => {
@@ -285,8 +292,8 @@ describe("PROMPT_DELETED handler simulation", () => {
 
     temporal().undo();
 
-    expect(store().prompts).toHaveLength(2);
-    expect((store().prompts[1] as any).prompt).toBe("second");
+    expect(store().steps).toHaveLength(2);
+    expect((store().steps[1] as any).prompt).toBe("second");
   });
 });
 
@@ -300,7 +307,7 @@ describe("undo/redo round-trips", () => {
 
     temporal().undo();
 
-    expect((store().prompts[0] as any).prompt).toBe("hello world");
+    expect((store().steps[0] as any).prompt).toBe("hello world");
     expect(temporal().futureStates).toHaveLength(1);
   });
 
@@ -310,7 +317,7 @@ describe("undo/redo round-trips", () => {
     temporal().undo();
     temporal().redo();
 
-    expect((store().prompts[0] as any).prompt).toBe("edited");
+    expect((store().steps[0] as any).prompt).toBe("edited");
     expect(temporal().futureStates).toHaveLength(0);
   });
 
@@ -332,10 +339,10 @@ describe("undo/redo round-trips", () => {
     store().updatePrompt(0, { prompt: "v3" });
 
     temporal().undo();
-    expect((store().prompts[0] as any).prompt).toBe("v2");
+    expect((store().steps[0] as any).prompt).toBe("v2");
 
     temporal().undo();
-    expect((store().prompts[0] as any).prompt).toBe("hello world");
+    expect((store().steps[0] as any).prompt).toBe("hello world");
   });
 
   it("workflowName changes are tracked and undoable", () => {
@@ -359,6 +366,6 @@ describe("undo/redo round-trips", () => {
 
     // executionState is not in the partialized snapshot — it stays as-is
     expect(store().executionState).toBe(EXECUTION_STATES.RUNNING);
-    expect((store().prompts[0] as any).prompt).toBe("hello world");
+    expect((store().steps[0] as any).prompt).toBe("hello world");
   });
 });

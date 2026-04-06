@@ -30,7 +30,7 @@ suite("CliSessionResolverAdapter", () => {
       resumeSession: true,
     };
     const workflowFile: PromptFile = {
-      prompts: [previousPrompt, currentPrompt],
+      steps: [previousPrompt, currentPrompt],
       harness: Harness.CopilotCli,
       model: "gpt-5",
       resumeSession: true,
@@ -70,7 +70,7 @@ suite("CliSessionResolverAdapter", () => {
         sessionId: "not-a-valid-uuid",
       };
       const workflowFile: PromptFile = {
-        prompts: [prompt],
+        steps: [prompt],
         harness: Harness.ClaudeCli,
         model: "sonnet",
         resumeSession: true,
