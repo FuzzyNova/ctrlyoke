@@ -87,6 +87,10 @@ export interface SavedNewPromptState {
   promptText: string;
   promptName: string;
   properties: PropertyValues;
+  stepType?: typeof STEP_TYPES.PROMPT | typeof STEP_TYPES.SCRIPT;
+  scriptCommand?: string;
+  scriptTimeout?: number;
+  scriptContinueOnFailure?: boolean;
 }
 
 /**
@@ -306,20 +310,20 @@ export const useEditorStore = create<
   enterNewPromptMode: () => {
     const { savedNewPromptState } = get();
     if (savedNewPromptState) {
-      // Restore saved new prompt state (from switching to edit mode)
+      // Restore saved new prompt state (from switching to edit mode), preserving step type
       set({
         selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
-        stepType: STEP_TYPES.PROMPT,
+        stepType: savedNewPromptState.stepType ?? STEP_TYPES.PROMPT,
         promptText: savedNewPromptState.promptText,
         promptName: savedNewPromptState.promptName,
-        scriptCommand: "",
-        scriptTimeout: undefined,
-        scriptContinueOnFailure: false,
+        scriptCommand: savedNewPromptState.scriptCommand ?? "",
+        scriptTimeout: savedNewPromptState.scriptTimeout,
+        scriptContinueOnFailure: savedNewPromptState.scriptContinueOnFailure ?? false,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
-        isDirty: savedNewPromptState.promptText.length > 0,
+        isDirty: savedNewPromptState.promptText.length > 0 || (savedNewPromptState.scriptCommand ?? "").length > 0,
       });
     } else {
       // Try to restore from VS Code persistent state
@@ -371,6 +375,10 @@ export const useEditorStore = create<
         promptText: state.promptText,
         promptName: state.promptName,
         properties: state.properties,
+        stepType: state.stepType,
+        scriptCommand: state.scriptCommand,
+        scriptTimeout: state.scriptTimeout,
+        scriptContinueOnFailure: state.scriptContinueOnFailure,
       };
     }
 
@@ -383,6 +391,10 @@ export const useEditorStore = create<
             promptText: state.promptText,
             promptName: state.promptName,
             properties: state.properties,
+            stepType: state.stepType,
+            scriptCommand: state.scriptCommand,
+            scriptTimeout: state.scriptTimeout,
+            scriptContinueOnFailure: state.scriptContinueOnFailure,
           }
         : state.savedNewPromptState;
 
@@ -396,25 +408,27 @@ export const useEditorStore = create<
     const pendingEdit = newPendingEdits[selectionTargetKey(newTarget)];
 
     if (isScriptStep(promptData)) {
-      // Script step: populate scriptCommand, clear promptText, set stepType to script
+      // Script step: populate scriptCommand, set stepType to script (unless pending edit overrides)
       set({
         selectionTarget: newTarget,
         selectedPromptIndex: isFinalPromptTarget ? null : index,
         originalPromptData: promptData,
         savedNewPromptState,
-        stepType: STEP_TYPES.SCRIPT,
-        promptText: "",
+        stepType: pendingEdit?.stepType ?? STEP_TYPES.SCRIPT,
+        promptText: pendingEdit?.promptText ?? "",
         promptName: pendingEdit ? pendingEdit.promptName : (promptData.name ?? ""),
-        scriptCommand: pendingEdit ? pendingEdit.promptText : promptData.script,
-        scriptTimeout: pendingEdit ? undefined : promptData.timeout,
-        scriptContinueOnFailure: pendingEdit ? false : (promptData.continueOnFailure ?? false),
+        scriptCommand: pendingEdit ? (pendingEdit.scriptCommand ?? "") : promptData.script,
+        scriptTimeout: pendingEdit ? pendingEdit.scriptTimeout : promptData.timeout,
+        scriptContinueOnFailure: pendingEdit ? (pendingEdit.scriptContinueOnFailure ?? false) : (promptData.continueOnFailure ?? false),
         properties: pendingEdit ? pendingEdit.properties : { ...PROPERTY_DEFAULTS },
         isDirty: pendingEdit ? true : false,
         validationErrors: {},
         pendingEdits: newPendingEdits,
       });
-      // Close PropertiesDrawer when entering script step edit mode
-      useUiStore.getState().closePropertiesDrawer();
+      // Close PropertiesDrawer when entering script step edit mode (unless pending edit had prompt mode open)
+      if (!pendingEdit || pendingEdit.stepType === STEP_TYPES.SCRIPT) {
+        useUiStore.getState().closePropertiesDrawer();
+      }
     } else {
       // Prompt step: populate promptText, clear scriptCommand/script properties, set stepType to prompt
       const propertiesFromData: PropertyValues = {
@@ -438,14 +452,14 @@ export const useEditorStore = create<
         selectedPromptIndex: isFinalPromptTarget ? null : index,
         originalPromptData: promptData,
         savedNewPromptState,
-        stepType: STEP_TYPES.PROMPT,
+        stepType: pendingEdit?.stepType ?? STEP_TYPES.PROMPT,
         promptText: pendingEdit ? pendingEdit.promptText : promptData.prompt,
         promptName: pendingEdit
           ? pendingEdit.promptName
           : (promptData.name ?? ""),
-        scriptCommand: "",
-        scriptTimeout: undefined,
-        scriptContinueOnFailure: false,
+        scriptCommand: pendingEdit?.scriptCommand ?? "",
+        scriptTimeout: pendingEdit?.scriptTimeout,
+        scriptContinueOnFailure: pendingEdit?.scriptContinueOnFailure ?? false,
         properties: pendingEdit ? pendingEdit.properties : propertiesFromData,
         isDirty: pendingEdit ? true : false,
         validationErrors: {},
@@ -467,20 +481,20 @@ export const useEditorStore = create<
     }
 
     if (savedNewPromptState) {
-      // Restore saved new prompt state (what was typed before switching to edit mode)
+      // Restore saved new prompt state (what was typed before switching to edit mode), preserving step type
       set({
         selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
-        stepType: STEP_TYPES.PROMPT,
+        stepType: savedNewPromptState.stepType ?? STEP_TYPES.PROMPT,
         promptText: savedNewPromptState.promptText,
         promptName: savedNewPromptState.promptName,
-        scriptCommand: "",
-        scriptTimeout: undefined,
-        scriptContinueOnFailure: false,
+        scriptCommand: savedNewPromptState.scriptCommand ?? "",
+        scriptTimeout: savedNewPromptState.scriptTimeout,
+        scriptContinueOnFailure: savedNewPromptState.scriptContinueOnFailure ?? false,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
-        isDirty: savedNewPromptState.promptText.length > 0,
+        isDirty: savedNewPromptState.promptText.length > 0 || (savedNewPromptState.scriptCommand ?? "").length > 0,
         validationErrors: {},
         pendingEdits: newPendingEdits,
       });
@@ -536,6 +550,10 @@ export const useEditorStore = create<
       promptText: state.promptText,
       promptName: state.promptName,
       properties: state.properties,
+      stepType: state.stepType,
+      scriptCommand: state.scriptCommand,
+      scriptTimeout: state.scriptTimeout,
+      scriptContinueOnFailure: state.scriptContinueOnFailure,
     };
 
     const { savedNewPromptState } = state;
@@ -544,15 +562,15 @@ export const useEditorStore = create<
         selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
         selectedPromptIndex: null,
         originalPromptData: null,
-        stepType: STEP_TYPES.PROMPT,
+        stepType: savedNewPromptState.stepType ?? STEP_TYPES.PROMPT,
         promptText: savedNewPromptState.promptText,
         promptName: savedNewPromptState.promptName,
-        scriptCommand: "",
-        scriptTimeout: undefined,
-        scriptContinueOnFailure: false,
+        scriptCommand: savedNewPromptState.scriptCommand ?? "",
+        scriptTimeout: savedNewPromptState.scriptTimeout,
+        scriptContinueOnFailure: savedNewPromptState.scriptContinueOnFailure ?? false,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
-        isDirty: savedNewPromptState.promptText.length > 0,
+        isDirty: savedNewPromptState.promptText.length > 0 || (savedNewPromptState.scriptCommand ?? "").length > 0,
         validationErrors: {},
         pendingEdits: newPendingEdits,
       });
@@ -598,22 +616,12 @@ export const useEditorStore = create<
 
   setStepType: (type) => {
     if (type === STEP_TYPES.SCRIPT) {
-      // Switching to script: clear promptText, close PropertiesDrawer
-      set({
-        stepType: STEP_TYPES.SCRIPT,
-        promptText: "",
-        isDirty: true,
-      });
+      // Switching to script: just flip the type flag, preserve promptText for round-trip
+      set({ stepType: STEP_TYPES.SCRIPT, isDirty: true });
       useUiStore.getState().closePropertiesDrawer();
     } else {
-      // Switching to prompt: clear scriptCommand and script properties
-      set({
-        stepType: STEP_TYPES.PROMPT,
-        scriptCommand: "",
-        scriptTimeout: undefined,
-        scriptContinueOnFailure: false,
-        isDirty: true,
-      });
+      // Switching to prompt: just flip the type flag, preserve scriptCommand for round-trip
+      set({ stepType: STEP_TYPES.PROMPT, isDirty: true });
     }
   },
 
