@@ -433,10 +433,10 @@ export interface StatusMessageMessage {
 }
 
 /**
- * Prompts extended message (extension -> webview)
+ * Steps extended message (extension -> webview)
  */
-export interface PromptsExtendedMessage {
-  type: typeof MESSAGE_TYPES.PROMPTS_EXTENDED;
+export interface StepsExtendedMessage {
+  type: typeof MESSAGE_TYPES.STEPS_EXTENDED;
   steps: WorkflowStep[];
   finalStep?: WorkflowStep | null;
 }
@@ -996,7 +996,7 @@ export type IncomingMessage =
   | FinalPromptStreamingChunkMessage
   | FinalPromptStreamingEventsMessage
   | { type: typeof MESSAGE_TYPES.EXECUTION_COMPLETED }
-  | PromptsExtendedMessage
+  | StepsExtendedMessage
   | PromptDeletedMessage
   | ModelOptionsUpdateMessage
   | HarnessStatusUpdateMessage

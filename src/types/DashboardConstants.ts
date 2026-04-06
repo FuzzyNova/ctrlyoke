@@ -23,7 +23,7 @@ export const MESSAGE_TYPES = {
   STATUS_MESSAGE: "statusMessage",
   EXECUTION_COMPLETED: "executionCompleted",
   QUEUE_EXTENDED: "queueExtended",
-  PROMPTS_EXTENDED: "promptsExtended", // Send updated prompt list after queue extension
+  STEPS_EXTENDED: "stepsExtended", // Send updated steps list after queue extension
   PROMPT_DELETED: "promptDeleted", // Notify webview that a prompt was deleted
   UPDATE_FINAL_PROMPT: "updateFinalPrompt", // Bidirectional: webview updates workflow-level finalPrompt; extension pushes latest finalPrompt
   FINAL_PROMPT_STATUS_CHANGED: "finalPromptStatusChanged", // Granular runtime status updates for finalPrompt phase

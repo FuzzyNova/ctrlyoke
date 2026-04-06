@@ -242,7 +242,7 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.UNDO_REDO_SYNC, async (message) => {
-      await this.getOrchestrator()?.syncPromptsForUndoRedo(
+      await this.getOrchestrator()?.syncStepsForUndoRedo(
         message.steps,
         message.finalPrompt ?? null
       );

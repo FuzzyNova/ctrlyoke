@@ -957,11 +957,11 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().reorderPendingPrompts(newPendingOrder);
   }
 
-  async syncPromptsForUndoRedo(
+  async syncStepsForUndoRedo(
     steps: WorkflowStep[],
     finalStep: WorkflowStep | null
   ): Promise<void> {
-    return this.getActiveInstance().syncPromptsForUndoRedo(steps, finalStep);
+    return this.getActiveInstance().syncStepsForUndoRedo(steps, finalStep);
   }
 
   async setStartPosition(toIndex: number): Promise<void> {

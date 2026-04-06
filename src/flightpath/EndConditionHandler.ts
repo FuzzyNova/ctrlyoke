@@ -30,7 +30,7 @@ const DIALOG_ACTIONS = {
  */
 export interface RetryContext {
   integration: HarnessIntegration;
-  totalPrompts: number;
+  totalSteps: number;
   workspaceFolderPath: string | undefined;
   currentPromptFilePath: string | undefined;
   runtime: WorkflowStateMachine;
@@ -316,7 +316,7 @@ export class EndConditionHandler {
       // Update workflow progress to show retry
       retryContext.integration.setWorkflowProgress(
         currentIndex + 1,
-        retryContext.totalPrompts
+        retryContext.totalSteps
       );
 
       // Send retry prompt and wait for response

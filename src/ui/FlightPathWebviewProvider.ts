@@ -507,13 +507,13 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public updatePromptsExtended(
+  public updateStepsExtended(
     steps: any[],
     finalPrompt?: WorkflowStep | null,
     executionState?: string
   ): void {
     this.postMessage({
-      type: MESSAGE_TYPES.PROMPTS_EXTENDED,
+      type: MESSAGE_TYPES.STEPS_EXTENDED,
       steps,
       finalPrompt: finalPrompt ?? null,
       ...(executionState !== undefined ? { executionState } : {}),
@@ -526,7 +526,7 @@ window.vscodeApi = acquireVsCodeApi();
    */
   public notifyCliPromptsExtended(workflowId: string, steps: any[]): void {
     this.postMessage({
-      type: MESSAGE_TYPES.PROMPTS_EXTENDED,
+      type: MESSAGE_TYPES.STEPS_EXTENDED,
       workflowId,
       steps,
     });

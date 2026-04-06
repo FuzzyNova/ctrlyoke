@@ -163,7 +163,7 @@ suite("EndConditionHandler", () => {
       successResult(),
       {
         integration,
-        totalPrompts: 1,
+        totalSteps: 1,
         workspaceFolderPath: process.cwd(),
         currentPromptFilePath: "workflow.flightpath.yaml",
         runtime,
@@ -221,7 +221,7 @@ suite("EndConditionHandler", () => {
       validationFailure(),
       {
         integration,
-        totalPrompts: 1,
+        totalSteps: 1,
         workspaceFolderPath: process.cwd(),
         currentPromptFilePath: "workflow.flightpath.yaml",
         runtime,
@@ -282,7 +282,7 @@ suite("EndConditionHandler", () => {
       validationFailure(),
       {
         integration,
-        totalPrompts: 1,
+        totalSteps: 1,
         workspaceFolderPath: process.cwd(),
         currentPromptFilePath: "workflow.flightpath.yaml",
         runtime,
@@ -325,7 +325,7 @@ suite("EndConditionHandler", () => {
       validationFailure(),
       {
         integration,
-        totalPrompts: 1,
+        totalSteps: 1,
         workspaceFolderPath: process.cwd(),
         currentPromptFilePath: "workflow.flightpath.yaml",
         runtime,
@@ -344,3 +344,4 @@ suite("EndConditionHandler", () => {
     assert.strictEqual(runtime.stopped, true);
   });
 });
+

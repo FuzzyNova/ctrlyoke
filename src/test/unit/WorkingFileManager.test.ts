@@ -13,11 +13,11 @@ import { EXECUTION_STATES } from "../../types/DashboardConstants";
 function makeMockAccess(workingFilePath?: string): IWorkingFileQueueAccess {
   return {
     getWorkingFilePath: () => workingFilePath,
-    getPrompts: () => [],
+    getSteps: () => [],
     getCurrentIndex: () => 0,
     getStatus: () => EXECUTION_STATES.IDLE,
     getWorkflowName: () => undefined,
-    mergeDiskPrompts: () => [],
+    mergeDiskSteps: () => [],
     emitStateChange: () => {
       /* no-op */
     },

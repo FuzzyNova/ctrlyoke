@@ -96,7 +96,7 @@ export interface IDashboardSink {
     severity?: StatusMessageSeverity
   ): void;
 
-  updatePromptsExtended(
+  updateStepsExtended(
     steps: any[],
     finalStep?: WorkflowStep | null,
     executionState?: string

@@ -328,10 +328,10 @@ describe("RETRY_ATTEMPT_CHANGED", () => {
 });
 
 // ---------------------------------------------------------------------------
-// PROMPTS_EXTENDED — dynamic queue extension
+// STEPS_EXTENDED — dynamic queue extension
 // ---------------------------------------------------------------------------
 
-describe("PROMPTS_EXTENDED", () => {
+describe("STEPS_EXTENDED", () => {
   it("extends the prompts array", () => {
     renderHook(() => useMessageHandler());
 
@@ -343,7 +343,7 @@ describe("PROMPTS_EXTENDED", () => {
     });
 
     act(() => {
-      dispatch(MESSAGE_TYPES.PROMPTS_EXTENDED, {
+      dispatch(MESSAGE_TYPES.STEPS_EXTENDED, {
         steps: [
           makePrompt("Step 0"),
           makePrompt("Step 1"),
@@ -375,7 +375,7 @@ describe("PROMPTS_EXTENDED", () => {
     });
 
     act(() => {
-      dispatch(MESSAGE_TYPES.PROMPTS_EXTENDED, {
+      dispatch(MESSAGE_TYPES.STEPS_EXTENDED, {
         steps: [
           makePrompt("Step 0"),
           makePrompt("Step 1"),
@@ -409,3 +409,4 @@ describe("cleanup", () => {
     );
   });
 });
+

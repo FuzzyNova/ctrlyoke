@@ -856,11 +856,11 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
     });
 
-    test("appendPrompts() should not reopen a completed workflow on its own", async () => {
+    test("appendSteps() should not reopen a completed workflow on its own", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await markQueueCompleted(queue);
 
-      await queue.appendPrompts([{ prompt: "follow-up" }], "test");
+      await queue.appendSteps([{ prompt: "follow-up" }], "test");
 
       assert.strictEqual(
         queue.getRuntimeStateMachine().status,
@@ -1114,7 +1114,7 @@ suite("PromptQueue State Machine Tests", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  suite("mergeDiskPrompts — session ID preservation", () => {
+  suite("mergeDiskSteps — session ID preservation", () => {
     test("should preserve in-memory _runtime.sessionId when MCP appends a new prompt", () => {
       // Simulate: prompt[0] ran, session ID set in memory but not yet persisted to disk
       queue.loadPrompts(createPromptFile([{ prompt: "prompt-0" }]));
@@ -1132,7 +1132,7 @@ suite("PromptQueue State Machine Tests", () => {
         { prompt: "prompt-1-mcp" }, // new from MCP
       ];
 
-      (queue as any).mergeDiskPrompts(diskPrompts);
+      (queue as any).mergeDiskSteps(diskPrompts);
 
       const state = queue.getState();
       assert.strictEqual(

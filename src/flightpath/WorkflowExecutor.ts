@@ -1035,7 +1035,7 @@ export class WorkflowExecutor {
 
     const retryContext = {
       integration,
-      totalPrompts: this.promptQueue.getState().steps.length,
+      totalSteps: this.promptQueue.getState().steps.length,
       workspaceFolderPath: context.workspaceFolderPath,
       currentPromptFilePath: context.currentPromptFilePath,
       runtime: this.promptQueue.getRuntimeStateMachine(),
@@ -1432,7 +1432,7 @@ export class WorkflowExecutor {
   private logWorkflowStart(
     context: WorkflowExecutionContext,
     integration: HarnessIntegration,
-    totalPrompts: number
+    totalSteps: number
   ): void {
     if (!context.showCliOutput) {
       return;
@@ -1443,13 +1443,13 @@ export class WorkflowExecutor {
       context.currentPromptFilePath ?? "unknown"
     );
     Log.info(
-      `${tag}Workflow started - ${workflowName}, ${totalPrompts} prompt(s), harness: ${integration.getStatus().strategy}`
+      `${tag}Workflow started - ${workflowName}, ${totalSteps} step(s), harness: ${integration.getStatus().strategy}`
     );
   }
 
   private logWorkflowCompletion(
     context: WorkflowExecutionContext,
-    totalPrompts: number
+    totalSteps: number
   ): void {
     if (!context.showCliOutput) {
       return;
@@ -1461,7 +1461,7 @@ export class WorkflowExecutor {
     );
     const completedCount = this.promptQueue.getCompletedCount();
     Log.info(
-      `${tag}Workflow complete - ${workflowName}, ${completedCount}/${totalPrompts} prompts completed`
+      `${tag}Workflow complete - ${workflowName}, ${completedCount}/${totalSteps} steps completed`
     );
   }
 
@@ -1476,7 +1476,7 @@ export class WorkflowExecutor {
   private async checkExecutionTimeLimit(
     dynamicConfig: DynamicQueueConfig,
     currentIndex: number,
-    totalPrompts: number
+    totalSteps: number
   ): Promise<boolean> {
     const maxTimeSec = dynamicConfig.maxWorkflowExecutionTime;
     const unlimitedWorkflow = dynamicConfig.unlimitedMode || maxTimeSec === -1;
@@ -1490,9 +1490,9 @@ export class WorkflowExecutor {
 
     if (elapsedSec >= maxTimeSec) {
       const completedCount = this.promptQueue.getCompletedCount();
-      const remainingCount = totalPrompts - currentIndex;
+      const remainingCount = totalSteps - currentIndex;
 
-      const message = `Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalPrompts} prompts. ${remainingCount} prompts remaining in queue.`;
+      const message = `Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalSteps} steps. ${remainingCount} steps remaining in queue.`;
 
       this.platform.warn(message);
       Log.trace(`⏱️ ${message}`);
@@ -1507,17 +1507,17 @@ export class WorkflowExecutor {
 
   private async checkQueueSizeLimit(
     dynamicConfig: DynamicQueueConfig,
-    totalPrompts: number
+    totalSteps: number
   ): Promise<boolean> {
     if (dynamicConfig.unlimitedMode || dynamicConfig.maxQueueSize <= 0) {
       return false;
     }
 
-    if (totalPrompts <= dynamicConfig.maxQueueSize) {
+    if (totalSteps <= dynamicConfig.maxQueueSize) {
       return false;
     }
 
-    const message = `Workflow stopped - Maximum queue size reached (${totalPrompts}/${dynamicConfig.maxQueueSize}).`;
+    const message = `Workflow stopped - Maximum queue size reached (${totalSteps}/${dynamicConfig.maxQueueSize}).`;
     this.platform.warn(message);
     Log.trace(`📏 ${message}`);
     this.promptQueue.getRuntimeStateMachine().fail();

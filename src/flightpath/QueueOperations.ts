@@ -31,8 +31,8 @@ export interface QueueStatusResponse {
     harness: string | null;
     model: string | null;
     currentIndex: number;
-    totalPrompts: number;
-    completedPrompts: number;
+    totalSteps: number;
+    completedSteps: number;
     executionState: string;
     maxQueueSize: number;
     remainingSlots: number;
@@ -68,9 +68,9 @@ export interface ReadOutputResponse {
 }
 
 /**
- * Append prompts request (single source for both MCP and Language Model Tools)
+ * Append steps request (single source for both MCP and Language Model Tools)
  */
-export interface AppendPromptsRequest {
+export interface AppendStepsRequest {
   steps: Array<{
     prompt: string;
     model?: string;
@@ -84,22 +84,22 @@ export interface AppendPromptsRequest {
 }
 
 /**
- * Append prompts response (single source for both MCP and Language Model Tools)
+ * Append steps response (single source for both MCP and Language Model Tools)
  */
-export interface AppendPromptsResponse {
+export interface AppendStepsResponse {
   success: boolean;
-  promptsAdded: number;
+  stepsAdded: number;
   newQueueSize: number;
   insertIndex: number;
   workingFile: string | null;
 }
 
 /**
- * Get comprehensive queue status including metadata and all prompts
+ * Get comprehensive queue status including metadata and all steps
  * Single-sourced logic used by MCP server and Language Model Tools
  * @param queue The PromptQueue instance
  * @param workingFilePath Optional working file path (from queue state or external)
- * @returns Queue status with metadata and all prompts
+ * @returns Queue status with metadata and all steps
  */
 export function getQueueStatus(
   queue: PromptQueue,
@@ -136,8 +136,8 @@ export function getQueueStatus(
       harness: workflowFile.harness ?? null,
       model: workflowFile.model ?? null,
       currentIndex: state.currentIndex,
-      totalPrompts: state.steps.length,
-      completedPrompts: state.results.filter(
+      totalSteps: state.steps.length,
+      completedSteps: state.results.filter(
         (r) => r.status === STEP_STATUS.COMPLETED
       ).length,
       executionState: runtime.status,
@@ -167,17 +167,17 @@ export function readQueueOutput(
   request: ReadOutputRequest
 ): ReadOutputResponse {
   const state = queue.getState();
-  const allPrompts = state.steps;
+  const allSteps = state.steps;
 
   const indices =
     !request.indices || request.indices.length === 0
-      ? allPrompts.map((_, i) => i)
+      ? allSteps.map((_, i) => i)
       : request.indices;
 
   const outputs = indices
-    .filter((i) => i >= 0 && i < allPrompts.length)
+    .filter((i) => i >= 0 && i < allSteps.length)
     .map((i) => {
-      const step = allPrompts[i];
+      const step = allSteps[i];
       const result = state.results[i];
       return {
         index: i,
@@ -191,17 +191,17 @@ export function readQueueOutput(
 }
 
 /**
- * Append prompts to the queue with position control (next or end)
+ * Append steps to the queue with position control (next or end)
  * Single-sourced logic used by MCP server, Language Model Tools, and Queue commands
  * @param queue The PromptQueue instance
- * @param request The append request with prompts, position, and source
+ * @param request The append request with steps, position, and source
  * @returns Append response with success status and new queue size
  * @throws Error if queue cannot accept appends or size limit exceeded
  */
 export async function appendToQueue(
   queue: PromptQueue,
-  request: AppendPromptsRequest
-): Promise<AppendPromptsResponse> {
+  request: AppendStepsRequest
+): Promise<AppendStepsResponse> {
   // 1. Validate queue state
   if (!queue.canAppend()) {
     throw new Error("Cannot append: Queue is in cancelled or error state");
@@ -219,12 +219,12 @@ export async function appendToQueue(
 
   if (!unlimitedMode && newSize > maxQueueSize) {
     throw new Error(
-      `Queue size limit exceeded: ${newSize}/${maxQueueSize} prompts. ` +
+      `Queue size limit exceeded: ${newSize}/${maxQueueSize} steps. ` +
         `Enable unlimitedMode or increase maxQueueSize to proceed.`
     );
   }
 
-  // 3. Convert request prompts to PromptStep format
+  // 3. Convert request steps to PromptStep format
   const promptItems: PromptStep[] = request.steps.map((p) => ({
     prompt: p.prompt,
     model: p.model,
@@ -244,15 +244,15 @@ export async function appendToQueue(
     runtime.reopenForContinuation();
   }
 
-  // 5. Append prompts (PromptQueue now owns topology only)
-  await queue.appendPrompts(promptItems, request.source, request.position);
+  // 5. Append steps (PromptQueue now owns topology only)
+  await queue.appendSteps(promptItems, request.source, request.position);
 
   // 6. Get updated state
   const updatedState = queue.getState();
 
   return {
     success: true,
-    promptsAdded: request.steps.length,
+    stepsAdded: request.steps.length,
     newQueueSize: updatedState.steps.length,
     insertIndex,
     workingFile: updatedState.workingFilePath || null,

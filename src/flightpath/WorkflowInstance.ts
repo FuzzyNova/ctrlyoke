@@ -78,7 +78,7 @@ export type {
  *   - EndConditionHandler / EndConditionEvaluator
  *   - PromptFileLoader / PromptFileWatcher
  *   - OutputHistoryManager
- *   - activeIntegration, currentPromptFile, startPending, lastKnownPromptCount
+ *   - activeIntegration, currentPromptFile, startPending, lastKnownStepCount
  *
  * Dependencies that span multiple workflows (integrations, status bar, template
  * importing) remain in WorkflowOrchestrator and are injected as callbacks:
@@ -124,7 +124,7 @@ export class WorkflowInstance {
   /** Deduplicates overlapping eager working-file creation requests */
   private ensureWorkingFilePromise: Promise<void> | undefined;
   /** Tracks prompt count to detect MCP-triggered merges */
-  private lastKnownPromptCount: number = 0;
+  private lastKnownStepCount: number = 0;
   /** Tracks workflow name to detect changes and push them to the dashboard */
   private lastKnownWorkflowName: string = "";
   /** Heartbeat interval for the process lock file (cleared in finally + dispose) */
@@ -825,7 +825,7 @@ export class WorkflowInstance {
       }
 
       const currentQueueState = this.promptQueue.getState();
-      const totalPrompts = currentQueueState.steps.length;
+      const totalSteps = currentQueueState.steps.length;
 
       const workingFilePath = currentQueueState.workingFilePath ?? "";
       if (
@@ -939,46 +939,46 @@ export class WorkflowInstance {
         );
       }
 
-      if (this.dashboardSink && totalPrompts > 0) {
+      if (this.dashboardSink && totalSteps > 0) {
         if (continueFromCurrent || isIdleContinuation) {
           const currentIndex = currentQueueState.currentIndex;
           Log.debug(
-            `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${currentIndex}, totalSteps=${totalPrompts}`
+            `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${currentIndex}, totalSteps=${totalSteps}`
           );
           this.dashboardSink.updateExecutionStarted(
             this.id,
             fileName,
-            totalPrompts,
+            totalSteps,
             true,
             currentIndex
           );
         } else if (isAppendContinuation) {
           Log.debug(
-            `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true (append-to-completed), preserveStepCount=${prevCompletedCount}, totalSteps=${totalPrompts}`
+            `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true (append-to-completed), preserveStepCount=${prevCompletedCount}, totalSteps=${totalSteps}`
           );
           this.dashboardSink.updateExecutionStarted(
             this.id,
             fileName,
-            totalPrompts,
+            totalSteps,
             true,
             prevCompletedCount
           );
         } else {
           Log.debug(
-            `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${totalPrompts}`
+            `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${totalSteps}`
           );
           this.clearOutputBuffers();
           this.dashboardSink.updateExecutionStarted(
             this.id,
             fileName,
-            totalPrompts
+            totalSteps
           );
         }
       }
 
-      if (totalPrompts > 0) {
+      if (totalSteps > 0) {
         const currentIndex = currentQueueState.currentIndex;
-        integration.setWorkflowProgress(currentIndex + 1, totalPrompts);
+        integration.setWorkflowProgress(currentIndex + 1, totalSteps);
       }
       Log.debug(
         `🟢 [APPEND-DEBUG] Starting workflow execution with historyFilePath: "${historyFilePath}" (empty=${!historyFilePath})`
@@ -1159,7 +1159,7 @@ export class WorkflowInstance {
     this.activeHistoryFilePath = "";
     this.currentPromptFile = undefined;
     this.promptQueue.clearQueue();
-    this.lastKnownPromptCount = 0;
+    this.lastKnownStepCount = 0;
     this.propagateWorkflowNameToIntegrations();
     Log.debug("Workflow state cleared");
   }
@@ -1236,12 +1236,12 @@ export class WorkflowInstance {
 
       const source = `User append (${position}): ${path.basename(filePath)}`;
       this.reopenRuntimeForContinuationIfNeeded(false);
-      await this.promptQueue.appendPrompts(parsed.steps, source, position);
+      await this.promptQueue.appendSteps(parsed.steps, source, position);
       this.syncCurrentPromptFileFromQueue(filePath);
 
       if (this.dashboardSink) {
         const updatedState = this.promptQueue.getState();
-        this.dashboardSink.updatePromptsExtended(
+        this.dashboardSink.updateStepsExtended(
           updatedState.steps,
           this.promptQueue.getWorkflowFile().finalStep ?? null
         );
@@ -1415,14 +1415,14 @@ export class WorkflowInstance {
   }
 
   /**
-   * Sync prompts (and optionally finalPrompt) to match the state restored by a webview undo/redo.
+   * Sync steps (and optionally finalStep) to match the state restored by a webview undo/redo.
    * Updates the in-memory queue and persists to the working file without broadcasting to the webview.
    */
-  async syncPromptsForUndoRedo(
+  async syncStepsForUndoRedo(
     steps: WorkflowStep[],
     finalStep: WorkflowStep | null
   ): Promise<void> {
-    await this.promptQueue.syncPromptsForUndoRedo(steps);
+    await this.promptQueue.syncStepsForUndoRedo(steps);
 
     // Sync finalStep if it changed
     if (finalStep !== null) {
@@ -1438,7 +1438,7 @@ export class WorkflowInstance {
 
     this.dashboardSink?.notifyUndoRedoSynced();
     Log.debug(
-      `[WorkflowInstance] syncPromptsForUndoRedo: ${steps.length} prompts, finalStep=${finalStep ? "set" : "null"}`
+      `[WorkflowInstance] syncStepsForUndoRedo: ${steps.length} steps, finalStep=${finalStep ? "set" : "null"}`
     );
   }
 
@@ -1469,7 +1469,7 @@ export class WorkflowInstance {
     }
     if (this.dashboardSink) {
       const currentState = this.promptQueue.getState();
-      this.dashboardSink.updatePromptsExtended(
+      this.dashboardSink.updateStepsExtended(
         currentState.steps,
         this.promptQueue.getWorkflowFile().finalStep ?? null
       );
@@ -1686,7 +1686,7 @@ export class WorkflowInstance {
           `(status=${this.getAuthoritativeExecutionState()}, prompts=${currentState.steps.length}, shouldRun=${shouldRun}, action=${action})`
       );
       this.reopenRuntimeForContinuationIfNeeded(shouldRun);
-      await this.promptQueue.appendPrompts(
+      await this.promptQueue.appendSteps(
         [step],
         "Dashboard editor",
         position
@@ -1695,7 +1695,7 @@ export class WorkflowInstance {
 
       if (this.dashboardSink) {
         const updatedState = this.promptQueue.getState();
-        this.dashboardSink.updatePromptsExtended(
+        this.dashboardSink.updateStepsExtended(
           updatedState.steps,
           this.promptQueue.getWorkflowFile().finalStep ?? null
         );
@@ -2119,7 +2119,7 @@ export class WorkflowInstance {
     }
 
     Log.info(
-      `appendPrompts: Setting to STOPPED (appended to ${status} queue, ${this.promptQueue.getCompletedCount()} prompts previously completed, user can Resume)`
+      `appendSteps: Setting to STOPPED (appended to ${status} queue, ${this.promptQueue.getCompletedCount()} steps previously completed, user can Resume)`
     );
     this.workflowRuntime.reopenForContinuation();
   }
@@ -2260,16 +2260,16 @@ export class WorkflowInstance {
       // Runtime transitions now flow through WorkflowStateMachine.onDidTransition.
       // Queue state changes stay responsible for queue topology updates only.
       // When prompts increase, piggyback the current execution state onto the
-      // PROMPTS_EXTENDED message so prompt-growth + lifecycle updates still land
+      // STEPS_EXTENDED message so prompt-growth + lifecycle updates still land
       // in one render and avoid the React 19 detached-fiber issue.
-      const hasNewPrompts = state.steps.length > this.lastKnownPromptCount;
+      const hasNewPrompts = state.steps.length > this.lastKnownStepCount;
 
       if (hasNewPrompts) {
         Log.debug(
-          `Detected prompt count increase: ${this.lastKnownPromptCount} → ${state.steps.length}. Notifying dashboard.`
+          `Detected prompt count increase: ${this.lastKnownStepCount} → ${state.steps.length}. Notifying dashboard.`
         );
         // Include executionState so both updates reach the webview in one message.
-        this.dashboardSink.updatePromptsExtended(
+        this.dashboardSink.updateStepsExtended(
           state.steps,
           this.promptQueue.getWorkflowFile().finalStep ?? null,
           executionState
@@ -2281,7 +2281,7 @@ export class WorkflowInstance {
       }
     }
 
-    this.lastKnownPromptCount = state.steps.length;
+    this.lastKnownStepCount = state.steps.length;
     this.lastKnownWorkflowName = state.workflowName ?? "";
   }
 
@@ -2549,3 +2549,4 @@ export class WorkflowInstance {
     };
   }
 }
+

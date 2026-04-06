@@ -246,13 +246,13 @@ export class DashboardBroadcastHub
     }
   }
 
-  updatePromptsExtended(
+  updateStepsExtended(
     steps: any[],
     finalPrompt?: WorkflowStep | null,
     executionState?: string
   ): void {
     for (const client of this.clients) {
-      client.updatePromptsExtended?.(steps, finalPrompt, executionState);
+      client.updateStepsExtended?.(steps, finalPrompt, executionState);
     }
   }
 

@@ -128,7 +128,7 @@ suite("WorkflowInstance finalPrompt replay", () => {
       updateCliOutput: () => {},
       updateCliStreamingChunk: () => {},
       updateCliStreamingEvents: () => {},
-      updatePromptsExtended: () => {},
+      updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
       updateFinalPrompt: () => {},
       updateFinalPromptStatus: () => {},
@@ -269,7 +269,7 @@ suite("WorkflowInstance runtime transitions", () => {
       updateCliOutput: () => {},
       updateCliStreamingChunk: () => {},
       updateCliStreamingEvents: () => {},
-      updatePromptsExtended: () => {},
+      updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
       updateFinalPrompt: () => {},
       updateFinalPromptStatus: () => {},
@@ -339,7 +339,7 @@ suite("WorkflowInstance runtime transitions", () => {
       updateCliOutput: () => {},
       updateCliStreamingChunk: () => {},
       updateCliStreamingEvents: () => {},
-      updatePromptsExtended: (
+      updateStepsExtended: (
         prompts: PromptStep[],
         _finalPrompt: PromptStep | null,
         executionState?: string
@@ -381,7 +381,7 @@ suite("WorkflowInstance runtime transitions", () => {
     assert.strictEqual(runtime.startExecution(), true);
     await instance.promptQueue.commitRuntimeTransition({ persist: false });
 
-    (instance as any).lastKnownPromptCount = 1;
+    (instance as any).lastKnownStepCount = 1;
 
     (instance as any).onQueueStateChanged({
       ...instance.promptQueue.getState(),
@@ -422,7 +422,7 @@ suite("WorkflowInstance runtime transitions", () => {
       updateCliOutput: () => {},
       updateCliStreamingChunk: () => {},
       updateCliStreamingEvents: () => {},
-      updatePromptsExtended: () => {},
+      updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
       updateFinalPrompt: () => {},
       updateFinalPromptStatus: () => {},
@@ -581,7 +581,7 @@ suite("WorkflowInstance runtime transitions", () => {
       updateCliOutput: () => {},
       updateCliStreamingChunk: () => {},
       updateCliStreamingEvents: () => {},
-      updatePromptsExtended: () => {},
+      updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
       updateFinalPrompt: () => {},
       updateFinalPromptStatus: () => {},
@@ -642,7 +642,7 @@ suite("WorkflowInstance eager working file creation", () => {
       updateCliOutput: () => {},
       updateCliStreamingChunk: () => {},
       updateCliStreamingEvents: () => {},
-      updatePromptsExtended: () => {},
+      updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
       updateFinalPrompt: () => {},
       updateFinalPromptStatus: () => {},
@@ -712,7 +712,7 @@ suite("WorkflowInstance append-and-continue", () => {
       updateCliOutput: () => {},
       updateCliStreamingChunk: () => {},
       updateCliStreamingEvents: () => {},
-      updatePromptsExtended: () => {},
+      updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
       updateFinalPrompt: () => {},
       updateFinalPromptStatus: () => {},
@@ -779,7 +779,7 @@ suite("WorkflowInstance append-and-continue", () => {
       updateCliOutput: () => {},
       updateCliStreamingChunk: () => {},
       updateCliStreamingEvents: () => {},
-      updatePromptsExtended: () => {},
+      updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
       updateFinalPrompt: () => {},
       updateFinalPromptStatus: () => {},
@@ -832,3 +832,4 @@ suite("WorkflowInstance append-and-continue", () => {
     ]);
   });
 });
+

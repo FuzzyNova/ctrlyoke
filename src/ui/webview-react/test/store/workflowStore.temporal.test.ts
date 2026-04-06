@@ -1,7 +1,7 @@
 /**
  * Tests for the undo/redo (temporal) behaviour of workflowStore.
  *
- * These cover the three bugs fixed in the PROMPTS_EXTENDED / PROMPT_DELETED /
+ * These cover the three bugs fixed in the STEPS_EXTENDED / PROMPT_DELETED /
  * STEP_STATUS_CHANGED handlers and verify the baseline store invariants that
  * those fixes depend on.
  *
@@ -86,7 +86,7 @@ describe("tracked store actions (should record undo entries)", () => {
     expect(temporal().pastStates).toHaveLength(1);
   });
 
-  it("setFinalPrompt records an undo entry (direct call — not via PROMPTS_EXTENDED)", () => {
+  it("setFinalPrompt records an undo entry (direct call — not via STEPS_EXTENDED)", () => {
     loadWorkflow([makePrompt()]);
     store().setFinalStep(makePrompt({ prompt: "final step" }));
     expect(temporal().pastStates).toHaveLength(1);
@@ -189,16 +189,16 @@ describe("STEP_STATUS_CHANGED handler simulation", () => {
 });
 
 // ---------------------------------------------------------------------------
-// PROMPTS_EXTENDED handler simulation
+// STEPS_EXTENDED handler simulation
 // Bug: double-fired notification + setFinalPrompt both created undo entries,
 // resulting in 4 entries for a single user add action.
 // Fix: pause around re-syncs and setFinalPrompt calls.
 // ---------------------------------------------------------------------------
-describe("PROMPTS_EXTENDED handler simulation", () => {
+describe("STEPS_EXTENDED handler simulation", () => {
   it("add prompt: records exactly 1 entry for a count increase", () => {
     loadWorkflow([makePrompt()]);
 
-    // Simulate PROMPTS_EXTENDED count increase (shouldRecord = true → no pause)
+    // Simulate STEPS_EXTENDED count increase (shouldRecord = true → no pause)
     store().setPrompts([makePrompt(), makePrompt({ prompt: "new prompt" })]);
 
     // setFinalPrompt is always paused in the handler
@@ -213,7 +213,7 @@ describe("PROMPTS_EXTENDED handler simulation", () => {
     const steps = [makePrompt(), makePrompt({ prompt: "second" })];
     loadWorkflow(steps);
 
-    // Simulate second PROMPTS_EXTENDED with same prompts (shouldRecord = false)
+    // Simulate second STEPS_EXTENDED with same prompts (shouldRecord = false)
     temporal().pause();
     store().setPrompts([...steps]);
     temporal().resume();
@@ -228,7 +228,7 @@ describe("PROMPTS_EXTENDED handler simulation", () => {
   it("edit prompt text: records 1 entry when count is same but text differs", () => {
     loadWorkflow([makePrompt()]);
 
-    // Simulate PROMPTS_EXTENDED from UPDATE_PROMPT response (shouldRecord = true)
+    // Simulate STEPS_EXTENDED from UPDATE_PROMPT response (shouldRecord = true)
     store().setPrompts([makePrompt({ prompt: "edited text" })]);
 
     temporal().pause();
@@ -244,13 +244,13 @@ describe("PROMPTS_EXTENDED handler simulation", () => {
   it("four-undo bug is gone: adding one prompt leaves exactly 1 past state", () => {
     loadWorkflow([makePrompt()]);
 
-    // First PROMPTS_EXTENDED — count increased (recorded)
+    // First STEPS_EXTENDED — count increased (recorded)
     store().setPrompts([makePrompt(), makePrompt({ prompt: "added" })]);
     temporal().pause();
     store().setFinalStep(null);
     temporal().resume();
 
-    // Second PROMPTS_EXTENDED — same content re-sync (suppressed)
+    // Second STEPS_EXTENDED — same content re-sync (suppressed)
     temporal().pause();
     store().setPrompts([makePrompt(), makePrompt({ prompt: "added" })]);
     temporal().resume();
@@ -369,3 +369,4 @@ describe("undo/redo round-trips", () => {
     expect((store().steps[0] as any).prompt).toBe("hello world");
   });
 });
+

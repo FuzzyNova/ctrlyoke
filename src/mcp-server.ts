@@ -351,15 +351,15 @@ class FlightPathMCPServer {
       executionState: EXECUTION_STATES.IDLE,
     };
 
-    const allPrompts = (queueData.steps || []) as WorkflowStep[];
-    const steps = allPrompts.map((p, index) => ({
+    const allSteps = (queueData.steps || []) as WorkflowStep[];
+    const steps = allSteps.map((p, index) => ({
       index,
       prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,
-      status: this.getPromptStatus(index, runtime, allPrompts),
+      status: this.getStepStatus(index, runtime, allSteps),
       model: isScriptStep(p) ? undefined : p.model,
     }));
 
-    const completedCount = allPrompts.filter(
+    const completedCount = allSteps.filter(
       (p) => p._runtime?.completedAt !== undefined
     ).length;
 
@@ -372,11 +372,11 @@ class FlightPathMCPServer {
         harness: queueData.harness ?? null,
         model: queueData.model ?? null,
         currentIndex: runtime.currentIndex,
-        totalPrompts: allPrompts.length,
-        completedPrompts: completedCount,
+        totalSteps: allSteps.length,
+        completedSteps: completedCount,
         executionState: runtime.executionState,
         maxQueueSize: unlimited ? "unlimited" : maxSize,
-        remainingSlots: unlimited ? "unlimited" : maxSize - allPrompts.length,
+        remainingSlots: unlimited ? "unlimited" : maxSize - allSteps.length,
         workingFile: path.relative(this.workspaceRoot, workingFile),
       },
       steps,
@@ -415,7 +415,7 @@ class FlightPathMCPServer {
     };
 
     log("Parsed arguments:", {
-      promptCount: steps?.length || 0,
+      stepCount: steps?.length || 0,
       position,
       source,
     });
@@ -477,8 +477,8 @@ class FlightPathMCPServer {
 
     let response: {
       success: boolean;
-      promptsAdded: number;
-      promptsRejected: number;
+      stepsAdded: number;
+      stepsRejected: number;
       newQueueSize: number;
       insertIndex: number;
       workingFile: string;
@@ -598,8 +598,8 @@ class FlightPathMCPServer {
 
       response = {
         success: true,
-        promptsAdded: validPrompts.length,
-        promptsRejected: rejectedPrompts.length,
+        stepsAdded: validPrompts.length,
+        stepsRejected: rejectedPrompts.length,
         newQueueSize: queueData.steps.length,
         insertIndex,
         workingFile: path.relative(this.workspaceRoot, workingFile),
@@ -700,7 +700,7 @@ class FlightPathMCPServer {
 
     const fileContent = await fs.readFile(workingFile, "utf8");
     const queueData: WorkingFile = JSON.parse(fileContent);
-    const allPrompts = (queueData.steps || []) as WorkflowStep[];
+    const allSteps = (queueData.steps || []) as WorkflowStep[];
 
     const runtime = queueData._runtime || {
       currentIndex: 0,
@@ -710,16 +710,16 @@ class FlightPathMCPServer {
     const requestedIndices: number[] =
       Array.isArray(args?.indices) && args.indices.length > 0
         ? args.indices
-        : allPrompts.map((_: any, i: number) => i);
+        : allSteps.map((_: any, i: number) => i);
 
     const outputs = requestedIndices
-      .filter((i) => i >= 0 && i < allPrompts.length)
+      .filter((i) => i >= 0 && i < allSteps.length)
       .map((i) => {
-        const p = allPrompts[i];
+        const p = allSteps[i];
         return {
           index: i,
           prompt: isScriptStep(p) ? `(script) ${p.script}` : p.prompt,
-          status: this.getPromptStatus(i, runtime, allPrompts),
+          status: this.getStepStatus(i, runtime, allSteps),
           responseText: p._runtime?.responseText ?? null,
         };
       });
@@ -865,9 +865,9 @@ class FlightPathMCPServer {
   }
 
   /**
-   * Determine prompt status based on per-prompt completedAt (source of truth)
+   * Determine step status based on per-step completedAt (source of truth)
    */
-  private getPromptStatus(
+  private getStepStatus(
     index: number,
     runtime: WorkingFileRuntime,
     steps: WorkflowStep[]
@@ -879,7 +879,7 @@ class FlightPathMCPServer {
       return "running";
     }
     if (index < runtime.currentIndex) {
-      return "completed"; // Fallback for prompts before current
+      return "completed"; // Fallback for steps before current
     }
     return "pending";
   }

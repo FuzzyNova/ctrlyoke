@@ -21,8 +21,8 @@ export interface IWorkingFileQueueAccess {
   /** The current working file path, if any */
   getWorkingFilePath(): string | undefined;
 
-  /** Current prompts in the queue */
-  getPrompts(): WorkflowStep[];
+  /** Current steps in the queue */
+  getSteps(): WorkflowStep[];
 
   /** Current execution index */
   getCurrentIndex(): number;
@@ -33,8 +33,8 @@ export interface IWorkingFileQueueAccess {
   /** Current workflow name */
   getWorkflowName(): string | undefined;
 
-  /** Merge disk prompts into memory, returning newly added prompts */
-  mergeDiskPrompts(diskPrompts: WorkflowStep[]): WorkflowStep[];
+  /** Merge disk steps into memory, returning newly added steps */
+  mergeDiskSteps(diskSteps: WorkflowStep[]): WorkflowStep[];
 
   /** Emit state change notification to listeners */
   emitStateChange(): void;
@@ -158,7 +158,7 @@ export class WorkingFileManager {
   /**
    * Create working file from original prompt file
    * @param nameForFile Display name or file path used to generate the working file's filename
-   * @param prompts Prompts to store in working file
+   * @param steps Steps to store in working file
    * @param workspaceFolder Current workspace folder
    * @param workflowName Computed workflow name for the working file
    * @param originalFilePath The true source file path (if any). Only set for file-based workflows;
@@ -167,7 +167,7 @@ export class WorkingFileManager {
    */
   public async createWorkingFile(
     nameForFile: string,
-    prompts: WorkflowStep[],
+    steps: WorkflowStep[],
     workspaceFolderPath: string,
     workflowName: string,
     originalFilePath?: string
@@ -182,7 +182,7 @@ export class WorkingFileManager {
       workflowName,
       startedAt: Date.now(),
       lastModifiedAt: Date.now(),
-      steps: prompts,
+      steps,
       _runtime: {
         currentIndex: 0,
         executionState: EXECUTION_STATES.IDLE,
@@ -238,19 +238,19 @@ export class WorkingFileManager {
         // Read current working file from disk
         const workingFile = await this.readWorkingFile(workingFilePath);
 
-        // CRITICAL FIX: Merge prompts from disk instead of blindly overwriting
-        // This preserves MCP-appended prompts that may have been added while we were running
+        // CRITICAL FIX: Merge steps from disk instead of blindly overwriting
+        // This preserves MCP-appended steps that may have been added while we were running
         // BUT: Skip merge for intentional writes (delete/update) to avoid undoing changes
         if (!skipMerge) {
-          const diskPrompts = workingFile.steps || [];
+          const diskSteps = workingFile.steps || [];
 
-          const newPromptsFromDisk =
-            this.queueAccess.mergeDiskPrompts(diskPrompts);
+          const newStepsFromDisk =
+            this.queueAccess.mergeDiskSteps(diskSteps);
 
-          // If disk has new prompts, log and emit state change
-          if (newPromptsFromDisk.length > 0) {
+          // If disk has new steps, log and emit state change
+          if (newStepsFromDisk.length > 0) {
             Log.info(
-              `updateWorkingFile - Detected ${newPromptsFromDisk.length} prompts added externally (likely via MCP), merging into queue`
+              `updateWorkingFile - Detected ${newStepsFromDisk.length} steps added externally (likely via MCP), merging into queue`
             );
 
             // Emit state change so dashboard updates
@@ -258,18 +258,18 @@ export class WorkingFileManager {
           }
         } // End skipMerge check
 
-        // Now write back the prompts array (merged or direct from memory)
+        // Now write back the steps array (merged or direct from memory)
         // CRITICAL: Preserve _runtime metadata during save (Phase 4: Per-Prompt Session Management)
-        workingFile.steps = this.queueAccess.getPrompts().map((prompt) => ({
-          ...prompt,
+        workingFile.steps = this.queueAccess.getSteps().map((step) => ({
+          ...step,
         }));
-        // Count prompts with _runtime metadata (Phase 4: Session Management)
-        const promptsWithRuntime = workingFile.steps.filter(
+        // Count steps with _runtime metadata (Phase 4: Session Management)
+        const stepsWithRuntime = workingFile.steps.filter(
           (p) => p._runtime
         ).length;
         Log.debug(
-          `updateWorkingFile - Writing ${workingFile.steps.length} prompts to ${workingFilePath}, ` +
-            `_runtime: ${promptsWithRuntime}/${workingFile.steps.length} prompts`
+          `updateWorkingFile - Writing ${workingFile.steps.length} steps to ${workingFilePath}, ` +
+            `_runtime: ${stepsWithRuntime}/${workingFile.steps.length} steps`
         );
 
         // Update workflow name if set in state
@@ -403,7 +403,7 @@ export class WorkingFileManager {
   /**
    * Run an async function serialized in the operation queue.
    * Used by PromptQueue for compound operations that need both state mutations
-   * and file I/O to be atomic (e.g., appendPrompts).
+   * and file I/O to be atomic (e.g., appendSteps).
    */
   public async runInQueue(fn: () => Promise<void>): Promise<void> {
     this.operationQueue = this.operationQueue.then(fn).catch((err) => {

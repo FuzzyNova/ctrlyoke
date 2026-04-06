@@ -234,7 +234,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
       if (prompt.prompt === "final-loop") {
         finalRuns++;
         if (finalRuns === 1) {
-          await queue.appendPrompts([{ prompt: "queue-appended" }], "test");
+          await queue.appendSteps([{ prompt: "queue-appended" }], "test");
         }
       }
       return { success: true, responseText: `ok:${prompt.prompt}` };

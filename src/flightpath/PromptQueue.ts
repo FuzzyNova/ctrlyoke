@@ -114,12 +114,12 @@ export class PromptQueue {
     // Create WorkingFileManager with adapter that provides access to queue state
     const queueAccess: IWorkingFileQueueAccess = {
       getWorkingFilePath: () => this.state.workingFilePath,
-      getPrompts: () => this.state.steps,
+      getSteps: () => this.state.steps,
       getCurrentIndex: () => this.state.currentIndex,
       getStatus: () => this.stateMachine.status,
       getWorkflowName: () => this.state.workflowName,
-      mergeDiskPrompts: (diskPrompts: WorkflowStep[]) =>
-        this.mergeDiskPrompts(diskPrompts),
+      mergeDiskSteps: (diskSteps: WorkflowStep[]) =>
+        this.mergeDiskSteps(diskSteps),
       emitStateChange: () => this.emitStateChange(),
       getFinalPromptRuntime: () => this.getFinalPromptRuntime(),
       updateWorkflowProperty: (key: string, value: unknown) =>
@@ -942,11 +942,11 @@ export class PromptQueue {
    * Identifies new prompts by content hash, adopts disk ordering as source of truth,
    * and preserves existing results for prompts already in memory.
    *
-   * @param diskPrompts Prompts read from the working file on disk
-   * @returns Array of newly-discovered prompts (empty if none)
+   * @param diskSteps Steps read from the working file on disk
+   * @returns Array of newly-discovered steps (empty if none)
    */
-  private mergeDiskPrompts(diskPrompts: WorkflowStep[]): WorkflowStep[] {
-    // Build map of prompts we have in memory (by content hash)
+  private mergeDiskSteps(diskSteps: WorkflowStep[]): WorkflowStep[] {
+    // Build map of steps we have in memory (by content hash)
     const memoryPromptMap = new Map<string, WorkflowStep>();
     for (const step of this.state.steps) {
       const content = isScriptStep(step) ? step.script : step.prompt;
@@ -954,27 +954,27 @@ export class PromptQueue {
       memoryPromptMap.set(hash, step);
     }
 
-    // Find prompts on disk that don't exist in memory
-    const newPromptsFromDisk: WorkflowStep[] = [];
-    for (const diskStep of diskPrompts) {
+    // Find steps on disk that don't exist in memory
+    const newStepsFromDisk: WorkflowStep[] = [];
+    for (const diskStep of diskSteps) {
       const content = isScriptStep(diskStep)
         ? diskStep.script
         : diskStep.prompt;
       const hash = hashPromptContent(content);
       if (!memoryPromptMap.has(hash)) {
-        newPromptsFromDisk.push(diskStep);
+        newStepsFromDisk.push(diskStep);
       }
     }
 
-    if (newPromptsFromDisk.length === 0) {
+    if (newStepsFromDisk.length === 0) {
       return [];
     }
 
     // CRITICAL: Use disk order as source of truth
     // This preserves the insertion positions chosen by MCP (e.g., "next" vs "end")
-    // But preserve in-memory state for existing prompts — specifically _runtime (session IDs,
+    // But preserve in-memory state for existing steps — specifically _runtime (session IDs,
     // completedAt, etc.) that may not have been persisted to disk yet at the time of this merge.
-    this.state.steps = diskPrompts.map((diskStep) => {
+    this.state.steps = diskSteps.map((diskStep) => {
       const content = isScriptStep(diskStep)
         ? diskStep.script
         : diskStep.prompt;
@@ -983,9 +983,9 @@ export class PromptQueue {
       return memoryStep ?? diskStep;
     });
 
-    // Rebuild results array to match new prompt order
-    // Preserve existing results where we have them, add pending for new prompts
-    const newResults: PromptResult[] = diskPrompts.map((step) => {
+    // Rebuild results array to match new step order
+    // Preserve existing results where we have them, add pending for new steps
+    const newResults: PromptResult[] = diskSteps.map((step) => {
       const content = isScriptStep(step) ? step.script : step.prompt;
       const hash = hashPromptContent(content);
 
@@ -1009,17 +1009,17 @@ export class PromptQueue {
     });
 
     this.state.results = newResults;
-    return newPromptsFromDisk;
+    return newStepsFromDisk;
   }
 
   /**
-   * Merge prompts from working file disk into current queue (for MCP appends during execution)
-   * This preserves execution state (currentIndex, status, results) while adding new prompts
-   * @returns Number of new prompts merged (-1 if error)
+   * Merge steps from working file disk into current queue (for MCP appends during execution)
+   * This preserves execution state (currentIndex, status, results) while adding new steps
+   * @returns Number of new steps merged (-1 if error)
    */
-  public async mergePromptsFromDisk(): Promise<number> {
+  public async mergeStepsFromDisk(): Promise<number> {
     if (!this.state.workingFilePath) {
-      Log.warn("mergePromptsFromDisk: No working file path set");
+      Log.warn("mergeStepsFromDisk: No working file path set");
       return -1;
     }
 
@@ -1028,21 +1028,21 @@ export class PromptQueue {
       const workingFile = await this.readWorkingFile(
         this.state.workingFilePath
       );
-      const diskPrompts = workingFile.steps || [];
+      const diskSteps = workingFile.steps || [];
 
       Log.info(
-        `mergePromptsFromDisk: Disk has ${diskPrompts.length} prompts, memory has ${this.state.steps.length} prompts`
+        `mergeStepsFromDisk: Disk has ${diskSteps.length} steps, memory has ${this.state.steps.length} steps`
       );
 
-      const newPromptsFromDisk = this.mergeDiskPrompts(diskPrompts);
+      const newStepsFromDisk = this.mergeDiskSteps(diskSteps);
 
-      if (newPromptsFromDisk.length === 0) {
-        Log.info("mergePromptsFromDisk: No new prompts found");
+      if (newStepsFromDisk.length === 0) {
+        Log.info("mergeStepsFromDisk: No new steps found");
         return 0;
       }
 
       Log.info(
-        `mergePromptsFromDisk: Found ${newPromptsFromDisk.length} new prompts from disk (MCP append), merging into queue`
+        `mergeStepsFromDisk: Found ${newStepsFromDisk.length} new steps from disk (MCP append), merging into queue`
       );
 
       // Update queue extension tracking
@@ -1053,13 +1053,13 @@ export class PromptQueue {
       this.emitStateChange();
 
       Log.info(
-        `mergePromptsFromDisk: Successfully merged. New queue size: ${this.state.steps.length}`
+        `mergeStepsFromDisk: Successfully merged. New queue size: ${this.state.steps.length}`
       );
 
-      return newPromptsFromDisk.length;
+      return newStepsFromDisk.length;
     } catch (error) {
       Log.error(
-        "mergePromptsFromDisk: Failed to read working file",
+        "mergeStepsFromDisk: Failed to read working file",
         error as Error
       );
       return -1;
@@ -1077,8 +1077,8 @@ export class PromptQueue {
    *   - QUEUE_POSITION.END: At end of queue (default)
    * @throws Error if queue is in invalid state for appending
    */
-  public async appendPrompts(
-    prompts: WorkflowStep[],
+  public async appendSteps(
+    steps: WorkflowStep[],
     source: string = "User append",
     position: QueuePosition = QUEUE_POSITION.END
   ): Promise<void> {
@@ -1101,11 +1101,11 @@ export class PromptQueue {
         insertIndex = this.state.steps.length;
       }
 
-      // Insert prompts at the specified position
-      this.state.steps.splice(insertIndex, 0, ...prompts);
+      // Insert steps at the specified position
+      this.state.steps.splice(insertIndex, 0, ...steps);
 
-      // Create new results for the inserted prompts
-      const newResults: PromptResult[] = prompts.map((step) => ({
+      // Create new results for the inserted steps
+      const newResults: PromptResult[] = steps.map((step) => ({
         prompt: isScriptStep(step) ? step.script : step.prompt,
         status: STEP_STATUS.PENDING,
         timestamp: new Date(),
@@ -1115,18 +1115,18 @@ export class PromptQueue {
       this.state.results.splice(insertIndex, 0, ...newResults);
 
       Log.info(
-        `appendPrompts: preserving runtime ownership (current: ${this.stateMachine.status}, completed count: ${this.state.completedIndices.size})`
+        `appendSteps: preserving runtime ownership (current: ${this.stateMachine.status}, completed count: ${this.state.completedIndices.size})`
       );
 
       this.emitStateChange();
 
       // Update working file if it exists (direct call since we're already in the operation queue)
       Log.info(
-        `About to update working file. Path: ${this.state.workingFilePath}, Total prompts: ${this.state.steps.length}, Insert position: ${position} (index: ${insertIndex})`
+        `About to update working file. Path: ${this.state.workingFilePath}, Total steps: ${this.state.steps.length}, Insert position: ${position} (index: ${insertIndex})`
       );
       await this.workingFileManager.updateWorkingFileDirect();
       Log.info(
-        `Working file updated. Appended ${prompts.length} prompts from: ${source} at position: ${position}`
+        `Working file updated. Appended ${steps.length} steps from: ${source} at position: ${position}`
       );
     });
   }
@@ -1461,15 +1461,15 @@ export class PromptQueue {
    * Does NOT emit a state change event — the webview already has the correct state.
    * The working file watcher ignores changes in non-running states, so no re-broadcast occurs.
    */
-  public async syncPromptsForUndoRedo(
-    newPrompts: WorkflowStep[]
+  public async syncStepsForUndoRedo(
+    newSteps: WorkflowStep[]
   ): Promise<void> {
     const currentIndex = this.state.currentIndex;
-    this.state.steps = newPrompts;
+    this.state.steps = newSteps;
 
     // Preserve completed results; reset pending slots to PENDING
     const completedResults = this.state.results.slice(0, currentIndex);
-    const pendingResults = newPrompts.slice(currentIndex).map((step) => ({
+    const pendingResults = newSteps.slice(currentIndex).map((step) => ({
       prompt: isScriptStep(step) ? step.script : step.prompt,
       status: STEP_STATUS.PENDING,
       timestamp: new Date(),
@@ -1480,7 +1480,7 @@ export class PromptQueue {
     await this.updateWorkingFile(true);
 
     Log.debug(
-      `[PromptQueue] syncPromptsForUndoRedo: ${newPrompts.length} prompts, currentIndex=${currentIndex}`
+      `[PromptQueue] syncStepsForUndoRedo: ${newSteps.length} steps, currentIndex=${currentIndex}`
     );
   }
 

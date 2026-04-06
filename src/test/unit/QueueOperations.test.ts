@@ -60,8 +60,8 @@ suite("QueueOperations", () => {
       const queue = new PromptQueue();
       const status = getQueueStatus(queue);
       assert.strictEqual(status.metadata.currentIndex, 0);
-      assert.strictEqual(status.metadata.totalPrompts, 0);
-      assert.strictEqual(status.metadata.completedPrompts, 0);
+      assert.strictEqual(status.metadata.totalSteps, 0);
+      assert.strictEqual(status.metadata.completedSteps, 0);
       assert.strictEqual(status.metadata.executionState, "idle");
       assert.ok("workingFile" in status.metadata);
       assert.ok(Array.isArray(status.steps));
@@ -70,7 +70,7 @@ suite("QueueOperations", () => {
     test("prompts array length matches queue size", () => {
       const queue = new PromptQueue();
       const status = getQueueStatus(queue);
-      assert.strictEqual(status.steps.length, status.metadata.totalPrompts);
+      assert.strictEqual(status.steps.length, status.metadata.totalSteps);
     });
   });
 
@@ -84,7 +84,7 @@ suite("QueueOperations", () => {
         source: "test",
       });
       assert.strictEqual(response.success, true);
-      assert.strictEqual(response.promptsAdded, 1);
+      assert.strictEqual(response.stepsAdded, 1);
       assert.strictEqual(response.newQueueSize, 1);
     });
 
@@ -99,7 +99,7 @@ suite("QueueOperations", () => {
         position: QUEUE_POSITION.END,
         source: "test",
       });
-      assert.strictEqual(response.promptsAdded, 3);
+      assert.strictEqual(response.stepsAdded, 3);
       assert.strictEqual(response.newQueueSize, 3);
     });
 

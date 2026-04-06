@@ -256,15 +256,15 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
-  // PROMPTS_EXTENDED - Queue was extended with new prompts
+  // STEPS_EXTENDED - Queue was extended with new steps
   // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.PROMPTS_EXTENDED] = (message) => {
+  handlers[MESSAGE_TYPES.STEPS_EXTENDED] = (message) => {
     // If workflowId is present (CLI watch mode), only apply to the active workflow
     if (message.workflowId) {
       const activeWorkflowId = useUiStore.getState().activeWorkflowId;
       if (message.workflowId !== activeWorkflowId) {
         WebviewLog.debug(
-          `[PROMPTS_EXTENDED] ignoring — workflowId=${message.workflowId?.slice(0, 8)} !== activeWorkflowId=${activeWorkflowId?.slice(0, 8)}`
+          `[STEPS_EXTENDED] ignoring — workflowId=${message.workflowId?.slice(0, 8)} !== activeWorkflowId=${activeWorkflowId?.slice(0, 8)}`
         );
         return;
       }
@@ -272,32 +272,32 @@ function createMessageHandlers(): MessageHandlerMap {
 
     const workflowStore = useWorkflowStore.getState();
 
-    // Update prompts list (keep existing status for completed prompts)
-    const currentPrompts = workflowStore.steps;
-    const newPrompts = (message.steps || []).map(
-      (prompt: any, index: number) => {
-        // Preserve status from existing prompts
-        const existingPrompt = currentPrompts[index] as any;
+    // Update steps list (keep existing status for completed steps)
+    const currentSteps = workflowStore.steps;
+    const newSteps = (message.steps || []).map(
+      (step: any, index: number) => {
+        // Preserve status from existing steps
+        const existingStep = currentSteps[index] as any;
         return {
-          ...prompt,
-          status: existingPrompt?.status || STEP_STATUS.PENDING,
+          ...step,
+          status: existingStep?.status || STEP_STATUS.PENDING,
         };
       }
     );
 
     WebviewLog.debug(
-      `[PROMPTS_EXTENDED] ${currentPrompts.length} → ${newPrompts.length} prompts${message.workflowId ? ` (CLI workflowId=${message.workflowId.slice(0, 8)})` : ""}`
+      `[STEPS_EXTENDED] ${currentSteps.length} → ${newSteps.length} steps${message.workflowId ? ` (CLI workflowId=${message.workflowId.slice(0, 8)})` : ""}`
     );
     // Only record an undo entry when the user actually changed something.
     // Count changes cover add/remove. Content changes (same count, different
     // text/name/model/harness) cover edits. Pure re-syncs (file-watcher firing
     // after the extension writes the working file) have identical content and
     // must not pollute the undo stack.
-    const promptCountChanged = newPrompts.length !== currentPrompts.length;
-    const promptContentChanged =
-      !promptCountChanged &&
-      newPrompts.some((p: any, i: number) => {
-        const cur = currentPrompts[i] as any;
+    const stepCountChanged = newSteps.length !== currentSteps.length;
+    const stepContentChanged =
+      !stepCountChanged &&
+      newSteps.some((p: any, i: number) => {
+        const cur = currentSteps[i] as any;
         return (
           p.prompt !== cur?.prompt ||
           p.name !== cur?.name ||
@@ -305,13 +305,13 @@ function createMessageHandlers(): MessageHandlerMap {
           p.harness !== cur?.harness
         );
       });
-    // Also suppress undo recording for the initial auto-load (0 → N prompts).
+    // Also suppress undo recording for the initial auto-load (0 → N steps).
     // Loading from an empty state is a system-driven restore, not a user edit.
-    const isInitialAutoLoad = currentPrompts.length === 0;
+    const isInitialAutoLoad = currentSteps.length === 0;
     const shouldRecord =
-      !isInitialAutoLoad && (promptCountChanged || promptContentChanged);
+      !isInitialAutoLoad && (stepCountChanged || stepContentChanged);
     WebviewLog.debug(
-      `[PROMPTS_EXTENDED] shouldRecord=${shouldRecord} (countChanged=${promptCountChanged} contentChanged=${promptContentChanged} isInitialAutoLoad=${isInitialAutoLoad}) pastStatesBefore=${useWorkflowStore.temporal.getState().pastStates.length}`
+      `[STEPS_EXTENDED] shouldRecord=${shouldRecord} (countChanged=${stepCountChanged} contentChanged=${stepContentChanged} isInitialAutoLoad=${isInitialAutoLoad}) pastStatesBefore=${useWorkflowStore.temporal.getState().pastStates.length}`
     );
     // If executionState is piggybacked (sent alongside prompts to avoid a
     // separate render), apply it first — same synchronous call, same render.
@@ -323,7 +323,7 @@ function createMessageHandlers(): MessageHandlerMap {
     if (!shouldRecord) {
       useWorkflowStore.temporal.getState().pause();
     }
-    workflowStore.setPrompts(newPrompts);
+    workflowStore.setPrompts(newSteps);
     if (!shouldRecord) {
       useWorkflowStore.temporal.getState().resume();
     }

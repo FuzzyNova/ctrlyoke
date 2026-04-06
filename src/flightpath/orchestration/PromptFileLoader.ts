@@ -220,27 +220,27 @@ export class PromptFileLoader {
         }
       } else {
         // Scenario 2: Queue extended during execution (MCP/append to same file)
-        // Merge new prompts preserving state and send PROMPTS_EXTENDED
+        // Merge new prompts preserving state and send STEPS_EXTENDED
         Log.debug(
           `Merging prompts from working file (state: ${queueState.status}, mode: ${mode})`
         );
-        const newPromptsCount = await this.promptQueue.mergePromptsFromDisk();
+        const newStepsCount = await this.promptQueue.mergeStepsFromDisk();
 
         const mergeDashboard = this.getDashboard();
-        if (newPromptsCount > 0 && mergeDashboard) {
+        if (newStepsCount > 0 && mergeDashboard) {
           // Get updated state after merge
           const updatedState = this.promptQueue.getState();
           Log.debug(
-            `Queue extended by ${newPromptsCount} prompts (total: ${updatedState.steps.length}). Sending PROMPTS_EXTENDED to dashboard.`
+            `Queue extended by ${newStepsCount} steps (total: ${updatedState.steps.length}). Sending STEPS_EXTENDED to dashboard.`
           );
 
-          // Send PROMPTS_EXTENDED message with updated prompt list
-          mergeDashboard.updatePromptsExtended(
+          // send STEPS_EXTENDED message with updated step list
+          mergeDashboard.updateStepsExtended(
             updatedState.steps,
             this.promptQueue.getWorkflowFile().finalStep ?? null
           );
-        } else if (newPromptsCount === 0) {
-          Log.debug("Working file changed but no new prompts detected");
+        } else if (newStepsCount === 0) {
+          Log.debug("Working file changed but no new steps detected");
         }
       }
 
@@ -376,3 +376,4 @@ export class PromptFileLoader {
     return defaults;
   }
 }
+

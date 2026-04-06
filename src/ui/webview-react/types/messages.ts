@@ -64,7 +64,7 @@ export {
   type CliStreamingChunkMessage,
   type CliStreamingEventsMessage,
   type StatusMessageMessage,
-  type PromptsExtendedMessage,
+  type StepsExtendedMessage,
   type PromptDeletedMessage,
   type UpdateFinalPromptMessage,
   type FinalPromptStatusChangedMessage,
