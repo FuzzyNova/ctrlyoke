@@ -5,7 +5,7 @@
  * Strategy: preset store state, render, assert what's visible and what's posted.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkflowStatus } from "@components/workflow/WorkflowStatus";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -124,20 +124,22 @@ describe("WorkflowStatus — loaded state", () => {
   it("populates recent workflows list on RECENT_WORKFLOWS message", async () => {
     render(<WorkflowStatus />);
     // Dispatch the RECENT_WORKFLOWS message
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: MESSAGE_TYPES.RECENT_WORKFLOWS,
-          workflows: [
-            {
-              workflowName: "Workflow A",
-              filePath: "/path/a.yaml",
-              executionState: "idle",
-            },
-          ],
-        },
-      })
-    );
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.RECENT_WORKFLOWS,
+            workflows: [
+              {
+                workflowName: "Workflow A",
+                filePath: "/path/a.yaml",
+                executionState: "idle",
+              },
+            ],
+          },
+        })
+      );
+    });
     // Open the dropdown
     const user = userEvent.setup();
     await user.click(
