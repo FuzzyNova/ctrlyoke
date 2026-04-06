@@ -251,9 +251,9 @@ export const STEP_STATUS = {
 // ============================================================================
 // FINAL PROMPT PHASES - Runtime phase values for finalPrompt orchestration
 // ============================================================================
-export const FINAL_PROMPT_PHASES = {
+export const FINAL_STEP_PHASES = {
   QUEUE: "queue",
-  FINAL_PROMPT: "finalPrompt",
+  FINAL_STEP: "finalStep",
 } as const;
 
 // ============================================================================
@@ -494,6 +494,30 @@ export const SESSION_ID_SENTINELS = {
 } as const;
 
 // ============================================================================
+// PRIOR CONTEXT KEYWORDS - User-facing values for the priorContext field
+// ============================================================================
+export const PRIOR_CONTEXT_KEYWORDS = {
+  ALL: "all",
+  PREVIOUS: "previous",
+  NONE: "none",
+  /** All outputs from finalPrompt/finalStep loop iterations. */
+  FINAL_STEP_ALL: "finalPromptAll",
+  /** Most recent output from the finalPrompt/finalStep loop. */
+  FINAL_STEP_PREVIOUS: "finalPromptPrevious",
+} as const;
+
+// ============================================================================
+// PRIOR CONTEXT ITEM TYPES - Discriminant for PriorContextItem.type
+// ============================================================================
+export const PRIOR_CONTEXT_ITEM_TYPES = {
+  /**
+   * Item originates from the finalPrompt/finalStep phase (not a queue prompt).
+   * Kept as "finalPrompt" because priorContext semantics are prompt-specific.
+   */
+  FINAL_PROMPT: "finalPrompt",
+} as const;
+
+// ============================================================================
 // STEP TYPES - Discriminant values for WorkflowStep union type
 // ============================================================================
 export const STEP_TYPES = {
@@ -651,7 +675,7 @@ export type ExecutionState =
   (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
 export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 export type FinalPromptPhase =
-  (typeof FINAL_PROMPT_PHASES)[keyof typeof FINAL_PROMPT_PHASES];
+  (typeof FINAL_STEP_PHASES)[keyof typeof FINAL_STEP_PHASES];
 export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
 export type StatusMessageSeverity =
   (typeof STATUS_MESSAGE_SEVERITY)[keyof typeof STATUS_MESSAGE_SEVERITY];
@@ -667,6 +691,10 @@ export type HarnessStatusString =
 export type WebviewLogLevel = (typeof LOG_LEVELS)[keyof typeof LOG_LEVELS];
 export type RunnerId = (typeof RUNNER_IDS)[keyof typeof RUNNER_IDS];
 export type LockStatus = (typeof LOCK_STATUS)[keyof typeof LOCK_STATUS];
+export type PriorContextKeyword =
+  (typeof PRIOR_CONTEXT_KEYWORDS)[keyof typeof PRIOR_CONTEXT_KEYWORDS];
+export type PriorContextItemType =
+  (typeof PRIOR_CONTEXT_ITEM_TYPES)[keyof typeof PRIOR_CONTEXT_ITEM_TYPES];
 export type EditorTargetKind =
   (typeof EDITOR_TARGET_KINDS)[keyof typeof EDITOR_TARGET_KINDS];
 export type TerminalSessionStatus =

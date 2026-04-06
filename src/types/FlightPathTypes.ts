@@ -1,6 +1,6 @@
 import {
   EXECUTION_STATES,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   STEP_STATUS,
   WORKFLOW_ATTEMPT_COMMANDS,
   ExecutionState,
@@ -10,6 +10,7 @@ import {
   type PromptTerminalStatus,
   type WorkflowAttemptStatus,
   STEP_TYPES,
+  PRIOR_CONTEXT_KEYWORDS,
 } from "./DashboardConstants";
 import { ToolPermissionMode } from "../flightpath/harness/shared/interfaces/IToolPermissionMapper";
 export type { ToolPermissionMode };
@@ -26,11 +27,7 @@ export type { ToolPermissionMode };
  * Note: When used with resumeSession:true, context may be duplicated — this is accepted behavior.
  */
 export type PriorContext =
-  | "all"
-  | "previous"
-  | "none"
-  | "finalPromptAll"
-  | "finalPromptPrevious"
+  | (typeof PRIOR_CONTEXT_KEYWORDS)[keyof typeof PRIOR_CONTEXT_KEYWORDS]
   | number[];
 
 /**
@@ -273,8 +270,8 @@ export interface WorkflowRuntimeTransition {
 }
 
 export type WorkflowAttemptTarget =
-  | { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }
-  | { kind: typeof FINAL_PROMPT_PHASES.FINAL_PROMPT; loopIndex: number };
+  | { kind: typeof FINAL_STEP_PHASES.QUEUE; stepIndex: number }
+  | { kind: typeof FINAL_STEP_PHASES.FINAL_STEP; loopIndex: number };
 
 export type { WorkflowAttemptStatus };
 

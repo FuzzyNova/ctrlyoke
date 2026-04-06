@@ -1,18 +1,19 @@
-import { ExecutionState, FINAL_PROMPT_PHASES, OUTPUT_HISTORY_KINDS } from "./DashboardConstants";
+import {
+  ExecutionState,
+  FINAL_STEP_PHASES,
+  OUTPUT_HISTORY_KINDS,
+} from "./DashboardConstants";
 import type {
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
 } from "./FlightPathTypes";
-import {
-  CliOutput,
-  UndoFileInstruction,
-} from "./WebviewMessageTypes";
+import { CliOutput, UndoFileInstruction } from "./WebviewMessageTypes";
 import type { StatusMessage } from "./WebviewMessageTypes";
 import type { UnifiedDiffHunk } from "./CliOutputTypes";
 
 export type OutputExecutionTarget =
-  | { kind: typeof FINAL_PROMPT_PHASES.QUEUE; stepIndex: number }
-  | { kind: typeof FINAL_PROMPT_PHASES.FINAL_PROMPT; loopIndex: number };
+  | { kind: typeof FINAL_STEP_PHASES.QUEUE; stepIndex: number }
+  | { kind: typeof FINAL_STEP_PHASES.FINAL_STEP; loopIndex: number };
 
 export interface OrderedHistoryEntryBase {
   timestampMs: number;

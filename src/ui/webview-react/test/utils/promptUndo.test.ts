@@ -16,7 +16,7 @@ import {
   buildUndoDialogInputForSpecificEvent,
 } from "@utils/promptUndo";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
-import { FINAL_PROMPT_PHASES } from "@/types/messages";
+import { FINAL_STEP_PHASES } from "@/types/messages";
 import type { CliOutput } from "@/types/cliEvents";
 import type {
   WorkspaceSnapshot,
@@ -100,7 +100,7 @@ function makeDeletedSnap(path: string, content: string): SnapshotFileChange {
   return { path, changeType: "deleted", contentToRestore: content };
 }
 
-const TARGET = { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 };
+const TARGET = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // sameFilePath

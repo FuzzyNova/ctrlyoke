@@ -4,7 +4,7 @@ import type { PromptStep } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type { PriorContext, ToolPermissionsOverride } from "../types/messages";
 import type { EndConditionCompareSource } from "../utils/prompt";
-import { FINAL_PROMPT_PHASES, EDITOR_TARGET_KINDS } from "../types/messages";
+import { FINAL_STEP_PHASES, EDITOR_TARGET_KINDS } from "../types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { useUiStore } from "./uiStore";
@@ -98,15 +98,15 @@ export interface SavedNewPromptState {
  * Only valid for edit-mode targets (queue / finalPrompt).
  */
 function selectionTargetKey(target: EditorSelectionTarget): string {
-  if (target.kind === FINAL_PROMPT_PHASES.QUEUE) return `queue:${target.index}`;
-  if (target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) return "finalPrompt";
+  if (target.kind === FINAL_STEP_PHASES.QUEUE) return `queue:${target.index}`;
+  if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) return FINAL_STEP_PHASES.FINAL_STEP;
   return "";
 }
 
 export type EditorSelectionTarget =
   | { kind: typeof EDITOR_TARGET_KINDS.NEW_PROMPT }
-  | { kind: typeof FINAL_PROMPT_PHASES.QUEUE; index: number }
-  | { kind: typeof FINAL_PROMPT_PHASES.FINAL_PROMPT };
+  | { kind: typeof FINAL_STEP_PHASES.QUEUE; index: number }
+  | { kind: typeof FINAL_STEP_PHASES.FINAL_STEP };
 
 /**
  * Editor state - Prompt editing mode and content
@@ -168,7 +168,9 @@ interface EditorActions {
   deselect: () => void;
 
   // Step type
-  setStepType: (type: typeof STEP_TYPES.PROMPT | typeof STEP_TYPES.SCRIPT) => void;
+  setStepType: (
+    type: typeof STEP_TYPES.PROMPT | typeof STEP_TYPES.SCRIPT
+  ) => void;
   setScriptCommand: (command: string) => void;
   setScriptTimeout: (timeout: number | undefined) => void;
   setScriptContinueOnFailure: (value: boolean) => void;
@@ -265,7 +267,7 @@ export const useEditorStore = create<
   selectPrompt: (target, promptData = null) => {
     if (
       typeof target === "object" &&
-      target?.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
+      target?.kind === FINAL_STEP_PHASES.FINAL_STEP
     ) {
       if (promptData) {
         get().enterEditMode(-1, promptData);
@@ -276,8 +278,7 @@ export const useEditorStore = create<
     const resolvedIndex =
       typeof target === "number"
         ? target
-        : typeof target === "object" &&
-            target?.kind === FINAL_PROMPT_PHASES.QUEUE
+        : typeof target === "object" && target?.kind === FINAL_STEP_PHASES.QUEUE
           ? target.index
           : null;
 
@@ -293,7 +294,7 @@ export const useEditorStore = create<
         // Fallback if promptData not provided (shouldn't happen)
         set({
           selectionTarget: {
-            kind: FINAL_PROMPT_PHASES.QUEUE,
+            kind: FINAL_STEP_PHASES.QUEUE,
             index: resolvedIndex,
           },
           selectedPromptIndex: resolvedIndex,
@@ -320,10 +321,13 @@ export const useEditorStore = create<
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
         scriptTimeout: savedNewPromptState.scriptTimeout,
-        scriptContinueOnFailure: savedNewPromptState.scriptContinueOnFailure ?? false,
+        scriptContinueOnFailure:
+          savedNewPromptState.scriptContinueOnFailure ?? false,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
-        isDirty: savedNewPromptState.promptText.length > 0 || (savedNewPromptState.scriptCommand ?? "").length > 0,
+        isDirty:
+          savedNewPromptState.promptText.length > 0 ||
+          (savedNewPromptState.scriptCommand ?? "").length > 0,
       });
     } else {
       // Try to restore from VS Code persistent state
@@ -400,8 +404,8 @@ export const useEditorStore = create<
 
     const isFinalPromptTarget = index < 0;
     const newTarget: EditorSelectionTarget = isFinalPromptTarget
-      ? { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT }
-      : { kind: FINAL_PROMPT_PHASES.QUEUE, index };
+      ? { kind: FINAL_STEP_PHASES.FINAL_STEP }
+      : { kind: FINAL_STEP_PHASES.QUEUE, index };
 
     // Restore a pending (unsaved) edit if one exists for this prompt, otherwise
     // load the prompt data from the workflow.
@@ -416,11 +420,21 @@ export const useEditorStore = create<
         savedNewPromptState,
         stepType: pendingEdit?.stepType ?? STEP_TYPES.SCRIPT,
         promptText: pendingEdit?.promptText ?? "",
-        promptName: pendingEdit ? pendingEdit.promptName : (promptData.name ?? ""),
-        scriptCommand: pendingEdit ? (pendingEdit.scriptCommand ?? "") : promptData.script,
-        scriptTimeout: pendingEdit ? pendingEdit.scriptTimeout : promptData.timeout,
-        scriptContinueOnFailure: pendingEdit ? (pendingEdit.scriptContinueOnFailure ?? false) : (promptData.continueOnFailure ?? false),
-        properties: pendingEdit ? pendingEdit.properties : { ...PROPERTY_DEFAULTS },
+        promptName: pendingEdit
+          ? pendingEdit.promptName
+          : (promptData.name ?? ""),
+        scriptCommand: pendingEdit
+          ? (pendingEdit.scriptCommand ?? "")
+          : promptData.script,
+        scriptTimeout: pendingEdit
+          ? pendingEdit.scriptTimeout
+          : promptData.timeout,
+        scriptContinueOnFailure: pendingEdit
+          ? (pendingEdit.scriptContinueOnFailure ?? false)
+          : (promptData.continueOnFailure ?? false),
+        properties: pendingEdit
+          ? pendingEdit.properties
+          : { ...PROPERTY_DEFAULTS },
         isDirty: pendingEdit ? true : false,
         validationErrors: {},
         pendingEdits: newPendingEdits,
@@ -438,7 +452,9 @@ export const useEditorStore = create<
         skills: promptData.skills,
         resumeSession: promptData.resumeSession,
         sessionId:
-          promptData.sessionId !== undefined ? String(promptData.sessionId) : "",
+          promptData.sessionId !== undefined
+            ? String(promptData.sessionId)
+            : "",
         mcpServers: promptData.mcpServers,
         hooks: promptData.hooks,
         endCondition: promptData.endCondition ?? null,
@@ -491,10 +507,13 @@ export const useEditorStore = create<
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
         scriptTimeout: savedNewPromptState.scriptTimeout,
-        scriptContinueOnFailure: savedNewPromptState.scriptContinueOnFailure ?? false,
+        scriptContinueOnFailure:
+          savedNewPromptState.scriptContinueOnFailure ?? false,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
-        isDirty: savedNewPromptState.promptText.length > 0 || (savedNewPromptState.scriptCommand ?? "").length > 0,
+        isDirty:
+          savedNewPromptState.promptText.length > 0 ||
+          (savedNewPromptState.scriptCommand ?? "").length > 0,
         validationErrors: {},
         pendingEdits: newPendingEdits,
       });
@@ -567,10 +586,13 @@ export const useEditorStore = create<
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
         scriptTimeout: savedNewPromptState.scriptTimeout,
-        scriptContinueOnFailure: savedNewPromptState.scriptContinueOnFailure ?? false,
+        scriptContinueOnFailure:
+          savedNewPromptState.scriptContinueOnFailure ?? false,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
-        isDirty: savedNewPromptState.promptText.length > 0 || (savedNewPromptState.scriptCommand ?? "").length > 0,
+        isDirty:
+          savedNewPromptState.promptText.length > 0 ||
+          (savedNewPromptState.scriptCommand ?? "").length > 0,
         validationErrors: {},
         pendingEdits: newPendingEdits,
       });
@@ -877,7 +899,7 @@ export const useEditorStore = create<
     get().selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT,
 
   isFinalPromptMode: () =>
-    get().selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT,
+    get().selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP,
 
   getPromptProperties: () => {
     const { promptText, promptName, properties } = get();

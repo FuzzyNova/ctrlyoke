@@ -1,4 +1,7 @@
-import { FINAL_PROMPT_PHASES, OUTPUT_HISTORY_KINDS } from "../../types/DashboardConstants";
+import {
+  FINAL_STEP_PHASES,
+  OUTPUT_HISTORY_KINDS,
+} from "../../types/DashboardConstants";
 import type {
   OrderedHistoryEntry,
   OutputExecutionTarget,
@@ -107,7 +110,7 @@ export class OutputHistoryTimelineAdapter {
     history: WorkflowOutputHistory,
     target: OutputExecutionTarget
   ): StepOutput {
-    if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       history.promptOutputs[target.stepIndex] ??= {};
       return history.promptOutputs[target.stepIndex];
     }
@@ -129,9 +132,10 @@ function getCliEntryKey(
   target: OutputExecutionTarget,
   attemptIndex: number
 ): string {
-  const base = target.kind === FINAL_PROMPT_PHASES.QUEUE
-    ? `queue:${target.stepIndex}`
-    : `final:${target.loopIndex}`;
+  const base =
+    target.kind === FINAL_STEP_PHASES.QUEUE
+      ? `queue:${target.stepIndex}`
+      : `final:${target.loopIndex}`;
   return `${base}:attempt:${attemptIndex}`;
 }
 

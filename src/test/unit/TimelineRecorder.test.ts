@@ -4,7 +4,10 @@ import * as os from "os";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import { TimelineRecorder } from "../../flightpath/orchestration/TimelineRecorder";
-import { EXECUTION_STATES, FINAL_PROMPT_PHASES } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+} from "../../types/DashboardConstants";
 import {
   TIMELINE_EVENT_TYPES,
   type WorkflowTimelineEventDraft,
@@ -17,7 +20,7 @@ function createStatusEventDraft(
   return {
     eventType: TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED,
     timestampMs,
-    target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+    target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
     payload: {
       statusMessage: {
         message,

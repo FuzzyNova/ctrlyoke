@@ -9,7 +9,7 @@ import {
 } from "@utils/outputUtils";
 import { generateMarkdownExport } from "@utils/markdownExport";
 import type { UnifiedDiffHunk } from "@/types/cliEvents";
-import { FINAL_PROMPT_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
+import { FINAL_STEP_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // shortenPath
@@ -259,7 +259,7 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "status" as const,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, index: 0 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 1000,
         data: { message: "Workflow started", timestamp: "10:00:00" },
       },
@@ -272,7 +272,7 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "cli" as const,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, index: 0 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 2000,
         attemptIndex: 0,
         data: {
@@ -291,7 +291,7 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "cli" as const,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, index: 0 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 1000,
         attemptIndex: 2,
         data: { response: "retry response" },
@@ -305,7 +305,7 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "cli" as const,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, index: 0 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 1000,
         attemptIndex: 0,
         data: {
@@ -324,7 +324,7 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "cli" as const,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, index: 0 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 1000,
         attemptIndex: 0,
         data: {
@@ -342,14 +342,14 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "cli" as const,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, index: 1 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 1 },
         timestamp: 3000,
         attemptIndex: 0,
         data: { response: "second" },
       },
       {
         type: "cli" as const,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, index: 0 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 1000,
         attemptIndex: 0,
         data: { response: "first" },
@@ -365,7 +365,7 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "status" as const,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, index: 0 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 2000,
         data: {
           message: "Process exited unexpectedly — workflow stopped",
@@ -374,7 +374,7 @@ describe("generateMarkdownExport", () => {
       },
       {
         type: "cli" as const,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, index: 0 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 1000,
         attemptIndex: 0,
         data: {
@@ -396,7 +396,7 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "cli" as const,
-        target: { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, index: 0 },
+        target: { kind: FINAL_STEP_PHASES.FINAL_STEP, index: 0 },
         timestamp: 1000,
         sequence: 2,
         attemptIndex: 0,
@@ -406,7 +406,7 @@ describe("generateMarkdownExport", () => {
       },
       {
         type: "status" as const,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, index: 0 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 1000,
         sequence: 1,
         data: {
@@ -427,14 +427,14 @@ describe("generateMarkdownExport", () => {
     const outputs = [
       {
         type: "cli" as const,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, index: 1 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 1 },
         timestamp: 3000,
         attemptIndex: 0,
         data: { response: "legacy queue second" },
       },
       {
         type: "cli" as const,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, index: 0 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
         timestamp: 1000,
         attemptIndex: 0,
         data: { response: "legacy queue first" },
@@ -443,7 +443,7 @@ describe("generateMarkdownExport", () => {
     const orderedEntries: OrderedHistoryEntry[] = [
       {
         kind: OUTPUT_HISTORY_KINDS.STATUS,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         statusMessage: {
           message: "canonical status",
           severity: "info",
@@ -454,7 +454,7 @@ describe("generateMarkdownExport", () => {
       },
       {
         kind: OUTPUT_HISTORY_KINDS.CLI,
-        target: { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: 0 },
+        target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
         attemptIndex: 0,
         cliOutput: {
           prompt: "",

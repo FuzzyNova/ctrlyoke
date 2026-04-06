@@ -29,7 +29,7 @@ import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import {
   ACTION_TYPES,
   DEFAULT_WORKFLOW_NAME,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   QUEUE_POSITION,
   STEP_STATUS,
   STEP_TYPES,
@@ -876,11 +876,11 @@ export class WorkflowInstance {
             for (const entry of history.orderedEntries) {
               if (
                 entry.kind === "cli" &&
-                entry.target.kind === FINAL_PROMPT_PHASES.QUEUE
+                entry.target.kind === FINAL_STEP_PHASES.QUEUE
               ) {
                 const stepIndex = (
                   entry.target as {
-                    kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                    kind: typeof FINAL_STEP_PHASES.QUEUE;
                     stepIndex: number;
                   }
                 ).stepIndex;
@@ -1686,11 +1686,7 @@ export class WorkflowInstance {
           `(status=${this.getAuthoritativeExecutionState()}, prompts=${currentState.steps.length}, shouldRun=${shouldRun}, action=${action})`
       );
       this.reopenRuntimeForContinuationIfNeeded(shouldRun);
-      await this.promptQueue.appendSteps(
-        [step],
-        "Dashboard editor",
-        position
-      );
+      await this.promptQueue.appendSteps([step], "Dashboard editor", position);
       this.syncCurrentPromptFileFromQueue();
 
       if (this.dashboardSink) {
@@ -2172,7 +2168,7 @@ export class WorkflowInstance {
     }
 
     const target = transition.current.target;
-    if (target.kind !== FINAL_PROMPT_PHASES.QUEUE) {
+    if (target.kind !== FINAL_STEP_PHASES.QUEUE) {
       return;
     }
 
@@ -2208,9 +2204,9 @@ export class WorkflowInstance {
 
   private getCurrentCancellationTarget(): WorkflowAttemptTarget | undefined {
     const finalPromptRuntime = this.promptQueue.getFinalPromptRuntime();
-    if (finalPromptRuntime?.phase === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+    if (finalPromptRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP) {
       return {
-        kind: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+        kind: FINAL_STEP_PHASES.FINAL_STEP,
         loopIndex: finalPromptRuntime.loopCount,
       };
     }
@@ -2221,7 +2217,7 @@ export class WorkflowInstance {
     }
 
     return {
-      kind: FINAL_PROMPT_PHASES.QUEUE,
+      kind: FINAL_STEP_PHASES.QUEUE,
       stepIndex: state.currentIndex,
     };
   }
@@ -2549,4 +2545,3 @@ export class WorkflowInstance {
     };
   }
 }
-

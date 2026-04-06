@@ -20,7 +20,7 @@ import {
   MESSAGE_TYPES,
   STEP_STATUS,
   EXECUTION_STATES,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
   RUNNER_IDS,
 } from "../../types/messages";
@@ -334,7 +334,7 @@ export const WorkflowStepsPanel: React.FC<{
       selectFinalPrompt(finalStep);
     } else {
       setFinalPromptFooterExpanded(true);
-      selectPrompt({ kind: FINAL_PROMPT_PHASES.FINAL_PROMPT }, { prompt: "" });
+      selectPrompt({ kind: FINAL_STEP_PHASES.FINAL_STEP }, { prompt: "" });
     }
   }, [
     isCLIManaged,
@@ -387,7 +387,7 @@ export const WorkflowStepsPanel: React.FC<{
       (e) =>
         e.kind === OUTPUT_HISTORY_KINDS.CLI &&
         "target" in e &&
-        (e as any).target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT &&
+        (e as any).target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
         (e as any).target.loopIndex === finalPromptLoopCount
     );
     if (cliEntries.length === 0) return null;
@@ -438,14 +438,14 @@ export const WorkflowStepsPanel: React.FC<{
             (e) =>
               e.kind === OUTPUT_HISTORY_KINDS.CLI &&
               "target" in e &&
-              e.target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+              e.target.kind === FINAL_STEP_PHASES.QUEUE &&
               (e.target as any).stepIndex === index
           )
         : liveOrderedEntries.filter(
             (e) =>
               e.kind === OUTPUT_HISTORY_KINDS.CLI &&
               "target" in e &&
-              (e as any).target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+              (e as any).target.kind === FINAL_STEP_PHASES.QUEUE &&
               (e as any).target.stepIndex === index
           );
     if (cliEntries.length === 0) return null;
@@ -546,7 +546,7 @@ export const WorkflowStepsPanel: React.FC<{
       // Cancel any active queue-prompt selection — the selected index may now
       // refer to a different prompt after reorder.
       const editorStore = useEditorStore.getState();
-      if (editorStore.selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE) {
+      if (editorStore.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
         editorStore.cancelEdit();
       }
     },
@@ -685,7 +685,7 @@ export const WorkflowStepsPanel: React.FC<{
                 const details = getPromptDetails(prompt, index);
                 const latestOutput = getLatestOutput(index);
                 const isSelected =
-                  selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE &&
+                  selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
                   selectionTarget.index === index;
                 const harnessModel = getPromptHarnessModel(prompt);
                 const overrides = getPromptOverrides(prompt);
@@ -764,7 +764,7 @@ export const WorkflowStepsPanel: React.FC<{
                   const latestOutput = getLatestOutput(index);
                   const isCurrent = isRunning && isCurrentStep;
                   const isSelected =
-                    selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE &&
+                    selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
                     selectionTarget.index === index;
                   const harnessModel = getPromptHarnessModel(prompt);
                   const overrides = getPromptOverrides(prompt);
@@ -818,10 +818,10 @@ export const WorkflowStepsPanel: React.FC<{
         loopCount={finalPromptLoopCount}
         phase={finalPromptPhase}
         isExpanded={finalPromptFooterExpanded}
-        isSelected={selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT}
+        isSelected={selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP}
         isReadOnly={
           isCLIManaged ||
-          (finalPromptPhase === FINAL_PROMPT_PHASES.FINAL_PROMPT &&
+          (finalPromptPhase === FINAL_STEP_PHASES.FINAL_STEP &&
             finalPromptStatus === STEP_STATUS.RUNNING)
         }
         onSelect={handleFinalPromptSelect}

@@ -21,10 +21,12 @@ import type {
 } from "../types/cliEvents";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/cliEvents";
-import { HARNESS_INFO, FINAL_PROMPT_PHASES, type FinalPromptPhase } from "../types/messages";
 import {
-  mapOrderedHistoryEntriesToMessages,
-} from "./outputProjection";
+  HARNESS_INFO,
+  FINAL_STEP_PHASES,
+  type FinalPromptPhase,
+} from "../types/messages";
+import { mapOrderedHistoryEntriesToMessages } from "./outputProjection";
 import { truncate } from "./string";
 import { generateDiffLines } from "./diffUtils";
 import { extractKeyParameters } from "./outputUtils";
@@ -351,7 +353,7 @@ export function generateMarkdownExport(
           ? "Initial Attempt"
           : `Retry ${item.attemptIndex}`;
       const stepLabel =
-        item.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
+        item.target.kind === FINAL_STEP_PHASES.FINAL_STEP
           ? `Final Prompt Loop ${item.target.index + 1}`
           : `Prompt ${item.target.index + 1}`;
 

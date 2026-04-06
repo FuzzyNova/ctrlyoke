@@ -1,3 +1,5 @@
+import { SESSION_ID_SENTINELS } from "@root/types/DashboardConstants";
+
 /**
  * Namespace keys for the dropdown hide feature.
  *
@@ -38,7 +40,7 @@ export function getResumeSessionOptions(defaultLabel?: string) {
   const base = [
     { value: "yes", label: "Yes - Resume previous" },
     { value: "no", label: "No - Create New" },
-    { value: "finalPrompt", label: "Final Prompt Session" },
+    { value: SESSION_ID_SENTINELS.FINAL_PROMPT, label: "Final Prompt Session" },
   ] as const;
   return defaultLabel
     ? [{ value: "default", label: defaultLabel }, ...base]

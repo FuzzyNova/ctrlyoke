@@ -2,11 +2,8 @@ import type {
   OrderedHistoryEntry,
   OutputExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
-import type {
-  CliOutput,
-  OutputStatusMessage,
-} from "../types/messages";
-import { FINAL_PROMPT_PHASES, type FinalPromptPhase } from "../types/messages";
+import type { CliOutput, OutputStatusMessage } from "../types/messages";
+import { FINAL_STEP_PHASES, type FinalPromptPhase } from "../types/messages";
 import { formatTime } from "./outputUtils";
 
 export interface OutputMessageTarget {
@@ -77,9 +74,9 @@ export function mapOrderedHistoryEntriesToMessages(
 export function toOutputMessageTarget(
   target: OutputExecutionTarget
 ): OutputMessageTarget {
-  return target.kind === FINAL_PROMPT_PHASES.QUEUE
-    ? { kind: FINAL_PROMPT_PHASES.QUEUE, index: target.stepIndex }
-    : { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, index: target.loopIndex };
+  return target.kind === FINAL_STEP_PHASES.QUEUE
+    ? { kind: FINAL_STEP_PHASES.QUEUE, index: target.stepIndex }
+    : { kind: FINAL_STEP_PHASES.FINAL_STEP, index: target.loopIndex };
 }
 
 export function getTargetKey(target: OutputMessageTarget): string {

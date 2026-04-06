@@ -11,6 +11,7 @@ import {
   Harness,
 } from "../../types/FlightPathTypes";
 import { PropertyResolver } from "../../utils/PropertyResolver";
+import { PRIOR_CONTEXT_ITEM_TYPES } from "../../types/DashboardConstants";
 
 // ---------------------------------------------------------------------------
 // Test subclass that exposes the private prior-context helpers
@@ -67,7 +68,7 @@ class TestHarness extends HarnessIntegration {
       name?: string;
       prompt?: string;
       text: string;
-      type?: "finalPrompt";
+      type?: (typeof PRIOR_CONTEXT_ITEM_TYPES)[keyof typeof PRIOR_CONTEXT_ITEM_TYPES];
     }[]
   ) {
     if (contextItems.length === 0) {
@@ -219,7 +220,7 @@ suite("gatherPriorContextItems", () => {
     assert.strictEqual(items.length, 3);
     assert.strictEqual(items[0].index, 0);
     assert.strictEqual(items[0].text, "loop 0 output");
-    assert.strictEqual(items[0].type, "finalPrompt");
+    assert.strictEqual(items[0].type, PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT);
     assert.strictEqual(items[2].index, 2);
     assert.strictEqual(items[2].text, "loop 2 output");
   });
@@ -245,7 +246,7 @@ suite("gatherPriorContextItems", () => {
     assert.strictEqual(items.length, 1);
     assert.strictEqual(items[0].index, 1);
     assert.strictEqual(items[0].text, "loop 1 output");
-    assert.strictEqual(items[0].type, "finalPrompt");
+    assert.strictEqual(items[0].type, PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT);
   });
 
   test("'finalPromptPrevious' returns [] when no loops have run", () => {
@@ -264,7 +265,7 @@ suite("gatherPriorContextItems", () => {
     );
     assert.strictEqual(items.length, 1);
     assert.strictEqual(items[0].text, "orchestrator decided X");
-    assert.strictEqual(items[0].type, "finalPrompt");
+    assert.strictEqual(items[0].type, PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT);
   });
 });
 
@@ -327,11 +328,17 @@ suite("insertPriorContext", () => {
 
   test("adds type='finalPrompt' attribute for finalPrompt loop items", () => {
     const items = [
-      { index: 0, text: "orchestrator output", type: "finalPrompt" as const },
+      {
+        index: 0,
+        text: "orchestrator output",
+        type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT,
+      },
     ];
     const result = harness.exposeInsert("Do work.", items);
-    assert.ok(result.includes('type="finalPrompt"'));
-    assert.ok(result.includes('<step index="1" type="finalPrompt">'));
+    assert.ok(result.includes(`type="${PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT}"`));
+    assert.ok(
+      result.includes(`<step index="1" type="${PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT}">`)
+    );
     assert.ok(result.includes("<response>\norchestrator output\n</response>"));
   });
 

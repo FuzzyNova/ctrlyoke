@@ -1,5 +1,10 @@
 import { EXECUTION_STATES } from "../types/FlightPathTypes";
-import { FINAL_PROMPT_PHASES, WORKFLOW_ATTEMPT_COMMANDS, WORKFLOW_ATTEMPT_STATUS, type ExecutionState } from "../types/DashboardConstants";
+import {
+  FINAL_STEP_PHASES,
+  WORKFLOW_ATTEMPT_COMMANDS,
+  WORKFLOW_ATTEMPT_STATUS,
+  type ExecutionState,
+} from "../types/DashboardConstants";
 import type {
   WorkflowAttemptCommand,
   WorkflowAttemptState,
@@ -91,7 +96,7 @@ export class WorkflowStateMachine {
   }
 
   private getAttemptKey(target: WorkflowAttemptTarget): string {
-    return target.kind === FINAL_PROMPT_PHASES.QUEUE
+    return target.kind === FINAL_STEP_PHASES.QUEUE
       ? `queue:${target.stepIndex}`
       : `final:${target.loopIndex}`;
   }

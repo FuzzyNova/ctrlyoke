@@ -23,10 +23,11 @@ import {
 import {
   HARNESS_IDS,
   LOCK_STATUS,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   type QueuePosition,
   type ActionType,
   type StepStatus,
+  type FinalPromptPhase,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { CliOutput } from "../types/WebviewMessageTypes";
@@ -1544,7 +1545,7 @@ export class WorkflowOrchestrator {
       | {
           status?: StepStatus;
           loopCount: number;
-          phase: "queue" | "finalPrompt";
+          phase: FinalPromptPhase;
         }
       | undefined;
 
@@ -1625,11 +1626,11 @@ export class WorkflowOrchestrator {
       for (const historyEntry of history.orderedEntries) {
         if (
           historyEntry.kind === "cli" &&
-          historyEntry.target.kind === FINAL_PROMPT_PHASES.QUEUE
+          historyEntry.target.kind === FINAL_STEP_PHASES.QUEUE
         ) {
           const stepIndex = (
             historyEntry.target as {
-              kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+              kind: typeof FINAL_STEP_PHASES.QUEUE;
               stepIndex: number;
             }
           ).stepIndex;
@@ -1684,11 +1685,11 @@ export class WorkflowOrchestrator {
         for (const historyEntry of history.orderedEntries) {
           if (
             historyEntry.kind === "cli" &&
-            historyEntry.target.kind === FINAL_PROMPT_PHASES.QUEUE
+            historyEntry.target.kind === FINAL_STEP_PHASES.QUEUE
           ) {
             const stepIndex = (
               historyEntry.target as {
-                kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                kind: typeof FINAL_STEP_PHASES.QUEUE;
                 stepIndex: number;
               }
             ).stepIndex;

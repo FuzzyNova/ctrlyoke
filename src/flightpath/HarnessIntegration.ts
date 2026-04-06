@@ -14,6 +14,11 @@ import type { SplitContext } from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
 import { TempFileManager } from "../utils/TempFileManager";
 import { SplitConfig } from "../utils/PromptFileSplitter";
+import {
+  PRIOR_CONTEXT_KEYWORDS,
+  PRIOR_CONTEXT_ITEM_TYPES,
+  PriorContextItemType,
+} from "../types/DashboardConstants";
 
 /**
  * Minimal container for VS Code-style disposable subscriptions.
@@ -31,8 +36,8 @@ type PriorContextItem = {
   /** The prompt text that was sent for this step. Absent for finalPrompt loop items. */
   prompt?: string;
   text: string;
-  /** "finalPrompt" when the item originates from a finalPrompt loop (not a queue prompt). */
-  type?: "finalPrompt";
+  /** Discriminant set when the item originates from a finalPrompt/finalStep loop (not a queue prompt). */
+  type?: PriorContextItemType;
 };
 
 /**
@@ -404,14 +409,18 @@ export abstract class HarnessIntegration {
     currentIndex: number,
     finalPromptResponseTexts: string[] = []
   ): PriorContextItem[] {
-    if (priorContext === "none") {
+    if (priorContext === PRIOR_CONTEXT_KEYWORDS.NONE) {
       return [];
     }
 
     // finalPrompt-specific keywords
-    if (priorContext === "finalPromptAll") {
+    if (priorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL) {
       const items = finalPromptResponseTexts
-        .map((text, i) => ({ index: i, text, type: "finalPrompt" as const }))
+        .map((text, i) => ({
+          index: i,
+          text,
+          type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT,
+        }))
         .filter((item) => item.text.length > 0);
       if (items.length === 0 && finalPromptResponseTexts.length > 0) {
         Log.debug(
@@ -421,7 +430,7 @@ export abstract class HarnessIntegration {
       return items;
     }
 
-    if (priorContext === "finalPromptPrevious") {
+    if (priorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS) {
       const lastIndex = finalPromptResponseTexts.length - 1;
       if (lastIndex < 0) {
         return [];
@@ -430,15 +439,21 @@ export abstract class HarnessIntegration {
       if (!text) {
         return [];
       }
-      return [{ index: lastIndex, text, type: "finalPrompt" as const }];
+      return [
+        {
+          index: lastIndex,
+          text,
+          type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_PROMPT,
+        },
+      ];
     }
 
     // Queue-prompt keywords
     let targetIndices: number[];
 
-    if (priorContext === "all") {
+    if (priorContext === PRIOR_CONTEXT_KEYWORDS.ALL) {
       targetIndices = Array.from({ length: currentIndex }, (_, i) => i);
-    } else if (priorContext === "previous") {
+    } else if (priorContext === PRIOR_CONTEXT_KEYWORDS.PREVIOUS) {
       targetIndices = currentIndex > 0 ? [currentIndex - 1] : [];
     } else {
       // Array of 1-based prompt numbers → 0-based indices, validated

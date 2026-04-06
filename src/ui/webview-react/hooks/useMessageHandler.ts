@@ -24,7 +24,7 @@ import {
   STEP_STATUS,
   EDITOR_TARGET_KINDS,
   SESSION_KINDS,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
   type ExecutionState,
   type StepStatus,
@@ -274,16 +274,14 @@ function createMessageHandlers(): MessageHandlerMap {
 
     // Update steps list (keep existing status for completed steps)
     const currentSteps = workflowStore.steps;
-    const newSteps = (message.steps || []).map(
-      (step: any, index: number) => {
-        // Preserve status from existing steps
-        const existingStep = currentSteps[index] as any;
-        return {
-          ...step,
-          status: existingStep?.status || STEP_STATUS.PENDING,
-        };
-      }
-    );
+    const newSteps = (message.steps || []).map((step: any, index: number) => {
+      // Preserve status from existing steps
+      const existingStep = currentSteps[index] as any;
+      return {
+        ...step,
+        status: existingStep?.status || STEP_STATUS.PENDING,
+      };
+    });
 
     WebviewLog.debug(
       `[STEPS_EXTENDED] ${currentSteps.length} → ${newSteps.length} steps${message.workflowId ? ` (CLI workflowId=${message.workflowId.slice(0, 8)})` : ""}`
@@ -586,7 +584,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: {
-        kind: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+        kind: FINAL_STEP_PHASES.FINAL_STEP,
         loopIndex: message.loopIndex,
       },
       attemptIndex: message.output.attemptIndex ?? 0,
@@ -625,7 +623,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const store = useWorkflowStore.getState();
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: message.stepIndex },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: message.stepIndex },
       attemptIndex: message.output.attemptIndex ?? 0,
       cliOutput: message.output,
       timestampMs: message.output.timestampMs ?? Date.now(),
@@ -667,7 +665,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const store = useWorkflowStore.getState();
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: message.stepIndex },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: message.stepIndex },
       attemptIndex: message.output.attemptIndex ?? 0,
       cliOutput: message.output,
       timestampMs: message.output.timestampMs ?? Date.now(),
@@ -685,11 +683,11 @@ function createMessageHandlers(): MessageHandlerMap {
     const target: OutputExecutionTarget =
       Number.isFinite(stepIndex) && stepIndex < 0
         ? {
-            kind: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+            kind: FINAL_STEP_PHASES.FINAL_STEP,
             loopIndex: Math.abs(stepIndex) - 1,
           }
         : {
-            kind: FINAL_PROMPT_PHASES.QUEUE,
+            kind: FINAL_STEP_PHASES.QUEUE,
             stepIndex: Math.max(0, stepIndex),
           };
     const entry: OrderedStatusHistoryEntry = {
@@ -995,7 +993,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const store = useWorkflowStore.getState();
     const entry: OrderedStatusHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.STATUS,
-      target: { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
       statusMessage: {
         message: `Queue size limit reached: ${message.currentSize}/${message.maxSize}`,
         severity: "warning",
@@ -1014,7 +1012,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const store = useWorkflowStore.getState();
     const entry: OrderedStatusHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.STATUS,
-      target: { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
       statusMessage: {
         message: `Execution time limit reached: ${message.elapsedSeconds}/${message.maxSeconds}s (${message.completedCount}/${message.totalCount} prompts)`,
         severity: "warning",

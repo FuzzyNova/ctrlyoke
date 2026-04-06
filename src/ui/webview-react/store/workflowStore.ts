@@ -5,7 +5,7 @@ import type { TemporalState } from "zundo";
 import {
   EXECUTION_STATES,
   STEP_STATUS,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
   type ExecutionState,
   type StepStatus,
@@ -286,14 +286,14 @@ function targetsEqual(
 ): boolean {
   if (a.kind !== b.kind) return false;
   if (
-    a.kind === FINAL_PROMPT_PHASES.QUEUE &&
-    b.kind === FINAL_PROMPT_PHASES.QUEUE
+    a.kind === FINAL_STEP_PHASES.QUEUE &&
+    b.kind === FINAL_STEP_PHASES.QUEUE
   ) {
     return a.stepIndex === b.stepIndex;
   }
   if (
-    a.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT &&
-    b.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
+    a.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+    b.kind === FINAL_STEP_PHASES.FINAL_STEP
   ) {
     return a.loopIndex === b.loopIndex;
   }
@@ -351,7 +351,7 @@ export const useWorkflowStore = create<
                 liveOrderedEntries: state.liveOrderedEntries.filter(
                   (e) =>
                     "target" in e &&
-                    e.target.kind !== FINAL_PROMPT_PHASES.FINAL_PROMPT
+                    e.target.kind !== FINAL_STEP_PHASES.FINAL_STEP
                 ),
               }),
           steps: state.steps,
@@ -430,7 +430,7 @@ export const useWorkflowStore = create<
         withUndoPause(() =>
           set((state) => {
             const target: OutputExecutionTarget = {
-              kind: FINAL_PROMPT_PHASES.QUEUE,
+              kind: FINAL_STEP_PHASES.QUEUE,
               stepIndex,
             };
             const existingIdx = state.liveOrderedEntries.findIndex(
@@ -438,10 +438,10 @@ export const useWorkflowStore = create<
                 e.kind === "cli" &&
                 "target" in e &&
                 (e as OrderedCliHistoryEntry).target.kind ===
-                  FINAL_PROMPT_PHASES.QUEUE &&
+                  FINAL_STEP_PHASES.QUEUE &&
                 (
                   (e as OrderedCliHistoryEntry).target as {
-                    kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                    kind: typeof FINAL_STEP_PHASES.QUEUE;
                     stepIndex: number;
                   }
                 ).stepIndex === stepIndex &&
@@ -513,7 +513,7 @@ export const useWorkflowStore = create<
         withUndoPause(() =>
           set((state) => {
             const target: OutputExecutionTarget = {
-              kind: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+              kind: FINAL_STEP_PHASES.FINAL_STEP,
               loopIndex,
             };
             const existingIdx = state.liveOrderedEntries.findIndex(
@@ -521,10 +521,10 @@ export const useWorkflowStore = create<
                 e.kind === "cli" &&
                 "target" in e &&
                 (e as OrderedCliHistoryEntry).target.kind ===
-                  FINAL_PROMPT_PHASES.FINAL_PROMPT &&
+                  FINAL_STEP_PHASES.FINAL_STEP &&
                 (
                   (e as OrderedCliHistoryEntry).target as {
-                    kind: typeof FINAL_PROMPT_PHASES.FINAL_PROMPT;
+                    kind: typeof FINAL_STEP_PHASES.FINAL_STEP;
                     loopIndex: number;
                   }
                 ).loopIndex === loopIndex &&
@@ -741,14 +741,14 @@ export const useWorkflowStore = create<
                 (e) =>
                   !(
                     "target" in e &&
-                    ((e.target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+                    ((e.target.kind === FINAL_STEP_PHASES.QUEUE &&
                       (
                         e.target as {
-                          kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                          kind: typeof FINAL_STEP_PHASES.QUEUE;
                           stepIndex: number;
                         }
                       ).stepIndex >= startStep) ||
-                      e.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT)
+                      e.target.kind === FINAL_STEP_PHASES.FINAL_STEP)
                   )
               ),
               retryStates: newRetryStates,
@@ -787,10 +787,10 @@ export const useWorkflowStore = create<
             const entriesToPromote = state.historyOutputs.orderedEntries.filter(
               (e) =>
                 "target" in e &&
-                e.target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+                e.target.kind === FINAL_STEP_PHASES.QUEUE &&
                 (
                   e.target as {
-                    kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                    kind: typeof FINAL_STEP_PHASES.QUEUE;
                     stepIndex: number;
                   }
                 ).stepIndex < stepCount
@@ -806,11 +806,11 @@ export const useWorkflowStore = create<
                 ...state.liveOrderedEntries.filter(
                   (e) =>
                     !("target" in e) ||
-                    e.target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT ||
-                    (e.target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+                    e.target.kind === FINAL_STEP_PHASES.FINAL_STEP ||
+                    (e.target.kind === FINAL_STEP_PHASES.QUEUE &&
                       (
                         e.target as {
-                          kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                          kind: typeof FINAL_STEP_PHASES.QUEUE;
                           stepIndex: number;
                         }
                       ).stepIndex >= stepCount)
@@ -845,7 +845,7 @@ export const useWorkflowStore = create<
 
       setWorkspaceSnapshot: (target, snapshot) =>
         withUndoPause(() => {
-          if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+          if (target.kind === FINAL_STEP_PHASES.QUEUE) {
             set((state) => ({
               workspaceSnapshots: {
                 ...state.workspaceSnapshots,
@@ -864,7 +864,7 @@ export const useWorkflowStore = create<
 
       setUndoRecord: (target, record) => {
         const key =
-          target.kind === FINAL_PROMPT_PHASES.QUEUE
+          target.kind === FINAL_STEP_PHASES.QUEUE
             ? `queue-${target.stepIndex}`
             : `finalPrompt-${target.loopIndex}`;
         withUndoPause(() =>
@@ -876,7 +876,7 @@ export const useWorkflowStore = create<
         withUndoPause(() =>
           set((state) => {
             if (!state.historyOutputs) return {};
-            if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+            if (target.kind === FINAL_STEP_PHASES.QUEUE) {
               const step = state.historyOutputs.promptOutputs[target.stepIndex];
               if (!step) return {};
               return {
@@ -1012,10 +1012,10 @@ export const useWorkflowStore = create<
               e.kind === "cli" &&
               "target" in e &&
               (e as OrderedCliHistoryEntry).target.kind ===
-                FINAL_PROMPT_PHASES.QUEUE &&
+                FINAL_STEP_PHASES.QUEUE &&
               (
                 (e as OrderedCliHistoryEntry).target as {
-                  kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                  kind: typeof FINAL_STEP_PHASES.QUEUE;
                   stepIndex: number;
                 }
               ).stepIndex === stepIndex
@@ -1031,10 +1031,10 @@ export const useWorkflowStore = create<
               e.kind === "cli" &&
               "target" in e &&
               (e as OrderedCliHistoryEntry).target.kind ===
-                FINAL_PROMPT_PHASES.QUEUE &&
+                FINAL_STEP_PHASES.QUEUE &&
               (
                 (e as OrderedCliHistoryEntry).target as {
-                  kind: typeof FINAL_PROMPT_PHASES.QUEUE;
+                  kind: typeof FINAL_STEP_PHASES.QUEUE;
                   stepIndex: number;
                 }
               ).stepIndex === stepIndex

@@ -17,7 +17,7 @@ import { WorkflowContext } from "../types/WorkflowContextTypes";
 import {
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
 } from "../types/DashboardConstants";
 import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
@@ -192,14 +192,14 @@ export class WorkflowExecutor {
 
     const getFinalStep = () => this.promptQueue.getWorkflowFile().finalStep;
 
-    const initialFinalPrompt = getFinalStep();
+    const initialFinalStep = getFinalStep();
 
-    if (initialFinalPrompt && !this.promptQueue.getFinalPromptRuntime()) {
+    if (initialFinalStep && !this.promptQueue.getFinalPromptRuntime()) {
       await this.setFinalPromptRuntime(context, {
-        phase: FINAL_PROMPT_PHASES.QUEUE,
+        phase: FINAL_STEP_PHASES.QUEUE,
         loopCount: 0,
       });
-    } else if (initialFinalPrompt) {
+    } else if (initialFinalStep) {
       const runtime = this.promptQueue.getFinalPromptRuntime();
       context.dashboardProvider?.updateFinalPromptStatus(
         runtime?.status ?? null,
@@ -210,17 +210,17 @@ export class WorkflowExecutor {
       context.dashboardProvider?.updateFinalPromptStatus(null, 0, null);
     }
 
-    let runFinalPromptFirst =
-      !!initialFinalPrompt &&
+    let runFinalStepFirst =
+      !!initialFinalStep &&
       this.promptQueue.getFinalPromptRuntime()?.phase ===
-        FINAL_PROMPT_PHASES.FINAL_PROMPT;
+        FINAL_STEP_PHASES.FINAL_STEP;
 
     while (true) {
-      if (!runFinalPromptFirst) {
+      if (!runFinalStepFirst) {
         while (this.promptQueue.hasNext()) {
           const state = this.promptQueue.getState();
           const target: ExecutionTarget = {
-            kind: FINAL_PROMPT_PHASES.QUEUE,
+            kind: FINAL_STEP_PHASES.QUEUE,
             stepIndex: state.currentIndex,
           };
           const prompt = state.steps[state.currentIndex];
@@ -271,7 +271,7 @@ export class WorkflowExecutor {
         }
       }
 
-      runFinalPromptFirst = false;
+      runFinalStepFirst = false;
 
       const statusAfterQueue = runtime.status;
       if (statusAfterQueue !== EXECUTION_STATES.RUNNING) {
@@ -286,7 +286,7 @@ export class WorkflowExecutor {
       // Initialize runtime if a final prompt was added after execution started
       if (!this.promptQueue.getFinalPromptRuntime()) {
         await this.setFinalPromptRuntime(context, {
-          phase: FINAL_PROMPT_PHASES.QUEUE,
+          phase: FINAL_STEP_PHASES.QUEUE,
           loopCount: 0,
         });
       }
@@ -296,7 +296,7 @@ export class WorkflowExecutor {
       const queueSizeBefore = this.promptQueue.getState().steps.length;
 
       await this.setFinalPromptRuntime(context, {
-        phase: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: loopIndex,
         status: STEP_STATUS.RUNNING,
         startedAt: Date.now(),
@@ -320,7 +320,7 @@ export class WorkflowExecutor {
       }
 
       const finalTarget: ExecutionTarget = {
-        kind: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+        kind: FINAL_STEP_PHASES.FINAL_STEP,
         loopIndex,
       };
       const shouldContinue = await this.executeSinglePrompt(
@@ -369,7 +369,7 @@ export class WorkflowExecutor {
         }
 
         await this.setFinalPromptRuntime(context, {
-          phase: FINAL_PROMPT_PHASES.QUEUE,
+          phase: FINAL_STEP_PHASES.QUEUE,
           loopCount: loopIndex + 1,
           status: STEP_STATUS.COMPLETED,
           startedAt:
@@ -381,7 +381,7 @@ export class WorkflowExecutor {
       }
 
       await this.setFinalPromptRuntime(context, {
-        phase: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: loopIndex,
         status: STEP_STATUS.COMPLETED,
         startedAt: this.promptQueue.getFinalPromptRuntime()?.startedAt,
@@ -419,7 +419,7 @@ export class WorkflowExecutor {
 
     const progress = this.promptQueue.getProgress();
     const guardIndex =
-      target.kind === FINAL_PROMPT_PHASES.QUEUE
+      target.kind === FINAL_STEP_PHASES.QUEUE
         ? target.stepIndex
         : state.currentIndex;
     const shouldStopForTime = await this.checkExecutionTimeLimit(
@@ -434,7 +434,7 @@ export class WorkflowExecutor {
     // Route script steps directly — no AI harness interaction needed
     if (isScriptStep(step)) {
       const stepIndex =
-        target.kind === FINAL_PROMPT_PHASES.QUEUE ? target.stepIndex : -1;
+        target.kind === FINAL_STEP_PHASES.QUEUE ? target.stepIndex : -1;
       return this.executeScriptStep(step, stepIndex, context, target);
     }
 
@@ -484,7 +484,7 @@ export class WorkflowExecutor {
       }
     }
 
-    if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       this.updateDashboardForPromptStart(context, prompt, target.stepIndex);
       integration.setWorkflowProgress(target.stepIndex + 1, progress.total);
       Log.info(`Executing prompt ${target.stepIndex + 1}/${progress.total}`);
@@ -494,7 +494,7 @@ export class WorkflowExecutor {
 
     const legacyStepIndex = this.getLegacyStepIndex(target);
     const sendPromptIndex =
-      target.kind === FINAL_PROMPT_PHASES.QUEUE
+      target.kind === FINAL_STEP_PHASES.QUEUE
         ? target.stepIndex
         : state.steps.length;
 
@@ -503,7 +503,7 @@ export class WorkflowExecutor {
       integration,
       context,
       target,
-      target.kind === FINAL_PROMPT_PHASES.QUEUE ? legacyStepIndex : undefined,
+      target.kind === FINAL_STEP_PHASES.QUEUE ? legacyStepIndex : undefined,
       0,
       {
         promptIndex: sendPromptIndex,
@@ -522,7 +522,7 @@ export class WorkflowExecutor {
           | undefined,
       },
       async () => {
-        if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+        if (target.kind === FINAL_STEP_PHASES.QUEUE) {
           await this.promptQueue.markCurrentAsSent();
         }
         this.isWaitingForResponse = true;
@@ -548,7 +548,7 @@ export class WorkflowExecutor {
     const { responseText, duration } = result;
 
     // Store response text for priorContext injection in subsequent prompts.
-    if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       // Queue steps: store on _runtime for "all" / "previous" / array-index access
       if (!prompt._runtime) {
         prompt._runtime = { startedAt: Date.now() };
@@ -569,7 +569,7 @@ export class WorkflowExecutor {
       context,
       integration,
       target,
-      target.kind === FINAL_PROMPT_PHASES.QUEUE ? legacyStepIndex : undefined,
+      target.kind === FINAL_STEP_PHASES.QUEUE ? legacyStepIndex : undefined,
       prompt,
       responseText,
       duration
@@ -589,7 +589,7 @@ export class WorkflowExecutor {
         integration,
         context,
         target,
-        target.kind === FINAL_PROMPT_PHASES.QUEUE ? legacyStepIndex : undefined,
+        target.kind === FINAL_STEP_PHASES.QUEUE ? legacyStepIndex : undefined,
         0,
         duration,
         vars && Object.keys(vars).length > 0 ? vars : undefined
@@ -606,7 +606,7 @@ export class WorkflowExecutor {
       }
 
       if (
-        target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+        target.kind === FINAL_STEP_PHASES.QUEUE &&
         context.dashboardProvider
       ) {
         context.dashboardProvider.updateStepStatus(legacyStepIndex, {
@@ -617,7 +617,7 @@ export class WorkflowExecutor {
     } else {
       runtime.completeAttempt(target, 0);
       if (
-        target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+        target.kind === FINAL_STEP_PHASES.QUEUE &&
         context.dashboardProvider
       ) {
         context.dashboardProvider.updateStepStatus(legacyStepIndex, {
@@ -627,7 +627,7 @@ export class WorkflowExecutor {
       }
     }
 
-    if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       await this.promptQueue.completeCurrentAndMoveNext();
 
       if (context.dashboardProvider) {
@@ -793,7 +793,7 @@ export class WorkflowExecutor {
       });
     }
 
-    if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       if (shouldContinue) {
         await this.promptQueue.completeCurrentAndMoveNext();
         if (context.dashboardProvider) {
@@ -863,9 +863,9 @@ export class WorkflowExecutor {
   private toOutputExecutionTarget(
     target: ExecutionTarget
   ): OutputExecutionTarget {
-    return target.kind === FINAL_PROMPT_PHASES.QUEUE
-      ? { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: target.stepIndex }
-      : { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: target.loopIndex };
+    return target.kind === FINAL_STEP_PHASES.QUEUE
+      ? { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: target.stepIndex }
+      : { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: target.loopIndex };
   }
 
   /**
@@ -875,13 +875,13 @@ export class WorkflowExecutor {
    * collide with queue indices and callers can detect them with `< 0`.
    */
   private getLegacyStepIndex(target: ExecutionTarget): number {
-    return target.kind === FINAL_PROMPT_PHASES.QUEUE
+    return target.kind === FINAL_STEP_PHASES.QUEUE
       ? target.stepIndex
       : -(target.loopIndex + 1);
   }
 
   private describeExecutionTarget(target: ExecutionTarget): string {
-    return target.kind === FINAL_PROMPT_PHASES.QUEUE
+    return target.kind === FINAL_STEP_PHASES.QUEUE
       ? `queue prompt ${target.stepIndex + 1}`
       : `finalPrompt loop ${target.loopIndex + 1}`;
   }
@@ -905,7 +905,7 @@ export class WorkflowExecutor {
 
     await this.setFinalPromptRuntime(context, {
       ...runtime,
-      phase: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+      phase: FINAL_STEP_PHASES.FINAL_STEP,
       status,
       ...(executionState === EXECUTION_STATES.ERROR ||
       executionState === EXECUTION_STATES.STOPPED ||
@@ -931,7 +931,7 @@ export class WorkflowExecutor {
       message,
       severity as any
     );
-    if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       context.onStatusMessage?.(target.stepIndex, message, severity);
     } else {
       context.onFinalPromptStatusMessage?.(target.loopIndex, message, severity);
@@ -1143,7 +1143,7 @@ export class WorkflowExecutor {
     const initTimestampMs = attempt.startedAt;
     const rawTextOutput = integration.rawTextOutput || undefined;
 
-    if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       if (context.dashboardProvider && legacyStepIndex !== undefined) {
         context.dashboardProvider.updateCliStreamingChunk(legacyStepIndex, "");
         context.dashboardProvider.updateCliOutput(legacyStepIndex, {
@@ -1209,7 +1209,7 @@ export class WorkflowExecutor {
         ? data.cliCommand
         : undefined;
 
-      if (target.kind === FINAL_PROMPT_PHASES.QUEUE) {
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
         if (context.dashboardProvider && legacyStepIndex !== undefined) {
           context.dashboardProvider.updateCliOutput(legacyStepIndex, {
             prompt: promptStep.prompt,
@@ -1264,7 +1264,7 @@ export class WorkflowExecutor {
 
     streamingDisposable = integration.onStreamingChunk((chunk) => {
       if (
-        target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+        target.kind === FINAL_STEP_PHASES.QUEUE &&
         legacyStepIndex !== undefined
       ) {
         context.captureChunk?.(legacyStepIndex, chunk);
@@ -1272,7 +1272,7 @@ export class WorkflowExecutor {
           legacyStepIndex,
           chunk
         );
-      } else if (target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+      } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         context.captureFinalPromptChunk?.(target.loopIndex, chunk);
         context.dashboardProvider?.updateFinalPromptStreamingChunk(
           target.loopIndex,
@@ -1283,7 +1283,7 @@ export class WorkflowExecutor {
 
     structuredStreamingDisposable = integration.onStreamingEvents((events) => {
       if (
-        target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+        target.kind === FINAL_STEP_PHASES.QUEUE &&
         legacyStepIndex !== undefined
       ) {
         context.captureEvents?.(legacyStepIndex, events);
@@ -1291,7 +1291,7 @@ export class WorkflowExecutor {
           legacyStepIndex,
           events
         );
-      } else if (target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+      } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         context.captureFinalPromptEvents?.(target.loopIndex, events);
         context.dashboardProvider?.updateFinalPromptStreamingEvents(
           target.loopIndex,
@@ -1353,7 +1353,7 @@ export class WorkflowExecutor {
         integration,
         context,
         target,
-        target.kind === FINAL_PROMPT_PHASES.QUEUE ? legacyStepIndex : undefined,
+        target.kind === FINAL_STEP_PHASES.QUEUE ? legacyStepIndex : undefined,
         retryAttemptIndex,
         {
           promptIndex: currentIndex,
@@ -1389,7 +1389,7 @@ export class WorkflowExecutor {
         context,
         integration,
         target,
-        target.kind === FINAL_PROMPT_PHASES.QUEUE ? legacyStepIndex : undefined,
+        target.kind === FINAL_STEP_PHASES.QUEUE ? legacyStepIndex : undefined,
         retryPromptStep,
         result.responseText,
         result.duration,
@@ -1582,7 +1582,7 @@ export class WorkflowExecutor {
         );
       } else if (
         context.dashboardProvider &&
-        target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
+        target.kind === FINAL_STEP_PHASES.FINAL_STEP
       ) {
         context.dashboardProvider.updateFinalPromptOutput(
           target.loopIndex,
@@ -1592,7 +1592,7 @@ export class WorkflowExecutor {
 
       if (legacyStepIndex >= 0) {
         context.captureCompletedOutput?.(legacyStepIndex, stoppedOutput);
-      } else if (target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+      } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         context.captureFinalPromptCompletedOutput?.(
           target.loopIndex,
           stoppedOutput
@@ -1674,7 +1674,7 @@ export class WorkflowExecutor {
         );
       } else if (
         context.dashboardProvider &&
-        target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
+        target.kind === FINAL_STEP_PHASES.FINAL_STEP
       ) {
         context.dashboardProvider.updateFinalPromptOutput(
           target.loopIndex,
@@ -1684,7 +1684,7 @@ export class WorkflowExecutor {
 
       if (legacyStepIndex >= 0) {
         context.captureCompletedOutput?.(legacyStepIndex, processExitOutput);
-      } else if (target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+      } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         context.captureFinalPromptCompletedOutput?.(
           target.loopIndex,
           processExitOutput
@@ -1762,7 +1762,7 @@ export class WorkflowExecutor {
       );
     } else if (
       context.dashboardProvider &&
-      target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
+      target.kind === FINAL_STEP_PHASES.FINAL_STEP
     ) {
       context.dashboardProvider.updateFinalPromptOutput(
         target.loopIndex,
@@ -1772,7 +1772,7 @@ export class WorkflowExecutor {
 
     if (legacyStepIndex >= 0) {
       context.captureCompletedOutput?.(legacyStepIndex, errorCliOutput);
-    } else if (target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+    } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
       context.captureFinalPromptCompletedOutput?.(
         target.loopIndex,
         errorCliOutput
@@ -1860,7 +1860,7 @@ export class WorkflowExecutor {
       context.dashboardProvider.updateCliOutput(legacyStepIndex, cliOutputObj);
     } else if (
       context.dashboardProvider &&
-      target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT
+      target.kind === FINAL_STEP_PHASES.FINAL_STEP
     ) {
       context.dashboardProvider.updateFinalPromptOutput(
         target.loopIndex,
@@ -1869,7 +1869,7 @@ export class WorkflowExecutor {
     }
     if (legacyStepIndex !== undefined) {
       context.captureCompletedOutput?.(legacyStepIndex, cliOutputObj);
-    } else if (target.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+    } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
       context.captureFinalPromptCompletedOutput?.(
         target.loopIndex,
         cliOutputObj

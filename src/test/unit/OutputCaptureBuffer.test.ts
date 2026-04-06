@@ -7,7 +7,7 @@ import {
   type PromptCompleteData,
 } from "../../flightpath/OutputCaptureBuffer";
 import { EXECUTION_STATES } from "../../types/FlightPathTypes";
-import { FINAL_PROMPT_PHASES } from "../../types/DashboardConstants";
+import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import type { CliEvent } from "../../types/WebviewMessageTypes";
 import type { PromptStep } from "../../types/FlightPathTypes";
@@ -660,7 +660,7 @@ suite("OutputCaptureBuffer", () => {
       buffer.replayTo(
         sink,
         { status: EXECUTION_STATES.RUNNING, currentIndex: 0 },
-        { phase: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopCount: 0 },
+        { phase: FINAL_STEP_PHASES.FINAL_STEP, loopCount: 0 },
         "tag"
       );
 

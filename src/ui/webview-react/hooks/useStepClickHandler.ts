@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
-import { OUTPUT_HISTORY_KINDS, FINAL_PROMPT_PHASES } from "../types/messages";
+import { OUTPUT_HISTORY_KINDS, FINAL_STEP_PHASES } from "../types/messages";
 
 /**
  * Returns a `handleStepClick(index)` callback that selects the prompt for
@@ -24,14 +24,14 @@ export function useStepClickHandler() {
     (index: number) => {
       const prompt = prompts[index];
       if (!prompt) return;
-      selectPrompt({ kind: FINAL_PROMPT_PHASES.QUEUE, index }, prompt);
+      selectPrompt({ kind: FINAL_STEP_PHASES.QUEUE, index }, prompt);
 
       let hasOutput: boolean;
       if (isViewingHistory && historyOutputs) {
         hasOutput = historyOutputs.orderedEntries.some(
           (e) =>
             "target" in e &&
-            e.target.kind === FINAL_PROMPT_PHASES.QUEUE &&
+            e.target.kind === FINAL_STEP_PHASES.QUEUE &&
             (e.target as any).stepIndex === index
         );
       } else {
@@ -39,7 +39,7 @@ export function useStepClickHandler() {
           (e) =>
             e.kind === OUTPUT_HISTORY_KINDS.CLI &&
             "target" in e &&
-            (e as any).target?.kind === FINAL_PROMPT_PHASES.QUEUE &&
+            (e as any).target?.kind === FINAL_STEP_PHASES.QUEUE &&
             (e as any).target?.stepIndex === index
         );
       }

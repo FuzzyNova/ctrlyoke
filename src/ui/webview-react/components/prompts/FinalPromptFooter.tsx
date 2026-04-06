@@ -3,7 +3,7 @@ import { StatusIcon } from "./StatusIcon";
 import { PromptStepDetails } from "./PromptStepDetails";
 import type { PromptOverride } from "./PromptStepDetails";
 import {
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   type StepStatus,
   type FinalPromptPhase,
 } from "../../types/messages";
@@ -106,9 +106,7 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
           {/* Phase badge */}
           {phase && (
             <div className="mt-0.5text-[10px] opacity-75">
-              {phase === FINAL_PROMPT_PHASES.FINAL_PROMPT
-                ? "Final Step"
-                : "Queue"}
+              {phase === FINAL_STEP_PHASES.FINAL_STEP ? "Final Step" : "Queue"}
             </div>
           )}
 
@@ -116,9 +114,13 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
           <PromptStepDetails
             status={effectiveStatus}
             harnessLabel={isScriptStep(finalStep) ? undefined : harnessLabel}
-            harnessIsDefault={isScriptStep(finalStep) ? undefined : harnessIsDefault}
+            harnessIsDefault={
+              isScriptStep(finalStep) ? undefined : harnessIsDefault
+            }
             modelLabel={isScriptStep(finalStep) ? undefined : modelLabel}
-            modelIsDefault={isScriptStep(finalStep) ? undefined : modelIsDefault}
+            modelIsDefault={
+              isScriptStep(finalStep) ? undefined : modelIsDefault
+            }
             latestOutput={latestOutput}
             isSelected={isSelected}
             overrides={isScriptStep(finalStep) ? undefined : overrides}

@@ -12,7 +12,7 @@ import { StatusIcon } from "../prompts/StatusIcon";
 import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
 } from "../../types/messages";
 import {
   DndContext,
@@ -199,7 +199,7 @@ export const MobilePromptsSidebar: React.FC = () => {
       // Cancel any active queue-prompt selection — the selected index may now
       // refer to a different prompt after reorder.
       const editorStore = useEditorStore.getState();
-      if (editorStore.selectionTarget.kind === FINAL_PROMPT_PHASES.QUEUE) {
+      if (editorStore.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
         editorStore.cancelEdit();
       }
     },

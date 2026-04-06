@@ -15,7 +15,7 @@ import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import { Harness, type PromptStep } from "../../types/FlightPathTypes";
 import {
   WORKFLOW_ATTEMPT_STATUS,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   WORKFLOW_ATTEMPT_COMMANDS,
 } from "../../types/DashboardConstants";
 
@@ -167,7 +167,7 @@ suite("EndConditionHandler", () => {
         workspaceFolderPath: process.cwd(),
         currentPromptFilePath: "workflow.flightpath.yaml",
         runtime,
-        attemptTarget: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
       async () => {
@@ -225,7 +225,7 @@ suite("EndConditionHandler", () => {
         workspaceFolderPath: process.cwd(),
         currentPromptFilePath: "workflow.flightpath.yaml",
         runtime,
-        attemptTarget: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
       async (_retryPrompt, _currentIndex, attemptIndex) => {
@@ -286,7 +286,7 @@ suite("EndConditionHandler", () => {
         workspaceFolderPath: process.cwd(),
         currentPromptFilePath: "workflow.flightpath.yaml",
         runtime,
-        attemptTarget: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
       async () => {
@@ -329,7 +329,7 @@ suite("EndConditionHandler", () => {
         workspaceFolderPath: process.cwd(),
         currentPromptFilePath: "workflow.flightpath.yaml",
         runtime,
-        attemptTarget: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+        attemptTarget: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
       },
       async () => {
@@ -344,4 +344,3 @@ suite("EndConditionHandler", () => {
     assert.strictEqual(runtime.stopped, true);
   });
 });
-

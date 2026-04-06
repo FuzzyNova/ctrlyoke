@@ -13,7 +13,7 @@ import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import { PromptStep, PromptFile, Harness } from "../../types/FlightPathTypes";
 import {
   EXECUTION_STATES,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   STEP_STATUS,
 } from "../../types/DashboardConstants";
 import { CliEvent } from "../../types/WebviewMessageTypes";
@@ -218,7 +218,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     ]);
     const runtime = queue.getFinalPromptRuntime();
     assert.ok(runtime);
-    assert.strictEqual(runtime?.phase, "finalPrompt");
+    assert.strictEqual(runtime?.phase, FINAL_STEP_PHASES.FINAL_STEP);
     assert.strictEqual(runtime?.loopCount, 0);
     assert.strictEqual(runtime?.status, STEP_STATUS.COMPLETED);
     assert.ok(runtime?.completedAt);
@@ -256,7 +256,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     const runtime = queue.getFinalPromptRuntime();
     assert.ok(runtime);
     assert.strictEqual(runtime?.loopCount, 1);
-    assert.strictEqual(runtime?.phase, "finalPrompt");
+    assert.strictEqual(runtime?.phase, FINAL_STEP_PHASES.FINAL_STEP);
   });
 
   test("does not loop when queue does not grow", async () => {
@@ -305,7 +305,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
 
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.PAUSED);
     const runtime = queue.getFinalPromptRuntime();
-    assert.strictEqual(runtime?.phase, "finalPrompt");
+    assert.strictEqual(runtime?.phase, FINAL_STEP_PHASES.FINAL_STEP);
     assert.strictEqual(runtime?.loopCount, 0);
   });
 
@@ -335,7 +335,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     await executor.execute(integration, makeContext(integration));
 
     const runtimeAfterStop = queue.getFinalPromptRuntime();
-    assert.strictEqual(runtimeAfterStop?.phase, "finalPrompt");
+    assert.strictEqual(runtimeAfterStop?.phase, FINAL_STEP_PHASES.FINAL_STEP);
 
     // Simulate resume and force an actual error on finalPrompt send failure
     await confirmQueueStopped(queue);
@@ -344,7 +344,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
 
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
     const runtimeAfterError = queue.getFinalPromptRuntime();
-    assert.strictEqual(runtimeAfterError?.phase, "finalPrompt");
+    assert.strictEqual(runtimeAfterError?.phase, FINAL_STEP_PHASES.FINAL_STEP);
     assert.strictEqual(runtimeAfterError?.status, STEP_STATUS.FAILED);
   });
 
@@ -392,7 +392,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     assert.ok(
       statusUpdates.some(
         (u) =>
-          u.phase === "finalPrompt" &&
+          u.phase === FINAL_STEP_PHASES.FINAL_STEP &&
           u.status === STEP_STATUS.RUNNING &&
           u.loopCount === 0
       )
@@ -400,7 +400,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     assert.ok(
       statusUpdates.some(
         (u) =>
-          u.phase === "finalPrompt" &&
+          u.phase === FINAL_STEP_PHASES.FINAL_STEP &&
           u.status === STEP_STATUS.COMPLETED &&
           u.loopCount === 0
       )
@@ -567,7 +567,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     assert.strictEqual(historySaves.length, 1);
     assert.strictEqual(appendedStatusMessages.length, 1);
     assert.deepStrictEqual(appendedStatusMessages[0].target, {
-      kind: FINAL_PROMPT_PHASES.QUEUE,
+      kind: FINAL_STEP_PHASES.QUEUE,
       stepIndex: 0,
     });
     assert.strictEqual(
@@ -580,7 +580,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     );
     assert.deepStrictEqual(historyCallOrder, ["status", "output"]);
     assert.deepStrictEqual(historySaves[0].target, {
-      kind: FINAL_PROMPT_PHASES.QUEUE,
+      kind: FINAL_STEP_PHASES.QUEUE,
       stepIndex: 0,
     });
     assert.strictEqual(historySaves[0].cliOutputs.length, 1);

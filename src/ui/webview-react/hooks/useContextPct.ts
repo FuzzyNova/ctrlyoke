@@ -1,7 +1,7 @@
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { calcContextPct } from "@utils/tokenUtils";
-import { OUTPUT_HISTORY_KINDS, FINAL_PROMPT_PHASES } from "../types/messages";
+import { OUTPUT_HISTORY_KINDS, FINAL_STEP_PHASES } from "../types/messages";
 
 /**
  * Returns a `getContextPct(stepIndex)` helper that looks up the context-window
@@ -24,7 +24,7 @@ export function useContextPct() {
         (e) =>
           e.kind === OUTPUT_HISTORY_KINDS.CLI &&
           "target" in e &&
-          (e as any).target?.kind === FINAL_PROMPT_PHASES.QUEUE &&
+          (e as any).target?.kind === FINAL_STEP_PHASES.QUEUE &&
           (e as any).target?.stepIndex === index
       );
     if (!cliEntry) return undefined;

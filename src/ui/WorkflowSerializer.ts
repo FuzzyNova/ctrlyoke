@@ -152,8 +152,8 @@ export class WorkflowSerializer {
       // Build clean PromptFile — strip all working-file-only and runtime fields.
       const WORKFLOW_FIELDS = [
         "prompt",
-        "prompts",
-        "finalPrompt",
+        "steps",
+        "finalStep",
         "harness",
         "model",
         "agent",
@@ -183,24 +183,24 @@ export class WorkflowSerializer {
       for (const field of WORKFLOW_FIELDS) {
         if (
           field in workingFile &&
-          field !== "prompts" &&
-          field !== "finalPrompt"
+          field !== "steps" &&
+          field !== "finalStep"
         ) {
           clean[field] = workingFile[field];
         }
       }
 
       if (
-        workingFile.finalPrompt &&
-        typeof workingFile.finalPrompt === "object"
+        workingFile.finalStep &&
+        typeof workingFile.finalStep === "object"
       ) {
-        const cleanFinalPrompt: Record<string, unknown> = {};
+        const cleanFinalStep: Record<string, unknown> = {};
         for (const field of PROMPT_FIELDS) {
-          if (field in workingFile.finalPrompt) {
-            cleanFinalPrompt[field] = workingFile.finalPrompt[field];
+          if (field in workingFile.finalStep) {
+            cleanFinalStep[field] = workingFile.finalStep[field];
           }
         }
-        clean.finalPrompt = cleanFinalPrompt;
+        clean.finalStep = cleanFinalStep;
       }
 
       if (Array.isArray(workingFile.steps)) {

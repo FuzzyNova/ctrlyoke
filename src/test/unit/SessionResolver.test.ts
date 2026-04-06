@@ -2,6 +2,7 @@ import * as assert from "assert";
 import { SessionResolver } from "../../utils/SessionResolver";
 import { PromptFile, PromptStep, Harness } from "../../types/FlightPathTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { SESSION_ID_SENTINELS } from "../../types/DashboardConstants";
 
 suite("SessionResolver Tests", () => {
   suite("resolve - workflow-level sessionId inheritance", () => {
@@ -525,7 +526,7 @@ suite("SessionResolver Tests", () => {
     });
   });
 
-  suite('resolve - "finalPrompt" sentinel', () => {
+  suite("resolve - SESSION_ID_SENTINELS.FINAL_PROMPT sentinel", () => {
     const workflow: PromptFile = {
       steps: [],
       resumeSession: true,
@@ -534,7 +535,7 @@ suite("SessionResolver Tests", () => {
     test("should return finalPromptSessionId when sentinel is used and prior session exists", () => {
       const prompt: PromptStep = {
         prompt: "finalPrompt text",
-        sessionId: "finalPrompt",
+        sessionId: SESSION_ID_SENTINELS.FINAL_PROMPT,
       };
       const priorSessionId = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -551,7 +552,7 @@ suite("SessionResolver Tests", () => {
     test("should return undefined when sentinel is used but no prior session (first iteration)", () => {
       const prompt: PromptStep = {
         prompt: "finalPrompt text",
-        sessionId: "finalPrompt",
+        sessionId: SESSION_ID_SENTINELS.FINAL_PROMPT,
       };
 
       const sessionId = SessionResolver.resolve(
@@ -571,7 +572,7 @@ suite("SessionResolver Tests", () => {
       };
       const prompt: PromptStep = {
         prompt: "finalPrompt text",
-        sessionId: "finalPrompt",
+        sessionId: SESSION_ID_SENTINELS.FINAL_PROMPT,
       };
 
       const sessionId = SessionResolver.resolve(
@@ -605,7 +606,7 @@ suite("SessionResolver Tests", () => {
     test("should use sentinel from workflow-level sessionId", () => {
       const workflowWithSentinel: PromptFile = {
         steps: [],
-        sessionId: "finalPrompt",
+        sessionId: SESSION_ID_SENTINELS.FINAL_PROMPT,
         resumeSession: true,
       };
       const prompt: PromptStep = {

@@ -15,7 +15,7 @@ import { useWorkflowStore } from "@store/workflowStore";
 import {
   EXECUTION_STATES,
   STEP_STATUS,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
 } from "@root/types/DashboardConstants";
 import type { PromptStep } from "@root/types/WebviewMessageTypes";
@@ -131,7 +131,7 @@ describe("untracked store actions (must not record undo entries)", () => {
     loadWorkflow([makePrompt()]);
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       cliOutput: {
         prompt: "p",
@@ -369,4 +369,3 @@ describe("undo/redo round-trips", () => {
     expect((store().steps[0] as any).prompt).toBe("hello world");
   });
 });
-

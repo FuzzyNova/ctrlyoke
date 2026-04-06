@@ -40,7 +40,7 @@ import type {
   ToolResultData,
 } from "../../types/cliEvents";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../../types/cliEvents";
-import { HARNESS_INFO, FINAL_PROMPT_PHASES } from "../../types/messages";
+import { HARNESS_INFO, FINAL_STEP_PHASES } from "../../types/messages";
 import type {
   UndoExecutionTarget,
   WorkspaceSnapshot,
@@ -546,8 +546,8 @@ export const CliOutput = memo<CliOutputProps>(
     const target: UndoExecutionTarget = useMemo(
       () =>
         isFinalPrompt
-          ? { kind: FINAL_PROMPT_PHASES.FINAL_PROMPT, loopIndex: stepIndex }
-          : { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex },
+          ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
+          : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
       [isFinalPrompt, stepIndex]
     );
     const targetKey = isFinalPrompt
@@ -788,7 +788,8 @@ export const CliOutput = memo<CliOutputProps>(
             n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
           parts.push(
             <span key="context" title={tokenDetails.join(" | ")}>
-              Context: {fmt(contextWindowUsed!)}/{fmt(contextWindowSize!)} ({pct}
+              Context: {fmt(contextWindowUsed!)}/{fmt(contextWindowSize!)} (
+              {pct}
               %)
             </span>
           );
@@ -906,9 +907,8 @@ export const CliOutput = memo<CliOutputProps>(
             {timestamp && (
               <span className="output-timestamp">[{timestamp}] </span>
             )}
-            <i className="codicon codicon-terminal" />
-            [{stepLabel ?? `Script ${stepIndex + 1}`}]
-            {streamingIndicator}
+            <i className="codicon codicon-terminal" />[
+            {stepLabel ?? `Script ${stepIndex + 1}`}]{streamingIndicator}
           </div>
 
           {/* CLI command */}
@@ -932,9 +932,7 @@ export const CliOutput = memo<CliOutputProps>(
 
           {/* Script stdout/stderr — plain text */}
           {output.response && (
-            <div
-              className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}
-            >
+            <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}>
               <div className="whitespace-pre-wrap text-[var(--fg-primary)]">
                 {output.response}
               </div>
@@ -966,11 +964,13 @@ export const CliOutput = memo<CliOutputProps>(
           )}
 
           {/* Elapsed (when no exit code) */}
-          {!output.isStreaming && output.exitCode === undefined && output.elapsed !== undefined && (
-            <div className="mt-[var(--spacing-xs)] text-[length:var(--fp-output-font-size-xs)] text-[var(--fg-secondary)]">
-              {output.elapsed}s
-            </div>
-          )}
+          {!output.isStreaming &&
+            output.exitCode === undefined &&
+            output.elapsed !== undefined && (
+              <div className="mt-[var(--spacing-xs)] text-[length:var(--fp-output-font-size-xs)] text-[var(--fg-secondary)]">
+                {output.elapsed}s
+              </div>
+            )}
         </div>
       );
     }

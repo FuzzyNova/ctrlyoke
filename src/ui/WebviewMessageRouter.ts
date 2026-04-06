@@ -4,7 +4,7 @@ import { getErrorMessage } from "../utils/ErrorUtils";
 import {
   MESSAGE_TYPES,
   LOG_LEVELS,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   SESSION_KINDS,
   type WebviewLogLevel,
 } from "../types/DashboardConstants";
@@ -1153,7 +1153,7 @@ export class WebviewMessageRouter {
           const history =
             await outputHistoryManager.loadHistory(historyFilePath);
           const stepOutput = (
-            target.kind === FINAL_PROMPT_PHASES.QUEUE
+            target.kind === FINAL_STEP_PHASES.QUEUE
               ? history.promptOutputs[target.stepIndex]
               : history.finalPromptOutputs?.[target.loopIndex]
           ) as
@@ -1247,7 +1247,7 @@ export class WebviewMessageRouter {
     }
 
     const firstTarget = entries[0]?.target ?? {
-      kind: FINAL_PROMPT_PHASES.QUEUE,
+      kind: FINAL_STEP_PHASES.QUEUE,
       stepIndex: 0,
     };
     this.emitMessage({
@@ -1307,7 +1307,7 @@ export class WebviewMessageRouter {
             const history =
               await outputHistoryManager.loadHistory(historyFilePath);
             const stepOutput = (
-              entry.target.kind === FINAL_PROMPT_PHASES.QUEUE
+              entry.target.kind === FINAL_STEP_PHASES.QUEUE
                 ? history.promptOutputs[entry.target.stepIndex]
                 : history.finalPromptOutputs?.[entry.target.loopIndex]
             ) as { undoRecord?: UndoRecord } | undefined;
@@ -1329,7 +1329,7 @@ export class WebviewMessageRouter {
     }
 
     const firstTarget = entries[0]?.target ?? {
-      kind: FINAL_PROMPT_PHASES.QUEUE,
+      kind: FINAL_STEP_PHASES.QUEUE,
       stepIndex: 0,
     };
     this.emitMessage({

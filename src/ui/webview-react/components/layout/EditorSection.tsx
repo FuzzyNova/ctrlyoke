@@ -9,7 +9,7 @@ import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { PromptEditor } from "../editor/PromptEditor";
 import { PanelBar, IconToggleButton } from "../shared";
 import {
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   RUNNER_IDS,
   EDITOR_TARGET_KINDS,
   MESSAGE_TYPES,
@@ -106,7 +106,7 @@ export const EditorSection: React.FC = () => {
   const getModeText = () => {
     if (isEditMode) {
       if (promptName) return `Editing: ${promptName}`;
-      if (selectionTarget.kind === FINAL_PROMPT_PHASES.FINAL_PROMPT) {
+      if (selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         return isScriptMode ? "Editing: Final Script" : "Editing: Final Prompt";
       }
       if (isScriptMode) return "Editing: Script";

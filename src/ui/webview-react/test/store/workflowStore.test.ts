@@ -7,7 +7,7 @@ import { useWorkflowStore } from "@store/workflowStore";
 import {
   EXECUTION_STATES,
   STEP_STATUS,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
 } from "@/types/messages";
 import type { PromptStep, CliOutput } from "@/types/messages";
@@ -103,7 +103,7 @@ describe("loadWorkflow", () => {
     store().loadWorkflow({ fileName: "a.yaml", steps: [makePrompt()] });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       cliOutput: makeOutput(),
       timestampMs: Date.now(),
@@ -157,7 +157,7 @@ describe("appendLiveEntry (cli)", () => {
     store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       cliOutput: makeOutput({ response: "first" }),
       timestampMs: Date.now(),
@@ -171,7 +171,7 @@ describe("appendLiveEntry (cli)", () => {
     store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       cliOutput: makeOutput({ response: "streaming", isStreaming: true }),
       timestampMs: Date.now(),
@@ -179,7 +179,7 @@ describe("appendLiveEntry (cli)", () => {
     });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       cliOutput: makeOutput({ response: "final", isStreaming: false }),
       timestampMs: Date.now(),
@@ -197,7 +197,7 @@ describe("appendLiveEntry (cli)", () => {
     });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       cliOutput: makeOutput({ response: "step0" }),
       timestampMs: Date.now(),
@@ -205,7 +205,7 @@ describe("appendLiveEntry (cli)", () => {
     });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 1 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
       attemptIndex: 0,
       cliOutput: makeOutput({ response: "step1" }),
       timestampMs: Date.now(),
@@ -277,7 +277,7 @@ describe("appendLiveEntry (status)", () => {
   it("appends status entries", () => {
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.STATUS,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       statusMessage: {
         message: "Starting...",
         severity: "info",
@@ -288,7 +288,7 @@ describe("appendLiveEntry (status)", () => {
     });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.STATUS,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       statusMessage: {
         message: "Retrying...",
         severity: "warning",
@@ -309,7 +309,7 @@ describe("appendLiveEntry (status)", () => {
   it("does not mix entries between steps", () => {
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.STATUS,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       statusMessage: {
         message: "step0 msg",
         severity: "info",
@@ -320,7 +320,7 @@ describe("appendLiveEntry (status)", () => {
     });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.STATUS,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 1 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
       statusMessage: {
         message: "step1 msg",
         severity: "info",
@@ -342,7 +342,7 @@ describe("appendLiveEntry (status)", () => {
   it("clearLiveEntries removes all entries", () => {
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.STATUS,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       statusMessage: {
         message: "msg1",
         severity: "info",
@@ -353,7 +353,7 @@ describe("appendLiveEntry (status)", () => {
     });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.STATUS,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       statusMessage: {
         message: "msg2",
         severity: "info",
@@ -376,7 +376,7 @@ describe("loadHistoryRun", () => {
     const orderedEntries: OrderedHistoryEntry[] = [
       {
         kind: OUTPUT_HISTORY_KINDS.STATUS,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         statusMessage: {
           message: "history status",
           severity: "info",
@@ -387,7 +387,7 @@ describe("loadHistoryRun", () => {
       },
       {
         kind: OUTPUT_HISTORY_KINDS.CLI,
-        target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         attemptIndex: 0,
         cliOutput: makeOutput({
           response: "history output",
@@ -504,7 +504,7 @@ describe("getLatestOutput", () => {
     store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       cliOutput: makeOutput({ response: "first" }),
       timestampMs: Date.now(),
@@ -531,7 +531,7 @@ describe("resetWorkflow", () => {
     });
     store().appendLiveEntry({
       kind: OUTPUT_HISTORY_KINDS.CLI,
-      target: { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 },
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
       attemptIndex: 0,
       cliOutput: makeOutput(),
       timestampMs: Date.now(),

@@ -4,7 +4,7 @@ import {
   PROPERTY_DEFAULTS,
   END_CONDITION_DEFAULTS,
 } from "@store/editorStore";
-import { FINAL_PROMPT_PHASES } from "@/types/messages";
+import { FINAL_STEP_PHASES } from "@/types/messages";
 import type { PromptStep } from "@/types/messages";
 
 // ---------------------------------------------------------------------------
@@ -169,7 +169,10 @@ describe("enterEditMode", () => {
     const item = makePromptStep({ prompt: "Fix bugs", name: "Fix Step" });
     store().enterEditMode(0, item);
 
-    expect(store().selectionTarget).toEqual({ kind: FINAL_PROMPT_PHASES.QUEUE, index: 0 });
+    expect(store().selectionTarget).toEqual({
+      kind: FINAL_STEP_PHASES.QUEUE,
+      index: 0,
+    });
     expect(store().selectedPromptIndex).toBe(0);
     expect(store().promptText).toBe("Fix bugs");
     expect(store().promptName).toBe("Fix Step");

@@ -13,7 +13,7 @@ import {
 import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
 import {
   EXECUTION_STATES,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
@@ -142,7 +142,11 @@ export class OutputHistoryManager {
     }
 
     try {
-      await this.saveTimelineExecutionOutput(historyFilePath, target, cliOutputs);
+      await this.saveTimelineExecutionOutput(
+        historyFilePath,
+        target,
+        cliOutputs
+      );
     } catch (error) {
       Log.warn("Failed to save step output to history:", error);
     }
@@ -219,7 +223,8 @@ export class OutputHistoryManager {
       const stepOutput = this.getStepOutput(history, target);
       if (
         stepOutput &&
-        JSON.stringify(stepOutput.workspaceSnapshot) === JSON.stringify(snapshot)
+        JSON.stringify(stepOutput.workspaceSnapshot) ===
+          JSON.stringify(snapshot)
       ) {
         return;
       }
@@ -450,7 +455,10 @@ export class OutputHistoryManager {
         redoneAt,
       };
 
-      if (JSON.stringify(stepOutput.undoRecord) === JSON.stringify(updatedUndoRecord)) {
+      if (
+        JSON.stringify(stepOutput.undoRecord) ===
+        JSON.stringify(updatedUndoRecord)
+      ) {
         return;
       }
 
@@ -477,7 +485,7 @@ export class OutputHistoryManager {
     history: WorkflowOutputHistory,
     target: OutputExecutionTarget
   ) {
-    return target.kind === FINAL_PROMPT_PHASES.QUEUE
+    return target.kind === FINAL_STEP_PHASES.QUEUE
       ? history.promptOutputs[target.stepIndex]
       : history.finalPromptOutputs?.[target.loopIndex];
   }
@@ -491,13 +499,15 @@ export class OutputHistoryManager {
       return;
     }
 
-    const eventDrafts: WorkflowTimelineEventDraft[] = cliOutputs.map((cliOutput) => ({
-      eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
-      timestampMs: cliOutput.timestampMs ?? Date.now(),
-      target,
-      attemptIndex: cliOutput.attemptIndex ?? 0,
-      payload: { cliOutput },
-    }));
+    const eventDrafts: WorkflowTimelineEventDraft[] = cliOutputs.map(
+      (cliOutput) => ({
+        eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
+        timestampMs: cliOutput.timestampMs ?? Date.now(),
+        target,
+        attemptIndex: cliOutput.attemptIndex ?? 0,
+        payload: { cliOutput },
+      })
+    );
 
     eventDrafts.sort((left, right) => left.timestampMs - right.timestampMs);
     await this.timelineRecorder.appendEvents(historyFilePath, eventDrafts);

@@ -13,7 +13,7 @@ import { TimelineRecorder } from "../../flightpath/orchestration/TimelineRecorde
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import {
   EXECUTION_STATES,
-  FINAL_PROMPT_PHASES,
+  FINAL_STEP_PHASES,
   STEP_STATUS,
 } from "../../types/DashboardConstants";
 import { Harness, PromptStep } from "../../types/FlightPathTypes";
@@ -166,7 +166,7 @@ suite("WorkflowInstance finalPrompt replay", () => {
 
     await startQueueExecution(instance);
     await instance.promptQueue.setFinalPromptRuntime({
-      phase: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+      phase: FINAL_STEP_PHASES.FINAL_STEP,
       loopCount: 0,
       status: STEP_STATUS.RUNNING,
       startedAt: Date.now(),
@@ -302,7 +302,7 @@ suite("WorkflowInstance runtime transitions", () => {
     await instance.promptQueue.commitRuntimeTransition({ persist: false });
 
     await instance.promptQueue.markCurrentAsSent();
-    runtime.beginAttempt({ kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 }, 0);
+    runtime.beginAttempt({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }, 0);
     instance.promptQueue.markInFlightPromptCancelled();
     assert.strictEqual(runtime.requestStop(), true);
     await instance.promptQueue.commitRuntimeTransition({ persist: false });
@@ -610,7 +610,7 @@ suite("WorkflowInstance runtime transitions", () => {
     });
 
     const runtime = instance.promptQueue.getRuntimeStateMachine();
-    const target = { kind: FINAL_PROMPT_PHASES.QUEUE, stepIndex: 0 };
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 };
 
     runtime.scheduleRetry(target, 1, 1, 2);
     runtime.beginAttempt(target, 1);
@@ -832,4 +832,3 @@ suite("WorkflowInstance append-and-continue", () => {
     ]);
   });
 });
-
