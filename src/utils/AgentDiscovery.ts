@@ -22,10 +22,6 @@ export interface AgentInfo {
     | "workspace-github"
     | "workspace-claude"
     | "workspace-flightpath";
-  /** Whether this agent is compatible with Copilot CLI (always true; agents use prompt prepending) */
-  supportsCopilotCli: boolean;
-  /** Whether this agent is compatible with Claude CLI (always true; agents use prompt prepending) */
-  supportsClaudeCli: boolean;
 }
 
 /**
@@ -44,9 +40,6 @@ export interface AgentInfo {
  * - AgentExpander reads the .agent.md file and prepends <agentInstructions> into each prompt
  * - This resolves the previously broken Claude CLI --agent flag (GitHub issue #9930)
  * - No provider-specific CLI flags are needed; prompt prepending is universal
- *
- * The `supportsCopilotCli` and `supportsClaudeCli` flags on AgentInfo are retained
- * for backward compatibility (UI filtering) but are always true.
  *
  * See: https://code.visualstudio.com/docs/copilot/customization/custom-agents
  */
@@ -179,19 +172,11 @@ export class AgentDiscovery {
         // Extract agent name (remove .agent.md extension)
         const name = file.replace(/\.agent\.md$/, "");
 
-        // All agents now work with all providers via prompt prepending (AgentExpander).
-        // The supportsCopilotCli/supportsClaudeCli flags are retained for backward
-        // compatibility but are always true regardless of source location.
-        const supportsCopilotCli = true;
-        const supportsClaudeCli = true;
-
         agents.push({
           name,
           displayName: formatDisplayName(name),
           path: filePath,
           source,
-          supportsCopilotCli,
-          supportsClaudeCli,
         });
       }
 

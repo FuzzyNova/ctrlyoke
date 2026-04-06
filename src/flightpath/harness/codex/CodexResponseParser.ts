@@ -78,7 +78,7 @@ interface CodexCliJsonEvent {
     // error item fields
     message?: string;
 
-    // Legacy tool_calls format (for backwards compatibility)
+    // Alternate tool_calls format
     tool_calls?: Array<{
       type: string;
       function?: {

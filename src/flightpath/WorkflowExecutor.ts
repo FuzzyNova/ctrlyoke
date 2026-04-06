@@ -870,10 +870,10 @@ export class WorkflowExecutor {
   }
 
   /**
-   * Maps an ExecutionTarget to the signed integer index expected by legacy
-   * dashboard/CLI callers. Queue steps use their zero-based stepIndex;
-   * finalStep loops use negative values (-(loopIndex+1)) so they never
-   * collide with queue indices and callers can detect them with `< 0`.
+   * Maps an ExecutionTarget to the signed integer index used by the dashboard
+   * and CLI. Queue steps use their zero-based stepIndex; finalStep loops use
+   * negative values (-(loopIndex+1)) so they never collide with queue indices
+   * and callers can detect them with `< 0`.
    */
   private getSignedStepIndex(target: ExecutionTarget): number {
     return target.kind === FINAL_STEP_PHASES.QUEUE
@@ -926,7 +926,7 @@ export class WorkflowExecutor {
     const signedStepIndex = this.getSignedStepIndex(target);
 
     // Queue steps keep non-negative indices; finalStep loops use negative
-    // legacy indices (-(loopIndex+1)) to avoid collisions with queue steps.
+    // signed indices (-(loopIndex+1)) to avoid collisions with queue steps.
     context.dashboardProvider?.updateStatusMessage(
       signedStepIndex,
       message,
@@ -936,8 +936,6 @@ export class WorkflowExecutor {
       context.onStatusMessage?.(target.stepIndex, message, severity);
     } else {
       context.onFinalStepStatusMessage?.(target.loopIndex, message, severity);
-      // Backward-compatible channel used by CLI renderers and existing listeners.
-      context.onStatusMessage?.(signedStepIndex, message, severity);
     }
 
     const statusMessage = {

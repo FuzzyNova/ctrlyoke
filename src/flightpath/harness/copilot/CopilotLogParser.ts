@@ -307,7 +307,7 @@ export class CopilotLogParser extends BaseLogParser {
     }
 
     // Prefer context window data from session.truncation (fires every turn, most accurate source).
-    // Fall back to legacy metadata.usage accumulation (not seen in practice, kept for safety).
+    // Fall back to metadata.usage accumulation (not seen in practice, kept as safety net).
     const effectiveInputTokens =
       contextWindowUsedTokens > 0 ? contextWindowUsedTokens : inputTokens;
     const effectiveContextWindowSize =

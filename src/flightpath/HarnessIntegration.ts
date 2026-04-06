@@ -108,7 +108,7 @@ export abstract class HarnessIntegration {
     return false;
   }
 
-  // Event emitter for streaming response chunks (plain text - for Copilot CLI backward compatibility)
+  // Event emitter for streaming response chunks (plain text - for plain-text harnesses like Copilot CLI)
   protected streamingChunkEmitter = new TypedEmitter<string>();
   public readonly onStreamingChunk = this.streamingChunkEmitter.event;
 

@@ -533,7 +533,7 @@ export class CodexLogParser extends BaseLogParser {
     if (event.type === "event_msg" && payload?.type === "turn.completed") {
       return true;
     }
-    // Legacy format check (payload.type at top level)
+    // Alternate format check (payload.type at top level)
     if (payload?.type === "turn.completed") {
       return true;
     }
@@ -843,7 +843,7 @@ export class CodexLogParser extends BaseLogParser {
       return textParts.length > 0 ? textParts.join("") : undefined;
     }
 
-    // response_item with content array (no role check - for backwards compatibility)
+    // response_item with content array (no role check - alternate format variant)
     if (
       e.type === "response_item" &&
       e.payload?.content &&

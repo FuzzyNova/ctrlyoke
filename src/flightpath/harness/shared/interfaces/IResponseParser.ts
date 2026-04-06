@@ -20,7 +20,7 @@ export interface IResponseParser {
    * Process streaming chunk for real-time display
    *
    * **Return types:**
-   * - `string`: Plain text for legacy harnesses (Copilot CLI) - rendered as fallback text
+   * - `string`: Plain text for plain-text harnesses (Copilot CLI) - rendered as fallback text
    * - `CliEvent[]`: Structured events for modern harnesses (Claude, Codex) - rendered with terminal styling
    * - `undefined`: Skip this chunk (incomplete data, waiting for more)
    *

@@ -18,7 +18,7 @@ export interface EvaluationResult {
   success: boolean;
   stdout: string; // Separate stdout from script
   stderr: string; // Separate stderr from script
-  result: string; // Keep for backward compatibility (same as stdout)
+  result: string; // Same as stdout; used in retry prompt interpolation ({actualValue})
   error?: string;
   timeout?: boolean;
   duration: number;

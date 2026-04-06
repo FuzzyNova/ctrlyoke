@@ -301,7 +301,7 @@ export class OutputCaptureBuffer {
     const messages = this.finalStepStatusMessages.get(loopIndex) ?? [];
     messages.push({ message, severity, timestamp: Date.now() });
     this.finalStepStatusMessages.set(loopIndex, messages);
-    // Legacy negative index encoding: loop N => -(N+1)
+    // Signed negative index encoding: loop N => -(N+1)
     this.callbacks.onStatusMessage(-(loopIndex + 1), message, severity);
   }
 
@@ -367,7 +367,7 @@ export class OutputCaptureBuffer {
       }
     }
 
-    // Replay finalStep status messages (encoded as legacy negative step indices).
+    // Replay finalStep status messages (encoded as signed negative step indices).
     if (this.finalStepStatusMessages.size > 0) {
       const dashboard = dashboardSink as {
         updateStatusMessage?: (
@@ -378,10 +378,10 @@ export class OutputCaptureBuffer {
       };
       if (dashboard.updateStatusMessage) {
         for (const [loopIndex, messages] of this.finalStepStatusMessages) {
-          const legacyLoopStepIndex = -(loopIndex + 1);
+          const negativeLoopStepIndex = -(loopIndex + 1);
           for (const msg of messages) {
             dashboard.updateStatusMessage(
-              legacyLoopStepIndex,
+              negativeLoopStepIndex,
               msg.message,
               msg.severity
             );

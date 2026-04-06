@@ -138,7 +138,7 @@ export class CliOutputFormatter {
   }
 
   /**
-   * Format metadata statistics string for backward compatibility.
+   * Format metadata statistics string.
    * Produces a compact statistics line suitable for status displays.
    *
    * @param metadata - The output metadata to format

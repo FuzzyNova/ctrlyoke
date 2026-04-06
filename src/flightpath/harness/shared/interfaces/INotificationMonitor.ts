@@ -365,7 +365,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
           }
         }
       } else {
-        // Wildcard scan — legacy path for harnesses that don't set FLIGHTPATH_RUN_ID.
+        // Wildcard scan — fallback path for harnesses that don't set FLIGHTPATH_RUN_ID.
         // isFileNewerThan guards against stale files but parallel-workflow safety
         // depends on non-overlapping start times.
         const files = await this.findNotificationFiles(

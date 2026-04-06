@@ -780,7 +780,7 @@ class FlightPathMCPServer {
    * 1. FLIGHTPATH_WORKING_FILE env var — set per-workflow by the MCP config generator
    *    so each AI session targets exactly its own queue file (multi-workflow safe).
    * 2. Fallback: scan .flightpath/.queue/ and prefer files with executionState=running,
-   *    then most recently modified (single-workflow backward compat).
+   *    then most recently modified (single-workflow fallback).
    */
   private async findActiveWorkingFile(): Promise<string | null> {
     // 1. Prefer the pinned file from the per-workflow MCP config

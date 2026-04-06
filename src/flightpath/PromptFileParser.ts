@@ -378,8 +378,7 @@ export class PromptFileParser {
         steps: resolvedPrompts,
       };
 
-      // Support both new "finalStep" and legacy "finalStep" field names
-      const rawFinalStep = parsed.finalStep ?? parsed.finalStep;
+      const rawFinalStep = parsed.finalStep;
       if (rawFinalStep) {
         if (rawFinalStep.type === STEP_TYPES.SCRIPT) {
           promptFile.finalStep = this.buildScriptStep(rawFinalStep);

@@ -316,7 +316,7 @@ export interface PromptStep extends ExecutionProperties {
   type?: typeof STEP_TYPES.PROMPT;
   name?: string; // Optional human-readable display label
   prompt: string;
-  sessionId?: string | number; // Session ID for resuming conversations (string for CLI, number for legacy chat)
+  sessionId?: string | number; // Session ID for resuming conversations (string for CLI, number for Copilot Chat)
   _runtime?: PromptRuntimeMetadata; // Per-prompt runtime metadata
 }
 
