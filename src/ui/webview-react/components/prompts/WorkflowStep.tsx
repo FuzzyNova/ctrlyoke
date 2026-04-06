@@ -7,7 +7,6 @@ import type { PromptOverride } from "./PromptStepDetails";
 export type { PromptOverride };
 import type { StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
 
 export interface EndConditionResult {
   passed: boolean;
@@ -197,20 +196,12 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
           {isScript ? (
             // Script step variant
             <>
-              <div className="flex items-center gap-1">
-                <i
-                  className="codicon codicon-terminal-powershell text-[11px] opacity-60 flex-shrink-0"
-                />
+              <div className="flex items-center gap-1 min-w-0">
+                <i className="codicon codicon-terminal-powershell text-[11px] opacity-60 flex-shrink-0" />
                 <span
-                  className={`text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
+                  className={`text-xs leading-relaxed truncate ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
                 >
-                  {name ? name : truncate(text, 60)}
-                </span>
-                <span
-                  className="ml-1 px-1 py-[1px] rounded text-[9px] bg-badge-bg text-badge-fg opacity-75 flex-shrink-0"
-                  title="Script step — runs a shell command"
-                >
-                  {STEP_TYPES.SCRIPT}
+                  {name ? name : text}
                 </span>
               </div>
               {/* Script command subtitle — only shown when a name is displayed in the title row */}
@@ -234,14 +225,12 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
           ) : (
             // Prompt step variant (default)
             <>
-              <div className="flex items-center gap-1">
-                <i
-                  className="codicon codicon-comment text-[11px] opacity-60 flex-shrink-0"
-                />
+              <div className="flex items-center gap-1 min-w-0">
+                <i className="codicon codicon-comment text-[11px] opacity-60 flex-shrink-0" />
                 <span
-                  className={`text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
+                  className={`text-xs leading-relaxed truncate ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
                 >
-                  {name ? name : truncate(text, 60)}
+                  {name ? name : text}
                 </span>
               </div>
               <PromptStepDetails
