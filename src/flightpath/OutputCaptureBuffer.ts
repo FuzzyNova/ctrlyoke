@@ -99,22 +99,22 @@ export class OutputCaptureBuffer {
   private readonly completedStepOutputs = new Map<number, CompletedStepEntry>();
 
   /**
-   * Per-loop streaming output buffer for workflow-level finalPrompt.
+   * Per-loop streaming output buffer for workflow-level finalStep.
    * Uses loopIndex keys (not queue step indices) to avoid collisions.
    */
-  private readonly finalPromptOutputBuffer = new Map<
+  private readonly finalStepOutputBuffer = new Map<
     number,
     StepOutputBufferEntry
   >();
 
-  /** Completed outputs keyed by finalPrompt loopIndex. */
-  private readonly finalPromptCompletedOutputs = new Map<
+  /** Completed outputs keyed by finalStep loopIndex. */
+  private readonly finalStepCompletedOutputs = new Map<
     number,
     { outputs: any[] }
   >();
 
-  /** Buffered status messages keyed by finalPrompt loopIndex. */
-  private readonly finalPromptStatusMessages = new Map<
+  /** Buffered status messages keyed by finalStep loopIndex. */
+  private readonly finalStepStatusMessages = new Map<
     number,
     StatusMessageEntry[]
   >();
@@ -128,16 +128,16 @@ export class OutputCaptureBuffer {
     return this.stepOutputBuffer.size;
   }
 
-  get finalPromptBufferSize(): number {
-    return this.finalPromptOutputBuffer.size;
+  get finalStepBufferSize(): number {
+    return this.finalStepOutputBuffer.size;
   }
 
   clear(): void {
     this.stepOutputBuffer.clear();
     this.completedStepOutputs.clear();
-    this.finalPromptOutputBuffer.clear();
-    this.finalPromptCompletedOutputs.clear();
-    this.finalPromptStatusMessages.clear();
+    this.finalStepOutputBuffer.clear();
+    this.finalStepCompletedOutputs.clear();
+    this.finalStepStatusMessages.clear();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -244,10 +244,10 @@ export class OutputCaptureBuffer {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // FinalPrompt capture methods (mirror of regular-step methods, loopIndex key)
+  // FinalStep capture methods (mirror of regular-step methods, loopIndex key)
   // ─────────────────────────────────────────────────────────────────────────
 
-  captureFinalPromptOutputInit(
+  captureFinalStepOutputInit(
     loopIndex: number,
     prompt: string,
     cliCommand: string | undefined,
@@ -256,8 +256,8 @@ export class OutputCaptureBuffer {
     attemptIndex: number,
     rawTextOutput: boolean | undefined
   ): void {
-    const existing = this.finalPromptOutputBuffer.get(loopIndex);
-    this.finalPromptOutputBuffer.set(loopIndex, {
+    const existing = this.finalStepOutputBuffer.get(loopIndex);
+    this.finalStepOutputBuffer.set(loopIndex, {
       prompt,
       cliCommand,
       workingDirectory,
@@ -269,38 +269,38 @@ export class OutputCaptureBuffer {
     });
   }
 
-  captureFinalPromptChunk(loopIndex: number, chunk: string): void {
-    const existing = this.finalPromptOutputBuffer.get(loopIndex);
+  captureFinalStepChunk(loopIndex: number, chunk: string): void {
+    const existing = this.finalStepOutputBuffer.get(loopIndex);
     if (existing) {
       existing.accumulatedText += chunk;
     }
   }
 
-  captureFinalPromptEvents(loopIndex: number, events: CliEvent[]): void {
-    const existing = this.finalPromptOutputBuffer.get(loopIndex);
+  captureFinalStepEvents(loopIndex: number, events: CliEvent[]): void {
+    const existing = this.finalStepOutputBuffer.get(loopIndex);
     if (existing) {
       existing.accumulatedEvents.push(...events);
     }
   }
 
-  captureFinalPromptCompletedOutput(loopIndex: number, output: any): void {
-    const existing = this.finalPromptCompletedOutputs.get(loopIndex);
+  captureFinalStepCompletedOutput(loopIndex: number, output: any): void {
+    const existing = this.finalStepCompletedOutputs.get(loopIndex);
     if (existing) {
       existing.outputs.push(output);
     } else {
-      this.finalPromptCompletedOutputs.set(loopIndex, { outputs: [output] });
+      this.finalStepCompletedOutputs.set(loopIndex, { outputs: [output] });
     }
-    this.finalPromptOutputBuffer.delete(loopIndex);
+    this.finalStepOutputBuffer.delete(loopIndex);
   }
 
-  onFinalPromptStatusMessage(
+  onFinalStepStatusMessage(
     loopIndex: number,
     message: string,
     severity: string
   ): void {
-    const messages = this.finalPromptStatusMessages.get(loopIndex) ?? [];
+    const messages = this.finalStepStatusMessages.get(loopIndex) ?? [];
     messages.push({ message, severity, timestamp: Date.now() });
-    this.finalPromptStatusMessages.set(loopIndex, messages);
+    this.finalStepStatusMessages.set(loopIndex, messages);
     // Legacy negative index encoding: loop N => -(N+1)
     this.callbacks.onStatusMessage(-(loopIndex + 1), message, severity);
   }
@@ -355,20 +355,20 @@ export class OutputCaptureBuffer {
       }
     }
 
-    // Replay finalPrompt completed outputs (per loop).
-    if (this.finalPromptCompletedOutputs.size > 0) {
-      for (const [loopIndex, entry] of this.finalPromptCompletedOutputs) {
+    // Replay finalStep completed outputs (per loop).
+    if (this.finalStepCompletedOutputs.size > 0) {
+      for (const [loopIndex, entry] of this.finalStepCompletedOutputs) {
         Log.trace(
-          `${instanceTag} sendFullStateToDashboard: replaying finalPrompt loop ${loopIndex} (${entry.outputs.length} attempt(s))`
+          `${instanceTag} sendFullStateToDashboard: replaying finalStep loop ${loopIndex} (${entry.outputs.length} attempt(s))`
         );
         for (const output of entry.outputs) {
-          dashboardSink.updateFinalPromptOutput(loopIndex, output);
+          dashboardSink.updateFinalStepOutput(loopIndex, output);
         }
       }
     }
 
-    // Replay finalPrompt status messages (encoded as legacy negative step indices).
-    if (this.finalPromptStatusMessages.size > 0) {
+    // Replay finalStep status messages (encoded as legacy negative step indices).
+    if (this.finalStepStatusMessages.size > 0) {
       const dashboard = dashboardSink as {
         updateStatusMessage?: (
           stepIndex: number,
@@ -377,7 +377,7 @@ export class OutputCaptureBuffer {
         ) => void;
       };
       if (dashboard.updateStatusMessage) {
-        for (const [loopIndex, messages] of this.finalPromptStatusMessages) {
+        for (const [loopIndex, messages] of this.finalStepStatusMessages) {
           const legacyLoopStepIndex = -(loopIndex + 1);
           for (const msg of messages) {
             dashboard.updateStatusMessage(
@@ -461,18 +461,18 @@ export class OutputCaptureBuffer {
       }
     }
 
-    // Replay in-flight finalPrompt streaming output when switching back mid-loop.
+    // Replay in-flight finalStep streaming output when switching back mid-loop.
     if (
       state.status === EXECUTION_STATES.RUNNING &&
       finalRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP
     ) {
       const loopIndex = finalRuntime.loopCount;
-      const buffer = this.finalPromptOutputBuffer.get(loopIndex);
+      const buffer = this.finalStepOutputBuffer.get(loopIndex);
       if (buffer) {
         Log.trace(
-          `${instanceTag} sendFullStateToDashboard: replaying finalPrompt loop ${loopIndex} buffer (${buffer.accumulatedText.length} chars, events=${buffer.accumulatedEvents.length}, attemptIndex=${buffer.attemptIndex})`
+          `${instanceTag} sendFullStateToDashboard: replaying finalStep loop ${loopIndex} buffer (${buffer.accumulatedText.length} chars, events=${buffer.accumulatedEvents.length}, attemptIndex=${buffer.attemptIndex})`
         );
-        dashboardSink.updateFinalPromptOutput(loopIndex, {
+        dashboardSink.updateFinalStepOutput(loopIndex, {
           prompt: buffer.prompt,
           response: buffer.accumulatedText,
           structured:

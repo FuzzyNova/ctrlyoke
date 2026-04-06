@@ -7,7 +7,7 @@ import {
   isScriptStep,
   McpServerConfig,
   DynamicQueueConfig,
-  FinalPromptRuntimeState,
+  FinalStepRuntimeState,
   EXECUTION_STATES,
   Harness,
   type WorkflowAttemptTarget,
@@ -90,8 +90,8 @@ export interface WorkflowExecutionContext {
   captureCompletedOutput?: (stepIndex: number, output: any) => void;
   /** Always-on structured event buffer for queue steps — enables replay on workflow switch. */
   captureEvents?: (stepIndex: number, events: CliEvent[]) => void;
-  /** Mirror of captureOutputInit for finalPrompt loops, keyed by loopIndex. */
-  captureFinalPromptOutputInit?: (
+  /** Mirror of captureOutputInit for finalStep loops, keyed by loopIndex. */
+  captureFinalStepOutputInit?: (
     loopIndex: number,
     prompt: string,
     cliCommand: string | undefined,
@@ -100,10 +100,10 @@ export interface WorkflowExecutionContext {
     attemptIndex: number,
     rawTextOutput?: boolean
   ) => void;
-  captureFinalPromptChunk?: (loopIndex: number, chunk: string) => void;
-  captureFinalPromptEvents?: (loopIndex: number, events: CliEvent[]) => void;
-  captureFinalPromptCompletedOutput?: (loopIndex: number, output: any) => void;
-  onFinalPromptStatusMessage?: (
+  captureFinalStepChunk?: (loopIndex: number, chunk: string) => void;
+  captureFinalStepEvents?: (loopIndex: number, events: CliEvent[]) => void;
+  captureFinalStepCompletedOutput?: (loopIndex: number, output: any) => void;
+  onFinalStepStatusMessage?: (
     loopIndex: number,
     message: string,
     severity: string
@@ -126,9 +126,9 @@ type ExecutionTarget = WorkflowAttemptTarget;
  *
  * The outer loop has two phases:
  *   1. **Queue phase** — drains normal prompts via `promptQueue.hasNext()`.
- *   2. **finalPrompt phase** — runs the orchestrator gate once the queue is empty.
+ *   2. **finalStep phase** — runs the orchestrator gate once the queue is empty.
  *      If the gate appends new prompts, the outer loop repeats
- *      (queue → finalPrompt → queue → …).
+ *      (queue → finalStep → queue → …).
  *
  * Pause/resume is implemented by holding the response promise until
  * `resumePendingResponse()` is called by `WorkflowOrchestrator`.
@@ -151,7 +151,7 @@ export class WorkflowExecutor {
 
   /**
    * Execute the workflow. Supports resume from a paused or previously-stopped
-   * run — the queue's `currentIndex` and `finalPromptRuntime` phase are both
+   * run — the queue's `currentIndex` and `finalStepRuntime` phase are both
    * restored from the working file before this is called, so the loop picks up
    * exactly where it left off.
    */
@@ -195,25 +195,25 @@ export class WorkflowExecutor {
 
     const initialFinalStep = getFinalStep();
 
-    if (initialFinalStep && !this.promptQueue.getFinalPromptRuntime()) {
-      await this.setFinalPromptRuntime(context, {
+    if (initialFinalStep && !this.promptQueue.getFinalStepRuntime()) {
+      await this.setFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.QUEUE,
         loopCount: 0,
       });
     } else if (initialFinalStep) {
-      const runtime = this.promptQueue.getFinalPromptRuntime();
-      context.dashboardProvider?.updateFinalPromptStatus(
+      const runtime = this.promptQueue.getFinalStepRuntime();
+      context.dashboardProvider?.updateFinalStepStatus(
         runtime?.status ?? null,
         runtime?.loopCount ?? 0,
         runtime?.phase ?? null
       );
     } else {
-      context.dashboardProvider?.updateFinalPromptStatus(null, 0, null);
+      context.dashboardProvider?.updateFinalStepStatus(null, 0, null);
     }
 
     let runFinalStepFirst =
       !!initialFinalStep &&
-      this.promptQueue.getFinalPromptRuntime()?.phase ===
+      this.promptQueue.getFinalStepRuntime()?.phase ===
         FINAL_STEP_PHASES.FINAL_STEP;
 
     while (true) {
@@ -279,24 +279,24 @@ export class WorkflowExecutor {
         break;
       }
 
-      const currentFinalPrompt = getFinalStep();
-      if (!currentFinalPrompt) {
+      const currentFinalStep = getFinalStep();
+      if (!currentFinalStep) {
         break;
       }
 
-      // Initialize runtime if a final prompt was added after execution started
-      if (!this.promptQueue.getFinalPromptRuntime()) {
-        await this.setFinalPromptRuntime(context, {
+      // Initialize runtime if a final step was added after execution started
+      if (!this.promptQueue.getFinalStepRuntime()) {
+        await this.setFinalStepRuntime(context, {
           phase: FINAL_STEP_PHASES.QUEUE,
           loopCount: 0,
         });
       }
 
-      const finalPromptRuntime = this.promptQueue.getFinalPromptRuntime();
-      const loopIndex = finalPromptRuntime?.loopCount ?? 0;
+      const finalStepRuntime = this.promptQueue.getFinalStepRuntime();
+      const loopIndex = finalStepRuntime?.loopCount ?? 0;
       const queueSizeBefore = this.promptQueue.getState().steps.length;
 
-      await this.setFinalPromptRuntime(context, {
+      await this.setFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: loopIndex,
         status: STEP_STATUS.RUNNING,
@@ -326,7 +326,7 @@ export class WorkflowExecutor {
       };
       const shouldContinue = await this.executeSinglePrompt(
         finalTarget,
-        currentFinalPrompt,
+        currentFinalStep,
         context
       );
 
@@ -349,13 +349,13 @@ export class WorkflowExecutor {
       }
 
       if (!shouldContinue) {
-        await this.persistInterruptedFinalPromptRuntime(context);
+        await this.persistInterruptedFinalStepRuntime(context);
         break;
       }
 
       const statusAfterFinal = runtime.status;
       if (statusAfterFinal !== EXECUTION_STATES.RUNNING) {
-        await this.persistInterruptedFinalPromptRuntime(context);
+        await this.persistInterruptedFinalStepRuntime(context);
         break;
       }
 
@@ -369,23 +369,23 @@ export class WorkflowExecutor {
           break;
         }
 
-        await this.setFinalPromptRuntime(context, {
+        await this.setFinalStepRuntime(context, {
           phase: FINAL_STEP_PHASES.QUEUE,
           loopCount: loopIndex + 1,
           status: STEP_STATUS.COMPLETED,
           startedAt:
-            this.promptQueue.getFinalPromptRuntime()?.startedAt ?? Date.now(),
+            this.promptQueue.getFinalStepRuntime()?.startedAt ?? Date.now(),
           completedAt: Date.now(),
         });
 
         continue;
       }
 
-      await this.setFinalPromptRuntime(context, {
+      await this.setFinalStepRuntime(context, {
         phase: FINAL_STEP_PHASES.FINAL_STEP,
         loopCount: loopIndex,
         status: STEP_STATUS.COMPLETED,
-        startedAt: this.promptQueue.getFinalPromptRuntime()?.startedAt,
+        startedAt: this.promptQueue.getFinalStepRuntime()?.startedAt,
         completedAt: Date.now(),
       });
 
@@ -490,7 +490,7 @@ export class WorkflowExecutor {
       integration.setWorkflowProgress(target.stepIndex + 1, progress.total);
       Log.info(`Executing prompt ${target.stepIndex + 1}/${progress.total}`);
     } else {
-      Log.info(`Executing finalPrompt loop ${target.loopIndex + 1}`);
+      Log.info(`Executing finalStep loop ${target.loopIndex + 1}`);
     }
 
     const signedStepIndex = this.getSignedStepIndex(target);
@@ -516,9 +516,9 @@ export class WorkflowExecutor {
         resolvedProperties,
         workflowFile,
         workingFilePersistence: this.promptQueue,
-        getFinalPromptResponseTexts: () =>
-          this.promptQueue.getFinalPromptResponseTexts(),
-        finalPromptSessionId: workflowFile.finalStep?._runtime?.sessionId as
+        getFinalStepResponseTexts: () =>
+          this.promptQueue.getFinalStepResponseTexts(),
+        finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
           | string
           | undefined,
       },
@@ -560,7 +560,7 @@ export class WorkflowExecutor {
       });
     } else {
       // finalStep loops: store indexed by loopIndex for "finalStepAll" / "finalStepPrevious"
-      await this.promptQueue.storeFinalPromptResponseText(
+      await this.promptQueue.storeFinalStepResponseText(
         target.loopIndex,
         responseText
       );
@@ -872,7 +872,7 @@ export class WorkflowExecutor {
   /**
    * Maps an ExecutionTarget to the signed integer index expected by legacy
    * dashboard/CLI callers. Queue steps use their zero-based stepIndex;
-   * finalPrompt loops use negative values (-(loopIndex+1)) so they never
+   * finalStep loops use negative values (-(loopIndex+1)) so they never
    * collide with queue indices and callers can detect them with `< 0`.
    */
   private getSignedStepIndex(target: ExecutionTarget): number {
@@ -884,13 +884,13 @@ export class WorkflowExecutor {
   private describeExecutionTarget(target: ExecutionTarget): string {
     return target.kind === FINAL_STEP_PHASES.QUEUE
       ? `queue prompt ${target.stepIndex + 1}`
-      : `finalPrompt loop ${target.loopIndex + 1}`;
+      : `finalStep loop ${target.loopIndex + 1}`;
   }
 
-  private async persistInterruptedFinalPromptRuntime(
+  private async persistInterruptedFinalStepRuntime(
     context: WorkflowExecutionContext
   ): Promise<void> {
-    const runtime = this.promptQueue.getFinalPromptRuntime();
+    const runtime = this.promptQueue.getFinalStepRuntime();
     if (!runtime) {
       return;
     }
@@ -904,7 +904,7 @@ export class WorkflowExecutor {
           ? STEP_STATUS.CANCELLED
           : (runtime.status ?? STEP_STATUS.RUNNING);
 
-    await this.setFinalPromptRuntime(context, {
+    await this.setFinalStepRuntime(context, {
       ...runtime,
       phase: FINAL_STEP_PHASES.FINAL_STEP,
       status,
@@ -925,7 +925,7 @@ export class WorkflowExecutor {
   ): Promise<void> {
     const signedStepIndex = this.getSignedStepIndex(target);
 
-    // Queue steps keep non-negative indices; finalPrompt loops use negative
+    // Queue steps keep non-negative indices; finalStep loops use negative
     // legacy indices (-(loopIndex+1)) to avoid collisions with queue steps.
     context.dashboardProvider?.updateStatusMessage(
       signedStepIndex,
@@ -935,7 +935,7 @@ export class WorkflowExecutor {
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       context.onStatusMessage?.(target.stepIndex, message, severity);
     } else {
-      context.onFinalPromptStatusMessage?.(target.loopIndex, message, severity);
+      context.onFinalStepStatusMessage?.(target.loopIndex, message, severity);
       // Backward-compatible channel used by CLI renderers and existing listeners.
       context.onStatusMessage?.(signedStepIndex, message, severity);
     }
@@ -1173,7 +1173,7 @@ export class WorkflowExecutor {
         );
       }
     } else {
-      context.dashboardProvider?.updateFinalPromptOutput(target.loopIndex, {
+      context.dashboardProvider?.updateFinalStepOutput(target.loopIndex, {
         prompt: promptStep.prompt,
         response: "",
         elapsed: 0,
@@ -1185,7 +1185,7 @@ export class WorkflowExecutor {
         attemptIndex,
         rawTextOutput,
       });
-      context.captureFinalPromptOutputInit?.(
+      context.captureFinalStepOutputInit?.(
         target.loopIndex,
         promptStep.prompt,
         undefined,
@@ -1238,7 +1238,7 @@ export class WorkflowExecutor {
           );
         }
       } else {
-        context.dashboardProvider?.updateFinalPromptOutput(target.loopIndex, {
+        context.dashboardProvider?.updateFinalStepOutput(target.loopIndex, {
           prompt: promptStep.prompt,
           response: "",
           elapsed: 0,
@@ -1251,7 +1251,7 @@ export class WorkflowExecutor {
           rawTextOutput,
         });
 
-        context.captureFinalPromptOutputInit?.(
+        context.captureFinalStepOutputInit?.(
           target.loopIndex,
           promptStep.prompt,
           cliCommand,
@@ -1274,8 +1274,8 @@ export class WorkflowExecutor {
           chunk
         );
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-        context.captureFinalPromptChunk?.(target.loopIndex, chunk);
-        context.dashboardProvider?.updateFinalPromptStreamingChunk(
+        context.captureFinalStepChunk?.(target.loopIndex, chunk);
+        context.dashboardProvider?.updateFinalStepStreamingChunk(
           target.loopIndex,
           chunk
         );
@@ -1293,8 +1293,8 @@ export class WorkflowExecutor {
           events
         );
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-        context.captureFinalPromptEvents?.(target.loopIndex, events);
-        context.dashboardProvider?.updateFinalPromptStreamingEvents(
+        context.captureFinalStepEvents?.(target.loopIndex, events);
+        context.dashboardProvider?.updateFinalStepStreamingEvents(
           target.loopIndex,
           events
         );
@@ -1366,9 +1366,9 @@ export class WorkflowExecutor {
           resolvedProperties: { ...resolvedProperties, resumeSession: true },
           workflowFile,
           workingFilePersistence: this.promptQueue,
-          getFinalPromptResponseTexts: () =>
-            this.promptQueue.getFinalPromptResponseTexts(),
-          finalPromptSessionId: workflowFile.finalStep?._runtime?.sessionId as
+          getFinalStepResponseTexts: () =>
+            this.promptQueue.getFinalStepResponseTexts(),
+          finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             | string
             | undefined,
         }
@@ -1585,7 +1585,7 @@ export class WorkflowExecutor {
         context.dashboardProvider &&
         target.kind === FINAL_STEP_PHASES.FINAL_STEP
       ) {
-        context.dashboardProvider.updateFinalPromptOutput(
+        context.dashboardProvider.updateFinalStepOutput(
           target.loopIndex,
           stoppedOutput
         );
@@ -1594,7 +1594,7 @@ export class WorkflowExecutor {
       if (signedStepIndex >= 0) {
         context.captureCompletedOutput?.(signedStepIndex, stoppedOutput);
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-        context.captureFinalPromptCompletedOutput?.(
+        context.captureFinalStepCompletedOutput?.(
           target.loopIndex,
           stoppedOutput
         );
@@ -1677,7 +1677,7 @@ export class WorkflowExecutor {
         context.dashboardProvider &&
         target.kind === FINAL_STEP_PHASES.FINAL_STEP
       ) {
-        context.dashboardProvider.updateFinalPromptOutput(
+        context.dashboardProvider.updateFinalStepOutput(
           target.loopIndex,
           processExitOutput
         );
@@ -1686,7 +1686,7 @@ export class WorkflowExecutor {
       if (signedStepIndex >= 0) {
         context.captureCompletedOutput?.(signedStepIndex, processExitOutput);
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-        context.captureFinalPromptCompletedOutput?.(
+        context.captureFinalStepCompletedOutput?.(
           target.loopIndex,
           processExitOutput
         );
@@ -1719,7 +1719,7 @@ export class WorkflowExecutor {
     const stepLabel =
       signedStepIndex >= 0
         ? `prompt ${signedStepIndex + 1}`
-        : `finalPrompt loop ${Math.abs(signedStepIndex)}`;
+        : `finalStep loop ${Math.abs(signedStepIndex)}`;
     this.platform.error(`Failed to execute ${stepLabel}: ${failureReason}`);
 
     // Send FAILED status before markErrored() so the step icon updates
@@ -1765,7 +1765,7 @@ export class WorkflowExecutor {
       context.dashboardProvider &&
       target.kind === FINAL_STEP_PHASES.FINAL_STEP
     ) {
-      context.dashboardProvider.updateFinalPromptOutput(
+      context.dashboardProvider.updateFinalStepOutput(
         target.loopIndex,
         errorCliOutput
       );
@@ -1774,7 +1774,7 @@ export class WorkflowExecutor {
     if (signedStepIndex >= 0) {
       context.captureCompletedOutput?.(signedStepIndex, errorCliOutput);
     } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      context.captureFinalPromptCompletedOutput?.(
+      context.captureFinalStepCompletedOutput?.(
         target.loopIndex,
         errorCliOutput
       );
@@ -1863,7 +1863,7 @@ export class WorkflowExecutor {
       context.dashboardProvider &&
       target.kind === FINAL_STEP_PHASES.FINAL_STEP
     ) {
-      context.dashboardProvider.updateFinalPromptOutput(
+      context.dashboardProvider.updateFinalStepOutput(
         target.loopIndex,
         cliOutputObj
       );
@@ -1871,10 +1871,7 @@ export class WorkflowExecutor {
     if (signedStepIndex !== undefined) {
       context.captureCompletedOutput?.(signedStepIndex, cliOutputObj);
     } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      context.captureFinalPromptCompletedOutput?.(
-        target.loopIndex,
-        cliOutputObj
-      );
+      context.captureFinalStepCompletedOutput?.(target.loopIndex, cliOutputObj);
     }
 
     if (context.historyFilePath && context.outputHistoryManager) {
@@ -1903,12 +1900,12 @@ export class WorkflowExecutor {
     }
   }
 
-  private async setFinalPromptRuntime(
+  private async setFinalStepRuntime(
     context: WorkflowExecutionContext,
-    runtime: FinalPromptRuntimeState
+    runtime: FinalStepRuntimeState
   ): Promise<void> {
-    await this.promptQueue.setFinalPromptRuntime(runtime);
-    context.dashboardProvider?.updateFinalPromptStatus(
+    await this.promptQueue.setFinalStepRuntime(runtime);
+    context.dashboardProvider?.updateFinalStepStatus(
       runtime.status ?? null,
       runtime.loopCount,
       runtime.phase

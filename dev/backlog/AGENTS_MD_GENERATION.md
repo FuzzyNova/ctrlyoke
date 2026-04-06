@@ -240,12 +240,12 @@ private buildCliArgs(
 
 ```typescript
 protected async buildPromptText(prompt: PromptItem): Promise<string> {
-  let finalPrompt = prompt.prompt;
+  let finalStep = prompt.prompt;
 
   // Existing context expansion logic
   if (this.shouldExpandContext()) {
-    finalPrompt = await ContextExpander.expandContext(
-      finalPrompt,
+    finalStep = await ContextExpander.expandContext(
+      finalStep,
       this.context
     );
   }
@@ -254,11 +254,11 @@ protected async buildPromptText(prompt: PromptItem): Promise<string> {
   if (ConfigurationUtils.shouldAttachAgentsHierarchy()) {
     const agentsContent = await this.getAgentsHierarchyContent(prompt);
     if (agentsContent) {
-      finalPrompt = `${agentsContent}\n\n${finalPrompt}`;
+      finalStep = `${agentsContent}\n\n${finalStep}`;
     }
   }
 
-  return finalPrompt;
+  return finalStep;
 }
 
 /**

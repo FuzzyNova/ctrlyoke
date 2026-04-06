@@ -1,7 +1,7 @@
 import type { CliEvent, UndoExecutionTarget } from "./WebviewMessageTypes";
 import type { WorkflowStep } from "./FlightPathTypes";
 import type {
-  FinalPromptPhase,
+  FinalStepPhase,
   StepStatus,
   StatusMessageSeverity,
 } from "./DashboardConstants";
@@ -23,10 +23,10 @@ export interface IDashboardSink {
     steps: any[],
     workflowName?: string,
     finalStep?: WorkflowStep | null,
-    finalPromptRuntime?: {
+    finalStepRuntime?: {
       status?: StepStatus;
       loopCount: number;
-      phase: FinalPromptPhase;
+      phase: FinalStepPhase;
     }
   ): Promise<void>;
 
@@ -38,10 +38,10 @@ export interface IDashboardSink {
     currentIndex: number,
     workflowName?: string,
     finalStep?: WorkflowStep | null,
-    finalPromptRuntime?: {
+    finalStepRuntime?: {
       status?: StepStatus;
       loopCount: number;
-      phase: FinalPromptPhase;
+      phase: FinalStepPhase;
     }
   ): Promise<void>;
 
@@ -108,19 +108,19 @@ export interface IDashboardSink {
     finalStep?: WorkflowStep | null
   ): void;
 
-  updateFinalPrompt(finalStep: WorkflowStep | null): void;
+  updateFinalStep(finalStep: WorkflowStep | null): void;
 
-  updateFinalPromptStatus(
+  updateFinalStepStatus(
     status: StepStatus | null,
     loopCount: number,
-    phase: FinalPromptPhase | null
+    phase: FinalStepPhase | null
   ): void;
 
-  updateFinalPromptOutput(loopIndex: number, output: unknown): void;
+  updateFinalStepOutput(loopIndex: number, output: unknown): void;
 
-  updateFinalPromptStreamingChunk(loopIndex: number, chunk: string): void;
+  updateFinalStepStreamingChunk(loopIndex: number, chunk: string): void;
 
-  updateFinalPromptStreamingEvents(loopIndex: number, events: CliEvent[]): void;
+  updateFinalStepStreamingEvents(loopIndex: number, events: CliEvent[]): void;
 
   notifyWorkflowStateReset(steps: any[]): void;
 

@@ -185,17 +185,17 @@ mcpServers:
 mcpServers: null
 ```
 
-The `"flightpath"` shorthand injects the built-in FlightPath MCP server, giving the AI access to `flightpath_append_queue` and `flightpath_queue_status`. Include it on the last prompt (or as `finalPrompt`) to allow autonomous workflow extension.
+The `"flightpath"` shorthand injects the built-in FlightPath MCP server, giving the AI access to `flightpath_append_queue` and `flightpath_queue_status`. Include it on the last prompt (or as `finalStep`) to allow autonomous workflow extension.
 
 ### Final prompt
 
-`finalPrompt` is a special prompt that runs after all queued prompts complete. If the AI appended new prompts during the final prompt loop and `"flightpath"` is in `mcpServers`, the executor re-runs the queue then `finalPrompt` again until no new prompts are added.
+`finalStep` is a special prompt that runs after all queued prompts complete. If the AI appended new prompts during the final prompt loop and `"flightpath"` is in `mcpServers`, the executor re-runs the queue then `finalStep` again until no new prompts are added.
 
 ```yaml
 prompts:
   - prompt: "Implement the feature"
 
-finalPrompt:
+finalStep:
   prompt: "Review the work and append follow-up tasks if needed."
   mcpServers:
     - flightpath
@@ -397,7 +397,7 @@ Design documents and implementation notes are in `dev/implemented/`.
 | Document                                       | Topic                                                       |
 | ---------------------------------------------- | ----------------------------------------------------------- |
 | `dev/implemented/WORKFLOW_PROPERTIES.md`       | Full prompt property reference                              |
-| `dev/implemented/QUEUE_APPEND_FEATURE.md`      | Dynamic queue extension and `finalPrompt` loop behavior     |
+| `dev/implemented/QUEUE_APPEND_FEATURE.md`      | Dynamic queue extension and `finalStep` loop behavior       |
 | `dev/implemented/SESSION_MANAGEMENT.md`        | Session resumption across prompts and harnesses             |
 | `dev/implemented/HOOKS_EXPOSURE_PLAN.md`       | User-defined hooks: events, merge behavior, harness support |
 | `dev/implemented/MCP_SERVERS_PROPERTY_PLAN.md` | `mcpServers` property design and per-harness behavior       |

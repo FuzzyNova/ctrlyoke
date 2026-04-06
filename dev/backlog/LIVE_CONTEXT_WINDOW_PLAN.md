@@ -490,6 +490,6 @@ Process exits → sidecar.stop() → watcher.close()
 
 3. **Show bar for pending steps?** Could show an empty track for all steps as a visual affordance, or only show it once context data exists. Current plan: only render when `contextPct !== undefined`.
 
-4. **Final prompt items (`FinalPromptFooter`):** `PromptItemDetails` is shared with `FinalPromptFooter` — the chip removal there is automatic. But `FinalPromptFooter` likely uses its own layout. Verify it doesn't need a bar added separately.
+4. **Final prompt items (`FinalStepFooter`):** `PromptItemDetails` is shared with `FinalStepFooter` — the chip removal there is automatic. But `FinalStepFooter` likely uses its own layout. Verify it doesn't need a bar added separately.
 
 5. **Color semantics:** Using opacity of `description-fg` keeps the bar theme-consistent without adding new CSS variables. Alternatively, map to existing semantic tokens: warning, error. Worth a quick look at what the VS Code theme exposes.

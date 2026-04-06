@@ -1,4 +1,8 @@
-import type { PriorContext, PromptStep, WorkflowStep } from "../../../types/FlightPathTypes";
+import type {
+  PriorContext,
+  PromptStep,
+  WorkflowStep,
+} from "../../../types/FlightPathTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import {
   PromptFileSplitter,
@@ -27,7 +31,7 @@ export interface CliPromptPreparerDeps {
     resolvedPriorContext: Exclude<PriorContext, "none">,
     allPrompts: WorkflowStep[],
     promptIndex: number,
-    finalPromptResponseTexts: string[]
+    finalStepResponseTexts: string[]
   ) => string;
   getWorkspaceRoot: () => string | undefined;
   getTempFileSplitConfig: () => SplitConfig | undefined;
@@ -51,7 +55,7 @@ export class CliPromptPreparer {
     workflowContext: WorkflowContext | undefined,
     resolvedProperties: ResolvedProperties | undefined,
     resolvedSessionId: string | undefined,
-    finalPromptResponseTexts?: string[]
+    finalStepResponseTexts?: string[]
   ): Promise<PromptFileResult> {
     const originalPromptText = prompt.prompt.trim();
     const slashCommand =
@@ -118,7 +122,7 @@ export class CliPromptPreparer {
           resolvedPriorContext as Exclude<PriorContext, "none">,
           allPrompts,
           promptIndex,
-          finalPromptResponseTexts ?? []
+          finalStepResponseTexts ?? []
         ) || undefined
       : undefined;
 
@@ -141,7 +145,9 @@ export class CliPromptPreparer {
   /** Strips @token refs from text and checks if the remainder is simple. */
   private isSimplePromptWithOnlyFileRefs(userPromptText: string): boolean {
     const textWithoutRefs = userPromptText.replace(/@\S+/g, "").trim();
-    return textWithoutRefs.length === 0 || this.deps.isSimplePrompt(textWithoutRefs);
+    return (
+      textWithoutRefs.length === 0 || this.deps.isSimplePrompt(textWithoutRefs)
+    );
   }
 
   private async createCategorizedPromptFiles(
@@ -234,9 +240,7 @@ export class CliPromptPreparer {
     allTempFilePaths.push(...promptPaths);
     const promptRefs = promptPaths.map(fmtRef);
 
-    Log.info(
-      `📁 Categorized prompt files: ${allTempFilePaths.length} file(s)`
-    );
+    Log.info(`📁 Categorized prompt files: ${allTempFilePaths.length} file(s)`);
 
     return {
       tempFilePaths: allTempFilePaths,

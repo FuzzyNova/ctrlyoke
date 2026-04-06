@@ -8,7 +8,7 @@ import {
   StatusMessageSeverity,
   STATUS_MESSAGE_SEVERITY,
   type StepStatus,
-  type FinalPromptPhase,
+  type FinalStepPhase,
 } from "../types/DashboardConstants";
 import type {
   CliEvent,
@@ -286,11 +286,11 @@ window.vscodeApi = acquireVsCodeApi();
     fileName: string,
     steps: any[],
     workflowName?: string,
-    finalPrompt?: WorkflowStep | null,
-    finalPromptRuntime?: {
+    finalStep?: WorkflowStep | null,
+    finalStepRuntime?: {
       status?: StepStatus;
       loopCount: number;
-      phase: FinalPromptPhase;
+      phase: FinalStepPhase;
     }
   ): Promise<void> {
     this.postMessage({
@@ -298,10 +298,10 @@ window.vscodeApi = acquireVsCodeApi();
       fileName,
       steps,
       workflowName,
-      finalStep: finalPrompt ?? null,
-      finalPromptStatus: finalPromptRuntime?.status ?? null,
-      finalPromptLoopCount: finalPromptRuntime?.loopCount ?? 0,
-      finalPromptPhase: finalPromptRuntime?.phase ?? null,
+      finalStep: finalStep ?? null,
+      finalStepStatus: finalStepRuntime?.status ?? null,
+      finalStepLoopCount: finalStepRuntime?.loopCount ?? 0,
+      finalStepPhase: finalStepRuntime?.phase ?? null,
     });
 
     // Extract and send workflow properties to settings panel
@@ -318,11 +318,11 @@ window.vscodeApi = acquireVsCodeApi();
     executionState: string,
     currentIndex: number,
     workflowName?: string,
-    finalPrompt?: WorkflowStep | null,
-    finalPromptRuntime?: {
+    finalStep?: WorkflowStep | null,
+    finalStepRuntime?: {
       status?: StepStatus;
       loopCount: number;
-      phase: FinalPromptPhase;
+      phase: FinalStepPhase;
     }
   ): Promise<void> {
     this.postMessage({
@@ -333,10 +333,10 @@ window.vscodeApi = acquireVsCodeApi();
       executionState,
       currentIndex,
       workflowName,
-      finalStep: finalPrompt ?? null,
-      finalPromptStatus: finalPromptRuntime?.status ?? null,
-      finalPromptLoopCount: finalPromptRuntime?.loopCount ?? 0,
-      finalPromptPhase: finalPromptRuntime?.phase ?? null,
+      finalStep: finalStep ?? null,
+      finalStepStatus: finalStepRuntime?.status ?? null,
+      finalStepLoopCount: finalStepRuntime?.loopCount ?? 0,
+      finalStepPhase: finalStepRuntime?.phase ?? null,
     });
 
     // Extract and send workflow properties to settings panel
@@ -509,13 +509,13 @@ window.vscodeApi = acquireVsCodeApi();
 
   public updateStepsExtended(
     steps: any[],
-    finalPrompt?: WorkflowStep | null,
+    finalStep?: WorkflowStep | null,
     executionState?: string
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.STEPS_EXTENDED,
       steps,
-      finalStep: finalPrompt ?? null,
+      finalStep: finalStep ?? null,
       ...(executionState !== undefined ? { executionState } : {}),
     });
   }
@@ -535,27 +535,27 @@ window.vscodeApi = acquireVsCodeApi();
   public updatePromptDeleted(
     fileName: string,
     steps: any[],
-    finalPrompt?: WorkflowStep | null
+    finalStep?: WorkflowStep | null
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.PROMPT_DELETED,
       fileName,
       steps,
-      finalStep: finalPrompt ?? null,
+      finalStep: finalStep ?? null,
     });
   }
 
-  public updateFinalPrompt(finalPrompt: WorkflowStep | null): void {
+  public updateFinalStep(finalStep: WorkflowStep | null): void {
     this.postMessage({
       type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
-      finalStep: finalPrompt,
+      finalStep: finalStep,
     });
   }
 
-  public updateFinalPromptStatus(
+  public updateFinalStepStatus(
     status: StepStatus | null,
     loopCount: number,
-    phase: FinalPromptPhase | null
+    phase: FinalStepPhase | null
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.FINAL_PROMPT_STATUS_CHANGED,
@@ -565,7 +565,7 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public updateFinalPromptOutput(loopIndex: number, output: CliOutput): void {
+  public updateFinalStepOutput(loopIndex: number, output: CliOutput): void {
     this.postMessage({
       type: MESSAGE_TYPES.FINAL_PROMPT_OUTPUT,
       loopIndex,
@@ -573,10 +573,7 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public updateFinalPromptStreamingChunk(
-    loopIndex: number,
-    chunk: string
-  ): void {
+  public updateFinalStepStreamingChunk(loopIndex: number, chunk: string): void {
     this.postMessage({
       type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK,
       loopIndex,
@@ -584,7 +581,7 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public updateFinalPromptStreamingEvents(
+  public updateFinalStepStreamingEvents(
     loopIndex: number,
     events: CliEvent[]
   ): void {
@@ -762,9 +759,9 @@ window.vscodeApi = acquireVsCodeApi();
         stepOutput
       );
     }
-    if (history.finalPromptOutputs) {
+    if (history.finalStepOutputs) {
       for (const [idx, stepOutput] of Object.entries(
-        history.finalPromptOutputs
+        history.finalStepOutputs
       )) {
         sendForOutput(
           { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: Number(idx) },

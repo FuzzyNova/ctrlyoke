@@ -66,7 +66,7 @@ src/ui/webview-react/
 │   │   └── SkillsQuickPicker.tsx # Skills override in EditorFooter (left side)
 │   ├── prompts/             # Prompt list components
 │   │   ├── BoundaryBar.tsx       # Visual separator between queue and final prompt
-│   │   ├── FinalPromptFooter.tsx # Footer for the final prompt section
+│   │   ├── FinalStepFooter.tsx # Footer for the final prompt section
 │   │   ├── PromptCounter.tsx     # Step count badge
 │   │   ├── PromptItem.tsx        # Single prompt row
 │   │   ├── PromptItemDetails.tsx # Expanded prompt detail view
@@ -555,12 +555,14 @@ PropertiesDrawer uses a 6-tab layout with `DrawerTabBar` at the bottom:
 Tab definitions in `types/drawerPages.ts`. `DrawerTabBar` renders icons with optional per-tab icon/color overrides via the `tabOverrides` prop (`Partial<Record<DrawerPage, TabIconOverride>>`).
 
 **`TabIconOverride`** (from `shared/tabBadgeUtils.ts`):
+
 - `codicon?` — replace the tab's default icon
 - `color?` — Tailwind text-color class when inactive
 - `hoverColor?` — Tailwind hover class when inactive (defaults to `hover:text-foreground`)
 - `activeColor?` — Tailwind text-color class when active (defaults to `text-foreground`)
 
 **`tabBadgeUtils.ts`** exports helper functions that compute overrides from resolved property state:
+
 - `getPermissionTabOverride(mode)` — color-codes the Permissions tab by severity (red = dangerously allow all, yellow = allow all, green = custom)
 - `getHooksTabOverride(hooks)` — blue icon when hooks are configured
 - `getMcpTabOverride(mcpServers)` — blue icon when MCP servers are configured
@@ -597,6 +599,7 @@ xterm.js instances live **outside React** in `terminalRegistry.ts`:
 - **Right** — `IconToggleButton` for `flightpath.respectGitignoreForCompletions` (hidden when `isCLIManaged`); posts `UPDATE_CONFIG` message to extension on toggle
 
 **Mode indicator text** format:
+
 - New mode: `"New Prompt"` or `"New: <name>"`
 - Edit mode: `"Editing: <name>"`, `"Editing: Final Prompt"`, or `"Editing: Prompt N of M"`
 - CLI managed: `"Read-only — CLI run in progress"`
@@ -612,12 +615,14 @@ The header left side shows Output/Terminal tab buttons (when a terminal session 
 `FooterQuickPicker` provides a reusable popup button pattern for compact property overrides in `EditorFooter`. The footer is split into two sides (all pickers hidden when `propertiesOpen`):
 
 **Left side** (Harness → Model → Agent → Skills):
+
 - `HarnessQuickPicker` - Harness override (wraps HarnessDropdown)
 - `ModelQuickPicker` - Model override (wraps CustomSelect)
 - `AgentQuickPicker` - Agent selection
 - `SkillsQuickPicker` - Skills multi-select
 
 **Right side** (Permissions → Context → action buttons):
+
 - `PermissionsQuickPicker` - Tool permissions mode override (shield icon, `footerOpenPicker === "permissions"`)
 - `ContextQuickPicker` - Resume session + session ID override (book icon, `footerOpenPicker === "context"`)
 

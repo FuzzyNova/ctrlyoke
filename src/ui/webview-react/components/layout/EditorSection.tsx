@@ -107,7 +107,7 @@ export const EditorSection: React.FC = () => {
     if (isEditMode) {
       if (promptName) return `Editing: ${promptName}`;
       if (selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-        return isScriptMode ? "Editing: Final Script" : "Editing: Final Prompt";
+        return isScriptMode ? "Editing: Final Script" : "Editing: Final Step";
       }
       if (isScriptMode) return "Editing: Script";
       return `Editing: Prompt ${selectionTarget.index + 1} of ${totalPrompts}`;

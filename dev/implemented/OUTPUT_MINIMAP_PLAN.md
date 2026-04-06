@@ -64,8 +64,8 @@ The outer `<section>` already uses `flex flex-col`. The content row becomes `fle
 interface OutputMinimapProps {
   /** Array of steps in display order, with their first-message index in allMessages */
   steps: Array<{
-    key: string; // e.g. "queue:0", "finalPrompt:1"
-    kind: "queue" | "finalPrompt";
+    key: string; // e.g. "queue:0", "finalStep:1"
+    kind: "queue" | "finalStep";
     stepIndex: number;
     firstMessageIndex: number;
     /** Undo/redo action for this step, or null if not available */

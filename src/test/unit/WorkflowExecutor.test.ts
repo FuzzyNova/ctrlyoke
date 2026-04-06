@@ -181,8 +181,8 @@ async function resumeQueueExecution(queue: PromptQueue): Promise<void> {
   }
 }
 
-suite("WorkflowExecutor finalPrompt phase 2", () => {
-  test("preserves behavior when finalPrompt is absent", async () => {
+suite("WorkflowExecutor finalStep phase 2", () => {
+  test("preserves behavior when finalStep is absent", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
     const executor = makeExecutor(queue);
@@ -196,10 +196,10 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
 
     assert.deepStrictEqual(integration.sentPrompts, ["queue-1", "queue-2"]);
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
-    assert.strictEqual(queue.getFinalPromptRuntime(), undefined);
+    assert.strictEqual(queue.getFinalStepRuntime(), undefined);
   });
 
-  test("runs finalPrompt once after queue drains", async () => {
+  test("runs finalStep once after queue drains", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
     const executor = makeExecutor(queue);
@@ -216,7 +216,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
       "queue-2",
       "final-gate",
     ]);
-    const runtime = queue.getFinalPromptRuntime();
+    const runtime = queue.getFinalStepRuntime();
     assert.ok(runtime);
     assert.strictEqual(runtime?.phase, FINAL_STEP_PHASES.FINAL_STEP);
     assert.strictEqual(runtime?.loopCount, 0);
@@ -224,7 +224,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     assert.ok(runtime?.completedAt);
   });
 
-  test("repeats loop when finalPrompt appends queue work", async () => {
+  test("repeats loop when finalStep appends queue work", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
     const executor = makeExecutor(queue);
@@ -253,7 +253,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
       "queue-appended",
       "final-loop",
     ]);
-    const runtime = queue.getFinalPromptRuntime();
+    const runtime = queue.getFinalStepRuntime();
     assert.ok(runtime);
     assert.strictEqual(runtime?.loopCount, 1);
     assert.strictEqual(runtime?.phase, FINAL_STEP_PHASES.FINAL_STEP);
@@ -278,7 +278,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     assert.strictEqual(finalRuns, 1);
   });
 
-  test("preserves finalPrompt runtime phase on pause during finalPrompt", async () => {
+  test("preserves finalStep runtime phase on pause during finalStep", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
     const executor = makeExecutor(queue);
@@ -304,12 +304,12 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     await executor.execute(integration, makeContext(integration));
 
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.PAUSED);
-    const runtime = queue.getFinalPromptRuntime();
+    const runtime = queue.getFinalStepRuntime();
     assert.strictEqual(runtime?.phase, FINAL_STEP_PHASES.FINAL_STEP);
     assert.strictEqual(runtime?.loopCount, 0);
   });
 
-  test("preserves finalPrompt runtime phase on stop/error during finalPrompt", async () => {
+  test("preserves finalStep runtime phase on stop/error during finalStep", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
     const executor = makeExecutor(queue);
@@ -334,21 +334,21 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
 
     await executor.execute(integration, makeContext(integration));
 
-    const runtimeAfterStop = queue.getFinalPromptRuntime();
+    const runtimeAfterStop = queue.getFinalStepRuntime();
     assert.strictEqual(runtimeAfterStop?.phase, FINAL_STEP_PHASES.FINAL_STEP);
 
-    // Simulate resume and force an actual error on finalPrompt send failure
+    // Simulate resume and force an actual error on finalStep send failure
     await confirmQueueStopped(queue);
     await resumeQueueExecution(queue);
     await executor.execute(integration, makeContext(integration));
 
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.ERROR);
-    const runtimeAfterError = queue.getFinalPromptRuntime();
+    const runtimeAfterError = queue.getFinalStepRuntime();
     assert.strictEqual(runtimeAfterError?.phase, FINAL_STEP_PHASES.FINAL_STEP);
     assert.strictEqual(runtimeAfterError?.status, STEP_STATUS.FAILED);
   });
 
-  test("emits finalPrompt status and output updates to dashboard sink", async () => {
+  test("emits finalStep status and output updates to dashboard sink", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
     const executor = makeExecutor(queue);
@@ -368,18 +368,18 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
       updateCliStreamingChunk: () => {},
       updateCliOutput: () => {},
       updateExecutionCompleted: () => {},
-      updateFinalPromptStatus: (
+      updateFinalStepStatus: (
         status: string | null,
         loopCount: number,
         phase: string | null
       ) => {
         statusUpdates.push({ status, loopCount, phase });
       },
-      updateFinalPromptOutput: (loopIndex: number, output: unknown) => {
+      updateFinalStepOutput: (loopIndex: number, output: unknown) => {
         outputUpdates.push({ loopIndex, output });
       },
-      updateFinalPromptStreamingChunk: () => {},
-      updateFinalPromptStreamingEvents: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
     } as any;
 
     queue.loadPrompts({
@@ -410,7 +410,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     assert.ok(outputUpdates.some((u: any) => u.output?.isStreaming === false));
   });
 
-  test("captures finalPrompt output using dedicated replay-safe callbacks", async () => {
+  test("captures finalStep output using dedicated replay-safe callbacks", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
     const executor = makeExecutor(queue);
@@ -436,7 +436,7 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     };
 
     const context = makeContext(integration);
-    context.captureFinalPromptOutputInit = (
+    context.captureFinalStepOutputInit = (
       loopIndex,
       _prompt,
       _cliCommand,
@@ -446,13 +446,13 @@ suite("WorkflowExecutor finalPrompt phase 2", () => {
     ) => {
       initCalls.push({ loopIndex, attemptIndex });
     };
-    context.captureFinalPromptChunk = (loopIndex, chunk) => {
+    context.captureFinalStepChunk = (loopIndex, chunk) => {
       chunkCalls.push({ loopIndex, chunk });
     };
-    context.captureFinalPromptEvents = (loopIndex, events) => {
+    context.captureFinalStepEvents = (loopIndex, events) => {
       eventCalls.push({ loopIndex, events });
     };
-    context.captureFinalPromptCompletedOutput = (loopIndex, output) => {
+    context.captureFinalStepCompletedOutput = (loopIndex, output) => {
       completedCalls.push({ loopIndex, output });
     };
 

@@ -28,7 +28,7 @@ import {
   type QueuePosition,
   type ActionType,
   type StepStatus,
-  type FinalPromptPhase,
+  type FinalStepPhase,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { CliOutput } from "../types/WebviewMessageTypes";
@@ -931,12 +931,12 @@ export class WorkflowOrchestrator {
     );
   }
 
-  async updateFinalPromptInQueue(
-    finalPrompt: PromptStep | null,
+  async updateFinalStepInQueue(
+    finalStep: PromptStep | null,
     clearProperties?: string[]
   ): Promise<void> {
-    return this.getActiveInstance().updateFinalPromptInQueue(
-      finalPrompt,
+    return this.getActiveInstance().updateFinalStepInQueue(
+      finalStep,
       clearProperties
     );
   }
@@ -1541,12 +1541,12 @@ export class WorkflowOrchestrator {
     // Read the latest working file to get current prompt list and step position
     let steps: WorkflowStep[] = [];
     let currentIndex = cliEntry.summary.currentStep ?? 0;
-    let finalPrompt: WorkflowStep | null = null;
-    let finalPromptRuntime:
+    let finalStep: WorkflowStep | null = null;
+    let finalStepRuntime:
       | {
           status?: StepStatus;
           loopCount: number;
-          phase: FinalPromptPhase;
+          phase: FinalStepPhase;
         }
       | undefined;
 
@@ -1559,12 +1559,12 @@ export class WorkflowOrchestrator {
         status: undefined as unknown as string,
       })) as WorkflowStep[];
       currentIndex = workingFile._runtime?.currentIndex ?? currentIndex;
-      finalPrompt = (workingFile.finalStep as WorkflowStep | undefined) ?? null;
-      finalPromptRuntime = workingFile._runtime?.finalPrompt
+      finalStep = (workingFile.finalStep as WorkflowStep | undefined) ?? null;
+      finalStepRuntime = workingFile._runtime?.finalStep
         ? {
-            status: workingFile._runtime.finalPrompt.status,
-            loopCount: workingFile._runtime.finalPrompt.loopCount,
-            phase: workingFile._runtime.finalPrompt.phase,
+            status: workingFile._runtime.finalStep.status,
+            loopCount: workingFile._runtime.finalStep.loopCount,
+            phase: workingFile._runtime.finalStep.phase,
           }
         : undefined;
     } catch (err) {
@@ -1595,8 +1595,8 @@ export class WorkflowOrchestrator {
       cliEntry.summary.executionState,
       currentIndex,
       cliEntry.summary.workflowName,
-      finalPrompt,
-      finalPromptRuntime
+      finalStep,
+      finalStepRuntime
     );
 
     // Replay all captured CLI outputs from the active history file

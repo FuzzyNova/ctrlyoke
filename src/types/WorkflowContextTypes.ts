@@ -28,9 +28,9 @@ export interface WorkflowContext {
   /** Minimal working-file persistence hook used for prompt runtime metadata. */
   workingFilePersistence?: WorkflowWorkingFilePersistence;
   /** Read-only accessor for prior-context finalStep loop responses. */
-  getFinalPromptResponseTexts?: () => string[];
+  getFinalStepResponseTexts?: () => string[];
   /** Session ID from the most recent finalStep execution. Consumed by SessionResolver
    *  when sessionId is the "finalStep" sentinel on any prompt (queue or finalStep phase).
    *  Note: only applies when finalStep is an AI prompt step (not a ScriptStep). */
-  finalPromptSessionId?: string;
+  finalStepSessionId?: string;
 }

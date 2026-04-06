@@ -131,9 +131,9 @@ export const WorkflowStepsPanel: React.FC<{
     liveOrderedEntries,
     historyOutputs,
     finalStep,
-    finalPromptStatus,
-    finalPromptLoopCount,
-    finalPromptPhase,
+    finalStepStatus,
+    finalStepLoopCount,
+    finalStepPhase,
   } = useWorkflowStore();
   const {
     stepsCollapsed: promptsCollapsed,
@@ -141,9 +141,9 @@ export const WorkflowStepsPanel: React.FC<{
     isViewingHistory,
     loadedWorkflows,
     activeWorkflowId,
-    finalPromptFooterExpanded,
-    toggleFinalPromptFooterExpanded,
-    setFinalPromptFooterExpanded,
+    finalStepFooterExpanded,
+    toggleFinalStepFooterExpanded,
+    setFinalStepFooterExpanded,
   } = useUiStore();
 
   const getPromptStatus = usePromptStatus();
@@ -153,7 +153,7 @@ export const WorkflowStepsPanel: React.FC<{
   const isCLIManaged =
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
     RUNNER_IDS.CLI;
-  const { selectionTarget, selectPrompt, selectFinalPrompt, deselect } =
+  const { selectionTarget, selectPrompt, selectFinalStep, deselect } =
     useEditorStore();
   const { workflowProperties, globalSettings } = useSettingsStore();
   const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
@@ -328,30 +328,30 @@ export const WorkflowStepsPanel: React.FC<{
     [isCLIManaged, handleStepClick]
   );
 
-  const handleFinalPromptSelect = useCallback(() => {
+  const handleFinalStepSelect = useCallback(() => {
     if (isCLIManaged) return;
     if (finalStep) {
-      selectFinalPrompt(finalStep);
+      selectFinalStep(finalStep);
     } else {
-      setFinalPromptFooterExpanded(true);
+      setFinalStepFooterExpanded(true);
       selectPrompt({ kind: FINAL_STEP_PHASES.FINAL_STEP }, { prompt: "" });
     }
   }, [
     isCLIManaged,
     finalStep,
-    selectFinalPrompt,
-    setFinalPromptFooterExpanded,
+    selectFinalStep,
+    setFinalStepFooterExpanded,
     selectPrompt,
   ]);
 
-  const handleDisableFinalPrompt = useCallback(() => {
+  const handleDisableFinalStep = useCallback(() => {
     if (isCLIManaged || !finalStep) return;
     sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, { finalStep: null });
   }, [isCLIManaged, finalStep]);
 
-  // Compute resolved harness/model for the final prompt using the same
+  // Compute resolved harness/model for the final step using the same
   // three-tier logic as regular prompts, so defaults are shown correctly.
-  const getFinalPromptHarnessModel = () => {
+  const getFinalStepHarnessModel = () => {
     if (!finalStep || isScriptStep(finalStep)) return {};
     if (finalStep._runtime?.harness ?? finalStep._runtime?.model) {
       const h = finalStep._runtime!.harness;
@@ -381,21 +381,21 @@ export const WorkflowStepsPanel: React.FC<{
     };
   };
 
-  // Get the latest CLI output for the current final prompt loop
-  const finalPromptLatestOutput = (() => {
+  // Get the latest CLI output for the current final step loop
+  const finalStepLatestOutput = (() => {
     const cliEntries = liveOrderedEntries.filter(
       (e) =>
         e.kind === OUTPUT_HISTORY_KINDS.CLI &&
         "target" in e &&
         (e as any).target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
-        (e as any).target.loopIndex === finalPromptLoopCount
+        (e as any).target.loopIndex === finalStepLoopCount
     );
     if (cliEntries.length === 0) return null;
     return (cliEntries[cliEntries.length - 1] as any).cliOutput;
   })();
 
-  // Compute overrides for the final prompt (same logic as regular prompts)
-  const finalPromptOverrides = finalStep
+  // Compute overrides for the final step (same logic as regular prompts)
+  const finalStepOverrides = finalStep
     ? getPromptOverrides(finalStep)
     : undefined;
 
@@ -814,22 +814,22 @@ export const WorkflowStepsPanel: React.FC<{
 
       <FinalStepFooter
         finalStep={finalStep}
-        status={finalPromptStatus}
-        loopCount={finalPromptLoopCount}
-        phase={finalPromptPhase}
-        isExpanded={finalPromptFooterExpanded}
+        status={finalStepStatus}
+        loopCount={finalStepLoopCount}
+        phase={finalStepPhase}
+        isExpanded={finalStepFooterExpanded}
         isSelected={selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP}
         isReadOnly={
           isCLIManaged ||
-          (finalPromptPhase === FINAL_STEP_PHASES.FINAL_STEP &&
-            finalPromptStatus === STEP_STATUS.RUNNING)
+          (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
+            finalStepStatus === STEP_STATUS.RUNNING)
         }
-        onSelect={handleFinalPromptSelect}
-        onToggleExpanded={toggleFinalPromptFooterExpanded}
-        onDisable={handleDisableFinalPrompt}
-        {...getFinalPromptHarnessModel()}
-        latestOutput={finalPromptLatestOutput}
-        overrides={finalPromptOverrides}
+        onSelect={handleFinalStepSelect}
+        onToggleExpanded={toggleFinalStepFooterExpanded}
+        onDisable={handleDisableFinalStep}
+        {...getFinalStepHarnessModel()}
+        latestOutput={finalStepLatestOutput}
+        overrides={finalStepOverrides}
       />
       <ResetConfirmModal
         isOpen={showClearConfirm}

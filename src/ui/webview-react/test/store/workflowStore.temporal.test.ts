@@ -86,7 +86,7 @@ describe("tracked store actions (should record undo entries)", () => {
     expect(temporal().pastStates).toHaveLength(1);
   });
 
-  it("setFinalPrompt records an undo entry (direct call — not via STEPS_EXTENDED)", () => {
+  it("setFinalStep records an undo entry (direct call — not via STEPS_EXTENDED)", () => {
     loadWorkflow([makePrompt()]);
     store().setFinalStep(makePrompt({ prompt: "final step" }));
     expect(temporal().pastStates).toHaveLength(1);
@@ -190,9 +190,9 @@ describe("STEP_STATUS_CHANGED handler simulation", () => {
 
 // ---------------------------------------------------------------------------
 // STEPS_EXTENDED handler simulation
-// Bug: double-fired notification + setFinalPrompt both created undo entries,
+// Bug: double-fired notification + setFinalStep both created undo entries,
 // resulting in 4 entries for a single user add action.
-// Fix: pause around re-syncs and setFinalPrompt calls.
+// Fix: pause around re-syncs and setFinalStep calls.
 // ---------------------------------------------------------------------------
 describe("STEPS_EXTENDED handler simulation", () => {
   it("add prompt: records exactly 1 entry for a count increase", () => {
@@ -201,7 +201,7 @@ describe("STEPS_EXTENDED handler simulation", () => {
     // Simulate STEPS_EXTENDED count increase (shouldRecord = true → no pause)
     store().setPrompts([makePrompt(), makePrompt({ prompt: "new prompt" })]);
 
-    // setFinalPrompt is always paused in the handler
+    // setFinalStep is always paused in the handler
     temporal().pause();
     store().setFinalStep(null);
     temporal().resume();
@@ -264,8 +264,8 @@ describe("STEPS_EXTENDED handler simulation", () => {
 
 // ---------------------------------------------------------------------------
 // PROMPT_DELETED handler simulation
-// Bug: setPrompts + setFinalPrompt both unpaused → 2 undo entries per delete.
-// Fix: setFinalPrompt paused in handler.
+// Bug: setPrompts + setFinalStep both unpaused → 2 undo entries per delete.
+// Fix: setFinalStep paused in handler.
 // ---------------------------------------------------------------------------
 describe("PROMPT_DELETED handler simulation", () => {
   it("records exactly 1 entry when a prompt is deleted", () => {
@@ -274,7 +274,7 @@ describe("PROMPT_DELETED handler simulation", () => {
     // setPrompts (unpaused — this IS the undo entry for the delete)
     store().setPrompts([makePrompt()]);
 
-    // setFinalPrompt (paused — fix: not a second undo entry)
+    // setFinalStep (paused — fix: not a second undo entry)
     temporal().pause();
     store().setFinalStep(null);
     temporal().resume();

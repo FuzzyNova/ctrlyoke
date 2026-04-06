@@ -392,7 +392,7 @@ describe("generateMarkdownExport", () => {
     expect(promptIdx).toBeLessThan(statusIdx);
   });
 
-  it("orders equal-timestamp items by sequence and labels final prompt loops", () => {
+  it("orders equal-timestamp items by sequence and labels final step loops", () => {
     const outputs = [
       {
         type: "cli" as const,
@@ -418,9 +418,9 @@ describe("generateMarkdownExport", () => {
 
     const md = generateMarkdownExport(outputs, metadata);
     expect(md.indexOf("queued first")).toBeLessThan(
-      md.indexOf("## Final Prompt Loop 1 - Initial Attempt")
+      md.indexOf("## Final Step Loop 1 - Initial Attempt")
     );
-    expect(md).toContain("## Final Prompt Loop 1 - Initial Attempt");
+    expect(md).toContain("## Final Step Loop 1 - Initial Attempt");
   });
 
   it("prefers canonical ordered entries when provided for export", () => {
@@ -470,7 +470,7 @@ describe("generateMarkdownExport", () => {
 
     const md = generateMarkdownExport(outputs, metadata, { orderedEntries });
     expect(md.indexOf("canonical status")).toBeLessThan(
-      md.indexOf("## Final Prompt Loop 1 - Initial Attempt")
+      md.indexOf("## Final Step Loop 1 - Initial Attempt")
     );
     expect(md).toContain("canonical final");
   });

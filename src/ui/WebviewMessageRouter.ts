@@ -213,7 +213,7 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, async (message) => {
-      await this.handleUpdateFinalPrompt(message);
+      await this.handleUpdateFinalStep(message);
     });
 
     table.set(MESSAGE_TYPES.SELECT_PROMPT_FOR_EDIT, (message) => {
@@ -756,7 +756,7 @@ export class WebviewMessageRouter {
     }
   }
 
-  private async handleUpdateFinalPrompt(message: any): Promise<void> {
+  private async handleUpdateFinalStep(message: any): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
       Log.error("WorkflowOrchestrator not initialized");
@@ -764,14 +764,14 @@ export class WebviewMessageRouter {
     }
 
     try {
-      await orchestrator.updateFinalPromptInQueue(
+      await orchestrator.updateFinalStepInQueue(
         message.finalStep ?? null,
         message.clearProperties
       );
     } catch (error) {
-      Log.error("Failed to update finalPrompt:", error);
+      Log.error("Failed to update finalStep:", error);
       vscode.window.showErrorMessage(
-        `Failed to update finalPrompt: ${getErrorMessage(error)}`
+        `Failed to update finalStep: ${getErrorMessage(error)}`
       );
     }
   }
@@ -1155,7 +1155,7 @@ export class WebviewMessageRouter {
           const stepOutput = (
             target.kind === FINAL_STEP_PHASES.QUEUE
               ? history.promptOutputs[target.stepIndex]
-              : history.finalPromptOutputs?.[target.loopIndex]
+              : history.finalStepOutputs?.[target.loopIndex]
           ) as
             | { undoRecord?: import("../types/OutputHistoryTypes").UndoRecord }
             | undefined;
@@ -1309,7 +1309,7 @@ export class WebviewMessageRouter {
             const stepOutput = (
               entry.target.kind === FINAL_STEP_PHASES.QUEUE
                 ? history.promptOutputs[entry.target.stepIndex]
-                : history.finalPromptOutputs?.[entry.target.loopIndex]
+                : history.finalStepOutputs?.[entry.target.loopIndex]
             ) as { undoRecord?: UndoRecord } | undefined;
             if (stepOutput?.undoRecord) {
               this.emitMessage({

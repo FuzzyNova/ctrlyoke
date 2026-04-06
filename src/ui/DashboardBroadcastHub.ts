@@ -1,6 +1,6 @@
 import type { WorkflowStep, WorkflowSummary } from "../types/FlightPathTypes";
 import type {
-  FinalPromptPhase,
+  FinalStepPhase,
   StatusMessageSeverity,
   StepStatus,
 } from "../types/DashboardConstants";
@@ -67,11 +67,11 @@ export class DashboardBroadcastHub
     fileName: string,
     steps: any[],
     workflowName?: string,
-    finalPrompt?: WorkflowStep | null,
-    finalPromptRuntime?: {
+    finalStep?: WorkflowStep | null,
+    finalStepRuntime?: {
       status?: StepStatus;
       loopCount: number;
-      phase: FinalPromptPhase;
+      phase: FinalStepPhase;
     }
   ): Promise<void> {
     for (const client of this.clients) {
@@ -79,8 +79,8 @@ export class DashboardBroadcastHub
         fileName,
         steps,
         workflowName,
-        finalPrompt,
-        finalPromptRuntime
+        finalStep,
+        finalStepRuntime
       );
     }
   }
@@ -92,11 +92,11 @@ export class DashboardBroadcastHub
     executionState: string,
     currentIndex: number,
     workflowName?: string,
-    finalPrompt?: WorkflowStep | null,
-    finalPromptRuntime?: {
+    finalStep?: WorkflowStep | null,
+    finalStepRuntime?: {
       status?: StepStatus;
       loopCount: number;
-      phase: FinalPromptPhase;
+      phase: FinalStepPhase;
     }
   ): Promise<void> {
     for (const client of this.clients) {
@@ -107,8 +107,8 @@ export class DashboardBroadcastHub
         executionState,
         currentIndex,
         workflowName,
-        finalPrompt,
-        finalPromptRuntime
+        finalStep,
+        finalStepRuntime
       );
     }
   }
@@ -248,58 +248,55 @@ export class DashboardBroadcastHub
 
   updateStepsExtended(
     steps: any[],
-    finalPrompt?: WorkflowStep | null,
+    finalStep?: WorkflowStep | null,
     executionState?: string
   ): void {
     for (const client of this.clients) {
-      client.updateStepsExtended?.(steps, finalPrompt, executionState);
+      client.updateStepsExtended?.(steps, finalStep, executionState);
     }
   }
 
   updatePromptDeleted(
     fileName: string,
     steps: any[],
-    finalPrompt?: WorkflowStep | null
+    finalStep?: WorkflowStep | null
   ): void {
     for (const client of this.clients) {
-      client.updatePromptDeleted?.(fileName, steps, finalPrompt);
+      client.updatePromptDeleted?.(fileName, steps, finalStep);
     }
   }
 
-  updateFinalPrompt(finalPrompt: WorkflowStep | null): void {
+  updateFinalStep(finalStep: WorkflowStep | null): void {
     for (const client of this.clients) {
-      client.updateFinalPrompt?.(finalPrompt);
+      client.updateFinalStep?.(finalStep);
     }
   }
 
-  updateFinalPromptStatus(
+  updateFinalStepStatus(
     status: StepStatus | null,
     loopCount: number,
-    phase: FinalPromptPhase | null
+    phase: FinalStepPhase | null
   ): void {
     for (const client of this.clients) {
-      client.updateFinalPromptStatus?.(status, loopCount, phase);
+      client.updateFinalStepStatus?.(status, loopCount, phase);
     }
   }
 
-  updateFinalPromptOutput(loopIndex: number, output: unknown): void {
+  updateFinalStepOutput(loopIndex: number, output: unknown): void {
     for (const client of this.clients) {
-      client.updateFinalPromptOutput?.(loopIndex, output);
+      client.updateFinalStepOutput?.(loopIndex, output);
     }
   }
 
-  updateFinalPromptStreamingChunk(loopIndex: number, chunk: string): void {
+  updateFinalStepStreamingChunk(loopIndex: number, chunk: string): void {
     for (const client of this.clients) {
-      client.updateFinalPromptStreamingChunk?.(loopIndex, chunk);
+      client.updateFinalStepStreamingChunk?.(loopIndex, chunk);
     }
   }
 
-  updateFinalPromptStreamingEvents(
-    loopIndex: number,
-    events: CliEvent[]
-  ): void {
+  updateFinalStepStreamingEvents(loopIndex: number, events: CliEvent[]): void {
     for (const client of this.clients) {
-      client.updateFinalPromptStreamingEvents?.(loopIndex, events);
+      client.updateFinalStepStreamingEvents?.(loopIndex, events);
     }
   }
 

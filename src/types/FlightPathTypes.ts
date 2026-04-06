@@ -4,7 +4,7 @@ import {
   STEP_STATUS,
   WORKFLOW_ATTEMPT_COMMANDS,
   ExecutionState,
-  FinalPromptPhase,
+  FinalStepPhase,
   StepStatus,
   type RunnerId,
   type PromptTerminalStatus,
@@ -216,15 +216,15 @@ export interface PromptFile extends ExecutionProperties {
 }
 
 /**
- * Runtime state for workflow-level finalPrompt execution.
+ * Runtime state for workflow-level finalStep execution.
  */
-export interface FinalPromptRuntimeState {
-  phase: FinalPromptPhase;
+export interface FinalStepRuntimeState {
+  phase: FinalStepPhase;
   loopCount: number;
   status?: StepStatus;
   startedAt?: number;
   completedAt?: number;
-  /** Response texts from each finalPrompt loop execution, indexed by loopIndex (0-based).
+  /** Response texts from each finalStep loop execution, indexed by loopIndex (0-based).
    *  Used by priorContext "finalStepAll" and "finalStepPrevious" keywords. */
   responseTexts?: string[];
 }
@@ -237,7 +237,7 @@ export interface FinalPromptRuntimeState {
 export interface WorkingFileRuntime {
   currentIndex: number;
   executionState: ExecutionState;
-  finalPrompt?: FinalPromptRuntimeState;
+  finalStep?: FinalStepRuntimeState;
 }
 
 /**

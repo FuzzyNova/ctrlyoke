@@ -46,7 +46,6 @@ import {
 } from "../../utils/endCondition";
 import type { SelectOption } from "../shared";
 
-
 const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
   ["auto", "stdout", "stderr", "exitCode"] as EndConditionCompareSource[]
 ).map((v) => ({ value: v, label: COMPARE_SOURCE_LABELS[v] }));
@@ -195,7 +194,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const defaultResumeSessionLabel =
     resolvedResumeSession &&
     resolvedSessionId === SESSION_ID_SENTINELS.FINAL_STEP
-      ? "Default (Final Prompt Session)"
+      ? "Default (Final Step Session)"
       : `Default (${resolvedResumeSession ? "Yes" : "No"})`;
 
   // Session ID display in prompt-level drawer
@@ -216,7 +215,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       ? "Using workflow-level Resume Session setting. Select Yes to override."
       : properties.resumeSession === true &&
           properties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP
-        ? "Using Final Prompt Session — no explicit Session ID needed"
+        ? "Using Final Step Session — no explicit Session ID needed"
         : "Set Resume Session to Yes to specify a Session ID";
 
   // Additional Args display mode
@@ -307,7 +306,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       setProperty("harness", newHarness);
       const defaultModel = globalSettings.harnessDefaultModels[newHarness];
       setProperty("model", defaultModel || undefined);
-      const defaultArgs = globalSettings.harnessDefaultAdditionalArgs[newHarness];
+      const defaultArgs =
+        globalSettings.harnessDefaultAdditionalArgs[newHarness];
       setProperty("additionalArgs", defaultArgs || null);
     }
   };
@@ -617,22 +617,17 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   onChange={(v) => {
                     if (v === SESSION_ID_SENTINELS.FINAL_STEP) {
                       setProperty("resumeSession", true);
-                      setProperty(
-                        "sessionId",
-                        SESSION_ID_SENTINELS.FINAL_STEP
-                      );
+                      setProperty("sessionId", SESSION_ID_SENTINELS.FINAL_STEP);
                     } else if (v === "default") {
                       setProperty("resumeSession", undefined);
                       if (
-                        properties.sessionId ===
-                        SESSION_ID_SENTINELS.FINAL_STEP
+                        properties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP
                       ) {
                         setProperty("sessionId", "");
                       }
                     } else {
                       if (
-                        properties.sessionId ===
-                        SESSION_ID_SENTINELS.FINAL_STEP
+                        properties.sessionId === SESSION_ID_SENTINELS.FINAL_STEP
                       ) {
                         setProperty("sessionId", "");
                       }
@@ -759,7 +754,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                         )
                       }
                       options={COMPARE_SOURCE_OPTIONS}
-                        />
+                    />
                     <span className="text-[10px] text-description-fg">
                       {(properties.endCondition?.compareSource ?? "auto") ===
                       "auto"
@@ -810,7 +805,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       onChange={(e) => setEndTimeoutInput(e.target.value)}
                       onBlur={() => {
                         const parsed = parseInt(endTimeoutInput);
-                        const value = isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
+                        const value =
+                          isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
                         setEndTimeoutInput(String(value));
                         updateEndConditionField("timeout", value);
                       }}
@@ -905,7 +901,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {/* Page: MCP */}
         {activePage === DRAWER_PAGES.MCP && (
           <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase text-description-fg">
+            <p className="text-[11px] font-semibold uppercase text-description-fg">
               MCP Servers
             </p>
             <McpServersEditor
@@ -1096,7 +1092,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {/* Page: Hooks */}
         {activePage === DRAWER_PAGES.HOOKS && (
           <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase text-description-fg">
+            <p className="text-[11px] font-semibold uppercase text-description-fg">
               User Hooks
             </p>
             <HooksEditor
@@ -1107,7 +1103,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
           </div>
         )}
       </div>
-
     </div>
   );
 };

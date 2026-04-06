@@ -286,7 +286,7 @@ run: () => {
 | `Enter`                 | WorkflowStatus          | Confirm workflow name edit    |
 | `Escape`                | WorkflowStatus          | Cancel workflow name edit     |
 | `Enter`                 | TemplateModal           | Confirm template selection    |
-| `Enter` / `Space`       | FinalPromptFooter       | Select final prompt item      |
+| `Enter` / `Space`       | FinalStepFooter         | Select final prompt item      |
 | `Enter` / `Space`       | PromptItem              | Select prompt                 |
 | `Enter`                 | RecentWorkflows         | Select workflow               |
 | `Enter`                 | RunningWorkflowItem     | Click action                  |

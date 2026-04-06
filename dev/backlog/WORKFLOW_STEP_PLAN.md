@@ -4,7 +4,7 @@
 
 Add a first-class `type: "workflow"` step to FlightPath: a queue item that runs another
 workflow file as a sub-workflow — no AI interaction of its own. The sub-workflow executes
-fully (all its queue steps, its finalPrompt) before the parent workflow advances to the next
+fully (all its queue steps, its finalStep) before the parent workflow advances to the next
 step. This is distinct from the planned `type: "script"` step: a workflow step orchestrates
 an entire FlightPath workflow, not a shell command.
 
@@ -98,7 +98,7 @@ export function isWorkflowStep(step: WorkflowStepItem): step is WorkflowStep {
 }
 ```
 
-`PromptFile.prompts`, `PromptFile.finalPrompt`, and `QueueState.prompts` become
+`PromptFile.prompts`, `PromptFile.finalStep`, and `QueueState.prompts` become
 `WorkflowStepItem[]` / `WorkflowStepItem` (same union expansion as `ScriptStep`).
 
 ---
@@ -129,7 +129,7 @@ if (isWorkflowStep(step)) {
    - `parentStepIndex: stepIndex`
    - `depth: (context.depth ?? 0) + 1`
 6. Notify the webview: `CHILD_WORKFLOW_STARTED` → switches the active workflow view to the child.
-7. Await the child instance's execution to completion (it runs fully: queue + finalPrompt).
+7. Await the child instance's execution to completion (it runs fully: queue + finalStep).
 8. Capture child output summary into the parent step's `_runtime.childOutput` (for display in
    the parent's output panel when the user navigates back up).
 9. On child success (all steps completed) → `STEP_STATUS_CHANGED` → `"completed"`, advance parent.
@@ -275,13 +275,13 @@ steps:
     harness: claude-cli
 ```
 
-Sub-workflow as `finalPrompt`:
+Sub-workflow as `finalStep`:
 
 ```yaml
 steps:
   - prompt: Implement the feature.
 
-finalPrompt:
+finalStep:
   type: workflow
   workflow: .flightpath/workflows/post-build-checks.flightpath.yaml
 ```
@@ -301,7 +301,7 @@ finalPrompt:
 | User pauses while child is running                  | Child pauses (it's the active executor); parent is waiting                                             |
 | User stops while child is running                   | Child stops; parent marks workflow step as failed/stopped                                              |
 | Workflow step as only queue item                    | Works; no special handling required                                                                    |
-| Sub-workflow has its own `finalPrompt`              | Executes normally as part of the child run                                                             |
+| Sub-workflow has its own `finalStep`                | Executes normally as part of the child run                                                             |
 | Variable substitution (`{{vars}}`)                  | Parent's resolved vars are NOT passed to child by default; child uses its own vars + CLI `--var` flags |
 | `postScript` on a workflow step                     | Schema error — `additionalProperties: false` rejects it                                                |
 

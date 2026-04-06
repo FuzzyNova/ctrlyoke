@@ -128,7 +128,7 @@ export class PromptFileLoader {
           promptFile.steps,
           undefined,
           promptFile.finalStep ?? null,
-          this.promptQueue.getFinalPromptRuntime()
+          this.promptQueue.getFinalStepRuntime()
         );
       }
 
@@ -212,7 +212,7 @@ export class PromptFileLoader {
             restoredState.currentIndex,
             restoredState.workflowName || undefined,
             workingFile.finalStep ?? null,
-            this.promptQueue.getFinalPromptRuntime()
+            this.promptQueue.getFinalStepRuntime()
           );
 
           // Load output history if available (auto-loads most recent run from disk)
@@ -376,4 +376,3 @@ export class PromptFileLoader {
     return defaults;
   }
 }
-

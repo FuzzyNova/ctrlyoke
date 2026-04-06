@@ -100,11 +100,11 @@ function describeChange(
 
   const prevFinal = prev.finalStep;
   const nextFinal = next.finalStep;
-  if (!prevFinal && nextFinal) return "Added final prompt";
-  if (prevFinal && !nextFinal) return "Removed final prompt";
+  if (!prevFinal && nextFinal) return "Added final step";
+  if (prevFinal && !nextFinal) return "Removed final step";
   if (prevFinal && nextFinal) {
     const change = describePromptChange(
-      "final prompt",
+      "final step",
       prevFinal as PromptChangeFields,
       nextFinal as PromptChangeFields
     );

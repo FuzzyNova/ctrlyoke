@@ -101,13 +101,12 @@ async function markQueueCompleted(instance: WorkflowInstance): Promise<void> {
   await queue.commitRuntimeTransition({ persist: false });
 }
 
-suite("WorkflowInstance finalPrompt replay", () => {
-  test("replays finalPrompt completed output, in-flight buffer, and status messages on workflow switch", async () => {
+suite("WorkflowInstance finalStep replay", () => {
+  test("replays finalStep completed output, in-flight buffer, and status messages on workflow switch", async () => {
     const platform = new MockPlatform();
 
     const sessionRestoredCalls: any[] = [];
-    const finalPromptOutputCalls: Array<{ loopIndex: number; output: any }> =
-      [];
+    const finalStepOutputCalls: Array<{ loopIndex: number; output: any }> = [];
     const statusMessageCalls: Array<{
       stepIndex: number;
       message: string;
@@ -130,13 +129,13 @@ suite("WorkflowInstance finalPrompt replay", () => {
       updateCliStreamingEvents: () => {},
       updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
-      updateFinalPrompt: () => {},
-      updateFinalPromptStatus: () => {},
-      updateFinalPromptOutput: (loopIndex: number, output: any) => {
-        finalPromptOutputCalls.push({ loopIndex, output });
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: (loopIndex: number, output: any) => {
+        finalStepOutputCalls.push({ loopIndex, output });
       },
-      updateFinalPromptStreamingChunk: () => {},
-      updateFinalPromptStreamingEvents: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: (
         stepIndex: number,
         message: string,
@@ -165,14 +164,14 @@ suite("WorkflowInstance finalPrompt replay", () => {
     });
 
     await startQueueExecution(instance);
-    await instance.promptQueue.setFinalPromptRuntime({
+    await instance.promptQueue.setFinalStepRuntime({
       phase: FINAL_STEP_PHASES.FINAL_STEP,
       loopCount: 0,
       status: STEP_STATUS.RUNNING,
       startedAt: Date.now(),
     });
 
-    (instance as any).outputCaptureBuffer.finalPromptCompletedOutputs.set(0, {
+    (instance as any).outputCaptureBuffer.finalStepCompletedOutputs.set(0, {
       outputs: [
         {
           prompt: "final-loop",
@@ -184,7 +183,7 @@ suite("WorkflowInstance finalPrompt replay", () => {
       ],
     });
 
-    (instance as any).outputCaptureBuffer.finalPromptOutputBuffer.set(0, {
+    (instance as any).outputCaptureBuffer.finalStepOutputBuffer.set(0, {
       prompt: "final-loop",
       cliCommand: "mock final cmd",
       workingDirectory: process.cwd(),
@@ -201,9 +200,9 @@ suite("WorkflowInstance finalPrompt replay", () => {
       rawTextOutput: true,
     });
 
-    (instance as any).outputCaptureBuffer.finalPromptStatusMessages.set(0, [
+    (instance as any).outputCaptureBuffer.finalStepStatusMessages.set(0, [
       {
-        message: "final prompt validating",
+        message: "final step validating",
         severity: "info",
         timestamp: Date.now(),
       },
@@ -218,9 +217,9 @@ suite("WorkflowInstance finalPrompt replay", () => {
       "session restore should reflect running state"
     );
 
-    assert.strictEqual(finalPromptOutputCalls.length, 2);
+    assert.strictEqual(finalStepOutputCalls.length, 2);
     assert.ok(
-      finalPromptOutputCalls.some(
+      finalStepOutputCalls.some(
         (c) =>
           c.loopIndex === 0 &&
           c.output.response === "completed-final-output" &&
@@ -228,7 +227,7 @@ suite("WorkflowInstance finalPrompt replay", () => {
       )
     );
     assert.ok(
-      finalPromptOutputCalls.some(
+      finalStepOutputCalls.some(
         (c) =>
           c.loopIndex === 0 &&
           c.output.response === "streaming-final-output" &&
@@ -239,7 +238,7 @@ suite("WorkflowInstance finalPrompt replay", () => {
     assert.deepStrictEqual(statusMessageCalls, [
       {
         stepIndex: -1,
-        message: "final prompt validating",
+        message: "final step validating",
         severity: "info",
       },
     ]);
@@ -271,11 +270,11 @@ suite("WorkflowInstance runtime transitions", () => {
       updateCliStreamingEvents: () => {},
       updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
-      updateFinalPrompt: () => {},
-      updateFinalPromptStatus: () => {},
-      updateFinalPromptOutput: () => {},
-      updateFinalPromptStreamingChunk: () => {},
-      updateFinalPromptStreamingEvents: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
       notifyWorkflowStateReset: () => {},
       notifyStartPositionSet: () => {},
@@ -341,7 +340,7 @@ suite("WorkflowInstance runtime transitions", () => {
       updateCliStreamingEvents: () => {},
       updateStepsExtended: (
         prompts: PromptStep[],
-        _finalPrompt: PromptStep | null,
+        _finalStep: PromptStep | null,
         executionState?: string
       ) => {
         promptsExtendedCalls.push({
@@ -350,11 +349,11 @@ suite("WorkflowInstance runtime transitions", () => {
         });
       },
       updatePromptDeleted: () => {},
-      updateFinalPrompt: () => {},
-      updateFinalPromptStatus: () => {},
-      updateFinalPromptOutput: () => {},
-      updateFinalPromptStreamingChunk: () => {},
-      updateFinalPromptStreamingEvents: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
       notifyWorkflowStateReset: () => {},
       notifyStartPositionSet: () => {},
@@ -424,11 +423,11 @@ suite("WorkflowInstance runtime transitions", () => {
       updateCliStreamingEvents: () => {},
       updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
-      updateFinalPrompt: () => {},
-      updateFinalPromptStatus: () => {},
-      updateFinalPromptOutput: () => {},
-      updateFinalPromptStreamingChunk: () => {},
-      updateFinalPromptStreamingEvents: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
       notifyWorkflowStateReset: () => {},
       notifyStartPositionSet: () => {},
@@ -583,11 +582,11 @@ suite("WorkflowInstance runtime transitions", () => {
       updateCliStreamingEvents: () => {},
       updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
-      updateFinalPrompt: () => {},
-      updateFinalPromptStatus: () => {},
-      updateFinalPromptOutput: () => {},
-      updateFinalPromptStreamingChunk: () => {},
-      updateFinalPromptStreamingEvents: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
       notifyWorkflowStateReset: () => {},
       notifyStartPositionSet: () => {},
@@ -644,11 +643,11 @@ suite("WorkflowInstance eager working file creation", () => {
       updateCliStreamingEvents: () => {},
       updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
-      updateFinalPrompt: () => {},
-      updateFinalPromptStatus: () => {},
-      updateFinalPromptOutput: () => {},
-      updateFinalPromptStreamingChunk: () => {},
-      updateFinalPromptStreamingEvents: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
       notifyWorkflowStateReset: () => {},
       notifyStartPositionSet: () => {},
@@ -714,11 +713,11 @@ suite("WorkflowInstance append-and-continue", () => {
       updateCliStreamingEvents: () => {},
       updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
-      updateFinalPrompt: () => {},
-      updateFinalPromptStatus: () => {},
-      updateFinalPromptOutput: () => {},
-      updateFinalPromptStreamingChunk: () => {},
-      updateFinalPromptStreamingEvents: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
       notifyWorkflowStateReset: () => {},
       notifyStartPositionSet: () => {},
@@ -781,11 +780,11 @@ suite("WorkflowInstance append-and-continue", () => {
       updateCliStreamingEvents: () => {},
       updateStepsExtended: () => {},
       updatePromptDeleted: () => {},
-      updateFinalPrompt: () => {},
-      updateFinalPromptStatus: () => {},
-      updateFinalPromptOutput: () => {},
-      updateFinalPromptStreamingChunk: () => {},
-      updateFinalPromptStreamingEvents: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
       updateStatusMessage: () => {},
       notifyWorkflowStateReset: () => {},
       notifyStartPositionSet: () => {},

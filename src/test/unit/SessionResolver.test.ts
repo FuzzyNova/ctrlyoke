@@ -532,9 +532,9 @@ suite("SessionResolver Tests", () => {
       resumeSession: true,
     };
 
-    test("should return finalPromptSessionId when sentinel is used and prior session exists", () => {
+    test("should return finalStepSessionId when sentinel is used and prior session exists", () => {
       const prompt: PromptStep = {
-        prompt: "finalPrompt text",
+        prompt: "finalStep text",
         sessionId: SESSION_ID_SENTINELS.FINAL_STEP,
       };
       const priorSessionId = "550e8400-e29b-41d4-a716-446655440000";
@@ -551,7 +551,7 @@ suite("SessionResolver Tests", () => {
 
     test("should return undefined when sentinel is used but no prior session (first iteration)", () => {
       const prompt: PromptStep = {
-        prompt: "finalPrompt text",
+        prompt: "finalStep text",
         sessionId: SESSION_ID_SENTINELS.FINAL_STEP,
       };
 
@@ -571,7 +571,7 @@ suite("SessionResolver Tests", () => {
         resumeSession: false,
       };
       const prompt: PromptStep = {
-        prompt: "finalPrompt text",
+        prompt: "finalStep text",
         sessionId: SESSION_ID_SENTINELS.FINAL_STEP,
       };
 
@@ -585,10 +585,10 @@ suite("SessionResolver Tests", () => {
       assert.strictEqual(sessionId, undefined);
     });
 
-    test("should ignore finalPromptSessionId when sessionId is not the sentinel", () => {
+    test("should ignore finalStepSessionId when sessionId is not the sentinel", () => {
       const exactId = "660e8400-e29b-41d4-a716-446655440000";
       const prompt: PromptStep = {
-        prompt: "finalPrompt text",
+        prompt: "finalStep text",
         sessionId: exactId,
         resumeSession: true,
       };
@@ -610,7 +610,7 @@ suite("SessionResolver Tests", () => {
         resumeSession: true,
       };
       const prompt: PromptStep = {
-        prompt: "finalPrompt text",
+        prompt: "finalStep text",
       };
       const priorSessionId = "770e8400-e29b-41d4-a716-446655440000";
 

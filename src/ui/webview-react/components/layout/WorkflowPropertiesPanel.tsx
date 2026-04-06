@@ -352,9 +352,11 @@ export const WorkflowPropertiesPanel: React.FC<{
 
       // Snapshot the full workflowProperties after all updates so this action
       // is tracked as a single undo entry.
-      useWorkflowStore.getState().setUndoWorkflowProperties(
-        useSettingsStore.getState().workflowProperties
-      );
+      useWorkflowStore
+        .getState()
+        .setUndoWorkflowProperties(
+          useSettingsStore.getState().workflowProperties
+        );
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTIES,
@@ -365,9 +367,11 @@ export const WorkflowPropertiesPanel: React.FC<{
   );
 
   const syncWorkflowPropertiesForUndo = useCallback(() => {
-    useWorkflowStore.getState().setUndoWorkflowProperties(
-      useSettingsStore.getState().workflowProperties
-    );
+    useWorkflowStore
+      .getState()
+      .setUndoWorkflowProperties(
+        useSettingsStore.getState().workflowProperties
+      );
   }, []);
 
   // ============================================================================
@@ -474,7 +478,7 @@ export const WorkflowPropertiesPanel: React.FC<{
       }
       const checked = v === "yes";
       const updates: Partial<WorkflowProperties> = { resumeSession: checked };
-      // Clear session ID when disabling or when switching away from Final Prompt Session.
+      // Clear session ID when disabling or when switching away from Final Step Session.
       // Use "" instead of undefined so the value survives JSON serialization and the
       // extension receives the clear instruction (undefined is stripped by JSON.stringify).
       if (
@@ -758,10 +762,14 @@ export const WorkflowPropertiesPanel: React.FC<{
         role={isMobileMode ? undefined : "button"}
         aria-label={isMobileMode ? undefined : "Collapse workflow properties"}
         tabIndex={isMobileMode ? undefined : 0}
-        onKeyDown={isMobileMode ? undefined : (e) => e.key === "Enter" && handleToggle()}
+        onKeyDown={
+          isMobileMode ? undefined : (e) => e.key === "Enter" && handleToggle()
+        }
       >
         <div className="flex items-center gap-1 text-description-fg hover:text-foreground transition-colors">
-          {!isMobileMode && <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />}
+          {!isMobileMode && (
+            <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
+          )}
           <i className="codicon codicon-settings text-[14px]" />
           <span className="text-[11px] font-semibold uppercase tracking-wide ml-0.5">
             Workflow Properties
@@ -996,7 +1004,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                 <FormField
                   label="Resume Session"
                   htmlFor="settings-resume-session"
-                  description="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number). 'Final Prompt Session' resumes the session established by the Final Prompt gate."
+                  description="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number). 'Final Step Session' resumes the session established by the Final Step gate."
                   setAsDefaultButton={
                     <SetAsDefaultButton
                       property="resumeSession"
@@ -1038,7 +1046,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                         ? "Enable Resume Session to specify a Session ID"
                         : workflowProperties.sessionId ===
                             SESSION_ID_SENTINELS.FINAL_STEP
-                          ? "Using Final Prompt Session — no explicit Session ID needed"
+                          ? "Using Final Step Session — no explicit Session ID needed"
                           : undefined
                     }
                   >

@@ -130,7 +130,7 @@ export class OutputHistoryManager {
   }
 
   /**
-   * Save outputs for either a queue step or a finalPrompt loop.
+   * Save outputs for either a queue step or a finalStep loop.
    */
   async saveExecutionOutput(
     historyFilePath: string,
@@ -487,7 +487,7 @@ export class OutputHistoryManager {
   ) {
     return target.kind === FINAL_STEP_PHASES.QUEUE
       ? history.promptOutputs[target.stepIndex]
-      : history.finalPromptOutputs?.[target.loopIndex];
+      : history.finalStepOutputs?.[target.loopIndex];
   }
 
   private async saveTimelineExecutionOutput(

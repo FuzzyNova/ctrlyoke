@@ -24,7 +24,7 @@ FlightPath is a VS Code extension that automates AI coding assistants (GitHub Co
 - **End condition evaluation**: Script-based validation with retry logic, timeout protection, and template variables
 - **Workflow-level properties**: Three-tier precedence (prompt > workflow > global settings) for harness, model, agent, end conditions
 - **Agent injection**: `AgentExpander.ts` reads agent file content and wraps in `<agentInstructions>` XML; injected via `HarnessIntegration.buildPromptText()`; supports workspace-relative, `.flightpath/`-relative, and absolute paths
-- **Final prompt**: `finalPrompt` field on `PromptFile` runs once after all queue items complete; `FinalPromptFooter` component in dashboard
+- **Final prompt**: `finalStep` field on `PromptFile` runs once after all queue items complete; `FinalStepFooter` component in dashboard
 - **Multi-format support**: `.flightpath.yaml`, `.flightpath.json`, `.prompt.md` with unified JSON schema (AJV validation)
 - **MCP server entrypoint**: `flightpath-mcp` binary for tool-based queue operations
 - **Stale state recovery**: `WorkflowLockManager` with atomic writes, PID probing, 30s heartbeat, and `normalizeStaleLocks` on startup
@@ -468,13 +468,13 @@ Getting FlightPath listed on the VS Code Marketplace is the primary distribution
 
 ## Estimated Timeline
 
-| Milestone                  | Items                               | Target      |
-| -------------------------- | ----------------------------------- | ----------- |
+| Milestone                  | Items                              | Target      |
+| -------------------------- | ---------------------------------- | ----------- |
 | **v0.1.0 Release**         | 1.2 (CHANGELOG) + 2.10 (docs site) | April 2026  |
 | **v0.2.0 Templates & UX**  | 1.1 + 2.1 + 2.7 + 2.8              | May 2026    |
-| **v0.3.0 Project Context** | 2.2 + 2.4 + 2.6                     | June 2026   |
-| **v0.4.0 Power Features**  | 2.9 + 3.1 (standalone server)       | August 2026 |
-| **v0.5.0 Platform & Pro**  | 4.1 + 4.2 + 4.3                     | Oct 2026    |
+| **v0.3.0 Project Context** | 2.2 + 2.4 + 2.6                    | June 2026   |
+| **v0.4.0 Power Features**  | 2.9 + 3.1 (standalone server)      | August 2026 |
+| **v0.5.0 Platform & Pro**  | 4.1 + 4.2 + 4.3                    | Oct 2026    |
 
 _Timeline is aspirational. Pre-release — prioritize quality over schedule._
 
@@ -486,29 +486,29 @@ _Timeline is aspirational. Pre-release — prioritize quality over schedule._
 
 ### Active (in progress)
 
-| Document                                                                        | Status    | Roadmap Item |
-| ------------------------------------------------------------------------------- | --------- | ------------ |
+| Document                                                                               | Status    | Roadmap Item |
+| -------------------------------------------------------------------------------------- | --------- | ------------ |
 | [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md) | 🔄 ACTIVE | 2.10         |
-| [`../active/AUTOMATION_API_PLAN.md`](../active/AUTOMATION_API_PLAN.md)          | 🔄 ACTIVE | —            |
+| [`../active/AUTOMATION_API_PLAN.md`](../active/AUTOMATION_API_PLAN.md)                 | 🔄 ACTIVE | —            |
 
 ### Backlog (not yet started)
 
-| Document                                                                                 | Status          | Roadmap Item |
-| ---------------------------------------------------------------------------------------- | --------------- | ------------ |
-| [`AGENTS_MD_GENERATION.md`](AGENTS_MD_GENERATION.md)                                    | NOT_IMPLEMENTED | 2.2          |
-| [`BMAD_FOR_FLIGHTPATH.md`](BMAD_FOR_FLIGHTPATH.md)                                      | NOT_IMPLEMENTED | 1.1          |
-| [`TEMPLATE_SETUP_SCRIPTS.md`](TEMPLATE_SETUP_SCRIPTS.md)                                | NOT_IMPLEMENTED | 2.1          |
-| [`INLINE_PRIOR_CONTEXT_PLAN.md`](INLINE_PRIOR_CONTEXT_PLAN.md)                          | NOT_IMPLEMENTED | 2.6          |
-| [`STANDALONE_SERVER_PLAN.md`](STANDALONE_SERVER_PLAN.md)                                | NOT_IMPLEMENTED | 3.1          |
-| [`GLOBAL_SETTINGS_PLAN.md`](GLOBAL_SETTINGS_PLAN.md)                                   | NOT_IMPLEMENTED | —            |
-| [`ADDITIONAL_INSTRUCTIONS_PLAN.md`](ADDITIONAL_INSTRUCTIONS_PLAN.md)                   | NOT_IMPLEMENTED | —            |
-| [`INLINE_SUGGESTIONS_PLAN.md`](INLINE_SUGGESTIONS_PLAN.md)                             | NOT_IMPLEMENTED | —            |
-| [`LIVE_CONTEXT_WINDOW_PLAN.md`](LIVE_CONTEXT_WINDOW_PLAN.md)                           | NOT_IMPLEMENTED | —            |
-| [`PARALLEL_STEPS_PLAN.md`](PARALLEL_STEPS_PLAN.md)                                     | NOT_IMPLEMENTED | —            |
-| [`SCM_COMMIT_MESSAGE_BUTTON.md`](SCM_COMMIT_MESSAGE_BUTTON.md)                         | NOT_IMPLEMENTED | —            |
-| [`SCRIPT_STEP_PLAN.md`](SCRIPT_STEP_PLAN.md)                                           | NOT_IMPLEMENTED | —            |
-| [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md)                                       | NOT_IMPLEMENTED | —            |
-| [`DROPDOWN_VALIDATION_STYLING_PLAN.md`](DROPDOWN_VALIDATION_STYLING_PLAN.md)           | NOT_IMPLEMENTED | —            |
-| [`CLINE_INTEGRATION_PLAN.md`](CLINE_INTEGRATION_PLAN.md)                               | NOT_IMPLEMENTED | —            |
-| [`VSCODE_LM_API_FEATURES.md`](VSCODE_LM_API_FEATURES.md)                              | NOT_IMPLEMENTED | —            |
-| [`VSCODE_TESTING_E2E_MCP.md`](VSCODE_TESTING_E2E_MCP.md)                              | NOT_IMPLEMENTED | —            |
+| Document                                                                     | Status          | Roadmap Item |
+| ---------------------------------------------------------------------------- | --------------- | ------------ |
+| [`AGENTS_MD_GENERATION.md`](AGENTS_MD_GENERATION.md)                         | NOT_IMPLEMENTED | 2.2          |
+| [`BMAD_FOR_FLIGHTPATH.md`](BMAD_FOR_FLIGHTPATH.md)                           | NOT_IMPLEMENTED | 1.1          |
+| [`TEMPLATE_SETUP_SCRIPTS.md`](TEMPLATE_SETUP_SCRIPTS.md)                     | NOT_IMPLEMENTED | 2.1          |
+| [`INLINE_PRIOR_CONTEXT_PLAN.md`](INLINE_PRIOR_CONTEXT_PLAN.md)               | NOT_IMPLEMENTED | 2.6          |
+| [`STANDALONE_SERVER_PLAN.md`](STANDALONE_SERVER_PLAN.md)                     | NOT_IMPLEMENTED | 3.1          |
+| [`GLOBAL_SETTINGS_PLAN.md`](GLOBAL_SETTINGS_PLAN.md)                         | NOT_IMPLEMENTED | —            |
+| [`ADDITIONAL_INSTRUCTIONS_PLAN.md`](ADDITIONAL_INSTRUCTIONS_PLAN.md)         | NOT_IMPLEMENTED | —            |
+| [`INLINE_SUGGESTIONS_PLAN.md`](INLINE_SUGGESTIONS_PLAN.md)                   | NOT_IMPLEMENTED | —            |
+| [`LIVE_CONTEXT_WINDOW_PLAN.md`](LIVE_CONTEXT_WINDOW_PLAN.md)                 | NOT_IMPLEMENTED | —            |
+| [`PARALLEL_STEPS_PLAN.md`](PARALLEL_STEPS_PLAN.md)                           | NOT_IMPLEMENTED | —            |
+| [`SCM_COMMIT_MESSAGE_BUTTON.md`](SCM_COMMIT_MESSAGE_BUTTON.md)               | NOT_IMPLEMENTED | —            |
+| [`SCRIPT_STEP_PLAN.md`](SCRIPT_STEP_PLAN.md)                                 | NOT_IMPLEMENTED | —            |
+| [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md)                             | NOT_IMPLEMENTED | —            |
+| [`DROPDOWN_VALIDATION_STYLING_PLAN.md`](DROPDOWN_VALIDATION_STYLING_PLAN.md) | NOT_IMPLEMENTED | —            |
+| [`CLINE_INTEGRATION_PLAN.md`](CLINE_INTEGRATION_PLAN.md)                     | NOT_IMPLEMENTED | —            |
+| [`VSCODE_LM_API_FEATURES.md`](VSCODE_LM_API_FEATURES.md)                     | NOT_IMPLEMENTED | —            |
+| [`VSCODE_TESTING_E2E_MCP.md`](VSCODE_TESTING_E2E_MCP.md)                     | NOT_IMPLEMENTED | —            |

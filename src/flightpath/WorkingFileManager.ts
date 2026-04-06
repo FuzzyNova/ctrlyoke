@@ -1,7 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import type { WorkflowStep, WorkingFile } from "../types/FlightPathTypes";
-import type { FinalPromptRuntimeState } from "../types/FlightPathTypes";
+import type { FinalStepRuntimeState } from "../types/FlightPathTypes";
 import { Harness } from "../types/FlightPathTypes";
 import { EXECUTION_STATES } from "../types/DashboardConstants";
 import type { ExecutionState } from "../types/DashboardConstants";
@@ -39,8 +39,8 @@ export interface IWorkingFileQueueAccess {
   /** Emit state change notification to listeners */
   emitStateChange(): void;
 
-  /** Runtime metadata for workflow-level finalPrompt execution */
-  getFinalPromptRuntime(): FinalPromptRuntimeState | undefined;
+  /** Runtime metadata for workflow-level finalStep execution */
+  getFinalStepRuntime(): FinalStepRuntimeState | undefined;
 
   /** Update a workflow property in cached workflow file */
   updateWorkflowProperty(key: string, value: unknown): void;
@@ -244,8 +244,7 @@ export class WorkingFileManager {
         if (!skipMerge) {
           const diskSteps = workingFile.steps || [];
 
-          const newStepsFromDisk =
-            this.queueAccess.mergeDiskSteps(diskSteps);
+          const newStepsFromDisk = this.queueAccess.mergeDiskSteps(diskSteps);
 
           // If disk has new steps, log and emit state change
           if (newStepsFromDisk.length > 0) {
@@ -283,11 +282,11 @@ export class WorkingFileManager {
 
         // Update workflow-level runtime state
         // completedPrompts is no longer written; per-prompt _runtime.completedAt is the source of truth
-        const finalPromptRuntime = this.queueAccess.getFinalPromptRuntime();
+        const finalStepRuntime = this.queueAccess.getFinalStepRuntime();
         workingFile._runtime = {
           currentIndex: this.queueAccess.getCurrentIndex(),
           executionState: this.queueAccess.getStatus(),
-          ...(finalPromptRuntime ? { finalPrompt: finalPromptRuntime } : {}),
+          ...(finalStepRuntime ? { finalStep: finalStepRuntime } : {}),
         };
 
         // Write atomically while holding lock

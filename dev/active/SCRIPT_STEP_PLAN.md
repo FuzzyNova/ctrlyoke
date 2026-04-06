@@ -7,16 +7,16 @@ shell script/command directly with no AI interaction. Script steps can appear an
 the queue and as the final step. This replaces the current workaround of pairing a no-op
 prompt with an `endCondition` that always passes.
 
-### `finalPrompt` → `finalStep` rename
+### `finalStep` → `finalStep` rename
 
-The `finalPrompt` schema field and `PromptFile.finalPrompt` type are renamed to
+The `finalStep` schema field and `PromptFile.finalStep` type are renamed to
 `finalStep` / `PromptFile.finalStep` as part of this work. Since the field can now hold
-either an AI prompt or a script step, `finalPrompt` is a misnomer. Pre-release — no
+either an AI prompt or a script step, `finalStep` is a misnomer. Pre-release — no
 backward compatibility constraints. The rename is mechanical across ~20 references.
 
 Internal runtime identifiers that describe the AI-specific loop behaviour
-(`FinalPromptPhase`, `finalPromptSessionId`, `finalPromptRuntime`, `finalPromptAll`,
-`finalPromptPrevious`) are **not renamed** — they specifically describe the loop mechanism
+(`FinalStepPhase`, `finalStepSessionId`, `finalStepRuntime`, `finalStepAll`,
+`finalStepPrevious`) are **not renamed** — they specifically describe the loop mechanism
 which only applies to AI final steps.
 
 ---
@@ -122,7 +122,7 @@ export function isScriptStep(step: WorkflowStep): step is ScriptStep {
 }
 ```
 
-`PromptFile.prompts`, `PromptFile.finalPrompt`, `QueueState.prompts`, and
+`PromptFile.prompts`, `PromptFile.finalStep`, `QueueState.prompts`, and
 `WorkflowContext` are updated from `PromptItem[]` / `PromptItem` to `WorkflowStep[]` /
 `WorkflowStep`.
 
@@ -236,7 +236,7 @@ PTY sessions). A `source: "script"` marker on `DashboardOutput` entries triggers
 simplified rendering: plain stdout/stderr text with an exit code summary line. No tool
 call events, no thinking blocks, no structured events.
 
-### `FinalPromptFooter`
+### `FinalStepFooter`
 
 Checks `isScriptStep(finalStep)` → renders `"Final Script"` label and Script badge
 instead of harness/model info.
@@ -301,8 +301,8 @@ prompts:
 
 ### Script as `finalStep`
 
-Note: `finalPrompt` is renamed to `finalStep` in this work. A script `finalStep` runs
-**exactly once** — the AI loop mechanism (`FinalPromptPhase`, `loopCount`) is bypassed.
+Note: `finalStep` is renamed to `finalStep` in this work. A script `finalStep` runs
+**exactly once** — the AI loop mechanism (`FinalStepPhase`, `loopCount`) is bypassed.
 
 ```yaml
 prompts:
@@ -332,29 +332,29 @@ finalStep:
 
 ## File Change Summary
 
-| File                                                            | Change                                                                                                                                                                                    |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schemas/prompt-schema.json`                                    | Add `scriptStep`; `promptItem` → `oneOf`; rename existing to `aiPromptItem`; rename `finalPrompt` → `finalStep`                                                                           |
-| `src/types/FlightPathTypes.ts`                                  | Add `ScriptStep`, `WorkflowStep`, `isScriptStep()`; rename `PromptFile.finalPrompt` → `finalStep`; update `QueueState`                                                                    |
-| `src/types/WebviewMessageTypes.ts`                              | Rename `finalPrompt` → `finalStep` in all message types; `finalPrompt?: PromptItem` → `finalStep?: WorkflowStep` (~6 message interfaces)                                                  |
-| `src/types/WorkflowContextTypes.ts`                             | Guard `finalPromptSessionId` — only populated when finalStep is an AI prompt                                                                                                              |
-| `src/types/DashboardConstants.ts`                               | Add `STEP_TYPES`; add `STEP_TYPE`, `SCRIPT`, `CONTINUE_ON_FAILURE` to `PROMPT_PROPERTIES`                                                                                                 |
-| `src/flightpath/WorkflowExecutor.ts`                            | Route `isScriptStep` → `executeScriptStep()`; rename `executeFinalPrompt` → `executeFinalStep()`; bypass loop mechanism for script finalStep; streaming output                            |
-| `src/flightpath/PromptFileParser.ts`                            | Validate `scriptStep` via AJV; type narrowing after parse; parse `finalStep` field                                                                                                        |
-| `src/flightpath/PromptQueue.ts`                                 | `prompts` typed as `WorkflowStep[]`; `finalPrompt` accessors → `finalStep`                                                                                                                |
-| `src/flightpath/PropertyResolver.ts`                            | Bypass for script steps; `{{var}}` substitution still applies to `script` field                                                                                                           |
-| `src/flightpath/EndConditionHandler.ts`                         | Extract `evaluateScript()` helper shared by end conditions and script steps                                                                                                               |
-| `src/flightpath/WorkingFileManager.ts`                          | Serialize/deserialize `WorkflowStep[]`; rename `finalPrompt` → `finalStep` in working file format                                                                                         |
-| `src/ui/webview-react/store/editorStore.ts`                     | Add `stepType`, `scriptCommand` fields; close PropertiesDrawer on type switch                                                                                                             |
-| `src/ui/webview-react/store/workflowStore.ts`                   | `prompts: WorkflowStep[]`; `finalPrompt` → `finalStep`; guard script step fields at access sites                                                                                          |
-| `src/ui/webview-react/components/editor/PromptEditor.tsx`       | Segmented Prompt/Script control; conditional editor UI; close drawer on type switch to Script                                                                                             |
-| `src/ui/webview-react/components/editor/EditorFooter.tsx`       | When `stepType === "script"`: hide all 6 quick pickers (Harness, Model, Agent, Skills, Permissions, Context) and the DrawerTabBar — only action buttons (Add/Update/Cancel/Delete) remain |
-| `src/ui/webview-react/components/layout/EditorSection.tsx`      | `getModeText()` returns `"Editing: Final Script"` / `"New Script"` for script steps; hide token count display (rendered in this header, not in the footer)                                |
-| `src/ui/webview-react/components/prompts/PromptItem.tsx`        | Script step variant (terminal icon, Script badge, command subtitle)                                                                                                                       |
-| `src/ui/webview-react/components/prompts/PromptsPanel.tsx`      | Iterate `WorkflowStep[]`; pass `stepType` to `PromptItem`                                                                                                                                 |
-| `src/ui/webview-react/components/prompts/FinalPromptFooter.tsx` | `isScriptStep` check → `"Final Script"` label                                                                                                                                             |
-| `src/ui/webview-react/components/output/CliOutput.tsx`          | `source: "script"` → simplified rendering                                                                                                                                                 |
-| `src/completions/`                                              | Suppress AI completions / offer script completions when `type: script`                                                                                                                    |
+| File                                                          | Change                                                                                                                                                                                    |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schemas/prompt-schema.json`                                  | Add `scriptStep`; `promptItem` → `oneOf`; rename existing to `aiPromptItem`; rename `finalStep` → `finalStep`                                                                             |
+| `src/types/FlightPathTypes.ts`                                | Add `ScriptStep`, `WorkflowStep`, `isScriptStep()`; rename `PromptFile.finalStep` → `finalStep`; update `QueueState`                                                                      |
+| `src/types/WebviewMessageTypes.ts`                            | Rename `finalStep` → `finalStep` in all message types; `finalStep?: PromptItem` → `finalStep?: WorkflowStep` (~6 message interfaces)                                                      |
+| `src/types/WorkflowContextTypes.ts`                           | Guard `finalStepSessionId` — only populated when finalStep is an AI prompt                                                                                                                |
+| `src/types/DashboardConstants.ts`                             | Add `STEP_TYPES`; add `STEP_TYPE`, `SCRIPT`, `CONTINUE_ON_FAILURE` to `PROMPT_PROPERTIES`                                                                                                 |
+| `src/flightpath/WorkflowExecutor.ts`                          | Route `isScriptStep` → `executeScriptStep()`; rename `executeFinalStep` → `executeFinalStep()`; bypass loop mechanism for script finalStep; streaming output                              |
+| `src/flightpath/PromptFileParser.ts`                          | Validate `scriptStep` via AJV; type narrowing after parse; parse `finalStep` field                                                                                                        |
+| `src/flightpath/PromptQueue.ts`                               | `prompts` typed as `WorkflowStep[]`; `finalStep` accessors → `finalStep`                                                                                                                  |
+| `src/flightpath/PropertyResolver.ts`                          | Bypass for script steps; `{{var}}` substitution still applies to `script` field                                                                                                           |
+| `src/flightpath/EndConditionHandler.ts`                       | Extract `evaluateScript()` helper shared by end conditions and script steps                                                                                                               |
+| `src/flightpath/WorkingFileManager.ts`                        | Serialize/deserialize `WorkflowStep[]`; rename `finalStep` → `finalStep` in working file format                                                                                           |
+| `src/ui/webview-react/store/editorStore.ts`                   | Add `stepType`, `scriptCommand` fields; close PropertiesDrawer on type switch                                                                                                             |
+| `src/ui/webview-react/store/workflowStore.ts`                 | `prompts: WorkflowStep[]`; `finalStep` → `finalStep`; guard script step fields at access sites                                                                                            |
+| `src/ui/webview-react/components/editor/PromptEditor.tsx`     | Segmented Prompt/Script control; conditional editor UI; close drawer on type switch to Script                                                                                             |
+| `src/ui/webview-react/components/editor/EditorFooter.tsx`     | When `stepType === "script"`: hide all 6 quick pickers (Harness, Model, Agent, Skills, Permissions, Context) and the DrawerTabBar — only action buttons (Add/Update/Cancel/Delete) remain |
+| `src/ui/webview-react/components/layout/EditorSection.tsx`    | `getModeText()` returns `"Editing: Final Script"` / `"New Script"` for script steps; hide token count display (rendered in this header, not in the footer)                                |
+| `src/ui/webview-react/components/prompts/PromptItem.tsx`      | Script step variant (terminal icon, Script badge, command subtitle)                                                                                                                       |
+| `src/ui/webview-react/components/prompts/PromptsPanel.tsx`    | Iterate `WorkflowStep[]`; pass `stepType` to `PromptItem`                                                                                                                                 |
+| `src/ui/webview-react/components/prompts/FinalStepFooter.tsx` | `isScriptStep` check → `"Final Script"` label                                                                                                                                             |
+| `src/ui/webview-react/components/output/CliOutput.tsx`        | `source: "script"` → simplified rendering                                                                                                                                                 |
+| `src/completions/`                                            | Suppress AI completions / offer script completions when `type: script`                                                                                                                    |
 
 ---
 
@@ -369,9 +369,9 @@ finalStep:
 | `resumeSession: true` on step after a script step | Resumes from last _AI_ step's session; script step has no session                                                                                                                                                                                                                                                                                                                                                                                   |
 | Non-zero exit, `continueOnFailure: false`         | Step fails, workflow stops                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Non-zero exit, `continueOnFailure: true`          | Step completes with warning badge, workflow continues                                                                                                                                                                                                                                                                                                                                                                                               |
-| Script step as `finalPrompt`                      | `executeFinalPrompt()` routes through `executeScriptStep()`                                                                                                                                                                                                                                                                                                                                                                                         |
+| Script step as `finalStep`                        | `executeFinalStep()` routes through `executeScriptStep()`                                                                                                                                                                                                                                                                                                                                                                                           |
 | `{{var}}` in script command                       | Substituted by existing variable pipeline before execution                                                                                                                                                                                                                                                                                                                                                                                          |
-| Script step as `finalStep` (loop)                 | The AI loop mechanism (`FinalPromptPhase`, `loopCount`, `finalPromptAll`/`Previous`) is bypassed entirely. `executeFinalStep()` calls `executeScriptStep()` once and the workflow completes. `finalPromptSessionId` is not populated.                                                                                                                                                                                                               |
+| Script step as `finalStep` (loop)                 | The AI loop mechanism (`FinalStepPhase`, `loopCount`, `finalStepAll`/`Previous`) is bypassed entirely. `executeFinalStep()` calls `executeScriptStep()` once and the workflow completes. `finalStepSessionId` is not populated.                                                                                                                                                                                                                     |
 | `enabled` on a script step (future)               | `ScriptStep` has `additionalProperties: false` — adding `enabled` (from `CONDITIONAL_STEPS_PLAN`) requires a schema update to `scriptStep`. This is a known future touch point; add `enabled?: boolean \| string` to `scriptStep` when that plan is implemented.                                                                                                                                                                                    |
 
 ---

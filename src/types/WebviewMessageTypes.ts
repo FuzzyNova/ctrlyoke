@@ -17,7 +17,7 @@
 
 import {
   ExecutionState,
-  FinalPromptPhase,
+  FinalStepPhase,
   StepStatus,
   HarnessId,
   MESSAGE_TYPES,
@@ -285,9 +285,9 @@ export interface InitMessageData {
   currentIndex: number;
   results: any[];
   finalStep?: WorkflowStep | null;
-  finalPromptStatus?: StepStatus | null;
-  finalPromptLoopCount?: number;
-  finalPromptPhase?: FinalPromptPhase | null;
+  finalStepStatus?: StepStatus | null;
+  finalStepLoopCount?: number;
+  finalStepPhase?: FinalStepPhase | null;
   globalSettings: {
     harness: HarnessId;
     model: string;
@@ -315,9 +315,9 @@ export interface FileSelectedMessage {
   steps: WorkflowStep[];
   workflowName?: string;
   finalStep?: WorkflowStep | null;
-  finalPromptStatus?: StepStatus | null;
-  finalPromptLoopCount?: number;
-  finalPromptPhase?: FinalPromptPhase | null;
+  finalStepStatus?: StepStatus | null;
+  finalStepLoopCount?: number;
+  finalStepPhase?: FinalStepPhase | null;
 }
 
 /**
@@ -332,9 +332,9 @@ export interface SessionRestoredMessage {
   currentIndex: number;
   workflowName?: string;
   finalStep?: WorkflowStep | null;
-  finalPromptStatus?: StepStatus | null;
-  finalPromptLoopCount?: number;
-  finalPromptPhase?: FinalPromptPhase | null;
+  finalStepStatus?: StepStatus | null;
+  finalStepLoopCount?: number;
+  finalStepPhase?: FinalStepPhase | null;
 }
 
 /**
@@ -454,43 +454,43 @@ export interface PromptDeletedMessage {
 /**
  * Update finalStep message (extension -> webview OR webview -> extension)
  */
-export interface UpdateFinalPromptMessage {
+export interface UpdateFinalStepMessage {
   type: typeof MESSAGE_TYPES.UPDATE_FINAL_PROMPT;
   finalStep: WorkflowStep | null;
 }
 
 /**
- * finalPrompt runtime status changed message (extension -> webview)
+ * finalStep runtime status changed message (extension -> webview)
  */
-export interface FinalPromptStatusChangedMessage {
+export interface FinalStepStatusChangedMessage {
   type: typeof MESSAGE_TYPES.FINAL_PROMPT_STATUS_CHANGED;
   status: StepStatus | null;
   loopCount: number;
-  phase: FinalPromptPhase | null;
+  phase: FinalStepPhase | null;
 }
 
 /**
- * finalPrompt CLI output message (extension -> webview)
+ * finalStep CLI output message (extension -> webview)
  */
-export interface FinalPromptOutputMessage {
+export interface FinalStepOutputMessage {
   type: typeof MESSAGE_TYPES.FINAL_PROMPT_OUTPUT;
   loopIndex: number;
   output: CliOutput;
 }
 
 /**
- * finalPrompt streaming chunk message (extension -> webview)
+ * finalStep streaming chunk message (extension -> webview)
  */
-export interface FinalPromptStreamingChunkMessage {
+export interface FinalStepStreamingChunkMessage {
   type: typeof MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK;
   loopIndex: number;
   chunk: string;
 }
 
 /**
- * finalPrompt streaming events message (extension -> webview)
+ * finalStep streaming events message (extension -> webview)
  */
-export interface FinalPromptStreamingEventsMessage {
+export interface FinalStepStreamingEventsMessage {
   type: typeof MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS;
   loopIndex: number;
   events: CliEvent[];
@@ -990,11 +990,11 @@ export type IncomingMessage =
   | CliStreamingChunkMessage
   | CliStreamingEventsMessage
   | StatusMessageMessage
-  | UpdateFinalPromptMessage
-  | FinalPromptStatusChangedMessage
-  | FinalPromptOutputMessage
-  | FinalPromptStreamingChunkMessage
-  | FinalPromptStreamingEventsMessage
+  | UpdateFinalStepMessage
+  | FinalStepStatusChangedMessage
+  | FinalStepOutputMessage
+  | FinalStepStreamingChunkMessage
+  | FinalStepStreamingEventsMessage
   | { type: typeof MESSAGE_TYPES.EXECUTION_COMPLETED }
   | StepsExtendedMessage
   | PromptDeletedMessage

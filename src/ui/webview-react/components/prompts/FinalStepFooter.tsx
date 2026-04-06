@@ -5,7 +5,7 @@ import type { PromptOverride } from "./PromptStepDetails";
 import {
   FINAL_STEP_PHASES,
   type StepStatus,
-  type FinalPromptPhase,
+  type FinalStepPhase,
 } from "../../types/messages";
 import type { CliOutput, WorkflowStep } from "../../store/workflowStore";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
@@ -23,7 +23,7 @@ interface FinalStepFooterProps {
   finalStep: WorkflowStep | null;
   status: StepStatus | null;
   loopCount: number;
-  phase: FinalPromptPhase | null;
+  phase: FinalStepPhase | null;
   isExpanded: boolean;
   isSelected: boolean;
   isReadOnly: boolean;
@@ -38,7 +38,7 @@ interface FinalStepFooterProps {
   modelLabel?: string;
   /** True when model is inherited (not set at prompt level) */
   modelIsDefault?: boolean;
-  /** Latest CLI output for the current final prompt loop */
+  /** Latest CLI output for the current final step loop */
   latestOutput?: CliOutput | null;
   /** Prompt-level property overrides to display as compact chips */
   overrides?: PromptOverride[];
@@ -70,14 +70,14 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
   latestOutput,
   overrides,
 }) => {
-  const hasFinalPrompt = !!finalStep;
-  const effectiveStatus: StepStatus = hasFinalPrompt
+  const hasFinalStep = !!finalStep;
+  const effectiveStatus: StepStatus = hasFinalStep
     ? (status ?? "pending")
     : "pending";
 
   return (
     <div className="border-t border-panel-border bg-sidebar-bg flex-shrink-0">
-      {hasFinalPrompt && isExpanded && finalStep && (
+      {hasFinalStep && isExpanded && finalStep && (
         <div
           className={`px-3 py-2 border-b border-panel-border ${
             isSelected
@@ -148,11 +148,11 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           }
         }}
       >
-        <StatusIcon status={effectiveStatus} disabled={!hasFinalPrompt} />
+        <StatusIcon status={effectiveStatus} disabled={!hasFinalStep} />
         <span className="text-[11px] font-semibold uppercase tracking-wide">
           {"Final Step"}
         </span>
-        {hasFinalPrompt && finalStep && isScriptStep(finalStep) && (
+        {hasFinalStep && finalStep && isScriptStep(finalStep) && (
           <span
             className="ml-1 px-1 py-[1px] rounded text-[9px] bg-badge-bg text-badge-fg opacity-75 flex-shrink-0"
             title="Script step — runs a shell command"
@@ -160,7 +160,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
             script
           </span>
         )}
-        {hasFinalPrompt && finalStep ? (
+        {hasFinalStep && finalStep ? (
           <span className="text-[12px] font-bold flex-1 opacity-90 text-terminal-ansiGreen">
             enabled
           </span>
@@ -175,7 +175,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           </span>
         )}
         <div className="ml-auto flex items-center gap-1">
-          {hasFinalPrompt && !isReadOnly && (
+          {hasFinalStep && !isReadOnly && (
             <button
               type="button"
               className="icon-btn py-0 px-1"
@@ -189,7 +189,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
               <i className="codicon codicon-trash text-[12px]" />
             </button>
           )}
-          {hasFinalPrompt && (
+          {hasFinalStep && (
             <button
               type="button"
               className="icon-btn py-0 px-1"

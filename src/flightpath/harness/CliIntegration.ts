@@ -475,13 +475,13 @@ export class CliIntegration extends HarnessIntegration {
         resolvedPriorContext,
         allPrompts,
         promptIndex,
-        finalPromptResponseTexts
+        finalStepResponseTexts
       ) => {
         const contextItems = this.gatherPriorContextItems(
           resolvedPriorContext,
           allPrompts,
           promptIndex,
-          finalPromptResponseTexts
+          finalStepResponseTexts
         );
         return contextItems.length > 0
           ? this.buildPriorContextXml(contextItems)
@@ -536,7 +536,8 @@ export class CliIntegration extends HarnessIntegration {
         onStreamingEvents: (events) => this.emitStreamingEvents(events),
         onResponseComplete: (response) => this.emitResponseComplete(response),
         onPtyExit: (session, exitCode) => this.handlePtyExit(session, exitCode),
-        cleanupTempFiles: (tempFilePaths) => this.cleanupTempFiles(tempFilePaths),
+        cleanupTempFiles: (tempFilePaths) =>
+          this.cleanupTempFiles(tempFilePaths),
       },
     });
 
@@ -548,7 +549,8 @@ export class CliIntegration extends HarnessIntegration {
         createInteractiveStartupCoordinator: () =>
           this.createInteractiveStartupCoordinator(),
         createResponseCollector: () => this.createResponseCollector(),
-        cleanupTempFiles: (tempFilePaths) => this.cleanupTempFiles(tempFilePaths),
+        cleanupTempFiles: (tempFilePaths) =>
+          this.cleanupTempFiles(tempFilePaths),
       },
       runtimeState: {
         getWorkspaceRoot: () => this.getWorkspaceRoot(),
@@ -582,7 +584,7 @@ export class CliIntegration extends HarnessIntegration {
       session.workflowContext,
       session.resolvedProperties,
       session.resolvedSessionId,
-      session.workflowContext?.getFinalPromptResponseTexts?.()
+      session.workflowContext?.getFinalStepResponseTexts?.()
     );
 
     session.preparePrompt(
@@ -705,7 +707,11 @@ export class CliIntegration extends HarnessIntegration {
       return;
     }
 
-    if (!success && this.failureTracker.wasLastFailureProcessExit() && workflowContext?.workingFilePersistence) {
+    if (
+      !success &&
+      this.failureTracker.wasLastFailureProcessExit() &&
+      workflowContext?.workingFilePersistence
+    ) {
       await this.promptRuntimeCoordinator.persistCancelledPromptRuntime({
         prompt,
         executionStartTime: session.executionStartTime,

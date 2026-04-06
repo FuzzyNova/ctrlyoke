@@ -34,7 +34,7 @@ interface PromptStepDetailsProps {
  *
  * Renders harness/model info, retry state, compact stats (context %, session ID,
  * duration), end condition result, status message, and property overrides.
- * Used by both PromptStep and FinalPromptFooter so future additions automatically
+ * Used by both PromptStep and FinalStepFooter so future additions automatically
  * appear in both places.
  */
 export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
@@ -52,7 +52,10 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
   const durationSeconds = details?.duration ?? latestOutput?.elapsed;
   const sessionId = latestOutput?.structured?.metadata?.sessionId;
   const tokens = latestOutput?.tokens;
-  const contextPct = calcContextPct(tokens?.contextWindowUsed, tokens?.contextWindowSize);
+  const contextPct = calcContextPct(
+    tokens?.contextWindowUsed,
+    tokens?.contextWindowSize
+  );
 
   const [copied, setCopied] = useState(false);
   const handleCopySessionId = useCallback(async () => {

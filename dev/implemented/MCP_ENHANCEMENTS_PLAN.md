@@ -365,7 +365,7 @@ Sourced from `queueData.harness` / `queueData.model` (top-level `WorkingFile` fi
 
 Now that MCP is the mechanism for dynamic queue extension, `allowDynamicExtension` is replaced by a richer `mcpServers` property that lets users inject any MCP server (not just FlightPath) into individual prompts. Simultaneously:
 
-- The `finalPrompt` loop gate (`if (!allowDynamicExtension) wrap up`) is removed entirely — the loop becomes purely behavioral (`queueSizeAfter > queueSizeBefore`)
+- The `finalStep` loop gate (`if (!allowDynamicExtension) wrap up`) is removed entirely — the loop becomes purely behavioral (`queueSizeAfter > queueSizeBefore`)
 - The `enableDynamicQueue` VS Code setting is renamed to `mcpServers` (array instead of boolean)
 
 See `docs/research/MCP_SERVERS_PROPERTY_PLAN.md` for the full plan.

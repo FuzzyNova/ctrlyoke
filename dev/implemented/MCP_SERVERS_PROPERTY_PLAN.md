@@ -339,18 +339,18 @@ if (harness === Harness.CopilotChat) {
 
 The `PropertyResolver` fallback returns the workspace default array as-is — it does not apply "last prompt only" logic. That is `WorkflowExecutor`'s concern.
 
-**`WorkflowExecutor` finalPrompt loop** — remove the flag check entirely:
+**`WorkflowExecutor` finalStep loop** — remove the flag check entirely:
 
 ```typescript
 // Before:
-const finalPromptAllowsDynamic = PropertyResolver.resolve(...).allowDynamicExtension;
-if (!finalPromptAllowsDynamic) { /* wrap up */ }
+const finalStepAllowsDynamic = PropertyResolver.resolve(...).allowDynamicExtension;
+if (!finalStepAllowsDynamic) { /* wrap up */ }
 
 // After: no flag check — loop is purely behavioral
 // (queueSizeAfter > queueSizeBefore is already the outer loop condition)
 ```
 
-`mcpServers` on the `finalPrompt` controls only whether MCP config is injected into the CLI invocation for that prompt. It has no bearing on whether the executor loops — that is determined solely by whether the queue grew. A workflow with `mcpServers: null` on the `finalPrompt` simply means the AI has no MCP tools during that step; if something else added prompts to the queue, the executor would still loop.
+`mcpServers` on the `finalStep` controls only whether MCP config is injected into the CLI invocation for that prompt. It has no bearing on whether the executor loops — that is determined solely by whether the queue grew. A workflow with `mcpServers: null` on the `finalStep` simply means the AI has no MCP tools during that step; if something else added prompts to the queue, the executor would still loop.
 
 ---
 
@@ -460,7 +460,7 @@ Returns `servers[].qualifiedName`, `servers[].displayName`, `servers[].descripti
 | `src/types/FlightPathTypes.ts`     | Add `McpServerConfig` interface; replace `allowDynamicExtension?: boolean` with `mcpServers?: (string \| McpServerConfig)[] \| null` in `ExecutionProperties`                                                                     |
 | `src/types/DashboardConstants.ts`  | Rename `ALLOW_DYNAMIC_EXTENSION` → `MCP_SERVERS`; update value to `"mcpServers"`                                                                                                                                                  |
 | `src/types/WebviewMessageTypes.ts` | Replace `allowDynamicExtension?: boolean` with `mcpServers?: (string \| McpServerConfig)[] \| null` in **three** interfaces: `PromptItemUpdate`, the global settings object in `WebviewInitMessage`, and `WorkflowSettingsUpdate` |
-| `schemas/prompt-schema.json`       | Remove `allowDynamicExtension`; add `McpServerConfig` def + `mcpServers` array property with `oneOf` string/object items; update `finalPrompt` description                                                                        |
+| `schemas/prompt-schema.json`       | Remove `allowDynamicExtension`; add `McpServerConfig` def + `mcpServers` array property with `oneOf` string/object items; update `finalStep` description                                                                          |
 
 Run `npm run generate-schema` after schema changes.
 
@@ -509,13 +509,13 @@ Run `npm run generate-schema` after schema changes.
 
 ### Tests
 
-| File                                                        | Change                                                                                                               |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `src/test/unit/PropertyResolver.test.ts`                    | Replace `resolveAllowDynamicExtension` suite with `resolveMcpServers`; update expected return types                  |
-| `src/test/unit/WorkflowExecutor.test.ts`                    | Remove `allowDynamicExtension: true` from `finalPrompt` fixtures; verify loop tests still pass on queue growth alone |
-| `src/ui/webview-react/test/store/settingsStore.test.ts`     | Replace `allowDynamicExtension` in test settings objects                                                             |
-| `src/ui/webview-react/test/utils/prompt.test.ts`            | Replace `allowDynamicExtension` in prompt item fixtures                                                              |
-| `src/ui/webview-react/test/hooks/useMessageHandler.test.ts` | Replace `allowDynamicExtension` in message handler fixtures                                                          |
+| File                                                        | Change                                                                                                             |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `src/test/unit/PropertyResolver.test.ts`                    | Replace `resolveAllowDynamicExtension` suite with `resolveMcpServers`; update expected return types                |
+| `src/test/unit/WorkflowExecutor.test.ts`                    | Remove `allowDynamicExtension: true` from `finalStep` fixtures; verify loop tests still pass on queue growth alone |
+| `src/ui/webview-react/test/store/settingsStore.test.ts`     | Replace `allowDynamicExtension` in test settings objects                                                           |
+| `src/ui/webview-react/test/utils/prompt.test.ts`            | Replace `allowDynamicExtension` in prompt item fixtures                                                            |
+| `src/ui/webview-react/test/hooks/useMessageHandler.test.ts` | Replace `allowDynamicExtension` in message handler fixtures                                                        |
 
 ### Validation
 

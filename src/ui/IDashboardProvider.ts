@@ -1,6 +1,6 @@
 import type { WorkflowSummary, PromptStep } from "../types/FlightPathTypes";
 import type { CliOutput } from "../types/WebviewMessageTypes";
-import type { StepStatus, FinalPromptPhase } from "../types/DashboardConstants";
+import type { StepStatus, FinalStepPhase } from "../types/DashboardConstants";
 
 /**
  * Platform-agnostic interface for pushing workflow state updates to the dashboard.
@@ -31,11 +31,11 @@ export interface IDashboardProvider {
     fileName: string,
     steps: any[],
     workflowName?: string,
-    finalPrompt?: PromptStep | null,
-    finalPromptRuntime?: {
+    finalStep?: PromptStep | null,
+    finalStepRuntime?: {
       status?: StepStatus;
       loopCount: number;
-      phase: FinalPromptPhase;
+      phase: FinalStepPhase;
     }
   ): Promise<void>;
 
@@ -47,11 +47,11 @@ export interface IDashboardProvider {
     executionState: string,
     currentIndex: number,
     workflowName?: string,
-    finalPrompt?: PromptStep | null,
-    finalPromptRuntime?: {
+    finalStep?: PromptStep | null,
+    finalStepRuntime?: {
       status?: StepStatus;
       loopCount: number;
-      phase: FinalPromptPhase;
+      phase: FinalStepPhase;
     }
   ): Promise<void>;
 

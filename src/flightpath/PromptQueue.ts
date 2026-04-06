@@ -3,7 +3,7 @@ import { TypedEmitter } from "../utils/TypedEmitter";
 import {
   PromptStep,
   PromptFile,
-  FinalPromptRuntimeState,
+  FinalStepRuntimeState,
   QueueState,
   WorkflowRuntimeState,
   PromptResult,
@@ -91,7 +91,7 @@ function getEffectiveRetryPrompt(
 export class PromptQueue {
   private state: InternalQueueState;
   private workflowFile?: PromptFile; // Store complete workflow file with workflow-level properties
-  private finalPromptRuntime?: FinalPromptRuntimeState;
+  private finalStepRuntime?: FinalStepRuntimeState;
   private onStateChanged = new TypedEmitter<QueueState>();
   private currentRetryCount: number = 0; // Track retry attempts for current prompt
   private readonly workingFileManager: WorkingFileManager;
@@ -121,7 +121,7 @@ export class PromptQueue {
       mergeDiskSteps: (diskSteps: WorkflowStep[]) =>
         this.mergeDiskSteps(diskSteps),
       emitStateChange: () => this.emitStateChange(),
-      getFinalPromptRuntime: () => this.getFinalPromptRuntime(),
+      getFinalStepRuntime: () => this.getFinalStepRuntime(),
       updateWorkflowProperty: (key: string, value: unknown) =>
         this.updateWorkflowProperty(key, value),
     };
@@ -174,7 +174,7 @@ export class PromptQueue {
     };
 
     this.workflowFile = undefined; // Clear workflow file reference
-    this.finalPromptRuntime = undefined;
+    this.finalStepRuntime = undefined;
     this.stateMachine.restore({
       status: EXECUTION_STATES.IDLE,
       stopped: false,
@@ -315,7 +315,7 @@ export class PromptQueue {
 
     // Store complete workflow file for property resolution
     this.workflowFile = promptFile;
-    this.finalPromptRuntime = undefined;
+    this.finalStepRuntime = undefined;
     this.stateMachine.restore({
       status: EXECUTION_STATES.IDLE,
       stopped: false,
@@ -340,7 +340,7 @@ export class PromptQueue {
       const workingFile = await this.readWorkingFile(workingFilePath);
 
       const runtime = workingFile._runtime;
-      this.finalPromptRuntime = runtime?.finalPrompt;
+      this.finalStepRuntime = runtime?.finalStep;
 
       const prompts = workingFile.steps ?? [];
 
@@ -505,7 +505,7 @@ export class PromptQueue {
     this.state.completedIndices = new Set<string>();
     this.state.totalExecutionTime = 0;
     this.state.queueExtensions = 0;
-    this.finalPromptRuntime = undefined;
+    this.finalStepRuntime = undefined;
 
     // Clear per-prompt _runtime data (sessionId, harness, model, etc.)
     // Stale session IDs from a previous run would cause log discovery and session
@@ -1195,58 +1195,58 @@ export class PromptQueue {
   }
 
   /**
-   * Get runtime state for workflow-level finalPrompt execution.
+   * Get runtime state for workflow-level finalStep execution.
    */
-  public getFinalPromptRuntime(): FinalPromptRuntimeState | undefined {
-    return this.finalPromptRuntime ? { ...this.finalPromptRuntime } : undefined;
+  public getFinalStepRuntime(): FinalStepRuntimeState | undefined {
+    return this.finalStepRuntime ? { ...this.finalStepRuntime } : undefined;
   }
 
   /**
-   * Persist runtime state for workflow-level finalPrompt execution.
-   * responseTexts accumulated via storeFinalPromptResponseText are preserved
+   * Persist runtime state for workflow-level finalStep execution.
+   * responseTexts accumulated via storeFinalStepResponseText are preserved
    * when the incoming runtime does not explicitly include them.
    */
-  public async setFinalPromptRuntime(
-    runtime: FinalPromptRuntimeState | undefined
+  public async setFinalStepRuntime(
+    runtime: FinalStepRuntimeState | undefined
   ): Promise<void> {
     if (runtime) {
-      const existingResponseTexts = this.finalPromptRuntime?.responseTexts;
-      this.finalPromptRuntime = {
+      const existingResponseTexts = this.finalStepRuntime?.responseTexts;
+      this.finalStepRuntime = {
         ...runtime,
         responseTexts: runtime.responseTexts ?? existingResponseTexts,
       };
     } else {
-      this.finalPromptRuntime = undefined;
+      this.finalStepRuntime = undefined;
     }
     await this.updateWorkingFile();
   }
 
   /**
-   * Store the response text from a single finalPrompt loop execution.
-   * Merges into the existing finalPromptRuntime.responseTexts array and flushes to disk.
+   * Store the response text from a single finalStep loop execution.
+   * Merges into the existing finalStepRuntime.responseTexts array and flushes to disk.
    *
    * @param loopIndex 0-based loop index (from ExecutionTarget.loopIndex)
    * @param text Plain-text AI response from this loop
    */
-  public async storeFinalPromptResponseText(
+  public async storeFinalStepResponseText(
     loopIndex: number,
     text: string
   ): Promise<void> {
-    if (!this.finalPromptRuntime) {
+    if (!this.finalStepRuntime) {
       return;
     }
-    const responseTexts = [...(this.finalPromptRuntime.responseTexts ?? [])];
+    const responseTexts = [...(this.finalStepRuntime.responseTexts ?? [])];
     responseTexts[loopIndex] = text;
-    this.finalPromptRuntime = { ...this.finalPromptRuntime, responseTexts };
+    this.finalStepRuntime = { ...this.finalStepRuntime, responseTexts };
     await this.updateWorkingFile();
   }
 
   /**
-   * Get all finalPrompt loop response texts accumulated so far.
+   * Get all finalStep loop response texts accumulated so far.
    * Returns a copy indexed by loopIndex (0-based); missing loops are empty strings.
    */
-  public getFinalPromptResponseTexts(): string[] {
-    return [...(this.finalPromptRuntime?.responseTexts ?? [])];
+  public getFinalStepResponseTexts(): string[] {
+    return [...(this.finalStepRuntime?.responseTexts ?? [])];
   }
 
   /**
@@ -1461,9 +1461,7 @@ export class PromptQueue {
    * Does NOT emit a state change event — the webview already has the correct state.
    * The working file watcher ignores changes in non-running states, so no re-broadcast occurs.
    */
-  public async syncStepsForUndoRedo(
-    newSteps: WorkflowStep[]
-  ): Promise<void> {
+  public async syncStepsForUndoRedo(newSteps: WorkflowStep[]): Promise<void> {
     const currentIndex = this.state.currentIndex;
     this.state.steps = newSteps;
 

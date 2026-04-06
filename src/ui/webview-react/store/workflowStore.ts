@@ -9,7 +9,7 @@ import {
   OUTPUT_HISTORY_KINDS,
   type ExecutionState,
   type StepStatus,
-  type FinalPromptPhase,
+  type FinalStepPhase,
   type PromptStep,
   type CliOutput,
   type RetryState,
@@ -89,18 +89,18 @@ interface WorkflowState {
   currentStep: number;
   totalSteps: number;
   finalStep: WorkflowStep | null;
-  finalPromptStatus: StepStatus | null;
-  finalPromptLoopCount: number;
-  finalPromptPhase: FinalPromptPhase | null;
+  finalStepStatus: StepStatus | null;
+  finalStepLoopCount: number;
+  finalStepPhase: FinalStepPhase | null;
 
-  // Live ordered output entries (queue + finalPrompt outputs and status messages)
+  // Live ordered output entries (queue + finalStep outputs and status messages)
   liveOrderedEntries: OrderedHistoryEntry[];
   liveSequence: number;
   retryStates: Record<number, RetryState>;
 
   // Streaming state (for incremental output)
   streamingChunks: Record<number, string>;
-  finalPromptStreamingChunks: Record<number, string>;
+  finalStepStreamingChunks: Record<number, string>;
 
   // Self-contained history snapshot for the currently-viewed historical run.
   // When isViewingHistory=true (in uiStore), OutputSection renders from historyOutputs
@@ -109,7 +109,7 @@ interface WorkflowState {
   historyOutputs: {
     orderedEntries: OrderedHistoryEntry[];
     promptOutputs: Record<number, StepOutput>;
-    finalPromptOutputs?: Record<number, StepOutput>;
+    finalStepOutputs?: Record<number, StepOutput>;
     runMetadata: Pick<
       WorkflowOutputHistory,
       "runId" | "startedAt" | "completedAt" | "executionState"
@@ -117,8 +117,8 @@ interface WorkflowState {
   } | null;
   /** Live workspace snapshots keyed by stepIndex (queue) */
   workspaceSnapshots: Record<number, WorkspaceSnapshot>;
-  /** Live workspace snapshots keyed by loopIndex (finalPrompt) */
-  finalPromptWorkspaceSnapshots: Record<number, WorkspaceSnapshot>;
+  /** Live workspace snapshots keyed by loopIndex (finalStep) */
+  finalStepWorkspaceSnapshots: Record<number, WorkspaceSnapshot>;
   /** Undo result state keyed by requestId — ephemeral, cleared after use */
   undoResults: Record<string, UndoResult>;
   /** UndoRecord per execution target (keyed by target key, same format as workspaceSnapshots) */
@@ -141,10 +141,10 @@ interface WorkflowActions {
   setCurrentStep: (step: number) => void;
   setTotalSteps: (total: number) => void;
   setFinalStep: (finalStep: WorkflowStep | null) => void;
-  setFinalPromptStatus: (
+  setFinalStepStatus: (
     status: StepStatus | null,
     loopCount: number,
-    phase: FinalPromptPhase | null
+    phase: FinalStepPhase | null
   ) => void;
 
   // Live entry management
@@ -153,8 +153,8 @@ interface WorkflowActions {
   appendStreamingChunk: (stepIndex: number, chunk: string) => void;
   clearStreamingChunk: (stepIndex: number) => void;
   appendStreamingEvents: (stepIndex: number, events: any[]) => void;
-  appendFinalPromptStreamingChunk: (loopIndex: number, chunk: string) => void;
-  appendFinalPromptStreamingEvents: (loopIndex: number, events: any[]) => void;
+  appendFinalStepStreamingChunk: (loopIndex: number, chunk: string) => void;
+  appendFinalStepStreamingEvents: (loopIndex: number, events: any[]) => void;
 
   // Retry management
   setRetryState: (
@@ -203,9 +203,9 @@ interface WorkflowActions {
     currentStep?: number;
     results?: Array<{ status?: StepStatus }>;
     finalStep?: WorkflowStep | null;
-    finalPromptStatus?: StepStatus | null;
-    finalPromptLoopCount?: number;
-    finalPromptPhase?: FinalPromptPhase | null;
+    finalStepStatus?: StepStatus | null;
+    finalStepLoopCount?: number;
+    finalStepPhase?: FinalStepPhase | null;
   }) => void;
   resetWorkflow: () => void;
   clearAllRuntimeState: () => void;
@@ -264,17 +264,17 @@ const initialState: WorkflowState = {
   currentStep: 0,
   totalSteps: 0,
   finalStep: null,
-  finalPromptStatus: null,
-  finalPromptLoopCount: 0,
-  finalPromptPhase: null,
+  finalStepStatus: null,
+  finalStepLoopCount: 0,
+  finalStepPhase: null,
   liveOrderedEntries: [],
   liveSequence: 0,
   retryStates: {},
   streamingChunks: {},
-  finalPromptStreamingChunks: {},
+  finalStepStreamingChunks: {},
   historyOutputs: null,
   workspaceSnapshots: {},
-  finalPromptWorkspaceSnapshots: {},
+  finalStepWorkspaceSnapshots: {},
   undoResults: {},
   undoRecords: {},
   undoWorkflowProperties: {},
@@ -344,10 +344,10 @@ export const useWorkflowStore = create<
           ...(finalStep
             ? {}
             : {
-                finalPromptStatus: null,
-                finalPromptLoopCount: 0,
-                finalPromptPhase: null,
-                finalPromptStreamingChunks: {},
+                finalStepStatus: null,
+                finalStepLoopCount: 0,
+                finalStepPhase: null,
+                finalStepStreamingChunks: {},
                 liveOrderedEntries: state.liveOrderedEntries.filter(
                   (e) =>
                     "target" in e &&
@@ -357,12 +357,12 @@ export const useWorkflowStore = create<
           steps: state.steps,
         })),
 
-      setFinalPromptStatus: (status, loopCount, phase) =>
+      setFinalStepStatus: (status, loopCount, phase) =>
         withUndoPause(() =>
           set({
-            finalPromptStatus: status,
-            finalPromptLoopCount: loopCount,
-            finalPromptPhase: phase,
+            finalStepStatus: status,
+            finalStepLoopCount: loopCount,
+            finalStepPhase: phase,
           })
         ),
 
@@ -498,18 +498,18 @@ export const useWorkflowStore = create<
           })
         ),
 
-      appendFinalPromptStreamingChunk: (loopIndex, chunk) =>
+      appendFinalStepStreamingChunk: (loopIndex, chunk) =>
         withUndoPause(() =>
           set((state) => ({
-            finalPromptStreamingChunks: {
-              ...state.finalPromptStreamingChunks,
+            finalStepStreamingChunks: {
+              ...state.finalStepStreamingChunks,
               [loopIndex]:
-                (state.finalPromptStreamingChunks[loopIndex] || "") + chunk,
+                (state.finalStepStreamingChunks[loopIndex] || "") + chunk,
             },
           }))
         ),
 
-      appendFinalPromptStreamingEvents: (loopIndex, events) =>
+      appendFinalStepStreamingEvents: (loopIndex, events) =>
         withUndoPause(() =>
           set((state) => {
             const target: OutputExecutionTarget = {
@@ -628,9 +628,9 @@ export const useWorkflowStore = create<
         currentStep = 0,
         results = [],
         finalStep = null,
-        finalPromptStatus = null,
-        finalPromptLoopCount = 0,
-        finalPromptPhase = null,
+        finalStepStatus = null,
+        finalStepLoopCount = 0,
+        finalStepPhase = null,
       }) => {
         // Apply status from results to prompts
         const promptsWithStatus = steps.map((prompt, index) => ({
@@ -647,15 +647,15 @@ export const useWorkflowStore = create<
             currentStep,
             totalSteps: steps.length,
             finalStep,
-            finalPromptStatus,
-            finalPromptLoopCount,
-            finalPromptPhase,
+            finalStepStatus,
+            finalStepLoopCount,
+            finalStepPhase,
             // Clear runtime state on new workflow
             liveOrderedEntries: [],
             liveSequence: 0,
             retryStates: {},
             streamingChunks: {},
-            finalPromptStreamingChunks: {},
+            finalStepStreamingChunks: {},
           })
         );
         useWorkflowStore.temporal.getState().clear();
@@ -680,7 +680,7 @@ export const useWorkflowStore = create<
               historyOutputs: {
                 orderedEntries: history.orderedEntries,
                 promptOutputs: history.promptOutputs,
-                finalPromptOutputs: history.finalPromptOutputs,
+                finalStepOutputs: history.finalStepOutputs,
                 runMetadata: {
                   runId: history.runId,
                   startedAt: history.startedAt,
@@ -690,7 +690,7 @@ export const useWorkflowStore = create<
               },
               undoRecords: {},
               workspaceSnapshots: {},
-              finalPromptWorkspaceSnapshots: {},
+              finalStepWorkspaceSnapshots: {},
             };
           })
         ),
@@ -700,7 +700,7 @@ export const useWorkflowStore = create<
 
       resetExecutionState: (steps) => {
         // Not wrapped in pause/resume — this is a user-initiated action.
-        // partialize ensures only prompts/workflowName/finalPrompt are snapshotted,
+        // partialize ensures only prompts/workflowName/finalStep are snapshotted,
         // so executionState/currentStep changes here are NOT recorded in undo history.
         set(() => ({
           steps: steps.map((p) => ({
@@ -710,11 +710,11 @@ export const useWorkflowStore = create<
           totalSteps: steps.length,
           executionState: EXECUTION_STATES.IDLE,
           currentStep: 0,
-          finalPromptStatus: null,
-          finalPromptLoopCount: 0,
-          finalPromptPhase: null,
+          finalStepStatus: null,
+          finalStepLoopCount: 0,
+          finalStepPhase: null,
           // liveOrderedEntries, retryStates, streamingChunks, historyOutputs,
-          // finalPromptStreamingChunks are intentionally preserved
+          // finalStepStreamingChunks are intentionally preserved
           // so the run history and output panel are unaffected.
         }));
       },
@@ -753,24 +753,24 @@ export const useWorkflowStore = create<
               ),
               retryStates: newRetryStates,
               streamingChunks: newStreamingChunks,
-              finalPromptStreamingChunks: {},
-              finalPromptStatus: null,
-              finalPromptLoopCount: 0,
-              finalPromptPhase: null,
+              finalStepStreamingChunks: {},
+              finalStepStatus: null,
+              finalStepLoopCount: 0,
+              finalStepPhase: null,
             };
           })
         ),
 
       applyStartPositionChange: (steps, newCurrentStep) => {
         // Not wrapped in pause/resume — this is a user-initiated action.
-        // partialize ensures only prompts/workflowName/finalPrompt are snapshotted,
+        // partialize ensures only prompts/workflowName/finalStep are snapshotted,
         // so currentStep/executionState changes here are NOT recorded in undo history.
         set(() => ({
           steps,
           currentStep: newCurrentStep,
           totalSteps: steps.length,
           executionState: EXECUTION_STATES.IDLE,
-          finalPromptStatus: null,
+          finalStepStatus: null,
         }));
       },
 
@@ -832,12 +832,12 @@ export const useWorkflowStore = create<
             liveSequence: 0,
             retryStates: {},
             streamingChunks: {},
-            finalPromptStreamingChunks: {},
-            finalPromptStatus: null,
-            finalPromptLoopCount: 0,
-            finalPromptPhase: null,
+            finalStepStreamingChunks: {},
+            finalStepStatus: null,
+            finalStepLoopCount: 0,
+            finalStepPhase: null,
             workspaceSnapshots: {},
-            finalPromptWorkspaceSnapshots: {},
+            finalStepWorkspaceSnapshots: {},
             undoResults: {},
             undoRecords: {},
           })
@@ -854,8 +854,8 @@ export const useWorkflowStore = create<
             }));
           } else {
             set((state) => ({
-              finalPromptWorkspaceSnapshots: {
-                ...state.finalPromptWorkspaceSnapshots,
+              finalStepWorkspaceSnapshots: {
+                ...state.finalStepWorkspaceSnapshots,
                 [target.loopIndex]: snapshot,
               },
             }));
@@ -866,7 +866,7 @@ export const useWorkflowStore = create<
         const key =
           target.kind === FINAL_STEP_PHASES.QUEUE
             ? `queue-${target.stepIndex}`
-            : `finalPrompt-${target.loopIndex}`;
+            : `finalStep-${target.loopIndex}`;
         withUndoPause(() =>
           set((s) => ({ undoRecords: { ...s.undoRecords, [key]: record } }))
         );
@@ -889,15 +889,15 @@ export const useWorkflowStore = create<
                 },
               };
             } else {
-              if (!state.historyOutputs.finalPromptOutputs) return {};
+              if (!state.historyOutputs.finalStepOutputs) return {};
               const step =
-                state.historyOutputs.finalPromptOutputs[target.loopIndex];
+                state.historyOutputs.finalStepOutputs[target.loopIndex];
               if (!step) return {};
               return {
                 historyOutputs: {
                   ...state.historyOutputs,
-                  finalPromptOutputs: {
-                    ...state.historyOutputs.finalPromptOutputs,
+                  finalStepOutputs: {
+                    ...state.historyOutputs.finalStepOutputs,
                     [target.loopIndex]: { ...step, undoRecord },
                   },
                 },

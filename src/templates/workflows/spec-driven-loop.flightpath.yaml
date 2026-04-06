@@ -34,7 +34,7 @@ steps:
       - Complete the full implementation — no TODOs, stubs, or placeholders
       - Handle edge cases and error conditions throughout
 
-finalPrompt:
+finalStep:
   name: orchestrate
   agent: spec-orchestrator
   mcpServers:

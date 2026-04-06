@@ -21,7 +21,7 @@ function makeMockAccess(workingFilePath?: string): IWorkingFileQueueAccess {
     emitStateChange: () => {
       /* no-op */
     },
-    getFinalPromptRuntime: () => undefined,
+    getFinalStepRuntime: () => undefined,
     updateWorkflowProperty: () => {
       /* no-op */
     },

@@ -1044,19 +1044,19 @@
             "none",
             "previous",
             "all",
-            "finalPromptAll",
-            "finalPromptPrevious"
+            "finalStepAll",
+            "finalStepPrevious"
           ],
           "enumDescriptions": [
             "No prior context injection (default)",
             "Inject the previous prompt's output",
             "Inject all prior prompt outputs",
-            "Inject all finalPrompt outputs",
-            "Inject the previous finalPrompt output"
+            "Inject all finalStep outputs",
+            "Inject the previous finalStep output"
           ],
           "default": "none",
           "description": "Default prior context injection mode for workflow prompts",
-          "markdownDescription": "Default mode for injecting prior prompt outputs into subsequent prompts. Workflows and individual prompts can override this. `none` disables injection; `previous` injects only the preceding prompt's output; `all` injects all prior outputs; `finalPromptAll`/`finalPromptPrevious` target finalPrompt outputs specifically."
+          "markdownDescription": "Default mode for injecting prior prompt outputs into subsequent prompts. Workflows and individual prompts can override this. `none` disables injection; `previous` injects only the preceding prompt's output; `all` injects all prior outputs; `finalStepAll`/`finalStepPrevious` target finalStep outputs specifically."
         },
         "flightpath.resumeExistingSession": {
           "order": 550,

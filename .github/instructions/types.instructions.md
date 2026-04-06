@@ -16,7 +16,7 @@ Core data structures and constants for FlightPath extension. TypeScript strict m
 <flightPathTypes>
 **File: FlightPathTypes.ts**
 
-**`PriorContext` type:** `"all" | "previous" | "none" | "finalPromptAll" | "finalPromptPrevious" | number[]` — controls injection of prior prompt outputs as XML context before the prompt text.
+**`PriorContext` type:** `"all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious" | number[]` — controls injection of prior prompt outputs as XML context before the prompt text.
 
 **`Harness` enum:** `CopilotCli` | `CopilotChat` | `ClaudeCli` | `CodexCli` | `OpenCodeCli` | `QwenCli` | `GeminiCli` — values: `"copilot-cli"` | `"copilot-chat"` | `"claude-cli"` | `"codex-cli"` | `"opencode-cli"` | `"qwen-cli"` | `"gemini-cli"`
 
@@ -36,12 +36,12 @@ Fields: `harness?`, `model?`, `agent?: string | null` (null = explicitly disable
 
 **Core interfaces:**
 
-- `PromptFile extends ExecutionProperties` — `prompt?`, `prompts?: PromptItem[]`, `finalPrompt?: PromptItem`
+- `PromptFile extends ExecutionProperties` — `prompt?`, `prompts?: PromptItem[]`, `finalStep?: PromptItem`
 - `PromptItem extends ExecutionProperties` — `name?`, `prompt`, `sessionId?`, `_runtime?: PromptRuntimeMetadata`
 - `PromptRuntimeMetadata extends ExecutionProperties` — `startedAt`, `completedAt?`, `terminalStatus?: "completed" | "cancelled" | "failed"`, `retryCount?`, `responseText?` (for priorContext injection)
 - `WorkingFile extends PromptFile` — `originalFile?`, `workflowName`, `startedAt`, `lastModifiedAt?`, `_runtime?: WorkingFileRuntime`
-- `WorkingFileRuntime` — `currentIndex`, `executionState: ExecutionState`, `finalPrompt?: FinalPromptRuntimeState`
-- `FinalPromptRuntimeState` — `phase: FinalPromptPhase`, `loopCount`, `status?`, `startedAt?`, `completedAt?`, `responseTexts?: string[]`
+- `WorkingFileRuntime` — `currentIndex`, `executionState: ExecutionState`, `finalStep?: FinalStepRuntimeState`
+- `FinalStepRuntimeState` — `phase: FinalStepPhase`, `loopCount`, `status?`, `startedAt?`, `completedAt?`, `responseTexts?: string[]`
 - `QueueState` — `currentIndex`, `status: ExecutionState`, `prompts`, `results`, `stopped`, `completedIndices: Set<string>`, `totalExecutionTime`, `queueExtensions`, `lastReloadTime?`, `startTime?`, `pausedTime?`, `totalPausedDuration`, `workingFilePath?`, `workflowName?`
 - `PromptResult` — `prompt`, `status: StepStatus`, `timestamp`, `endConditionResult?`, `error?`, `retryCount?`, `scriptOutput?`
 - `EndCondition` — `script`, `returns`, `compareSource?: EndConditionCompareSource`, `timeout?`, `maxRetries?`, `retryPrompt?`, `resumeSessionOnRetry?`
@@ -61,15 +61,15 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 
 **Key methods:**
 
-- `updateFileSelected(fileName, prompts, workflowName?, finalPrompt?, finalPromptRuntime?)` — initial load
+- `updateFileSelected(fileName, prompts, workflowName?, finalStep?, finalStepRuntime?)` — initial load
 - `updateSessionRestored(fileName, prompts, results, executionState, currentIndex, ...)` — restore paused/stopped session
 - `updateExecutionStarted(workflowId, fileName, totalSteps, isContinuation?, preserveStepCount?)` — run begins
 - `updateProgress(current, total)` / `updateExecutionState(state)`
 - `updateStepStatus(stepIndex, status, details?)` / `updateRetryAttempt(stepIndex, currentRetry, maxRetries)`
 - `updateCliOutput(stepIndex, output)` / `updateCliStreamingChunk(stepIndex, chunk)` / `updateCliStreamingEvents(stepIndex, events)`
-- `updatePromptsExtended(prompts, finalPrompt?, executionState?)` / `updatePromptDeleted(...)`
-- `updateFinalPrompt(finalPrompt)` / `updateFinalPromptStatus(status, loopCount, phase)` / `updateFinalPromptOutput(loopIndex, output)`
-- `updateFinalPromptStreamingChunk(loopIndex, chunk)` / `updateFinalPromptStreamingEvents(loopIndex, events)`
+- `updatePromptsExtended(prompts, finalStep?, executionState?)` / `updatePromptDeleted(...)`
+- `updateFinalStep(finalStep)` / `updateFinalStepStatus(status, loopCount, phase)` / `updateFinalStepOutput(loopIndex, output)`
+- `updateFinalStepStreamingChunk(loopIndex, chunk)` / `updateFinalStepStreamingEvents(loopIndex, events)`
 - `updateWorkflowName(name)`
 - `notifyRunHistoryUpdated(runCount, runTimestamps?, runStates?)` / `notifyWorkflowStateReset(prompts)` / `notifyStartPositionSet(prompts, currentIndex)` / `notifyPromptsReordered(prompts)` / `notifyUndoRedoSynced()`
   </iDashboardSink>
@@ -113,7 +113,7 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 - `UndoCandidateTier` — `"tier1" | "tier2"` (event-attributed vs snapshot-only)
 
 **Message payload interfaces** (selection of key types):
-`InitMessageData` (globalSettings includes `hooks: UserHookConfig[]`), `FileSelectedMessage`, `SessionRestoredMessage`, `ExecutionStartedMessage` (with `workflowId`, `isContinuation?`/`preserveStepCount?`), `CliOutputMessage`, `CliStreamingEventsMessage`, `FinalPromptStatusChangedMessage`, `FinalPromptOutputMessage`, `FinalPromptStreamingChunkMessage`, `FinalPromptStreamingEventsMessage`, `AgentsUpdateMessage`, `SkillsUpdateMessage`, `GlobalSettingsUpdatedMessage` (globalSettings includes `hooks`, `harnessDefaultModels?`, `harnessDefaultAdditionalArgs?`, `skills?`, `respectGitignore?`, `confirmDeleteOperations?`, `confirmResetOperations?`), `WorkflowsListMessage`, `WorkflowAddedMessage`, `WorkflowDismissedMessage`, `WorkflowSummaryUpdatedMessage`, `SaveWorkflowDialogDataMessage`, `OutputHistoryLoadedMessage`, `StepUndoDataUpdatedMessage`, `UndoPromptChangesMessage`, `UndoPromptResultMessage`, `UndoRecordUpdatedMessage`, `RedoPromptChangesMessage`, `UndoWorkflowChangesMessage`, `RedoWorkflowChangesMessage`, `ReorderPromptsMessage`
+`InitMessageData` (globalSettings includes `hooks: UserHookConfig[]`), `FileSelectedMessage`, `SessionRestoredMessage`, `ExecutionStartedMessage` (with `workflowId`, `isContinuation?`/`preserveStepCount?`), `CliOutputMessage`, `CliStreamingEventsMessage`, `FinalStepStatusChangedMessage`, `FinalStepOutputMessage`, `FinalStepStreamingChunkMessage`, `FinalStepStreamingEventsMessage`, `AgentsUpdateMessage`, `SkillsUpdateMessage`, `GlobalSettingsUpdatedMessage` (globalSettings includes `hooks`, `harnessDefaultModels?`, `harnessDefaultAdditionalArgs?`, `skills?`, `respectGitignore?`, `confirmDeleteOperations?`, `confirmResetOperations?`), `WorkflowsListMessage`, `WorkflowAddedMessage`, `WorkflowDismissedMessage`, `WorkflowSummaryUpdatedMessage`, `SaveWorkflowDialogDataMessage`, `OutputHistoryLoadedMessage`, `StepUndoDataUpdatedMessage`, `UndoPromptChangesMessage`, `UndoPromptResultMessage`, `UndoRecordUpdatedMessage`, `RedoPromptChangesMessage`, `UndoWorkflowChangesMessage`, `RedoWorkflowChangesMessage`, `ReorderPromptsMessage`
 
 **MCP Discovery types:**
 
@@ -141,8 +141,8 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 - `workflowId`, `runId`, `startedAt`, `completedAt?`, `executionState: ExecutionState`
 - `runStepCount` — preserves original step count for correct history rendering
 - `promptOutputs: { [stepIndex: number]: StepOutput }` — queue step outputs
-- `finalPromptOutputs?: { [loopIndex: number]: StepOutput }` — finalPrompt loop outputs (schema 1.1.0+)
-- `outputTimeline?: OutputTimelineEntry[]` — chronological `{ key, target: OutputExecutionTarget, firstOutputAt }` for mixed queue/finalPrompt rendering
+- `finalStepOutputs?: { [loopIndex: number]: StepOutput }` — finalStep loop outputs (schema 1.1.0+)
+- `outputTimeline?: OutputTimelineEntry[]` — chronological `{ key, target: OutputExecutionTarget, firstOutputAt }` for mixed queue/finalStep rendering
 
 **`StepOutput` interface:**
 
@@ -159,7 +159,7 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 
 **Discriminated union types:**
 
-- `OutputExecutionTarget = { kind: "queue"; stepIndex } | { kind: "finalPrompt"; loopIndex }`
+- `OutputExecutionTarget = { kind: "queue"; stepIndex } | { kind: "finalStep"; loopIndex }`
 - `UndoExecutionTarget` — alias for `OutputExecutionTarget`
 - `UndoDialogScope = { mode: "prompt"; target } | { mode: "singleFile"; target; attemptIndex; path }`
   </outputHistoryTypes>
@@ -169,7 +169,7 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 
 Workflow context passed to harness `sendPrompt` calls. Single source of truth — replaces all per-file inline type duplicates. Add fields here; no other file needs updating for new context properties.
 
-**`WorkflowContext` interface:** `promptIndex`, `allPrompts: PromptItem[]`, `filePath?`, `workflowName?` (human-readable, for temp file naming), `instanceId?` (workflow UUID for PTY session keying), `workingFilePath?` (sets `FLIGHTPATH_WORKING_FILE` for MCP), `resolvedProperties?: ResolvedProperties`, `workflowFile?: PromptFile`, `promptQueue?: PromptQueue`, `finalPromptSessionId?` (consumed by SessionResolver when sessionId is the "finalPrompt" sentinel)
+**`WorkflowContext` interface:** `promptIndex`, `allPrompts: PromptItem[]`, `filePath?`, `workflowName?` (human-readable, for temp file naming), `instanceId?` (workflow UUID for PTY session keying), `workingFilePath?` (sets `FLIGHTPATH_WORKING_FILE` for MCP), `resolvedProperties?: ResolvedProperties`, `workflowFile?: PromptFile`, `promptQueue?: PromptQueue`, `finalStepSessionId?` (consumed by SessionResolver when sessionId is the "finalStep" sentinel)
 </workflowContextTypes>
 
 <dashboardConstants>
@@ -182,7 +182,7 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 - `MESSAGE_TYPES` — 100+ extension↔webview message type strings (includes Terminal I/O, MCP Discovery, Workflow Undo/Redo)
 - `EXECUTION_STATES` — `idle | running | paused | stopped | cancelling | completed | error`
 - `STEP_STATUS` — `pending | sent | running | completed | failed | cancelled | skipped`
-- `FINAL_PROMPT_PHASES` — `queue | finalPrompt`
+- `FINAL_PROMPT_PHASES` — `queue | finalStep`
 - `ACTION_TYPES` — `run | queue | runNext | queueNext | runBeforeCurrent`
 - `HARNESS_IDS` — `copilot-cli | copilot-chat | claude-cli | codex-cli | opencode-cli | qwen-cli | gemini-cli`
 - `HARNESS_INFO` — display names per harness (name, shortName)
@@ -196,7 +196,7 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 - `EDITOR_PLACEHOLDER_TEXT` — `DEFAULT`, `FINAL_PROMPT` (placeholder hints for CodeMirrorEditor)
 - `TERMINAL_SESSION_STATUS` — `running | completed | failed`
 - `SESSION_KINDS` — `ai-cli | shell`
-- `SESSION_ID_SENTINELS` — `{ FINAL_PROMPT: "finalPrompt" }` (resume session from prior finalPrompt loop)
+- `SESSION_ID_SENTINELS` — `{ FINAL_PROMPT: "finalStep" }` (resume session from prior finalStep loop)
 - `PROMPT_PROPERTIES` — property name constants: `PROMPT`, `ID`, `HARNESS`, `MODEL`, `AGENT`, `SKILLS`, `RESUME_SESSION`, `SESSION_ID`, `MCP_SERVERS`, `HOOKS`, `END_CONDITION`
 - `END_CONDITION_PROPERTIES` — `SCRIPT`, `RETURNS`, `TIMEOUT`, `MAX_RETRIES`, `RETRY_PROMPT`, `RESUME_SESSION_ON_RETRY`
 - `CLI_EVENT_TYPES` — `text | thinking | bashCommand | fileRead | fileWrite | fileEdit | fileDelete | mcpToolCall | webSearch | toolCall | toolResult`
@@ -208,7 +208,7 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 - `ATTACHMENT_PREFIXES` — `file | symbol | directory | selection | git` (id namespace for `<attachment>` XML elements)
 - `DEFAULT_WORKFLOW_NAME` — `"New Workflow"`
 
-**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `FinalPromptPhase`, `HarnessId`, `StatusMessageSeverity`, `ActionType`, `QueuePosition`, `FileOperationStatus`, `CliEventType`, `HarnessStatusString`, `WebviewLogLevel`, `RunnerId`, `LockStatus`, `ExecutionMode`, `EditorTargetKind`, `TerminalSessionStatus`, `SessionKind`
+**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `FinalStepPhase`, `HarnessId`, `StatusMessageSeverity`, `ActionType`, `QueuePosition`, `FileOperationStatus`, `CliEventType`, `HarnessStatusString`, `WebviewLogLevel`, `RunnerId`, `LockStatus`, `ExecutionMode`, `EditorTargetKind`, `TerminalSessionStatus`, `SessionKind`
 </dashboardConstants>
 
 <typeSafetyPatterns>
@@ -226,12 +226,12 @@ this.postMessage({ type: MESSAGE_TYPES.PROGRESS_UPDATE, data: { ... } });
 **Use type helpers for function signatures:**
 
 ```typescript
-import { ExecutionState, StepStatus, HarnessId, FinalPromptPhase } from "../types/DashboardConstants";
+import { ExecutionState, StepStatus, HarnessId, FinalStepPhase } from "../types/DashboardConstants";
 
 function updateState(status: ExecutionState) { ... }
 function getStepResult(status: StepStatus) { ... }
 function getHarness(harness: HarnessId) { ... }
-function setPhase(phase: FinalPromptPhase) { ... }
+function setPhase(phase: FinalStepPhase) { ... }
 ```
 
 **ExecutionProperties with three-tier precedence:**
@@ -284,7 +284,7 @@ const resumeSession =
 <criticalRules>
 1. **NO HARDCODED STRINGS** - All shared string literals MUST be defined in DashboardConstants.ts
 2. **Single Source of Truth** - Each constant has exactly ONE definition location
-3. **Type Safety** - Use ExecutionState, StepStatus, MessageType, HarnessId, FinalPromptPhase, etc. instead of raw strings
+3. **Type Safety** - Use ExecutionState, StepStatus, MessageType, HarnessId, FinalStepPhase, etc. instead of raw strings
 4. **Import Consistency** - Always import from DashboardConstants for shared values
 5. **Harness terminology** - Use "harness" (not "provider") for AI framework/tool selection
 6. **Null semantics for agent/skills/additionalArgs/hooks/toolPermissions/mcpServers/endCondition** - `null` = explicitly disable, `undefined` = inherit; use `??` not `||`

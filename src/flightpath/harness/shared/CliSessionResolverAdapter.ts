@@ -33,16 +33,14 @@ export class CliSessionResolverAdapter {
       workflowContext?.promptIndex ?? 0,
       workflowContext?.allPrompts ?? [prompt],
       workflowContext?.workflowFile,
-      workflowContext?.finalPromptSessionId
+      workflowContext?.finalStepSessionId
     );
 
     if (resolvedSessionId) {
       const harness =
         resolvedProperties?.harness ?? this.deps.getIntegrationHarness();
       if (!SessionValidator.validate(resolvedSessionId, harness)) {
-        Log.info(
-          "🔄 Starting new session due to invalid session ID format"
-        );
+        Log.info("🔄 Starting new session due to invalid session ID format");
         resolvedSessionId = undefined;
       }
     }

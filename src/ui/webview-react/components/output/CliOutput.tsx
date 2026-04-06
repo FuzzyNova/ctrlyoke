@@ -40,7 +40,11 @@ import type {
   ToolResultData,
 } from "../../types/cliEvents";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../../types/cliEvents";
-import { HARNESS_INFO, FINAL_STEP_PHASES, STEP_TYPES } from "../../types/messages";
+import {
+  HARNESS_INFO,
+  FINAL_STEP_PHASES,
+  STEP_TYPES,
+} from "../../types/messages";
 import type {
   UndoExecutionTarget,
   WorkspaceSnapshot,
@@ -537,33 +541,33 @@ export const CliOutput = memo<CliOutputProps>(
     const workspaceSnapshotsFromStore = useWorkflowStore(
       (s) => s.workspaceSnapshots
     );
-    const finalPromptWorkspaceSnapshotsFromStore = useWorkflowStore(
-      (s) => s.finalPromptWorkspaceSnapshots
+    const finalStepWorkspaceSnapshotsFromStore = useWorkflowStore(
+      (s) => s.finalStepWorkspaceSnapshots
     );
     const undoRecordsFromStore = useWorkflowStore((s) => s.undoRecords);
 
-    const isFinalPrompt = stepLabel !== undefined;
+    const isFinalStep = stepLabel !== undefined;
     const target: UndoExecutionTarget = useMemo(
       () =>
-        isFinalPrompt
+        isFinalStep
           ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
           : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-      [isFinalPrompt, stepIndex]
+      [isFinalStep, stepIndex]
     );
-    const targetKey = isFinalPrompt
-      ? `finalPrompt-${stepIndex}`
+    const targetKey = isFinalStep
+      ? `finalStep-${stepIndex}`
       : `queue-${stepIndex}`;
 
     // Prefix for diff measurement anchor IDs in StructuredOutput.
     // Format: fp-diff-{kind}-{stepIndex}-a{attemptIndex}
     // Matches the lookup key used in OutputSection minimapSteps computation.
-    const diffAnchorPrefix = `fp-diff-${isFinalPrompt ? "fp" : "q"}-${stepIndex}-a${attemptIndex}`;
+    const diffAnchorPrefix = `fp-diff-${isFinalStep ? "fp" : "q"}-${stepIndex}-a${attemptIndex}`;
 
     const effectiveUndoRecord = undoRecord ?? undoRecordsFromStore[targetKey];
     const effectiveSnapshot =
       workspaceSnapshot ??
-      (isFinalPrompt
-        ? finalPromptWorkspaceSnapshotsFromStore[stepIndex]
+      (isFinalStep
+        ? finalStepWorkspaceSnapshotsFromStore[stepIndex]
         : workspaceSnapshotsFromStore[stepIndex]);
 
     const fileUndoMode: "undo" | "redo" =

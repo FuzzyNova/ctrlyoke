@@ -24,7 +24,7 @@ import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/cliEvents";
 import {
   HARNESS_INFO,
   FINAL_STEP_PHASES,
-  type FinalPromptPhase,
+  type FinalStepPhase,
 } from "../types/messages";
 import { mapOrderedHistoryEntriesToMessages } from "./outputProjection";
 import { truncate } from "./string";
@@ -36,7 +36,7 @@ import { extractKeyParameters } from "./outputUtils";
 interface MarkdownExportItem {
   type: "status" | "cli";
   target: {
-    kind: FinalPromptPhase;
+    kind: FinalStepPhase;
     index: number;
   };
   timestamp: number;
@@ -354,7 +354,7 @@ export function generateMarkdownExport(
           : `Retry ${item.attemptIndex}`;
       const stepLabel =
         item.target.kind === FINAL_STEP_PHASES.FINAL_STEP
-          ? `Final Prompt Loop ${item.target.index + 1}`
+          ? `Final Step Loop ${item.target.index + 1}`
           : `Prompt ${item.target.index + 1}`;
 
       lines.push(`## ${stepLabel} - ${attemptLabel}`);

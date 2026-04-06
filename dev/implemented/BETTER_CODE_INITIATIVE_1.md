@@ -42,6 +42,7 @@ history can be wiped.
 All five phases are now complete.
 
 **Phase 2 — Authoritative Runtime State Machine (fully complete):**
+
 - `WorkflowStateMachine` is the sole owner of runtime lifecycle state
   (`status`, `stopped`, `startTime`, `pausedTime`, `totalPausedDuration`).
 - `PromptQueue` internal `this.state` no longer carries runtime fields. A
@@ -54,19 +55,22 @@ All five phases are now complete.
   working file — no field copying required).
 
 **Phase 1 — `CliIntegration` decomposition (materially complete):**
+
 - `CliExecutionSession`, `CliExecutionRunner`, `CliTransportCoordinator`,
   `CliInteractiveStartupCoordinator`, `CliResponseCollector`, and
   `CliPromptPreparer` are all in place. `CliIntegration` is a delegation facade.
 
 **Phase 3 — Append-Only Timeline Recorder (complete):**
+
 - `TimelineRecorder` manages `manifest.json` + `events.jsonl` under
   `.flightpath/.history/<workflow-id>/run-<timestamp>/`. Schema version `2.0.0`.
 - `OutputHistoryTimelineAdapter` projects the event log into `WorkflowOutputHistory`
   with a canonical `orderedEntries: OrderedHistoryEntry[]` array.
 
 **Phase 4 — UI Projections (fully complete):**
+
 - `workflowStore` replaces all per-step `cliOutputs`/`statusMessages`/
-  `finalPromptOutputs`/`finalPromptStatusMessages` Record maps with a single
+  `finalStepOutputs`/`finalStepStatusMessages` Record maps with a single
   `liveOrderedEntries: OrderedHistoryEntry[]` array and a `liveSequence` counter.
 - `useMessageHandler` handlers for `CLI_OUTPUT`, `FINAL_PROMPT_OUTPUT`,
   `STATUS_MESSAGE` now create `OrderedHistoryEntry` objects and call
@@ -79,6 +83,7 @@ All five phases are now complete.
 - `markdownExport.ts` uses a single rendering path via `orderedEntries`.
 
 **Phase 5 — Legacy Structures Deleted (complete):**
+
 - `StepOutput.cliOutputs[]` and `statusMessages[]` removed from type.
 - `OutputTimelineEntry` and `outputTimeline` removed from `WorkflowOutputHistory`.
 - `buildProjectedOutputMessages`, `buildHistoricalProjectionSteps`,
@@ -88,9 +93,10 @@ All five phases are now complete.
   `OutputHistoryManager`. Old `.json` run files will no longer load; the
   timeline format (`run-*/manifest.json + events.jsonl`) is the only format.
 - `historyOutputs` in `workflowStore` is now `{ orderedEntries, runMetadata }`
-  — no `steps` map, no `outputTimeline`, no `finalPromptOutputs` sub-map.
+  — no `steps` map, no `outputTimeline`, no `finalStepOutputs` sub-map.
 
 **Test coverage improvements:**
+
 - Dedicated test files added: `OutputHistoryManager.test.ts`,
   `EndConditionHandler.test.ts`, `QueueOperations.test.ts`,
   `workflowStore.test.ts`, `outputProjection.test.ts`.
@@ -99,16 +105,17 @@ All five phases are now complete.
 ### What Is Still Incomplete
 
 Phase 0 test gaps remain:
+
 - Ordering-specific regression coverage for history replay across queue and
-  finalPrompt interleaving.
+  finalStep interleaving.
 - PTY exit during log discovery and interactive startup abort coverage.
 
 Phase 1 minor cleanup:
+
 - `CliIntegration` is a delegation facade (~850 lines). Helper-factory wiring
   could be extracted further if the file still feels dense.
 
 ### Handoff Guidance
-
 
 1. **Remove redundant lifecycle fields from `QueueState`.** Now that
    `WorkflowStateMachine` is authoritative, `status`, `stopped`, and
@@ -383,7 +390,7 @@ transition is validated and recorded in one place.
 
 - ordered prompts
 - current queue pointer
-- finalPrompt loop metadata if it truly belongs to queue topology
+- finalStep loop metadata if it truly belongs to queue topology
 - prompt insertion / deletion / reorder behavior
 
 `PromptQueue` should stop being a secondary owner of lifecycle transitions like
@@ -420,7 +427,7 @@ Current persisted history is effectively a projection:
 
 - `promptOutputs[stepIndex].cliOutputs[]`
 - `promptOutputs[stepIndex].statusMessages[]`
-- `finalPromptOutputs[loopIndex]...`
+- `finalStepOutputs[loopIndex]...`
 - `outputTimeline[]`
 
 This is workable, but it is not the best canonical form.
@@ -438,7 +445,7 @@ interface WorkflowTimelineEvent {
   sequence: number;
   target:
     | { kind: "queue"; stepIndex: number }
-    | { kind: "finalPrompt"; loopIndex: number };
+    | { kind: "finalStep"; loopIndex: number };
   attemptIndex?: number;
   eventType:
     | "promptStarted"
@@ -568,7 +575,7 @@ Before deeper refactors, strengthen tests around the bug-prone seams.
 - PTY exit during log discovery
 - stop -> stopped transition behavior
 - history replay ordering
-- timeline ordering across queue and finalPrompt
+- timeline ordering across queue and finalStep
 
 ### Deliverable
 
@@ -579,7 +586,7 @@ same bug class.
 `EndConditionHandler`, `QueueOperations`, `WorkflowInstance` (loadHistoryRun),
 `outputProjection`, and `workflowStore`. Interactive-startup and log-discovery
 abort coverage exists around `CliExecutionRunner`. Ordering-specific regression
-coverage for history replay across queue and finalPrompt interleaving is still
+coverage for history replay across queue and finalStep interleaving is still
 incomplete.
 
 ---

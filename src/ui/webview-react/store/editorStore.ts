@@ -95,11 +95,12 @@ export interface SavedNewPromptState {
 
 /**
  * Returns a stable string key for a selection target, used to index pendingEdits.
- * Only valid for edit-mode targets (queue / finalPrompt).
+ * Only valid for edit-mode targets (queue / finalStep).
  */
 function selectionTargetKey(target: EditorSelectionTarget): string {
   if (target.kind === FINAL_STEP_PHASES.QUEUE) return `queue:${target.index}`;
-  if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) return FINAL_STEP_PHASES.FINAL_STEP;
+  if (target.kind === FINAL_STEP_PHASES.FINAL_STEP)
+    return FINAL_STEP_PHASES.FINAL_STEP;
   return "";
 }
 
@@ -156,7 +157,7 @@ interface EditorActions {
     target: number | null | EditorSelectionTarget,
     promptData?: WorkflowStep | null
   ) => void;
-  selectFinalPrompt: (promptData: WorkflowStep) => void;
+  selectFinalStep: (promptData: WorkflowStep) => void;
   enterNewPromptMode: () => void;
   enterEditMode: (index: number, promptData: WorkflowStep) => void;
   cancelEdit: () => void;
@@ -228,7 +229,7 @@ interface EditorSelectors {
   isNewPromptMode: () => boolean;
   // Check if in edit mode
   isEditMode: () => boolean;
-  isFinalPromptMode: () => boolean;
+  isFinalStepMode: () => boolean;
   // Get current property values as PromptStep properties
   getPromptProperties: () => Partial<PromptStep>;
   // Check if editor has content
@@ -304,7 +305,7 @@ export const useEditorStore = create<
     }
   },
 
-  selectFinalPrompt: (promptData) => {
+  selectFinalStep: (promptData) => {
     get().enterEditMode(-1, promptData);
   },
 
@@ -402,8 +403,8 @@ export const useEditorStore = create<
           }
         : state.savedNewPromptState;
 
-    const isFinalPromptTarget = index < 0;
-    const newTarget: EditorSelectionTarget = isFinalPromptTarget
+    const isFinalStepTarget = index < 0;
+    const newTarget: EditorSelectionTarget = isFinalStepTarget
       ? { kind: FINAL_STEP_PHASES.FINAL_STEP }
       : { kind: FINAL_STEP_PHASES.QUEUE, index };
 
@@ -415,7 +416,7 @@ export const useEditorStore = create<
       // Script step: populate scriptCommand, set stepType to script (unless pending edit overrides)
       set({
         selectionTarget: newTarget,
-        selectedPromptIndex: isFinalPromptTarget ? null : index,
+        selectedPromptIndex: isFinalStepTarget ? null : index,
         originalPromptData: promptData,
         savedNewPromptState,
         stepType: pendingEdit?.stepType ?? STEP_TYPES.SCRIPT,
@@ -465,7 +466,7 @@ export const useEditorStore = create<
 
       set({
         selectionTarget: newTarget,
-        selectedPromptIndex: isFinalPromptTarget ? null : index,
+        selectedPromptIndex: isFinalStepTarget ? null : index,
         originalPromptData: promptData,
         savedNewPromptState,
         stepType: pendingEdit?.stepType ?? STEP_TYPES.PROMPT,
@@ -898,7 +899,7 @@ export const useEditorStore = create<
   isEditMode: () =>
     get().selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT,
 
-  isFinalPromptMode: () =>
+  isFinalStepMode: () =>
     get().selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP,
 
   getPromptProperties: () => {

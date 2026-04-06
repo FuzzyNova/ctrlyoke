@@ -67,8 +67,8 @@ export interface WorkflowOutputHistory {
     [stepIndex: number]: StepOutput;
   };
 
-  // Per-loop finalPrompt outputs (keyed by loopIndex)
-  finalPromptOutputs?: {
+  // Per-loop finalStep outputs (keyed by loopIndex)
+  finalStepOutputs?: {
     [loopIndex: number]: StepOutput;
   };
 

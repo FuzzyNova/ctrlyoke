@@ -104,7 +104,7 @@ Sequential prompt execution with pause/resume support.
 **`WorkflowExecutionContext`** bundle pattern (replaces old `WorkflowContext`) — carries `dashboardProvider`, `getIntegrationForPrompt`, capture callbacks, `snapshotService`, etc.
 **Two-phase outer loop:**
   1. **Queue phase** — drains normal prompts via `promptQueue.hasNext()`
-  2. **`finalPrompt` phase** — runs the orchestrator gate once the queue is empty; if new prompts were appended (via MCP queue extension), the outer loop repeats
+  2. **`finalStep` phase** — runs the orchestrator gate once the queue is empty; if new prompts were appended (via MCP queue extension), the outer loop repeats
 **Harness resolution:** Uses `PropertyResolver` to determine harness per prompt (prompt > workflow > global settings)
 **Delegation:** Defers to `EndConditionHandler` for retry logic
 **Status transitions:** All status changes go through `WorkflowStateMachine` (no local status fields in executor)

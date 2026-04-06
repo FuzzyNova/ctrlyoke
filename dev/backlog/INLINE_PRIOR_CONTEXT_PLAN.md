@@ -21,14 +21,14 @@ so the same step's content is never attached twice.
 
 ## New `$` Syntax
 
-| Syntax            | Equivalent property                 | Description                                       |
-| ----------------- | ----------------------------------- | ------------------------------------------------- |
-| `$previous`       | `priorContext: previous`            | Output of the immediately preceding queue prompt  |
-| `$all`            | `priorContext: all`                 | Outputs of all prior queue prompts                |
-| `$finalPrompt`    | `priorContext: finalPromptPrevious` | Output of the previous finalPrompt loop execution |
-| `$allFinalPrompt` | `priorContext: finalPromptAll`      | Outputs of all finalPrompt loop executions        |
-| `$prompt:N`       | `priorContext: [N]`                 | Output of a specific prompt by 1-based number     |
-| `$prompt:N,M,A-B` | `priorContext: [N,M,A,…,B]`         | Outputs of specific prompts via range notation    |
+| Syntax            | Equivalent property               | Description                                      |
+| ----------------- | --------------------------------- | ------------------------------------------------ |
+| `$previous`       | `priorContext: previous`          | Output of the immediately preceding queue prompt |
+| `$all`            | `priorContext: all`               | Outputs of all prior queue prompts               |
+| `$finalStep`      | `priorContext: finalStepPrevious` | Output of the previous finalStep loop execution  |
+| `$allFinalStep`   | `priorContext: finalStepAll`      | Outputs of all finalStep loop executions         |
+| `$prompt:N`       | `priorContext: [N]`               | Output of a specific prompt by 1-based number    |
+| `$prompt:N,M,A-B` | `priorContext: [N,M,A,…,B]`       | Outputs of specific prompts via range notation   |
 
 Range notation uses the same `1,2,4-10` format already supported in `PriorContextSelect`. Any
 combination of comma-separated numbers and `A-B` ranges is valid.
@@ -97,8 +97,8 @@ text, not static file contents).
 export type InlinePriorContextRef =
   | { kind: "previous" }
   | { kind: "all" }
-  | { kind: "finalPrompt" }
-  | { kind: "allFinalPrompt" }
+  | { kind: "finalStep" }
+  | { kind: "allFinalStep" }
   | { kind: "prompt"; indices: number[] }; // 1-based, sorted, deduped
 
 export interface InlinePriorContextMatch {
@@ -119,7 +119,7 @@ export function parseInlinePriorContextRefs(
 }
 ```
 
-Recognized tokens: `$previous`, `$all`, `$finalPrompt`, `$allFinalPrompt`, `$prompt:RANGE`.
+Recognized tokens: `$previous`, `$all`, `$finalStep`, `$allFinalStep`, `$prompt:RANGE`.
 Unrecognized `$xxx` tokens are silently ignored (pass through to the AI unchanged).
 Invalid `$prompt:` ranges (e.g. `$prompt:abc`) are logged as a warning and skipped.
 
@@ -156,15 +156,15 @@ protected gatherAndMergeContextItems(
   inlineRefs: InlinePriorContextRef[],
   allsteps: WorkflowStep[],
   promptIndex: number,
-  finalPromptResponseTexts: string[]
+  finalStepResponseTexts: string[]
 ): PriorContextItem[] {
   const propertyItems =
     propertyContext && propertyContext !== "none"
-      ? this.gatherPriorContextItems(propertyContext, allPrompts, promptIndex, finalPromptResponseTexts)
+      ? this.gatherPriorContextItems(propertyContext, allPrompts, promptIndex, finalStepResponseTexts)
       : [];
 
   const inlineItems = inlineRefs.flatMap((ref) =>
-    this.gatherPriorContextItems(refToPriorContext(ref), allPrompts, promptIndex, finalPromptResponseTexts)
+    this.gatherPriorContextItems(refToPriorContext(ref), allPrompts, promptIndex, finalStepResponseTexts)
   );
 
   // Deduplicate by (index, type) — property items take priority
@@ -201,7 +201,7 @@ gatherAndMergeContextItems: (
   inlineRefs: InlinePriorContextRef[],
   allsteps: PromptItem[],
   promptIndex: number,
-  finalPromptResponseTexts: string[]
+  finalStepResponseTexts: string[]
 ) => PriorContextItem[];
 ```
 
@@ -227,7 +227,7 @@ const contextContent = hasPriorContext
         inlineRefs,
         allPrompts,
         promptIndex,
-        finalPromptResponseTexts ?? []
+        finalStepResponseTexts ?? []
       );
       return items.length > 0
         ? this.deps.buildPriorContextXmlFromItems(items)
@@ -262,8 +262,8 @@ export function getPriorContextCompletions(
   const keywords = [
     { label: "previous", detail: "Output of the previous prompt" },
     { label: "all", detail: "Outputs of all prior prompts" },
-    { label: "finalPrompt", detail: "Previous finalPrompt output" },
-    { label: "allFinalPrompt", detail: "All finalPrompt outputs" },
+    { label: "finalStep", detail: "Previous finalStep output" },
+    { label: "allFinalStep", detail: "All finalStep outputs" },
     { label: "prompt:", detail: "Specific prompts — e.g. $prompt:1,3-5" },
   ];
   return keywords

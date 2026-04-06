@@ -3,11 +3,11 @@ import type {
   OutputExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
 import type { CliOutput, OutputStatusMessage } from "../types/messages";
-import { FINAL_STEP_PHASES, type FinalPromptPhase } from "../types/messages";
+import { FINAL_STEP_PHASES, type FinalStepPhase } from "../types/messages";
 import { formatTime } from "./outputUtils";
 
 export interface OutputMessageTarget {
-  kind: FinalPromptPhase;
+  kind: FinalStepPhase;
   index: number;
 }
 

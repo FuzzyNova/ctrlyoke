@@ -378,18 +378,18 @@ export class PromptFileParser {
         steps: resolvedPrompts,
       };
 
-      // Support both new "finalStep" and legacy "finalPrompt" field names
-      const rawFinalStep = parsed.finalStep ?? parsed.finalPrompt;
+      // Support both new "finalStep" and legacy "finalStep" field names
+      const rawFinalStep = parsed.finalStep ?? parsed.finalStep;
       if (rawFinalStep) {
         if (rawFinalStep.type === STEP_TYPES.SCRIPT) {
           promptFile.finalStep = this.buildScriptStep(rawFinalStep);
         } else if (typeof rawFinalStep.prompt === "string") {
-          const resolvedFinalPrompt = await this.resolvePromptContent(
+          const resolvedFinalStep = await this.resolvePromptContent(
             rawFinalStep.prompt,
             promptFilePath
           );
           promptFile.finalStep = this.buildPromptStep(
-            resolvedFinalPrompt,
+            resolvedFinalStep,
             rawFinalStep
           );
         }

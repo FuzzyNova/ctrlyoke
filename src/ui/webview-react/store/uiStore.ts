@@ -116,7 +116,7 @@ interface UiState {
   hiddenDropdownOptions: Record<string, string[]>; // namespace → hidden value[]
   // Section collapse states
   stepsCollapsed: boolean;
-  finalPromptFooterExpanded: boolean;
+  finalStepFooterExpanded: boolean;
   outputCollapsed: boolean;
   editorCollapsed: boolean;
 
@@ -238,8 +238,8 @@ interface UiState {
 interface UiActions {
   // Section toggles
   togglePromptsCollapse: () => void;
-  toggleFinalPromptFooterExpanded: () => void;
-  setFinalPromptFooterExpanded: (expanded: boolean) => void;
+  toggleFinalStepFooterExpanded: () => void;
+  setFinalStepFooterExpanded: (expanded: boolean) => void;
   toggleOutputCollapse: () => void;
   toggleEditorCollapse: () => void;
   setPromptsCollapsed: (collapsed: boolean) => void;
@@ -389,7 +389,7 @@ const initialState: UiState = {
   saveWorkflowDialogOpen: false,
   saveWorkflowDialogData: null,
   stepsCollapsed: false,
-  finalPromptFooterExpanded: false,
+  finalStepFooterExpanded: false,
   outputCollapsed: false,
   editorCollapsed: false,
   diffsCollapsed: true, // collapsed by default to keep the DOM lean
@@ -471,13 +471,13 @@ export const useUiStore = create<UiState & UiActions>()(
       togglePromptsCollapse: () =>
         set((state) => ({ stepsCollapsed: !state.stepsCollapsed })),
 
-      toggleFinalPromptFooterExpanded: () =>
+      toggleFinalStepFooterExpanded: () =>
         set((state) => ({
-          finalPromptFooterExpanded: !state.finalPromptFooterExpanded,
+          finalStepFooterExpanded: !state.finalStepFooterExpanded,
         })),
 
-      setFinalPromptFooterExpanded: (expanded) =>
-        set({ finalPromptFooterExpanded: expanded }),
+      setFinalStepFooterExpanded: (expanded) =>
+        set({ finalStepFooterExpanded: expanded }),
 
       toggleOutputCollapse: () =>
         set((state) => ({ outputCollapsed: !state.outputCollapsed })),

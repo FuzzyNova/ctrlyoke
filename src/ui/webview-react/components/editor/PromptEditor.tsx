@@ -66,7 +66,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     steps: prompts,
     executionState,
     currentStep,
-    finalPromptStatus,
+    finalStepStatus,
   } = useWorkflowStore();
   const {
     propertiesDrawerOpen,
@@ -110,7 +110,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const [fileRefExists, setFileRefExists] = useState<boolean | null>(null);
 
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
-  const isFinalPrompt = selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP;
+  const isFinalStep = selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP;
   const isScriptMode = stepType === STEP_TYPES.SCRIPT;
   const isFileRef = looksLikeFilePath(promptText.trim());
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
@@ -118,7 +118,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
       ? (prompts[selectionTarget.index] as any)?.status
       : selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP
-        ? finalPromptStatus
+        ? finalStepStatus
         : null;
   const isPromptCompleted = selectedPromptStatus === STEP_STATUS.COMPLETED;
   // Update button: disabled when prompt is currently being sent (SENT or RUNNING)
@@ -683,7 +683,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             value={promptText}
             onChange={handleTextChange}
             placeholder={
-              isFinalPrompt ? EDITOR_PLACEHOLDER_TEXT.FINAL_PROMPT : undefined
+              isFinalStep ? EDITOR_PLACEHOLDER_TEXT.FINAL_PROMPT : undefined
             }
             affUri={affUri}
             dicUri={dicUri}
@@ -803,9 +803,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       {/* Editor Footer with actions (outside wrapper, not covered by drawer) */}
       <EditorFooter
         isEditMode={isEditMode}
-        isFinalPromptMode={
-          selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP
-        }
+        isFinalStepMode={selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP}
         isPromptCompleted={isPromptCompleted}
         isPromptBeingSent={isPromptBeingSent}
         isPromptActivelyRunning={isPromptActivelyRunning}
@@ -840,7 +838,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         title="Delete Prompt"
         message={
           selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP
-            ? "Disable final prompt?"
+            ? "Disable final step?"
             : `Are you sure you want to delete prompt ${selectionTarget.kind === FINAL_STEP_PHASES.QUEUE ? selectionTarget.index + 1 : 1}?`
         }
         detail="This action cannot be undone."

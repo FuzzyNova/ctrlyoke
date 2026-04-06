@@ -367,7 +367,7 @@ export class WorkflowInstance {
       ? path.basename(this.currentPromptFile.filePath)
       : state.workflowName || "Untitled";
     Log.trace(
-      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${executionState}, currentIndex=${state.currentIndex}, prompts=${state.steps.length}, bufferSteps=${this.outputCaptureBuffer.stepBufferSize}, finalBufferLoops=${this.outputCaptureBuffer.finalPromptBufferSize}`
+      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${executionState}, currentIndex=${state.currentIndex}, prompts=${state.steps.length}, bufferSteps=${this.outputCaptureBuffer.stepBufferSize}, finalBufferLoops=${this.outputCaptureBuffer.finalStepBufferSize}`
     );
     this.dashboardSink.updateSessionRestored(
       fileName,
@@ -377,12 +377,12 @@ export class WorkflowInstance {
       state.currentIndex,
       state.workflowName || undefined,
       this.promptQueue.getWorkflowFile().finalStep ?? null,
-      this.promptQueue.getFinalPromptRuntime()
+      this.promptQueue.getFinalStepRuntime()
     );
     this.outputCaptureBuffer.replayTo(
       this.dashboardSink,
       { status: executionState, currentIndex: state.currentIndex },
-      this.promptQueue.getFinalPromptRuntime(),
+      this.promptQueue.getFinalStepRuntime(),
       `[inst:${this.id.slice(0, 8)}]`
     );
   }
@@ -1306,7 +1306,7 @@ export class WorkflowInstance {
 
   /**
    * Eagerly create a working file for a new ephemeral workflow the moment the
-   * user first changes any workflow-level property (harness, model, finalPrompt,
+   * user first changes any workflow-level property (harness, model, finalStep,
    * etc.) before adding any prompts. This eliminates the need for a
    * pendingWorkflowProperties cache — every property write goes straight to disk.
    *
@@ -1478,7 +1478,7 @@ export class WorkflowInstance {
     Log.debug(`Updated prompt ${index}: ${text.substring(0, 50)}...`);
   }
 
-  async updateFinalPromptInQueue(
+  async updateFinalStepInQueue(
     finalStep: WorkflowStep | null,
     clearProperties?: string[]
   ): Promise<void> {
@@ -1510,15 +1510,15 @@ export class WorkflowInstance {
         { finalStep: undefined },
         { allowDeletes: true }
       );
-      await this.promptQueue.setFinalPromptRuntime(undefined);
+      await this.promptQueue.setFinalStepRuntime(undefined);
       if (this.currentPromptFile) {
         delete this.currentPromptFile.promptFile.finalStep;
       }
     }
 
-    this.dashboardSink?.updateFinalPrompt(finalStep);
+    this.dashboardSink?.updateFinalStep(finalStep);
     if (!finalStep) {
-      this.dashboardSink?.updateFinalPromptStatus(null, 0, null);
+      this.dashboardSink?.updateFinalStepStatus(null, 0, null);
     }
 
     Log.debug(`Updated finalStep (${finalStep ? "enabled" : "disabled"})`);
@@ -1823,7 +1823,7 @@ export class WorkflowInstance {
       captureCompletedOutput: (stepIndex, output) => {
         this.outputCaptureBuffer.captureCompletedOutput(stepIndex, output);
       },
-      captureFinalPromptOutputInit: (
+      captureFinalStepOutputInit: (
         loopIndex,
         prompt,
         cliCommand,
@@ -1832,7 +1832,7 @@ export class WorkflowInstance {
         attemptIndex,
         rawTextOutput
       ) => {
-        this.outputCaptureBuffer.captureFinalPromptOutputInit(
+        this.outputCaptureBuffer.captureFinalStepOutputInit(
           loopIndex,
           prompt,
           cliCommand,
@@ -1842,20 +1842,20 @@ export class WorkflowInstance {
           rawTextOutput
         );
       },
-      captureFinalPromptChunk: (loopIndex, chunk) => {
-        this.outputCaptureBuffer.captureFinalPromptChunk(loopIndex, chunk);
+      captureFinalStepChunk: (loopIndex, chunk) => {
+        this.outputCaptureBuffer.captureFinalStepChunk(loopIndex, chunk);
       },
-      captureFinalPromptEvents: (loopIndex, events) => {
-        this.outputCaptureBuffer.captureFinalPromptEvents(loopIndex, events);
+      captureFinalStepEvents: (loopIndex, events) => {
+        this.outputCaptureBuffer.captureFinalStepEvents(loopIndex, events);
       },
-      captureFinalPromptCompletedOutput: (loopIndex, output) => {
-        this.outputCaptureBuffer.captureFinalPromptCompletedOutput(
+      captureFinalStepCompletedOutput: (loopIndex, output) => {
+        this.outputCaptureBuffer.captureFinalStepCompletedOutput(
           loopIndex,
           output
         );
       },
-      onFinalPromptStatusMessage: (loopIndex, message, severity) => {
-        this.outputCaptureBuffer.onFinalPromptStatusMessage(
+      onFinalStepStatusMessage: (loopIndex, message, severity) => {
+        this.outputCaptureBuffer.onFinalStepStatusMessage(
           loopIndex,
           message,
           severity
@@ -2204,11 +2204,11 @@ export class WorkflowInstance {
   }
 
   private getCurrentCancellationTarget(): WorkflowAttemptTarget | undefined {
-    const finalPromptRuntime = this.promptQueue.getFinalPromptRuntime();
-    if (finalPromptRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP) {
+    const finalStepRuntime = this.promptQueue.getFinalStepRuntime();
+    if (finalStepRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP) {
       return {
         kind: FINAL_STEP_PHASES.FINAL_STEP,
-        loopIndex: finalPromptRuntime.loopCount,
+        loopIndex: finalStepRuntime.loopCount,
       };
     }
 
@@ -2427,7 +2427,7 @@ export class WorkflowInstance {
         steps,
         queueState.workflowName || undefined,
         promptFile.finalStep ?? null,
-        this.promptQueue.getFinalPromptRuntime()
+        this.promptQueue.getFinalStepRuntime()
       );
     }
 

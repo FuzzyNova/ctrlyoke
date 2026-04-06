@@ -15,7 +15,7 @@ import { STEP_TYPES } from "@root/types/DashboardConstants";
 
 interface EditorFooterProps {
   isEditMode: boolean;
-  isFinalPromptMode?: boolean;
+  isFinalStepMode?: boolean;
   isPromptCompleted: boolean;
   /** True when the selected prompt's status is SENT or RUNNING (prevents Update) */
   isPromptBeingSent: boolean;
@@ -55,7 +55,7 @@ interface EditorFooterProps {
  */
 export const EditorFooter: React.FC<EditorFooterProps> = ({
   isEditMode,
-  isFinalPromptMode = false,
+  isFinalStepMode = false,
   isPromptCompleted,
   isPromptBeingSent,
   isPromptActivelyRunning,
@@ -199,11 +199,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-update px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onUpdate}
-              disabled={
-                isCLIManaged ||
-                !hasContent ||
-                isPromptBeingSent
-              }
+              disabled={isCLIManaged || !hasContent || isPromptBeingSent}
               title={
                 isCLIManaged
                   ? "Read-only — workflow is running via FlightPath CLI"
@@ -221,15 +217,12 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-delete px-3 py-1 text-xs rounded flex items-center gap-1 bg-input-error-bg text-input-error-fg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onDelete}
-              disabled={
-                isCLIManaged ||
-                isPromptActivelyRunning
-              }
+              disabled={isCLIManaged || isPromptActivelyRunning}
               title={
                 isCLIManaged
                   ? "Read-only — workflow is running via FlightPath CLI"
-                  : isFinalPromptMode
-                    ? "Disable final prompt"
+                  : isFinalStepMode
+                    ? "Disable final step"
                     : isPromptActivelyRunning
                       ? "Cannot delete a prompt that is currently running"
                       : "Delete prompt from queue"
@@ -238,7 +231,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               <i className="codicon codicon-trash" />
               {!isNarrow && (
                 <span className="btn-text">
-                  {isFinalPromptMode ? "Disable" : "Delete"}
+                  {isFinalStepMode ? "Disable" : "Delete"}
                 </span>
               )}
             </button>

@@ -1,4 +1,9 @@
-import { PromptFile, PromptStep, WorkflowStep, Harness } from "../types/FlightPathTypes";
+import {
+  PromptFile,
+  PromptStep,
+  WorkflowStep,
+  Harness,
+} from "../types/FlightPathTypes";
 import { SESSION_ID_SENTINELS } from "../types/DashboardConstants";
 import { PropertyResolver } from "./PropertyResolver";
 import { Log } from "./Log";
@@ -83,7 +88,7 @@ export class SessionResolver {
    * @param promptIndex Current prompt's index in queue (0-based)
    * @param allPrompts All prompts in queue (with runtime metadata)
    * @param workflow Workflow file for workflow-level defaults (optional)
-   * @param finalPromptSessionId Session ID from the most recent finalPrompt execution.
+   * @param finalStepSessionId Session ID from the most recent finalStep execution.
    *   Used when sessionId is the "finalStep" sentinel on any prompt.
    * @returns Resolved session ID or undefined for new session
    */
@@ -92,7 +97,7 @@ export class SessionResolver {
     promptIndex: number,
     allPrompts: WorkflowStep[],
     workflow?: PromptFile,
-    finalPromptSessionId?: string
+    finalStepSessionId?: string
   ): string | undefined {
     const resolved = workflow
       ? PropertyResolver.resolve(prompt, workflow)
@@ -108,16 +113,16 @@ export class SessionResolver {
     if (resolvedSessionId !== undefined) {
       // 2a. "finalStep" sentinel — resume the previous final step loop's session
       if (resolvedSessionId === SESSION_ID_SENTINELS.FINAL_STEP) {
-        if (finalPromptSessionId) {
+        if (finalStepSessionId) {
           Log.debug(
-            `✅ Resuming finalPrompt loop session: ${finalPromptSessionId}`
+            `✅ Resuming finalStep loop session: ${finalStepSessionId}`
           );
         } else {
           Log.debug(
             `ℹ️ sessionId "finalStep": no prior loop session, starting new session`
           );
         }
-        return finalPromptSessionId;
+        return finalStepSessionId;
       }
 
       // 2b. Numeric reference (prompt number)

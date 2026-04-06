@@ -6,7 +6,7 @@ import type { PromptStep } from "../../types/FlightPathTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 suite("CopilotChatIntegration", () => {
-  test("should read finalPrompt prior context from the workflow callback", async () => {
+  test("should read finalStep prior context from the workflow callback", async () => {
     const integration = new CopilotChatIntegration(
       {} as vscode.ExtensionContext,
       false
@@ -41,7 +41,7 @@ suite("CopilotChatIntegration", () => {
           promptIndex: 0,
           allPrompts: [prompt],
           resolvedProperties: { priorContext: "finalStepAll" },
-          getFinalPromptResponseTexts: () => ["final loop response"],
+          getFinalStepResponseTexts: () => ["final loop response"],
         }
       );
 

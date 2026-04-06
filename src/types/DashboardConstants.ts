@@ -25,11 +25,11 @@ export const MESSAGE_TYPES = {
   QUEUE_EXTENDED: "queueExtended",
   STEPS_EXTENDED: "stepsExtended", // Send updated steps list after queue extension
   PROMPT_DELETED: "promptDeleted", // Notify webview that a prompt was deleted
-  UPDATE_FINAL_PROMPT: "updateFinalPrompt", // Bidirectional: webview updates workflow-level finalPrompt; extension pushes latest finalPrompt
-  FINAL_PROMPT_STATUS_CHANGED: "finalPromptStatusChanged", // Granular runtime status updates for finalPrompt phase
-  FINAL_PROMPT_OUTPUT: "finalPromptOutput", // CLI output for finalPrompt keyed by loop index
-  FINAL_PROMPT_STREAMING_CHUNK: "finalPromptStreamingChunk", // Incremental streaming text chunk for finalPrompt
-  FINAL_PROMPT_STREAMING_EVENTS: "finalPromptStreamingEvents", // Structured streaming events for finalPrompt
+  UPDATE_FINAL_PROMPT: "updateFinalStep", // Bidirectional: webview updates workflow-level finalStep; extension pushes latest finalStep
+  FINAL_PROMPT_STATUS_CHANGED: "finalStepStatusChanged", // Granular runtime status updates for finalStep phase
+  FINAL_PROMPT_OUTPUT: "finalStepOutput", // CLI output for finalStep keyed by loop index
+  FINAL_PROMPT_STREAMING_CHUNK: "finalStepStreamingChunk", // Incremental streaming text chunk for finalStep
+  FINAL_PROMPT_STREAMING_EVENTS: "finalStepStreamingEvents", // Structured streaming events for finalStep
   QUEUE_SIZE_LIMIT_REACHED: "queueSizeLimitReached",
   EXECUTION_TIME_LIMIT_REACHED: "executionTimeLimitReached",
 
@@ -249,7 +249,7 @@ export const STEP_STATUS = {
 } as const;
 
 // ============================================================================
-// FINAL PROMPT PHASES - Runtime phase values for finalPrompt orchestration
+// FINAL PROMPT PHASES - Runtime phase values for finalStep orchestration
 // ============================================================================
 export const FINAL_STEP_PHASES = {
   QUEUE: "queue",
@@ -417,9 +417,9 @@ export const EDITOR_PLACEHOLDER_TEXT = {
   /** Base hint shown in all prompt editors */
   DEFAULT:
     "Use @ for files/folders, # for selections/symbols, ~ for git changes",
-  /** Extended hint for the Final Prompt editor, explaining its loop-back behavior */
+  /** Extended hint for the Final Step editor, explaining its loop-back behavior */
   FINAL_PROMPT:
-    "Use @ for files/folders, # for selections/symbols, ~ for git changes\n\nNote: The Final Prompt runs after all other prompts complete. If it appends new prompts, it will run again once those finish.",
+    "Use @ for files/folders, # for selections/symbols, ~ for git changes\n\nNote: The Final Step runs after all other prompts complete. If it appends new prompts, it will run again once those finish.",
 } as const;
 
 // ============================================================================
@@ -685,7 +685,7 @@ export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
 export type ExecutionState =
   (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
 export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
-export type FinalPromptPhase =
+export type FinalStepPhase =
   (typeof FINAL_STEP_PHASES)[keyof typeof FINAL_STEP_PHASES];
 export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
 export type StatusMessageSeverity =

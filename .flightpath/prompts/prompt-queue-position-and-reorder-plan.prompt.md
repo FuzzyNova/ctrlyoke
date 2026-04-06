@@ -157,7 +157,7 @@ Add `setStartPosition(toIndex: number): Promise<void>`:
       currentStep: newCurrentStep,
       totalSteps: prompts.length,
       executionState: EXECUTION_STATES.IDLE,
-      finalPromptStatus: null,
+      finalStepStatus: null,
     })),
   ```
 

@@ -106,7 +106,7 @@ function normalizeWorkflowProperties(
 function applyWorkflowChange(): void {
   useWorkflowStore.getState().clearHistoryOutputs();
   useUiStore.getState().clearHistoryView();
-  useUiStore.getState().setFinalPromptFooterExpanded(false);
+  useUiStore.getState().setFinalStepFooterExpanded(false);
   useUiStore.setState({ availableRuns: 0, runTimestamps: [], runStates: [] });
 
   const editorStore = useEditorStore.getState();
@@ -198,9 +198,9 @@ function createMessageHandlers(): MessageHandlerMap {
         currentStep: data.currentIndex || 0,
         results: data.results || [],
         finalStep: data.finalStep ?? null,
-        finalPromptStatus: data.finalPromptStatus ?? null,
-        finalPromptLoopCount: data.finalPromptLoopCount ?? 0,
-        finalPromptPhase: data.finalPromptPhase ?? null,
+        finalStepStatus: data.finalStepStatus ?? null,
+        finalStepLoopCount: data.finalStepLoopCount ?? 0,
+        finalStepPhase: data.finalStepPhase ?? null,
       });
       editorStore.setHasActiveQueue(true);
       settingsStore.setWorkflowLoaded(true);
@@ -229,9 +229,9 @@ function createMessageHandlers(): MessageHandlerMap {
       workflowName: message.workflowName,
       steps: message.steps || [],
       finalStep: message.finalStep ?? null,
-      finalPromptStatus: message.finalPromptStatus ?? null,
-      finalPromptLoopCount: message.finalPromptLoopCount ?? 0,
-      finalPromptPhase: message.finalPromptPhase ?? null,
+      finalStepStatus: message.finalStepStatus ?? null,
+      finalStepLoopCount: message.finalStepLoopCount ?? 0,
+      finalStepPhase: message.finalStepPhase ?? null,
     });
     applyWorkflowChange();
   };
@@ -248,9 +248,9 @@ function createMessageHandlers(): MessageHandlerMap {
       currentStep: message.currentIndex || 0,
       results: message.results || [],
       finalStep: message.finalStep ?? null,
-      finalPromptStatus: message.finalPromptStatus ?? null,
-      finalPromptLoopCount: message.finalPromptLoopCount ?? 0,
-      finalPromptPhase: message.finalPromptPhase ?? null,
+      finalStepStatus: message.finalStepStatus ?? null,
+      finalStepLoopCount: message.finalStepLoopCount ?? 0,
+      finalStepPhase: message.finalStepPhase ?? null,
     });
     applyWorkflowChange();
   };
@@ -564,12 +564,12 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
-  // FINAL_PROMPT_STATUS_CHANGED - Runtime status updates for finalPrompt phase
+  // FINAL_PROMPT_STATUS_CHANGED - Runtime status updates for finalStep phase
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FINAL_PROMPT_STATUS_CHANGED] = (message) => {
     useWorkflowStore
       .getState()
-      .setFinalPromptStatus(
+      .setFinalStepStatus(
         (message.status as StepStatus | null) ?? null,
         message.loopCount ?? 0,
         message.phase ?? null
@@ -577,7 +577,7 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
-  // FINAL_PROMPT_OUTPUT - CLI output for finalPrompt loop
+  // FINAL_PROMPT_OUTPUT - CLI output for finalStep loop
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FINAL_PROMPT_OUTPUT] = (message) => {
     const store = useWorkflowStore.getState();
@@ -596,24 +596,21 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
-  // FINAL_PROMPT_STREAMING_CHUNK - Incremental streaming text chunk for finalPrompt
+  // FINAL_PROMPT_STREAMING_CHUNK - Incremental streaming text chunk for finalStep
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK] = (message) => {
     useWorkflowStore
       .getState()
-      .appendFinalPromptStreamingChunk(message.loopIndex, message.chunk || "");
+      .appendFinalStepStreamingChunk(message.loopIndex, message.chunk || "");
   };
 
   // --------------------------------------------------------------------------
-  // FINAL_PROMPT_STREAMING_EVENTS - Structured streaming events for finalPrompt
+  // FINAL_PROMPT_STREAMING_EVENTS - Structured streaming events for finalStep
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS] = (message) => {
     useWorkflowStore
       .getState()
-      .appendFinalPromptStreamingEvents(
-        message.loopIndex,
-        message.events || []
-      );
+      .appendFinalStepStreamingEvents(message.loopIndex, message.events || []);
   };
 
   // --------------------------------------------------------------------------

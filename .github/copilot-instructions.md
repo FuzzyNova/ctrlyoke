@@ -44,7 +44,7 @@ User loads workflow (.flightpath.yaml/.json/.prompt.md)
         → WorkflowInstance (per-workflow execution state)
             → WorkflowStateMachine (sole owner of runtime status transitions)
             → PromptQueue (prompt list + hash-based deduplication)
-            → WorkflowExecutor (sequential execution loop, two-phase: queue → finalPrompt)
+            → WorkflowExecutor (sequential execution loop, two-phase: queue → finalStep)
                 → PropertyResolver (3-tier: prompt > workflow > settings)
                 → HarnessIntegration (abstract base, 7 concrete implementations)
                     → CliIntegration / CopilotChatIntegration
@@ -117,7 +117,7 @@ Adding a new harness requires changes across multiple layers (harness directory,
 | `src/flightpath/WorkflowStateMachine.ts`  | Sole owner of runtime status transitions                                       |
 | `src/flightpath/HarnessIntegration.ts`    | Abstract base class for all harnesses                                          |
 | `src/flightpath/PromptQueue.ts`           | Prompt list with hash-based deduplication                                      |
-| `src/flightpath/WorkflowExecutor.ts`      | Sequential execution loop (two-phase: queue → finalPrompt)                     |
+| `src/flightpath/WorkflowExecutor.ts`      | Sequential execution loop (two-phase: queue → finalStep)                       |
 | `src/flightpath/PromptFileParser.ts`      | YAML/JSON parsing with AJV validation                                          |
 | `src/flightpath/EndConditionEvaluator.ts` | Script validation in isolated child process                                    |
 | `src/flightpath/IntegrationFactory.ts`    | Factory for creating harness-specific CliIntegration instances                 |

@@ -51,13 +51,13 @@ class TestHarness extends HarnessIntegration {
     priorContext: PriorContext,
     allPrompts: PromptStep[],
     currentIndex: number,
-    finalPromptResponseTexts: string[] = []
+    finalStepResponseTexts: string[] = []
   ) {
     return (this as any).gatherPriorContextItems(
       priorContext,
       allPrompts,
       currentIndex,
-      finalPromptResponseTexts
+      finalStepResponseTexts
     );
   }
 
@@ -326,7 +326,7 @@ suite("insertPriorContext", () => {
     assert.ok(!result.includes("  trimmed response  "));
   });
 
-  test("adds type='finalPrompt' attribute for finalPrompt loop items", () => {
+  test("adds type='finalStep' attribute for finalStep loop items", () => {
     const items = [
       {
         index: 0,
@@ -337,7 +337,9 @@ suite("insertPriorContext", () => {
     const result = harness.exposeInsert("Do work.", items);
     assert.ok(result.includes(`type="${PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP}"`));
     assert.ok(
-      result.includes(`<step index="1" type="${PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP}">`)
+      result.includes(
+        `<step index="1" type="${PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP}">`
+      )
     );
     assert.ok(result.includes("<response>\norchestrator output\n</response>"));
   });

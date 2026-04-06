@@ -77,7 +77,7 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("test-tag", callbacks);
       assert.strictEqual(buffer.stepBufferSize, 0);
-      assert.strictEqual(buffer.finalPromptBufferSize, 0);
+      assert.strictEqual(buffer.finalStepBufferSize, 0);
     });
   });
 
@@ -350,12 +350,12 @@ suite("OutputCaptureBuffer", () => {
     });
   });
 
-  suite("finalPrompt capture", () => {
-    test("should buffer finalPrompt init and chunks", () => {
+  suite("finalStep capture", () => {
+    test("should buffer finalStep init and chunks", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureFinalPromptOutputInit(
+      buffer.captureFinalStepOutputInit(
         0,
         "final q",
         "cmd",
@@ -364,16 +364,16 @@ suite("OutputCaptureBuffer", () => {
         0,
         false
       );
-      buffer.captureFinalPromptChunk(0, "response chunk");
+      buffer.captureFinalStepChunk(0, "response chunk");
 
-      assert.strictEqual(buffer.finalPromptBufferSize, 1);
+      assert.strictEqual(buffer.finalStepBufferSize, 1);
     });
 
-    test("should accumulate finalPrompt events", () => {
+    test("should accumulate finalStep events", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureFinalPromptOutputInit(
+      buffer.captureFinalStepOutputInit(
         0,
         "q",
         undefined,
@@ -382,21 +382,21 @@ suite("OutputCaptureBuffer", () => {
         0,
         false
       );
-      buffer.captureFinalPromptEvents(0, [
+      buffer.captureFinalStepEvents(0, [
         { type: "tool_call" } as unknown as CliEvent,
       ]);
-      buffer.captureFinalPromptEvents(0, [
+      buffer.captureFinalStepEvents(0, [
         { type: "tool_result" } as unknown as CliEvent,
       ]);
 
-      assert.strictEqual(buffer.finalPromptBufferSize, 1);
+      assert.strictEqual(buffer.finalStepBufferSize, 1);
     });
 
-    test("should store finalPrompt completed output and remove from streaming buffer", () => {
+    test("should store finalStep completed output and remove from streaming buffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureFinalPromptOutputInit(
+      buffer.captureFinalStepOutputInit(
         0,
         "q",
         undefined,
@@ -405,11 +405,11 @@ suite("OutputCaptureBuffer", () => {
         0,
         false
       );
-      assert.strictEqual(buffer.finalPromptBufferSize, 1);
+      assert.strictEqual(buffer.finalStepBufferSize, 1);
 
-      buffer.captureFinalPromptCompletedOutput(0, { response: "final done" });
+      buffer.captureFinalStepCompletedOutput(0, { response: "final done" });
       assert.strictEqual(
-        buffer.finalPromptBufferSize,
+        buffer.finalStepBufferSize,
         0,
         "streaming buffer should be cleared"
       );
@@ -419,8 +419,8 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureFinalPromptCompletedOutput(0, { response: "loop0" });
-      buffer.captureFinalPromptCompletedOutput(1, { response: "loop1" });
+      buffer.captureFinalStepCompletedOutput(0, { response: "loop0" });
+      buffer.captureFinalStepCompletedOutput(1, { response: "loop1" });
 
       const { sink, calls } = makeDashboardSink();
       buffer.replayTo(
@@ -429,20 +429,18 @@ suite("OutputCaptureBuffer", () => {
         null,
         "tag"
       );
-      const fpCalls = calls.filter(
-        (c) => c.method === "updateFinalPromptOutput"
-      );
+      const fpCalls = calls.filter((c) => c.method === "updateFinalStepOutput");
       assert.strictEqual(fpCalls.length, 2);
     });
   });
 
-  suite("onFinalPromptStatusMessage", () => {
+  suite("onFinalStepStatusMessage", () => {
     test("should buffer status messages and fire callback with legacy negative index", () => {
       const { callbacks, statusMessages } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.onFinalPromptStatusMessage(0, "Evaluating end condition", "info");
-      buffer.onFinalPromptStatusMessage(0, "Condition met", "success");
+      buffer.onFinalStepStatusMessage(0, "Evaluating end condition", "info");
+      buffer.onFinalStepStatusMessage(0, "Condition met", "success");
 
       assert.strictEqual(statusMessages.length, 2);
       // Legacy encoding: loop 0 => -(0+1) = -1
@@ -455,7 +453,7 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks, statusMessages } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.onFinalPromptStatusMessage(2, "msg", "info");
+      buffer.onFinalStepStatusMessage(2, "msg", "info");
       // Legacy encoding: loop 2 => -(2+1) = -3
       assert.strictEqual(statusMessages[0].stepIndex, -3);
     });
@@ -511,7 +509,7 @@ suite("OutputCaptureBuffer", () => {
 
       buffer.captureOutputInit(0, "p", undefined, undefined, 100, 0, false);
       buffer.captureCompletedOutput(0, { response: "done" });
-      buffer.captureFinalPromptOutputInit(
+      buffer.captureFinalStepOutputInit(
         0,
         "fp",
         undefined,
@@ -524,7 +522,7 @@ suite("OutputCaptureBuffer", () => {
       buffer.clear();
 
       assert.strictEqual(buffer.stepBufferSize, 0);
-      assert.strictEqual(buffer.finalPromptBufferSize, 0);
+      assert.strictEqual(buffer.finalStepBufferSize, 0);
 
       // Verify completed outputs also cleared
       const { sink, calls } = makeDashboardSink();
@@ -638,11 +636,11 @@ suite("OutputCaptureBuffer", () => {
       assert.strictEqual(streamingCalls.length, 0);
     });
 
-    test("should replay finalPrompt streaming when phase is FINAL_PROMPT", () => {
+    test("should replay finalStep streaming when phase is FINAL_PROMPT", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureFinalPromptOutputInit(
+      buffer.captureFinalStepOutputInit(
         0,
         "final q",
         "cmd",
@@ -651,8 +649,8 @@ suite("OutputCaptureBuffer", () => {
         0,
         false
       );
-      buffer.captureFinalPromptChunk(0, "fp response");
-      buffer.captureFinalPromptEvents(0, [
+      buffer.captureFinalStepChunk(0, "fp response");
+      buffer.captureFinalStepEvents(0, [
         { type: "tool_call" } as unknown as CliEvent,
       ]);
 
@@ -664,19 +662,19 @@ suite("OutputCaptureBuffer", () => {
         "tag"
       );
 
-      const fpCall = calls.find((c) => c.method === "updateFinalPromptOutput");
-      assert.ok(fpCall, "should replay finalPrompt streaming output");
+      const fpCall = calls.find((c) => c.method === "updateFinalStepOutput");
+      assert.ok(fpCall, "should replay finalStep streaming output");
       assert.strictEqual(fpCall!.args[0], 0); // loopIndex
       assert.strictEqual(fpCall!.args[1].isStreaming, true);
       assert.strictEqual(fpCall!.args[1].response, "fp response");
       assert.ok(fpCall!.args[1].structured?.events?.length === 1);
     });
 
-    test("should replay finalPrompt status messages", () => {
+    test("should replay finalStep status messages", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.onFinalPromptStatusMessage(0, "status msg", "info");
+      buffer.onFinalStepStatusMessage(0, "status msg", "info");
 
       const { sink, calls } = makeDashboardSink();
       buffer.replayTo(

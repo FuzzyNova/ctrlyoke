@@ -1,5 +1,10 @@
 import * as path from "path";
-import { PromptStep, PriorContext, WorkflowStep, isScriptStep } from "../types/FlightPathTypes";
+import {
+  PromptStep,
+  PriorContext,
+  WorkflowStep,
+  isScriptStep,
+} from "../types/FlightPathTypes";
 import { WorkflowContext } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import {
@@ -33,10 +38,10 @@ interface SubscriptionContainer {
 type PriorContextItem = {
   index: number;
   name?: string;
-  /** The prompt text that was sent for this step. Absent for finalPrompt loop items. */
+  /** The prompt text that was sent for this step. Absent for finalStep loop items. */
   prompt?: string;
   text: string;
-  /** Discriminant set when the item originates from a finalPrompt/finalStep loop (not a queue prompt). */
+  /** Discriminant set when the item originates from a finalStep/finalStep loop (not a queue prompt). */
   type?: PriorContextItemType;
 };
 
@@ -394,48 +399,48 @@ export abstract class HarnessIntegration {
    * Gather prior prompt response texts based on the priorContext field.
    *
    * Queue-prompt keywords ("all", "previous", number[]) resolve against allPrompts._runtime.responseText.
-   * finalStep keywords ("finalStepAll", "finalStepPrevious") resolve against finalPromptResponseTexts.
+   * finalStep keywords ("finalStepAll", "finalStepPrevious") resolve against finalStepResponseTexts.
    *
    * Prompts/loops with no captured output are silently skipped.
    *
    * @param priorContext The resolved priorContext value
    * @param allPrompts All queue prompts in the workflow
    * @param currentIndex 0-based index of the prompt being built
-   * @param finalPromptResponseTexts Per-loop finalPrompt response texts (indexed by loopIndex)
+   * @param finalStepResponseTexts Per-loop finalStep response texts (indexed by loopIndex)
    */
   protected gatherPriorContextItems(
     priorContext: PriorContext,
     allPrompts: WorkflowStep[],
     currentIndex: number,
-    finalPromptResponseTexts: string[] = []
+    finalStepResponseTexts: string[] = []
   ): PriorContextItem[] {
     if (priorContext === PRIOR_CONTEXT_KEYWORDS.NONE) {
       return [];
     }
 
-    // finalPrompt-specific keywords
+    // finalStep-specific keywords
     if (priorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL) {
-      const items = finalPromptResponseTexts
+      const items = finalStepResponseTexts
         .map((text, i) => ({
           index: i,
           text,
           type: PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP,
         }))
         .filter((item) => item.text.length > 0);
-      if (items.length === 0 && finalPromptResponseTexts.length > 0) {
+      if (items.length === 0 && finalStepResponseTexts.length > 0) {
         Log.debug(
-          `priorContext: no captured finalPrompt response text available yet`
+          `priorContext: no captured finalStep response text available yet`
         );
       }
       return items;
     }
 
     if (priorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS) {
-      const lastIndex = finalPromptResponseTexts.length - 1;
+      const lastIndex = finalStepResponseTexts.length - 1;
       if (lastIndex < 0) {
         return [];
       }
-      const text = finalPromptResponseTexts[lastIndex];
+      const text = finalStepResponseTexts[lastIndex];
       if (!text) {
         return [];
       }
@@ -482,7 +487,10 @@ export abstract class HarnessIntegration {
         return {
           index: i,
           name: step?.name,
-          prompt: step && !isScriptStep(step) ? step.prompt : step?.name ?? `(script: ${(step as any)?.script ?? ""})`,
+          prompt:
+            step && !isScriptStep(step)
+              ? step.prompt
+              : (step?.name ?? `(script: ${(step as any)?.script ?? ""})`),
           text: step?._runtime?.responseText ?? "",
         };
       })
@@ -531,25 +539,28 @@ export abstract class HarnessIntegration {
     promptIndex: number,
     allPrompts: WorkflowStep[],
     resolvedPriorContext?: PriorContext,
-    finalPromptResponseTexts?: string[]
+    finalStepResponseTexts?: string[]
   ): string {
-    if (resolvedPriorContext === undefined || resolvedPriorContext === PRIOR_CONTEXT_KEYWORDS.NONE) {
+    if (
+      resolvedPriorContext === undefined ||
+      resolvedPriorContext === PRIOR_CONTEXT_KEYWORDS.NONE
+    ) {
       return "";
     }
     const contextItems = this.gatherPriorContextItems(
       resolvedPriorContext,
       allPrompts,
       promptIndex,
-      finalPromptResponseTexts ?? []
+      finalStepResponseTexts ?? []
     );
     if (contextItems.length === 0) {
       return "";
     }
-    const isFinalPromptContext =
+    const isFinalStepContext =
       resolvedPriorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL ||
       resolvedPriorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS;
     Log.debug(
-      `🔗 Injecting ${isFinalPromptContext ? "finalStep" : "prior"} context for prompt ${promptIndex + 1}: ` +
+      `🔗 Injecting ${isFinalStepContext ? "finalStep" : "prior"} context for prompt ${promptIndex + 1}: ` +
         `${contextItems.length} step(s) from indices [${contextItems.map((c) => c.index + 1).join(", ")}]`
     );
     return this.buildPriorContextXml(contextItems);
@@ -609,24 +620,24 @@ export abstract class HarnessIntegration {
    * For chat harnesses the same check applies as a fast-path gate: if it passes,
    * the prompt is short and clean enough to type inline, skipping temp file I/O.
    *
-   * @param finalPromptText The final prompt text (after instruction injection)
+   * @param finalStepText The final step text (after instruction injection)
    * @returns true if prompt can be passed directly
    */
-  protected isSimplePrompt(finalPromptText: string): boolean {
-    if (finalPromptText.length > HarnessIntegration.MAX_SIMPLE_PROMPT_LENGTH) {
+  protected isSimplePrompt(finalStepText: string): boolean {
+    if (finalStepText.length > HarnessIntegration.MAX_SIMPLE_PROMPT_LENGTH) {
       return false;
     }
 
     // Only allow: letters, numbers, spaces, and basic safe punctuation.
     // If anything else exists, use file-based passing.
-    if (!HarnessIntegration.SAFE_CHARS_PATTERN.test(finalPromptText)) {
+    if (!HarnessIntegration.SAFE_CHARS_PATTERN.test(finalStepText)) {
       Log.debug(
         "📁 Prompt contains special characters, using file-based passing for safety"
       );
       return false;
     }
 
-    if (/[\n\r\t]/.test(finalPromptText)) {
+    if (/[\n\r\t]/.test(finalStepText)) {
       Log.debug("📁 Prompt contains newlines/tabs, using file-based passing");
       return false;
     }

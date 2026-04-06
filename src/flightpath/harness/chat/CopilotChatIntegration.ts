@@ -1,7 +1,11 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
-import { PromptStep, Harness, type UserHookConfig } from "../../../types/FlightPathTypes";
+import {
+  PromptStep,
+  Harness,
+  type UserHookConfig,
+} from "../../../types/FlightPathTypes";
 import { HarnessIntegration, HarnessStatus } from "../../HarnessIntegration";
 import { isModelAvailable } from "../../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
@@ -1093,7 +1097,8 @@ export class CopilotChatIntegration extends HarnessIntegration {
     workingFilePath: string | undefined,
     userHooks: UserHookConfig[]
   ): Promise<void> {
-    const hookConfig = CopilotNotificationMonitor.buildUserOnlyConfig(userHooks);
+    const hookConfig =
+      CopilotNotificationMonitor.buildUserOnlyConfig(userHooks);
 
     // Same filename pattern as CopilotCliProvider.buildHookFileName()
     const stem = workingFilePath
@@ -1107,14 +1112,20 @@ export class CopilotChatIntegration extends HarnessIntegration {
     // Security: validate hook path stays within workspace root
     const normalizedRoot = path.resolve(workspaceRoot);
     if (!path.resolve(hookDir).startsWith(normalizedRoot)) {
-      Log.error(`Security: Hook directory is outside workspace root "${normalizedRoot}"`);
+      Log.error(
+        `Security: Hook directory is outside workspace root "${normalizedRoot}"`
+      );
       return;
     }
 
     try {
       await fs.mkdir(hookDir, { recursive: true });
       const hookPath = path.join(hookDir, hookFileName);
-      await fs.writeFile(hookPath, JSON.stringify(hookConfig, null, 2), "utf-8");
+      await fs.writeFile(
+        hookPath,
+        JSON.stringify(hookConfig, null, 2),
+        "utf-8"
+      );
       this.hookFilePaths.push(hookPath);
       Log.debug(`📁 Created hook file: ${hookPath}`);
     } catch (error) {
@@ -1123,7 +1134,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
   }
 
   /**
-   * Build final prompt text for the chat input.
+   * Build final step text for the chat input.
    *
    * - **Native attachments** (`useNativeAttachments=true`): attach files via VS Code
    *   native commands, return only the raw prompt text (short string typed into input).
@@ -1193,7 +1204,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
           workflowContext.promptIndex,
           workflowContext.allPrompts,
           workflowContext.resolvedProperties?.priorContext,
-          workflowContext.getFinalPromptResponseTexts?.()
+          workflowContext.getFinalStepResponseTexts?.()
         )
       : "";
 

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { type FinalPromptPhase } from "../../types/messages";
+import { type FinalStepPhase } from "../../types/messages";
 
 // ============================================================================
 // Types
@@ -34,7 +34,7 @@ export interface MinimapDiffBlock {
 
 export interface MinimapStep {
   key: string;
-  kind: FinalPromptPhase;
+  kind: FinalStepPhase;
   stepIndex: number;
   firstMessageIndex: number;
   /** Real pixel fraction (0–1): offsetTop of the step anchor / scrollHeight */

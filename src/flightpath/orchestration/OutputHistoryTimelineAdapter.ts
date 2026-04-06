@@ -97,10 +97,10 @@ export class OutputHistoryTimelineAdapter {
     ].sort(compareOrderedHistoryEntries);
 
     if (
-      history.finalPromptOutputs &&
-      Object.keys(history.finalPromptOutputs).length === 0
+      history.finalStepOutputs &&
+      Object.keys(history.finalStepOutputs).length === 0
     ) {
-      delete history.finalPromptOutputs;
+      delete history.finalStepOutputs;
     }
 
     return history;
@@ -115,9 +115,9 @@ export class OutputHistoryTimelineAdapter {
       return history.promptOutputs[target.stepIndex];
     }
 
-    history.finalPromptOutputs ??= {};
-    history.finalPromptOutputs[target.loopIndex] ??= {};
-    return history.finalPromptOutputs[target.loopIndex];
+    history.finalStepOutputs ??= {};
+    history.finalStepOutputs[target.loopIndex] ??= {};
+    return history.finalStepOutputs[target.loopIndex];
   }
 }
 
