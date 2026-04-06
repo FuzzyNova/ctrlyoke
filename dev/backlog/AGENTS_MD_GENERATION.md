@@ -756,7 +756,7 @@ Proceed with creating root-level AGENTS.md.
 ### 7. Symlink Creation on Windows
 
 **Scenario**: Symlink creation requires admin privileges on some Windows systems
-**Solution**: Include fallback in prompts: "If symlink creation fails, copy AGENTS.md to CLAUDE.md instead"
+**Solution**: Include fallback in steps: "If symlink creation fails, copy AGENTS.md to CLAUDE.md instead"
 
 ### 8. Setup Script Execution Failure
 

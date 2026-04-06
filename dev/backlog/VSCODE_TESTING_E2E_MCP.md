@@ -92,7 +92,7 @@ Expose via MCP tool: `get_queue_state() → { status, prompts, currentIndex, ...
 **Sending messages to the webview** — already exists:
 
 ```typescript
-webviewProvider.postMessage({ type: "PROMPTS_EXTENDED", prompts: [...] })
+webviewProvider.postMessage({ type: "PROMPTS_EXTENDED", steps: [...] })
 ```
 
 Expose via MCP tool: `send_webview_message(type: string, payload: object)`.

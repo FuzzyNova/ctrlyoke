@@ -16,6 +16,7 @@ import {
   PROMPT_FILE_EXTENSIONS,
   looksLikeFilePath,
 } from "../utils/promptPathUtils";
+import { STEP_TYPES } from "../types/DashboardConstants";
 
 export class PromptFileParser {
   private ajv = new Ajv({ allowUnionTypes: true });
@@ -289,7 +290,7 @@ export class PromptFileParser {
    * @returns ScriptStep with only defined properties
    */
   private buildScriptStep(source: any): ScriptStep {
-    const step: ScriptStep = { type: "script", script: source.script };
+    const step: ScriptStep = { type: STEP_TYPES.SCRIPT, script: source.script };
     if (source.name !== undefined) step.name = source.name;
     if (source.timeout !== undefined) step.timeout = source.timeout;
     if (source.continueOnFailure !== undefined)
@@ -361,7 +362,7 @@ export class PromptFileParser {
     if (parsed.steps && Array.isArray(parsed.steps)) {
       const resolvedPrompts: WorkflowStep[] = await Promise.all(
         parsed.steps.map(async (item: any) => {
-          if (item.type === "script") {
+          if (item.type === STEP_TYPES.SCRIPT) {
             return this.buildScriptStep(item);
           }
           const resolvedPrompt = await this.resolvePromptContent(
@@ -380,7 +381,7 @@ export class PromptFileParser {
       // Support both new "finalStep" and legacy "finalPrompt" field names
       const rawFinalStep = parsed.finalStep ?? parsed.finalPrompt;
       if (rawFinalStep) {
-        if (rawFinalStep.type === "script") {
+        if (rawFinalStep.type === STEP_TYPES.SCRIPT) {
           promptFile.finalStep = this.buildScriptStep(rawFinalStep);
         } else if (typeof rawFinalStep.prompt === "string") {
           const resolvedFinalPrompt = await this.resolvePromptContent(

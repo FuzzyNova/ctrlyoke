@@ -533,7 +533,7 @@ export abstract class HarnessIntegration {
     resolvedPriorContext?: PriorContext,
     finalPromptResponseTexts?: string[]
   ): string {
-    if (resolvedPriorContext === undefined || resolvedPriorContext === "none") {
+    if (resolvedPriorContext === undefined || resolvedPriorContext === PRIOR_CONTEXT_KEYWORDS.NONE) {
       return "";
     }
     const contextItems = this.gatherPriorContextItems(
@@ -546,8 +546,8 @@ export abstract class HarnessIntegration {
       return "";
     }
     const isFinalPromptContext =
-      resolvedPriorContext === "finalPromptAll" ||
-      resolvedPriorContext === "finalPromptPrevious";
+      resolvedPriorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL ||
+      resolvedPriorContext === PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS;
     Log.debug(
       `🔗 Injecting ${isFinalPromptContext ? "finalPrompt" : "prior"} context for prompt ${promptIndex + 1}: ` +
         `${contextItems.length} step(s) from indices [${contextItems.map((c) => c.index + 1).join(", ")}]`

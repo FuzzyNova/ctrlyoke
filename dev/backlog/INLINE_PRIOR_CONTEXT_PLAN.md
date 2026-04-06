@@ -21,14 +21,14 @@ so the same step's content is never attached twice.
 
 ## New `$` Syntax
 
-| Syntax | Equivalent property | Description |
-|---|---|---|
-| `$previous` | `priorContext: previous` | Output of the immediately preceding queue prompt |
-| `$all` | `priorContext: all` | Outputs of all prior queue prompts |
-| `$finalPrompt` | `priorContext: finalPromptPrevious` | Output of the previous finalPrompt loop execution |
-| `$allFinalPrompt` | `priorContext: finalPromptAll` | Outputs of all finalPrompt loop executions |
-| `$prompt:N` | `priorContext: [N]` | Output of a specific prompt by 1-based number |
-| `$prompt:N,M,A-B` | `priorContext: [N,M,A,…,B]` | Outputs of specific prompts via range notation |
+| Syntax            | Equivalent property                 | Description                                       |
+| ----------------- | ----------------------------------- | ------------------------------------------------- |
+| `$previous`       | `priorContext: previous`            | Output of the immediately preceding queue prompt  |
+| `$all`            | `priorContext: all`                 | Outputs of all prior queue prompts                |
+| `$finalPrompt`    | `priorContext: finalPromptPrevious` | Output of the previous finalPrompt loop execution |
+| `$allFinalPrompt` | `priorContext: finalPromptAll`      | Outputs of all finalPrompt loop executions        |
+| `$prompt:N`       | `priorContext: [N]`                 | Output of a specific prompt by 1-based number     |
+| `$prompt:N,M,A-B` | `priorContext: [N,M,A,…,B]`         | Outputs of specific prompts via range notation    |
 
 Range notation uses the same `1,2,4-10` format already supported in `PriorContextSelect`. Any
 combination of comma-separated numbers and `A-B` ranges is valid.
@@ -43,7 +43,7 @@ Hey Copilot, take a look at what Claude told me to do in $previous — can you i
 
 ```yaml
 # workflow level: priorContext: previous  →  always inject previous output
-prompts:
+steps:
   - name: analyze
     prompt: Analyze the architecture.
   - name: implement
@@ -154,7 +154,7 @@ Add a new protected helper:
 protected gatherAndMergeContextItems(
   propertyContext: PriorContext | undefined,
   inlineRefs: InlinePriorContextRef[],
-  allPrompts: PromptItem[],
+  allsteps: WorkflowStep[],
   promptIndex: number,
   finalPromptResponseTexts: string[]
 ): PriorContextItem[] {
@@ -178,7 +178,9 @@ equivalent `PriorContext` value (e.g. `{ kind: "previous" } → "previous"`).
 Add a private utility:
 
 ```typescript
-function deduplicatePriorContextItems(items: PriorContextItem[]): PriorContextItem[] {
+function deduplicatePriorContextItems(
+  items: PriorContextItem[]
+): PriorContextItem[] {
   const seen = new Set<string>();
   return items.filter((item) => {
     const key = `${item.type ?? "queue"}:${item.index}`;
@@ -197,7 +199,7 @@ Add the new dep:
 gatherAndMergeContextItems: (
   propertyContext: PriorContext | undefined,
   inlineRefs: InlinePriorContextRef[],
-  allPrompts: PromptItem[],
+  allsteps: PromptItem[],
   promptIndex: number,
   finalPromptResponseTexts: string[]
 ) => PriorContextItem[];
@@ -258,11 +260,11 @@ export function getPriorContextCompletions(
   filterText: string
 ): PlainCompletionItem[] {
   const keywords = [
-    { label: "previous",       detail: "Output of the previous prompt" },
-    { label: "all",            detail: "Outputs of all prior prompts" },
-    { label: "finalPrompt",    detail: "Previous finalPrompt output" },
+    { label: "previous", detail: "Output of the previous prompt" },
+    { label: "all", detail: "Outputs of all prior prompts" },
+    { label: "finalPrompt", detail: "Previous finalPrompt output" },
     { label: "allFinalPrompt", detail: "All finalPrompt outputs" },
-    { label: "prompt:",        detail: "Specific prompts — e.g. $prompt:1,3-5" },
+    { label: "prompt:", detail: "Specific prompts — e.g. $prompt:1,3-5" },
   ];
   return keywords
     .filter((k) => k.label.startsWith(filterText))
@@ -295,7 +297,12 @@ Add `"$"` as a fourth trigger when registering `PromptCompletionProvider`.
 ```typescript
 const lastDollarIndex = textBefore.lastIndexOf("$");
 
-const maxIndex = Math.max(lastAtIndex, lastHashIndex, lastTildeIndex, lastDollarIndex);
+const maxIndex = Math.max(
+  lastAtIndex,
+  lastHashIndex,
+  lastTildeIndex,
+  lastDollarIndex
+);
 
 // ...
 
@@ -332,6 +339,7 @@ The Additional Instructions plan reuses the Context tab independently.
 `$xxx` tokens today, so files won't break when support is added later.
 
 **Tests to add:**
+
 - `parseInlinePriorContextRefs()` — all keyword forms, range notation, unknown tokens ignored,
   invalid range logged
 - `parseRangeNotation()` — existing range notation tests from `PriorContextSelect` (if any)
@@ -343,16 +351,16 @@ The Additional Instructions plan reuses the Context tab independently.
 
 ## File Change Summary
 
-| File | Change |
-|---|---|
-| `src/utils/RangeNotationParser.ts` | New — extract `parseRangeNotation()` from `PriorContextSelect.tsx` |
-| `src/utils/FileReferenceParser.ts` | Add `parseInlinePriorContextRefs()`, `InlinePriorContextRef`, `InlinePriorContextMatch` |
-| `src/ui/webview-react/components/shared/PriorContextSelect.tsx` | Import `parseRangeNotation` from new utility instead of defining it locally |
-| `src/flightpath/HarnessIntegration.ts` | Add `gatherAndMergeContextItems()`, `deduplicatePriorContextItems()`, `refToPriorContext()`; refactor `buildPriorContextXml` to accept pre-gathered items |
-| `src/flightpath/harness/shared/CliPromptPreparer.ts` | Replace `resolvedPriorContext`-only block with merged property+inline logic; update `CliPromptPreparerDeps` |
-| `src/flightpath/harness/chat/CopilotChatIntegration.ts` | Add inline ref parsing alongside property resolution |
-| `src/completions/CompletionHelpers.ts` | Add `getPriorContextCompletions()` |
-| `src/completions/PromptCompletionProvider.ts` | Add `$` to `TriggerChar`; add `getDollarCompletions()`; extend `lastIndexOf` block |
-| `src/extension.ts` | Add `"$"` to completion trigger characters |
-| `src/ui/WebviewMessageRouter.ts` | Add `$` branch to `getCompletionItems()` |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Add `lastDollarIndex`; add `$` character class validation |
+| File                                                            | Change                                                                                                                                                    |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/utils/RangeNotationParser.ts`                              | New — extract `parseRangeNotation()` from `PriorContextSelect.tsx`                                                                                        |
+| `src/utils/FileReferenceParser.ts`                              | Add `parseInlinePriorContextRefs()`, `InlinePriorContextRef`, `InlinePriorContextMatch`                                                                   |
+| `src/ui/webview-react/components/shared/PriorContextSelect.tsx` | Import `parseRangeNotation` from new utility instead of defining it locally                                                                               |
+| `src/flightpath/HarnessIntegration.ts`                          | Add `gatherAndMergeContextItems()`, `deduplicatePriorContextItems()`, `refToPriorContext()`; refactor `buildPriorContextXml` to accept pre-gathered items |
+| `src/flightpath/harness/shared/CliPromptPreparer.ts`            | Replace `resolvedPriorContext`-only block with merged property+inline logic; update `CliPromptPreparerDeps`                                               |
+| `src/flightpath/harness/chat/CopilotChatIntegration.ts`         | Add inline ref parsing alongside property resolution                                                                                                      |
+| `src/completions/CompletionHelpers.ts`                          | Add `getPriorContextCompletions()`                                                                                                                        |
+| `src/completions/PromptCompletionProvider.ts`                   | Add `$` to `TriggerChar`; add `getDollarCompletions()`; extend `lastIndexOf` block                                                                        |
+| `src/extension.ts`                                              | Add `"$"` to completion trigger characters                                                                                                                |
+| `src/ui/WebviewMessageRouter.ts`                                | Add `$` branch to `getCompletionItems()`                                                                                                                  |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`   | Add `lastDollarIndex`; add `$` character class validation                                                                                                 |

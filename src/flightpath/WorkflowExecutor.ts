@@ -18,6 +18,7 @@ import {
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
   FINAL_STEP_PHASES,
+  STEP_TYPES,
 } from "../types/DashboardConstants";
 import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
@@ -492,7 +493,7 @@ export class WorkflowExecutor {
       Log.info(`Executing finalPrompt loop ${target.loopIndex + 1}`);
     }
 
-    const legacyStepIndex = this.getLegacyStepIndex(target);
+    const signedStepIndex = this.getSignedStepIndex(target);
     const sendPromptIndex =
       target.kind === FINAL_STEP_PHASES.QUEUE
         ? target.stepIndex
@@ -503,7 +504,7 @@ export class WorkflowExecutor {
       integration,
       context,
       target,
-      target.kind === FINAL_STEP_PHASES.QUEUE ? legacyStepIndex : undefined,
+      target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
       0,
       {
         promptIndex: sendPromptIndex,
@@ -540,7 +541,7 @@ export class WorkflowExecutor {
         context,
         target,
         prompt,
-        legacyStepIndex,
+        signedStepIndex,
         0
       );
     }
@@ -569,7 +570,7 @@ export class WorkflowExecutor {
       context,
       integration,
       target,
-      target.kind === FINAL_STEP_PHASES.QUEUE ? legacyStepIndex : undefined,
+      target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
       prompt,
       responseText,
       duration
@@ -589,7 +590,7 @@ export class WorkflowExecutor {
         integration,
         context,
         target,
-        target.kind === FINAL_STEP_PHASES.QUEUE ? legacyStepIndex : undefined,
+        target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
         0,
         duration,
         vars && Object.keys(vars).length > 0 ? vars : undefined
@@ -609,7 +610,7 @@ export class WorkflowExecutor {
         target.kind === FINAL_STEP_PHASES.QUEUE &&
         context.dashboardProvider
       ) {
-        context.dashboardProvider.updateStepStatus(legacyStepIndex, {
+        context.dashboardProvider.updateStepStatus(signedStepIndex, {
           state: STEP_STATUS.COMPLETED,
           duration,
         });
@@ -620,7 +621,7 @@ export class WorkflowExecutor {
         target.kind === FINAL_STEP_PHASES.QUEUE &&
         context.dashboardProvider
       ) {
-        context.dashboardProvider.updateStepStatus(legacyStepIndex, {
+        context.dashboardProvider.updateStepStatus(signedStepIndex, {
           state: STEP_STATUS.COMPLETED,
           duration,
         });
@@ -710,29 +711,29 @@ export class WorkflowExecutor {
     // that are unreadable as literal characters in the output panel.
     const outputText = rawOutput.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
 
-    const legacyStepIndex = this.getLegacyStepIndex(target);
+    const signedStepIndex = this.getSignedStepIndex(target);
     const scriptCliOutput = {
       prompt: step.script,
       response: outputText,
       elapsed: evalResult.duration / 1000,
       isStreaming: false,
-      source: "script" as const,
+      source: STEP_TYPES.SCRIPT,
       exitCode: evalResult.exitCode ?? (succeeded ? 0 : 1),
       timestampMs: Date.now(),
       cliCommand: step.script,
       workingDirectory: context.workspaceFolderPath,
     };
 
-    if (context.dashboardProvider && legacyStepIndex >= 0) {
+    if (context.dashboardProvider && signedStepIndex >= 0) {
       context.dashboardProvider.updateCliOutput(
-        legacyStepIndex,
+        signedStepIndex,
         scriptCliOutput
       );
     }
 
     // Capture for output history replay (same pattern as updateDashboardWithResponse)
-    if (legacyStepIndex >= 0) {
-      context.captureCompletedOutput?.(legacyStepIndex, scriptCliOutput);
+    if (signedStepIndex >= 0) {
+      context.captureCompletedOutput?.(signedStepIndex, scriptCliOutput);
     }
 
     if (context.historyFilePath && context.outputHistoryManager) {
@@ -874,7 +875,7 @@ export class WorkflowExecutor {
    * finalPrompt loops use negative values (-(loopIndex+1)) so they never
    * collide with queue indices and callers can detect them with `< 0`.
    */
-  private getLegacyStepIndex(target: ExecutionTarget): number {
+  private getSignedStepIndex(target: ExecutionTarget): number {
     return target.kind === FINAL_STEP_PHASES.QUEUE
       ? target.stepIndex
       : -(target.loopIndex + 1);
@@ -922,12 +923,12 @@ export class WorkflowExecutor {
     severity: string = STATUS_MESSAGE_SEVERITY.INFO,
     timestampMs?: number
   ): Promise<void> {
-    const legacyStepIndex = this.getLegacyStepIndex(target);
+    const signedStepIndex = this.getSignedStepIndex(target);
 
     // Queue steps keep non-negative indices; finalPrompt loops use negative
     // legacy indices (-(loopIndex+1)) to avoid collisions with queue steps.
     context.dashboardProvider?.updateStatusMessage(
-      legacyStepIndex,
+      signedStepIndex,
       message,
       severity as any
     );
@@ -936,7 +937,7 @@ export class WorkflowExecutor {
     } else {
       context.onFinalPromptStatusMessage?.(target.loopIndex, message, severity);
       // Backward-compatible channel used by CLI renderers and existing listeners.
-      context.onStatusMessage?.(legacyStepIndex, message, severity);
+      context.onStatusMessage?.(signedStepIndex, message, severity);
     }
 
     const statusMessage = {
@@ -963,7 +964,7 @@ export class WorkflowExecutor {
     integration: HarnessIntegration,
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
-    legacyStepIndex: number | undefined,
+    signedStepIndex: number | undefined,
     attemptIndex: number,
     duration: number,
     vars?: Record<string, string>
@@ -991,8 +992,8 @@ export class WorkflowExecutor {
           "End condition missing required 'script' property"
         );
 
-      if (context.dashboardProvider && legacyStepIndex !== undefined) {
-        context.dashboardProvider.updateStepStatus(legacyStepIndex, {
+      if (context.dashboardProvider && signedStepIndex !== undefined) {
+        context.dashboardProvider.updateStepStatus(signedStepIndex, {
           state: STEP_STATUS.FAILED,
           message: "End condition missing required 'script' property",
           duration,
@@ -1047,7 +1048,7 @@ export class WorkflowExecutor {
       integration,
       context,
       target,
-      legacyStepIndex
+      signedStepIndex
     );
 
     const result = await this.endConditionHandler.handleEndConditionResult(
@@ -1058,8 +1059,8 @@ export class WorkflowExecutor {
     );
 
     if (!result.shouldContinue) {
-      if (context.dashboardProvider && legacyStepIndex !== undefined) {
-        context.dashboardProvider.updateStepStatus(legacyStepIndex, {
+      if (context.dashboardProvider && signedStepIndex !== undefined) {
+        context.dashboardProvider.updateStepStatus(signedStepIndex, {
           state: STEP_STATUS.FAILED,
           message: result.failureReason || "End condition failed",
           duration,
@@ -1131,7 +1132,7 @@ export class WorkflowExecutor {
     integration: HarnessIntegration,
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
-    legacyStepIndex: number | undefined,
+    signedStepIndex: number | undefined,
     attemptIndex: number,
     sendOptions: WorkflowContext,
     onPromptSent?: () => Promise<void>
@@ -1144,9 +1145,9 @@ export class WorkflowExecutor {
     const rawTextOutput = integration.rawTextOutput || undefined;
 
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      if (context.dashboardProvider && legacyStepIndex !== undefined) {
-        context.dashboardProvider.updateCliStreamingChunk(legacyStepIndex, "");
-        context.dashboardProvider.updateCliOutput(legacyStepIndex, {
+      if (context.dashboardProvider && signedStepIndex !== undefined) {
+        context.dashboardProvider.updateCliStreamingChunk(signedStepIndex, "");
+        context.dashboardProvider.updateCliOutput(signedStepIndex, {
           prompt: promptStep.prompt,
           response: "",
           elapsed: 0,
@@ -1160,9 +1161,9 @@ export class WorkflowExecutor {
         });
       }
 
-      if (legacyStepIndex !== undefined) {
+      if (signedStepIndex !== undefined) {
         context.captureOutputInit?.(
-          legacyStepIndex,
+          signedStepIndex,
           promptStep.prompt,
           undefined,
           context.workspaceFolderPath,
@@ -1210,8 +1211,8 @@ export class WorkflowExecutor {
         : undefined;
 
       if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        if (context.dashboardProvider && legacyStepIndex !== undefined) {
-          context.dashboardProvider.updateCliOutput(legacyStepIndex, {
+        if (context.dashboardProvider && signedStepIndex !== undefined) {
+          context.dashboardProvider.updateCliOutput(signedStepIndex, {
             prompt: promptStep.prompt,
             response: "",
             elapsed: 0,
@@ -1225,9 +1226,9 @@ export class WorkflowExecutor {
           });
         }
 
-        if (legacyStepIndex !== undefined) {
+        if (signedStepIndex !== undefined) {
           context.captureOutputInit?.(
-            legacyStepIndex,
+            signedStepIndex,
             promptStep.prompt,
             cliCommand,
             context.workspaceFolderPath,
@@ -1265,11 +1266,11 @@ export class WorkflowExecutor {
     streamingDisposable = integration.onStreamingChunk((chunk) => {
       if (
         target.kind === FINAL_STEP_PHASES.QUEUE &&
-        legacyStepIndex !== undefined
+        signedStepIndex !== undefined
       ) {
-        context.captureChunk?.(legacyStepIndex, chunk);
+        context.captureChunk?.(signedStepIndex, chunk);
         context.dashboardProvider?.updateCliStreamingChunk(
-          legacyStepIndex,
+          signedStepIndex,
           chunk
         );
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
@@ -1284,11 +1285,11 @@ export class WorkflowExecutor {
     structuredStreamingDisposable = integration.onStreamingEvents((events) => {
       if (
         target.kind === FINAL_STEP_PHASES.QUEUE &&
-        legacyStepIndex !== undefined
+        signedStepIndex !== undefined
       ) {
-        context.captureEvents?.(legacyStepIndex, events);
+        context.captureEvents?.(signedStepIndex, events);
         context.dashboardProvider?.updateCliStreamingEvents(
-          legacyStepIndex,
+          signedStepIndex,
           events
         );
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
@@ -1334,7 +1335,7 @@ export class WorkflowExecutor {
     integration: HarnessIntegration,
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
-    legacyStepIndex: number | undefined
+    signedStepIndex: number | undefined
   ): SendRetryPromptCallback {
     return async (
       retryPromptStep: PromptStep,
@@ -1353,7 +1354,7 @@ export class WorkflowExecutor {
         integration,
         context,
         target,
-        target.kind === FINAL_STEP_PHASES.QUEUE ? legacyStepIndex : undefined,
+        target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
         retryAttemptIndex,
         {
           promptIndex: currentIndex,
@@ -1379,7 +1380,7 @@ export class WorkflowExecutor {
           context,
           target,
           retryPromptStep,
-          legacyStepIndex ?? this.getLegacyStepIndex(target),
+          signedStepIndex ?? this.getSignedStepIndex(target),
           retryAttemptIndex
         );
         return null;
@@ -1389,7 +1390,7 @@ export class WorkflowExecutor {
         context,
         integration,
         target,
-        target.kind === FINAL_STEP_PHASES.QUEUE ? legacyStepIndex : undefined,
+        target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
         retryPromptStep,
         result.responseText,
         result.duration,
@@ -1544,7 +1545,7 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
     prompt: PromptStep,
-    legacyStepIndex: number,
+    signedStepIndex: number,
     attemptIndex: number
   ): Promise<boolean> {
     const runtime = this.getRuntime();
@@ -1575,9 +1576,9 @@ export class WorkflowExecutor {
         errorMessage: failureReason,
       };
 
-      if (context.dashboardProvider && legacyStepIndex >= 0) {
+      if (context.dashboardProvider && signedStepIndex >= 0) {
         context.dashboardProvider.updateCliOutput(
-          legacyStepIndex,
+          signedStepIndex,
           stoppedOutput
         );
       } else if (
@@ -1590,8 +1591,8 @@ export class WorkflowExecutor {
         );
       }
 
-      if (legacyStepIndex >= 0) {
-        context.captureCompletedOutput?.(legacyStepIndex, stoppedOutput);
+      if (signedStepIndex >= 0) {
+        context.captureCompletedOutput?.(signedStepIndex, stoppedOutput);
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         context.captureFinalPromptCompletedOutput?.(
           target.loopIndex,
@@ -1667,9 +1668,9 @@ export class WorkflowExecutor {
         errorMessage: failureReason,
       };
 
-      if (context.dashboardProvider && legacyStepIndex >= 0) {
+      if (context.dashboardProvider && signedStepIndex >= 0) {
         context.dashboardProvider.updateCliOutput(
-          legacyStepIndex,
+          signedStepIndex,
           processExitOutput
         );
       } else if (
@@ -1682,8 +1683,8 @@ export class WorkflowExecutor {
         );
       }
 
-      if (legacyStepIndex >= 0) {
-        context.captureCompletedOutput?.(legacyStepIndex, processExitOutput);
+      if (signedStepIndex >= 0) {
+        context.captureCompletedOutput?.(signedStepIndex, processExitOutput);
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         context.captureFinalPromptCompletedOutput?.(
           target.loopIndex,
@@ -1716,16 +1717,16 @@ export class WorkflowExecutor {
 
     const failureReason = integration.getLastFailureReason();
     const stepLabel =
-      legacyStepIndex >= 0
-        ? `prompt ${legacyStepIndex + 1}`
-        : `finalPrompt loop ${Math.abs(legacyStepIndex)}`;
+      signedStepIndex >= 0
+        ? `prompt ${signedStepIndex + 1}`
+        : `finalPrompt loop ${Math.abs(signedStepIndex)}`;
     this.platform.error(`Failed to execute ${stepLabel}: ${failureReason}`);
 
     // Send FAILED status before markErrored() so the step icon updates
     // before the execution state transitions to ERROR (separate postMessages
     // arrive in the same render cycle this way).
-    if (context.dashboardProvider && legacyStepIndex >= 0) {
-      context.dashboardProvider.updateStepStatus(legacyStepIndex, {
+    if (context.dashboardProvider && signedStepIndex >= 0) {
+      context.dashboardProvider.updateStepStatus(signedStepIndex, {
         state: STEP_STATUS.FAILED,
         message: failureReason,
       });
@@ -1755,9 +1756,9 @@ export class WorkflowExecutor {
       errorMessage: failureReason,
     };
 
-    if (context.dashboardProvider && legacyStepIndex >= 0) {
+    if (context.dashboardProvider && signedStepIndex >= 0) {
       context.dashboardProvider.updateCliOutput(
-        legacyStepIndex,
+        signedStepIndex,
         errorCliOutput
       );
     } else if (
@@ -1770,8 +1771,8 @@ export class WorkflowExecutor {
       );
     }
 
-    if (legacyStepIndex >= 0) {
-      context.captureCompletedOutput?.(legacyStepIndex, errorCliOutput);
+    if (signedStepIndex >= 0) {
+      context.captureCompletedOutput?.(signedStepIndex, errorCliOutput);
     } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
       context.captureFinalPromptCompletedOutput?.(
         target.loopIndex,
@@ -1798,7 +1799,7 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     integration: HarnessIntegration,
     target: ExecutionTarget,
-    legacyStepIndex: number | undefined,
+    signedStepIndex: number | undefined,
     prompt: PromptStep,
     responseText: string,
     duration: number,
@@ -1856,8 +1857,8 @@ export class WorkflowExecutor {
       rawTextOutput: integration.rawTextOutput || undefined,
     };
 
-    if (context.dashboardProvider && legacyStepIndex !== undefined) {
-      context.dashboardProvider.updateCliOutput(legacyStepIndex, cliOutputObj);
+    if (context.dashboardProvider && signedStepIndex !== undefined) {
+      context.dashboardProvider.updateCliOutput(signedStepIndex, cliOutputObj);
     } else if (
       context.dashboardProvider &&
       target.kind === FINAL_STEP_PHASES.FINAL_STEP
@@ -1867,8 +1868,8 @@ export class WorkflowExecutor {
         cliOutputObj
       );
     }
-    if (legacyStepIndex !== undefined) {
-      context.captureCompletedOutput?.(legacyStepIndex, cliOutputObj);
+    if (signedStepIndex !== undefined) {
+      context.captureCompletedOutput?.(signedStepIndex, cliOutputObj);
     } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
       context.captureFinalPromptCompletedOutput?.(
         target.loopIndex,

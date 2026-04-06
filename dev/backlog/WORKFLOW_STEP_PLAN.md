@@ -255,7 +255,7 @@ CONTINUE_ON_FAILURE: "continueOnFailure", // shared with scriptStep
 # parent.flightpath.yaml
 harness: claude-cli
 
-prompts:
+steps:
   - name: Implement feature
     prompt: |
       Implement the feature described in #file:spec.md
@@ -267,7 +267,7 @@ prompts:
   - name: Run test suite
     type: workflow
     workflow: test-and-fix.flightpath.yaml
-    continueOnFailure: true  # test failures are non-blocking
+    continueOnFailure: true # test failures are non-blocking
 
   - name: Ship it
     prompt: |
@@ -278,7 +278,7 @@ prompts:
 Sub-workflow as `finalPrompt`:
 
 ```yaml
-prompts:
+steps:
   - prompt: Implement the feature.
 
 finalPrompt:
@@ -290,41 +290,41 @@ finalPrompt:
 
 ## Edge Cases
 
-| Scenario | Handling |
-|---|---|
-| Circular reference (A → B → A) | Detected via `ancestorPaths` before child runs; step fails immediately |
-| Depth > limit (default 5) | Step fails with error: "Maximum workflow depth exceeded" |
-| Sub-workflow file not found | Step fails with error; `continueOnFailure` applies |
-| Sub-workflow schema validation error | Step fails with validation message; `continueOnFailure` applies |
-| Sub-workflow step fails, `continueOnFailure: false` | Child failure → parent step fails → parent workflow stops |
-| Sub-workflow step fails, `continueOnFailure: true` | Child failure → parent step shows warning badge → parent continues |
-| User pauses while child is running | Child pauses (it's the active executor); parent is waiting |
-| User stops while child is running | Child stops; parent marks workflow step as failed/stopped |
-| Workflow step as only queue item | Works; no special handling required |
-| Sub-workflow has its own `finalPrompt` | Executes normally as part of the child run |
-| Variable substitution (`{{vars}}`) | Parent's resolved vars are NOT passed to child by default; child uses its own vars + CLI `--var` flags |
-| `postScript` on a workflow step | Schema error — `additionalProperties: false` rejects it |
+| Scenario                                            | Handling                                                                                               |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Circular reference (A → B → A)                      | Detected via `ancestorPaths` before child runs; step fails immediately                                 |
+| Depth > limit (default 5)                           | Step fails with error: "Maximum workflow depth exceeded"                                               |
+| Sub-workflow file not found                         | Step fails with error; `continueOnFailure` applies                                                     |
+| Sub-workflow schema validation error                | Step fails with validation message; `continueOnFailure` applies                                        |
+| Sub-workflow step fails, `continueOnFailure: false` | Child failure → parent step fails → parent workflow stops                                              |
+| Sub-workflow step fails, `continueOnFailure: true`  | Child failure → parent step shows warning badge → parent continues                                     |
+| User pauses while child is running                  | Child pauses (it's the active executor); parent is waiting                                             |
+| User stops while child is running                   | Child stops; parent marks workflow step as failed/stopped                                              |
+| Workflow step as only queue item                    | Works; no special handling required                                                                    |
+| Sub-workflow has its own `finalPrompt`              | Executes normally as part of the child run                                                             |
+| Variable substitution (`{{vars}}`)                  | Parent's resolved vars are NOT passed to child by default; child uses its own vars + CLI `--var` flags |
+| `postScript` on a workflow step                     | Schema error — `additionalProperties: false` rejects it                                                |
 
 ---
 
 ## File Change Summary
 
-| File | Change |
-|---|---|
-| `schemas/prompt-schema.json` | Add `workflowStep` definition; `promptItem` becomes `oneOf` with three variants |
-| `src/types/FlightPathTypes.ts` | Add `WorkflowStep`, expand `WorkflowStepItem` union, add `isWorkflowStep()` guard |
-| `src/types/DashboardConstants.ts` | Add `WORKFLOW` to `STEP_TYPES`; add `CHILD_WORKFLOW_STARTED`, `CHILD_WORKFLOW_COMPLETED` message types |
-| `src/flightpath/WorkflowExecutor.ts` | Route `isWorkflowStep` to `executeWorkflowStep()`; add `depth` and `ancestorPaths` to context |
-| `src/flightpath/WorkflowOrchestrator.ts` | Add `createChildInstance()` — creates a WorkflowInstance tagged with parent metadata |
-| `src/flightpath/WorkflowInstance.ts` | Add `parentInstanceId?`, `parentStepIndex?`, `depth` fields |
-| `src/flightpath/PromptFileParser.ts` | Validate `workflowStep` via AJV; type narrowing after parse |
-| `src/ui/webview-react/store/uiStore.ts` | Add `navigationStack: string[]`; push/pop on child workflow events |
-| `src/ui/webview-react/store/workflowStore.ts` | Handle `CHILD_WORKFLOW_STARTED` / `CHILD_WORKFLOW_COMPLETED`; register child workflow state |
-| `src/ui/webview-react/components/prompts/PromptItem.tsx` | Render workflow step variant (workflow icon, Workflow badge, file preview); show "Running sub-workflow (N/M)" |
-| `src/ui/webview-react/components/workflow/WorkflowBreadcrumb.tsx` | New component: breadcrumb bar shown when `navigationStack.length > 1` |
-| `src/ui/webview-react/components/prompts/PromptEditor.tsx` | Add `type: workflow` to Step Type selector; show workflow path field; hide all AI settings |
-| `src/ui/FlightPathWebviewProvider.ts` | Handle `CHILD_WORKFLOW_STARTED` / `CHILD_WORKFLOW_COMPLETED`; pass child workflow state to webview |
-| `src/completions/` | Offer `workflow` step type; suppress AI completions when `type: workflow`; offer `workflow` path field with file picker |
+| File                                                              | Change                                                                                                                  |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `schemas/prompt-schema.json`                                      | Add `workflowStep` definition; `promptItem` becomes `oneOf` with three variants                                         |
+| `src/types/FlightPathTypes.ts`                                    | Add `WorkflowStep`, expand `WorkflowStepItem` union, add `isWorkflowStep()` guard                                       |
+| `src/types/DashboardConstants.ts`                                 | Add `WORKFLOW` to `STEP_TYPES`; add `CHILD_WORKFLOW_STARTED`, `CHILD_WORKFLOW_COMPLETED` message types                  |
+| `src/flightpath/WorkflowExecutor.ts`                              | Route `isWorkflowStep` to `executeWorkflowStep()`; add `depth` and `ancestorPaths` to context                           |
+| `src/flightpath/WorkflowOrchestrator.ts`                          | Add `createChildInstance()` — creates a WorkflowInstance tagged with parent metadata                                    |
+| `src/flightpath/WorkflowInstance.ts`                              | Add `parentInstanceId?`, `parentStepIndex?`, `depth` fields                                                             |
+| `src/flightpath/PromptFileParser.ts`                              | Validate `workflowStep` via AJV; type narrowing after parse                                                             |
+| `src/ui/webview-react/store/uiStore.ts`                           | Add `navigationStack: string[]`; push/pop on child workflow events                                                      |
+| `src/ui/webview-react/store/workflowStore.ts`                     | Handle `CHILD_WORKFLOW_STARTED` / `CHILD_WORKFLOW_COMPLETED`; register child workflow state                             |
+| `src/ui/webview-react/components/prompts/PromptItem.tsx`          | Render workflow step variant (workflow icon, Workflow badge, file preview); show "Running sub-workflow (N/M)"           |
+| `src/ui/webview-react/components/workflow/WorkflowBreadcrumb.tsx` | New component: breadcrumb bar shown when `navigationStack.length > 1`                                                   |
+| `src/ui/webview-react/components/prompts/PromptEditor.tsx`        | Add `type: workflow` to Step Type selector; show workflow path field; hide all AI settings                              |
+| `src/ui/FlightPathWebviewProvider.ts`                             | Handle `CHILD_WORKFLOW_STARTED` / `CHILD_WORKFLOW_COMPLETED`; pass child workflow state to webview                      |
+| `src/completions/`                                                | Offer `workflow` step type; suppress AI completions when `type: workflow`; offer `workflow` path field with file picker |
 
 ---
 
@@ -343,15 +343,15 @@ finalPrompt:
 
 ### What makes this harder than `type: script`
 
-| Area | Script Step | Workflow Step |
-|---|---|---|
-| Execution engine | Calls `EndConditionEvaluator` directly | Must spin up a full `WorkflowInstance` |
-| State | Stateless shell command | Full queue state machine, history, output buffer |
-| UI | Badge change only | Navigation stack, breadcrumb bar, new message types |
-| Lifecycle | Atomic (runs once, done) | Multi-step, pauseable, resumeable |
-| Orchestration | Self-contained in executor | Requires orchestrator involvement |
-| Testing | Straightforward unit tests | Integration tests across parent-child boundaries |
-| Edge cases | Exit code, `continueOnFailure` | Circular refs, depth limits, pause/resume inheritance, variable scoping |
+| Area             | Script Step                            | Workflow Step                                                           |
+| ---------------- | -------------------------------------- | ----------------------------------------------------------------------- |
+| Execution engine | Calls `EndConditionEvaluator` directly | Must spin up a full `WorkflowInstance`                                  |
+| State            | Stateless shell command                | Full queue state machine, history, output buffer                        |
+| UI               | Badge change only                      | Navigation stack, breadcrumb bar, new message types                     |
+| Lifecycle        | Atomic (runs once, done)               | Multi-step, pauseable, resumeable                                       |
+| Orchestration    | Self-contained in executor             | Requires orchestrator involvement                                       |
+| Testing          | Straightforward unit tests             | Integration tests across parent-child boundaries                        |
+| Edge cases       | Exit code, `continueOnFailure`         | Circular refs, depth limits, pause/resume inheritance, variable scoping |
 
 The webview navigation stack is the most novel piece — it's a new UI concept that touches the
 uiStore, workflowStore, the breadcrumb component, and the message protocol. The execution side

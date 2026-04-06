@@ -147,7 +147,7 @@ export interface CliOutput {
    * (shell command, no AI interaction). The UI renders script output as plain
    * stdout/stderr text with an exit code summary rather than structured events.
    */
-  source?: "script";
+  source?: typeof STEP_TYPES.SCRIPT;
   /**
    * Exit code from the script step (source: "script" only).
    * 0 = success, non-zero = failure.

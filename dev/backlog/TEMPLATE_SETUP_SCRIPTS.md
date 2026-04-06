@@ -252,7 +252,7 @@ async function main() {
 
     // Output full workflow
     outputWorkflow({
-      prompts: prompts,
+      steps: prompts,
     });
   } catch (error) {
     outputError(error.message, "Failed to analyze repository structure");
@@ -556,7 +556,7 @@ interface WorkflowTemplate {
   name?: string;
   description?: string;
   setupScript?: string; // NEW: Path relative to template directory
-  prompts: PromptItem[];
+  steps: PromptItem[];
 }
 ```
 

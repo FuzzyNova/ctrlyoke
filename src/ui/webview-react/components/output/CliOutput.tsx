@@ -40,7 +40,7 @@ import type {
   ToolResultData,
 } from "../../types/cliEvents";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../../types/cliEvents";
-import { HARNESS_INFO, FINAL_STEP_PHASES } from "../../types/messages";
+import { HARNESS_INFO, FINAL_STEP_PHASES, STEP_TYPES } from "../../types/messages";
 import type {
   UndoExecutionTarget,
   WorkspaceSnapshot,
@@ -897,7 +897,7 @@ export const CliOutput = memo<CliOutputProps>(
     const timestamp = output.timestampMs ? formatTime(output.timestampMs) : "";
 
     // Script step output — simplified rendering: header + stdout/stderr + exit code
-    if (output.source === "script") {
+    if (output.source === STEP_TYPES.SCRIPT) {
       return (
         <div
           className={`bg-[var(--bg-primary)] py-[var(--spacing-sm)] px-[var(--spacing-md)] border-b border-[var(--border-color)] ${className}`}

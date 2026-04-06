@@ -26,20 +26,20 @@ using the CLI's `--var` flag.
 ## Schema: `enabled` Field on `PromptItem`
 
 ```yaml
-prompts:
+steps:
   - name: setup
     prompt: Read the codebase.
 
   - name: security-scan
-    enabled: "{{runSecurity}}"   # skipped if --var runSecurity=false (or not set)
+    enabled: "{{runSecurity}}" # skipped if --var runSecurity=false (or not set)
     prompt: Scan for vulnerabilities.
 
   - name: implement
-    enabled: true                # explicit true — always runs (default)
+    enabled: true # explicit true — always runs (default)
     prompt: Implement the feature.
 
   - name: cleanup
-    enabled: false               # explicitly disabled — useful for temporarily skipping
+    enabled: false # explicitly disabled — useful for temporarily skipping
     prompt: Clean up temp files.
 ```
 
@@ -52,14 +52,14 @@ enabled?: boolean | string;  // default: true (undefined = enabled)
 
 **Resolution rules (evaluated at step dispatch time):**
 
-| `enabled` value         | Runs? |
-|-------------------------|-------|
-| `undefined` / `true`    | Yes   |
-| `false`                 | No    |
-| `"true"` / `"1"` / `"yes"` (case-insensitive) | Yes |
-| `"false"` / `"0"` / `"no"` (case-insensitive) | No |
-| `"{{var}}"` where var resolves to a truthy string | Yes |
-| `"{{var}}"` where var resolves to a falsy string  | No |
+| `enabled` value                                   | Runs?                     |
+| ------------------------------------------------- | ------------------------- |
+| `undefined` / `true`                              | Yes                       |
+| `false`                                           | No                        |
+| `"true"` / `"1"` / `"yes"` (case-insensitive)     | Yes                       |
+| `"false"` / `"0"` / `"no"` (case-insensitive)     | No                        |
+| `"{{var}}"` where var resolves to a truthy string | Yes                       |
+| `"{{var}}"` where var resolves to a falsy string  | No                        |
 | `"{{var}}"` where var is not set (no default)     | **Skip** (treat as false) |
 
 String values go through `{{var}}` substitution first, then the truthy/falsy string
@@ -89,8 +89,9 @@ flightpath run workflow.yaml --var "runSecurity=true"
 ## Skip Behavior
 
 A skipped step:
+
 - Does **not** execute the AI prompt
-- Does **not** consume a session slot or affect `resumeSession` continuity for the *next* step
+- Does **not** consume a session slot or affect `resumeSession` continuity for the _next_ step
   (the next step that runs behaves as if the skipped step didn't exist)
 - Shows as **Skipped** in the dashboard step list (distinct visual state from Completed/Error)
 - Counts toward total step count in the status bar label but is not counted in "completed"
@@ -98,7 +99,7 @@ A skipped step:
 
 ### Session Continuity Note
 
-`resumeSession: true` on the step *after* a skipped step resumes from the last
+`resumeSession: true` on the step _after_ a skipped step resumes from the last
 **executed** step's session, not the skipped step. `WorkflowExecutor` must track
 "last executed session ID" separately from "last step index."
 
@@ -107,6 +108,7 @@ A skipped step:
 ## Dashboard
 
 Skipped steps in the prompt list show:
+
 - A distinct visual treatment (muted/strikethrough or a skip icon)
 - The evaluated condition result (e.g. `enabled: false` or `{{runSecurity}} → "false"`)
 - No Run/Retry controls — skipped steps cannot be manually run from the dashboard
@@ -123,6 +125,7 @@ be skipped given the current vars before running.
 
 `enabled` resolution follows the same `{{var}}` substitution pipeline as prompt text.
 Add a `resolveEnabled(prompt: PromptItem): boolean` method to `PropertyResolver` that:
+
 1. If `enabled` is `undefined` or `true` → return `true`
 2. If `enabled` is `false` → return `false`
 3. If `enabled` is a string → substitute `{{vars}}`, then evaluate as boolean string
@@ -162,6 +165,7 @@ These are all achievable with a `type: script` step that sets a var, combined wi
 
 ~1 day. The `{{var}}` substitution pipeline already exists in `PropertyResolver`. The
 main work is:
+
 1. `resolveEnabled()` in `PropertyResolver`
 2. Skip logic in `WorkflowExecutor` (including session continuity fix)
 3. `STEP_STATUS.SKIPPED` constant + dashboard visual

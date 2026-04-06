@@ -31,7 +31,7 @@ parallel groups (not a full DAG).
 harness: claude-cli
 model: sonnet
 
-prompts:
+steps:
   # Sequential step first
   - name: setup
     prompt: Read the codebase and summarize the architecture.
@@ -55,14 +55,14 @@ prompts:
 
 - `parallel:` is a sibling key to `id:` — clearly not a regular step
 - Array under `parallel:` contains normal `PromptItem` objects — no new step-level fields
-- The position in the `prompts:` array defines the execution order: everything before
+- The position in the `steps:` array defines the execution order: everything before
   runs first, then all parallel steps run concurrently, then everything after waits
 - Clean and readable — the structure of the YAML mirrors the structure of execution
 
 ### Option B: `dependsOn` / DAG (future extension)
 
 ```yaml
-prompts:
+steps:
   - name: research-auth
     prompt: ...
   - name: research-db
@@ -78,7 +78,7 @@ to implement and validate. Reserve for a future phase if users ask for it.
 ### Option C: `group` + `parallel: true` on each step
 
 ```yaml
-prompts:
+steps:
   - name: research-auth
     group: research
     parallel: true
@@ -131,7 +131,7 @@ parallel groups, the loop encounters a `ParallelGroup` and fans out:
 ```
 WorkflowExecutor.run()
     ↓
-for each item in prompts:
+for each item in steps:
     if item is PromptItem → execute sequentially (existing path)
     if item is ParallelGroup:
         spawn N concurrent WorkflowExecutor sub-instances, one per step

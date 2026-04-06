@@ -997,7 +997,7 @@ export class ClineTuiStreamProcessor extends TuiStreamProcessor {
 # test-cline-simple.flightpath.yaml
 harness: cline-cli
 model: anthropic/claude-sonnet-4-5
-prompts:
+steps:
   - prompt: "Just say hi"
     endCondition:
       script: echo "success"
@@ -1010,7 +1010,7 @@ harness: cline-cli
 model: anthropic/claude-sonnet-4-5
 toolPermissions:
   mode: dangerouslyAllowAll
-prompts:
+steps:
   - prompt: "Create a file called test.txt with 'hello world'"
     endCondition:
       script: test -f test.txt && cat test.txt | grep "hello world"
@@ -1020,7 +1020,7 @@ prompts:
 ```yaml
 # test-cline-session-resume.flightpath.yaml
 harness: cline-cli
-prompts:
+steps:
   - prompt: "My favorite color is blue."
   - prompt: "What is my favorite color?"
     resumeSession: true

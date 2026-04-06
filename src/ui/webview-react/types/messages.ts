@@ -31,6 +31,7 @@ export {
   EDITOR_PLACEHOLDER_TEXT,
   TERMINAL_SESSION_STATUS,
   SESSION_KINDS,
+  STEP_TYPES,
   type MessageType,
   type WebviewLogLevel,
   type ExecutionState,

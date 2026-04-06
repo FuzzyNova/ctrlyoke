@@ -36,7 +36,7 @@ Example: `npm test` passes → the "Fix test failures" prompt is skipped → loo
 cleanly. Without `preCondition`, you would need the AI prompt to detect the clean state,
 which wastes an AI round-trip.
 
-The same benefit applies to regular queue prompts: a `preCondition` can gate "Generate API
+The same benefit applies to regular queue steps: a `preCondition` can gate "Generate API
 docs" on whether the relevant source files changed, for example.
 
 ---
@@ -152,7 +152,7 @@ preCondition:
   failureAction: stopWorkflow
 
 # Per-prompt pre-condition with advisory mode
-prompts:
+steps:
   - name: generate-docs
     prompt: Generate API documentation.
     preCondition:
@@ -323,9 +323,11 @@ When `handleSkippedStep()` runs, it must:
 
 2. **Append a status output entry** to the live ordered entries so the user can see _why_
    the step was skipped. Format:
+
    ```
    [Pre-condition] Step skipped — pre-condition check did not pass.
    ```
+
    Include the pre-condition script command and its output (stdout/stderr) at debug
    verbosity so users can diagnose unexpected skips.
 
@@ -337,6 +339,7 @@ When `handleSkippedStep()` runs, it must:
    then continue with the next queued step.
 
 **`DashboardConstants.ts` change required:**
+
 ```typescript
 // Add to STEP_STATUS
 SKIPPED: "skipped",
@@ -438,11 +441,11 @@ Read `failureAction` directly from the condition config value, not from local co
 state. The retry-specific block renders conditionally:
 
 ```tsx
-{variant === "endCondition" && value?.failureAction === "retry" && (
-  <>
-    {/* Max Retries, Retry Prompt, Resume Session on Retry */}
-  </>
-)}
+{
+  variant === "endCondition" && value?.failureAction === "retry" && (
+    <>{/* Max Retries, Retry Prompt, Resume Session on Retry */}</>
+  );
+}
 ```
 
 Default: when `failureAction` is `undefined`, treat as `"stopWorkflow"` for the End
@@ -451,6 +454,7 @@ Condition (do not show retry fields) and `"skipPrompt"` for Pre-Condition.
 #### Inherit vs. disable state
 
 The Enable checkbox maps to two states only:
+
 - **Unchecked** → `undefined` (inherit from workflow level, or no condition if already at
   workflow level). Grays out all fields.
 - **Checked** → object with defaults. Fields become editable.
@@ -474,6 +478,7 @@ Two more changes are required in `editorStore.ts` beyond those already covered i
 Editor State Cache Maintenance section:
 
 **`EndConditionConfig`** (webview-local mirror of `EndCondition`) needs `failureAction`:
+
 ```typescript
 export interface EndConditionConfig {
   script: string;
@@ -488,6 +493,7 @@ export interface EndConditionConfig {
 ```
 
 **`PropertyValues`** (webview-local mirror of `ExecutionProperties`) needs `preCondition`:
+
 ```typescript
 export interface PropertyValues {
   // ... existing fields ...
@@ -584,6 +590,7 @@ When this plan adds `failureAction`, `compareSource`, and `returns` to `ScriptSt
 following changes are required in `editorStore.ts`:
 
 1. **Add the new fields to `SavedNewStepState`**:
+
    ```typescript
    export interface SavedNewStepState {
      // ... existing fields ...
@@ -650,25 +657,25 @@ worth doing at the same time as the `SavedNewStepState` rename, but not a blocke
 
 ## File Change Summary
 
-| File                                                                 | Change                                                                                                                                                                                                                                                                                                                                 |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schemas/prompt-schema.json`                                         | Add `scriptProperties`, `preCondition` definitions; update `endCondition` (allOf scriptProperties, add `failureAction`); update `scriptStep` (allOf scriptProperties, `continueOnFailure`→`failureAction`, add explicit `preCondition` + `_runtime` properties); add `preCondition` to `executionProperties`                           |
-| `src/types/FlightPathTypes.ts`                                       | Add `ScriptProperties`, `PreCondition`, `PreConditionFailureAction`, `EndConditionFailureAction`, `ScriptStepFailureAction`; update `EndCondition` (add `failureAction`, extend `ScriptProperties`); update `ScriptStep` (`continueOnFailure`→`failureAction`, extend `ScriptProperties`; no `preCondition` — prompt-only)             |
-| `src/types/DashboardConstants.ts`                                    | Add `SKIPPED: "skipped"` to `STEP_STATUS`                                                                                                                                                                                                                                                                                              |
-| `src/flightpath/WorkflowExecutor.ts`                                 | Add pre-condition gate before every step dispatch; `handleSkippedStep()` broadcasts `STEP_STATUS.SKIPPED` + output entry; handle `skipPrompt` on `finalStep` as clean loop exit; script step `continueOnFailure` → `failureAction`; pass `compareSource`/`returns` to evaluator                                                        |
-| `src/flightpath/EndConditionHandler.ts`                              | Wire `failureAction` for continue/retry/stop; apply `maxRetries` default of 1 when `failureAction: "retry"` and `maxRetries` is unset                                                                                                                                                                                                  |
-| `src/flightpath/EndConditionEvaluator.ts`                            | `ScriptEvaluationConfig` already uses `returns`; shared by all three consumers unchanged                                                                                                                                                                                                                                                |
+| File                                                                 | Change                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schemas/prompt-schema.json`                                         | Add `scriptProperties`, `preCondition` definitions; update `endCondition` (allOf scriptProperties, add `failureAction`); update `scriptStep` (allOf scriptProperties, `continueOnFailure`→`failureAction`, add explicit `preCondition` + `_runtime` properties); add `preCondition` to `executionProperties`                                                        |
+| `src/types/FlightPathTypes.ts`                                       | Add `ScriptProperties`, `PreCondition`, `PreConditionFailureAction`, `EndConditionFailureAction`, `ScriptStepFailureAction`; update `EndCondition` (add `failureAction`, extend `ScriptProperties`); update `ScriptStep` (`continueOnFailure`→`failureAction`, extend `ScriptProperties`; no `preCondition` — prompt-only)                                          |
+| `src/types/DashboardConstants.ts`                                    | Add `SKIPPED: "skipped"` to `STEP_STATUS`                                                                                                                                                                                                                                                                                                                           |
+| `src/flightpath/WorkflowExecutor.ts`                                 | Add pre-condition gate before every step dispatch; `handleSkippedStep()` broadcasts `STEP_STATUS.SKIPPED` + output entry; handle `skipPrompt` on `finalStep` as clean loop exit; script step `continueOnFailure` → `failureAction`; pass `compareSource`/`returns` to evaluator                                                                                     |
+| `src/flightpath/EndConditionHandler.ts`                              | Wire `failureAction` for continue/retry/stop; apply `maxRetries` default of 1 when `failureAction: "retry"` and `maxRetries` is unset                                                                                                                                                                                                                               |
+| `src/flightpath/EndConditionEvaluator.ts`                            | `ScriptEvaluationConfig` already uses `returns`; shared by all three consumers unchanged                                                                                                                                                                                                                                                                            |
 | `src/ui/webview-react/store/editorStore.ts`                          | Rename `SavedNewPromptState` → `SavedNewStepState`; add `scriptFailureAction`, `scriptCompareSource`, `scriptReturns` to `SavedNewStepState` and `EditorState`; update all `pendingEdits`/`savedNewStepState` write+read paths; add `failureAction` to `EndConditionConfig`; add `preCondition` to `PropertyValues` + `PROPERTY_DEFAULTS` + `getPromptProperties()` |
-| `src/ui/webview-react/store/workflowStore.ts`                        | `setStepStatus` and `liveOrderedEntries` handlers accept `"skipped"` automatically via `StepStatus` type (picks up new constant); verify no hardcoded status string comparisons                                                                                                                                                         |
-| `src/ui/webview-react/store/settingsStore.ts`                        | Add `preCondition` to `WorkflowProperties` and `executionProperties` shape                                                                                                                                                                                                                                                              |
-| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`   | NEW shared component used by both panels; `variant` prop selects endCondition (failureAction: continue/retry/stop + retry fields) vs preCondition (failureAction: continue/skip/stop, no retry fields)                                                                                                                                  |
-| `src/ui/webview-react/components/editor/PropertiesDrawer.tsx`        | Validation tab: replace inline End Condition fields with `<ScriptConditionEditor variant="endCondition">`; add `<ScriptConditionEditor variant="preCondition">` below with its own enable toggle                                                                                                                                         |
-| `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` | Same Validation tab swap as PropertiesDrawer — both panels now delegate to `ScriptConditionEditor`                                                                                                                                                                                                                                      |
-| `src/ui/webview-react/components/editor/PromptEditor.tsx`            | Script step editor: `continueOnFailure` checkbox → `failureAction` dropdown; add `compareSource` + `returns` fields                                                                                                                                                                                                                     |
-| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx`      | Render `skipped` step status with skip/dash icon in muted style; tooltip "Skipped by pre-condition"                                                                                                                                                                                                                                     |
-| `src/ui/webview-react/utils/endCondition.ts`                         | No rename needed; add helpers for preCondition if needed                                                                                                                                                                                                                                                                                |
-| `src/completions/`                                                    | Offer `preCondition` completions in `executionProperties`; add `failureAction` to `endCondition` and `scriptStep` completions; add `compareSource`/`returns` to `scriptStep` completions                                                                                                                                                |
-| `src/test/` (multiple files)                                          | See Testing section above for per-file breakdown; run `grep -r "continueOnFailure" src/test/` first to find all compile-broken references                                                                                                                                                                                              |
+| `src/ui/webview-react/store/workflowStore.ts`                        | `setStepStatus` and `liveOrderedEntries` handlers accept `"skipped"` automatically via `StepStatus` type (picks up new constant); verify no hardcoded status string comparisons                                                                                                                                                                                     |
+| `src/ui/webview-react/store/settingsStore.ts`                        | Add `preCondition` to `WorkflowProperties` and `executionProperties` shape                                                                                                                                                                                                                                                                                          |
+| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`   | NEW shared component used by both panels; `variant` prop selects endCondition (failureAction: continue/retry/stop + retry fields) vs preCondition (failureAction: continue/skip/stop, no retry fields)                                                                                                                                                              |
+| `src/ui/webview-react/components/editor/PropertiesDrawer.tsx`        | Validation tab: replace inline End Condition fields with `<ScriptConditionEditor variant="endCondition">`; add `<ScriptConditionEditor variant="preCondition">` below with its own enable toggle                                                                                                                                                                    |
+| `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` | Same Validation tab swap as PropertiesDrawer — both panels now delegate to `ScriptConditionEditor`                                                                                                                                                                                                                                                                  |
+| `src/ui/webview-react/components/editor/PromptEditor.tsx`            | Script step editor: `continueOnFailure` checkbox → `failureAction` dropdown; add `compareSource` + `returns` fields                                                                                                                                                                                                                                                 |
+| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx`      | Render `skipped` step status with skip/dash icon in muted style; tooltip "Skipped by pre-condition"                                                                                                                                                                                                                                                                 |
+| `src/ui/webview-react/utils/endCondition.ts`                         | No rename needed; add helpers for preCondition if needed                                                                                                                                                                                                                                                                                                            |
+| `src/completions/`                                                   | Offer `preCondition` completions in `executionProperties`; add `failureAction` to `endCondition` and `scriptStep` completions; add `compareSource`/`returns` to `scriptStep` completions                                                                                                                                                                            |
+| `src/test/` (multiple files)                                         | See Testing section above for per-file breakdown; run `grep -r "continueOnFailure" src/test/` first to find all compile-broken references                                                                                                                                                                                                                           |
 
 ---
 
@@ -677,14 +684,14 @@ worth doing at the same time as the `SavedNewStepState` rename, but not a blocke
 The test suite (`src/test/`) has ~64 files. The following files are directly affected and
 require new test cases or updates to existing ones:
 
-| Test File                              | Required Changes                                                                                                                                                                                            |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Test File                              | Required Changes                                                                                                                                                                                           |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `EndConditionEvaluator.test.ts`        | Verify `returns` absent → exit code 0 = pass; `compareSource` + `returns` combinations on `evaluateScript()`                                                                                               |
 | `EndConditionHandler.test.ts`          | Add cases for `failureAction: "continue"` (advance despite failure) and `failureAction: "retry"` defaulting `maxRetries` to 1 when unset; verify `failureAction: "stopWorkflow"` matches current behaviour |
-| `WorkflowExecutor.test.ts`             | Pre-condition gate: `skipPrompt` skips step and advances queue; `stopWorkflow` halts; `continue` falls through; `finalStep` skip = loop exit + `completed` state; script step `failureAction` variants      |
-| `PromptFileParser.test.ts`             | New valid YAML with `preCondition`, `failureAction` on `endCondition` and `scriptStep`, `compareSource`/`returns` on `scriptStep`; verify `continueOnFailure` fails schema validation (removed field)       |
-| Schema validation tests (if separate)  | Same as PromptFileParser coverage above                                                                                                                                                                     |
-| `PropertyResolver.test.ts` (if exists) | `preCondition: null` at prompt level overrides workflow-level `preCondition` object; workflow-level `preCondition` inherits to all prompts without explicit override                                         |
+| `WorkflowExecutor.test.ts`             | Pre-condition gate: `skipPrompt` skips step and advances queue; `stopWorkflow` halts; `continue` falls through; `finalStep` skip = loop exit + `completed` state; script step `failureAction` variants     |
+| `PromptFileParser.test.ts`             | New valid YAML with `preCondition`, `failureAction` on `endCondition` and `scriptStep`, `compareSource`/`returns` on `scriptStep`; verify `continueOnFailure` fails schema validation (removed field)      |
+| Schema validation tests (if separate)  | Same as PromptFileParser coverage above                                                                                                                                                                    |
+| `PropertyResolver.test.ts` (if exists) | `preCondition: null` at prompt level overrides workflow-level `preCondition` object; workflow-level `preCondition` inherits to all prompts without explicit override                                       |
 
 **Files with `continueOnFailure` references** — run `grep -r "continueOnFailure" src/test/`
 before starting; every occurrence is a compile error after the type change and needs
