@@ -211,10 +211,16 @@ export class WorkflowExecutor {
       context.dashboardProvider?.updateFinalStepStatus(null, 0, null);
     }
 
+    // Only skip the queue drain and go straight to the finalStep when resuming
+    // a run that was interrupted mid-finalStep AND there are no pending queue
+    // items waiting to run. If there are pending items (e.g. an ephemeral
+    // prompt was appended to a completed workflow), drain the queue first so
+    // the new prompts are not skipped.
     let runFinalStepFirst =
       !!initialFinalStep &&
       this.promptQueue.getFinalStepRuntime()?.phase ===
-        FINAL_STEP_PHASES.FINAL_STEP;
+        FINAL_STEP_PHASES.FINAL_STEP &&
+      !this.promptQueue.hasNext();
 
     while (true) {
       if (!runFinalStepFirst) {
@@ -729,11 +735,21 @@ export class WorkflowExecutor {
         signedStepIndex,
         scriptCliOutput
       );
+    } else if (
+      context.dashboardProvider &&
+      target.kind === FINAL_STEP_PHASES.FINAL_STEP
+    ) {
+      context.dashboardProvider.updateFinalStepOutput(
+        target.loopIndex,
+        scriptCliOutput
+      );
     }
 
     // Capture for output history replay (same pattern as updateDashboardWithResponse)
     if (signedStepIndex >= 0) {
       context.captureCompletedOutput?.(signedStepIndex, scriptCliOutput);
+    } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+      context.captureFinalStepCompletedOutput?.(target.loopIndex, scriptCliOutput);
     }
 
     if (context.historyFilePath && context.outputHistoryManager) {
