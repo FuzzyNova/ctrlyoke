@@ -695,19 +695,47 @@ export class WorkflowExecutor {
 
     const succeeded = evalResult.exitCode === 0;
 
-    // Stream output to dashboard as a status message
-    const outputText = [evalResult.stdout, evalResult.stderr]
+    // Send script output to the dashboard as a CliOutput with source: "script"
+    // so the UI renders it with terminal formatting (whitespace preserved, exit code summary).
+    const rawOutput = [evalResult.stdout, evalResult.stderr]
       .filter(Boolean)
       .join("\n")
       .trim();
 
-    if (outputText) {
-      await this.trackStatusMessage(
-        context,
-        target,
-        outputText,
-        succeeded ? STATUS_MESSAGE_SEVERITY.INFO : STATUS_MESSAGE_SEVERITY.ERROR
-      );
+    // Strip ANSI escape codes — script processes (npm, node, etc.) emit colour codes
+    // that are unreadable as literal characters in the output panel.
+    const outputText = rawOutput.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
+
+    const legacyStepIndex = this.getLegacyStepIndex(target);
+    const scriptCliOutput = {
+      prompt: step.script,
+      response: outputText,
+      elapsed: evalResult.duration / 1000,
+      isStreaming: false,
+      source: "script" as const,
+      exitCode: evalResult.exitCode ?? (succeeded ? 0 : 1),
+      timestampMs: Date.now(),
+      cliCommand: step.script,
+      workingDirectory: context.workspaceFolderPath,
+    };
+
+    if (context.dashboardProvider && legacyStepIndex >= 0) {
+      context.dashboardProvider.updateCliOutput(legacyStepIndex, scriptCliOutput);
+    }
+
+    // Capture for output history replay (same pattern as updateDashboardWithResponse)
+    if (legacyStepIndex >= 0) {
+      context.captureCompletedOutput?.(legacyStepIndex, scriptCliOutput);
+    }
+
+    if (context.historyFilePath && context.outputHistoryManager) {
+      await context.outputHistoryManager
+        .saveExecutionOutput(
+          context.historyFilePath,
+          this.toOutputExecutionTarget(target),
+          [scriptCliOutput]
+        )
+        .catch((err) => Log.warn("Failed to save script step output to history:", err));
     }
 
     if (evalResult.timeout) {

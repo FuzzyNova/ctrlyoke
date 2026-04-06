@@ -645,24 +645,13 @@ export const WorkflowStepsPanel: React.FC<{
           <div className="py-1">
             {/* Done prompts (indices 0..doneStepCount-1).
                 doneStepCount is capped at currentStep to guarantee no overlap with
-                the pending section (which starts at currentStep). Without the cap,
-                loading an idle workflow (currentStep=0) that has prior run history
-                causes historyOutputs.stepCount to exceed currentStep, rendering every
-                prompt in both lists simultaneously. */}
+                the pending section (which starts at currentStep). History entries
+                are NOT used to further cap doneStepCount: a step should remain
+                visible even if its output wasn't captured in the current history
+                file (e.g. script step ran in session 1, prompt step ran in
+                session 2 appended to the same history, or output capture failed). */}
             {(() => {
-              const doneStepCount =
-                  isViewingHistory && historyOutputs
-                  ? Math.min(
-                      currentStep,
-                      prompts.length,
-                      Math.max(0, ...historyOutputs.orderedEntries
-                        .filter((e): e is typeof e & { target: { kind: string; stepIndex: number } } =>
-                          e.kind !== OUTPUT_HISTORY_KINDS.RUNTIME && (e as any).target?.kind === FINAL_PROMPT_PHASES.QUEUE
-                        )
-                        .map((e) => (e as any).target.stepIndex + 1)
-                        .concat([0]))
-                    )
-                  : currentStep;
+              const doneStepCount = currentStep;
               return prompts.slice(0, doneStepCount).map((prompt, sliceIdx) => {
                 const index = sliceIdx;
                 const slotNumber = index + 1;
