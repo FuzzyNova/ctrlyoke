@@ -434,7 +434,7 @@ export const ConfigurationUtils = {
 
   /**
    * Get Codex CLI approval policy
-   * Options: untrusted, on-failure, on-request, never
+   * Options: untrusted, on-request, never
    */
   getCodexApprovalPolicy(): string {
     return getConfig().get<string>("codexApprovalPolicy", "on-request");

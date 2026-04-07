@@ -1,5 +1,15 @@
 # Global Settings Plan
 
+> **Status: Backlog — ready to implement.**
+>
+> Pre-implementation audit completed 2026-04-07:
+> - Removed dead `flightpath.qwenCliApprovalMode` setting (was never read; `QwenToolPermissionMapper` derives approval mode from `cliToolPermissions` directly)
+> - Removed deprecated `on-failure` value from `flightpath.codexApprovalPolicy` enum
+> - Fixed `getModelSettingKeyForHarness()` missing `Harness.QwenCli` case (was silently writing Qwen model to Copilot's setting key)
+> - Updated `CodexToolPermissionMapper` comment with correct flag names and values
+>
+> The settings inventory below reflects the current post-audit state.
+
 Create a first-class **global settings surface** for FlightPath so global configuration is no longer tied to the legacy `WorkflowPropertiesPanel` footer or to VS Code settings alone. This plan introduces a unified config-file architecture that works identically in VS Code and standalone CLI mode.
 
 ---
@@ -343,8 +353,7 @@ export interface FlightPathGlobalSettings {
   // Execution
   execution: {
     mode: "interactive" | "headless";
-    maxPromptTimeout: number;  // seconds, -1 = unlimited
-    maxWorkflowExecutionTime: number;  // seconds, -1 = unlimited
+    maxPromptTimeout: number;  // seconds, -1 = unlimited (→ maxPromptExecutionTime)
     scriptTimeout: number;  // seconds
     closeTerminalOnComplete: boolean;
   };
@@ -354,10 +363,13 @@ export interface FlightPathGlobalSettings {
     permissionMode: "dangerouslyAllowAll" | "allowAll" | "custom";
     allowed: string[];
     denied: string[];
-    additionalDirs: string[];
-    allowAllPaths: boolean;
-    codexSandboxMode: string;
-    codexApprovalPolicy: string;
+    // Copilot CLI-specific
+    copilotAllowedDirs: string[];   // → flightpath.copilotCliAllowedDirs
+    copilotAllowAllPaths: boolean;  // → flightpath.copilotCliAllowAllPaths
+    // Codex CLI-specific
+    codexSandboxMode: "read-only" | "workspace-write" | "danger-full-access";
+    codexApprovalPolicy: "untrusted" | "on-request" | "never";
+    codexAllowedDirs: string[];     // → flightpath.codexAllowedDirs
   };
   
   // Workflow defaults
@@ -389,9 +401,10 @@ export interface FlightPathGlobalSettings {
   };
   hooks: UserHookConfig[];
   
-  // Queue
+  // Queue (all fields come from ConfigurationUtils.getDynamicQueueConfig())
   queue: {
     maxSize: number;
+    maxWorkflowExecutionTime: number;  // seconds; -1 = unlimited
     unlimitedMode: boolean;
     notifyOnExtension: boolean;
   };
@@ -592,7 +605,7 @@ This avoids overloading the header button while still making the feature easy to
 
 **Deliverables:**
 1. `src/types/FlightPathSettings.ts` — typed `FlightPathGlobalSettings` interface (see Decision 5 above)
-2. Inventory every setting currently surfaced by `ConfigurationUtils.ts` and map to the new nested structure
+2. ~~Inventory every setting currently surfaced by `ConfigurationUtils.ts` and map to the new nested structure~~ **✅ Done** — audit completed 2026-04-07; dead settings removed, interface above reflects current state
 3. No backward compatibility layer needed — pre-release, clean break
 4. Update `schemas/prompt-schema.json` if any new global settings affect workflow file structure
 5. Update `package.json` `contributes.configuration.properties` to mark settings as documentation-only (add note to `markdownDescription` pointing to config files). New server settings (`flightpath.serverPort`, `flightpath.serverEnabled`) should also be added here for VS Code settings UI documentation consistency.
@@ -618,6 +631,7 @@ This avoids overloading the header button while still making the feature easy to
    ```
 5. `ConfigurationUtils.updateSetting()` writes to config files, not VS Code settings
 6. `FileConfigBackend` watches for file changes to both config paths via `chokidar` (already in dependencies) and fires `subscribe` listeners on change — live-reload without restarting the extension or the CLI process.
+7. **`additionalArgs` consolidation:** The six separate `*CliAdditionalArgs` VS Code settings (`copilotCliAdditionalArgs`, `claudeCliAdditionalArgs`, etc.) collapse into a single `additionalArgs: Record<HarnessId, string>` key in the new config format. `ConfigurationUtils.getAdditionalArgsForHarness(harness)` reads `configService.get("additionalArgs")[harnessId] ?? ""`. The six old flat keys map to this record during the Phase 7 backend migration.
 
 ### Phase 3 — CLI config file support
 
@@ -632,15 +646,329 @@ This avoids overloading the header button while still making the feature easy to
 
 ### Phase 4 — Build the Global Settings UI
 
-**Deliverables:**
-1. The **Global Settings button already exists** in `Header.tsx` (the `codicon-settings-gear` button, currently posting `MESSAGE_TYPES.OPEN_SETTINGS` to open VS Code settings). Update its tooltip and handler to post the new `MESSAGE_TYPES.OPEN_GLOBAL_SETTINGS` message instead. No new button DOM needed.
-2. Add new message types to `src/types/DashboardConstants.ts` per the single-source-of-truth rule: `OPEN_GLOBAL_SETTINGS`, `GLOBAL_SETTINGS_LOADED`, `UPDATE_GLOBAL_SETTING`, `GLOBAL_SETTING_UPDATED`.
-3. Create a dedicated large settings drawer/modal/page shell
-4. Build sections from the typed settings model (General, Workflow Defaults, Harnesses & Models, etc.)
-5. Reuse existing controls where possible (`CustomSelect`, toggles, editors, MCP/hook editors)
-6. Show clearly which values are user global defaults vs workspace overrides
-7. Indicate the **source** of each setting value (config file, CLI flag, default)
-8. All writes go to config files — no VS Code settings interaction
+---
+
+#### 4.1 — Shape and Layout
+
+**Shape: full-width bottom-up overlay drawer.**
+
+The drawer slides up from the bottom edge of the viewport, fills the full width, and occupies all vertical space below the header row. The header remains fully visible at all times. This matches the mobile prompts overlay pattern already in use.
+
+```
+┌──────────────────────────────────────────────────────┐  ← header (always visible)
+│ [New▾] [Save] [↩][↪]  [⚙ highlighted]   [▶][⏸][⏹] │
+├──────────────────┬───────────────────────────────────┤
+│                  │                              [✕]  │  ← close button, top-right
+│  General         │                                   │
+│  Workflow        │   Section content                 │
+│  Harnesses       │   (vertically scrollable)         │
+│  Permissions     │                                   │
+│  Execution       │                                   │
+│  Chat            │                                   │
+│  MCP & Hooks     │                                   │
+│  Queue           │                                   │
+│  History         │                                   │
+│  Server          │                                   │
+│                  │                                   │
+└──────────────────┴───────────────────────────────────┘
+  ↑ vertical tab bar (fixed, non-scrolling)
+```
+
+- **Vertical tab bar** — left column, fixed height, non-scrolling. Each tab is a full-width row with an icon and a label. Active tab has a left-border accent (`border-l-2 border-focus-border`), matching the horizontal `DrawerTabBar` style adapted to vertical orientation.
+- **Content area** — right column, independently scrollable (`overflow-y-auto`). Contains the controls for the active section.
+- **Animation** — slide up from below: `translate-y-full → translate-y-0` with `transition-transform duration-200 ease-out`. Same pattern as `MobilePromptsSidebar` overlay.
+- **Z-index** — renders above all panels but below the header. Achieved by positioning the drawer as an absolute overlay within the main content area (below `<header>`), not over the header element.
+
+---
+
+#### 4.2 — Open / Close Mechanics
+
+**Three ways to open/close:**
+
+1. **Header settings-gear button** (`codicon-settings-gear`, left section of `Header.tsx`):
+   - Toggles `uiStore.globalSettingsOpen`
+   - When open, button gets the active state style: `bg-btn-bg text-btn-fg` (same pattern as `mobilePromptsOpen` button in mobile header center)
+   - No message posted to extension for open/close — state is client-side
+
+2. **Close button (✕)** — top-right corner of the drawer, same style as `PropertiesDrawer`'s close button
+
+3. **Escape key** — `useEffect` on `keydown` when drawer is open
+
+**On open:** webview posts `MESSAGE_TYPES.GLOBAL_SETTINGS_LOAD_REQUEST` to extension. Extension responds with `MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED` carrying the full settings payload with source metadata. The drawer renders immediately with cached/default values and updates once the response arrives (no loading spinner needed for fast local reads).
+
+**Naming note:** `uiStore` already has `mobileSettingsOpen` / `toggleMobileSettings` which refers to the *workflow properties* drawer on mobile — not this Global Settings drawer. The new state should be `globalSettingsOpen` / `toggleGlobalSettings` / `closeGlobalSettings` to avoid confusion.
+
+---
+
+#### 4.3 — State Management additions
+
+**`uiStore` additions:**
+
+```ts
+// New state
+globalSettingsOpen: boolean;
+globalSettingsActiveTab: GlobalSettingsTab;
+
+// New actions
+toggleGlobalSettings(): void;
+closeGlobalSettings(): void;
+setGlobalSettingsTab(tab: GlobalSettingsTab): void;
+```
+
+**`settingsStore` additions:**
+
+The existing `GlobalSettings` interface in `settingsStore.ts` covers only the subset needed by `WorkflowPropertiesPanel`. A new `FullGlobalSettings` shape (or expanding `GlobalSettings`) needs to cover all settings. This should mirror `FlightPathGlobalSettings` from `src/types/FlightPathSettings.ts` and include source metadata:
+
+```ts
+// Each setting value carries its source so the UI can show badges
+export type SettingSource = "workspace" | "user" | "default";
+
+export interface GlobalSettingValue<T> {
+  value: T;
+  source: SettingSource;
+}
+
+export interface FullGlobalSettings {
+  harness: GlobalSettingValue<HarnessId>;
+  models: GlobalSettingValue<Record<HarnessId, string>>;
+  additionalArgs: GlobalSettingValue<Record<HarnessId, string>>;
+  execution: { ... };   // all fields wrapped in GlobalSettingValue<T>
+  tools: { ... };
+  workflow: { ... };
+  chat: { ... };
+  mcp: { ... };
+  hooks: { ... };
+  queue: { ... };
+  history: { ... };
+  ui: { ... };
+  server: { ... };
+}
+```
+
+**New store actions:**
+
+```ts
+setFullGlobalSettings(settings: FullGlobalSettings): void;
+updateGlobalSetting(path: string, value: unknown, scope: "workspace" | "user"): void;
+```
+
+---
+
+#### 4.4 — Message Types
+
+Add to `src/types/DashboardConstants.ts`:
+
+```ts
+GLOBAL_SETTINGS_LOAD_REQUEST   // webview → extension: "send me current settings"
+GLOBAL_SETTINGS_LOADED         // extension → webview: full settings payload + sources
+UPDATE_GLOBAL_SETTING          // webview → extension: { path, value, scope }
+GLOBAL_SETTING_UPDATED         // extension → webview: { path, value, source } acknowledgment
+```
+
+The `UPDATE_GLOBAL_SETTING` path uses dot notation matching the `FlightPathGlobalSettings` nested structure (e.g. `"execution.mode"`, `"tools.permissionMode"`, `"models.claude-cli"`).
+
+---
+
+#### 4.5 — New Component
+
+**`src/ui/webview-react/components/layout/GlobalSettingsDrawer.tsx`**
+
+```
+GlobalSettingsDrawer
+├── VerticalTabBar              (left column, new component)
+│   └── GlobalSettingsTab[]     (one row per section)
+└── GlobalSettingsContent       (right column, scrollable)
+    ├── GeneralSection
+    ├── WorkflowDefaultsSection
+    ├── HarnessesSection
+    ├── PermissionsSection
+    ├── ExecutionSection
+    ├── ChatSection
+    ├── McpHooksSection
+    ├── QueueSection
+    ├── HistorySection
+    └── ServerSection
+```
+
+`VerticalTabBar` renders identically to `DrawerTabBar` but oriented vertically — a `flex-col` list of full-width tab buttons, each with `border-l-2` accent when active instead of `border-b-2`. Reuse the same color tokens (`border-focus-border`, `text-foreground`, `text-description-fg`).
+
+Each section component receives:
+- `settings: FullGlobalSettings` (full snapshot)
+- `onUpdate(path, value, scope): void` (fires `UPDATE_GLOBAL_SETTING`)
+
+Sections are rendered lazily — only the active section is mounted (simple conditional render is fine; no need for `React.lazy` here).
+
+---
+
+#### 4.6 — Source Indicator Design
+
+Each `DrawerRow` already accepts a label and content. Add an optional `source` prop that renders a small pill after the row label:
+
+```tsx
+// Rendered as a small muted pill to the right of the label
+source === "workspace" → <span class="badge">workspace</span>
+source === "user"      → <span class="badge">global</span>
+source === "default"   → (nothing shown — default is the baseline)
+```
+
+Badge style: `text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-badge-bg text-description-fg` — subtle, non-distracting.
+
+When a value comes from `"workspace"`, a secondary affordance appears below the row: a small `[Reset to global]` link that calls `onUpdate(path, globalDefault, "workspace-delete")`. This removes the workspace override without touching the user-global setting.
+
+---
+
+#### 4.7 — Section Breakdown (Controls per Section)
+
+##### General
+
+| Control | Type | Setting key |
+|---|---|---|
+| Show CLI output | Toggle | `ui.showCliOutput` |
+| Show CLI command | Toggle | `ui.showCliCommand` |
+| Log raw CLI output | Toggle | `ui.logRawCliOutput` |
+| Enable diagnostic logs | Toggle | `enableDiagnosticLogs` |
+| Open prompts in second group | Toggle | `ui.openPromptsInSecondGroup` |
+| Respect .gitignore for completions | Toggle | `ui.respectGitignoreForCompletions` |
+| Confirm delete operations | Toggle | `ui.confirmDeleteOperations` |
+| Confirm reset operations | Toggle | `ui.confirmResetOperations` |
+
+##### Workflow Defaults
+
+| Control | Type | Setting key |
+|---|---|---|
+| Default harness | `HarnessDropdown` (reuse) | `harness` |
+| Default workflow format | `CustomSelect` yaml/json | `workflow.defaultFormat` |
+| Default template | `CustomSelect` (template list) | `workflow.defaultTemplate` |
+| Default agent | Text input with file picker | `workflow.defaultAgent` |
+| Default skills | `SkillsSelect` (reuse) | `workflow.defaultSkills` |
+| Default prior context | `PriorContextSelect` (reuse) | `workflow.priorContext` |
+| Resume existing session | Toggle | `workflow.resumeExistingSession` |
+| Auto-load recent session | Toggle | `workflow.autoLoadRecentSession` |
+| Omit agents/skills on resume | Toggle | `workflow.omitAgentsSkillsOnResume` |
+| Default max retries | Number input | `workflow.maxRetries` |
+| Default retry prompt | Textarea | `workflow.retryPrompt` |
+
+##### Harnesses & Models
+
+Flat two-column grid — one row per harness. Each row: harness icon + name on left; model dropdown + additionalArgs text input on right.
+
+| Harness | Model dropdown namespace | additionalArgs key |
+|---|---|---|
+| Copilot CLI | `copilot-cli` models | `additionalArgs["copilot-cli"]` |
+| Claude CLI | `claude-cli` models | `additionalArgs["claude-cli"]` |
+| Codex CLI | `codex-cli` models | `additionalArgs["codex-cli"]` |
+| OpenCode CLI | `opencode-cli` models (free-form) | `additionalArgs["opencode-cli"]` |
+| Qwen CLI | `qwen-cli` models | `additionalArgs["qwen-cli"]` |
+| Gemini CLI | `gemini-cli` models | `additionalArgs["gemini-cli"]` |
+| Copilot Chat | `copilot-chat` models | — (no additionalArgs for chat) |
+
+Model dropdowns reuse `modelNamespaceForHarness()` + existing `CustomSelect` with model namespaces. additionalArgs uses a plain `<input type="text">`.
+
+##### Permissions
+
+| Control | Type | Setting key |
+|---|---|---|
+| Permission mode | `CustomSelect` (reuse `PERMISSION_MODE_OPTIONS`) | `tools.permissionMode` |
+| Allowed tools | Tag/multiline input *(shown in custom mode)* | `tools.allowed` |
+| Denied tools | Tag/multiline input *(shown in custom mode)* | `tools.denied` |
+| **Copilot CLI** | | |
+| Allow all paths | Toggle | `tools.copilotAllowAllPaths` |
+| Allowed dirs | String[] editor | `tools.copilotAllowedDirs` |
+| **Codex CLI** | | |
+| Sandbox mode | `CustomSelect` read-only/workspace-write/danger-full-access | `tools.codexSandboxMode` |
+| Approval policy | `CustomSelect` untrusted/on-request/never | `tools.codexApprovalPolicy` |
+| Allowed dirs | String[] editor | `tools.codexAllowedDirs` |
+
+Copilot-specific and Codex-specific subsections are visually grouped under a sub-header. Codex sandbox/approval rows dim when `permissionMode !== "custom"`.
+
+##### Execution
+
+| Control | Type | Setting key |
+|---|---|---|
+| Execution mode | `CustomSelect` interactive/headless | `execution.mode` |
+| Max prompt timeout | Number input (seconds, -1=unlimited) | `execution.maxPromptTimeout` |
+| Script timeout | Number input (seconds) | `execution.scriptTimeout` |
+| Close terminal on completion | Toggle | `execution.closeTerminalOnComplete` |
+
+##### Chat
+
+| Control | Type | Setting key |
+|---|---|---|
+| Chat model | `CustomSelect` (copilot-chat models) | `chat.model` |
+| Chat window location | `CustomSelect` chatPanel/newTab/newWindow | `chat.windowLocation` |
+| Inactivity timeout | Number input (seconds) | `chat.inactivityTimeout` |
+| Treat timeout as success | Toggle | `chat.treatTimeoutAsSuccess` |
+| Force agent mode | Toggle | `chat.forceAgentMode` |
+| Use native attachments | Toggle | `chat.useNativeAttachments` |
+| Omit agents/skills on resume | *(also in Workflow Defaults)* | `chat.omitAgentsSkillsOnResume` |
+
+##### MCP & Hooks
+
+Reuse `McpServersEditor` and `HooksEditor` components directly (they already handle add/edit/remove). These are the default servers/hooks applied to all workflows that don't override them.
+
+| Control | Component | Setting key |
+|---|---|---|
+| Default MCP servers | `McpServersEditor` (reuse) | `mcp.defaultServers` |
+| Default hooks | `HooksEditor` (reuse) | `hooks` |
+
+##### Queue
+
+| Control | Type | Setting key |
+|---|---|---|
+| Max queue size | Number input | `queue.maxSize` |
+| Max workflow execution time | Number input (seconds, -1=unlimited) | `queue.maxWorkflowExecutionTime` |
+| Unlimited mode | Toggle | `queue.unlimitedMode` |
+| Notify on queue extension | Toggle | `queue.notifyOnExtension` |
+
+##### History & Safety
+
+| Control | Type | Setting key |
+|---|---|---|
+| Save output history | Toggle | `history.saveOutput` |
+| Max history runs | Number input (-1=unlimited) | `history.maxRuns` |
+
+##### Server *(stubbed in Phase 4, fully built in Phase 6)*
+
+Renders a placeholder card: *"Server configuration coming soon."* with the port and enabled fields stubbed as disabled inputs. Full implementation deferred to Phase 6.
+
+---
+
+#### 4.8 — Header Changes
+
+In `Header.tsx`:
+
+1. Replace `handleOpenSettings` (currently posts `MESSAGE_TYPES.OPEN_SETTINGS` to extension) with a direct `uiStore.toggleGlobalSettings()` call — no extension message needed to open/close. The load request fires from the drawer's `useEffect` on mount.
+
+2. Add active state to the settings-gear button:
+
+```tsx
+const globalSettingsOpen = useUiStore((s) => s.globalSettingsOpen);
+const toggleGlobalSettings = useUiStore((s) => s.toggleGlobalSettings);
+
+// Button className:
+`control-button ... ${
+  globalSettingsOpen
+    ? "bg-btn-bg text-btn-fg"
+    : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+}`
+```
+
+3. Update button title from `"Open VS Code settings"` to `"Global Settings"`.
+
+---
+
+#### 4.9 — Deliverables Summary
+
+1. `src/types/DashboardConstants.ts` — add `GLOBAL_SETTINGS_LOAD_REQUEST`, `GLOBAL_SETTINGS_LOADED`, `UPDATE_GLOBAL_SETTING`, `GLOBAL_SETTING_UPDATED`
+2. `src/ui/webview-react/store/uiStore.ts` — add `globalSettingsOpen`, `globalSettingsActiveTab`, and actions
+3. `src/ui/webview-react/store/settingsStore.ts` — add `FullGlobalSettings`, `SettingSource`, `GlobalSettingValue<T>`, and store actions
+4. `src/ui/webview-react/components/layout/GlobalSettingsDrawer.tsx` — main drawer shell + animation
+5. `src/ui/webview-react/components/layout/GlobalSettingsVerticalTabBar.tsx` — vertical tab nav
+6. Section components (`GeneralSection.tsx`, `WorkflowDefaultsSection.tsx`, etc.) in `components/settings/`
+7. `DrawerRow` — add optional `source?: SettingSource` prop + reset-to-global affordance
+8. `Header.tsx` — wire `toggleGlobalSettings`, active state, title update
+9. `App.tsx` — render `<GlobalSettingsDrawer>` as a bottom overlay (sibling to `MobilePromptsSidebar` pattern)
+10. `FlightPathWebviewProvider.ts` — handle `GLOBAL_SETTINGS_LOAD_REQUEST` (read all settings, attach source metadata, send `GLOBAL_SETTINGS_LOADED`) and `UPDATE_GLOBAL_SETTING` (write to config file via `FlightPathConfigService`)
 
 ### Phase 5 — Detangle the current footer
 
