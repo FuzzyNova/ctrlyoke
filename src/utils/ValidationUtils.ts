@@ -95,9 +95,14 @@ export class ValidationUtils {
           maxRetries: { type: "number", nullable: true },
           retryPrompt: { type: "string", nullable: true },
           resumeSessionOnRetry: { type: "boolean", nullable: true },
+          onPass: { type: "string", nullable: true },
+          onFail: { type: "string", nullable: true },
         },
         required: ["script", "returns"],
         nullable: true,
+      } as any,
+      preCondition: {
+        // PreCondition | null — complex union type, use 'as any'
       } as any,
       sessionId: {
         type: ["string", "number"] as any, // Allow both string and number for session IDs
@@ -165,7 +170,7 @@ export class ValidationUtils {
     },
     required: ["prompt"],
     additionalProperties: false,
-  };
+  } as any as JSONSchemaType<PromptStep>;
 
   // Compiled validators
   private static promptStepValidator = ValidationUtils.ajv.compile(

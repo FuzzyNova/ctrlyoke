@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo } from "react";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import {
   useEditorStore,
@@ -37,18 +37,11 @@ import {
   PERMISSION_MODE_OPTIONS,
   getPermissionHarnessSupport,
   buildPermissionsDefaultLabel,
+  ScriptConditionEditor,
+  type ScriptConditionValue,
 } from "../shared";
 import { HooksEditor } from "./HooksEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
-import {
-  COMPARE_SOURCE_LABELS,
-  type EndConditionCompareSource,
-} from "../../utils/endCondition";
-import type { SelectOption } from "../shared";
-
-const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
-  ["auto", "stdout", "stderr", "exitCode"] as EndConditionCompareSource[]
-).map((v) => ({ value: v, label: COMPARE_SOURCE_LABELS[v] }));
 
 interface PropertiesDrawerProps {
   isOpen: boolean;
@@ -75,9 +68,17 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     properties,
     setProperty,
     setEndCondition,
-    updateEndConditionField,
     clearEndCondition,
   } = useEditorStore();
+
+  // Pre-condition toggle handler
+  const handlePreConditionToggle = () => {
+    if (properties.preCondition !== undefined) {
+      setProperty("preCondition", undefined);
+    } else {
+      setProperty("preCondition", { script: "", onFail: "skipPrompt" } as import("../../../../types/FlightPathTypes").PreCondition);
+    }
+  };
   const {
     availableAgents,
     availableSkills,
@@ -320,22 +321,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       setEndCondition({ ...END_CONDITION_DEFAULTS });
     }
   };
-
-  // Local string state for number inputs — prevents auto-reset when clearing the field
-  const [endTimeoutInput, setEndTimeoutInput] = useState(
-    String(properties.endCondition?.timeout ?? 30000)
-  );
-  const [endMaxRetriesInput, setEndMaxRetriesInput] = useState(
-    String(properties.endCondition?.maxRetries ?? 0)
-  );
-
-  useEffect(() => {
-    setEndTimeoutInput(String(properties.endCondition?.timeout ?? 30000));
-  }, [properties.endCondition?.timeout]);
-
-  useEffect(() => {
-    setEndMaxRetriesInput(String(properties.endCondition?.maxRetries ?? 0));
-  }, [properties.endCondition?.maxRetries]);
 
   return (
     <div
@@ -683,7 +668,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 
         {/* Page: Validation */}
         {activePage === DRAWER_PAGES.VALIDATION && (
-          <div className="space-y-2">
+          <div className="space-y-4">
+            {/* End Condition Section */}
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <input
@@ -714,185 +700,61 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     : "Enable End Condition to configure validation"
                 }
               >
-                {/* Script (full width) */}
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="prop-end-script"
-                    className="text-xs font-medium text-foreground"
-                  >
-                    Script
-                  </label>
-                  <input
-                    type="text"
-                    id="prop-end-script"
-                    value={properties.endCondition?.script || ""}
-                    onChange={(e) =>
-                      updateEndConditionField("script", e.target.value)
-                    }
-                    placeholder="npm test"
-                    className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-                  />
-                </div>
+                <ScriptConditionEditor
+                  variant="endCondition"
+                  value={properties.endCondition as ScriptConditionValue | null | undefined}
+                  onChange={(updated) =>
+                    setEndCondition(updated as import("../../store/editorStore").EndConditionConfig)
+                  }
+                  narrow={isNarrow}
+                  disabled={!properties.endCondition}
+                  idPrefix="prop-end"
+                />
+              </div>
+            </div>
 
-                {/* Compare Source + Expected Return */}
-                <DrawerRow narrow={isNarrow}>
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="prop-end-compare-source"
-                      className="text-xs font-medium text-foreground"
-                      title="Auto: 'true'/'false' check exit code; other values check stdout. Stdout: always compare stdout (requires clean exit). Stderr: compare stderr output. Exit Code: compare the numeric exit code directly."
-                    >
-                      Compare Source
-                    </label>
-                    <CustomSelect
-                      id="prop-end-compare-source"
-                      value={properties.endCondition?.compareSource ?? "auto"}
-                      onChange={(v) =>
-                        updateEndConditionField(
-                          "compareSource",
-                          v as EndConditionCompareSource
-                        )
-                      }
-                      options={COMPARE_SOURCE_OPTIONS}
-                    />
-                    <span className="text-[10px] text-description-fg">
-                      {(properties.endCondition?.compareSource ?? "auto") ===
-                      "auto"
-                        ? "'true'/'false' use exit code; other values check stdout"
-                        : (properties.endCondition?.compareSource ?? "auto") ===
-                            "stdout"
-                          ? "Compares stdout output (requires clean exit)"
-                          : (properties.endCondition?.compareSource ??
-                                "auto") === "stderr"
-                            ? "Compares stderr output (exit code not checked)"
-                            : "Compares numeric exit code — use '0', '1', or 'true'/'false'"}
-                    </span>
-                  </div>
+            {/* Pre-Condition Section */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="checkbox"
+                  id="prop-pre-enabled"
+                  checked={properties.preCondition !== undefined}
+                  onChange={handlePreConditionToggle}
+                  className="w-4 h-4 rounded border border-input-border"
+                />
+                <label
+                  htmlFor="prop-pre-enabled"
+                  className="text-xs font-medium text-foreground cursor-pointer"
+                  title="Runs a script before the prompt. Use to gate execution on a condition."
+                >
+                  Enable Pre-Condition
+                </label>
+              </div>
 
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="prop-end-returns"
-                      className="text-xs font-medium text-foreground"
-                    >
-                      Expected Return
-                    </label>
-                    <input
-                      type="text"
-                      id="prop-end-returns"
-                      value={properties.endCondition?.returns || ""}
-                      onChange={(e) =>
-                        updateEndConditionField("returns", e.target.value)
-                      }
-                      placeholder="true"
-                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-                    />
-                  </div>
-                </DrawerRow>
-
-                {/* Timeout + Max Retries */}
-                <DrawerRow narrow={isNarrow}>
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="prop-end-timeout"
-                      className="text-xs font-medium text-foreground"
-                    >
-                      Timeout (ms)
-                    </label>
-                    <input
-                      type="number"
-                      id="prop-end-timeout"
-                      value={endTimeoutInput}
-                      onChange={(e) => setEndTimeoutInput(e.target.value)}
-                      onBlur={() => {
-                        const parsed = parseInt(endTimeoutInput);
-                        const value =
-                          isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
-                        setEndTimeoutInput(String(value));
-                        updateEndConditionField("timeout", value);
-                      }}
-                      min={1000}
-                      max={300000}
-                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="prop-end-retries"
-                      className="text-xs font-medium text-foreground"
-                    >
-                      Max Retries
-                    </label>
-                    <input
-                      type="number"
-                      id="prop-end-retries"
-                      value={endMaxRetriesInput}
-                      onChange={(e) => setEndMaxRetriesInput(e.target.value)}
-                      onBlur={() => {
-                        const parsed = parseInt(endMaxRetriesInput);
-                        const value = isNaN(parsed) ? 0 : parsed;
-                        setEndMaxRetriesInput(String(value));
-                        updateEndConditionField("maxRetries", value);
-                      }}
-                      min={-1}
-                      max={100}
-                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-                    />
-                    <span className="text-[10px] text-description-fg">
-                      Use -1 for unlimited retries
-                    </span>
-                  </div>
-                </DrawerRow>
-
-                {/* Retry Prompt (Full Width) */}
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="prop-end-retry-prompt"
-                    className="text-xs font-medium text-foreground"
-                  >
-                    Retry Prompt
-                  </label>
-                  <textarea
-                    id="prop-end-retry-prompt"
-                    value={properties.endCondition?.retryPrompt || ""}
-                    onChange={(e) =>
-                      updateEndConditionField("retryPrompt", e.target.value)
-                    }
-                    placeholder={
-                      "Validation failed: {error}\n\nPlease fix the issues."
-                    }
-                    rows={3}
-                    className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-y"
-                  />
-                  <span className="text-[10px] text-description-fg">
-                    Use {"{error}"} placeholder for validation error message
-                  </span>
-                </div>
-
-                {/* Resume Session on Retry */}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="prop-end-resume-session-on-retry"
-                    checked={
-                      properties.endCondition?.resumeSessionOnRetry ?? true
-                    }
-                    onChange={(e) =>
-                      updateEndConditionField(
-                        "resumeSessionOnRetry",
-                        e.target.checked
-                      )
-                    }
-                    className="w-4 h-4 accent-focus-border cursor-pointer"
-                  />
-                  <label
-                    htmlFor="prop-end-resume-session-on-retry"
-                    className="text-xs font-medium text-foreground cursor-pointer"
-                    title="When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
-                  >
-                    Resume Session on Retry
-                  </label>
-                </div>
+              {/* Pre-condition fields — always visible, grayed out when disabled */}
+              <div
+                className={`space-y-3 p-3 bg-editor-bg border border-panel-border rounded ${
+                  properties.preCondition !== undefined
+                    ? ""
+                    : "opacity-50 pointer-events-none"
+                }`}
+                title={
+                  properties.preCondition !== undefined
+                    ? undefined
+                    : "Enable Pre-Condition to configure"
+                }
+              >
+                <ScriptConditionEditor
+                  variant="preCondition"
+                  value={properties.preCondition as ScriptConditionValue | null | undefined}
+                  onChange={(updated) =>
+                    setProperty("preCondition", updated as import("../../../../types/FlightPathTypes").PreCondition)
+                  }
+                  narrow={isNarrow}
+                  disabled={properties.preCondition === undefined}
+                  idPrefix="prop-pre"
+                />
               </div>
             </div>
           </div>

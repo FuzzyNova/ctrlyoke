@@ -32,7 +32,7 @@ suite("EndConditionEvaluator Tests", () => {
   suite("buildRetryPrompt - Template Substitution", () => {
     // Create a mock evaluation result for testing
     const mockResult: EvaluationResult = {
-      success: false,
+      passed: false,
       stdout: "Test stdout output",
       stderr: "Test stderr error",
       result: "Test stdout output",
@@ -228,7 +228,7 @@ suite("EndConditionEvaluator Tests", () => {
       );
 
       assert.strictEqual(result.timeout, true);
-      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.passed, false);
     }).timeout(10000);
 
     test("should report correct duration", async () => {
@@ -303,7 +303,7 @@ suite("EndConditionEvaluator Tests", () => {
         workspaceFolder.uri.fsPath
       );
 
-      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.passed, true);
     });
 
     test("should match boolean interpretation (1 for true)", async () => {
@@ -323,7 +323,7 @@ suite("EndConditionEvaluator Tests", () => {
         workspaceFolder.uri.fsPath
       );
 
-      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.passed, true);
     });
 
     test("should match substring in output", async () => {
@@ -346,7 +346,7 @@ suite("EndConditionEvaluator Tests", () => {
         workspaceFolder.uri.fsPath
       );
 
-      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.passed, true);
     });
   });
 

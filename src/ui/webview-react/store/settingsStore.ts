@@ -96,7 +96,10 @@ export interface WorkflowProperties {
     timeout?: number;
     maxRetries?: number;
     retryPrompt?: string;
+    onPass?: string;
+    onFail?: string;
   } | null;
+  preCondition?: import("../../../types/FlightPathTypes").PreCondition | null;
   priorContext?: PriorContext;
   additionalArgs?: string | null;
   toolPermissions?: {

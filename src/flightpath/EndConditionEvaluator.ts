@@ -4,7 +4,7 @@ import { spawn } from "child_process";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import {
-  EndCondition,
+  type ScriptProperties,
   type EndConditionCompareSource,
 } from "../types/FlightPathTypes";
 import {
@@ -15,7 +15,8 @@ import { CliProcessManager } from "../utils/CliProcessManager";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 
 export interface EvaluationResult {
-  success: boolean;
+  /** Whether the script evaluation passed. Use onPass/onFail from the condition config to branch on this. */
+  passed: boolean;
   stdout: string; // Separate stdout from script
   stderr: string; // Separate stderr from script
   result: string; // Same as stdout; used in retry prompt interpolation ({actualValue})
@@ -56,12 +57,13 @@ export class EndConditionEvaluator {
   }
 
   /**
-   * Evaluate an end condition
+   * Evaluate a script condition (endCondition, preCondition, or scriptStep).
+   * When `returns` is absent, exit code 0 = pass.
    * @param vars Optional variable map — injected as FLIGHTPATH_VAR_<KEY> environment
    *   variables so end condition scripts can branch on workflow variables.
    */
   async evaluateCondition(
-    condition: EndCondition,
+    condition: ScriptProperties,
     workingDirectory?: string,
     vars?: Record<string, string>
   ): Promise<EvaluationResult> {
@@ -87,7 +89,7 @@ export class EndConditionEvaluator {
         command = this.getScriptCommand(resolvedScriptPath);
         if (!command) {
           return {
-            success: false,
+            passed: false,
             stdout: "",
             stderr: "",
             result: "",
@@ -117,14 +119,14 @@ export class EndConditionEvaluator {
         vars
       );
 
-      const success = this.evaluateSuccess(
+      const passed = this.evaluateSuccess(
         result,
         condition.returns,
         condition.compareSource
       );
 
       return {
-        success,
+        passed,
         stdout: result.stdout || "",
         stderr: result.stderr || "",
         result: result.result,
@@ -135,7 +137,7 @@ export class EndConditionEvaluator {
       };
     } catch (error) {
       return {
-        success: false,
+        passed: false,
         stdout: "",
         stderr: "",
         result: "",
@@ -383,9 +385,13 @@ export class EndConditionEvaluator {
       exitCode?: number;
       success: boolean;
     },
-    returns: string,
+    returns: string | undefined,
     compareSource: EndConditionCompareSource = "auto"
   ): boolean {
+    // When returns is absent, exit code 0 = pass
+    if (returns === undefined) {
+      return result.exitCode === 0;
+    }
     const expectedLower = returns.trim().toLowerCase();
 
     switch (compareSource) {

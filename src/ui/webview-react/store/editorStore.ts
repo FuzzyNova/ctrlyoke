@@ -33,6 +33,8 @@ export interface EndConditionConfig {
   maxRetries?: number;
   retryPrompt?: string;
   resumeSessionOnRetry?: boolean;
+  onPass?: string;
+  onFail?: string;
 }
 
 /**
@@ -49,6 +51,7 @@ export interface PropertyValues {
   mcpServers: (string | object)[] | null | undefined; // undefined = inherit, null = none, array = custom
   hooks: object[] | null | undefined; // undefined = inherit, null = none, array = custom
   endCondition?: EndConditionConfig | null;
+  preCondition?: import('../../../types/FlightPathTypes').PreCondition | null;
   priorContext?: PriorContext; // undefined = inherit/default
   additionalArgs: Disableable<string>; // undefined = inherit, null = none, string = custom args
   toolPermissions?: ToolPermissionsOverride | null; // undefined = inherit workflow, null = none (omit flags), object = override
@@ -68,6 +71,7 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
   mcpServers: undefined,
   hooks: undefined,
   endCondition: undefined, // undefined = inherit from workflow
+  preCondition: undefined,
   additionalArgs: undefined,
   toolPermissions: undefined,
 };
@@ -81,17 +85,23 @@ export const END_CONDITION_DEFAULTS: EndConditionConfig = {
 };
 
 /**
- * Saved new prompt state for restoring when switching from edit to new mode
+ * Saved new step state for restoring when switching from edit to new mode
  */
-export interface SavedNewPromptState {
+export interface SavedNewStepState {
   promptText: string;
   promptName: string;
   properties: PropertyValues;
   stepType?: typeof STEP_TYPES.PROMPT | typeof STEP_TYPES.SCRIPT;
   scriptCommand?: string;
   scriptTimeout?: number;
-  scriptContinueOnFailure?: boolean;
+  scriptOnPass?: string;
+  scriptOnFail?: string;
+  scriptCompareSource?: string;
+  scriptReturns?: string;
 }
+
+/** @deprecated Use SavedNewStepState */
+export type SavedNewPromptState = SavedNewStepState;
 
 /**
  * Returns a stable string key for a selection target, used to index pendingEdits.
@@ -117,13 +127,13 @@ interface EditorState {
   selectionTarget: EditorSelectionTarget;
   selectedPromptIndex: number | null; // null = new prompt mode, number = editing existing
   originalPromptData: WorkflowStep | null; // For Cancel/revert functionality
-  savedNewPromptState: SavedNewPromptState | null; // Saved state when switching to edit mode
+  savedNewPromptState: SavedNewStepState | null; // Saved state when switching to edit mode
   /**
    * Local-memory cache of unsaved edits for each prompt, keyed by selectionTargetKey().
    * Populated when the user navigates away from a prompt without pressing Update.
    * Cleared when the user presses Update (via cancelEdit) or Cancel.
    */
-  pendingEdits: Record<string, SavedNewPromptState>;
+  pendingEdits: Record<string, SavedNewStepState>;
   hasActiveQueue: boolean; // Whether a workflow is currently loaded
 
   // Step type — determines editor mode
@@ -136,7 +146,10 @@ interface EditorState {
   // Script step content
   scriptCommand: string;
   scriptTimeout: number | undefined;
-  scriptContinueOnFailure: boolean;
+  scriptOnPass: string;
+  scriptOnFail: string;
+  scriptCompareSource: string;
+  scriptReturns: string;
 
   // Property values
   properties: PropertyValues;
@@ -174,7 +187,10 @@ interface EditorActions {
   ) => void;
   setScriptCommand: (command: string) => void;
   setScriptTimeout: (timeout: number | undefined) => void;
-  setScriptContinueOnFailure: (value: boolean) => void;
+  setScriptOnPass: (value: string) => void;
+  setScriptOnFail: (value: string) => void;
+  setScriptCompareSource: (value: string) => void;
+  setScriptReturns: (value: string) => void;
 
   // Content updates
   setPromptText: (text: string) => void;
@@ -250,7 +266,10 @@ const initialState: EditorState = {
   promptName: "",
   scriptCommand: "",
   scriptTimeout: undefined,
-  scriptContinueOnFailure: false,
+  scriptOnPass: "continue",
+  scriptOnFail: "stopWorkflow",
+  scriptCompareSource: "auto",
+  scriptReturns: "",
   properties: { ...PROPERTY_DEFAULTS },
   isDirty: false,
   validationErrors: {},
@@ -322,8 +341,10 @@ export const useEditorStore = create<
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
         scriptTimeout: savedNewPromptState.scriptTimeout,
-        scriptContinueOnFailure:
-          savedNewPromptState.scriptContinueOnFailure ?? false,
+        scriptOnPass: savedNewPromptState.scriptOnPass ?? "continue",
+        scriptOnFail: savedNewPromptState.scriptOnFail ?? "stopWorkflow",
+        scriptCompareSource: savedNewPromptState.scriptCompareSource ?? "auto",
+        scriptReturns: savedNewPromptState.scriptReturns ?? "",
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
         isDirty:
@@ -347,7 +368,10 @@ export const useEditorStore = create<
           promptName: "",
           scriptCommand: "",
           scriptTimeout: undefined,
-          scriptContinueOnFailure: false,
+          scriptOnPass: "continue",
+          scriptOnFail: "stopWorkflow",
+          scriptCompareSource: "auto",
+          scriptReturns: "",
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
           validationErrors: {},
@@ -361,7 +385,10 @@ export const useEditorStore = create<
           stepType: STEP_TYPES.PROMPT,
           scriptCommand: "",
           scriptTimeout: undefined,
-          scriptContinueOnFailure: false,
+          scriptOnPass: "continue",
+          scriptOnFail: "stopWorkflow",
+          scriptCompareSource: "auto",
+          scriptReturns: "",
           savedNewPromptState: null,
         });
       }
@@ -383,14 +410,17 @@ export const useEditorStore = create<
         stepType: state.stepType,
         scriptCommand: state.scriptCommand,
         scriptTimeout: state.scriptTimeout,
-        scriptContinueOnFailure: state.scriptContinueOnFailure,
+        scriptOnPass: state.scriptOnPass,
+        scriptOnFail: state.scriptOnFail,
+        scriptCompareSource: state.scriptCompareSource,
+        scriptReturns: state.scriptReturns,
       };
     }
 
     // Save current new-prompt state when first entering edit mode.
     // Preserve the existing savedNewPromptState when switching between edit modes
     // so the user's new-prompt draft survives multiple prompt switches.
-    const savedNewPromptState: SavedNewPromptState | null =
+    const savedNewPromptState: SavedNewStepState | null =
       state.selectionTarget.kind === EDITOR_TARGET_KINDS.NEW_PROMPT
         ? {
             promptText: state.promptText,
@@ -399,7 +429,10 @@ export const useEditorStore = create<
             stepType: state.stepType,
             scriptCommand: state.scriptCommand,
             scriptTimeout: state.scriptTimeout,
-            scriptContinueOnFailure: state.scriptContinueOnFailure,
+            scriptOnPass: state.scriptOnPass,
+            scriptOnFail: state.scriptOnFail,
+            scriptCompareSource: state.scriptCompareSource,
+            scriptReturns: state.scriptReturns,
           }
         : state.savedNewPromptState;
 
@@ -430,9 +463,18 @@ export const useEditorStore = create<
         scriptTimeout: pendingEdit
           ? pendingEdit.scriptTimeout
           : promptData.timeout,
-        scriptContinueOnFailure: pendingEdit
-          ? (pendingEdit.scriptContinueOnFailure ?? false)
-          : (promptData.continueOnFailure ?? false),
+        scriptOnPass: pendingEdit
+          ? (pendingEdit.scriptOnPass ?? "continue")
+          : (promptData.onPass ?? "continue"),
+        scriptOnFail: pendingEdit
+          ? (pendingEdit.scriptOnFail ?? "stopWorkflow")
+          : (promptData.onFail ?? "stopWorkflow"),
+        scriptCompareSource: pendingEdit
+          ? (pendingEdit.scriptCompareSource ?? "auto")
+          : (promptData.compareSource ?? "auto"),
+        scriptReturns: pendingEdit
+          ? (pendingEdit.scriptReturns ?? "")
+          : (promptData.returns ?? ""),
         properties: pendingEdit
           ? pendingEdit.properties
           : { ...PROPERTY_DEFAULTS },
@@ -476,7 +518,10 @@ export const useEditorStore = create<
           : (promptData.name ?? ""),
         scriptCommand: pendingEdit?.scriptCommand ?? "",
         scriptTimeout: pendingEdit?.scriptTimeout,
-        scriptContinueOnFailure: pendingEdit?.scriptContinueOnFailure ?? false,
+        scriptOnPass: pendingEdit?.scriptOnPass ?? "continue",
+        scriptOnFail: pendingEdit?.scriptOnFail ?? "stopWorkflow",
+        scriptCompareSource: pendingEdit?.scriptCompareSource ?? "auto",
+        scriptReturns: pendingEdit?.scriptReturns ?? "",
         properties: pendingEdit ? pendingEdit.properties : propertiesFromData,
         isDirty: pendingEdit ? true : false,
         validationErrors: {},
@@ -508,8 +553,10 @@ export const useEditorStore = create<
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
         scriptTimeout: savedNewPromptState.scriptTimeout,
-        scriptContinueOnFailure:
-          savedNewPromptState.scriptContinueOnFailure ?? false,
+        scriptOnPass: savedNewPromptState.scriptOnPass ?? "continue",
+        scriptOnFail: savedNewPromptState.scriptOnFail ?? "stopWorkflow",
+        scriptCompareSource: savedNewPromptState.scriptCompareSource ?? "auto",
+        scriptReturns: savedNewPromptState.scriptReturns ?? "",
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
         isDirty:
@@ -535,7 +582,10 @@ export const useEditorStore = create<
           promptName: "",
           scriptCommand: "",
           scriptTimeout: undefined,
-          scriptContinueOnFailure: false,
+          scriptOnPass: "continue",
+          scriptOnFail: "stopWorkflow",
+          scriptCompareSource: "auto",
+          scriptReturns: "",
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
           validationErrors: {},
@@ -550,7 +600,10 @@ export const useEditorStore = create<
           stepType: STEP_TYPES.PROMPT,
           scriptCommand: "",
           scriptTimeout: undefined,
-          scriptContinueOnFailure: false,
+          scriptOnPass: "continue",
+          scriptOnFail: "stopWorkflow",
+          scriptCompareSource: "auto",
+          scriptReturns: "",
           savedNewPromptState: null,
           validationErrors: {},
           pendingEdits: newPendingEdits,
@@ -573,7 +626,10 @@ export const useEditorStore = create<
       stepType: state.stepType,
       scriptCommand: state.scriptCommand,
       scriptTimeout: state.scriptTimeout,
-      scriptContinueOnFailure: state.scriptContinueOnFailure,
+      scriptOnPass: state.scriptOnPass,
+      scriptOnFail: state.scriptOnFail,
+      scriptCompareSource: state.scriptCompareSource,
+      scriptReturns: state.scriptReturns,
     };
 
     const { savedNewPromptState } = state;
@@ -587,8 +643,10 @@ export const useEditorStore = create<
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
         scriptTimeout: savedNewPromptState.scriptTimeout,
-        scriptContinueOnFailure:
-          savedNewPromptState.scriptContinueOnFailure ?? false,
+        scriptOnPass: savedNewPromptState.scriptOnPass ?? "continue",
+        scriptOnFail: savedNewPromptState.scriptOnFail ?? "stopWorkflow",
+        scriptCompareSource: savedNewPromptState.scriptCompareSource ?? "auto",
+        scriptReturns: savedNewPromptState.scriptReturns ?? "",
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
         isDirty:
@@ -610,7 +668,10 @@ export const useEditorStore = create<
           promptName: "",
           scriptCommand: "",
           scriptTimeout: undefined,
-          scriptContinueOnFailure: false,
+          scriptOnPass: "continue",
+          scriptOnFail: "stopWorkflow",
+          scriptCompareSource: "auto",
+          scriptReturns: "",
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
           validationErrors: {},
@@ -624,7 +685,10 @@ export const useEditorStore = create<
           stepType: STEP_TYPES.PROMPT,
           scriptCommand: "",
           scriptTimeout: undefined,
-          scriptContinueOnFailure: false,
+          scriptOnPass: "continue",
+          scriptOnFail: "stopWorkflow",
+          scriptCompareSource: "auto",
+          scriptReturns: "",
           savedNewPromptState: null,
           validationErrors: {},
           pendingEdits: newPendingEdits,
@@ -660,9 +724,27 @@ export const useEditorStore = create<
       isDirty: true,
     }),
 
-  setScriptContinueOnFailure: (value) =>
+  setScriptOnPass: (value) =>
     set({
-      scriptContinueOnFailure: value,
+      scriptOnPass: value,
+      isDirty: true,
+    }),
+
+  setScriptOnFail: (value) =>
+    set({
+      scriptOnFail: value,
+      isDirty: true,
+    }),
+
+  setScriptCompareSource: (value) =>
+    set({
+      scriptCompareSource: value,
+      isDirty: true,
+    }),
+
+  setScriptReturns: (value) =>
+    set({
+      scriptReturns: value,
       isDirty: true,
     }),
 
@@ -869,7 +951,10 @@ export const useEditorStore = create<
       promptName: "",
       scriptCommand: "",
       scriptTimeout: undefined,
-      scriptContinueOnFailure: false,
+      scriptOnPass: "continue",
+      scriptOnFail: "stopWorkflow",
+      scriptCompareSource: "auto",
+      scriptReturns: "",
       properties: { ...PROPERTY_DEFAULTS },
       isDirty: false,
       validationErrors: {},
@@ -883,7 +968,10 @@ export const useEditorStore = create<
       promptName: "",
       scriptCommand: "",
       scriptTimeout: undefined,
-      scriptContinueOnFailure: false,
+      scriptOnPass: "continue",
+      scriptOnFail: "stopWorkflow",
+      scriptCompareSource: "auto",
+      scriptReturns: "",
       properties: { ...PROPERTY_DEFAULTS },
       isDirty: false,
       validationErrors: {},
@@ -953,6 +1041,11 @@ export const useEditorStore = create<
     // Add end condition if configured
     if (properties.endCondition && properties.endCondition.script.trim()) {
       result.endCondition = properties.endCondition;
+    }
+
+    // Add pre-condition if configured
+    if (properties.preCondition !== undefined) {
+      result.preCondition = properties.preCondition;
     }
 
     // Add priorContext if set

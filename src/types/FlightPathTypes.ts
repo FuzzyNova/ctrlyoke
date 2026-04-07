@@ -169,6 +169,14 @@ export interface ExecutionProperties {
    */
   endCondition?: EndCondition | null;
 
+  /**
+   * Pre-condition script gate that runs before the prompt.
+   * - PreCondition object: Gate this prompt on a script check
+   * - null: Explicitly disable workflow-level pre-condition for this prompt
+   * - undefined: Inherit from workflow-level pre-condition (if configured)
+   */
+  preCondition?: PreCondition | null;
+
   /** Controls injection of prior prompt outputs into this prompt's text.
    *  See PriorContext type for valid values. Omitting the field = no injection. */
   priorContext?: PriorContext;
@@ -324,12 +332,13 @@ export interface PromptStep extends ExecutionProperties {
  * Script step — runs a shell command with no AI harness interaction.
  * Shares _runtime with PromptRuntimeMetadata for startedAt/completedAt tracking.
  */
-export interface ScriptStep {
+export interface ScriptStep extends ScriptProperties {
   type: typeof STEP_TYPES.SCRIPT;
   name?: string;
-  script: string;
-  timeout?: number;
-  continueOnFailure?: boolean;
+  /** What to do when the script passes. Default: "continue". */
+  onPass?: ScriptStepAction;
+  /** What to do when the script fails. Default: "stopWorkflow". */
+  onFail?: ScriptStepAction;
   _runtime?: PromptRuntimeMetadata; // Reuse for startedAt/completedAt/terminalStatus
 }
 
@@ -382,15 +391,48 @@ export type EndConditionCompareSource =
   | "stderr"
   | "exitCode";
 
-export interface EndCondition {
+/** Action options for endCondition onPass/onFail */
+export type EndConditionAction = "continue" | "retry" | "stopWorkflow";
+
+/** Action options for preCondition onPass/onFail */
+export type PreConditionAction = "continue" | "skipPrompt" | "stopWorkflow";
+
+/** Action options for scriptStep onPass/onFail */
+export type ScriptStepAction = "continue" | "stopWorkflow";
+
+/**
+ * Shared script execution properties used by endCondition, preCondition, and scriptStep.
+ */
+export interface ScriptProperties {
   script: string;
-  returns: string;
   /** Controls which output source is compared against `returns`. Default: `"auto"`. */
   compareSource?: EndConditionCompareSource;
+  /** Expected result to compare against. When absent, exit code 0 = pass. */
+  returns?: string;
   timeout?: number;
+}
+
+export interface EndCondition extends ScriptProperties {
+  /** Required for endCondition: expected result to compare against. */
+  returns: string;
   maxRetries?: number; // Maximum number of retry attempts (default: 0)
   retryPrompt?: string; // Template with placeholders for retry messages
   resumeSessionOnRetry?: boolean; // Resume the same session for retries (default: true). Set false to start a fresh session for each retry.
+  /** What to do when the end condition passes. Default: "continue". */
+  onPass?: EndConditionAction;
+  /** What to do when the end condition fails. Default: "stopWorkflow". When "retry" and maxRetries unset, defaults to 1 retry. */
+  onFail?: EndConditionAction;
+}
+
+/**
+ * Pre-condition script gate that runs before a prompt step.
+ * Determines whether to run the prompt, skip it, or stop the workflow.
+ */
+export interface PreCondition extends ScriptProperties {
+  /** What to do when the pre-condition passes. Default: "continue" (run the prompt). */
+  onPass?: PreConditionAction;
+  /** What to do when the pre-condition fails. Default: "skipPrompt". */
+  onFail?: PreConditionAction;
 }
 
 /**

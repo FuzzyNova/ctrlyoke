@@ -236,6 +236,7 @@ export interface PromptStep {
   mcpServers?: (string | McpServerConfig)[] | null;
   hooks?: UserHookConfig[] | null;
   endCondition?: EndConditionConfig | null;
+  preCondition?: import("./FlightPathTypes").PreCondition | null;
   priorContext?: import("./FlightPathTypes").PriorContext;
   additionalArgs?: string | null;
   toolPermissions?: import("./FlightPathTypes").ToolPermissionsOverride | null;

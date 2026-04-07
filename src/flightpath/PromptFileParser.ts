@@ -293,8 +293,10 @@ export class PromptFileParser {
     const step: ScriptStep = { type: STEP_TYPES.SCRIPT, script: source.script };
     if (source.name !== undefined) step.name = source.name;
     if (source.timeout !== undefined) step.timeout = source.timeout;
-    if (source.continueOnFailure !== undefined)
-      step.continueOnFailure = source.continueOnFailure;
+    if (source.compareSource !== undefined) step.compareSource = source.compareSource;
+    if (source.returns !== undefined) step.returns = source.returns;
+    if (source.onPass !== undefined) step.onPass = source.onPass;
+    if (source.onFail !== undefined) step.onFail = source.onFail;
     return step;
   }
 
@@ -321,6 +323,8 @@ export class PromptFileParser {
     if (source.hooks !== undefined) promptStep.hooks = source.hooks;
     if (source.endCondition !== undefined)
       promptStep.endCondition = source.endCondition;
+    if (source.preCondition !== undefined)
+      promptStep.preCondition = source.preCondition;
     if (source.priorContext !== undefined)
       promptStep.priorContext = source.priorContext;
     if (source.additionalArgs !== undefined)
@@ -424,6 +428,8 @@ export class PromptFileParser {
     if (parsed.hooks !== undefined) promptFile.hooks = parsed.hooks;
     if (parsed.endCondition !== undefined)
       promptFile.endCondition = parsed.endCondition;
+    if (parsed.preCondition !== undefined)
+      promptFile.preCondition = parsed.preCondition;
     if (parsed.priorContext !== undefined)
       promptFile.priorContext = parsed.priorContext;
     if (parsed.additionalArgs !== undefined)

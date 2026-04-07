@@ -41,3 +41,7 @@ export {
   type PermissionHarnessSupport,
 } from "./permissionUtils";
 export { type TabIconOverride } from "./tabBadgeUtils";
+export {
+  ScriptConditionEditor,
+  type ScriptConditionValue,
+} from "./ScriptConditionEditor";

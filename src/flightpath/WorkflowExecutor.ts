@@ -11,6 +11,7 @@ import {
   EXECUTION_STATES,
   Harness,
   type WorkflowAttemptTarget,
+  type PreConditionAction,
 } from "../types/FlightPathTypes";
 import type { FlightPathMcpServerProvider } from "../ui/FlightPathMcpServerProvider";
 import { WorkflowContext } from "../types/WorkflowContextTypes";
@@ -446,6 +447,39 @@ export class WorkflowExecutor {
     }
 
     let prompt: PromptStep = step as PromptStep;
+
+    // Evaluate pre-condition gate before running the AI prompt
+    const workflowFileForPre = this.promptQueue.getWorkflowFile();
+    const resolvedPreCondition =
+      prompt.preCondition !== undefined
+        ? prompt.preCondition
+        : workflowFileForPre.preCondition ?? null;
+
+    if (resolvedPreCondition !== null && resolvedPreCondition !== undefined) {
+      const preResult = await this.endConditionEvaluator.evaluateCondition(
+        resolvedPreCondition,
+        context.workspaceFolderPath,
+        workflowFileForPre.vars
+      );
+      const preAction: PreConditionAction = preResult.passed
+        ? (resolvedPreCondition.onPass ?? "continue")
+        : (resolvedPreCondition.onFail ?? "skipPrompt");
+
+      Log.debug(
+        `Pre-condition ${preResult.passed ? "passed" : "failed"} → action: ${preAction}`
+      );
+
+      if (preAction === "skipPrompt") {
+        return this.handleSkippedStep(step, target, context);
+      }
+      if (preAction === "stopWorkflow") {
+        Log.info("Pre-condition stopWorkflow triggered");
+        this.getRuntime().fail();
+        await this.promptQueue.commitRuntimeTransition();
+        return false;
+      }
+      // "continue" — fall through and run the step
+    }
     const workflowFile = this.promptQueue.getWorkflowFile();
     let resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
 
@@ -652,6 +686,56 @@ export class WorkflowExecutor {
   }
 
   /**
+   * Handle a step that has been skipped by a pre-condition gate.
+   *
+   * For mid-queue steps: broadcasts SKIPPED status and advances the queue.
+   * For finalStep: marks the loop as skipped and exits cleanly (treated as "resolved").
+   *
+   * @returns true to continue to the next step, false to stop (finalStep skip exits loop)
+   */
+  private async handleSkippedStep(
+    step: WorkflowStep,
+    target: ExecutionTarget,
+    context: WorkflowExecutionContext
+  ): Promise<boolean> {
+    const stepLabel =
+      !isScriptStep(step) && (step as PromptStep).name
+        ? (step as PromptStep).name!
+        : step.type === "script"
+          ? (step as ScriptStep).script.split(/\s+/)[0]
+          : "prompt";
+
+    Log.info(`[Pre-condition] Step skipped — ${stepLabel}`);
+
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      const stepIndex = target.stepIndex;
+      if (context.dashboardProvider && stepIndex >= 0) {
+        context.dashboardProvider.updateStepStatus(stepIndex, {
+          state: STEP_STATUS.SKIPPED,
+          message: "Skipped by pre-condition",
+        });
+      }
+      await this.promptQueue.completeCurrentAndMoveNext();
+      if (context.dashboardProvider) {
+        const live = this.promptQueue.getProgress();
+        context.dashboardProvider.updateProgress(live.current, live.total);
+      }
+      return true;
+    }
+
+    // finalStep — skip = loop exits cleanly (the condition we were fixing is resolved)
+    await this.setFinalStepRuntime(context, {
+      phase: FINAL_STEP_PHASES.FINAL_STEP,
+      loopCount: target.loopIndex,
+      status: STEP_STATUS.SKIPPED,
+      startedAt: this.promptQueue.getFinalStepRuntime()?.startedAt ?? Date.now(),
+      completedAt: Date.now(),
+    });
+
+    return false;
+  }
+
+  /**
    * Execute a script step — runs a shell command with no AI harness interaction.
    *
    * @param step      The ScriptStep to execute
@@ -687,24 +771,24 @@ export class WorkflowExecutor {
     const attemptIndex = 0;
     runtime.beginAttempt(target, attemptIndex, Date.now());
 
-    // Build a minimal EndCondition to reuse EndConditionEvaluator's script runner
     const timeout =
       step.timeout != null
         ? step.timeout * 1000
         : ConfigurationUtils.getScriptTimeoutMs();
 
+    // Build script evaluation config — compareSource/returns from step or default to exit code 0
     const evalResult = await this.endConditionEvaluator.evaluateCondition(
       {
         script: step.script,
-        returns: "0",
-        compareSource: "exitCode",
+        compareSource: step.compareSource ?? "exitCode",
+        returns: step.returns ?? "0",
         timeout: timeout,
       },
       context.workspaceFolderPath,
       this.promptQueue.getWorkflowFile().vars
     );
 
-    const succeeded = evalResult.exitCode === 0;
+    const succeeded = evalResult.passed;
 
     // Send script output to the dashboard as a CliOutput with source: "script"
     // so the UI renders it with terminal formatting (whitespace preserved, exit code summary).
@@ -773,21 +857,22 @@ export class WorkflowExecutor {
       );
     }
 
-    const continueOnFailure = step.continueOnFailure ?? false;
-    const shouldContinue = succeeded || continueOnFailure;
-    const terminalStatus = succeeded
-      ? STEP_STATUS.COMPLETED
-      : continueOnFailure
-        ? STEP_STATUS.COMPLETED
-        : STEP_STATUS.FAILED;
+    const onPass = step.onPass ?? "continue";
+    const onFail = step.onFail ?? "stopWorkflow";
+    const shouldContinue = succeeded ? onPass !== "stopWorkflow" : onFail !== "stopWorkflow";
+    const terminalStatus = shouldContinue ? STEP_STATUS.COMPLETED : STEP_STATUS.FAILED;
 
-    if (!succeeded && !continueOnFailure) {
+    if (!succeeded && onFail === "stopWorkflow") {
       Log.error(
         `Script step failed (exit code ${evalResult.exitCode}): ${stepLabel}`
       );
-    } else if (!succeeded && continueOnFailure) {
+    } else if (succeeded && onPass === "stopWorkflow") {
+      Log.info(
+        `Script step passed but onPass=stopWorkflow, stopping: ${stepLabel}`
+      );
+    } else if (!succeeded) {
       Log.warn(
-        `Script step failed but continueOnFailure=true, continuing: ${stepLabel}`
+        `Script step failed but onFail=continue, continuing: ${stepLabel}`
       );
     }
 
@@ -1033,8 +1118,8 @@ export class WorkflowExecutor {
     );
 
     {
-      const resultStatus = evaluationResult.success ? "Passed" : "Failed";
-      const severity = evaluationResult.success
+      const resultStatus = evaluationResult.passed ? "Passed" : "Failed";
+      const severity = evaluationResult.passed
         ? STATUS_MESSAGE_SEVERITY.INFO
         : STATUS_MESSAGE_SEVERITY.ERROR;
       const output = evaluationResult.error

@@ -2495,7 +2495,10 @@ export class WorkflowInstance {
         props.timeout !== null && {
           timeout: props.timeout as number,
         }),
-      ...(props.continueOnFailure === true && { continueOnFailure: true }),
+      ...(props.onPass !== undefined && props.onPass !== null && { onPass: props.onPass as "continue" | "stopWorkflow" }),
+      ...(props.onFail !== undefined && props.onFail !== null && { onFail: props.onFail as "continue" | "stopWorkflow" }),
+      ...(props.compareSource !== undefined && props.compareSource !== null && { compareSource: props.compareSource as "auto" | "stdout" | "stderr" | "exitCode" }),
+      ...(props.returns !== undefined && props.returns !== null && { returns: props.returns as string }),
     };
   }
 
@@ -2530,6 +2533,9 @@ export class WorkflowInstance {
       }),
       ...(props?.endCondition !== undefined && {
         endCondition: coerce<EndCondition>(props.endCondition),
+      }),
+      ...(props?.preCondition !== undefined && {
+        preCondition: props.preCondition as import("../types/FlightPathTypes").PreCondition | null,
       }),
       ...(props?.skills !== undefined && {
         skills: props.skills as string[] | null,

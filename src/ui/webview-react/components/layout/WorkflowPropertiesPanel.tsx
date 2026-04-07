@@ -37,22 +37,14 @@ import {
   type McpServersValue,
   PERMISSION_MODE_OPTIONS,
   getPermissionHarnessSupport,
+  ScriptConditionEditor,
+  type ScriptConditionValue,
 } from "../shared";
 import { HooksEditor } from "../editor/HooksEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
-import {
-  COMPARE_SOURCE_LABELS,
-  type EndConditionCompareSource,
-} from "../../utils/endCondition";
-import type { SelectOption } from "../shared";
-
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const SETTINGS_DRAWER_BREAKPOINT = 400;
-
-const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
-  ["auto", "stdout", "stderr", "exitCode"] as EndConditionCompareSource[]
-).map((v) => ({ value: v, label: COMPARE_SOURCE_LABELS[v] }));
 
 const BUTTON_STATE = {
   IDLE: "idle",
@@ -211,22 +203,6 @@ export const WorkflowPropertiesPanel: React.FC<{
     );
   }, [workflowProperties.endCondition]);
 
-  // Local string state for number inputs — prevents auto-reset when clearing the field
-  const [endTimeoutInput, setEndTimeoutInput] = useState(
-    String((workflowProperties.endCondition as any)?.timeout ?? 30000)
-  );
-  const [endMaxRetriesInput, setEndMaxRetriesInput] = useState(
-    String((workflowProperties.endCondition as any)?.maxRetries ?? 0)
-  );
-
-  const endConditionAny = workflowProperties.endCondition as any;
-  const endTimeoutValue = endConditionAny?.timeout;
-  const endMaxRetriesValue = endConditionAny?.maxRetries;
-
-  useEffect(() => {
-    setEndTimeoutInput(String(endTimeoutValue ?? 30000));
-    setEndMaxRetriesInput(String(endMaxRetriesValue ?? 0));
-  }, [workflowProperties.endCondition, endTimeoutValue, endMaxRetriesValue]);
 
   // Single breakpoint for all three layout zones (body rows, tab labels, footer toggles)
   const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(
@@ -671,26 +647,74 @@ export const WorkflowPropertiesPanel: React.FC<{
     [syncWorkflowPropertiesForUndo, vscode]
   );
 
-  const handleEndConditionFieldChange = useCallback(
-    (field: string, value: string | number | boolean) => {
-      const currentEndCondition = workflowProperties.endCondition || {};
-      const updatedEndCondition = {
-        ...currentEndCondition,
-        [field]: value,
-      };
-
-      // Optimistic update
+  const handleEndConditionChange = useCallback(
+    (updated: ScriptConditionValue) => {
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("endCondition", updatedEndCondition);
+      settingsStore.updateWorkflowProperty("endCondition", updated as WorkflowProperties["endCondition"]);
       syncWorkflowPropertiesForUndo();
-
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "endCondition",
-        value: updatedEndCondition,
+        value: updated,
       });
     },
-    [syncWorkflowPropertiesForUndo, vscode, workflowProperties.endCondition]
+    [syncWorkflowPropertiesForUndo, vscode]
+  );
+
+  // Pre-condition state
+  const [preConditionEnabled, setPreConditionEnabled] = useState(
+    workflowProperties.preCondition !== null &&
+      workflowProperties.preCondition !== undefined
+  );
+
+  // Sync preConditionEnabled with store
+  useEffect(() => {
+    setPreConditionEnabled(
+      workflowProperties.preCondition !== null &&
+        workflowProperties.preCondition !== undefined
+    );
+  }, [workflowProperties.preCondition]);
+
+  const handlePreConditionToggle = useCallback(
+    (enabled: boolean) => {
+      setPreConditionEnabled(enabled);
+      const settingsStore = useSettingsStore.getState();
+      if (!enabled) {
+        settingsStore.updateWorkflowProperty("preCondition", undefined);
+        syncWorkflowPropertiesForUndo();
+        vscode.postMessage({
+          type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+          property: "preCondition",
+          value: undefined,
+        });
+      } else {
+        const defaultPreCondition: import("@root/types/FlightPathTypes").PreCondition = { script: "", onFail: "skipPrompt" };
+        settingsStore.updateWorkflowProperty("preCondition", defaultPreCondition);
+        syncWorkflowPropertiesForUndo();
+        vscode.postMessage({
+          type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+          property: "preCondition",
+          value: defaultPreCondition,
+        });
+      }
+    },
+    [syncWorkflowPropertiesForUndo, vscode]
+  );
+
+  const handlePreConditionChange = useCallback(
+    (updated: ScriptConditionValue) => {
+      useSettingsStore.getState().updateWorkflowProperty(
+        "preCondition",
+        updated as import("@root/types/FlightPathTypes").PreCondition
+      );
+      syncWorkflowPropertiesForUndo();
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+        property: "preCondition",
+        value: updated,
+      });
+    },
+    [syncWorkflowPropertiesForUndo, vscode]
   );
 
   const handleSetAsDefault = useCallback(
@@ -735,8 +759,6 @@ export const WorkflowPropertiesPanel: React.FC<{
       />
     );
   }
-
-  const endCondition = workflowProperties.endCondition || {};
 
   // Permissions page derived values
   const toolPerms = workflowProperties.toolPermissions;
@@ -1091,213 +1113,87 @@ export const WorkflowPropertiesPanel: React.FC<{
           )}
 
           {activePage === DRAWER_PAGES.VALIDATION && (
-            <>
-              {/* Enable checkbox */}
-              <label
-                htmlFor="settings-end-condition-enabled"
-                className="flex items-center gap-2 text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
-                title="Validation runs after each prompt completes. Individual prompts can override or disable this."
-              >
-                <input
-                  type="checkbox"
-                  id="settings-end-condition-enabled"
-                  aria-label="Enable End Condition"
-                  checked={endConditionEnabled}
-                  onChange={(e) => handleEndConditionToggle(e.target.checked)}
-                  className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
-                />
-                Enable End Condition
-              </label>
-
-              {/* End condition fields — always visible, grayed out when disabled */}
-              <div
-                className={`space-y-3 ${
-                  endConditionEnabled ? "" : "opacity-50 pointer-events-none"
-                }`}
-                title={
-                  endConditionEnabled
-                    ? undefined
-                    : "Enable End Condition to configure validation"
-                }
-              >
-                {/* Row 1: Script (full width) */}
+            <div className="space-y-4">
+              {/* End Condition Section */}
+              <div>
                 <label
-                  htmlFor="settings-end-script"
-                  className="flex flex-col gap-1"
-                >
-                  <span className="text-[11px] font-semibold text-description-fg">
-                    Script:
-                  </span>
-                  <input
-                    type="text"
-                    id="settings-end-script"
-                    aria-label="Script"
-                    value={(endCondition as any).script || ""}
-                    onChange={(e) =>
-                      handleEndConditionFieldChange("script", e.target.value)
-                    }
-                    placeholder="npm test"
-                    className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-                  />
-                </label>
-
-                {/* Row 2: Compare Source + Expected Return */}
-                <DrawerRow narrow={isNarrow}>
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="settings-end-compare-source"
-                      className="text-[11px] font-semibold text-description-fg"
-                      title="Auto: 'true'/'false' check exit code; other values check stdout. Stdout: always compare stdout. Stderr: compare stderr. Exit Code: compare numeric exit code."
-                    >
-                      Compare Source:
-                    </label>
-                    <CustomSelect
-                      id="settings-end-compare-source"
-                      value={(endCondition as any).compareSource ?? "auto"}
-                      onChange={(v) =>
-                        handleEndConditionFieldChange(
-                          "compareSource",
-                          v as EndConditionCompareSource
-                        )
-                      }
-                      options={COMPARE_SOURCE_OPTIONS}
-                    />
-                    <span className="text-[10px] text-description-fg">
-                      {((endCondition as any).compareSource ?? "auto") ===
-                      "auto"
-                        ? "'true'/'false' use exit code; other values check stdout"
-                        : ((endCondition as any).compareSource ?? "auto") ===
-                            "stdout"
-                          ? "Compares stdout output (requires clean exit)"
-                          : ((endCondition as any).compareSource ?? "auto") ===
-                              "stderr"
-                            ? "Compares stderr output (exit code not checked)"
-                            : "Compares numeric exit code — use '0', '1', or 'true'/'false'"}
-                    </span>
-                  </div>
-
-                  <label
-                    htmlFor="settings-end-returns"
-                    className="flex flex-col gap-1"
-                  >
-                    <span className="text-[11px] font-semibold text-description-fg">
-                      Expected Return:
-                    </span>
-                    <input
-                      type="text"
-                      id="settings-end-returns"
-                      aria-label="Expected Return"
-                      value={(endCondition as any).returns || ""}
-                      onChange={(e) =>
-                        handleEndConditionFieldChange("returns", e.target.value)
-                      }
-                      placeholder="true"
-                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-                    />
-                  </label>
-                </DrawerRow>
-
-                {/* Row 3: Timeout + Max Retries */}
-                <DrawerRow narrow={isNarrow}>
-                  <label
-                    htmlFor="settings-end-timeout"
-                    className="flex flex-col gap-1"
-                  >
-                    <span className="text-[11px] font-semibold text-description-fg">
-                      Timeout (ms):
-                    </span>
-                    <input
-                      type="number"
-                      id="settings-end-timeout"
-                      aria-label="Timeout in milliseconds"
-                      value={endTimeoutInput}
-                      onChange={(e) => setEndTimeoutInput(e.target.value)}
-                      onBlur={() => {
-                        const parsed = parseInt(endTimeoutInput);
-                        const value =
-                          isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
-                        setEndTimeoutInput(String(value));
-                        handleEndConditionFieldChange("timeout", value);
-                      }}
-                      min={1000}
-                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-                    />
-                  </label>
-
-                  <label
-                    htmlFor="settings-end-retries"
-                    className="flex flex-col gap-1"
-                  >
-                    <span className="text-[11px] font-semibold text-description-fg">
-                      Max Retries:
-                    </span>
-                    <input
-                      type="number"
-                      id="settings-end-retries"
-                      aria-label="Maximum retries"
-                      value={endMaxRetriesInput}
-                      onChange={(e) => setEndMaxRetriesInput(e.target.value)}
-                      onBlur={() => {
-                        const parsed = parseInt(endMaxRetriesInput);
-                        const value = isNaN(parsed) ? 0 : parsed;
-                        setEndMaxRetriesInput(String(value));
-                        handleEndConditionFieldChange("maxRetries", value);
-                      }}
-                      min={-1}
-                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
-                    />
-                  </label>
-                </DrawerRow>
-
-                {/* Retry Prompt (full width) */}
-                <label
-                  htmlFor="settings-end-retry-prompt"
-                  className="flex flex-col gap-1"
-                >
-                  <span className="text-[11px] font-semibold text-description-fg">
-                    Retry Prompt:
-                  </span>
-                  <textarea
-                    id="settings-end-retry-prompt"
-                    aria-label="Retry Prompt"
-                    value={(endCondition as any).retryPrompt || ""}
-                    onChange={(e) =>
-                      handleEndConditionFieldChange(
-                        "retryPrompt",
-                        e.target.value
-                      )
-                    }
-                    rows={3}
-                    placeholder={
-                      "Validation failed: {error}\n\nPlease fix the issues."
-                    }
-                    className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none"
-                  />
-                </label>
-
-                {/* Resume Session on Retry (full width) */}
-                <label
-                  htmlFor="settings-end-resume-session-on-retry"
-                  className="flex items-center gap-2 mt-1 text-[11px] font-semibold text-description-fg cursor-pointer"
-                  title="When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
+                  htmlFor="settings-end-condition-enabled"
+                  className="flex items-center gap-2 text-[11px] font-semibold uppercase text-description-fg cursor-pointer mb-3"
+                  title="Validation runs after each prompt completes. Individual prompts can override or disable this."
                 >
                   <input
                     type="checkbox"
-                    id="settings-end-resume-session-on-retry"
-                    aria-label="Resume Session on Retry"
-                    checked={(endCondition as any).resumeSessionOnRetry ?? true}
-                    onChange={(e) =>
-                      handleEndConditionFieldChange(
-                        "resumeSessionOnRetry",
-                        e.target.checked
-                      )
-                    }
-                    className="w-4 h-4 accent-focus-border cursor-pointer"
+                    id="settings-end-condition-enabled"
+                    aria-label="Enable End Condition"
+                    checked={endConditionEnabled}
+                    onChange={(e) => handleEndConditionToggle(e.target.checked)}
+                    className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
                   />
-                  Resume Session on Retry
+                  Enable End Condition
                 </label>
+
+                {/* End condition fields — grayed out when disabled */}
+                <div
+                  className={`space-y-3 ${
+                    endConditionEnabled ? "" : "opacity-50 pointer-events-none"
+                  }`}
+                  title={
+                    endConditionEnabled
+                      ? undefined
+                      : "Enable End Condition to configure validation"
+                  }
+                >
+                  <ScriptConditionEditor
+                    variant="endCondition"
+                    value={workflowProperties.endCondition as ScriptConditionValue | null | undefined}
+                    onChange={handleEndConditionChange}
+                    narrow={isNarrow}
+                    disabled={!endConditionEnabled}
+                    idPrefix="settings-end"
+                  />
+                </div>
               </div>
-            </>
+
+              {/* Pre-Condition Section */}
+              <div>
+                <label
+                  htmlFor="settings-pre-condition-enabled"
+                  className="flex items-center gap-2 text-[11px] font-semibold uppercase text-description-fg cursor-pointer mb-3"
+                  title="Runs a script before each prompt. Use to gate execution based on a condition."
+                >
+                  <input
+                    type="checkbox"
+                    id="settings-pre-condition-enabled"
+                    aria-label="Enable Pre-Condition"
+                    checked={preConditionEnabled}
+                    onChange={(e) => handlePreConditionToggle(e.target.checked)}
+                    className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
+                  />
+                  Enable Pre-Condition
+                </label>
+
+                {/* Pre-condition fields — grayed out when disabled */}
+                <div
+                  className={`space-y-3 ${
+                    preConditionEnabled ? "" : "opacity-50 pointer-events-none"
+                  }`}
+                  title={
+                    preConditionEnabled
+                      ? undefined
+                      : "Enable Pre-Condition to configure"
+                  }
+                >
+                  <ScriptConditionEditor
+                    variant="preCondition"
+                    value={workflowProperties.preCondition as ScriptConditionValue | null | undefined}
+                    onChange={handlePreConditionChange}
+                    narrow={isNarrow}
+                    disabled={!preConditionEnabled}
+                    idPrefix="settings-pre"
+                  />
+                </div>
+              </div>
+            </div>
           )}
 
           {activePage === DRAWER_PAGES.MCP && (

@@ -542,8 +542,11 @@ export const PROMPT_PROPERTIES = {
 
   // Script step properties
   SCRIPT: "script",
-  CONTINUE_ON_FAILURE: "continueOnFailure",
   TIMEOUT: "timeout",
+  COMPARE_SOURCE: "compareSource",
+  RETURNS: "returns",
+  ON_PASS: "onPass",
+  ON_FAIL: "onFail",
 
   // Harness/Model properties
   HARNESS: "harness",
@@ -559,6 +562,8 @@ export const PROMPT_PROPERTIES = {
 
   // End condition root
   END_CONDITION: "endCondition",
+  // Pre-condition root
+  PRE_CONDITION: "preCondition",
 
   // Context injection
   PRIOR_CONTEXT: "priorContext",

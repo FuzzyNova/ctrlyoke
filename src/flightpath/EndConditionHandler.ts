@@ -4,6 +4,7 @@ import { SCRIPT_EXTENSIONS } from "../utils/ValidationUtils";
 import {
   PromptStep,
   type WorkflowAttemptTarget,
+  type EndConditionAction,
 } from "../types/FlightPathTypes";
 import { STATUS_MESSAGE_SEVERITY } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
@@ -94,8 +95,23 @@ export class EndConditionHandler {
     retryContext: RetryContext,
     sendRetryPrompt: SendRetryPromptCallback
   ): Promise<EndConditionHandlerResult> {
-    // Success case - continue to next prompt
-    if (evaluationResult.success) {
+    const onPass: EndConditionAction = prompt.endCondition?.onPass ?? "continue";
+    const onFail: EndConditionAction = prompt.endCondition?.onFail ?? "stopWorkflow";
+
+    // Apply maxRetries default of 1 when either field is "retry" and maxRetries is unset
+    if (
+      (onPass === "retry" || onFail === "retry") &&
+      prompt.endCondition &&
+      prompt.endCondition.maxRetries === undefined
+    ) {
+      prompt = {
+        ...prompt,
+        endCondition: { ...prompt.endCondition, maxRetries: 1 },
+      };
+    }
+
+    // Success case - apply onPass action
+    if (evaluationResult.passed) {
       Log.info("✅ End condition passed");
       this.promptQueue.resetRetryCount();
 
@@ -107,11 +123,42 @@ export class EndConditionHandler {
         currentResult.scriptOutput = evaluationResult.stdout;
       }
 
+      if (onPass === "stopWorkflow") {
+        const reason = "End condition passed with onPass: stopWorkflow";
+        retryContext.runtime.failAttempt(
+          retryContext.attemptTarget,
+          retryContext.attemptIndex,
+          reason
+        );
+        return { shouldContinue: false, failureReason: reason };
+      }
+
+      // "continue" or "retry" — advance to next step
+      // Note: onPass "retry" (re-run while passing) requires orchestrator-level loop support;
+      // for now it behaves as "continue" to avoid breaking workflow state.
+      if (onPass === "retry") {
+        Log.info(
+          "⚠️ onPass: retry is not yet fully implemented — advancing to next step"
+        );
+      }
+
       retryContext.runtime.completeAttempt(
         retryContext.attemptTarget,
         retryContext.attemptIndex
       );
 
+      return { shouldContinue: true };
+    }
+
+    // Failure case — apply onFail action
+    if (onFail === "continue") {
+      // Advance despite failure
+      Log.warn("⚠️ End condition failed, continuing due to onFail: continue");
+      this.promptQueue.resetRetryCount();
+      retryContext.runtime.completeAttempt(
+        retryContext.attemptTarget,
+        retryContext.attemptIndex
+      );
       return { shouldContinue: true };
     }
 
@@ -352,7 +399,7 @@ export class EndConditionHandler {
         );
 
       // Check if the retry succeeded
-      if (retryEvaluation.success) {
+      if (retryEvaluation.passed) {
         Log.info("✅ End condition passed after retry");
         this.promptQueue.resetRetryCount();
 

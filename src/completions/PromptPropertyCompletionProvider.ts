@@ -41,11 +41,32 @@ export class PromptPropertyCompletionProvider
       insertSnippet: "timeout: ",
     },
     {
-      key: PROMPT_PROPERTIES.CONTINUE_ON_FAILURE,
-      detail: "Continue workflow on non-zero exit (boolean)",
+      key: PROMPT_PROPERTIES.COMPARE_SOURCE,
+      detail: "Output source to compare against returns",
       documentation:
-        "When `true`, a non-zero exit code is treated as a warning and the workflow continues. Default: `false`.",
-      insertSnippet: `${PROMPT_PROPERTIES.CONTINUE_ON_FAILURE}: `,
+        "Which output to compare against `returns`. `auto` (default): `true`/`false` use exit code, other values compare stdout. `stdout`: always compare stdout. `stderr`: compare stderr. `exitCode`: compare the numeric exit code.",
+      insertSnippet: `${PROMPT_PROPERTIES.COMPARE_SOURCE}: `,
+    },
+    {
+      key: PROMPT_PROPERTIES.RETURNS,
+      detail: "Expected return value",
+      documentation:
+        "Expected result to compare against. When absent, exit code 0 = pass. Interpretation depends on `compareSource` (default auto).",
+      insertSnippet: `${PROMPT_PROPERTIES.RETURNS}: `,
+    },
+    {
+      key: PROMPT_PROPERTIES.ON_PASS,
+      detail: "Action on script pass: continue | stopWorkflow",
+      documentation:
+        "What to do when the script passes. `continue`: advance the queue (default). `stopWorkflow`: halt execution.",
+      insertSnippet: `${PROMPT_PROPERTIES.ON_PASS}: `,
+    },
+    {
+      key: PROMPT_PROPERTIES.ON_FAIL,
+      detail: "Action on script fail: continue | stopWorkflow",
+      documentation:
+        "What to do when the script fails. `stopWorkflow`: halt execution (default). `continue`: log a warning and advance the queue.",
+      insertSnippet: `${PROMPT_PROPERTIES.ON_FAIL}: `,
     },
   ];
 
@@ -146,8 +167,15 @@ export class PromptPropertyCompletionProvider
       key: PROMPT_PROPERTIES.END_CONDITION,
       detail: "Validation script run after AI response",
       documentation:
-        "End condition evaluated after the AI responds. If the condition fails, the step retries with `retryPrompt`.",
+        "End condition evaluated after the AI responds. If the condition fails, the step retries with `retryPrompt`. Supports `onPass` and `onFail` actions: continue | retry | stopWorkflow.",
       insertSnippet: `${PROMPT_PROPERTIES.END_CONDITION}:\n  script: \n  returns: "true"`,
+    },
+    {
+      key: PROMPT_PROPERTIES.PRE_CONDITION,
+      detail: "Script gate evaluated before the AI prompt runs",
+      documentation:
+        "Pre-condition script that gates whether the prompt runs. `onPass` (default: continue) and `onFail` (default: skipPrompt) control the outcome. Actions: continue | skipPrompt | stopWorkflow.",
+      insertSnippet: `${PROMPT_PROPERTIES.PRE_CONDITION}:\n  script: \n  onFail: skipPrompt`,
     },
     {
       key: "allowDynamicExtension",
@@ -365,7 +393,7 @@ export class PromptPropertyCompletionProvider
     scriptItem.documentation = new vscode.MarkdownString(
       "Runs a shell command or script file with no AI interaction.\n\n" +
         "Required additional property: `script` (the command or path to execute).\n\n" +
-        "Optional: `timeout` (ms), `continueOnFailure` (bool)."
+        "Optional: `timeout` (ms), `compareSource`, `returns`, `onPass`, `onFail`."
     );
     scriptItem.insertText = STEP_TYPES.SCRIPT;
     scriptItem.sortText = `1_${STEP_TYPES.SCRIPT}`;
