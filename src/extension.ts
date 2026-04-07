@@ -35,6 +35,10 @@ import { PATH_CONSTANTS } from "./utils/ConfigurationUtils";
 import { initPtyProcessManager } from "./flightpath/harness/PtyProcessManager";
 import { FlightPathMcpServerProvider } from "./ui/FlightPathMcpServerProvider";
 import { configService } from "./config/FlightPathConfigService";
+import {
+  createUserConfigBackend,
+  createWorkspaceConfigBackend,
+} from "./config/FileConfigBackend";
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: FlightPathWebviewProvider;
@@ -312,6 +316,21 @@ export async function activate(context: vscode.ExtensionContext) {
           );
         }
       });
+    }
+
+    // Initialize config service with file-based backends so settings from
+    // ~/.flightpath/settings.json and <workspace>/.flightpath/settings.json
+    // are resolved by ConfigurationUtils throughout the extension.
+    const userConfigBackend = createUserConfigBackend(() => {
+      configService.notify();
+    });
+    configService.setUserBackend(userConfigBackend);
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      const workspaceConfigBackend = createWorkspaceConfigBackend(
+        workspaceFolders[0].uri.fsPath,
+        () => { configService.notify(); }
+      );
+      configService.setWorkspaceBackend(workspaceConfigBackend);
     }
 
     // Register React webview provider (Phase 4 - unified provider)
