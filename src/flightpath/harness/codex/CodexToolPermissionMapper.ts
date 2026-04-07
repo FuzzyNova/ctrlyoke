@@ -13,21 +13,21 @@ import { PERMISSION_MODES } from "../../../types/DashboardConstants";
  *
  * Codex CLI uses mode-based permissions (no granular tool patterns):
  * - dangerouslyAllowAll → --dangerously-bypass-approvals-and-sandbox
- * - allowAll → --full-auto
- * - custom → --sandbox <mode> --approval <policy>
+ * - allowAll → --full-auto (= workspace-write sandbox + on-request approval)
+ * - custom → -s <sandboxMode> -a <approvalPolicy>
  *
  * Note: Codex does NOT support granular tool patterns like Copilot/Claude.
  * Tool permissions are controlled via sandbox modes and approval policies.
  *
- * Sandbox modes:
- * - "none": No restrictions
- * - "filesystem": Restrict filesystem access to workspace
- * - "network": Restrict network access
+ * Sandbox modes (-s / --sandbox):
+ * - "read-only": Read-only filesystem access
+ * - "workspace-write": Read + write within workspace (default for --full-auto)
+ * - "danger-full-access": Unrestricted filesystem access (dangerous)
  *
- * Approval policies:
- * - "auto": Auto-approve all actions
- * - "interactive": Require user approval
- * - "deny": Deny all actions
+ * Approval policies (-a / --ask-for-approval):
+ * - "untrusted": Only run trusted read commands without asking; escalate others
+ * - "on-request": Model decides when to ask (default for --full-auto)
+ * - "never": Never ask for approval (dangerous)
  *
  * If allowedTools or deniedTools are configured, a warning is logged
  * since Codex doesn't support them.

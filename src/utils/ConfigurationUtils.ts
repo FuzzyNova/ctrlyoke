@@ -87,6 +87,8 @@ function getModelSettingKeyForHarness(harness: Harness): string {
       return "codexCliModel";
     case Harness.OpenCodeCli:
       return "openCodeCliModel";
+    case Harness.QwenCli:
+      return "qwenCliModel";
     case Harness.GeminiCli:
       return "geminiCliModel";
     default:
