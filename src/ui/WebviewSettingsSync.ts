@@ -322,6 +322,7 @@ export class WebviewSettingsSync {
         mcpServers: workingFile.mcpServers,
         hooks: workingFile.hooks,
         endCondition: workingFile.endCondition,
+        preCondition: workingFile.preCondition,
         priorContext: workingFile.priorContext,
         additionalArgs: workingFile.additionalArgs,
         toolPermissions: workingFile.toolPermissions,
