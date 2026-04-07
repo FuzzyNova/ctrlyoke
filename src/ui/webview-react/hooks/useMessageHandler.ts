@@ -70,6 +70,42 @@ export function sendMessage(
   vscode.postMessage({ type, ...payload });
 }
 
+// ============================================================================
+// Theme Capture Helper
+// ============================================================================
+
+/**
+ * Captures all --vscode-* CSS custom properties from :root and posts them
+ * back to the extension as THEME_VARS_CAPTURED so the server can forward
+ * them to external browser clients.
+ */
+export function captureAndSendThemeVars(
+  vscodeApi: ReturnType<typeof getVsCodeApi>
+): void {
+  const style = window.getComputedStyle(document.documentElement);
+  const vars: Record<string, string> = {};
+  try {
+    for (const sheet of document.styleSheets) {
+      try {
+        for (const rule of sheet.cssRules) {
+          if (rule instanceof CSSStyleRule && rule.selectorText === ":root") {
+            for (const prop of rule.style) {
+              if (prop.startsWith("--vscode-")) {
+                vars[prop] = style.getPropertyValue(prop).trim();
+              }
+            }
+          }
+        }
+      } catch {
+        /* cross-origin sheet, skip */
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  vscodeApi.postMessage({ type: MESSAGE_TYPES.THEME_VARS_CAPTURED, vars });
+}
+
 function normalizeWorkflowProperties(
   workflowProperties?: Partial<WorkflowProperties>
 ): WorkflowProperties {
@@ -1226,6 +1262,31 @@ function createMessageHandlers(): MessageHandlerMap {
     useWorkflowStore
       .getState()
       .updateHistoryStepUndoRecord(m.target, m.undoRecord);
+  };
+
+  // --------------------------------------------------------------------------
+  // SERVER_STARTED - Extension started the server; store URL and running state
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SERVER_STARTED] = (message) => {
+    const settingsStore = useSettingsStore.getState();
+    settingsStore.setServerRunning(true);
+    settingsStore.setServerUrl(message.url ?? null);
+  };
+
+  // --------------------------------------------------------------------------
+  // SERVER_STOPPED - Extension stopped the server
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SERVER_STOPPED] = (_message) => {
+    const settingsStore = useSettingsStore.getState();
+    settingsStore.setServerRunning(false);
+    settingsStore.setServerUrl(null);
+  };
+
+  // --------------------------------------------------------------------------
+  // CAPTURE_THEME_VARS - Extension wants the webview to capture --vscode-* CSS vars
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.CAPTURE_THEME_VARS] = (_message) => {
+    captureAndSendThemeVars(getVsCodeApi());
   };
 
   // ========================================================================

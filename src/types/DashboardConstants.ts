@@ -149,6 +149,17 @@ export const MESSAGE_TYPES = {
   WORKFLOW_SUMMARY_UPDATED: "workflowSummaryUpdated", // Execution state changed: { summary: WorkflowSummary }
   ACTIVE_WORKFLOW_CHANGED: "activeWorkflowChanged", // Active selection changed: { workflowId }
 
+  // VS Code-hosted server — Extension → Webview
+  SERVER_STARTED: "serverStarted", // Server started: { url: string }
+  SERVER_STOPPED: "serverStopped", // Server stopped
+
+  // VS Code-hosted server — Extension → Webview (theme forwarding)
+  CAPTURE_THEME_VARS: "captureThemeVars", // Request webview to capture --vscode-* CSS vars
+  THEME_VARS_UPDATED: "themeVarsUpdated", // Broadcast updated theme vars to browser clients: { vars: Record<string, string> }
+
+  // VS Code-hosted server — Webview → Extension (theme forwarding)
+  THEME_VARS_CAPTURED: "themeVarsCaptured", // Webview captured CSS vars: { vars: Record<string, string> }
+
   // CLI Watch Mode — Extension → Webview
   CLI_WATCH_OUTPUT: "cliWatchOutput", // Live output update from CLI-managed workflow: { workflowId, stepIndex, output }
 

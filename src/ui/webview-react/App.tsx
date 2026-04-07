@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
-import { useMessageHandler } from "@hooks/useMessageHandler";
+import { useMessageHandler, captureAndSendThemeVars } from "@hooks/useMessageHandler";
 import { useUndoRedoKeyHandler } from "@hooks/useUndoRedoKeyHandler";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
@@ -106,6 +106,8 @@ function App() {
   // Signal ready to extension
   useEffect(() => {
     vscode.postMessage({ type: MESSAGE_TYPES.READY });
+    // Capture VS Code theme variables on mount and send to extension for server theme forwarding
+    captureAndSendThemeVars(vscode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // vscode is a stable singleton — never changes
 

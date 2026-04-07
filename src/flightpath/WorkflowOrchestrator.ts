@@ -221,6 +221,10 @@ export class WorkflowOrchestrator {
     this.dashboardBroadcastHub.removeClient(provider);
   }
 
+  public getDashboardBroadcastHub(): DashboardBroadcastHub {
+    return this.dashboardBroadcastHub;
+  }
+
   /** Set the MCP server provider for injecting user-defined MCP servers (chat harness) */
   public setMcpServerProvider(provider: FlightPathMcpServerProvider): void {
     this.mcpServerProvider = provider;

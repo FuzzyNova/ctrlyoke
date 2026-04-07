@@ -893,6 +893,16 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   /**
+   * Wire up a callback for when the webview captures CSS theme vars.
+   * Used by FlightPathHostedServer to forward theme vars to browser clients.
+   */
+  public setThemeVarsCapturedCallback(
+    cb: ((vars: Record<string, string>) => void) | undefined
+  ): void {
+    this.router.setThemeVarsCapturedCallback(cb);
+  }
+
+  /**
    * Open new workflow modal in the webview
    */
   public openNewWorkflowModal(): void {

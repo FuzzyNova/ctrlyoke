@@ -50,6 +50,7 @@ import {
 export class WebviewMessageRouter {
   private routeQueue: Promise<void> = Promise.resolve();
   private scopedPostMessage?: PostMessageFn;
+  private themeVarsCapturedCallback?: (vars: Record<string, string>) => void;
 
   private readonly handlers: Map<
     string,
@@ -64,6 +65,12 @@ export class WebviewMessageRouter {
     private readonly callbacks: WebviewRouterCallbacks
   ) {
     this.handlers = this.buildDispatchTable();
+  }
+
+  setThemeVarsCapturedCallback(
+    cb: ((vars: Record<string, string>) => void) | undefined
+  ): void {
+    this.themeVarsCapturedCallback = cb;
   }
 
   /**
@@ -459,6 +466,10 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.DISABLE_SERVER, () => {
       this.settingsSync.handleDisableServer(this.getCurrentPostMessage());
+    });
+
+    table.set(MESSAGE_TYPES.THEME_VARS_CAPTURED, (message) => {
+      this.themeVarsCapturedCallback?.(message.vars);
     });
 
     // ── Settings — Workflow Properties ───────────────────────────────────

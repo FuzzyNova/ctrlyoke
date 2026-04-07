@@ -170,6 +170,31 @@ const copyScriptsPlugin = {
   },
 };
 
+/**
+ * Plugin to copy server static files to output directory
+ * @type {import('esbuild').Plugin}
+ */
+const copyServerPlugin = {
+  name: "copy-server",
+
+  setup(build) {
+    build.onEnd(() => {
+      const srcServer = path.join(__dirname, "src", "server");
+      const outServer = path.join(__dirname, "out", "server");
+
+      if (!fs.existsSync(outServer)) {
+        fs.mkdirSync(outServer, { recursive: true });
+      }
+
+      const shimSrc = path.join(srcServer, "standalone-shim.js");
+      if (fs.existsSync(shimSrc)) {
+        fs.copyFileSync(shimSrc, path.join(outServer, "standalone-shim.js"));
+        console.log("[copy] standalone-shim.js -> out/server/standalone-shim.js");
+      }
+    });
+  },
+};
+
 async function main() {
   // Build main extension
   const ctx = await esbuild.context({
@@ -181,7 +206,7 @@ async function main() {
     sourcesContent: false,
     platform: "node",
     outfile: "out/extension.js",
-    external: ["vscode", "node-pty"],
+    external: ["vscode", "node-pty", "express", "ws"],
     logLevel: "silent",
     define: defineConstants,
     plugins: [
@@ -190,6 +215,7 @@ async function main() {
       copyTemplatesPlugin,
       copySchemasPlugin,
       copyScriptsPlugin,
+      copyServerPlugin,
     ],
   });
 

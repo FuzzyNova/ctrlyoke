@@ -6,9 +6,11 @@ import { PromptPropertyCompletionProvider } from "./completions/PromptPropertyCo
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
 import { FlightPathWebviewProvider } from "./ui/FlightPathWebviewProvider";
+import { FlightPathHostedServer } from "./server/FlightPathHostedServer";
 import {
   EXECUTION_STATES,
   QUEUE_POSITION,
+  MESSAGE_TYPES,
   type QueuePosition,
 } from "./types/DashboardConstants";
 import {
@@ -32,9 +34,11 @@ import { WorkspaceInitializer } from "./flightpath/orchestration/WorkspaceInitia
 import { PATH_CONSTANTS } from "./utils/ConfigurationUtils";
 import { initPtyProcessManager } from "./flightpath/harness/PtyProcessManager";
 import { FlightPathMcpServerProvider } from "./ui/FlightPathMcpServerProvider";
+import { configService } from "./config/FlightPathConfigService";
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: FlightPathWebviewProvider;
+let hostedServer: FlightPathHostedServer | undefined;
 
 /**
  * Register Language Model Tools for VS Code Chat integration
@@ -367,6 +371,19 @@ export async function activate(context: vscode.ExtensionContext) {
         `FlightPath: Initialization failed: ${err}`
       );
     });
+
+    // Re-capture theme vars when VS Code theme changes
+    context.subscriptions.push(
+      vscode.window.onDidChangeActiveColorTheme(() => {
+        webviewProvider.postMessage({ type: MESSAGE_TYPES.CAPTURE_THEME_VARS });
+      })
+    );
+
+    // Auto-start hosted server if enabled in config
+    const serverConfig = configService.get("server");
+    if (serverConfig?.enabled) {
+      void vscode.commands.executeCommand("flightpath.enableServer");
+    }
 
     // Register completion provider for prompt files (JSON, YAML, and Markdown)
     // Two triggers: @ for full file references, # for snippets (line ranges, selections)
@@ -836,6 +853,35 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
+  // Server commands
+  const enableServerCommand = vscode.commands.registerCommand(
+    "flightpath.enableServer",
+    () => {
+      if (hostedServer) return;
+      const hub = workflowOrchestrator.getDashboardBroadcastHub();
+      const port = configService.get("server")?.port ?? 3000;
+      hostedServer = new FlightPathHostedServer(hub, webviewProvider, port);
+      const url = hostedServer.listen();
+      webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STARTED, url });
+      webviewProvider.setThemeVarsCapturedCallback((vars) =>
+        hostedServer?.updateThemeVars(vars)
+      );
+      webviewProvider.postMessage({ type: MESSAGE_TYPES.CAPTURE_THEME_VARS });
+      Log.info(`FlightPath: Hosted server started at ${url}`);
+    }
+  );
+
+  const disableServerCommand = vscode.commands.registerCommand(
+    "flightpath.disableServer",
+    () => {
+      hostedServer?.dispose();
+      hostedServer = undefined;
+      webviewProvider.setThemeVarsCapturedCallback(undefined);
+      webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STOPPED });
+      Log.info("FlightPath: Hosted server stopped");
+    }
+  );
+
   // Add all production commands to subscriptions
   context.subscriptions.push(
     openPanelCommand,
@@ -862,7 +908,9 @@ function registerCommands(context: vscode.ExtensionContext) {
     openFileWithSelectionCommand,
     clearWorkflowCommand,
     openGitChangeCommand,
-    initWorkspaceCommand
+    initWorkspaceCommand,
+    enableServerCommand,
+    disableServerCommand
   );
 
   // Register development commands (only in dev mode)
@@ -876,6 +924,9 @@ function registerCommands(context: vscode.ExtensionContext) {
 
 export function deactivate() {
   Log.debug("FlightPath: Extension deactivating...");
+
+  hostedServer?.dispose();
+  hostedServer = undefined;
 
   if (workflowOrchestrator) {
     workflowOrchestrator.dispose();

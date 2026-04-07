@@ -901,26 +901,13 @@ export class WebviewSettingsSync {
     await this.handleGlobalSettingsLoadRequest(postMessage);
   }
 
-  async handleEnableServer(postMessage: PostMessageFn): Promise<void> {
-    // Stub: server implementation pending STANDALONE_SERVER_PLAN
+  async handleEnableServer(_postMessage: PostMessageFn): Promise<void> {
     await configService.set("server.enabled", true, "user");
-    postMessage({
-      type: MESSAGE_TYPES.GLOBAL_SETTING_UPDATED,
-      path: "server.enabled",
-      value: true,
-      source: "user",
-    });
-    Log.info("[WebviewSettingsSync] Server enable requested (stub — server not yet implemented)");
+    await vscode.commands.executeCommand("flightpath.enableServer");
   }
 
-  async handleDisableServer(postMessage: PostMessageFn): Promise<void> {
+  async handleDisableServer(_postMessage: PostMessageFn): Promise<void> {
     await configService.set("server.enabled", false, "user");
-    postMessage({
-      type: MESSAGE_TYPES.GLOBAL_SETTING_UPDATED,
-      path: "server.enabled",
-      value: false,
-      source: "user",
-    });
-    Log.info("[WebviewSettingsSync] Server disable requested (stub — server not yet implemented)");
+    await vscode.commands.executeCommand("flightpath.disableServer");
   }
 }

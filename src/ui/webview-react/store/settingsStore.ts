@@ -142,6 +142,9 @@ interface SettingsState {
 
   // Server running state (toggled by ENABLE_SERVER / DISABLE_SERVER)
   serverRunning: boolean;
+
+  // Server URL (set when server starts, cleared when stopped)
+  serverUrl: string | null;
 }
 
 /**
@@ -187,6 +190,9 @@ interface SettingsActions {
 
   // Server running state
   setServerRunning: (running: boolean) => void;
+
+  // Server URL
+  setServerUrl: (url: string | null) => void;
 
   // Effective value resolution (workflow > global)
   getEffectiveHarness: () => HarnessId;
@@ -281,6 +287,7 @@ const initialState: SettingsState = {
   workflowLoaded: false,
   fullGlobalSettings: null,
   serverRunning: false,
+  serverUrl: null,
 };
 
 export const useSettingsStore = create<SettingsState & SettingsActions>(
@@ -382,6 +389,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     setFullGlobalSettings: (settings) => set({ fullGlobalSettings: settings }),
 
     setServerRunning: (running) => set({ serverRunning: running }),
+
+    setServerUrl: (url) => set({ serverUrl: url }),
 
     // ============================================================================
     // EFFECTIVE VALUE RESOLUTION (Workflow > Global)
