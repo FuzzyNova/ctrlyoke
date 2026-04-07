@@ -237,6 +237,30 @@ module.exports = {
           "0%": { transform: "translateX(0)" },
           "100%": { transform: "translateX(100%)" },
         },
+        "slide-down-fade-in": {
+          from: {
+            opacity: "0",
+            maxHeight: "0px",
+            transform: "translateY(-6px)",
+          },
+          to: {
+            opacity: "1",
+            maxHeight: "800px",
+            transform: "translateY(0)",
+          },
+        },
+        "slide-down-fade-out": {
+          from: {
+            opacity: "1",
+            maxHeight: "800px",
+            transform: "translateY(0)",
+          },
+          to: {
+            opacity: "0",
+            maxHeight: "0px",
+            transform: "translateY(-6px)",
+          },
+        },
       },
 
       animation: {
@@ -247,6 +271,8 @@ module.exports = {
         "slide-in-right": "slide-in-right 0.25s ease-out",
         "slide-out-left": "slide-out-left 0.22s ease-in forwards",
         "slide-out-right": "slide-out-right 0.22s ease-in forwards",
+        "slide-down-in": "slide-down-fade-in 300ms ease-out forwards",
+        "slide-down-out": "slide-down-fade-out 300ms ease-in forwards",
       },
 
       fontFamily: {

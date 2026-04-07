@@ -39,6 +39,7 @@ import {
   getPermissionHarnessSupport,
   ScriptConditionEditor,
   type ScriptConditionValue,
+  AnimatedSection,
 } from "../shared";
 import { HooksEditor } from "../editor/HooksEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
@@ -1140,8 +1141,8 @@ export const WorkflowPropertiesPanel: React.FC<{
                   Enable Pre-Condition
                 </label>
 
-                {/* Pre-condition fields — hidden when disabled */}
-                {preConditionEnabled && (
+                {/* Pre-condition fields — animated slide-down on show/hide */}
+                <AnimatedSection visible={preConditionEnabled}>
                   <div className="space-y-3">
                     <ScriptConditionEditor
                       variant="preCondition"
@@ -1157,7 +1158,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                       idPrefix="settings-pre"
                     />
                   </div>
-                )}
+                </AnimatedSection>
               </div>
               {/* End Condition Section */}
               <div>
@@ -1177,8 +1178,8 @@ export const WorkflowPropertiesPanel: React.FC<{
                   Enable End Condition
                 </label>
 
-                {/* End condition fields — hidden when disabled */}
-                {endConditionEnabled && (
+                {/* End condition fields — animated slide-down on show/hide */}
+                <AnimatedSection visible={endConditionEnabled}>
                   <div className="space-y-3">
                     <ScriptConditionEditor
                       variant="endCondition"
@@ -1194,7 +1195,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                       idPrefix="settings-end"
                     />
                   </div>
-                )}
+                </AnimatedSection>
               </div>
             </div>
           )}

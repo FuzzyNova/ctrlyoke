@@ -45,3 +45,4 @@ export {
   ScriptConditionEditor,
   type ScriptConditionValue,
 } from "./ScriptConditionEditor";
+export { AnimatedSection } from "./AnimatedSection";

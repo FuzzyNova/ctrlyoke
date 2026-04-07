@@ -39,6 +39,7 @@ import {
   buildPermissionsDefaultLabel,
   ScriptConditionEditor,
   type ScriptConditionValue,
+  AnimatedSection,
 } from "../shared";
 import { HooksEditor } from "./HooksEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
@@ -687,8 +688,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
               </div>
 
-              {/* Pre-condition fields — hidden when disabled */}
-              {properties.preCondition !== undefined && (
+              {/* Pre-condition fields — animated slide-down on show/hide */}
+              <AnimatedSection visible={properties.preCondition !== undefined}>
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ScriptConditionEditor
                     variant="preCondition"
@@ -709,7 +710,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     idPrefix="prop-pre"
                   />
                 </div>
-              )}
+              </AnimatedSection>
             </div>
             {/* End Condition Section */}
             <div>
@@ -729,8 +730,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
               </div>
 
-              {/* End condition fields — hidden when disabled */}
-              {properties.endCondition && (
+              {/* End condition fields — animated slide-down on show/hide */}
+              <AnimatedSection visible={!!properties.endCondition}>
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ScriptConditionEditor
                     variant="endCondition"
@@ -750,7 +751,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     idPrefix="prop-end"
                   />
                 </div>
-              )}
+              </AnimatedSection>
             </div>
           </div>
         )}
