@@ -453,9 +453,13 @@ export class WorkflowExecutor {
     const resolvedPreCondition =
       prompt.preCondition !== undefined
         ? prompt.preCondition
-        : workflowFileForPre.preCondition ?? null;
+        : (workflowFileForPre.preCondition ?? null);
 
-    if (resolvedPreCondition !== null && resolvedPreCondition !== undefined) {
+    if (
+      resolvedPreCondition !== null &&
+      resolvedPreCondition !== undefined &&
+      resolvedPreCondition.script?.trim()
+    ) {
       const preResult = await this.endConditionEvaluator.evaluateCondition(
         resolvedPreCondition,
         context.workspaceFolderPath,
@@ -728,7 +732,8 @@ export class WorkflowExecutor {
       phase: FINAL_STEP_PHASES.FINAL_STEP,
       loopCount: target.loopIndex,
       status: STEP_STATUS.SKIPPED,
-      startedAt: this.promptQueue.getFinalStepRuntime()?.startedAt ?? Date.now(),
+      startedAt:
+        this.promptQueue.getFinalStepRuntime()?.startedAt ?? Date.now(),
       completedAt: Date.now(),
     });
 
@@ -833,7 +838,10 @@ export class WorkflowExecutor {
     if (signedStepIndex >= 0) {
       context.captureCompletedOutput?.(signedStepIndex, scriptCliOutput);
     } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      context.captureFinalStepCompletedOutput?.(target.loopIndex, scriptCliOutput);
+      context.captureFinalStepCompletedOutput?.(
+        target.loopIndex,
+        scriptCliOutput
+      );
     }
 
     if (context.historyFilePath && context.outputHistoryManager) {
@@ -859,8 +867,12 @@ export class WorkflowExecutor {
 
     const onPass = step.onPass ?? "continue";
     const onFail = step.onFail ?? "stopWorkflow";
-    const shouldContinue = succeeded ? onPass !== "stopWorkflow" : onFail !== "stopWorkflow";
-    const terminalStatus = shouldContinue ? STEP_STATUS.COMPLETED : STEP_STATUS.FAILED;
+    const shouldContinue = succeeded
+      ? onPass !== "stopWorkflow"
+      : onFail !== "stopWorkflow";
+    const terminalStatus = shouldContinue
+      ? STEP_STATUS.COMPLETED
+      : STEP_STATUS.FAILED;
 
     if (!succeeded && onFail === "stopWorkflow") {
       Log.error(

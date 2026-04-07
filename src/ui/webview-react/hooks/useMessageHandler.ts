@@ -83,6 +83,7 @@ function normalizeWorkflowProperties(
     mcpServers: workflowProperties?.mcpServers,
     hooks: workflowProperties?.hooks,
     endCondition: workflowProperties?.endCondition,
+    preCondition: workflowProperties?.preCondition,
     priorContext: workflowProperties?.priorContext,
     additionalArgs: workflowProperties?.additionalArgs,
     toolPermissions: workflowProperties?.toolPermissions,
