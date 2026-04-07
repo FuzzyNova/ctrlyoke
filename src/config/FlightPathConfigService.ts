@@ -1,0 +1,164 @@
+import type {
+  FlightPathGlobalSettings,
+  PartialFlightPathSettings,
+} from "../types/FlightPathSettings";
+import { FLIGHTPATH_SETTINGS_DEFAULTS } from "../types/FlightPathSettings";
+
+export type SettingSource = "cli" | "workspace" | "user" | "default";
+
+export interface ResolvedSetting<T> {
+  value: T;
+  source: SettingSource;
+}
+
+export interface ConfigBackend {
+  getAll(): PartialFlightPathSettings;
+  set<T>(path: string, value: T): Promise<void>;
+}
+
+/** Deep merge: source properties override target; objects are merged recursively, arrays/primitives are replaced */
+function deepMerge<T extends Record<string, unknown>>(
+  target: T,
+  source: Partial<T>
+): T {
+  const result = { ...target };
+  for (const key of Object.keys(source) as (keyof T)[]) {
+    const sourceVal = source[key];
+    const targetVal = result[key];
+    if (
+      sourceVal !== undefined &&
+      sourceVal !== null &&
+      typeof sourceVal === "object" &&
+      !Array.isArray(sourceVal) &&
+      typeof targetVal === "object" &&
+      targetVal !== null &&
+      !Array.isArray(targetVal)
+    ) {
+      result[key] = deepMerge(
+        targetVal as Record<string, unknown>,
+        sourceVal as Record<string, unknown>
+      ) as T[keyof T];
+    } else if (sourceVal !== undefined) {
+      result[key] = sourceVal as T[keyof T];
+    }
+  }
+  return result;
+}
+
+export class FlightPathConfigService {
+  private workspaceBackend?: ConfigBackend;
+  private userBackend?: ConfigBackend;
+  private cliOverlay?: PartialFlightPathSettings;
+  private listeners: Set<() => void> = new Set();
+
+  setWorkspaceBackend(backend: ConfigBackend): void {
+    this.workspaceBackend = backend;
+  }
+
+  setUserBackend(backend: ConfigBackend): void {
+    this.userBackend = backend;
+  }
+
+  setCliOverlay(overlay: PartialFlightPathSettings): void {
+    this.cliOverlay = overlay;
+  }
+
+  /** Get a top-level setting with source tracking */
+  resolve<K extends keyof FlightPathGlobalSettings>(
+    key: K
+  ): ResolvedSetting<FlightPathGlobalSettings[K]> {
+    if (this.cliOverlay && key in this.cliOverlay) {
+      return { value: this.getAll()[key], source: "cli" };
+    }
+    if (this.workspaceBackend && key in this.workspaceBackend.getAll()) {
+      return { value: this.getAll()[key], source: "workspace" };
+    }
+    if (this.userBackend && key in this.userBackend.getAll()) {
+      return { value: this.getAll()[key], source: "user" };
+    }
+    return { value: this.getAll()[key], source: "default" };
+  }
+
+  /** Get a top-level setting value (no source info) */
+  get<K extends keyof FlightPathGlobalSettings>(
+    key: K
+  ): FlightPathGlobalSettings[K] {
+    return this.getAll()[key];
+  }
+
+  /** Get a nested setting value using dot notation (e.g. "execution.mode") */
+  getNested(path: string): unknown {
+    const parts = path.split(".");
+    let current: unknown = this.getAll();
+    for (const part of parts) {
+      if (
+        current === null ||
+        current === undefined ||
+        typeof current !== "object"
+      ) {
+        return undefined;
+      }
+      current = (current as Record<string, unknown>)[part];
+    }
+    return current;
+  }
+
+  /** Get all settings merged from all backends */
+  getAll(): FlightPathGlobalSettings {
+    let result: FlightPathGlobalSettings = {
+      ...FLIGHTPATH_SETTINGS_DEFAULTS,
+    } as FlightPathGlobalSettings;
+
+    if (this.userBackend) {
+      result = deepMerge(
+        result as unknown as Record<string, unknown>,
+        this.userBackend.getAll() as unknown as Record<string, unknown>
+      ) as unknown as FlightPathGlobalSettings;
+    }
+
+    if (this.workspaceBackend) {
+      result = deepMerge(
+        result as unknown as Record<string, unknown>,
+        this.workspaceBackend.getAll() as unknown as Record<string, unknown>
+      ) as unknown as FlightPathGlobalSettings;
+    }
+
+    if (this.cliOverlay) {
+      result = deepMerge(
+        result as unknown as Record<string, unknown>,
+        this.cliOverlay as unknown as Record<string, unknown>
+      ) as unknown as FlightPathGlobalSettings;
+    }
+
+    return result;
+  }
+
+  /** Set a setting at workspace or user scope using dot notation path */
+  async set(
+    path: string,
+    value: unknown,
+    scope: "workspace" | "user"
+  ): Promise<void> {
+    const backend =
+      scope === "workspace" ? this.workspaceBackend : this.userBackend;
+    if (!backend) {
+      throw new Error(`No ${scope} backend configured`);
+    }
+    await backend.set(path, value);
+  }
+
+  /** Subscribe to config changes */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  /** Notify all subscribers */
+  notify(): void {
+    this.listeners.forEach((listener) => listener());
+  }
+}
+
+export const configService = new FlightPathConfigService();

@@ -230,6 +230,10 @@ interface UiState {
   mobilePromptsOpen: boolean;
   mobilePromptsMode: "sidebar" | "fullwidth";
   mobileSettingsOpen: boolean;
+
+  // Global settings drawer state
+  globalSettingsOpen: boolean;
+  globalSettingsActiveTab: string;
 }
 
 /**
@@ -380,6 +384,11 @@ interface UiActions {
   closeMobilePrompts: () => void;
   closeMobileSettings: () => void;
 
+  // Global settings drawer actions
+  toggleGlobalSettings: () => void;
+  closeGlobalSettings: () => void;
+  setGlobalSettingsTab: (tab: string) => void;
+
   // Reset UI to defaults
   resetUi: () => void;
 }
@@ -439,6 +448,8 @@ const initialState: UiState = {
   mobilePromptsOpen: false,
   mobilePromptsMode: "sidebar",
   mobileSettingsOpen: false,
+  globalSettingsOpen: false,
+  globalSettingsActiveTab: "general",
 };
 
 // Fields to persist via vscode.getState()/setState()
@@ -457,6 +468,7 @@ const persistedFields = [
   "terminalRailCollapsed",
   "terminalRailSizePx",
   "mcpDiscoveryTab",
+  "globalSettingsActiveTab",
 ] as const;
 
 export const useUiStore = create<UiState & UiActions>()(
@@ -832,6 +844,17 @@ export const useUiStore = create<UiState & UiActions>()(
       closeMobilePrompts: () => set({ mobilePromptsOpen: false }),
 
       closeMobileSettings: () => set({ mobileSettingsOpen: false }),
+
+      // ============================================================================
+      // GLOBAL SETTINGS DRAWER
+      // ============================================================================
+
+      toggleGlobalSettings: () =>
+        set((state) => ({ globalSettingsOpen: !state.globalSettingsOpen })),
+
+      closeGlobalSettings: () => set({ globalSettingsOpen: false }),
+
+      setGlobalSettingsTab: (tab) => set({ globalSettingsActiveTab: tab }),
 
       // ============================================================================
       // RESET

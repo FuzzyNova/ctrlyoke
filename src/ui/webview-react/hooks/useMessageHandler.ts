@@ -222,6 +222,16 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // GLOBAL_SETTINGS_LOADED - Full global settings from configService
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED] = (message) => {
+    const settingsStore = useSettingsStore.getState();
+    if (message.settings) {
+      settingsStore.setFullGlobalSettings(message.settings);
+    }
+  };
+
+  // --------------------------------------------------------------------------
   // FILE_SELECTED - New workflow file loaded
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FILE_SELECTED] = (message) => {

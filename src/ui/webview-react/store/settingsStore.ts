@@ -16,6 +16,9 @@ import {
   GEMINI_CLI_MODELS as GEMINI_CLI_MODEL_LIST,
   PERMISSION_MODES,
 } from "@root/types/DashboardConstants";
+import type {
+  FullGlobalSettings,
+} from "@root/types/WebviewMessageTypes";
 
 /**
  * Model option for dropdowns
@@ -133,6 +136,12 @@ interface SettingsState {
 
   // Whether workflow is loaded (enables settings panel)
   workflowLoaded: boolean;
+
+  // Full global settings (from configService, loaded on demand)
+  fullGlobalSettings: FullGlobalSettings | null;
+
+  // Server running state (toggled by ENABLE_SERVER / DISABLE_SERVER)
+  serverRunning: boolean;
 }
 
 /**
@@ -172,6 +181,12 @@ interface SettingsActions {
 
   // Workflow loaded state
   setWorkflowLoaded: (loaded: boolean) => void;
+
+  // Full global settings
+  setFullGlobalSettings: (settings: FullGlobalSettings) => void;
+
+  // Server running state
+  setServerRunning: (running: boolean) => void;
 
   // Effective value resolution (workflow > global)
   getEffectiveHarness: () => HarnessId;
@@ -264,6 +279,8 @@ const initialState: SettingsState = {
   globalSettings: initialGlobalSettings,
   workflowProperties: {},
   workflowLoaded: false,
+  fullGlobalSettings: null,
+  serverRunning: false,
 };
 
 export const useSettingsStore = create<SettingsState & SettingsActions>(
@@ -361,6 +378,10 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     // ============================================================================
 
     setWorkflowLoaded: (loaded) => set({ workflowLoaded: loaded }),
+
+    setFullGlobalSettings: (settings) => set({ fullGlobalSettings: settings }),
+
+    setServerRunning: (running) => set({ serverRunning: running }),
 
     // ============================================================================
     // EFFECTIVE VALUE RESOLUTION (Workflow > Global)

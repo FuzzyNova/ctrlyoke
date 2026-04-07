@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import {
   DynamicQueueConfig,
   Harness,
@@ -7,15 +6,35 @@ import {
 } from "../types/FlightPathTypes";
 import {
   HARNESS_IDS,
-  EXECUTION_MODES,
-  PERMISSION_MODES,
+  DEFAULT_MODELS,
+  type HarnessId,
   type PermissionMode,
 } from "../types/DashboardConstants";
+import { configService } from "../config/FlightPathConfigService";
 
 /**
- * Configuration namespace for FlightPath settings
+ * Map a Harness enum value to the HarnessId string used in config keys
  */
-const CONFIG_NAMESPACE = "flightpath";
+function harnessToId(harness: Harness): HarnessId {
+  switch (harness) {
+    case Harness.CopilotCli:
+      return "copilot-cli";
+    case Harness.CopilotChat:
+      return "copilot-chat";
+    case Harness.ClaudeCli:
+      return "claude-cli";
+    case Harness.CodexCli:
+      return "codex-cli";
+    case Harness.OpenCodeCli:
+      return "opencode-cli";
+    case Harness.QwenCli:
+      return "qwen-cli";
+    case Harness.GeminiCli:
+      return "gemini-cli";
+    default:
+      return "copilot-cli";
+  }
+}
 
 /**
  * Path constants (single source of truth for directory names)
@@ -65,84 +84,29 @@ export const PATH_CONSTANTS = {
 } as const;
 
 /**
- * Get the FlightPath configuration object
- */
-function getConfig(): vscode.WorkspaceConfiguration {
-  return vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
-}
-
-/**
- * Get the settings key for a harness model
- * Internal helper for ConfigurationUtils
- */
-function getModelSettingKeyForHarness(harness: Harness): string {
-  switch (harness) {
-    case Harness.CopilotCli:
-      return "copilotCliModel";
-    case Harness.CopilotChat:
-      return "copilotChatModel";
-    case Harness.ClaudeCli:
-      return "claudeCliModel";
-    case Harness.CodexCli:
-      return "codexCliModel";
-    case Harness.OpenCodeCli:
-      return "openCodeCliModel";
-    case Harness.QwenCli:
-      return "qwenCliModel";
-    case Harness.GeminiCli:
-      return "geminiCliModel";
-    default:
-      return "copilotCliModel";
-  }
-}
-
-/**
- * Get the settings key for harness-specific additional args
- * Internal helper for ConfigurationUtils
- */
-function getAdditionalArgsSettingKeyForHarness(harness: Harness): string {
-  switch (harness) {
-    case Harness.CopilotCli:
-      return "copilotCliAdditionalArgs";
-    case Harness.ClaudeCli:
-      return "claudeCliAdditionalArgs";
-    case Harness.CodexCli:
-      return "codexCliAdditionalArgs";
-    case Harness.OpenCodeCli:
-      return "openCodeCliAdditionalArgs";
-    case Harness.QwenCli:
-      return "qwenCliAdditionalArgs";
-    case Harness.GeminiCli:
-      return "geminiCliAdditionalArgs";
-    default:
-      return "copilotCliAdditionalArgs";
-  }
-}
-
-/**
  * Configuration utility functions for FlightPath settings.
- * Centralizes all VS Code settings access for consistency and testability.
+ * Centralizes all settings access for consistency and testability.
  */
 export const ConfigurationUtils = {
   /**
    * Check if CLI command should be shown in dashboard output
    */
   shouldShowCliCommand(): boolean {
-    return getConfig().get<boolean>("showCliCommand", false);
+    return configService.get("ui").showCliCommand;
   },
 
   /**
    * Check if CLI output should be shown in output panel
    */
   shouldShowCliOutput(): boolean {
-    return getConfig().get<boolean>("showCliOutput", true);
+    return configService.get("ui").showCliOutput;
   },
 
   /**
    * Check if raw CLI output should be logged for debugging
    */
   shouldLogRawCliOutput(): boolean {
-    return getConfig().get<boolean>("logRawCliOutput", false);
+    return configService.get("ui").logRawCliOutput;
   },
 
   /**
@@ -151,14 +115,14 @@ export const ConfigurationUtils = {
    * Dev builds always write log files regardless of this setting.
    */
   isDiagnosticLogsEnabled(): boolean {
-    return getConfig().get<boolean>("enableDiagnosticLogs", false);
+    return configService.get("enableDiagnosticLogs");
   },
 
   /**
    * Check if prompt files should open in the second editor group
    */
   shouldOpenPromptsInSecondGroup(): boolean {
-    return getConfig().get<boolean>("openPromptsInSecondGroup", false);
+    return configService.get("ui").openPromptsInSecondGroup;
   },
 
   /**
@@ -166,26 +130,22 @@ export const ConfigurationUtils = {
    * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI), codex-cli (Codex CLI)
    */
   getIntegrationMode(): Harness {
-    const mode = getConfig().get<string>("harness", Harness.CopilotCli);
+    const mode = configService.get("harness");
 
     switch (mode) {
       case HARNESS_IDS.COPILOT_CHAT:
-      case Harness.CopilotChat:
         return Harness.CopilotChat;
       case HARNESS_IDS.CLAUDE_CLI:
-      case Harness.ClaudeCli:
         return Harness.ClaudeCli;
       case HARNESS_IDS.CODEX_CLI:
-      case Harness.CodexCli:
         return Harness.CodexCli;
       case HARNESS_IDS.OPENCODE_CLI:
-      case Harness.OpenCodeCli:
         return Harness.OpenCodeCli;
       case HARNESS_IDS.GEMINI_CLI:
-      case Harness.GeminiCli:
         return Harness.GeminiCli;
+      case HARNESS_IDS.QWEN_CLI:
+        return Harness.QwenCli;
       case HARNESS_IDS.COPILOT_CLI:
-      case Harness.CopilotCli:
       default:
         return Harness.CopilotCli;
     }
@@ -195,16 +155,12 @@ export const ConfigurationUtils = {
    * Get dynamic queue configuration from settings
    */
   getDynamicQueueConfig(): DynamicQueueConfig {
-    const config = getConfig();
-
+    const queue = configService.get("queue");
     return {
-      maxQueueSize: config.get<number>("maxQueueSize", 100),
-      maxWorkflowExecutionTime: config.get<number>(
-        "maxWorkflowExecutionTime",
-        86400
-      ),
-      unlimitedMode: config.get<boolean>("unlimitedMode", false),
-      notifyOnExtension: config.get<boolean>("notifyOnQueueExtension", true),
+      maxQueueSize: queue.maxSize,
+      maxWorkflowExecutionTime: queue.maxWorkflowExecutionTime,
+      unlimitedMode: queue.unlimitedMode,
+      notifyOnExtension: queue.notifyOnExtension,
     };
   },
 
@@ -213,43 +169,45 @@ export const ConfigurationUtils = {
    * User configures in seconds, this returns milliseconds
    */
   getScriptTimeoutMs(): number {
-    const timeoutSeconds = getConfig().get<number>("scriptTimeout", 30);
-    return timeoutSeconds * 1000;
+    return configService.get("execution").scriptTimeout * 1000;
   },
 
   /**
    * Get default max retries for end conditions
    */
   getDefaultMaxRetries(): number {
-    return getConfig().get<number>("defaultMaxRetries", 3);
+    return configService.get("workflow").maxRetries;
   },
 
   /**
    * Get default retry prompt template
    */
   getDefaultRetryPrompt(): string {
-    return getConfig().get<string>("defaultRetryPrompt", "");
+    return configService.get("workflow").retryPrompt;
   },
 
   /**
    * Get default workflow format (yaml or json)
    */
   getDefaultWorkflowFormat(): "yaml" | "json" {
-    return getConfig().get<"yaml" | "json">("defaultWorkflowFormat", "yaml");
+    return configService.get("workflow").defaultFormat;
   },
 
   /**
    * Check if .gitignore should be respected for completions
    */
   shouldRespectGitignoreForCompletions(): boolean {
-    return getConfig().get<boolean>("respectGitignoreForCompletions", true);
+    return configService.get("ui").respectGitignoreForCompletions;
   },
 
   /**
    * Get the default CLI model (Copilot CLI)
    */
   getCliModel(): string {
-    return getConfig().get<string>("copilotCliModel", "claude-sonnet-4.5");
+    return (
+      configService.get("models")["copilot-cli"] ??
+      DEFAULT_MODELS["copilot-cli"]
+    );
   },
 
   /**
@@ -282,27 +240,22 @@ export const ConfigurationUtils = {
    * Get allowed directories for CLI operations
    */
   getCliAllowedDirs(): string[] {
-    return getConfig().get<string[]>("copilotCliAllowedDirs", []);
+    return configService.get("tools").copilotAllowedDirs;
   },
 
   /**
    * Get CLI tool permissions mode (shared between Copilot and Claude)
    */
   getCliToolPermissions(): Exclude<PermissionMode, "none"> {
-    return getConfig().get<Exclude<PermissionMode, "none">>(
-      "cliToolPermissions",
-      PERMISSION_MODES.ALLOW_ALL
-    );
+    return configService.get("tools")
+      .permissionMode as Exclude<PermissionMode, "none">;
   },
 
   /**
    * Get chat window location preference
    */
   getChatWindowLocation(): "chatPanel" | "newTab" | "newWindow" {
-    return getConfig().get<"chatPanel" | "newTab" | "newWindow">(
-      "chatWindowLocation",
-      "chatPanel"
-    );
+    return configService.get("chat").windowLocation;
   },
 
   /**
@@ -310,11 +263,7 @@ export const ConfigurationUtils = {
    * User configures in seconds, this returns milliseconds
    */
   getChatInactivityTimeoutMs(): number {
-    const timeoutSeconds = getConfig().get<number>(
-      "chatInactivityTimeout",
-      300
-    );
-    return timeoutSeconds * 1000;
+    return configService.get("chat").inactivityTimeout * 1000;
   },
 
   /**
@@ -322,7 +271,7 @@ export const ConfigurationUtils = {
    * When true, inactivity timeouts are treated as successful completions
    */
   shouldTreatChatTimeoutAsSuccess(): boolean {
-    return getConfig().get<boolean>("treatChatTimeoutAsSuccess", true);
+    return configService.get("chat").treatTimeoutAsSuccess;
   },
 
   // ============================================================
@@ -333,17 +282,14 @@ export const ConfigurationUtils = {
    * Get CLI execution mode (interactive terminal or headless)
    */
   getCliExecutionMode(): string {
-    return getConfig().get<string>(
-      "cliExecutionMode",
-      EXECUTION_MODES.INTERACTIVE
-    );
+    return configService.get("execution").mode;
   },
 
   /**
    * Check if terminal should be closed when each interactive prompt completes
    */
   shouldCloseTerminalWhenPromptCompletes(): boolean {
-    return getConfig().get<boolean>("closeTerminalWhenPromptCompletes", false);
+    return configService.get("execution").closeTerminalOnComplete;
   },
 
   /**
@@ -352,10 +298,7 @@ export const ConfigurationUtils = {
    * Returns undefined if set to -1 (unlimited)
    */
   getMaxPromptExecutionTimeMs(): number | undefined {
-    const timeoutSeconds = getConfig().get<number>(
-      "maxPromptExecutionTime",
-      10800
-    );
+    const timeoutSeconds = configService.get("execution").maxPromptTimeout;
     return timeoutSeconds === -1 ? undefined : timeoutSeconds * 1000;
   },
 
@@ -363,7 +306,7 @@ export const ConfigurationUtils = {
    * Check if all paths should be allowed for Copilot CLI
    */
   shouldAllowAllPaths(): boolean {
-    return getConfig().get<boolean>("copilotCliAllowAllPaths", true);
+    return configService.get("tools").copilotAllowAllPaths;
   },
 
   // ============================================================
@@ -374,7 +317,9 @@ export const ConfigurationUtils = {
    * Get Claude CLI model
    */
   getClaudeCliModel(): string {
-    return getConfig().get<string>("claudeCliModel", "sonnet");
+    return (
+      configService.get("models")["claude-cli"] ?? DEFAULT_MODELS["claude-cli"]
+    );
   },
 
   // ============================================================
@@ -385,9 +330,9 @@ export const ConfigurationUtils = {
    * Get OpenCode CLI model (user-configured, free-form provider/model format)
    */
   getOpenCodeCliModel(): string {
-    return getConfig().get<string>(
-      "openCodeCliModel",
-      "anthropic/claude-sonnet-4-6"
+    return (
+      configService.get("models")["opencode-cli"] ??
+      DEFAULT_MODELS["opencode-cli"]
     );
   },
 
@@ -399,7 +344,9 @@ export const ConfigurationUtils = {
    * Get Qwen CLI model
    */
   getQwenCliModel(): string {
-    return getConfig().get<string>("qwenCliModel", "coder-model");
+    return (
+      configService.get("models")["qwen-cli"] ?? DEFAULT_MODELS["qwen-cli"]
+    );
   },
 
   // ============================================================
@@ -410,7 +357,10 @@ export const ConfigurationUtils = {
    * Get Gemini CLI model
    */
   getGeminiCliModel(): string {
-    return getConfig().get<string>("geminiCliModel", "gemini-2.5-pro");
+    return (
+      configService.get("models")["gemini-cli"] ??
+      DEFAULT_MODELS["gemini-cli"]
+    );
   },
 
   // ============================================================
@@ -421,7 +371,9 @@ export const ConfigurationUtils = {
    * Get Codex CLI model
    */
   getCodexCliModel(): string {
-    return getConfig().get<string>("codexCliModel", "gpt-5.1-codex");
+    return (
+      configService.get("models")["codex-cli"] ?? DEFAULT_MODELS["codex-cli"]
+    );
   },
 
   /**
@@ -429,7 +381,7 @@ export const ConfigurationUtils = {
    * Options: read-only, workspace-write, danger-full-access
    */
   getCodexSandboxMode(): string {
-    return getConfig().get<string>("codexSandboxMode", "workspace-write");
+    return configService.get("tools").codexSandboxMode;
   },
 
   /**
@@ -437,14 +389,14 @@ export const ConfigurationUtils = {
    * Options: untrusted, on-request, never
    */
   getCodexApprovalPolicy(): string {
-    return getConfig().get<string>("codexApprovalPolicy", "on-request");
+    return configService.get("tools").codexApprovalPolicy;
   },
 
   /**
    * Get allowed directories for Codex CLI
    */
   getCodexAllowedDirs(): string[] {
-    return getConfig().get<string[]>("codexAllowedDirs", []);
+    return configService.get("tools").codexAllowedDirs;
   },
 
   // ============================================================
@@ -460,22 +412,21 @@ export const ConfigurationUtils = {
     if (harness === Harness.CopilotChat) {
       return "";
     }
-    const key = getAdditionalArgsSettingKeyForHarness(harness);
-    return getConfig().get<string>(key, "");
+    return configService.get("additionalArgs")[harnessToId(harness)] ?? "";
   },
 
   /**
    * Get allowed tools for CLI operations (shared between Copilot and Claude)
    */
   getCliAllowedTools(): string[] {
-    return getConfig().get<string[]>("cliAllowedTools", []);
+    return configService.get("tools").allowed;
   },
 
   /**
    * Get denied tools for CLI operations (shared between Copilot and Claude)
    */
   getCliDeniedTools(): string[] {
-    return getConfig().get<string[]>("cliDeniedTools", []);
+    return configService.get("tools").denied;
   },
 
   // ============================================================
@@ -486,14 +437,14 @@ export const ConfigurationUtils = {
    * Get the default prior context injection mode for workflow prompts.
    */
   getPriorContext(): string {
-    return getConfig().get<string>("priorContext", "none");
+    return configService.get("workflow").priorContext;
   },
 
   /**
    * Check if existing chat session should be resumed per prompt
    */
   shouldResumeExistingSession(): boolean {
-    return getConfig().get<boolean>("resumeExistingSession", false);
+    return configService.get("workflow").resumeExistingSession;
   },
 
   /**
@@ -515,14 +466,14 @@ export const ConfigurationUtils = {
    * Get default workflow template ID
    */
   getDefaultWorkflowTemplate(): string {
-    return getConfig().get<string>("defaultWorkflowTemplate", "blank");
+    return configService.get("workflow").defaultTemplate;
   },
 
   /**
    * Check if recent session should be auto-loaded on startup
    */
   shouldAutoLoadRecentSession(): boolean {
-    return getConfig().get<boolean>("autoLoadRecentSession", true);
+    return configService.get("workflow").autoLoadRecentSession;
   },
 
   // ============================================================
@@ -533,7 +484,10 @@ export const ConfigurationUtils = {
    * Get the default Copilot Chat model
    */
   getCopilotChatModel(): string {
-    return getConfig().get<string>("copilotChatModel", "claude-sonnet-4.5");
+    return (
+      configService.get("models")["copilot-chat"] ??
+      DEFAULT_MODELS["copilot-chat"]
+    );
   },
 
   /**
@@ -541,7 +495,7 @@ export const ConfigurationUtils = {
    * Returns empty string if no default agent is selected
    */
   getDefaultAgent(): string {
-    return getConfig().get<string>("defaultAgent", "");
+    return configService.get("workflow").defaultAgent;
   },
 
   /**
@@ -549,14 +503,14 @@ export const ConfigurationUtils = {
    * Returns empty array if no default skills are selected
    */
   getDefaultSkills(): string[] {
-    return getConfig().get<string[]>("defaultSkills", []) ?? [];
+    return configService.get("workflow").defaultSkills ?? [];
   },
 
   /**
    * Check if agent mode should be forced for chat
    */
   shouldForceAgentModeForChat(): boolean {
-    return getConfig().get<boolean>("forceAgentModeForChat", false);
+    return configService.get("chat").forceAgentMode;
   },
 
   /**
@@ -565,7 +519,7 @@ export const ConfigurationUtils = {
    * When true, uses VS Code's native attachFile commands and agent-specific chat windows.
    */
   shouldUseChatNativeAttachments(): boolean {
-    return getConfig().get<boolean>("chatUseNativeAttachments", false);
+    return configService.get("chat").useNativeAttachments;
   },
 
   /**
@@ -575,7 +529,7 @@ export const ConfigurationUtils = {
    * in the first message of that session.
    */
   shouldOmitAgentsAndSkillsOnResume(): boolean {
-    return getConfig().get<boolean>("omitAgentsAndSkillsOnResume", true);
+    return configService.get("workflow").omitAgentsSkillsOnResume;
   },
 
   // ============================================================
@@ -583,30 +537,31 @@ export const ConfigurationUtils = {
   // ============================================================
 
   /**
-   * Get a FlightPath configuration value
-   * @param key The setting key (without 'flightpath.' prefix)
+   * Get a FlightPath configuration value by dot-notation path
+   * @param key The setting path (dot-notation, e.g. "execution.mode")
    * @param defaultValue The default value if setting is not defined
    * @returns The configuration value
    */
   getConfigValue<T>(key: string, defaultValue?: T): T | undefined {
-    if (defaultValue !== undefined) {
-      return getConfig().get<T>(key, defaultValue);
+    const value = configService.getNested(key) as T | undefined;
+    if (value !== undefined) {
+      return value;
     }
-    return getConfig().get<T>(key);
+    return defaultValue;
   },
 
   /**
    * Update a FlightPath configuration setting
-   * @param key The setting key (without 'flightpath.' prefix)
+   * @param key The setting path (dot-notation, e.g. "execution.mode")
    * @param value The new value
-   * @param target The configuration target (default: Global)
+   * @param _target Ignored — always writes to user scope via config service
    */
   async updateSetting<T>(
     key: string,
     value: T,
-    target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Global
+    _target?: unknown
   ): Promise<void> {
-    await getConfig().update(key, value, target);
+    await configService.set(key, value, "user");
   },
 
   // ============================================================
@@ -617,15 +572,14 @@ export const ConfigurationUtils = {
    * Set the default harness integration mode
    */
   async setIntegrationMode(harness: Harness): Promise<void> {
-    await this.updateSetting("harness", harness);
+    await configService.set("harness", harness, "user");
   },
 
   /**
    * Set the model for a specific harness
    */
   async setModelForHarness(harness: Harness, model: string): Promise<void> {
-    const settingKey = getModelSettingKeyForHarness(harness);
-    await this.updateSetting(settingKey, model);
+    await configService.set(`models.${harnessToId(harness)}`, model, "user");
   },
 
   /**
@@ -635,46 +589,48 @@ export const ConfigurationUtils = {
     harness: Harness,
     args: string
   ): Promise<void> {
-    const settingKey = getAdditionalArgsSettingKeyForHarness(harness);
-    // Pass undefined to remove the VS Code setting entirely when args is
-    // empty — avoids leaving a "" entry in settings.json.
-    await this.updateSetting(settingKey, args || undefined);
+    // Pass undefined to remove the setting entirely when args is empty —
+    // avoids leaving a "" entry in settings.json.
+    await configService.set(
+      `additionalArgs.${harnessToId(harness)}`,
+      args || undefined,
+      "user"
+    );
   },
 
   /**
    * Set the default agent for new workflows
    */
   async setDefaultAgent(agent: string): Promise<void> {
-    await this.updateSetting("defaultAgent", agent);
+    await configService.set("workflow.defaultAgent", agent, "user");
   },
 
   /**
    * Set the default skills for new workflows
    */
   async setDefaultSkills(skills: string[]): Promise<void> {
-    await this.updateSetting("defaultSkills", skills);
+    await configService.set("workflow.defaultSkills", skills, "user");
   },
 
   /**
    * Set CLI execution mode
    */
   async setCliExecutionMode(mode: string): Promise<void> {
-    await this.updateSetting("cliExecutionMode", mode);
+    await configService.set("execution.mode", mode, "user");
   },
 
   /**
    * Set whether to resume existing session
    */
   async setResumeExistingSession(enabled: boolean): Promise<void> {
-    await this.updateSetting("resumeExistingSession", enabled);
+    await configService.set("workflow.resumeExistingSession", enabled, "user");
   },
 
   /**
    * Get the default MCP servers from settings
    */
   getDefaultMcpServers(): (string | McpServerConfig)[] {
-    const config = getConfig();
-    return config.get<(string | McpServerConfig)[]>("mcpServers", []);
+    return configService.get("mcp").defaultServers;
   },
 
   /**
@@ -683,29 +639,28 @@ export const ConfigurationUtils = {
   async setDefaultMcpServers(
     servers: (string | McpServerConfig)[]
   ): Promise<void> {
-    await this.updateSetting("mcpServers", servers);
+    await configService.set("mcp.defaultServers", servers, "user");
   },
 
   /**
    * Get the default hooks from settings
    */
   getDefaultHooks(): UserHookConfig[] {
-    const config = getConfig();
-    return config.get<UserHookConfig[]>("hooks", []);
+    return configService.get("hooks");
   },
 
   /**
    * Set the default hooks in settings
    */
   async setDefaultHooks(hooks: UserHookConfig[]): Promise<void> {
-    await this.updateSetting("hooks", hooks);
+    await configService.set("hooks", hooks, "user");
   },
 
   /**
    * Set the default workflow template
    */
   async setDefaultWorkflowTemplate(templateId: string): Promise<void> {
-    await this.updateSetting("defaultWorkflowTemplate", templateId);
+    await configService.set("workflow.defaultTemplate", templateId, "user");
   },
 
   // ============================================================
@@ -716,14 +671,14 @@ export const ConfigurationUtils = {
    * Check if output history saving is enabled
    */
   isSaveOutputHistoryEnabled(): boolean {
-    return getConfig().get<boolean>("saveOutputHistory", true)!;
+    return configService.get("history").saveOutput;
   },
 
   /**
    * Get the maximum number of history runs to retain per workflow
    */
   getMaxHistoryRuns(): number {
-    return getConfig().get<number>("maxHistoryRuns", -1)!;
+    return configService.get("history").maxRuns;
   },
 
   /**
@@ -731,21 +686,21 @@ export const ConfigurationUtils = {
    * When true (default), shows a modal before destructive delete operations.
    */
   shouldConfirmDeleteOperations(): boolean {
-    return getConfig().get<boolean>("confirmDeleteOperations", true);
+    return configService.get("ui").confirmDeleteOperations;
   },
 
   /**
    * Set whether to show confirmation dialogs before delete operations
    */
   async setConfirmDeleteOperations(enabled: boolean): Promise<void> {
-    await this.updateSetting("confirmDeleteOperations", enabled);
+    await configService.set("ui.confirmDeleteOperations", enabled, "user");
   },
 
   shouldConfirmResetOperations(): boolean {
-    return getConfig().get<boolean>("confirmResetOperations", true);
+    return configService.get("ui").confirmResetOperations;
   },
 
   async setConfirmResetOperations(enabled: boolean): Promise<void> {
-    await this.updateSetting("confirmResetOperations", enabled);
+    await configService.set("ui.confirmResetOperations", enabled, "user");
   },
 };

@@ -15,8 +15,14 @@ import {
   EXECUTION_MODES,
   RUNNER_IDS,
 } from "./types/DashboardConstants";
-import type { ExecutionMode } from "./types/DashboardConstants";
+import type { ExecutionMode, HarnessId } from "./types/DashboardConstants";
 import { Harness, isScriptStep } from "./types/FlightPathTypes";
+import { configService } from "./config/FlightPathConfigService";
+import {
+  createUserConfigBackend,
+  createWorkspaceConfigBackend,
+} from "./config/FileConfigBackend";
+import type { PartialFlightPathSettings } from "./types/FlightPathSettings";
 import type { QueueState, WorkflowRunnerLock } from "./types/FlightPathTypes";
 import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
 import { Log } from "./utils/Log";
@@ -246,6 +252,39 @@ async function runCommand(
     headless: options.headless,
     cliExecutionMode: executionMode,
   };
+
+  // Initialize config service with file-based backends so that settings from
+  // ~/.flightpath/settings.json and <workspace>/.flightpath/settings.json are
+  // available to CliAdapter's default getConfig() fallback.
+  const userBackend = createUserConfigBackend();
+  const workspaceBackend = createWorkspaceConfigBackend(workingDir);
+  configService.setUserBackend(userBackend);
+  configService.setWorkspaceBackend(workspaceBackend);
+
+  // Build CLI overlay from explicitly provided flags only (not Commander defaults).
+  const overlay: PartialFlightPathSettings = {};
+  // --harness: only include when not the default (copilot-cli)
+  if (options.harness && options.harness !== HARNESS_IDS.COPILOT_CLI) {
+    overlay.harness = options.harness as HarnessId;
+  }
+  if (options.model) {
+    overlay.models = { [config.harness as HarnessId]: options.model };
+  }
+  if (options.headless) {
+    overlay.execution = { mode: "headless" };
+  } else if (options.interactive) {
+    overlay.execution = { mode: "interactive" };
+  }
+  if (options.allowAllTools) {
+    overlay.tools = { permissionMode: "dangerouslyAllowAll" };
+  }
+  if (options.allowTool?.length) {
+    overlay.tools = { ...overlay.tools, allowed: options.allowTool };
+  }
+  if (options.denyTool?.length) {
+    overlay.tools = { ...overlay.tools, denied: options.denyTool };
+  }
+  configService.setCliOverlay(overlay);
 
   const platform = new CliAdapter(config);
   // Register the adapter with the vscode-shim so ConfigurationUtils calls inside

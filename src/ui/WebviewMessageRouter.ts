@@ -440,6 +440,27 @@ export class WebviewMessageRouter {
       this.settingsSync.handleOpenSettings();
     });
 
+    table.set(MESSAGE_TYPES.GLOBAL_SETTINGS_LOAD_REQUEST, () => {
+      this.settingsSync.handleGlobalSettingsLoadRequest(this.getCurrentPostMessage());
+    });
+
+    table.set(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, (message) => {
+      this.settingsSync.handleUpdateGlobalSetting(
+        message.path,
+        message.value,
+        message.scope,
+        this.getCurrentPostMessage()
+      );
+    });
+
+    table.set(MESSAGE_TYPES.ENABLE_SERVER, () => {
+      this.settingsSync.handleEnableServer(this.getCurrentPostMessage());
+    });
+
+    table.set(MESSAGE_TYPES.DISABLE_SERVER, () => {
+      this.settingsSync.handleDisableServer(this.getCurrentPostMessage());
+    });
+
     // ── Settings — Workflow Properties ───────────────────────────────────
     table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY, (message) => {
       this.settingsSync.handleUpdateWorkflowProperty(

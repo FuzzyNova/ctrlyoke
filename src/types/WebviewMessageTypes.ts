@@ -31,6 +31,7 @@ import type {
   UserHookConfig,
   WorkflowStep,
 } from "./FlightPathTypes";
+import type { FlightPathGlobalSettings } from "./FlightPathSettings";
 import type {
   CliEvent as CliOutputEvent,
   UniversalCliOutput,
@@ -669,6 +670,44 @@ export interface GlobalSettingsUpdatedMessage {
   };
 }
 
+// ============================================================================
+// GLOBAL SETTINGS DRAWER TYPES
+// ============================================================================
+
+export type SettingSource = "workspace" | "user" | "default";
+
+export interface FullGlobalSettings {
+  settings: FlightPathGlobalSettings;
+  sources: Partial<Record<keyof FlightPathGlobalSettings, SettingSource>>;
+}
+
+/** Webview → Extension: request full settings payload */
+export interface GlobalSettingsLoadRequestMessage {
+  type: typeof MESSAGE_TYPES.GLOBAL_SETTINGS_LOAD_REQUEST;
+}
+
+/** Extension → Webview: full settings payload + sources */
+export interface GlobalSettingsLoadedMessage {
+  type: typeof MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED;
+  settings: FullGlobalSettings;
+}
+
+/** Webview → Extension: update a single setting */
+export interface UpdateGlobalSettingMessage {
+  type: typeof MESSAGE_TYPES.UPDATE_GLOBAL_SETTING;
+  path: string;
+  value: unknown;
+  scope: "workspace" | "user";
+}
+
+/** Extension → Webview: acknowledge a setting update */
+export interface GlobalSettingUpdatedMessage {
+  type: typeof MESSAGE_TYPES.GLOBAL_SETTING_UPDATED;
+  path: string;
+  value: unknown;
+  source: string;
+}
+
 /**
  * Reset workflow state message (extension -> webview, bidirectional)
  */
@@ -1040,4 +1079,6 @@ export type IncomingMessage =
   | UndoRecordUpdatedMessage
   | McpLocalServersResultMessage
   | McpRegistryResultMessage
-  | McpWorkspaceServersResultMessage;
+  | McpWorkspaceServersResultMessage
+  | GlobalSettingsLoadedMessage
+  | GlobalSettingUpdatedMessage;

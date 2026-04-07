@@ -5,3 +5,5 @@ export { EditorSection } from "./EditorSection";
 export { WorkflowPropertiesPanel } from "./WorkflowPropertiesPanel";
 export { CenterContentArea } from "./CenterContentArea";
 export { MobilePromptsSidebar } from "./MobilePromptsSidebar";
+export { GlobalSettingsDrawer } from "./GlobalSettingsDrawer";
+export { GlobalSettingsVerticalTabBar } from "./GlobalSettingsVerticalTabBar";

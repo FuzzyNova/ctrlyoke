@@ -1,6 +1,7 @@
 import React, { useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
+import { useSettingsStore } from "@store/settingsStore";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
@@ -84,6 +85,7 @@ export const Header: React.FC<{
   const isMobile = useIsMobile();
   const { fileName, executionState } = useWorkflowStore();
   const hasPrompts = useWorkflowStore((s) => s.steps.length > 0);
+  const serverRunning = useSettingsStore((s) => s.serverRunning);
   const {
     loadedWorkflows,
     activeWorkflowId,
@@ -91,6 +93,8 @@ export const Header: React.FC<{
     closeNewWorkflowModal,
     mobilePromptsOpen,
     mobileSettingsOpen,
+    globalSettingsOpen,
+    toggleGlobalSettings,
   } = useUiStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
@@ -144,10 +148,6 @@ export const Header: React.FC<{
     if (!canSave) return;
     vscode.postMessage({ type: MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST });
   }, [vscode, canSave]);
-
-  const handleOpenSettings = useCallback(() => {
-    vscode.postMessage({ type: MESSAGE_TYPES.OPEN_SETTINGS });
-  }, [vscode]);
 
   // Handlers
   const handleRun = useCallback(() => {
@@ -228,13 +228,36 @@ export const Header: React.FC<{
           />
           {/* Settings button */}
           <button
-            className="control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-            onClick={handleOpenSettings}
-            title="Open VS Code settings"
-            aria-label="Open settings"
+            className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
+              globalSettingsOpen
+                ? "bg-btn-bg text-btn-fg"
+                : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+            }`}
+            onClick={toggleGlobalSettings}
+            title="Global Settings"
+            aria-label="Open global settings"
           >
             <i className="codicon codicon-settings-gear" />
           </button>
+          {/* Start/Stop Server button (desktop only) */}
+          {!isMobile && (
+            <button
+              className="control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              onClick={() =>
+                vscode.postMessage({
+                  type: serverRunning
+                    ? MESSAGE_TYPES.DISABLE_SERVER
+                    : MESSAGE_TYPES.ENABLE_SERVER,
+                })
+              }
+              title={serverRunning ? "Stop Server" : "Start Server"}
+              aria-label={serverRunning ? "Stop server" : "Start server"}
+            >
+              <i
+                className={`codicon ${serverRunning ? "codicon-debug-stop" : "codicon-play-circle"}`}
+              />
+            </button>
+          )}
         </div>
 
         {/* Save Workflow Dialog — rendered here for co-location with SaveWorkflowButton */}

@@ -1,6 +1,7 @@
 import * as path from "path";
 import type { PlatformAdapter } from "./PlatformAdapter";
 import { PERMISSION_MODES } from "../types/DashboardConstants";
+import { configService } from "../config/FlightPathConfigService";
 
 export interface ResolvedCliConfig {
   harness: string;
@@ -87,12 +88,22 @@ export class CliAdapter implements PlatformAdapter {
       case "maxPromptExecutionTime":
         return Math.round(this.config.timeout / 1000) as unknown as T;
 
-      // ── Fallback: direct property access ─────────────────────────────────
-      default:
-        return (
-          ((this.config as unknown as Record<string, unknown>)[key] as T) ??
-          defaultValue
-        );
+      // ── Fallback: config service (file-based) then direct property ────────
+      default: {
+        // Prefer direct CLI config properties (explicit flag values) first,
+        // then fall back to the config service (reads user/workspace config files).
+        const directValue = (
+          this.config as unknown as Record<string, unknown>
+        )[key] as T;
+        if (directValue !== undefined) {
+          return directValue;
+        }
+        const serviceValue = configService.getNested(key);
+        if (serviceValue !== undefined) {
+          return serviceValue as unknown as T;
+        }
+        return defaultValue;
+      }
     }
   }
 

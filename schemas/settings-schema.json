@@ -1,0 +1,357 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FlightPath Global Settings",
+  "description": "Configuration schema for .flightpath/settings.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "harness": {
+      "type": "string",
+      "enum": [
+        "copilot-cli",
+        "copilot-chat",
+        "claude-cli",
+        "codex-cli",
+        "opencode-cli",
+        "qwen-cli",
+        "gemini-cli"
+      ],
+      "description": "The AI harness to use for prompt execution."
+    },
+    "models": {
+      "type": "object",
+      "description": "Per-harness model overrides.",
+      "properties": {
+        "copilot-cli": { "type": "string" },
+        "copilot-chat": { "type": "string" },
+        "claude-cli": { "type": "string" },
+        "codex-cli": { "type": "string" },
+        "opencode-cli": { "type": "string" },
+        "qwen-cli": { "type": "string" },
+        "gemini-cli": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "additionalArgs": {
+      "type": "object",
+      "description": "Per-harness additional CLI arguments.",
+      "properties": {
+        "copilot-cli": { "type": "string" },
+        "copilot-chat": { "type": "string" },
+        "claude-cli": { "type": "string" },
+        "codex-cli": { "type": "string" },
+        "opencode-cli": { "type": "string" },
+        "qwen-cli": { "type": "string" },
+        "gemini-cli": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "execution": {
+      "type": "object",
+      "description": "Execution settings.",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["interactive", "headless"],
+          "description": "Whether prompts run in an interactive terminal or headless mode."
+        },
+        "maxPromptTimeout": {
+          "type": "number",
+          "description": "Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited."
+        },
+        "scriptTimeout": {
+          "type": "number",
+          "description": "Maximum time in seconds for end-condition scripts to run."
+        },
+        "closeTerminalOnComplete": {
+          "type": "boolean",
+          "description": "Automatically close the terminal when execution completes."
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "description": "Tool permission settings.",
+      "additionalProperties": false,
+      "properties": {
+        "permissionMode": {
+          "type": "string",
+          "enum": ["dangerouslyAllowAll", "allowAll", "custom"],
+          "description": "Global tool permission mode."
+        },
+        "allowed": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Explicitly allowed tools (used when permissionMode is 'custom')."
+        },
+        "denied": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Explicitly denied tools (used when permissionMode is 'custom')."
+        },
+        "copilotAllowedDirs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Directories Copilot CLI is allowed to access."
+        },
+        "copilotAllowAllPaths": {
+          "type": "boolean",
+          "description": "Allow Copilot CLI to access all paths."
+        },
+        "codexSandboxMode": {
+          "type": "string",
+          "enum": ["read-only", "workspace-write", "danger-full-access"],
+          "description": "Sandbox mode for Codex CLI."
+        },
+        "codexApprovalPolicy": {
+          "type": "string",
+          "enum": ["untrusted", "on-request", "never"],
+          "description": "Approval policy for Codex CLI tool calls."
+        },
+        "codexAllowedDirs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Directories Codex CLI is allowed to access."
+        }
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "description": "Workflow default settings.",
+      "additionalProperties": false,
+      "properties": {
+        "defaultFormat": {
+          "type": "string",
+          "enum": ["yaml", "json"],
+          "description": "Default file format for new workflows."
+        },
+        "defaultTemplate": {
+          "type": "string",
+          "description": "Default template to use for new workflows."
+        },
+        "defaultAgent": {
+          "type": "string",
+          "description": "Default agent to use in new workflows."
+        },
+        "defaultSkills": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Default skills to include in new workflows."
+        },
+        "resumeExistingSession": {
+          "type": "boolean",
+          "description": "Resume an existing session when running a workflow."
+        },
+        "priorContext": {
+          "type": "string",
+          "description": "Prior context to inject before the first prompt."
+        },
+        "autoLoadRecentSession": {
+          "type": "boolean",
+          "description": "Automatically load the most recent session on startup."
+        },
+        "maxRetries": {
+          "type": "number",
+          "description": "Maximum number of retry attempts per prompt."
+        },
+        "retryPrompt": {
+          "type": "string",
+          "description": "Prompt text injected when a retry is triggered."
+        },
+        "omitAgentsSkillsOnResume": {
+          "type": "boolean",
+          "description": "Omit agents/skills declarations when resuming an existing session."
+        }
+      }
+    },
+    "chat": {
+      "type": "object",
+      "description": "Copilot Chat harness settings.",
+      "additionalProperties": false,
+      "properties": {
+        "windowLocation": {
+          "type": "string",
+          "enum": ["chatPanel", "newTab", "newWindow"],
+          "description": "Where to open the Copilot Chat window."
+        },
+        "inactivityTimeout": {
+          "type": "number",
+          "description": "Seconds of inactivity before treating a chat session as complete."
+        },
+        "treatTimeoutAsSuccess": {
+          "type": "boolean",
+          "description": "Treat an inactivity timeout as a successful completion."
+        },
+        "forceAgentMode": {
+          "type": "boolean",
+          "description": "Force Copilot Chat into agent mode."
+        },
+        "useNativeAttachments": {
+          "type": "boolean",
+          "description": "Use native VS Code chat attachment API instead of inline text."
+        }
+      }
+    },
+    "mcp": {
+      "type": "object",
+      "description": "MCP server configuration.",
+      "additionalProperties": false,
+      "properties": {
+        "defaultServers": {
+          "type": "array",
+          "description": "Default MCP servers to attach to each prompt execution.",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "command": { "type": "string" },
+                  "args": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  },
+                  "env": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" }
+                  }
+                },
+                "additionalProperties": true
+              }
+            ]
+          }
+        }
+      }
+    },
+    "hooks": {
+      "type": "array",
+      "description": "User-defined hooks to run at various execution lifecycle points.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "queue": {
+      "type": "object",
+      "description": "Queue management settings.",
+      "additionalProperties": false,
+      "properties": {
+        "maxSize": {
+          "type": "number",
+          "description": "Maximum number of prompts allowed in the queue."
+        },
+        "maxWorkflowExecutionTime": {
+          "type": "number",
+          "description": "Maximum total execution time in seconds for a workflow. Use -1 for unlimited."
+        },
+        "unlimitedMode": {
+          "type": "boolean",
+          "description": "Disable queue size and time limits."
+        },
+        "notifyOnExtension": {
+          "type": "boolean",
+          "description": "Show a notification when the queue is extended."
+        }
+      }
+    },
+    "history": {
+      "type": "object",
+      "description": "Execution history settings.",
+      "additionalProperties": false,
+      "properties": {
+        "saveOutput": {
+          "type": "boolean",
+          "description": "Save CLI output to execution history."
+        },
+        "maxRuns": {
+          "type": "number",
+          "description": "Maximum number of history entries to retain. Use -1 for unlimited."
+        }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "description": "UI display settings.",
+      "additionalProperties": false,
+      "properties": {
+        "showCliOutput": {
+          "type": "boolean",
+          "description": "Show CLI output in the FlightPath panel."
+        },
+        "showCliCommand": {
+          "type": "boolean",
+          "description": "Show the CLI command being executed."
+        },
+        "logRawCliOutput": {
+          "type": "boolean",
+          "description": "Log raw CLI output to the extension output channel."
+        },
+        "openPromptsInSecondGroup": {
+          "type": "boolean",
+          "description": "Open prompt files in a second editor group."
+        },
+        "respectGitignoreForCompletions": {
+          "type": "boolean",
+          "description": "Filter file completions using .gitignore rules."
+        },
+        "confirmDeleteOperations": {
+          "type": "boolean",
+          "description": "Show a confirmation dialog before deleting prompts or workflow history."
+        },
+        "confirmResetOperations": {
+          "type": "boolean",
+          "description": "Show a confirmation dialog before resetting workflow start position."
+        }
+      }
+    },
+    "server": {
+      "type": "object",
+      "description": "FlightPath hosted server settings.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the FlightPath hosted server is enabled."
+        },
+        "port": {
+          "type": "number",
+          "description": "Port for the FlightPath hosted server."
+        },
+        "standalonePort": {
+          "type": "number",
+          "description": "Port for the standalone (non-extension) FlightPath server."
+        },
+        "theme": {
+          "type": "string",
+          "enum": ["auto", "light", "dark"],
+          "description": "Color theme for the hosted server UI."
+        },
+        "tls": {
+          "type": "object",
+          "description": "TLS configuration for the hosted server.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether TLS is enabled."
+            },
+            "certPath": {
+              "type": "string",
+              "description": "Path to the TLS certificate file."
+            },
+            "keyPath": {
+              "type": "string",
+              "description": "Path to the TLS private key file."
+            }
+          }
+        }
+      }
+    },
+    "enableDiagnosticLogs": {
+      "type": "boolean",
+      "description": "Enable verbose diagnostic logging for troubleshooting."
+    }
+  }
+}

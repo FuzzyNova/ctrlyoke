@@ -40,6 +40,65 @@ import { AgentDiscovery } from "../utils/AgentDiscovery";
 import type { AgentInfo } from "../utils/AgentDiscovery";
 import { SkillDiscovery } from "../utils/SkillDiscovery";
 import type { SkillInfo } from "../utils/SkillDiscovery";
+import { configService } from "../config/FlightPathConfigService";
+import type { FlightPathGlobalSettings } from "../types/FlightPathSettings";
+
+/**
+ * Maps legacy flat VS Code setting keys (after stripping "flightpath." prefix)
+ * to their new nested config paths in FlightPathGlobalSettings.
+ */
+const LEGACY_KEY_MAP: Record<string, string> = {
+  "showCliCommand": "ui.showCliCommand",
+  "showCliOutput": "ui.showCliOutput",
+  "logRawCliOutput": "ui.logRawCliOutput",
+  "enableDiagnosticLogs": "enableDiagnosticLogs",
+  "openPromptsInSecondGroup": "ui.openPromptsInSecondGroup",
+  "respectGitignoreForCompletions": "ui.respectGitignoreForCompletions",
+  "confirmDeleteOperations": "ui.confirmDeleteOperations",
+  "confirmResetOperations": "ui.confirmResetOperations",
+  "harness": "harness",
+  "copilotCliModel": "models.copilot-cli",
+  "copilotChatModel": "models.copilot-chat",
+  "claudeCliModel": "models.claude-cli",
+  "codexCliModel": "models.codex-cli",
+  "openCodeCliModel": "models.opencode-cli",
+  "qwenCliModel": "models.qwen-cli",
+  "geminiCliModel": "models.gemini-cli",
+  "cliToolPermissions": "tools.permissionMode",
+  "cliAllowedTools": "tools.allowed",
+  "cliDeniedTools": "tools.denied",
+  "copilotCliAllowedDirs": "tools.copilotAllowedDirs",
+  "copilotCliAllowAllPaths": "tools.copilotAllowAllPaths",
+  "codexSandboxMode": "tools.codexSandboxMode",
+  "codexApprovalPolicy": "tools.codexApprovalPolicy",
+  "codexAllowedDirs": "tools.codexAllowedDirs",
+  "cliExecutionMode": "execution.mode",
+  "maxPromptExecutionTime": "execution.maxPromptTimeout",
+  "scriptTimeout": "execution.scriptTimeout",
+  "closeTerminalWhenPromptCompletes": "execution.closeTerminalOnComplete",
+  "defaultWorkflowFormat": "workflow.defaultFormat",
+  "defaultWorkflowTemplate": "workflow.defaultTemplate",
+  "defaultAgent": "workflow.defaultAgent",
+  "defaultSkills": "workflow.defaultSkills",
+  "resumeExistingSession": "workflow.resumeExistingSession",
+  "autoLoadRecentSession": "workflow.autoLoadRecentSession",
+  "omitAgentsAndSkillsOnResume": "workflow.omitAgentsSkillsOnResume",
+  "priorContext": "workflow.priorContext",
+  "defaultMaxRetries": "workflow.maxRetries",
+  "defaultRetryPrompt": "workflow.retryPrompt",
+  "chatWindowLocation": "chat.windowLocation",
+  "chatInactivityTimeout": "chat.inactivityTimeout",
+  "treatChatTimeoutAsSuccess": "chat.treatTimeoutAsSuccess",
+  "forceAgentModeForChat": "chat.forceAgentMode",
+  "chatUseNativeAttachments": "chat.useNativeAttachments",
+  "mcpServers": "mcp.defaultServers",
+  "saveOutputHistory": "history.saveOutput",
+  "maxHistoryRuns": "history.maxRuns",
+  "maxQueueSize": "queue.maxSize",
+  "maxWorkflowExecutionTime": "queue.maxWorkflowExecutionTime",
+  "unlimitedMode": "queue.unlimitedMode",
+  "notifyOnQueueExtension": "queue.notifyOnExtension",
+};
 
 /**
  * Harness availability status
@@ -423,10 +482,8 @@ export class WebviewSettingsSync {
   }
 
   handleOpenSettings(): void {
-    vscode.commands.executeCommand(
-      "workbench.action.openSettings",
-      "@ext:flightpath"
-    );
+    // No-op: the Header now opens the Global Settings drawer directly via uiStore.
+    // This method is kept for backward compatibility with the OPEN_SETTINGS message handler.
   }
 
   async handleUpdateWorkflowProperty(
@@ -528,7 +585,9 @@ export class WebviewSettingsSync {
       return;
     }
 
-    const value = ConfigurationUtils.getConfigValue(key);
+    const relativeKey = key.slice("flightpath.".length);
+    const mappedKey = LEGACY_KEY_MAP[relativeKey] ?? relativeKey;
+    const value = configService.getNested(mappedKey);
 
     this.emitMessage(
       {
@@ -546,10 +605,9 @@ export class WebviewSettingsSync {
       return;
     }
 
-    // Strip the "flightpath." prefix — ConfigurationUtils.updateSetting uses a
-    // scoped getConfiguration("flightpath"), so it expects a relative key.
     const relativeKey = key.slice("flightpath.".length);
-    await ConfigurationUtils.updateSetting(relativeKey, value);
+    const mappedKey = LEGACY_KEY_MAP[relativeKey] ?? relativeKey;
+    await configService.set(mappedKey, value, "user");
   }
 
   // ============================================================================
@@ -807,5 +865,62 @@ export class WebviewSettingsSync {
       (DEFAULT_MODELS as Record<string, string>)[harness] ||
       DEFAULT_MODELS[HARNESS_IDS.COPILOT_CLI]
     );
+  }
+
+  // ============================================================================
+  // Global Settings Drawer Handlers
+  // ============================================================================
+
+  async handleGlobalSettingsLoadRequest(postMessage: PostMessageFn): Promise<void> {
+    const allSettings = configService.getAll();
+    const keys: (keyof FlightPathGlobalSettings)[] = [
+      "harness", "models", "additionalArgs", "execution", "tools",
+      "workflow", "chat", "mcp", "hooks", "queue", "history", "ui",
+      "server", "enableDiagnosticLogs",
+    ];
+    const sources: Partial<Record<string, string>> = {};
+    for (const key of keys) {
+      sources[key] = configService.resolve(key).source;
+    }
+    this.emitMessage(
+      {
+        type: MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED,
+        settings: { settings: allSettings, sources },
+      },
+      postMessage
+    );
+  }
+
+  async handleUpdateGlobalSetting(
+    path: string,
+    value: unknown,
+    scope: "workspace" | "user",
+    postMessage: PostMessageFn
+  ): Promise<void> {
+    await configService.set(path, value, scope);
+    await this.handleGlobalSettingsLoadRequest(postMessage);
+  }
+
+  async handleEnableServer(postMessage: PostMessageFn): Promise<void> {
+    // Stub: server implementation pending STANDALONE_SERVER_PLAN
+    await configService.set("server.enabled", true, "user");
+    postMessage({
+      type: MESSAGE_TYPES.GLOBAL_SETTING_UPDATED,
+      path: "server.enabled",
+      value: true,
+      source: "user",
+    });
+    Log.info("[WebviewSettingsSync] Server enable requested (stub — server not yet implemented)");
+  }
+
+  async handleDisableServer(postMessage: PostMessageFn): Promise<void> {
+    await configService.set("server.enabled", false, "user");
+    postMessage({
+      type: MESSAGE_TYPES.GLOBAL_SETTING_UPDATED,
+      path: "server.enabled",
+      value: false,
+      source: "user",
+    });
+    Log.info("[WebviewSettingsSync] Server disable requested (stub — server not yet implemented)");
   }
 }

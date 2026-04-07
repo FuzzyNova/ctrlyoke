@@ -82,6 +82,10 @@ export const MESSAGE_TYPES = {
   AGENTS_UPDATE: "agentsUpdate", // Update available agents list
   SKILLS_UPDATE: "skillsUpdate", // Update available skills list
   GLOBAL_SETTINGS_UPDATED: "globalSettingsUpdated", // Extension -> Webview: Config changed, update settings only (no workflow reset)
+  GLOBAL_SETTINGS_LOAD_REQUEST: "globalSettingsLoadRequest", // Webview -> Extension: Request full settings payload
+  GLOBAL_SETTINGS_LOADED: "globalSettingsLoaded", // Extension -> Webview: Full settings payload + sources
+  UPDATE_GLOBAL_SETTING: "updateGlobalSetting", // Webview -> Extension: { path, value, scope }
+  GLOBAL_SETTING_UPDATED: "globalSettingUpdated", // Extension -> Webview: { path, value, source } acknowledgment
   GET_CONFIG: "getConfig", // Webview -> Extension: Request config value
   UPDATE_CONFIG: "updateConfig", // Webview -> Extension: Update config value
   CONFIG_VALUE: "configValue", // Extension -> Webview: Send config value

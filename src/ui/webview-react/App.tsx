@@ -29,6 +29,7 @@ import {
   WorkflowPropertiesPanel,
   CenterContentArea,
   MobilePromptsSidebar,
+  GlobalSettingsDrawer,
 } from "./components/layout";
 
 function App() {
@@ -450,6 +451,9 @@ function App() {
               </div>
             </>
           )}
+
+          {/* Global Settings Drawer — slides up from bottom, sits above all other content */}
+          <GlobalSettingsDrawer />
         </div>
       </div>
     );
@@ -463,7 +467,9 @@ function App() {
     <div className="h-screen w-full flex flex-col bg-editor-bg text-foreground">
       <Header />
 
-      {/* Main layout: Prompts (left) | Output/Editor (center) | Settings (right) */}
+      {/* Main layout: relative container enables GlobalSettingsDrawer overlay */}
+      <div className="flex-1 relative overflow-hidden flex flex-col min-h-0">
+      {/* Prompts (left) | Output/Editor (center) | Settings (right) */}
       <Group
         groupRef={desktop.horizontalGroupRef}
         orientation="horizontal"
@@ -622,6 +628,10 @@ function App() {
           <WorkflowPropertiesPanel />
         </Panel>
       </Group>
+
+      {/* Global Settings Drawer — slides up from bottom, z-40 */}
+      <GlobalSettingsDrawer />
+      </div>
     </div>
   );
 }

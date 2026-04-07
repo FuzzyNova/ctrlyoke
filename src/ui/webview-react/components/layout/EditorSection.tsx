@@ -87,9 +87,10 @@ export const EditorSection: React.FC = () => {
   const handleRespectGitignoreChange = useCallback(
     (checked: boolean) => {
       vscode.postMessage({
-        type: MESSAGE_TYPES.UPDATE_CONFIG,
-        key: "flightpath.respectGitignoreForCompletions",
+        type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+        path: "ui.respectGitignoreForCompletions",
         value: checked,
+        scope: "user",
       });
     },
     [vscode]
