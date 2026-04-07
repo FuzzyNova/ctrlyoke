@@ -203,7 +203,6 @@ export const WorkflowPropertiesPanel: React.FC<{
     );
   }, [workflowProperties.endCondition]);
 
-
   // Single breakpoint for all three layout zones (body rows, tab labels, footer toggles)
   const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(
     SETTINGS_DRAWER_BREAKPOINT
@@ -650,7 +649,10 @@ export const WorkflowPropertiesPanel: React.FC<{
   const handleEndConditionChange = useCallback(
     (updated: ScriptConditionValue) => {
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("endCondition", updated as WorkflowProperties["endCondition"]);
+      settingsStore.updateWorkflowProperty(
+        "endCondition",
+        updated as WorkflowProperties["endCondition"]
+      );
       syncWorkflowPropertiesForUndo();
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
@@ -688,8 +690,12 @@ export const WorkflowPropertiesPanel: React.FC<{
           value: undefined,
         });
       } else {
-        const defaultPreCondition: import("@root/types/FlightPathTypes").PreCondition = { script: "", onFail: "skipPrompt" };
-        settingsStore.updateWorkflowProperty("preCondition", defaultPreCondition);
+        const defaultPreCondition: import("@root/types/FlightPathTypes").PreCondition =
+          { script: "", onFail: "skipPrompt" };
+        settingsStore.updateWorkflowProperty(
+          "preCondition",
+          defaultPreCondition
+        );
         syncWorkflowPropertiesForUndo();
         vscode.postMessage({
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
@@ -703,10 +709,12 @@ export const WorkflowPropertiesPanel: React.FC<{
 
   const handlePreConditionChange = useCallback(
     (updated: ScriptConditionValue) => {
-      useSettingsStore.getState().updateWorkflowProperty(
-        "preCondition",
-        updated as import("@root/types/FlightPathTypes").PreCondition
-      );
+      useSettingsStore
+        .getState()
+        .updateWorkflowProperty(
+          "preCondition",
+          updated as import("@root/types/FlightPathTypes").PreCondition
+        );
       syncWorkflowPropertiesForUndo();
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
@@ -1114,46 +1122,6 @@ export const WorkflowPropertiesPanel: React.FC<{
 
           {activePage === DRAWER_PAGES.VALIDATION && (
             <div className="space-y-4">
-              {/* End Condition Section */}
-              <div>
-                <label
-                  htmlFor="settings-end-condition-enabled"
-                  className="flex items-center gap-2 text-[11px] font-semibold uppercase text-description-fg cursor-pointer mb-3"
-                  title="Validation runs after each prompt completes. Individual prompts can override or disable this."
-                >
-                  <input
-                    type="checkbox"
-                    id="settings-end-condition-enabled"
-                    aria-label="Enable End Condition"
-                    checked={endConditionEnabled}
-                    onChange={(e) => handleEndConditionToggle(e.target.checked)}
-                    className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
-                  />
-                  Enable End Condition
-                </label>
-
-                {/* End condition fields — grayed out when disabled */}
-                <div
-                  className={`space-y-3 ${
-                    endConditionEnabled ? "" : "opacity-50 pointer-events-none"
-                  }`}
-                  title={
-                    endConditionEnabled
-                      ? undefined
-                      : "Enable End Condition to configure validation"
-                  }
-                >
-                  <ScriptConditionEditor
-                    variant="endCondition"
-                    value={workflowProperties.endCondition as ScriptConditionValue | null | undefined}
-                    onChange={handleEndConditionChange}
-                    narrow={isNarrow}
-                    disabled={!endConditionEnabled}
-                    idPrefix="settings-end"
-                  />
-                </div>
-              </div>
-
               {/* Pre-Condition Section */}
               <div>
                 <label
@@ -1172,26 +1140,61 @@ export const WorkflowPropertiesPanel: React.FC<{
                   Enable Pre-Condition
                 </label>
 
-                {/* Pre-condition fields — grayed out when disabled */}
-                <div
-                  className={`space-y-3 ${
-                    preConditionEnabled ? "" : "opacity-50 pointer-events-none"
-                  }`}
-                  title={
-                    preConditionEnabled
-                      ? undefined
-                      : "Enable Pre-Condition to configure"
-                  }
+                {/* Pre-condition fields — hidden when disabled */}
+                {preConditionEnabled && (
+                  <div className="space-y-3">
+                    <ScriptConditionEditor
+                      variant="preCondition"
+                      value={
+                        workflowProperties.preCondition as
+                          | ScriptConditionValue
+                          | null
+                          | undefined
+                      }
+                      onChange={handlePreConditionChange}
+                      narrow={isNarrow}
+                      disabled={!preConditionEnabled}
+                      idPrefix="settings-pre"
+                    />
+                  </div>
+                )}
+              </div>
+              {/* End Condition Section */}
+              <div>
+                <label
+                  htmlFor="settings-end-condition-enabled"
+                  className="flex items-center gap-2 text-[11px] font-semibold uppercase text-description-fg cursor-pointer mb-3"
+                  title="Validation runs after each prompt completes. Individual prompts can override or disable this."
                 >
-                  <ScriptConditionEditor
-                    variant="preCondition"
-                    value={workflowProperties.preCondition as ScriptConditionValue | null | undefined}
-                    onChange={handlePreConditionChange}
-                    narrow={isNarrow}
-                    disabled={!preConditionEnabled}
-                    idPrefix="settings-pre"
+                  <input
+                    type="checkbox"
+                    id="settings-end-condition-enabled"
+                    aria-label="Enable End Condition"
+                    checked={endConditionEnabled}
+                    onChange={(e) => handleEndConditionToggle(e.target.checked)}
+                    className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
                   />
-                </div>
+                  Enable End Condition
+                </label>
+
+                {/* End condition fields — hidden when disabled */}
+                {endConditionEnabled && (
+                  <div className="space-y-3">
+                    <ScriptConditionEditor
+                      variant="endCondition"
+                      value={
+                        workflowProperties.endCondition as
+                          | ScriptConditionValue
+                          | null
+                          | undefined
+                      }
+                      onChange={handleEndConditionChange}
+                      narrow={isNarrow}
+                      disabled={!endConditionEnabled}
+                      idPrefix="settings-end"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}

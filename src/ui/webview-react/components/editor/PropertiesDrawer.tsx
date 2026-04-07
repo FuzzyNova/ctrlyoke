@@ -64,19 +64,18 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   onClose,
   activePage,
 }) => {
-  const {
-    properties,
-    setProperty,
-    setEndCondition,
-    clearEndCondition,
-  } = useEditorStore();
+  const { properties, setProperty, setEndCondition, clearEndCondition } =
+    useEditorStore();
 
   // Pre-condition toggle handler
   const handlePreConditionToggle = () => {
     if (properties.preCondition !== undefined) {
       setProperty("preCondition", undefined);
     } else {
-      setProperty("preCondition", { script: "", onFail: "skipPrompt" } as import("../../../../types/FlightPathTypes").PreCondition);
+      setProperty("preCondition", {
+        script: "",
+        onFail: "skipPrompt",
+      } as import("../../../../types/FlightPathTypes").PreCondition);
     }
   };
   const {
@@ -669,50 +668,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {/* Page: Validation */}
         {activePage === DRAWER_PAGES.VALIDATION && (
           <div className="space-y-4">
-            {/* End Condition Section */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <input
-                  type="checkbox"
-                  id="prop-end-enabled"
-                  checked={!!properties.endCondition}
-                  onChange={handleEndConditionToggle}
-                  className="w-4 h-4 rounded border border-input-border"
-                />
-                <label
-                  htmlFor="prop-end-enabled"
-                  className="text-xs font-medium text-foreground cursor-pointer"
-                >
-                  Enable End Condition
-                </label>
-              </div>
-
-              {/* End condition fields — always visible, grayed out when disabled */}
-              <div
-                className={`space-y-3 p-3 bg-editor-bg border border-panel-border rounded ${
-                  properties.endCondition
-                    ? ""
-                    : "opacity-50 pointer-events-none"
-                }`}
-                title={
-                  properties.endCondition
-                    ? undefined
-                    : "Enable End Condition to configure validation"
-                }
-              >
-                <ScriptConditionEditor
-                  variant="endCondition"
-                  value={properties.endCondition as ScriptConditionValue | null | undefined}
-                  onChange={(updated) =>
-                    setEndCondition(updated as import("../../store/editorStore").EndConditionConfig)
-                  }
-                  narrow={isNarrow}
-                  disabled={!properties.endCondition}
-                  idPrefix="prop-end"
-                />
-              </div>
-            </div>
-
             {/* Pre-Condition Section */}
             <div>
               <div className="flex items-center gap-2 mb-3">
@@ -732,30 +687,70 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
               </div>
 
-              {/* Pre-condition fields — always visible, grayed out when disabled */}
-              <div
-                className={`space-y-3 p-3 bg-editor-bg border border-panel-border rounded ${
-                  properties.preCondition !== undefined
-                    ? ""
-                    : "opacity-50 pointer-events-none"
-                }`}
-                title={
-                  properties.preCondition !== undefined
-                    ? undefined
-                    : "Enable Pre-Condition to configure"
-                }
-              >
-                <ScriptConditionEditor
-                  variant="preCondition"
-                  value={properties.preCondition as ScriptConditionValue | null | undefined}
-                  onChange={(updated) =>
-                    setProperty("preCondition", updated as import("../../../../types/FlightPathTypes").PreCondition)
-                  }
-                  narrow={isNarrow}
-                  disabled={properties.preCondition === undefined}
-                  idPrefix="prop-pre"
+              {/* Pre-condition fields — hidden when disabled */}
+              {properties.preCondition !== undefined && (
+                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
+                  <ScriptConditionEditor
+                    variant="preCondition"
+                    value={
+                      properties.preCondition as
+                        | ScriptConditionValue
+                        | null
+                        | undefined
+                    }
+                    onChange={(updated) =>
+                      setProperty(
+                        "preCondition",
+                        updated as import("../../../../types/FlightPathTypes").PreCondition
+                      )
+                    }
+                    narrow={isNarrow}
+                    disabled={properties.preCondition === undefined}
+                    idPrefix="prop-pre"
+                  />
+                </div>
+              )}
+            </div>
+            {/* End Condition Section */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="checkbox"
+                  id="prop-end-enabled"
+                  checked={!!properties.endCondition}
+                  onChange={handleEndConditionToggle}
+                  className="w-4 h-4 rounded border border-input-border"
                 />
+                <label
+                  htmlFor="prop-end-enabled"
+                  className="text-xs font-medium text-foreground cursor-pointer"
+                >
+                  Enable End Condition
+                </label>
               </div>
+
+              {/* End condition fields — hidden when disabled */}
+              {properties.endCondition && (
+                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
+                  <ScriptConditionEditor
+                    variant="endCondition"
+                    value={
+                      properties.endCondition as
+                        | ScriptConditionValue
+                        | null
+                        | undefined
+                    }
+                    onChange={(updated) =>
+                      setEndCondition(
+                        updated as import("../../store/editorStore").EndConditionConfig
+                      )
+                    }
+                    narrow={isNarrow}
+                    disabled={!properties.endCondition}
+                    idPrefix="prop-end"
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
