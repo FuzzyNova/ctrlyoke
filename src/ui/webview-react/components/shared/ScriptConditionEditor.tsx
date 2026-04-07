@@ -93,7 +93,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   // Local string state for timeout to prevent auto-reset when clearing
   const [timeoutInput, setTimeoutInput] = useState(String(v.timeout ?? 30000));
   const [maxRetriesInput, setMaxRetriesInput] = useState(
-    String(v.maxRetries ?? 0)
+    String(v.maxRetries ?? 1)
   );
 
   useEffect(() => {
@@ -101,7 +101,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   }, [v.timeout]);
 
   useEffect(() => {
-    setMaxRetriesInput(String(v.maxRetries ?? 0));
+    setMaxRetriesInput(String(v.maxRetries ?? 1));
   }, [v.maxRetries]);
 
   const update = (patch: Partial<ScriptConditionValue>) =>
@@ -110,12 +110,19 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const compareSource = (v.compareSource ?? "auto") as EndConditionCompareSource;
   const compareSourceHint =
     compareSource === "auto"
-      ? "'true'/'false' use exit code; other values check stdout"
+      ? "'true'/'false' check exit code; other values compare stdout"
       : compareSource === "stdout"
-        ? "Compares stdout output (requires clean exit)"
+        ? "Compares stdout text output (requires a clean exit)"
         : compareSource === "stderr"
-          ? "Compares stderr output (exit code not checked)"
-          : "Compares numeric exit code — use '0', '1', or 'true'/'false'";
+          ? "Compares stderr text output (exit code not checked)"
+          : "Compares the numeric exit code directly (e.g. '0', '1')";
+
+  // Shown under Expected Return when exit code semantics apply — clarifies the
+  // counterintuitive shell convention: success=0, failure=non-zero.
+  const returnsExitCodeHint =
+    compareSource === "auto" || compareSource === "exitCode"
+      ? "Shell exit codes: true = 0 (success)  ·  false = non-zero (failure)"
+      : null;
 
   return (
     <div className="space-y-3">
@@ -137,6 +144,53 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
         />
       </div>
+
+      {/* Compare Source + Expected Return */}
+      <DrawerRow narrow={narrow}>
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor={`${idPrefix}-compare-source`}
+            className="text-xs font-medium text-foreground"
+            title="Auto: 'true'/'false' check exit code (0=success); other values compare stdout. Stdout/Stderr: text match. Exit Code: numeric exit code directly."
+          >
+            Compare Source
+          </label>
+          <CustomSelect
+            id={`${idPrefix}-compare-source`}
+            value={compareSource}
+            onChange={(val) =>
+              update({ compareSource: val as EndConditionCompareSource })
+            }
+            options={COMPARE_SOURCE_OPTIONS}
+            disabled={disabled}
+          />
+          <span className="text-[10px] text-description-fg">
+            {compareSourceHint}
+          </span>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor={`${idPrefix}-returns`}
+            className="text-xs font-medium text-foreground"
+          >
+            Expected Return
+          </label>
+          <input
+            type="text"
+            id={`${idPrefix}-returns`}
+            value={v.returns ?? ""}
+            onChange={(e) => update({ returns: e.target.value })}
+            placeholder="true"
+            disabled={disabled}
+            className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+          />
+          {returnsExitCodeHint && (
+            <span className="text-[10px] text-description-fg">
+              {returnsExitCodeHint}
+            </span>
+          )}
+        </div>
+      </DrawerRow>
 
       {/* On Pass + On Fail */}
       <DrawerRow narrow={narrow}>
@@ -172,154 +226,131 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         </div>
       </DrawerRow>
 
-      {/* Compare Source + Expected Return */}
-      <DrawerRow narrow={narrow}>
-        <div className="flex flex-col gap-1">
+      {/* Timeout + Max Retries (Max Retries shares row with Timeout in wide view when retry is active) */}
+      {variant === "endCondition" && hasRetry ? (
+        <DrawerRow narrow={narrow}>
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor={`${idPrefix}-timeout`}
+              className="text-xs font-medium text-foreground"
+            >
+              Timeout (ms)
+            </label>
+            <input
+              type="number"
+              id={`${idPrefix}-timeout`}
+              value={timeoutInput}
+              onChange={(e) => setTimeoutInput(e.target.value)}
+              onBlur={() => {
+                const parsed = parseInt(timeoutInput);
+                const val = isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
+                setTimeoutInput(String(val));
+                update({ timeout: val });
+              }}
+              min={1000}
+              max={300000}
+              disabled={disabled}
+              className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor={`${idPrefix}-max-retries`}
+              className="text-xs font-medium text-foreground"
+            >
+              Max Retries
+            </label>
+            <input
+              type="number"
+              id={`${idPrefix}-max-retries`}
+              value={maxRetriesInput}
+              onChange={(e) => setMaxRetriesInput(e.target.value)}
+              onBlur={() => {
+                const parsed = parseInt(maxRetriesInput);
+                const val = isNaN(parsed) ? 1 : parsed;
+                setMaxRetriesInput(String(val));
+                update({ maxRetries: val });
+              }}
+              min={-1}
+              max={100}
+              disabled={disabled}
+              className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+            />
+            <span className="text-[10px] text-description-fg">
+              Use -1 for unlimited retries
+            </span>
+          </div>
+        </DrawerRow>
+      ) : (
+        <div className="flex flex-col gap-1 w-1/2">
           <label
-            htmlFor={`${idPrefix}-compare-source`}
-            className="text-xs font-medium text-foreground"
-            title="Auto: 'true'/'false' check exit code; other values check stdout. Stdout: always compare stdout. Stderr: compare stderr. Exit Code: compare numeric exit code."
-          >
-            Compare Source
-          </label>
-          <CustomSelect
-            id={`${idPrefix}-compare-source`}
-            value={compareSource}
-            onChange={(val) =>
-              update({ compareSource: val as EndConditionCompareSource })
-            }
-            options={COMPARE_SOURCE_OPTIONS}
-            disabled={disabled}
-          />
-          <span className="text-[10px] text-description-fg">
-            {compareSourceHint}
-          </span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor={`${idPrefix}-returns`}
+            htmlFor={`${idPrefix}-timeout`}
             className="text-xs font-medium text-foreground"
           >
-            Expected Return
+            Timeout (ms)
           </label>
           <input
-            type="text"
-            id={`${idPrefix}-returns`}
-            value={v.returns ?? ""}
-            onChange={(e) => update({ returns: e.target.value })}
-            placeholder="true"
+            type="number"
+            id={`${idPrefix}-timeout`}
+            value={timeoutInput}
+            onChange={(e) => setTimeoutInput(e.target.value)}
+            onBlur={() => {
+              const parsed = parseInt(timeoutInput);
+              const val = isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
+              setTimeoutInput(String(val));
+              update({ timeout: val });
+            }}
+            min={1000}
+            max={300000}
             disabled={disabled}
             className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
           />
         </div>
-      </DrawerRow>
+      )}
 
-      {/* Timeout (half-width) */}
-      <div className="flex flex-col gap-1 w-1/2">
-        <label
-          htmlFor={`${idPrefix}-timeout`}
-          className="text-xs font-medium text-foreground"
-        >
-          Timeout (ms)
-        </label>
-        <input
-          type="number"
-          id={`${idPrefix}-timeout`}
-          value={timeoutInput}
-          onChange={(e) => setTimeoutInput(e.target.value)}
-          onBlur={() => {
-            const parsed = parseInt(timeoutInput);
-            const val = isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
-            setTimeoutInput(String(val));
-            update({ timeout: val });
-          }}
-          min={1000}
-          max={300000}
-          disabled={disabled}
-          className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-        />
-      </div>
-
-      {/* endCondition-only: retry fields */}
-      {variant === "endCondition" && (
+      {/* endCondition-only: retry fields (shown when retry is an action) */}
+      {variant === "endCondition" && hasRetry && (
         <>
-          {/* Max Retries (always shown for endCondition) */}
-          <DrawerRow narrow={narrow}>
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor={`${idPrefix}-max-retries`}
-                className="text-xs font-medium text-foreground"
-              >
-                Max Retries
-              </label>
-              <input
-                type="number"
-                id={`${idPrefix}-max-retries`}
-                value={maxRetriesInput}
-                onChange={(e) => setMaxRetriesInput(e.target.value)}
-                onBlur={() => {
-                  const parsed = parseInt(maxRetriesInput);
-                  const val = isNaN(parsed) ? 0 : parsed;
-                  setMaxRetriesInput(String(val));
-                  update({ maxRetries: val });
-                }}
-                min={-1}
-                max={100}
-                disabled={disabled}
-                className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-              />
-              <span className="text-[10px] text-description-fg">
-                Use -1 for unlimited retries
-              </span>
-            </div>
-            <div />
-          </DrawerRow>
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor={`${idPrefix}-retry-prompt`}
+              className="text-xs font-medium text-foreground"
+            >
+              Retry Prompt
+            </label>
+            <textarea
+              id={`${idPrefix}-retry-prompt`}
+              value={v.retryPrompt ?? ""}
+              onChange={(e) => update({ retryPrompt: e.target.value })}
+              placeholder={"Validation failed: {error}\n\nPlease fix the issues."}
+              rows={3}
+              disabled={disabled}
+              className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-y disabled:opacity-50"
+            />
+            <span className="text-[10px] text-description-fg">
+              Use {"{error}"} placeholder for validation error message
+            </span>
+          </div>
 
-          {/* Retry Prompt + Resume Session on Retry (only shown when retry is an action) */}
-          {hasRetry && (
-            <>
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor={`${idPrefix}-retry-prompt`}
-                  className="text-xs font-medium text-foreground"
-                >
-                  Retry Prompt
-                </label>
-                <textarea
-                  id={`${idPrefix}-retry-prompt`}
-                  value={v.retryPrompt ?? ""}
-                  onChange={(e) => update({ retryPrompt: e.target.value })}
-                  placeholder={"Validation failed: {error}\n\nPlease fix the issues."}
-                  rows={3}
-                  disabled={disabled}
-                  className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-y disabled:opacity-50"
-                />
-                <span className="text-[10px] text-description-fg">
-                  Use {"{error}"} placeholder for validation error message
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id={`${idPrefix}-resume-session-on-retry`}
-                  checked={v.resumeSessionOnRetry ?? true}
-                  onChange={(e) =>
-                    update({ resumeSessionOnRetry: e.target.checked })
-                  }
-                  disabled={disabled}
-                  className="w-4 h-4 accent-focus-border cursor-pointer"
-                />
-                <label
-                  htmlFor={`${idPrefix}-resume-session-on-retry`}
-                  className="text-xs font-medium text-foreground cursor-pointer"
-                  title="When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
-                >
-                  Resume Session on Retry
-                </label>
-              </div>
-            </>
-          )}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id={`${idPrefix}-resume-session-on-retry`}
+              checked={v.resumeSessionOnRetry ?? true}
+              onChange={(e) =>
+                update({ resumeSessionOnRetry: e.target.checked })
+              }
+              disabled={disabled}
+              className="w-4 h-4 accent-focus-border cursor-pointer"
+            />
+            <label
+              htmlFor={`${idPrefix}-resume-session-on-retry`}
+              className="text-xs font-medium text-foreground cursor-pointer"
+              title="When enabled, retries continue in the same session. Uncheck to start a fresh session for each retry."
+            >
+              Resume Session on Retry
+            </label>
+          </div>
         </>
       )}
     </div>

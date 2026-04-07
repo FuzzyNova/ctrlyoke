@@ -57,10 +57,12 @@ export const AnimatedSection: React.FC<{
 
   return (
     <div
-      className={`animate-slide-down-in${closing ? " animate-slide-down-out" : ""}${className ? ` ${className}` : ""}`}
+      className={`grid animate-slide-down-in${closing ? " animate-slide-down-out" : ""}${className ? ` ${className}` : ""}`}
       onAnimationEnd={handleAnimationEnd}
     >
-      {children}
+      <div className="overflow-hidden min-h-0">
+        {children}
+      </div>
     </div>
   );
 };

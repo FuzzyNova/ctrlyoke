@@ -240,25 +240,25 @@ module.exports = {
         "slide-down-fade-in": {
           from: {
             opacity: "0",
-            maxHeight: "0px",
-            transform: "translateY(-6px)",
+            gridTemplateRows: "0fr",
+            transform: "translateY(-4px)",
           },
           to: {
             opacity: "1",
-            maxHeight: "800px",
+            gridTemplateRows: "1fr",
             transform: "translateY(0)",
           },
         },
         "slide-down-fade-out": {
           from: {
             opacity: "1",
-            maxHeight: "800px",
+            gridTemplateRows: "1fr",
             transform: "translateY(0)",
           },
           to: {
             opacity: "0",
-            maxHeight: "0px",
-            transform: "translateY(-6px)",
+            gridTemplateRows: "0fr",
+            transform: "translateY(-4px)",
           },
         },
       },
