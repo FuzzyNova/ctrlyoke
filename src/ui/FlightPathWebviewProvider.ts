@@ -35,6 +35,7 @@ import type { WorkflowSummary } from "../types/FlightPathTypes";
 import { workflowDisplayStep } from "../types/FlightPathTypes";
 import { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { configService } from "../config/FlightPathConfigService";
 import { WebviewSettingsSync } from "./WebviewSettingsSync";
 import { WorkflowSerializer } from "./WorkflowSerializer";
 import { WebviewMessageRouter } from "./WebviewMessageRouter";
@@ -64,6 +65,7 @@ export class FlightPathWebviewProvider
   private outputHistoryManager?: OutputHistoryManager;
   private configChangeDisposable?: vscode.Disposable;
   private modelsLoadedDisposable?: vscode.Disposable;
+  private configServiceUnsubscribe?: () => void;
 
   // Delegate classes
   private readonly settingsSync: WebviewSettingsSync;
@@ -116,7 +118,7 @@ export class FlightPathWebviewProvider
       }
     });
 
-    // Listen for configuration changes to sync settings view
+    // Listen for VS Code configuration changes (legacy flightpath.* settings)
     this.configChangeDisposable = vscode.workspace.onDidChangeConfiguration(
       (e) => {
         if (e.affectsConfiguration("flightpath")) {
@@ -126,6 +128,13 @@ export class FlightPathWebviewProvider
         }
       }
     );
+
+    // Listen for file-based config changes (configService) to keep the webview in sync
+    this.configServiceUnsubscribe = configService.subscribe(() => {
+      if (this.view) {
+        this.settingsSync.sendGlobalSettingsUpdate();
+      }
+    });
 
     // Discover available agents and skills in background
     this.settingsSync.discoverAgents();
@@ -932,6 +941,7 @@ window.vscodeApi = acquireVsCodeApi();
   public dispose(): void {
     this.configChangeDisposable?.dispose();
     this.modelsLoadedDisposable?.dispose();
+    this.configServiceUnsubscribe?.();
   }
 
   // ============================================================================

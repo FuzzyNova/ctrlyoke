@@ -145,6 +145,7 @@ export class FlightPathConfigService {
       throw new Error(`No ${scope} backend configured`);
     }
     await backend.set(path, value);
+    this.notify();
   }
 
   /** Subscribe to config changes */
