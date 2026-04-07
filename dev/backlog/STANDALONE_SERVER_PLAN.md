@@ -39,7 +39,7 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 - A full VS Code extension replacement
 - Supporting the `copilot-chat` harness in the standalone server (directly automates VS Code's UI)
 
-## Current Codebase Audit (2026-04-03)
+## Current Codebase Audit (updated 2026-04-07)
 
 ### Already in place
 
@@ -50,23 +50,48 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 - `src/flightpath/WorkflowOrchestrator.ts` now routes registry and CLI-watch updates through the shared broadcast hub and exposes `addDashboardProvider()` / `removeDashboardProvider()`.
 - `src/flightpath/WorkflowInstance.ts` now receives the shared `IDashboardSink` instead of casting the first provider to `FlightPathWebviewProvider`.
 - `src/ui/WebviewMessageRouter.ts` now supports scoped reply callbacks, and `src/ui/FlightPathWebviewProvider.ts` exposes `routeMessage(...)` / `routeExternalMessage(...)` for hosted clients.
-- `RUNNER_IDS.SERVER` and `MESSAGE_TYPES.ENABLE_SERVER` / `DISABLE_SERVER` now exist.
+- `RUNNER_IDS.SERVER` and `MESSAGE_TYPES.ENABLE_SERVER` / `DISABLE_SERVER` now exist in `DashboardConstants.ts`.
 - The React app already depends only on the `window.vscodeApi` contract (`postMessage`, `getState`, `setState`), so the browser shim approach is still valid.
+- **`FlightPathGlobalSettings` type** (`src/types/FlightPathSettings.ts`) is complete, including `server.port`, `server.enabled`, `server.standalonePort`, and `server.theme` fields. No `flightpath.serverPort` VS Code setting is needed; the config file system owns it.
+- **`FlightPathConfigService` + `FileConfigBackend`** (`src/config/`) are in place. `ConfigurationUtils` now reads from the config service — not `vscode.workspace.getConfiguration()` — so it works identically in VS Code and non-VS Code contexts.
+- **Global Settings UI** (`GlobalSettingsDrawer` + 10 section components including `ServerSection`) is implemented in `src/ui/webview-react/components/settings/`.
+- **Global Settings message types** (`GLOBAL_SETTINGS_LOAD_REQUEST`, `GLOBAL_SETTINGS_LOADED`, `UPDATE_GLOBAL_SETTING`, `GLOBAL_SETTING_UPDATED`) are wired end-to-end.
+- **Header settings-gear button** opens the Global Settings drawer (`uiStore.toggleGlobalSettings`). The server Start/Stop button can be added to the same header cluster.
+- `schemas/settings-schema.json` provides IntelliSense for `.flightpath/settings.json`.
 
 ### Still missing before implementation
 
-- `WorkflowOrchestrator.buildWorkflowInstance()` still hard-codes `new VsCodeAdapter(this.context)`, which blocks standalone reuse of the current constructor path.
-- `PromptFileWatcher` and `CliWatchSession` still create VS Code file watchers directly.
+**VS Code-hosted server (Phase 2):**
+
+Already wired from global settings work:
+- `Header.tsx` has the Start/Stop Server button (`codicon-play-circle` / `codicon-debug-stop`) posting `ENABLE_SERVER` / `DISABLE_SERVER` ✅
+- `settingsStore` has `serverRunning: boolean` + `setServerRunning(running)` ✅
+- `WebviewMessageRouter` routes `ENABLE_SERVER` / `DISABLE_SERVER` → `WebviewSettingsSync.handleEnableServer/handleDisableServer` (currently persists config only) ✅
+- `ServerSection` in Global Settings drawer has port, standalonePort, and theme fields ✅
+- `FlightPathWebviewProvider.routeExternalMessage(message, postMessage)` routing seam exists ✅
+
+Still missing:
+- `express` and `ws` npm dependencies not installed.
+- `src/server/FlightPathHostedServer.ts` — the actual Express + WS server.
+- `src/server/HostedServerRouter.ts` — per-WS-client routing wrapper.
+- `WebviewSettingsSync.handleEnableServer` needs to actually start/stop the server instance (currently only persists config).
+- `SERVER_STARTED` + `SERVER_STOPPED` message types (extension → webview) to flip `serverRunning` and carry the running URL.
+- `useMessageHandler` needs to handle `SERVER_STARTED` / `SERVER_STOPPED` to call `setServerRunning` and store the URL.
+- `serverUrl: string | null` field in `settingsStore` + display in `ServerSection`.
+- Theme capture/forward pipeline (see Phase 2 design below).
+- Extension deactivation cleanup (`FlightPathHostedServer.dispose()` called from `extension.ts`).
+
+**Standalone server (Phases 5–10):**
+- `WorkflowOrchestrator` still hard-codes `new VsCodeAdapter(this.context)` — blocks standalone reuse.
+- `PromptFileWatcher` and `CliWatchSession` still call `vscode.workspace.createFileSystemWatcher()` directly.
 - `WebviewSettingsSync` still uses `vscode.workspace.workspaceFolders` directly for agent/skill/workspace discovery.
-- There is no hosted/standalone server code yet, no `flightpath.enableServer` command, no `flightpath.serverPort` setting, and no `_internalRouteMessage` command.
-- `express`, `ws`, `fast-glob`, and `ignore` are not installed. (`chokidar` is already present.)
-- Hosted-server request/response messages such as completions, file-ref validation, and attachment token counts must reply to the requesting WebSocket client only; they cannot be blindly broadcast to every connected tab.
-- The hosted-server UI control still needs to be added to the React shell, along with running URL/status display.
+- `fast-glob` and `ignore` npm packages not installed (needed for standalone `CompletionService`).
+- `StandaloneServerAdapter`, `FlightPathServer`, `standalone-shim.js`, theme CSS files, `WebSocketMessageRouter`, `CompletionService`, `ServerFileWatcher`, and `flightpath server` CLI subcommand all not yet created.
 
 ### Readiness verdict
 
-- **VS Code-hosted server:** **ready to implement now.** The shared broadcast sink/provider cleanup and callable hosted-router surface are in place, so Phase 2 can start with `FlightPathHostedServer`, command/setting wiring, and the webview control.
-- **Standalone server:** not ready until that same cleanup is complete and the watcher / `PlatformAdapter` seams are threaded through the orchestration layer.
+- **VS Code-hosted server (Phase 2): ready to implement.** All prerequisites are in place — broadcast hub, callable router seam, settings architecture, message types, and the Global Settings UI shell are all done. Start with `FlightPathHostedServer`, command registration in `extension.ts`, `express`/`ws` install, and the Start/Stop header button.
+- **Standalone server (Phases 5–10): not yet ready.** Blocked by the `VsCodeAdapter` hard-coding in `WorkflowOrchestrator`, and the VS Code file-watcher usage in `PromptFileWatcher` / `CliWatchSession`. These seams need to be threaded through `PlatformAdapter` before standalone can reuse the orchestration layer.
 
 ---
 
@@ -131,7 +156,7 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 | `PlatformAdapter` interface      | `src/platform/PlatformAdapter.ts`        | `StandaloneServerAdapter` is the third implementation; this seam also needs file-watcher support                     |
 | `vscode-shim` alias              | `esbuild.js` CLI bundle                  | Standalone server bundle uses the same `alias: { vscode: 'src/platform/vscode-shim.ts' }`                             |
 | Commander.js subcommands         | `src/cli.ts`                             | `server` added as `program.command('server')` (standalone only)                                                       |
-| `setRuntimeMode`                 | `src/cli.ts` line 27                     | Standalone server should call `setRuntimeMode(RUNNER_IDS.SERVER)` once that constant exists                           |
+| `setRuntimeMode`                 | `src/cli.ts` line 27                     | Standalone server calls `setRuntimeMode(RUNNER_IDS.SERVER)` — `RUNNER_IDS.SERVER` already exists in `DashboardConstants.ts` |
 
 ---
 
@@ -155,7 +180,7 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 | `src/flightpath/WorkflowOrchestrator.ts`            | `vscode.ExtensionContext`, `VsCodeAdapter`, primary-provider assumptions | Finish provider fanout, add a broadcast sink for `WorkflowInstance`, and inject adapter/context cleanly for server use |
 | `src/ui/WebviewMessageRouter.ts`                    | `vscode.commands.executeCommand()` + webview-local reply channel   | Hosted server needs a callable router wrapper; standalone needs a WebSocket router with per-connection replies |
 | `src/ui/WebviewSettingsSync.ts`                     | `vscode.workspace.workspaceFolders`, command execution, `ConfigurationUtils` | Move workspace discovery behind adapter/constructor inputs; keep settings reads routed through `ConfigurationUtils` |
-| `src/utils/ConfigurationUtils.ts`                   | `vscode.workspace.getConfiguration()`                              | Already bypassed when called through `CliAdapter.getConfig()`          |
+| `src/utils/ConfigurationUtils.ts`                   | `vscode.workspace.getConfiguration()`                              | **Done** — now reads from `FlightPathConfigService` (file-based config). No VS Code dependency remaining. |
 | `src/flightpath/orchestration/PromptFileWatcher.ts` | `vscode.workspace.createFileSystemWatcher()`                       | `chokidar` (already in dependencies)                                   |
 | `src/flightpath/orchestration/CliWatchSession.ts`   | `vscode.workspace.createFileSystemWatcher()` (multiple watchers)   | Same watcher abstraction; inject adapter into constructor              |
 | `src/completions/CompletionHelpers.ts`              | `vscode.workspace.findFiles()`, Git extension                      | Node.js `fs` + `fast-glob` + `ignore`                                  |
@@ -203,41 +228,271 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 **New files**
 
 - `src/server/FlightPathHostedServer.ts`
-- `src/server/HostedServerRouter.ts` (or an equivalent wrapper/factory around `WebviewMessageRouter`)
+- `src/server/HostedServerRouter.ts`
 
-Starts an HTTP + WebSocket server inside the running VS Code extension process. The live `WorkflowOrchestrator` remains the backend, but hosted tabs are **not** just another broadcast target — they also need a per-connection request/response channel.
+Starts an Express + WebSocket server inside the running VS Code extension process. The live `WorkflowOrchestrator` remains the backend; browser tabs are additional `IDashboardProvider` consumers alongside the VS Code sidebar panel.
 
-**Design**
+#### New message types (add to `DashboardConstants.ts`)
 
-- `FlightPathHostedServer` implements `IDashboardProvider` and registers with the shared broadcast hub from Phase 1 so all global workflow events reach browser tabs.
-- Each WebSocket client gets its own reply callback for client-scoped messages such as completions, attachment token counts, and file-ref validation.
-- Reuse `WebviewMessageRouter` logic by exposing a direct callable entrypoint (for example `FlightPathWebviewProvider.routeExternalMessage(message, reply)` or a shared router factory). Do **not** rely on a synthetic `flightpath._internalRouteMessage` command unless one is intentionally added and tested.
-- Hosted mode can keep using the in-process VS Code services for prompt file selection, output panel commands, open file, Git diff, settings sync, and completions because the server is still running inside the extension.
-- Add duplicate-start protection, explicit stop/dispose, and extension deactivation cleanup.
+```typescript
+SERVER_STARTED: "serverStarted"   // extension → webview: { url: string }
+SERVER_STOPPED: "serverStopped"   // extension → webview
+THEME_VARS_CAPTURED: "themeVarsCaptured"  // webview → extension: { vars: Record<string, string> }
+THEME_VARS_UPDATED: "themeVarsUpdated"    // extension → hosted WS clients: { vars: Record<string, string> }
+```
 
-**Extension wiring**
+#### Store additions (`settingsStore`)
 
-- Register `flightpath.enableServer` and `flightpath.disableServer` commands.
-- Add `MESSAGE_TYPES.ENABLE_SERVER` (and a stop counterpart if needed) for the dashboard button.
-- Server port and enabled/disabled state are owned by the global settings architecture (`GLOBAL_SETTINGS_PLAN.md`). Do **not** add a standalone `flightpath.serverPort` setting to `package.json` here — it belongs to the global settings inventory already defined there.
-- Surface the running URL in the dashboard header and in Global Settings > Server.
+```typescript
+serverUrl: string | null;  // set by SERVER_STARTED, cleared by SERVER_STOPPED
+setServerUrl: (url: string | null) => void;
+```
 
-**Dashboard UI placement**
+#### `useMessageHandler` additions
 
-- Put the **Start/Stop Server** quick-action button in `src/ui/webview-react/components/layout/Header.tsx`, beside the existing Global Settings button (the `codicon-settings-gear` button). These are both app-global controls, not workflow-local.
-- The header already has a stable cluster for app-global actions (Save, Undo/Redo, Global Settings). The server toggle belongs in that cluster.
-- Detailed server configuration (port, displayed URL, copy/open-browser affordances, future TLS options) lives in **Global Settings > Server**, not in the header button itself.
-- Keep the server toggle outside any CLI-managed read-only disable wrapper. Viewing a CLI-managed workflow should not prevent starting or stopping the hosted server.
+```typescript
+case MESSAGE_TYPES.SERVER_STARTED:
+  settingsStore.setServerRunning(true);
+  settingsStore.setServerUrl(message.url);
+  break;
+case MESSAGE_TYPES.SERVER_STOPPED:
+  settingsStore.setServerRunning(false);
+  settingsStore.setServerUrl(null);
+  break;
+```
 
-**Theme**
+#### Theme forwarding — capture from webview, inject into browser HTML
 
-Since the extension is running, the hosted server can either inject actual VS Code theme variables into the served HTML or map the active theme to the Phase 4 fallback CSS files. Pick one approach and keep it shared with the standalone theme assets where possible.
+The VS Code webview is the only context where all `--vscode-*` CSS variables are live. On webview init and on `vscode.window.onDidChangeActiveColorTheme`, the React app extracts them:
 
-> **Key advantage over standalone**: No standalone harness limitations and no replacement for VS Code-only commands. The hosted server is primarily a transport + connection-management layer over the existing extension runtime.
+```typescript
+// In App.tsx (or a dedicated hook) — fires once on mount and on theme change
+function captureThemeVars() {
+  const style = window.getComputedStyle(document.documentElement);
+  const vars: Record<string, string> = {};
+  // Walk all CSS custom properties; filter to --vscode-* only
+  for (const sheet of document.styleSheets) {
+    try {
+      for (const rule of sheet.cssRules) {
+        if (rule instanceof CSSStyleRule && rule.selectorText === ':root') {
+          for (const prop of rule.style) {
+            if (prop.startsWith('--vscode-')) {
+              vars[prop] = style.getPropertyValue(prop).trim();
+            }
+          }
+        }
+      }
+    } catch { /* cross-origin sheet, skip */ }
+  }
+  vscodeApi.postMessage({ type: MESSAGE_TYPES.THEME_VARS_CAPTURED, vars });
+}
+```
+
+The extension stores the snapshot in `FlightPathHostedServer`. On theme change (`vscode.window.onDidChangeActiveColorTheme`), re-trigger capture by posting a `CAPTURE_THEME_VARS` message to the VS Code webview, then broadcast the new vars to all connected browser clients as `THEME_VARS_UPDATED`. Browser clients apply the vars via the shim:
+
+```javascript
+// In standalone-shim.js
+case 'themeVarsUpdated':
+  const style = document.documentElement.style;
+  for (const [k, v] of Object.entries(msg.vars)) style.setProperty(k, v);
+  break;
+```
+
+When a new browser client connects, inject the cached vars as an inline `<style>:root { ... }</style>` block in the served HTML (before `standalone-shim.js`). This gives the browser client the exact same theme as the VS Code sidebar — custom themes included — with live updates on theme change. **Phase 4 static CSS files are only needed for the standalone server.**
+
+#### `FlightPathHostedServer` design
+
+```typescript
+// src/server/FlightPathHostedServer.ts
+import express from "express";
+import { WebSocketServer, WebSocket } from "ws";
+import { createServer, Server } from "http";
+import type { IDashboardProvider } from "../ui/IDashboardProvider";
+import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
+import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
+import { MESSAGE_TYPES } from "../types/DashboardConstants";
+
+export class FlightPathHostedServer implements IDashboardProvider {
+  private app = express();
+  private httpServer: Server;
+  private wss: WebSocketServer;
+  private connections = new Set<WebSocket>();
+  private cachedThemeVars: Record<string, string> = {};
+  private port: number;
+
+  constructor(
+    private hub: DashboardBroadcastHub,
+    private webviewProvider: FlightPathWebviewProvider,
+    port: number,
+  ) {
+    this.port = port;
+    this.httpServer = createServer(this.app);
+    this.wss = new WebSocketServer({ server: this.httpServer });
+    this.setupRoutes();
+    this.setupWebSocket();
+    hub.addProvider(this);
+  }
+
+  // ── IDashboardProvider — broadcast all orchestrator events ────────────────
+  postMessage(message: unknown): void {
+    this.broadcast(message);
+  }
+  notifyWorkflowAdded(summary) { this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary }); }
+  notifyWorkflowDismissed(id) { this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId: id }); }
+  notifyWorkflowSummaryUpdated(summary) { this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary }); }
+  notifyActiveWorkflowChanged(id) { this.broadcast({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId: id }); }
+
+  // ── Theme var snapshot (fed from VS Code webview capture) ─────────────────
+  updateThemeVars(vars: Record<string, string>): void {
+    this.cachedThemeVars = vars;
+    this.broadcast({ type: MESSAGE_TYPES.THEME_VARS_UPDATED, vars });
+  }
+
+  // ── HTTP routes ───────────────────────────────────────────────────────────
+  private setupRoutes(): void {
+    const webviewDist = this.resolveWebviewDist();
+    this.app.use(express.static(webviewDist));
+    this.app.get("/standalone-shim.js", (_req, res) =>
+      res.sendFile(path.join(__dirname, "standalone-shim.js"))
+    );
+    this.app.get("*", (_req, res) => res.send(this.buildHtml(webviewDist)));
+  }
+
+  private buildHtml(webviewDist: string): string {
+    const index = fs.readFileSync(path.join(webviewDist, "index.html"), "utf8");
+    const themeBlock = this.buildThemeStyleBlock();
+    return index.replace(
+      "</head>",
+      `${themeBlock}<script src="/standalone-shim.js"></script></head>`
+    );
+  }
+
+  private buildThemeStyleBlock(): string {
+    const vars = Object.entries(this.cachedThemeVars)
+      .map(([k, v]) => `  ${k}: ${v};`)
+      .join("\n");
+    return vars ? `<style>:root {\n${vars}\n}</style>\n` : "";
+  }
+
+  // ── WebSocket ─────────────────────────────────────────────────────────────
+  private setupWebSocket(): void {
+    this.wss.on("connection", (ws) => {
+      this.connections.add(ws);
+      this.sendInitialState(ws);
+      ws.on("message", (raw) => {
+        const msg = JSON.parse(raw.toString());
+        // Route through the VS Code webview's message router — replies go back to this client only
+        this.webviewProvider.routeExternalMessage(msg, (reply) => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(reply));
+        });
+      });
+      ws.on("close", () => this.connections.delete(ws));
+    });
+  }
+
+  private sendInitialState(ws: WebSocket): void {
+    // Full bootstrap: let the webview provider send its INIT payload to this client
+    this.webviewProvider.routeExternalMessage(
+      { type: MESSAGE_TYPES.READY },
+      (msg) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
+    );
+  }
+
+  private broadcast(message: unknown): void {
+    const json = JSON.stringify(message);
+    for (const ws of this.connections) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(json);
+    }
+  }
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+  listen(): string {
+    this.httpServer.listen(this.port, "127.0.0.1");
+    return `http://localhost:${this.port}`;
+  }
+
+  dispose(): void {
+    this.hub.removeProvider(this);
+    for (const ws of this.connections) ws.close();
+    this.connections.clear();
+    this.wss.close();
+    this.httpServer.close();
+  }
+
+  private resolveWebviewDist(): string {
+    // Vite outputs to out/ui/webview-react/ relative to the extension root
+    return path.join(path.dirname(__dirname), "ui", "webview-react");
+  }
+}
+```
+
+#### `HostedServerRouter.ts`
+
+Not needed as a separate file — `FlightPathWebviewProvider.routeExternalMessage(message, reply)` is the callable entrypoint. Each WebSocket client passes its own `reply` callback, giving per-connection request/response without any shared state.
+
+#### `WebviewSettingsSync` — wire up actual start/stop
+
+`handleEnableServer` and `handleDisableServer` currently only persist the setting. They need to also start/stop the server instance and post `SERVER_STARTED`/`SERVER_STOPPED` back to the webview. The server instance is owned by the extension and passed into `WebviewSettingsSync`, or the methods fire VS Code commands that `extension.ts` handles:
+
+```typescript
+// extension.ts — preferred: extension owns the server lifetime
+context.subscriptions.push(
+  vscode.commands.registerCommand("flightpath.enableServer", async () => {
+    if (hostedServer) return; // already running
+    const port = configService.get("server").port ?? 3000;
+    hostedServer = new FlightPathHostedServer(broadcastHub, webviewProvider, port);
+    const url = hostedServer.listen();
+    webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STARTED, url });
+  }),
+  vscode.commands.registerCommand("flightpath.disableServer", async () => {
+    hostedServer?.dispose();
+    hostedServer = undefined;
+    webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STOPPED });
+  }),
+);
+```
+
+`WebviewSettingsSync.handleEnableServer` becomes: persist `server.enabled = true` then `vscode.commands.executeCommand("flightpath.enableServer")`.
+
+#### Theme change listener (extension.ts)
+
+```typescript
+context.subscriptions.push(
+  vscode.window.onDidChangeActiveColorTheme(() => {
+    // Ask the VS Code webview to re-capture CSS vars
+    webviewProvider.postMessage({ type: MESSAGE_TYPES.CAPTURE_THEME_VARS });
+  })
+);
+```
+
+Add `CAPTURE_THEME_VARS: "captureThemeVars"` to `MESSAGE_TYPES`. In `useMessageHandler`, handle it by calling `captureThemeVars()` (the function defined in App.tsx). In `WebviewMessageRouter`, handle `THEME_VARS_CAPTURED` by forwarding vars to `hostedServer?.updateThemeVars(message.vars)`.
+
+#### Extension wiring checklist
+
+- [ ] `npm install express ws @types/express @types/ws`
+- [ ] Add `express` and `ws` to `external` in `esbuild.js` (extension bundle, not CLI)
+- [ ] Register `flightpath.enableServer` + `flightpath.disableServer` commands in `extension.ts`
+- [ ] Add `SERVER_STARTED`, `SERVER_STOPPED`, `THEME_VARS_CAPTURED`, `THEME_VARS_UPDATED`, `CAPTURE_THEME_VARS` to `DashboardConstants.ts`
+- [ ] Add `serverUrl: string | null` + `setServerUrl` to `settingsStore`
+- [ ] Handle `SERVER_STARTED` / `SERVER_STOPPED` in `useMessageHandler`
+- [ ] Handle `THEME_VARS_CAPTURED` in `WebviewMessageRouter` → forward to `hostedServer?.updateThemeVars()`
+- [ ] Add `captureThemeVars()` call in `App.tsx` on mount
+- [ ] Handle `CAPTURE_THEME_VARS` in `useMessageHandler` → re-run `captureThemeVars()`
+- [ ] Add `serverUrl` display + copy/open-browser affordances to `ServerSection.tsx`
+- [ ] Call `hostedServer?.dispose()` in `extension.ts` `deactivate()`
+- [ ] Auto-start server on extension activation if `configService.get("server").enabled === true`
+
+#### `standalone-shim.js` (shared, Phase 3)
+
+Phase 2 needs this file too. Write it in Phase 2 — it is shared verbatim with standalone. Add `THEME_VARS_UPDATED` handling (see Theme forwarding above).
+
+> **Key advantage over standalone**: No harness limitations, no VS Code-command replacements. The hosted server is a transport layer over the existing extension runtime — every VS Code capability (file pickers, Copilot Chat harness, output panel, Git diff, settings sync, completions) works unchanged because the server IS the extension.
 
 ---
 
 ### Phase 3 — WebSocket Shim (browser side, shared)
+
+> **Note:** This file is needed in Phase 2 (VS Code-hosted server). Write it there and reuse it unchanged for standalone.
 
 **New file:** `src/server/standalone-shim.js` (plain JS — injected directly into HTML before React loads)
 
@@ -253,10 +508,17 @@ Since the extension is running, the hosted server can either inject actual VS Co
   });
 
   ws.addEventListener("message", (e) => {
-    // useMessageHandler already listens on window.addEventListener('message', ...)
-    window.dispatchEvent(
-      new MessageEvent("message", { data: JSON.parse(e.data) })
-    );
+    const msg = JSON.parse(e.data);
+
+    // Theme var updates: apply directly to :root without going through React
+    if (msg.type === "themeVarsUpdated") {
+      const style = document.documentElement.style;
+      for (const [k, v] of Object.entries(msg.vars)) style.setProperty(k, v);
+      return;
+    }
+
+    // All other messages: dispatch to useMessageHandler via window.addEventListener('message', ...)
+    window.dispatchEvent(new MessageEvent("message", { data: msg }));
   });
 
   // Reconnect on server restart (development convenience)
@@ -267,9 +529,7 @@ Since the extension is running, the hosted server can either inject actual VS Co
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
       else pending.push(msg);
     },
-    getState() {
-      return _state;
-    },
+    getState() { return _state; },
     setState(s) {
       _state = s;
       sessionStorage.setItem("fpState", JSON.stringify(s));
@@ -279,6 +539,8 @@ Since the extension is running, the hosted server can either inject actual VS Co
 ```
 
 **Why `sessionStorage`?** Matches VS Code's `setState` semantics — cleared on tab close, persisted through refresh.
+
+**Why `themeVarsUpdated` is handled outside React?** Patching `document.documentElement.style` is a CSS-level operation, not state. Routing it through React's message dispatch and store would add round-trip latency with no benefit. The React app never reads these vars directly — Tailwind's CSS custom property references (`var(--vscode-*)`) pick them up automatically from the DOM.
 
 ---
 

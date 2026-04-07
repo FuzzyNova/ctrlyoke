@@ -1,6 +1,6 @@
 # Global Settings Plan
 
-> **Status: Backlog — ready to implement.**
+> **Status: Implemented (2026-04-07). Core phases 1–4 complete.**
 >
 > Pre-implementation audit completed 2026-04-07:
 > - Removed dead `flightpath.qwenCliApprovalMode` setting (was never read; `QwenToolPermissionMapper` derives approval mode from `cliToolPermissions` directly)
@@ -8,7 +8,18 @@
 > - Fixed `getModelSettingKeyForHarness()` missing `Harness.QwenCli` case (was silently writing Qwen model to Copilot's setting key)
 > - Updated `CodexToolPermissionMapper` comment with correct flag names and values
 >
-> The settings inventory below reflects the current post-audit state.
+> Implementation completed same day (commit `3888e09`):
+> - `src/types/FlightPathSettings.ts` — `FlightPathGlobalSettings` interface ✅
+> - `src/config/FlightPathConfigService.ts` + `src/config/FileConfigBackend.ts` — file-based config backend ✅
+> - `ConfigurationUtils` now reads from config service instead of `vscode.workspace.getConfiguration()` ✅
+> - `CliAdapter` falls back to config service before hardcoded defaults; CLI flags populate an overlay ✅
+> - `GlobalSettingsDrawer` + 10 section components in `src/ui/webview-react/components/settings/` ✅
+> - `schemas/settings-schema.json` — JSON Schema for `.flightpath/settings.json` ✅
+> - Message protocol: `GLOBAL_SETTINGS_LOAD_REQUEST`, `GLOBAL_SETTINGS_LOADED`, `UPDATE_GLOBAL_SETTING`, `GLOBAL_SETTING_UPDATED` ✅
+> - Header settings-gear button opens the drawer ✅
+> - Unit tests for config service ✅
+>
+> **Remaining:** Phase 3 CLI config full integration (config file auto-discovery on startup) is partially done (overlay works, but `CliAdapter` still has its own switch for some keys). Phases deferred to server plan: server Start/Stop button in header, hosted server URL display in `ServerSection`.
 
 Create a first-class **global settings surface** for FlightPath so global configuration is no longer tied to the legacy `WorkflowPropertiesPanel` footer or to VS Code settings alone. This plan introduces a unified config-file architecture that works identically in VS Code and standalone CLI mode.
 
