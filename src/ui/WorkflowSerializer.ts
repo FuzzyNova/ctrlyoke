@@ -2,7 +2,11 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
 import * as yaml from "js-yaml";
-import { MESSAGE_TYPES, EXECUTION_STATES, PROMPT_PROPERTIES } from "../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  EXECUTION_STATES,
+  PROMPT_PROPERTIES,
+} from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
   PATH_CONSTANTS,
@@ -45,9 +49,7 @@ export class WorkflowSerializer {
    * Determines the default save path and format from the working file and
    * sends SAVE_WORKFLOW_DIALOG_DATA back so the webview can open the dialog.
    */
-  async handleSaveWorkflowRequest(
-    postMessage?: PostMessageFn
-  ): Promise<void> {
+  async handleSaveWorkflowRequest(postMessage?: PostMessageFn): Promise<void> {
     const pm = postMessage ?? this.postMessage;
     const manager = this.getManager();
     if (!manager) {
@@ -216,10 +218,7 @@ export class WorkflowSerializer {
         }
       }
 
-      if (
-        workingFile.finalStep &&
-        typeof workingFile.finalStep === "object"
-      ) {
+      if (workingFile.finalStep && typeof workingFile.finalStep === "object") {
         const cleanFinalStep: Record<string, unknown> = {};
         for (const field of PROMPT_FIELDS) {
           if (field in workingFile.finalStep) {
@@ -392,7 +391,8 @@ export class WorkflowSerializer {
 
   async handleCreateWorkflow(
     message: any,
-    postMessage?: PostMessageFn
+    postMessage?: PostMessageFn,
+    loadFn?: (filePath: string) => Promise<void>
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
     const { templateId, variables, filename, workflowsDir, runAfter, format } =
@@ -412,13 +412,18 @@ export class WorkflowSerializer {
         filePath,
       });
 
-      const manager = this.getManager();
-      if (manager) {
-        await manager.loadPromptFile(filePath);
-        if (runAfter) {
-          vscode.commands.executeCommand("flightpath.run");
-        }
-      }
+      const load =
+        loadFn ??
+        (async (fp: string) => {
+          const manager = this.getManager();
+          if (manager) {
+            await manager.loadPromptFile(fp);
+            if (runAfter) {
+              vscode.commands.executeCommand("flightpath.run");
+            }
+          }
+        });
+      await load(filePath);
     } catch (error) {
       const errorMsg = getErrorMessage(error);
       vscode.window.showErrorMessage(`Failed to create workflow: ${errorMsg}`);

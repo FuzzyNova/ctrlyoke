@@ -474,6 +474,17 @@ export class WorkflowOrchestrator {
           err
         )
       );
+    const workingFilePath = instance.getSummary().workingFilePath;
+    if (workingFilePath) {
+      this.dashboardBroadcastHub
+        .loadOutputHistoryForWorkflow(workingFilePath)
+        .catch((err) =>
+          Log.warn(
+            `setActiveWorkflow: failed to load output history for inst:${workflowId.slice(0, 8)}:`,
+            err
+          )
+        );
+    }
   }
 
   /**
@@ -493,33 +504,7 @@ export class WorkflowOrchestrator {
     if (instance) {
       instance.replayFullStateTo(sink);
       await instance.replayRunHistoryTo(sink);
-      // Send the most recent run's output history so the client can display it
-      const workingFilePath = instance.getQueueState().workingFilePath;
-      if (workingFilePath) {
-        try {
-          const om = instance.outputHistoryManager;
-          const fileId = om.extractWorkflowId(workingFilePath);
-          const runs = await om.getRunsForWorkflow(fileId);
-          if (runs.length > 0) {
-            const historyPath = om.getHistoryFilePath(fileId, runs[0]);
-            const [history, runTimestamps, runStates] = await Promise.all([
-              om.loadHistory(historyPath),
-              om.getRunTimestamps(fileId),
-              om.getRunStates(fileId),
-            ]);
-            send({
-              type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
-              history,
-              availableRuns: runs.length,
-              currentRunIndex: 0,
-              runTimestamps,
-              runStates,
-            });
-          }
-        } catch (err) {
-          Log.warn(`replayWorkflowStateTo: failed to load output history for ${workflowId.slice(0, 8)}: ${err}`);
-        }
-      }
+      await instance.replayOutputHistoryTo(send);
       // Send viewer-only terminal sessions so browser clients show a placeholder
       // instead of a blank terminal panel or a broken xterm.
       const ptyManager = getPtyProcessManager();
@@ -801,6 +786,9 @@ export class WorkflowOrchestrator {
           // TerminalView looks up sessions under null/"_shell" — no match.
           const instance = this.getActiveInstance();
           this.dashboardBroadcastHub.notifyActiveWorkflowChanged(instance.id);
+          await this.dashboardBroadcastHub.loadOutputHistoryForWorkflow(
+            workingFilePath
+          );
         }
       );
     }
@@ -1068,7 +1056,8 @@ export class WorkflowOrchestrator {
 
     // Phase 2: loading a working file creates a new instance alongside any running ones
     await this.createWorkflow();
-    return this.getActiveInstance().loadWorkingFile(filePath);
+    await this.getActiveInstance().loadWorkingFile(filePath);
+    await this.dashboardBroadcastHub.loadOutputHistoryForWorkflow(filePath);
   }
 
   getCurrentPromptFile(): { fileName: string; steps: unknown[] } | null {

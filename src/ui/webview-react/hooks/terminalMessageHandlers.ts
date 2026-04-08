@@ -54,7 +54,11 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     // viewerOnly sessions (sent via replayWorkflowStateTo for browser clients) may
     // be for any workflow. Live sessions must match this client's active workflow —
     // reject them otherwise to prevent terminals from hijacking the wrong client's view.
-    if (!message.viewerOnly && activeWorkflowId && workflowId !== activeWorkflowId) {
+    if (
+      !message.viewerOnly &&
+      activeWorkflowId &&
+      workflowId !== activeWorkflowId
+    ) {
       WebviewLog.debug(
         `[TERMINAL_STARTED] ignoring live session — workflowId=${workflowId?.slice(0, 8)} !== activeWorkflowId=${activeWorkflowId?.slice(0, 8)}`
       );
@@ -94,11 +98,7 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     // may have been silently dropped if it was posted before the webview panel
     // was visible (postMessage no-ops when this.view is null).
     if (kind === SESSION_KINDS.AI_CLI) {
-      const uiState = useUiStore.getState();
-      if (uiState.activeWorkflowId !== workflowId) {
-        uiState.setActiveWorkflowId(workflowId);
-      }
-      uiState.setActiveOutputTab(workflowId, "terminal");
+      useUiStore.getState().setActiveOutputTab(workflowId, "terminal");
     }
   };
 

@@ -61,6 +61,7 @@ export class FlightPathWebviewProvider
   implements vscode.WebviewViewProvider, IDashboardProvider, IDashboardSink
 {
   private view?: vscode.WebviewView;
+  private _pendingActiveWorkflowId: string | undefined;
   private workflowOrchestrator?: WorkflowOrchestrator;
   private outputHistoryManager?: OutputHistoryManager;
   private modelsLoadedDisposable?: vscode.Disposable;
@@ -164,6 +165,11 @@ export class FlightPathWebviewProvider
     // attached yet. The READY handler sends INIT again as a
     // guaranteed fallback once React confirms it is listening.
     this.settingsSync.sendInitialState();
+
+    if (this._pendingActiveWorkflowId !== undefined) {
+      this.notifyActiveWorkflowChanged(this._pendingActiveWorkflowId);
+      this._pendingActiveWorkflowId = undefined;
+    }
   }
 
   /**
@@ -774,6 +780,11 @@ window.vscodeApi = acquireVsCodeApi();
   /** Notify webview that the active (displayed) workflow changed. */
   public notifyActiveWorkflowChanged(workflowId: string): void {
     Log.debug(`[notifyActiveWorkflowChanged] inst:${workflowId.slice(0, 8)}`);
+    if (!this.view) {
+      this._pendingActiveWorkflowId = workflowId;
+      return;
+    }
+    this._pendingActiveWorkflowId = undefined;
     this.postMessage({
       type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
       workflowId,
@@ -942,7 +953,9 @@ window.vscodeApi = acquireVsCodeApi();
         currentRunIndex: 0,
         runTimestamps,
         runStates,
-        ...(workflowInstanceId !== undefined ? { workflowId: workflowInstanceId } : {}),
+        ...(workflowInstanceId !== undefined
+          ? { workflowId: workflowInstanceId }
+          : {}),
       });
     } catch (error) {
       Log.warn("Failed to load output history for workflow:", error);

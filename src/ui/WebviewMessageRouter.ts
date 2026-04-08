@@ -420,6 +420,22 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.CREATE_WORKFLOW, (message) => {
+      if (this.scopedPostMessage) {
+        // External browser client — create file then load without touching vsCodeViewedId
+        const send = this.scopedPostMessage;
+        const orchestrator = this.getOrchestrator();
+        if (orchestrator) {
+          this.serializer
+            .handleCreateWorkflow(message, send, (fp) =>
+              orchestrator.loadWorkflowForClient(fp, send)
+            )
+            .catch((err) =>
+              Log.warn(`CREATE_WORKFLOW per-client load failed: ${err}`)
+            );
+          return;
+        }
+      }
+      // VS Code sidebar path — global load (changes vsCodeViewedId)
       this.serializer.handleCreateWorkflow(
         message,
         this.getCurrentPostMessage()

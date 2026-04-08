@@ -30,6 +30,7 @@ import {
   ACTION_TYPES,
   DEFAULT_WORKFLOW_NAME,
   FINAL_STEP_PHASES,
+  MESSAGE_TYPES,
   OUTPUT_HISTORY_KINDS,
   QUEUE_POSITION,
   STEP_STATUS,
@@ -390,6 +391,39 @@ export class WorkflowInstance {
       }
     } catch (err) {
       Log.warn(`[inst:${this.id.slice(0, 8)}] replayRunHistoryTo failed:`, err);
+    }
+  }
+
+  async replayOutputHistoryTo(send: (msg: unknown) => void): Promise<void> {
+    const workingFilePath = this.promptQueue.getState().workingFilePath;
+    if (!workingFilePath) {
+      return;
+    }
+    try {
+      const om = this.outputHistoryManager;
+      const fileId = om.extractWorkflowId(workingFilePath);
+      const runs = await om.getRunsForWorkflow(fileId);
+      if (runs.length > 0) {
+        const historyPath = om.getHistoryFilePath(fileId, runs[0]);
+        const [history, runTimestamps, runStates] = await Promise.all([
+          om.loadHistory(historyPath),
+          om.getRunTimestamps(fileId),
+          om.getRunStates(fileId),
+        ]);
+        send({
+          type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
+          history,
+          availableRuns: runs.length,
+          currentRunIndex: 0,
+          runTimestamps,
+          runStates,
+        });
+      }
+    } catch (err) {
+      Log.warn(
+        `[inst:${this.id.slice(0, 8)}] replayOutputHistoryTo failed:`,
+        err
+      );
     }
   }
 

@@ -214,9 +214,6 @@ export class PromptFileLoader {
             workingFile.finalStep ?? null,
             this.promptQueue.getFinalStepRuntime()
           );
-
-          // Load output history if available (auto-loads most recent run from disk)
-          await dashboard.loadOutputHistoryForWorkflow?.(workingFilePath);
         }
       } else {
         // Scenario 2: Queue extended during execution (MCP/append to same file)
