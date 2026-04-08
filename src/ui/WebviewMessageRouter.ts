@@ -136,36 +136,55 @@ export class WebviewMessageRouter {
       Log.debug("Received READY from React — sending INIT");
       this.settingsSync.sendInitialState(this.getCurrentPostMessage());
       const orchestrator = this.getOrchestrator();
-      if (orchestrator) {
-        await orchestrator.setDashboardReady();
-      }
-      // Reconnect server running state (handles webview reload while server is up)
-      const serverUrl = this.callbacks.getServerUrl?.();
-      if (serverUrl) {
-        this.emitMessage({ type: MESSAGE_TYPES.SERVER_STARTED, url: serverUrl });
-      }
-      // Reconnect active PTY sessions to the fresh webview
-      const ptyManager = getPtyProcessManager();
-      if (ptyManager) {
-        for (const session of ptyManager.getAllSessions()) {
+
+      if (this.scopedPostMessage) {
+        // ── External browser client (WebSocket) ──────────────────────────
+        // Replay current state to ONLY this client without touching global
+        // orchestrator flags or broadcasting to VS Code.
+        if (orchestrator) {
+          const activeId = orchestrator.getActiveWorkflowId();
+          if (activeId) {
+            await orchestrator.replayWorkflowStateTo(activeId, this.scopedPostMessage);
+          }
+          // Send the full loaded-workflow list so the switcher dropdown populates.
           this.emitMessage({
-            type: MESSAGE_TYPES.TERMINAL_STARTED,
-            workflowId: session.workflowId,
-            sessionId: session.id,
-            stepName: session.stepName,
-            kind: session.kind,
-            promptNumber: session.promptNumber,
+            type: MESSAGE_TYPES.WORKFLOWS_LIST,
+            workflows: orchestrator.getWorkflowSummaries(),
           });
-          // Flush reconnect buffer
-          for (const chunk of session.reconnectBuffer) {
+        }
+      } else {
+        // ── VS Code sidebar ───────────────────────────────────────────────
+        if (orchestrator) {
+          await orchestrator.setDashboardReady();
+        }
+        // Reconnect server running state (handles webview reload while server is up)
+        const serverUrl = this.callbacks.getServerUrl?.();
+        if (serverUrl) {
+          this.emitMessage({ type: MESSAGE_TYPES.SERVER_STARTED, url: serverUrl });
+        }
+        // Reconnect active PTY sessions to the fresh webview
+        const ptyManager = getPtyProcessManager();
+        if (ptyManager) {
+          for (const session of ptyManager.getAllSessions()) {
             this.emitMessage({
-              type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+              type: MESSAGE_TYPES.TERMINAL_STARTED,
               workflowId: session.workflowId,
               sessionId: session.id,
-              data: chunk,
+              stepName: session.stepName,
+              kind: session.kind,
+              promptNumber: session.promptNumber,
             });
+            // Flush reconnect buffer
+            for (const chunk of session.reconnectBuffer) {
+              this.emitMessage({
+                type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+                workflowId: session.workflowId,
+                sessionId: session.id,
+                data: chunk,
+              });
+            }
+            session.clearReconnectBuffer();
           }
-          session.clearReconnectBuffer();
         }
       }
     });
@@ -409,6 +428,32 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.LOAD_WORKFLOW, (message) => {
+      if (this.scopedPostMessage) {
+        // External browser client — avoid changing the global active workflow
+        // (which would update the VS Code sidebar). If the requested workflow is
+        // already loaded in the orchestrator (running/paused), replay its state
+        // to just this client. If it's not currently loaded, fall back to a full
+        // global load so the file is parsed and added to the registry.
+        const orchestrator = this.getOrchestrator();
+        if (orchestrator) {
+          const filePath: string = message.filePath ?? "";
+          const match = orchestrator
+            .getWorkflowSummaries()
+            .find((s) => s.workingFilePath === filePath);
+          if (match) {
+            orchestrator
+              .replayWorkflowStateTo(match.id, this.scopedPostMessage)
+              .catch((err) =>
+                Log.warn(`LOAD_WORKFLOW per-client replay failed: ${err}`)
+              );
+            return;
+          }
+        }
+        // Workflow not currently loaded — fall through to global load.
+        // This adds it to the orchestrator registry and broadcasts to all clients
+        // (including VS Code). This is acceptable for workflows being opened for
+        // the first time from the browser.
+      }
       this.serializer.handleLoadWorkflow(message);
     });
 

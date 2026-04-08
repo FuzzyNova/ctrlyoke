@@ -119,6 +119,14 @@ export class FlightPathHostedServer implements IDashboardProvider {
     this.broadcast({ type: MESSAGE_TYPES.HARNESS_STATUS_UPDATE, harnessId, available });
   }
 
+  notifyRunHistoryUpdated(
+    runCount: number,
+    runTimestamps?: (number | undefined)[],
+    runStates?: (string | undefined)[]
+  ): void {
+    this.broadcast({ type: MESSAGE_TYPES.RUN_HISTORY_UPDATED, runCount, runTimestamps, runStates });
+  }
+
   // ── Theme var snapshot (fed from VS Code webview capture) ─────────────────
 
   updateThemeVars(vars: Record<string, string>): void {

@@ -44,10 +44,12 @@ import { configService } from "../config/FlightPathConfigService";
 import type { FlightPathGlobalSettings } from "../types/FlightPathSettings";
 
 /**
- * Maps legacy flat VS Code setting keys (after stripping "flightpath." prefix)
- * to their new nested config paths in FlightPathGlobalSettings.
+ * Maps VS Code setting keys (after stripping "flightpath." prefix)
+ * to their nested config paths in FlightPathGlobalSettings.
+ * VS Code settings are the authoritative UI surface for per-user configuration;
+ * changes are forwarded into the file-based config service so both stay in sync.
  */
-const LEGACY_KEY_MAP: Record<string, string> = {
+const VSCODE_SETTINGS_KEY_MAP: Record<string, string> = {
   "showCliCommand": "ui.showCliCommand",
   "showCliOutput": "ui.showCliOutput",
   "logRawCliOutput": "ui.logRawCliOutput",
@@ -586,7 +588,7 @@ export class WebviewSettingsSync {
     }
 
     const relativeKey = key.slice("flightpath.".length);
-    const mappedKey = LEGACY_KEY_MAP[relativeKey] ?? relativeKey;
+    const mappedKey = VSCODE_SETTINGS_KEY_MAP[relativeKey] ?? relativeKey;
     const value = configService.getNested(mappedKey);
 
     this.emitMessage(
@@ -606,7 +608,7 @@ export class WebviewSettingsSync {
     }
 
     const relativeKey = key.slice("flightpath.".length);
-    const mappedKey = LEGACY_KEY_MAP[relativeKey] ?? relativeKey;
+    const mappedKey = VSCODE_SETTINGS_KEY_MAP[relativeKey] ?? relativeKey;
     await configService.set(mappedKey, value, "user");
   }
 

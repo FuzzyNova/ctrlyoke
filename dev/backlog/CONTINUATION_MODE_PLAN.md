@@ -41,8 +41,42 @@ No startup overhead.
 
 ## Setting
 
+Settings live in the file-based config system (`~/.flightpath/settings.json` / `.flightpath/settings.json`). VS Code's `package.json` contributes.configuration is also required so the setting is discoverable via the VS Code settings UI and so `VSCODE_SETTINGS_KEY_MAP` in `WebviewSettingsSync.ts` can forward VS Code settings changes into the config file.
+
+### 1. `src/types/FlightPathSettings.ts` — add to `execution` object
+
+```typescript
+execution: {
+  mode: "interactive" | "headless";
+  continuationMode: "restart" | "inject";  // ← new
+  maxPromptTimeout: number;
+  scriptTimeout: number;
+  closeTerminalOnComplete: boolean;
+};
+```
+
+Also add the default in `FLIGHTPATH_SETTINGS_DEFAULTS`:
+```typescript
+execution: {
+  mode: "interactive",
+  continuationMode: "restart",  // ← new
+  ...
+}
+```
+
+### 2. `schemas/settings-schema.json` — add to `execution.properties`
+
 ```json
-// package.json contributes.configuration.properties
+"continuationMode": {
+  "type": "string",
+  "enum": ["restart", "inject"],
+  "description": "Controls how follow-up prompts are sent in interactive mode. 'restart' kills and restarts the terminal (uses --resume). 'inject' keeps the TUI alive and writes the next prompt directly into the PTY."
+}
+```
+
+### 3. `package.json` — add to `contributes.configuration.properties`
+
+```json
 "flightpath.interactiveContinuationMode": {
   "type": "string",
   "default": "restart",
@@ -51,17 +85,23 @@ No startup overhead.
     "Kill and restart the terminal for each prompt (current behavior). Uses --resume to restore session.",
     "Keep the TUI alive and inject follow-up prompts directly into the running terminal. Faster and avoids the Claude Code resume cache bug."
   ],
-  "description": "Controls how follow-up prompts are sent in interactive mode."
+  "description": "[Interactive Mode] Controls how follow-up prompts are sent in interactive mode."
 }
 ```
 
-Add accessor to `ConfigurationUtils`:
+### 4. `src/ui/WebviewSettingsSync.ts` — add to `VSCODE_SETTINGS_KEY_MAP`
+
+```typescript
+"interactiveContinuationMode": "execution.continuationMode",
+```
+
+This forwards VS Code settings changes into the file-based config service.
+
+### 5. `src/utils/ConfigurationUtils.ts` — add typed accessor
+
 ```typescript
 static getInteractiveContinuationMode(): "restart" | "inject" {
-  return ConfigurationUtils.get<"restart" | "inject">(
-    "interactiveContinuationMode",
-    "restart"
-  );
+  return configService.get("execution").continuationMode;
 }
 ```
 
@@ -102,8 +142,12 @@ so session ID tracking must be adjusted: retain the session ID from the initial
 
 ## Implementation
 
-### 1. `ConfigurationUtils.ts`
-Add `getInteractiveContinuationMode()` accessor.
+### 1. Settings wiring (four files)
+- `src/types/FlightPathSettings.ts` — add `continuationMode` to `execution` type and defaults
+- `schemas/settings-schema.json` — add `continuationMode` to `execution.properties`
+- `package.json` — add `flightpath.interactiveContinuationMode` to contributes.configuration
+- `src/ui/WebviewSettingsSync.ts` — add `"interactiveContinuationMode": "execution.continuationMode"` to `VSCODE_SETTINGS_KEY_MAP`
+- `src/utils/ConfigurationUtils.ts` — add `getInteractiveContinuationMode()` reading `configService.get("execution").continuationMode`
 
 ### 2. `CliIntegration.ts` — `runExecutionSession()`
 After Stop hook fires for prompt N and there is a prompt N+1:
