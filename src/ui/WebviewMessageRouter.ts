@@ -139,6 +139,11 @@ export class WebviewMessageRouter {
       if (orchestrator) {
         await orchestrator.setDashboardReady();
       }
+      // Reconnect server running state (handles webview reload while server is up)
+      const serverUrl = this.callbacks.getServerUrl?.();
+      if (serverUrl) {
+        this.emitMessage({ type: MESSAGE_TYPES.SERVER_STARTED, url: serverUrl });
+      }
       // Reconnect active PTY sessions to the fresh webview
       const ptyManager = getPtyProcessManager();
       if (ptyManager) {
@@ -1480,6 +1485,8 @@ export class WebviewMessageRouter {
 export interface WebviewRouterCallbacks {
   handleClearWorkflow: () => Promise<void>;
   updateWorkflowName: (name: string) => void;
+  /** Returns the hosted server URL if the server is currently running, undefined otherwise. */
+  getServerUrl?: () => string | undefined;
 }
 
 export interface WebviewRouteOptions {

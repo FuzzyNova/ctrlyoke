@@ -398,12 +398,6 @@ export async function activate(context: vscode.ExtensionContext) {
       })
     );
 
-    // Auto-start hosted server if enabled in config
-    const serverConfig = configService.get("server");
-    if (serverConfig?.enabled) {
-      void vscode.commands.executeCommand("flightpath.enableServer");
-    }
-
     // Register completion provider for prompt files (JSON, YAML, and Markdown)
     // Two triggers: @ for full file references, # for snippets (line ranges, selections)
     const promptCompletionProvider = new PromptCompletionProvider();
@@ -881,6 +875,7 @@ function registerCommands(context: vscode.ExtensionContext) {
       const port = configService.get("server")?.port ?? 3000;
       hostedServer = new FlightPathHostedServer(hub, webviewProvider, port);
       const url = hostedServer.listen();
+      webviewProvider.setRunningServerUrl(url);
       webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STARTED, url });
       webviewProvider.setThemeVarsCapturedCallback((vars) =>
         hostedServer?.updateThemeVars(vars)
@@ -895,6 +890,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     () => {
       hostedServer?.dispose();
       hostedServer = undefined;
+      webviewProvider.setRunningServerUrl(undefined);
       webviewProvider.setThemeVarsCapturedCallback(undefined);
       webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STOPPED });
       Log.info("FlightPath: Hosted server stopped");
@@ -931,6 +927,11 @@ function registerCommands(context: vscode.ExtensionContext) {
     enableServerCommand,
     disableServerCommand
   );
+
+  // Auto-start hosted server if enabled in config (must be after command registration)
+  if (configService.get("server")?.enabled) {
+    void vscode.commands.executeCommand("flightpath.enableServer");
+  }
 
   // Register development commands (only in dev mode)
   if (IS_DEV_MODE) {

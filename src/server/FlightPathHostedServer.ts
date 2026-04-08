@@ -137,10 +137,10 @@ export class FlightPathHostedServer implements IDashboardProvider {
     // Serve static assets (disable automatic index.html fallback).
     this.app.use(express.static(webviewDist, { index: false }));
     this.app.get("/standalone-shim.js", (_req, res) =>
-      res.sendFile(path.join(__dirname, "standalone-shim.js"))
+      res.sendFile(path.join(__dirname, "server", "standalone-shim.js"))
     );
     // SPA fallback: any unmatched route gets the patched index.html.
-    this.app.get("*", (_req, res) => res.send(this.buildHtml(webviewDist)));
+    this.app.use((_req, res) => res.send(this.buildHtml(webviewDist)));
   }
 
   private buildHtml(webviewDist: string): string {
@@ -148,10 +148,13 @@ export class FlightPathHostedServer implements IDashboardProvider {
     let html = fs.readFileSync(indexPath, "utf8");
 
     // Replace VS Code URI placeholders with server-relative paths.
-    html = html.replace(/\{\{typoUri\}\}/g, "/typo.js");
+    // typo.js is only available via VS Code's URI scheme — omit for browser.
+    html = html.replace(/<script\s+src="\{\{typoUri\}\}"><\/script>/g, "");
     html = html.replace(/\{\{codiconsUri\}\}/g, "/codicons/codicon.css");
     html = html.replace(/\{\{customIconsUri\}\}/g, "/custom-icons.css");
     html = html.replace(/\{\{logoUri\}\}/g, "");
+    // Vite adds crossorigin to module scripts; remove it for same-origin serving.
+    html = html.replace(/<script type="module" crossorigin/g, '<script type="module"');
 
     // Add spell-checker dictionary paths as data attributes on <body>.
     html = html.replace(
@@ -237,8 +240,8 @@ export class FlightPathHostedServer implements IDashboardProvider {
   }
 
   private resolveWebviewDist(): string {
-    // Vite outputs to out/ui/webview-react/ relative to the extension root
-    // __dirname at runtime = out/server/
-    return path.join(path.dirname(__dirname), "ui", "webview-react");
+    // Vite outputs to out/ui/webview-react/ relative to the extension root.
+    // __dirname at runtime = out/ (esbuild resolves __dirname to the output file's directory).
+    return path.join(__dirname, "ui", "webview-react");
   }
 }

@@ -242,7 +242,11 @@ export const Header: React.FC<{
           {/* Start/Stop Server button (desktop only) */}
           {!isMobile && (
             <button
-              className="control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border transition-colors ${
+                serverRunning
+                  ? "border-btn-primary-border bg-btn-primary-bg text-btn-primary-fg hover:bg-btn-primary-hover"
+                  : "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              }`}
               onClick={() =>
                 vscode.postMessage({
                   type: serverRunning

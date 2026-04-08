@@ -66,6 +66,7 @@ export class FlightPathWebviewProvider
   private configChangeDisposable?: vscode.Disposable;
   private modelsLoadedDisposable?: vscode.Disposable;
   private configServiceUnsubscribe?: () => void;
+  private runningServerUrl?: string;
 
   // Delegate classes
   private readonly settingsSync: WebviewSettingsSync;
@@ -108,6 +109,7 @@ export class FlightPathWebviewProvider
       {
         handleClearWorkflow: () => this.handleClearWorkflow(),
         updateWorkflowName: (name: string) => this.updateWorkflowName(name),
+        getServerUrl: () => this.runningServerUrl,
       }
     );
 
@@ -899,6 +901,14 @@ window.vscodeApi = acquireVsCodeApi();
    */
   public getSettingsSync(): WebviewSettingsSync {
     return this.settingsSync;
+  }
+
+  /**
+   * Track the running server URL so READY reconnects the webview when it reloads
+   * while the server is up. Pass undefined when the server stops.
+   */
+  public setRunningServerUrl(url: string | undefined): void {
+    this.runningServerUrl = url;
   }
 
   /**
