@@ -74,6 +74,7 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       promptNumber,
       status: TERMINAL_SESSION_STATUS.RUNNING,
       pendingOutput: [],
+      viewerOnly: message.viewerOnly === true,
     });
 
     useUiStore.getState().setTerminalSessionActive(workflowId, true);

@@ -45,6 +45,7 @@ import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import { CliWatchSession } from "./orchestration/CliWatchSession";
+import { getPtyProcessManager } from "./harness/PtyProcessManager";
 
 // Orchestration classes that remain at orchestrator level
 import { TemplateImporter } from "./orchestration/TemplateImporter";
@@ -492,6 +493,22 @@ export class WorkflowOrchestrator {
     if (instance) {
       instance.replayFullStateTo(sink);
       await instance.replayRunHistoryTo(sink);
+      // Send viewer-only terminal sessions so browser clients show a placeholder
+      // instead of a blank terminal panel or a broken xterm.
+      const ptyManager = getPtyProcessManager();
+      if (ptyManager) {
+        for (const session of ptyManager.getSessionsForWorkflow(workflowId)) {
+          send({
+            type: MESSAGE_TYPES.TERMINAL_STARTED,
+            workflowId: session.workflowId,
+            sessionId: session.id,
+            stepName: session.stepName,
+            kind: session.kind,
+            promptNumber: session.promptNumber,
+            viewerOnly: true,
+          });
+        }
+      }
       return;
     }
 

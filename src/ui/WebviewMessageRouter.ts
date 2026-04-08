@@ -711,20 +711,32 @@ export class WebviewMessageRouter {
     // ── Terminal I/O ─────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.TERMINAL_INPUT, async (msg) => {
       const ptyManager = getPtyProcessManager();
-      if (ptyManager && msg.sessionId && msg.data) {
-        ptyManager.writeToSession(msg.sessionId as string, msg.data as string);
+      if (!ptyManager || !msg.sessionId || !msg.data) return;
+      // Block keyboard input for AI CLI sessions from browser/scoped connections —
+      // the PTY is owned exclusively by the VS Code sidebar (ptyPostMessage target).
+      // Browser clients receive viewerOnly sessions and won't create an xterm or
+      // register onData, but this guard prevents any accidental writes.
+      if (this.scopedPostMessage) {
+        const session = ptyManager.getSession(msg.sessionId as string);
+        if (session?.kind === SESSION_KINDS.AI_CLI) return;
       }
+      ptyManager.writeToSession(msg.sessionId as string, msg.data as string);
     });
 
     table.set(MESSAGE_TYPES.TERMINAL_RESIZE, async (msg) => {
       const ptyManager = getPtyProcessManager();
-      if (ptyManager && msg.sessionId && msg.cols && msg.rows) {
-        ptyManager.resizeSession(
-          msg.sessionId as string,
-          msg.cols as number,
-          msg.rows as number
-        );
+      if (!ptyManager || !msg.sessionId || !msg.cols || !msg.rows) return;
+      // Same ownership guard — prevent browser-side ResizeObserver from fighting
+      // with the VS Code sidebar's PTY dimensions on AI CLI sessions.
+      if (this.scopedPostMessage) {
+        const session = ptyManager.getSession(msg.sessionId as string);
+        if (session?.kind === SESSION_KINDS.AI_CLI) return;
       }
+      ptyManager.resizeSession(
+        msg.sessionId as string,
+        msg.cols as number,
+        msg.rows as number
+      );
     });
 
     table.set(MESSAGE_TYPES.TERMINAL_SPAWN_SHELL, async (msg) => {

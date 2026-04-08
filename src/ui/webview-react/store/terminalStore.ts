@@ -17,6 +17,11 @@ export interface TerminalSession {
   status: TerminalSessionStatus;
   /** Chunks buffered before TerminalInstance mounts — flushed on mount */
   pendingOutput: string[];
+  /**
+   * True when this client is a secondary observer — the PTY is owned by the VS Code
+   * sidebar (or whichever client spawned it). No xterm is created; a message is shown.
+   */
+  viewerOnly?: boolean;
 }
 
 interface TerminalState {

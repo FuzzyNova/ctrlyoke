@@ -18,6 +18,12 @@ interface TerminalInstanceProps {
   sessionId: string;
   /** false = display:none (rail switching within workflow) */
   isVisible: boolean;
+  /**
+   * True when this client does not own the PTY (e.g. browser tab viewing a
+   * workflow whose interactive terminal is attached to the VS Code sidebar).
+   * Renders an informational placeholder instead of creating an xterm.
+   */
+  viewerOnly?: boolean;
 }
 
 /**
@@ -31,7 +37,23 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
   workflowId,
   sessionId,
   isVisible,
+  viewerOnly = false,
 }) => {
+  if (viewerOnly) {
+    return (
+      <div
+        className="flex items-center justify-center h-full select-none px-4 text-center"
+        style={{ display: isVisible ? "flex" : "none" }}
+      >
+        <span
+          className="text-[12px]"
+          style={{ color: "var(--vscode-descriptionForeground)" }}
+        >
+          Terminal is running in the VS Code sidebar
+        </span>
+      </div>
+    );
+  }
   const containerRef = useRef<HTMLDivElement>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
