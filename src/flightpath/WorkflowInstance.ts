@@ -388,6 +388,61 @@ export class WorkflowInstance {
   }
 
   /**
+   * Replay the full current state of this workflow to an explicit sink.
+   * Unlike sendFullStateToDashboard(), this bypasses the broadcast hub so
+   * only the provided sink receives the messages — used for per-client
+   * workflow switches in the hosted server.
+   */
+  replayFullStateTo(sink: IDashboardSink): void {
+    const state = this.promptQueue.getState();
+    const executionState = this.getAuthoritativeExecutionState();
+    const fileName = this.currentPromptFile
+      ? path.basename(this.currentPromptFile.filePath)
+      : state.workflowName || "Untitled";
+    sink.updateSessionRestored(
+      fileName,
+      state.steps,
+      state.results,
+      executionState,
+      state.currentIndex,
+      state.workflowName || undefined,
+      this.promptQueue.getWorkflowFile().finalStep ?? null,
+      this.promptQueue.getFinalStepRuntime()
+    );
+    this.outputCaptureBuffer.replayTo(
+      sink,
+      { status: executionState, currentIndex: state.currentIndex },
+      this.promptQueue.getFinalStepRuntime(),
+      `[inst:${this.id.slice(0, 8)}]`
+    );
+  }
+
+  /**
+   * Replay run history count to an explicit sink.
+   * Unlike sendRunHistoryToDashboard(), this bypasses activeDashboard so
+   * the sink always receives the update regardless of isActive state.
+   */
+  async replayRunHistoryTo(sink: IDashboardSink): Promise<void> {
+    const workingFilePath = this.promptQueue.getState().workingFilePath;
+    if (!workingFilePath) {
+      return;
+    }
+    try {
+      const workflowId = this.outputHistoryManager.extractWorkflowId(workingFilePath);
+      const [runs, runTimestamps, runStates] = await Promise.all([
+        this.outputHistoryManager.getRunsForWorkflow(workflowId),
+        this.outputHistoryManager.getRunTimestamps(workflowId),
+        this.outputHistoryManager.getRunStates(workflowId),
+      ]);
+      if (runs.length > 0) {
+        sink.notifyRunHistoryUpdated(runs.length, runTimestamps, runStates);
+      }
+    } catch (err) {
+      Log.warn(`[inst:${this.id.slice(0, 8)}] replayRunHistoryTo failed:`, err);
+    }
+  }
+
+  /**
    * Asynchronously read this workflow's run history from disk and send
    * RUN_HISTORY_UPDATED to the dashboard so the RunSelector appears after
    * switching back to a running/paused workflow.

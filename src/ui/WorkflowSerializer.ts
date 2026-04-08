@@ -45,10 +45,13 @@ export class WorkflowSerializer {
    * Determines the default save path and format from the working file and
    * sends SAVE_WORKFLOW_DIALOG_DATA back so the webview can open the dialog.
    */
-  async handleSaveWorkflowRequest(): Promise<void> {
+  async handleSaveWorkflowRequest(
+    postMessage?: PostMessageFn
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
     const manager = this.getManager();
     if (!manager) {
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
         error: "No workflow manager available.",
       });
@@ -59,7 +62,7 @@ export class WorkflowSerializer {
     const workingFilePath = queueState.workingFilePath;
 
     if (!workingFilePath) {
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
         error: "No workflow loaded.",
       });
@@ -102,7 +105,7 @@ export class WorkflowSerializer {
         ? "json"
         : "yaml";
 
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.SAVE_WORKFLOW_DIALOG_DATA,
         defaultPath,
         defaultFormat,
@@ -110,7 +113,7 @@ export class WorkflowSerializer {
       });
     } catch (error) {
       const msg = getErrorMessage(error);
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
         error: `Failed to read workflow: ${msg}`,
       });
@@ -124,11 +127,13 @@ export class WorkflowSerializer {
    */
   async handleSaveWorkflow(
     filePath: string,
-    format: "yaml" | "json"
+    format: "yaml" | "json",
+    postMessage?: PostMessageFn
   ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
     const manager = this.getManager();
     if (!manager) {
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
         error: "No workflow manager available.",
       });
@@ -139,7 +144,7 @@ export class WorkflowSerializer {
     const workingFilePath = queueState.workingFilePath;
 
     if (!workingFilePath) {
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
         error: "No workflow loaded.",
       });
@@ -264,14 +269,14 @@ export class WorkflowSerializer {
 
       Log.debug(`Saved workflow to: ${absolutePath}`);
 
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.WORKFLOW_SAVED,
         filePath: absolutePath,
       });
     } catch (error) {
       const msg = getErrorMessage(error);
       Log.error("Failed to save workflow:", error);
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
         error: msg,
       });
@@ -324,7 +329,8 @@ export class WorkflowSerializer {
   // New Workflow / Template Modal
   // ============================================================================
 
-  async handleNewWorkflow(): Promise<void> {
+  async handleNewWorkflow(postMessage?: PostMessageFn): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
     try {
       const templates = await this.templateManager.getAvailableTemplates();
       const workflowsDir = path.join(
@@ -333,7 +339,7 @@ export class WorkflowSerializer {
       );
       const defaultTemplateId = ConfigurationUtils.getDefaultWorkflowTemplate();
 
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.OPEN_NEW_WORKFLOW_MODAL,
         templates: templates.map((t) => ({
           id: t.id,
@@ -351,10 +357,14 @@ export class WorkflowSerializer {
     }
   }
 
-  async handleTemplateSelected(templateId: string): Promise<void> {
+  async handleTemplateSelected(
+    templateId: string,
+    postMessage?: PostMessageFn
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
     try {
       const template = await this.templateManager.getTemplateInfo(templateId);
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.TEMPLATE_INFO,
         template,
       });
@@ -363,11 +373,15 @@ export class WorkflowSerializer {
     }
   }
 
-  async handleSetDefaultTemplate(templateId: string): Promise<void> {
+  async handleSetDefaultTemplate(
+    templateId: string,
+    postMessage?: PostMessageFn
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
     try {
       await ConfigurationUtils.setDefaultWorkflowTemplate(templateId);
 
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.DEFAULT_TEMPLATE_SET,
         templateId,
       });
@@ -376,7 +390,11 @@ export class WorkflowSerializer {
     }
   }
 
-  async handleCreateWorkflow(message: any): Promise<void> {
+  async handleCreateWorkflow(
+    message: any,
+    postMessage?: PostMessageFn
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
     const { templateId, variables, filename, workflowsDir, runAfter, format } =
       message;
 
@@ -389,7 +407,7 @@ export class WorkflowSerializer {
         format === "json" ? "json" : "yaml"
       );
 
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.WORKFLOW_CREATED,
         filePath,
       });
@@ -404,7 +422,7 @@ export class WorkflowSerializer {
     } catch (error) {
       const errorMsg = getErrorMessage(error);
       vscode.window.showErrorMessage(`Failed to create workflow: ${errorMsg}`);
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.WORKFLOW_CREATED,
         error: errorMsg,
       });
@@ -417,8 +435,10 @@ export class WorkflowSerializer {
 
   async handleBrowseTemplateFile(
     variable: string,
-    fileFilter?: string[]
+    fileFilter?: string[],
+    postMessage?: PostMessageFn
   ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     const filters: Record<string, string[]> = {};
 
@@ -455,7 +475,7 @@ export class WorkflowSerializer {
       // and are valid in prompt file @path references
       filePath = filePath.replace(/\\/g, "/");
 
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.TEMPLATE_FILE_SELECTED,
         variable,
         path: filePath,
@@ -486,11 +506,14 @@ export class WorkflowSerializer {
   // Recent Workflows
   // ============================================================================
 
-  async handleGetRecentWorkflows(): Promise<void> {
+  async handleGetRecentWorkflows(
+    replyPostMessage?: PostMessageFn
+  ): Promise<void> {
+    const pm = replyPostMessage ?? this.postMessage;
     try {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!workspaceRoot) {
-        this.postMessage({
+        pm({
           type: MESSAGE_TYPES.RECENT_WORKFLOWS,
           workflows: [],
         });
@@ -506,7 +529,7 @@ export class WorkflowSerializer {
       try {
         await fs.access(queueDir);
       } catch {
-        this.postMessage({
+        pm({
           type: MESSAGE_TYPES.RECENT_WORKFLOWS,
           workflows: [],
         });
@@ -585,13 +608,13 @@ export class WorkflowSerializer {
         .filter((w) => w !== null)
         .sort((a, b) => b!.lastModifiedAt - a!.lastModifiedAt);
 
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.RECENT_WORKFLOWS,
         workflows: validWorkflows,
       });
     } catch (error) {
       Log.error("Failed to get recent workflows:", error);
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.RECENT_WORKFLOWS,
         workflows: [],
       });
@@ -611,7 +634,10 @@ export class WorkflowSerializer {
     }
   }
 
-  async handleClearWorkflowHistory(): Promise<boolean> {
+  async handleClearWorkflowHistory(
+    postMessage?: PostMessageFn
+  ): Promise<boolean> {
+    const pm = postMessage ?? this.postMessage;
     const confirm = await vscode.window.showWarningMessage(
       "Delete all workflow history files from .flightpath/.queue?",
       { modal: true },
@@ -659,7 +685,7 @@ export class WorkflowSerializer {
           `Deleted ${workflowFiles.length} workflow history files`
         );
 
-        this.postMessage({
+        pm({
           type: MESSAGE_TYPES.RECENT_WORKFLOWS,
           workflows: [],
         });
@@ -751,7 +777,11 @@ export class WorkflowSerializer {
    * Handle LOAD_RUN_HISTORY: load a specific historical run and send to webview.
    * runIndex 0 = most recent, 1 = second most recent, etc.
    */
-  async handleLoadRunHistory(runIndex: number): Promise<void> {
+  async handleLoadRunHistory(
+    runIndex: number,
+    postMessage?: PostMessageFn
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
     const outputHistoryManager = this.getOutputHistoryManager();
     if (!outputHistoryManager) {
       return;
@@ -788,7 +818,7 @@ export class WorkflowSerializer {
         outputHistoryManager.getRunStates(workflowId),
       ]);
 
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
         history,
         availableRuns: runs.length,
@@ -804,7 +834,8 @@ export class WorkflowSerializer {
   /**
    * Handle CLEAR_RUN_HISTORY: delete all history files for the current workflow.
    */
-  async handleClearRunHistory(): Promise<void> {
+  async handleClearRunHistory(postMessage?: PostMessageFn): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
     const outputHistoryManager = this.getOutputHistoryManager();
     if (!outputHistoryManager) {
       return;
@@ -840,7 +871,7 @@ export class WorkflowSerializer {
         Log.warn("Failed to delete history directory:", error);
       }
 
-      this.postMessage({
+      pm({
         type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
         history: null,
         availableRuns: 0,

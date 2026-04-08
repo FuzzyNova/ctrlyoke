@@ -215,6 +215,13 @@ export class FlightPathHostedServer implements IDashboardProvider {
       { type: MESSAGE_TYPES.READY },
       (msg) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
     );
+    // Push cached theme vars immediately so the client can style itself without waiting
+    // for a CAPTURE_THEME_VARS round-trip.
+    if (Object.keys(this.cachedThemeVars).length > 0 && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: MESSAGE_TYPES.THEME_VARS_UPDATED, vars: this.cachedThemeVars }));
+    }
+    // Also request a fresh capture so any theme-change since last capture is picked up.
+    this.webviewProvider.postMessage({ type: MESSAGE_TYPES.CAPTURE_THEME_VARS });
   }
 
   private broadcast(message: unknown): void {

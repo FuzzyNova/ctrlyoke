@@ -82,8 +82,19 @@ export function sendMessage(
 export function captureAndSendThemeVars(
   vscodeApi: ReturnType<typeof getVsCodeApi>
 ): void {
-  const style = window.getComputedStyle(document.documentElement);
+  const computedStyle = window.getComputedStyle(document.documentElement);
   const vars: Record<string, string> = {};
+
+  // VS Code injects --vscode-* vars as inline styles on <html>; iterate those first.
+  const inlineStyle = document.documentElement.style;
+  for (let i = 0; i < inlineStyle.length; i++) {
+    const prop = inlineStyle.item(i);
+    if (prop.startsWith("--vscode-")) {
+      vars[prop] = computedStyle.getPropertyValue(prop).trim();
+    }
+  }
+
+  // Also scan stylesheet :root rules (picks up any theme vars defined via CSS files).
   try {
     for (const sheet of document.styleSheets) {
       try {
@@ -91,7 +102,7 @@ export function captureAndSendThemeVars(
           if (rule instanceof CSSStyleRule && rule.selectorText === ":root") {
             for (const prop of rule.style) {
               if (prop.startsWith("--vscode-")) {
-                vars[prop] = style.getPropertyValue(prop).trim();
+                vars[prop] = computedStyle.getPropertyValue(prop).trim();
               }
             }
           }
@@ -103,6 +114,7 @@ export function captureAndSendThemeVars(
   } catch {
     /* ignore */
   }
+
   vscodeApi.postMessage({ type: MESSAGE_TYPES.THEME_VARS_CAPTURED, vars });
 }
 

@@ -25,12 +25,14 @@ import {
   LOCK_STATUS,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
+  MESSAGE_TYPES,
   type QueuePosition,
   type ActionType,
   type StepStatus,
   type FinalStepPhase,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
+import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import type { CliOutput } from "../types/WebviewMessageTypes";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
@@ -424,6 +426,35 @@ export class WorkflowOrchestrator {
       );
   }
 
+  /**
+   * Replay the full state of a specific workflow to a single client's send
+   * function without changing the global active workflow or broadcasting to
+   * other clients. Used by SWITCH_WORKFLOW from external WebSocket clients
+   * so each browser tab can view a different workflow independently.
+   */
+  async replayWorkflowStateTo(
+    workflowId: string,
+    send: (msg: unknown) => void
+  ): Promise<void> {
+    const sink = new PostMessageDashboardSink(send);
+    send({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
+
+    const instance = this.workflows.get(workflowId);
+    if (instance) {
+      instance.replayFullStateTo(sink);
+      await instance.replayRunHistoryTo(sink);
+      return;
+    }
+
+    // CLI-managed session
+    const cliEntry = this.cliSessions.get(workflowId);
+    if (cliEntry) {
+      await this.sendCliWorkflowFullStateToDashboard(workflowId, cliEntry, sink);
+    } else {
+      Log.warn(`replayWorkflowStateTo: workflowId "${workflowId.slice(0, 8)}" not found`);
+    }
+  }
+
   /** Return summaries without exposing WorkflowInstance internals */
   getWorkflowSummaries(): WorkflowSummary[] {
     const vsSummaries = [...this.workflows.values()].map((w) => w.getSummary());
@@ -570,6 +601,11 @@ export class WorkflowOrchestrator {
       this.viewedInstance.sendFullStateToDashboard();
       this.dashboardBroadcastHub.notifyActiveWorkflowChanged(
         this.viewedInstance.id
+      );
+      // Re-send run history count so newly connected clients (browser) see the
+      // RunSelector without waiting for the next setActiveWorkflow call.
+      this.viewedInstance.sendRunHistoryToDashboard().catch((err) =>
+        Log.warn(`setDashboardReady: failed to send run history: ${err}`)
       );
     }
 
@@ -1532,10 +1568,13 @@ export class WorkflowOrchestrator {
   /**
    * Send full workflow state to the dashboard when switching to a CLI-managed workflow.
    * Sends SESSION_RESTORED with the current prompts, then replays all captured outputs.
+   * When `sink` is provided, sends only to that single client (per-client replay);
+   * otherwise broadcasts to all clients via the hub.
    */
   private async sendCliWorkflowFullStateToDashboard(
     workflowId: string,
-    cliEntry: { session: CliWatchSession; summary: WorkflowSummary }
+    cliEntry: { session: CliWatchSession; summary: WorkflowSummary },
+    sink?: IDashboardSink
   ): Promise<void> {
     const workingFilePath = cliEntry.summary.workingFilePath;
     if (!workingFilePath) {
@@ -1592,7 +1631,8 @@ export class WorkflowOrchestrator {
     }));
 
     const fileName = path.basename(workingFilePath);
-    await this.dashboardBroadcastHub.updateSessionRestored(
+    const target: IDashboardSink = sink ?? this.dashboardBroadcastHub;
+    await target.updateSessionRestored(
       fileName,
       steps,
       results,
@@ -1606,7 +1646,36 @@ export class WorkflowOrchestrator {
     // Replay all captured CLI outputs from the active history file
     const historyFilePath = cliEntry.session.getActiveHistoryFilePath();
     if (historyFilePath) {
-      await this.replayCliWatchHistoryFile(workflowId, historyFilePath);
+      if (sink) {
+        // Per-client replay: send directly to the sink without updating lastKnown counts
+        await this.replayCliHistoryFileTo(historyFilePath, sink);
+      } else {
+        await this.replayCliWatchHistoryFile(workflowId, historyFilePath);
+      }
+    }
+  }
+
+  /**
+   * Replay CLI watch history outputs to a single explicit sink.
+   * Does NOT update lastKnownOutputCount — used for per-client replays only.
+   */
+  private async replayCliHistoryFileTo(
+    historyFilePath: string,
+    sink: IDashboardSink
+  ): Promise<void> {
+    try {
+      const history = await this.getOutputHistoryManager().loadHistory(historyFilePath);
+      for (const entry of history.orderedEntries) {
+        if (
+          entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
+          entry.target.kind === FINAL_STEP_PHASES.QUEUE
+        ) {
+          const stepIndex = (entry.target as { kind: typeof FINAL_STEP_PHASES.QUEUE; stepIndex: number }).stepIndex;
+          sink.updateCliOutput(stepIndex, entry.cliOutput as CliOutput);
+        }
+      }
+    } catch (err) {
+      Log.warn(`[WorkflowOrchestrator] replayCliHistoryFileTo: failed:`, err);
     }
   }
 
