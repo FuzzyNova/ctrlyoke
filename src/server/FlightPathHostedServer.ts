@@ -6,10 +6,7 @@ import * as fs from "fs";
 import type { IDashboardProvider } from "../ui/IDashboardProvider";
 import type { WorkflowSummary, PromptStep } from "../types/FlightPathTypes";
 import type { CliOutput } from "../types/WebviewMessageTypes";
-import type {
-  StepStatus,
-  FinalStepPhase,
-} from "../types/DashboardConstants";
+import type { StepStatus, FinalStepPhase } from "../types/DashboardConstants";
 import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
 import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
@@ -24,7 +21,7 @@ export class FlightPathHostedServer implements IDashboardProvider {
   constructor(
     private hub: DashboardBroadcastHub,
     private webviewProvider: FlightPathWebviewProvider,
-    private port: number,
+    private port: number
   ) {
     this.httpServer = createServer(this.app);
     this.wss = new WebSocketServer({ server: this.httpServer, path: "/ws" });
@@ -108,7 +105,12 @@ export class FlightPathHostedServer implements IDashboardProvider {
     stepIndex: number,
     output: CliOutput
   ): void {
-    this.broadcast({ type: MESSAGE_TYPES.CLI_WATCH_OUTPUT, workflowId, stepIndex, output });
+    this.broadcast({
+      type: MESSAGE_TYPES.CLI_WATCH_OUTPUT,
+      workflowId,
+      stepIndex,
+      output,
+    });
   }
 
   notifyCliPromptsExtended(workflowId: string, steps: any[]): void {
@@ -116,7 +118,11 @@ export class FlightPathHostedServer implements IDashboardProvider {
   }
 
   notifyHarnessAvailability(harnessId: string, available: boolean): void {
-    this.broadcast({ type: MESSAGE_TYPES.HARNESS_STATUS_UPDATE, harnessId, available });
+    this.broadcast({
+      type: MESSAGE_TYPES.HARNESS_STATUS_UPDATE,
+      harnessId,
+      available,
+    });
   }
 
   notifyRunHistoryUpdated(
@@ -124,7 +130,12 @@ export class FlightPathHostedServer implements IDashboardProvider {
     runTimestamps?: (number | undefined)[],
     runStates?: (string | undefined)[]
   ): void {
-    this.broadcast({ type: MESSAGE_TYPES.RUN_HISTORY_UPDATED, runCount, runTimestamps, runStates });
+    this.broadcast({
+      type: MESSAGE_TYPES.RUN_HISTORY_UPDATED,
+      runCount,
+      runTimestamps,
+      runStates,
+    });
   }
 
   // ── Theme var snapshot (fed from VS Code webview capture) ─────────────────
@@ -162,7 +173,10 @@ export class FlightPathHostedServer implements IDashboardProvider {
     html = html.replace(/\{\{customIconsUri\}\}/g, "/custom-icons.css");
     html = html.replace(/\{\{logoUri\}\}/g, "");
     // Vite adds crossorigin to module scripts; remove it for same-origin serving.
-    html = html.replace(/<script type="module" crossorigin/g, '<script type="module"');
+    html = html.replace(
+      /<script type="module" crossorigin/g,
+      '<script type="module"'
+    );
 
     // Add spell-checker dictionary paths as data attributes on <body>.
     html = html.replace(
@@ -210,9 +224,12 @@ export class FlightPathHostedServer implements IDashboardProvider {
         try {
           const msg = JSON.parse(raw.toString());
           this.webviewProvider.routeExternalMessage(msg, (reply) => {
-            if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(reply));
+            if (ws.readyState === WebSocket.OPEN)
+              ws.send(JSON.stringify(reply));
           });
-        } catch (_e) { /* ignore malformed messages */ }
+        } catch (_e) {
+          /* ignore malformed messages */
+        }
       });
       ws.on("close", () => this.connections.delete(ws));
     });
@@ -221,15 +238,27 @@ export class FlightPathHostedServer implements IDashboardProvider {
   private sendInitialState(ws: WebSocket): void {
     this.webviewProvider.routeExternalMessage(
       { type: MESSAGE_TYPES.READY },
-      (msg) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
+      (msg) => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+      }
     );
     // Push cached theme vars immediately so the client can style itself without waiting
     // for a CAPTURE_THEME_VARS round-trip.
-    if (Object.keys(this.cachedThemeVars).length > 0 && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: MESSAGE_TYPES.THEME_VARS_UPDATED, vars: this.cachedThemeVars }));
+    if (
+      Object.keys(this.cachedThemeVars).length > 0 &&
+      ws.readyState === WebSocket.OPEN
+    ) {
+      ws.send(
+        JSON.stringify({
+          type: MESSAGE_TYPES.THEME_VARS_UPDATED,
+          vars: this.cachedThemeVars,
+        })
+      );
     }
     // Also request a fresh capture so any theme-change since last capture is picked up.
-    this.webviewProvider.postMessage({ type: MESSAGE_TYPES.CAPTURE_THEME_VARS });
+    this.webviewProvider.postMessage({
+      type: MESSAGE_TYPES.CAPTURE_THEME_VARS,
+    });
   }
 
   private broadcast(message: unknown): void {
@@ -242,7 +271,7 @@ export class FlightPathHostedServer implements IDashboardProvider {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   listen(): string {
-    this.httpServer.listen(this.port, "127.0.0.1");
+    this.httpServer.listen(this.port, "0.0.0.0");
     return `http://localhost:${this.port}`;
   }
 
