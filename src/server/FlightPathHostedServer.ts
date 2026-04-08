@@ -49,8 +49,13 @@ export class FlightPathHostedServer implements IDashboardProvider {
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
   }
 
-  notifyActiveWorkflowChanged(workflowId: string): void {
-    this.broadcast({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
+  notifyActiveWorkflowChanged(_workflowId: string): void {
+    // Intentional no-op. ACTIVE_WORKFLOW_CHANGED must never be broadcast to
+    // browser clients — each browser client's active workflow is driven exclusively
+    // by replayWorkflowStateTo(), which sends directly via the client's scoped
+    // postMessage. DashboardBroadcastHub.notifyActiveWorkflowChanged() already
+    // routes only to clients[0] (VS Code) so this method should never be called,
+    // but we guard here defensively.
   }
 
   async updateFileSelected(

@@ -51,6 +51,16 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       `[TERMINAL_STARTED] workflowId=inst:${workflowId?.slice(0, 8)} sessionId=${sessionId?.slice(0, 8)} kind=${kind} activeWorkflowId=inst:${activeWorkflowId?.slice(0, 8) ?? "null"} match=${workflowId === activeWorkflowId}`
     );
 
+    // viewerOnly sessions (sent via replayWorkflowStateTo for browser clients) may
+    // be for any workflow. Live sessions must match this client's active workflow —
+    // reject them otherwise to prevent terminals from hijacking the wrong client's view.
+    if (!message.viewerOnly && activeWorkflowId && workflowId !== activeWorkflowId) {
+      WebviewLog.debug(
+        `[TERMINAL_STARTED] ignoring live session — workflowId=${workflowId?.slice(0, 8)} !== activeWorkflowId=${activeWorkflowId?.slice(0, 8)}`
+      );
+      return;
+    }
+
     // For ai-cli sessions, only one should exist at a time per workflow.
     // Replace any previous ai-cli session so prompts within a run don't accumulate
     // separate xterm views. (clearAiCliSessions at WORKFLOW_STARTED handles run-to-run

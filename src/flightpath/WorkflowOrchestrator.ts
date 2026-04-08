@@ -138,7 +138,7 @@ export class WorkflowOrchestrator {
     dashboardProvider?: DashboardClient
   ) {
     if (dashboardProvider) {
-      this.dashboardBroadcastHub.addClient(dashboardProvider);
+      this.dashboardBroadcastHub.setPanelClient(dashboardProvider);
     }
     this.integrationFactory = new VsCodeIntegrationFactory(
       new VsCodeAdapter(context)

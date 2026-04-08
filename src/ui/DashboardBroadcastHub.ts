@@ -18,13 +18,27 @@ export type DashboardClient = IDashboardProvider & Partial<IDashboardSink>;
 /**
  * Broadcasts dashboard updates to every registered dashboard client.
  *
- * The VS Code sidebar is the first client today. Hosted browser clients can be
- * added later without changing orchestrator or workflow-instance call sites.
+ * One client is designated the "panel client" (the VS Code sidebar) via
+ * setPanelClient(). Certain messages — notably ACTIVE_WORKFLOW_CHANGED — must
+ * only go to the panel client, never broadcast. All other clients (browser
+ * WebSocket connections) receive those messages only through per-client paths
+ * such as replayWorkflowStateTo().
  */
 export class DashboardBroadcastHub
   implements IDashboardProvider, IDashboardSink
 {
   private readonly clients: DashboardClient[] = [];
+  /** The VS Code sidebar panel — the only client that receives hub-driven ACTIVE_WORKFLOW_CHANGED. */
+  private panelClient: DashboardClient | null = null;
+
+  /**
+   * Register the VS Code sidebar as the panel client.
+   * Also adds it to the broadcast list via addClient().
+   */
+  setPanelClient(client: DashboardClient): void {
+    this.panelClient = client;
+    this.addClient(client);
+  }
 
   addClient(client: DashboardClient): void {
     if (!this.clients.includes(client)) {
@@ -36,6 +50,9 @@ export class DashboardBroadcastHub
     const index = this.clients.indexOf(client);
     if (index !== -1) {
       this.clients.splice(index, 1);
+    }
+    if (this.panelClient === client) {
+      this.panelClient = null;
     }
   }
 
@@ -58,9 +75,11 @@ export class DashboardBroadcastHub
   }
 
   notifyActiveWorkflowChanged(workflowId: string): void {
-    for (const client of this.clients) {
-      client.notifyActiveWorkflowChanged(workflowId);
-    }
+    // ACTIVE_WORKFLOW_CHANGED is always per-client, never broadcast.
+    // Only the VS Code sidebar panel receives it via the hub. Browser clients
+    // receive it exclusively through replayWorkflowStateTo(), which sends directly
+    // via the client's scoped postMessage.
+    this.panelClient?.notifyActiveWorkflowChanged(workflowId);
   }
 
   async updateFileSelected(
