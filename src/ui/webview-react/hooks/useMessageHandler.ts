@@ -283,6 +283,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // FILE_SELECTED - New workflow file loaded
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FILE_SELECTED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     useWorkflowStore.getState().loadWorkflow({
       fileName: message.fileName,
       workflowName: message.workflowName,
@@ -299,6 +305,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // SESSION_RESTORED - Restore previous session with runtime state
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SESSION_RESTORED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     useWorkflowStore.getState().loadWorkflow({
       fileName: message.fileName,
       workflowName: message.workflowName,
@@ -398,6 +410,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // Resets prompt statuses and execution state without touching output history.
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.RESET_WORKFLOW_STATE] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const workflowStore = useWorkflowStore.getState();
     workflowStore.resetExecutionState(message.steps || []);
 
@@ -418,6 +436,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // REORDER_PROMPTS_CONFIRMED - Extension confirms pending prompts were reordered
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setPrompts(message.steps || []);
   };
@@ -426,6 +450,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // SET_START_POSITION_CONFIRMED - Extension confirms start position was moved
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SET_START_POSITION_CONFIRMED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const workflowStore = useWorkflowStore.getState();
     const prevCurrentStep = workflowStore.currentStep;
     const newCurrentStep = message.currentIndex as number;
@@ -466,6 +496,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // EXECUTION_STARTED - Workflow execution has started
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.EXECUTION_STARTED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const workflowStore = useWorkflowStore.getState();
     const editorStore = useEditorStore.getState();
     const uiStore = useUiStore.getState();
@@ -557,6 +593,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // EXECUTION_STATE_CHANGED - Execution state changed (running/paused/stopped)
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.EXECUTION_STATE_CHANGED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setExecutionState(message.state as ExecutionState);
   };
@@ -565,6 +607,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // PROGRESS_UPDATE - Current step/total steps updated
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.PROGRESS_UPDATE] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setCurrentStep(message.current);
     workflowStore.setTotalSteps(message.total);
@@ -574,6 +622,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // STEP_STATUS_CHANGED - Individual step status changed
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.STEP_STATUS_CHANGED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const workflowStore = useWorkflowStore.getState();
     const { stepIndex, status, details } = message;
 
@@ -599,6 +653,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // RETRY_ATTEMPT_CHANGED - Retry count updated for a step
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.RETRY_ATTEMPT_CHANGED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setRetryState(
       message.stepIndex,
@@ -610,7 +670,13 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   // EXECUTION_COMPLETED - Workflow execution finished
   // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.EXECUTION_COMPLETED] = () => {
+  handlers[MESSAGE_TYPES.EXECUTION_COMPLETED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setExecutionState(EXECUTION_STATES.COMPLETED);
   };
@@ -626,6 +692,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // FINAL_PROMPT_STATUS_CHANGED - Runtime status updates for finalStep phase
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FINAL_PROMPT_STATUS_CHANGED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     useWorkflowStore
       .getState()
       .setFinalStepStatus(
@@ -639,6 +711,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // FINAL_PROMPT_OUTPUT - CLI output for finalStep loop
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FINAL_PROMPT_OUTPUT] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const store = useWorkflowStore.getState();
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
@@ -658,6 +736,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // FINAL_PROMPT_STREAMING_CHUNK - Incremental streaming text chunk for finalStep
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     useWorkflowStore
       .getState()
       .appendFinalStepStreamingChunk(message.loopIndex, message.chunk || "");
@@ -667,6 +751,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // FINAL_PROMPT_STREAMING_EVENTS - Structured streaming events for finalStep
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     useWorkflowStore
       .getState()
       .appendFinalStepStreamingEvents(message.loopIndex, message.events || []);
@@ -676,6 +766,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // CLI_OUTPUT - Complete CLI output for a step
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CLI_OUTPUT] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const store = useWorkflowStore.getState();
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
@@ -692,6 +788,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // CLI_STREAMING_CHUNK - Incremental streaming text chunk
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CLI_STREAMING_CHUNK] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const workflowStore = useWorkflowStore.getState();
     workflowStore.appendStreamingChunk(message.stepIndex, message.chunk || "");
   };
@@ -700,6 +802,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // CLI_STREAMING_EVENTS - Structured events for Claude/Codex CLI
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CLI_STREAMING_EVENTS] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const workflowStore = useWorkflowStore.getState();
     const events = message.events || [];
 
@@ -734,6 +842,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // STATUS_MESSAGE - Status message for a step (info/warning/error)
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.STATUS_MESSAGE] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const store = useWorkflowStore.getState();
     const stepIndex = Number(message.stepIndex);
     const target: OutputExecutionTarget =
@@ -764,6 +878,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // WORKFLOW_NAME_UPDATED - Workflow name changed
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_NAME_UPDATED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setWorkflowName(message.workflowName);
   };
@@ -986,6 +1106,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // RUN_HISTORY_UPDATED - Available run count changed (new run initialized)
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.RUN_HISTORY_UPDATED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     WebviewLog.debug(
       `[MessageHandler] RUN_HISTORY_UPDATED: runCount=${message.runCount}, runTimestamps=${JSON.stringify(message.runTimestamps)}`
     );

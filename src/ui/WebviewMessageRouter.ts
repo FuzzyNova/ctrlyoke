@@ -144,7 +144,10 @@ export class WebviewMessageRouter {
         if (orchestrator) {
           const activeId = orchestrator.getActiveWorkflowId();
           if (activeId) {
-            await orchestrator.replayWorkflowStateTo(activeId, this.scopedPostMessage);
+            await orchestrator.replayWorkflowStateTo(
+              activeId,
+              this.scopedPostMessage
+            );
           }
           // Send the full loaded-workflow list so the switcher dropdown populates.
           this.emitMessage({
@@ -160,7 +163,10 @@ export class WebviewMessageRouter {
         // Reconnect server running state (handles webview reload while server is up)
         const serverUrl = this.callbacks.getServerUrl?.();
         if (serverUrl) {
-          this.emitMessage({ type: MESSAGE_TYPES.SERVER_STARTED, url: serverUrl });
+          this.emitMessage({
+            type: MESSAGE_TYPES.SERVER_STARTED,
+            url: serverUrl,
+          });
         }
         // Reconnect active PTY sessions to the fresh webview
         const ptyManager = getPtyProcessManager();
@@ -379,7 +385,10 @@ export class WebviewMessageRouter {
 
     // ── Output History ───────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.LOAD_RUN_HISTORY, async (message) => {
-      await this.serializer.handleLoadRunHistory(message.runIndex, this.getCurrentPostMessage());
+      await this.serializer.handleLoadRunHistory(
+        message.runIndex,
+        this.getCurrentPostMessage()
+      );
     });
 
     table.set(MESSAGE_TYPES.CLEAR_RUN_HISTORY, async () => {
@@ -392,15 +401,24 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.TEMPLATE_SELECTED, (message) => {
-      this.serializer.handleTemplateSelected(message.templateId, this.getCurrentPostMessage());
+      this.serializer.handleTemplateSelected(
+        message.templateId,
+        this.getCurrentPostMessage()
+      );
     });
 
     table.set(MESSAGE_TYPES.SET_DEFAULT_TEMPLATE, (message) => {
-      this.serializer.handleSetDefaultTemplate(message.templateId, this.getCurrentPostMessage());
+      this.serializer.handleSetDefaultTemplate(
+        message.templateId,
+        this.getCurrentPostMessage()
+      );
     });
 
     table.set(MESSAGE_TYPES.CREATE_WORKFLOW, (message) => {
-      this.serializer.handleCreateWorkflow(message, this.getCurrentPostMessage());
+      this.serializer.handleCreateWorkflow(
+        message,
+        this.getCurrentPostMessage()
+      );
     });
 
     table.set(MESSAGE_TYPES.CREATE_NEW_TEMPLATE, () => {
@@ -429,38 +447,29 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.LOAD_WORKFLOW, (message) => {
       if (this.scopedPostMessage) {
-        // External browser client — avoid changing the global active workflow
-        // (which would update the VS Code sidebar). If the requested workflow is
-        // already loaded in the orchestrator (running/paused), replay its state
-        // to just this client. If it's not currently loaded, fall back to a full
-        // global load so the file is parsed and added to the registry.
+        // External browser client — use per-client load which never changes
+        // the VS Code sidebar's active view (vsCodeViewedId).
         const orchestrator = this.getOrchestrator();
         if (orchestrator) {
           const filePath: string = message.filePath ?? "";
-          const match = orchestrator
-            .getWorkflowSummaries()
-            .find((s) => s.workingFilePath === filePath);
-          if (match) {
-            orchestrator
-              .replayWorkflowStateTo(match.id, this.scopedPostMessage)
-              .catch((err) =>
-                Log.warn(`LOAD_WORKFLOW per-client replay failed: ${err}`)
-              );
-            return;
-          }
+          orchestrator
+            .loadWorkflowForClient(filePath, this.scopedPostMessage)
+            .catch((err) =>
+              Log.warn(`LOAD_WORKFLOW per-client load failed: ${err}`)
+            );
+          return;
         }
-        // Workflow not currently loaded — fall through to global load.
-        // This adds it to the orchestrator registry and broadcasts to all clients
-        // (including VS Code). This is acceptable for workflows being opened for
-        // the first time from the browser.
       }
+      // VS Code sidebar path — global load (changes vsCodeViewedId)
       this.serializer.handleLoadWorkflow(message);
     });
 
     table.set(MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY, async () => {
       const currentWorkingFilePath =
         this.getOrchestrator()?.getQueueState()?.workingFilePath;
-      const deleted = await this.serializer.handleClearWorkflowHistory(this.getCurrentPostMessage());
+      const deleted = await this.serializer.handleClearWorkflowHistory(
+        this.getCurrentPostMessage()
+      );
       // Clear the stale working file path if it was deleted by the history clear.
       // Same logic as REMOVE_WORKFLOW_HISTORY — we do NOT call clearWorkflow() to
       // preserve the user's prompts and source file reference.
@@ -499,7 +508,9 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.GLOBAL_SETTINGS_LOAD_REQUEST, () => {
-      this.settingsSync.handleGlobalSettingsLoadRequest(this.getCurrentPostMessage());
+      this.settingsSync.handleGlobalSettingsLoadRequest(
+        this.getCurrentPostMessage()
+      );
     });
 
     table.set(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, (message) => {
@@ -564,7 +575,9 @@ export class WebviewMessageRouter {
 
     // ── Save Workflow ────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST, async () => {
-      await this.serializer.handleSaveWorkflowRequest(this.getCurrentPostMessage());
+      await this.serializer.handleSaveWorkflowRequest(
+        this.getCurrentPostMessage()
+      );
     });
 
     table.set(MESSAGE_TYPES.SAVE_WORKFLOW, async (message) => {
@@ -600,9 +613,11 @@ export class WebviewMessageRouter {
       if (this.scopedPostMessage) {
         // External WS client — replay state to just this client without changing
         // the global active workflow (so the VS Code sidebar is unaffected).
-        orchestrator.replayWorkflowStateTo(workflowId, this.scopedPostMessage).catch(
-          (err) => Log.warn(`SWITCH_WORKFLOW per-client replay failed: ${err}`)
-        );
+        orchestrator
+          .replayWorkflowStateTo(workflowId, this.scopedPostMessage)
+          .catch((err) =>
+            Log.warn(`SWITCH_WORKFLOW per-client replay failed: ${err}`)
+          );
       } else {
         // VS Code sidebar — change global active workflow and broadcast to all.
         orchestrator.setActiveWorkflow(workflowId);

@@ -79,8 +79,9 @@ export class WorkflowOrchestrator {
   // Instance registry
   // ─────────────────────────────────────────────────────────────────────────
 
-  /** RUNNING and PAUSED instances only — the parallel execution registry */
-  private readonly workflows: Map<string, WorkflowInstance> = new Map();
+  /** Instance registry — running/paused instances plus idle instances loaded via browser client.
+   * Keyed by WorkflowInstance.id (UUID). */
+  private readonly instances: Map<string, WorkflowInstance> = new Map();
 
   /** CLI-managed workflows being watched (keyed by workflowId) */
   private readonly cliSessions: Map<
@@ -91,8 +92,12 @@ export class WorkflowOrchestrator {
   /** Watcher for *.runner.json creation (Entry Point 3: CLI starts while VS Code is open) */
   private runnerJsonCreateWatcher?: vscode.FileSystemWatcher;
 
-  /** The instance currently displayed in the dashboard (may or may not be in the Map) */
-  private viewedInstance: WorkflowInstance | null = null;
+  /** UUID of the instance shown in the VS Code sidebar. Not changed by browser-client loads. */
+  private vsCodeViewedId: string | null = null;
+
+  /** Retired instance still shown in the VS Code sidebar (completed/stopped/error).
+   * Disposed when the next workflow is created. */
+  private vsCodeViewedRetiredInstance: WorkflowInstance | null = null;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Cross-cutting concerns
@@ -244,11 +249,11 @@ export class WorkflowOrchestrator {
     _filePath?: string
   ): Promise<WorkflowInstance | undefined> {
     Log.debug(
-      `createWorkflow: filePath="${_filePath ?? "(none)"}", currently viewed=${this.viewedInstance?.id.slice(0, 8) ?? "null"}, running=${this.workflows.size}`
+      `createWorkflow: filePath="${_filePath ?? "(none)"}", currently viewed=${this.vsCodeViewedId?.slice(0, 8) ?? "null"}, running=${this.instances.size}`
     );
     // ── Duplicate detection: only running/paused instances are in the Map ──
     if (_filePath) {
-      const existing = [...this.workflows.values()].find(
+      const existing = [...this.instances.values()].find(
         (w) => w.filePath === _filePath
       );
       if (existing) {
@@ -274,23 +279,39 @@ export class WorkflowOrchestrator {
       }
     }
 
-    // Dispose current viewedInstance if it is idle (not in the execution registry)
-    if (this.viewedInstance && !this.workflows.has(this.viewedInstance.id)) {
+    // Dispose/deactivate the current VS Code viewed instance if applicable
+    const currentViewed = this.vsCodeViewedId
+      ? (this.instances.get(this.vsCodeViewedId) ??
+        this.vsCodeViewedRetiredInstance)
+      : null;
+    if (this.vsCodeViewedRetiredInstance) {
       Log.debug(
-        `createWorkflow: disposing idle viewedInstance inst:${this.viewedInstance.id.slice(0, 8)}`
+        `createWorkflow: disposing retired viewedInstance inst:${this.vsCodeViewedRetiredInstance.id.slice(0, 8)}`
       );
-      this.viewedInstance.dispose();
-    } else if (this.viewedInstance) {
-      // It is running/paused — just deactivate it visually
-      Log.debug(
-        `createWorkflow: deactivating running viewedInstance inst:${this.viewedInstance.id.slice(0, 8)}`
-      );
-      this.viewedInstance.setActive(false);
+      this.vsCodeViewedRetiredInstance.dispose();
+      this.vsCodeViewedRetiredInstance = null;
+    } else if (currentViewed) {
+      const viewedStatus = currentViewed.getQueueState().status;
+      const isIdle =
+        viewedStatus !== EXECUTION_STATES.RUNNING &&
+        viewedStatus !== EXECUTION_STATES.PAUSED;
+      if (isIdle) {
+        Log.debug(
+          `createWorkflow: disposing idle viewedInstance inst:${currentViewed.id.slice(0, 8)}`
+        );
+        currentViewed.dispose();
+        this.instances.delete(this.vsCodeViewedId!);
+      } else {
+        // It is running/paused — keep it in the registry but do not deactivate
+        Log.debug(
+          `createWorkflow: keeping running viewedInstance inst:${currentViewed.id.slice(0, 8)} in registry`
+        );
+      }
     }
 
     const instance = this.buildWorkflowInstance();
-    this.viewedInstance = instance;
-    instance.setActive(true);
+    this.vsCodeViewedId = instance.id;
+    this.instances.set(instance.id, instance);
 
     // Load the prompt file into the new instance if a path was provided
     if (_filePath) {
@@ -310,7 +331,7 @@ export class WorkflowOrchestrator {
    * Called automatically when a workflow reaches COMPLETED, ERROR, or STOPPED state.
    */
   private retireWorkflow(workflowId: string): void {
-    const instance = this.workflows.get(workflowId);
+    const instance = this.instances.get(workflowId);
     if (!instance) {
       Log.debug(
         `retireWorkflow: inst:${workflowId.slice(0, 8)} not in registry (already retired?)`
@@ -318,16 +339,17 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    const isViewed = this.viewedInstance === instance;
+    const isViewed = this.vsCodeViewedId === workflowId;
     Log.debug(
       `retireWorkflow: inst:${workflowId.slice(0, 8)} name=\"${instance.workflowName || "(empty)"}\" ` +
-        `status=${instance.getQueueState().status}, isViewed=${isViewed}, remaining=${this.workflows.size - 1}`
+        `status=${instance.getQueueState().status}, isViewed=${isViewed}, remaining=${this.instances.size - 1}`
     );
-    this.workflows.delete(workflowId);
+    this.instances.delete(workflowId);
 
-    if (this.viewedInstance === instance) {
-      // Keep as viewedInstance so the user still sees the completed result.
+    if (isViewed) {
+      // Keep as vsCodeViewedRetiredInstance so the user still sees the completed result.
       // It will be disposed when the next workflow is created or the extension is disposed.
+      this.vsCodeViewedRetiredInstance = instance;
     } else {
       // Background workflow completed silently — dispose it immediately.
       instance.dispose();
@@ -340,25 +362,32 @@ export class WorkflowOrchestrator {
   }
 
   getWorkflow(workflowId: string): WorkflowInstance | undefined {
-    return this.workflows.get(workflowId);
+    return this.instances.get(workflowId);
   }
 
   getAllWorkflows(): WorkflowInstance[] {
-    return [...this.workflows.values()];
+    return [...this.instances.values()];
   }
 
   getRunningWorkflows(): WorkflowInstance[] {
-    return [...this.workflows.values()].filter(
+    return [...this.instances.values()].filter(
       (w) => w.getQueueState().status === EXECUTION_STATES.RUNNING
     );
   }
 
   getActiveWorkflow(): WorkflowInstance | undefined {
-    return this.viewedInstance ?? undefined;
+    if (this.vsCodeViewedId) {
+      return (
+        this.instances.get(this.vsCodeViewedId) ??
+        this.vsCodeViewedRetiredInstance ??
+        undefined
+      );
+    }
+    return undefined;
   }
 
   getActiveWorkflowId(): string | null {
-    return this.viewedInstance?.id ?? null;
+    return this.vsCodeViewedId;
   }
 
   setActiveWorkflow(workflowId: string): void {
@@ -382,7 +411,7 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    const instance = this.workflows.get(workflowId);
+    const instance = this.instances.get(workflowId);
     if (!instance) {
       Log.warn(
         `setActiveWorkflow: inst:${workflowId.slice(0, 8)} not found in running/paused registry`
@@ -393,22 +422,42 @@ export class WorkflowOrchestrator {
     }
 
     Log.debug(
-      `setActiveWorkflow: switching from inst:${this.viewedInstance?.id.slice(0, 8) ?? "null"} → inst:${workflowId.slice(0, 8)} (${instance.workflowName || "unnamed"})`
+      `setActiveWorkflow: switching from inst:${this.vsCodeViewedId?.slice(0, 8) ?? "null"} → inst:${workflowId.slice(0, 8)} (${instance.workflowName || "unnamed"})`
     );
 
-    // Dispose current viewedInstance if it is idle (not executing)
-    if (this.viewedInstance && !this.workflows.has(this.viewedInstance.id)) {
+    // Dispose/deactivate the current VS Code viewed instance if applicable
+    if (this.vsCodeViewedRetiredInstance) {
       Log.debug(
-        `setActiveWorkflow: disposing idle viewedInstance inst:${this.viewedInstance.id.slice(0, 8)}`
+        `setActiveWorkflow: disposing retired viewedInstance inst:${this.vsCodeViewedRetiredInstance.id.slice(0, 8)}`
       );
-      this.viewedInstance.dispose();
-    } else if (this.viewedInstance && this.viewedInstance !== instance) {
-      this.viewedInstance.setActive(false);
+      this.vsCodeViewedRetiredInstance.dispose();
+      this.vsCodeViewedRetiredInstance = null;
+    } else if (this.vsCodeViewedId) {
+      const currentViewed = this.instances.get(this.vsCodeViewedId);
+      if (currentViewed && currentViewed !== instance) {
+        const viewedStatus = currentViewed.getQueueState().status;
+        const isIdle =
+          viewedStatus !== EXECUTION_STATES.RUNNING &&
+          viewedStatus !== EXECUTION_STATES.PAUSED;
+        if (isIdle) {
+          Log.debug(
+            `setActiveWorkflow: disposing idle viewedInstance inst:${currentViewed.id.slice(0, 8)}`
+          );
+          currentViewed.dispose();
+          this.instances.delete(this.vsCodeViewedId);
+        } else {
+          // Running/paused — keep it in the registry.
+          // WorkflowTaggedSink + client-side workflowId filtering handles visibility.
+          Log.debug(
+            `setActiveWorkflow: keeping running viewedInstance inst:${currentViewed.id.slice(0, 8)} in registry`
+          );
+        }
+      }
     }
 
-    this.viewedInstance = instance;
-    // setActive(true) calls flushBufferedEvents → sendFullStateToDashboard internally
-    instance.setActive(true);
+    this.vsCodeViewedId = workflowId;
+    this.vsCodeViewedRetiredInstance = null;
+    instance.sendFullStateToDashboard();
     // Notify the dashboard that the active workflow selection changed.
     this.dashboardBroadcastHub.notifyActiveWorkflowChanged(workflowId);
     Log.debug(
@@ -439,7 +488,7 @@ export class WorkflowOrchestrator {
     const sink = new PostMessageDashboardSink(send);
     send({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
 
-    const instance = this.workflows.get(workflowId);
+    const instance = this.instances.get(workflowId);
     if (instance) {
       instance.replayFullStateTo(sink);
       await instance.replayRunHistoryTo(sink);
@@ -449,23 +498,65 @@ export class WorkflowOrchestrator {
     // CLI-managed session
     const cliEntry = this.cliSessions.get(workflowId);
     if (cliEntry) {
-      await this.sendCliWorkflowFullStateToDashboard(workflowId, cliEntry, sink);
+      await this.sendCliWorkflowFullStateToDashboard(
+        workflowId,
+        cliEntry,
+        sink
+      );
     } else {
-      Log.warn(`replayWorkflowStateTo: workflowId "${workflowId.slice(0, 8)}" not found`);
+      Log.warn(
+        `replayWorkflowStateTo: workflowId "${workflowId.slice(0, 8)}" not found`
+      );
     }
   }
 
   /** Return summaries without exposing WorkflowInstance internals */
   getWorkflowSummaries(): WorkflowSummary[] {
-    const vsSummaries = [...this.workflows.values()].map((w) => w.getSummary());
+    const vsSummaries = [...this.instances.values()].map((w) => w.getSummary());
     const cliSummaries = [...this.cliSessions.values()].map(
       (entry) => entry.summary
     );
     const summaries = [...vsSummaries, ...cliSummaries];
     Log.trace(
-      `[getWorkflowSummaries] registry has ${this.workflows.size} running/paused instances + ${this.cliSessions.size} CLI sessions, viewed=${this.viewedInstance?.id.slice(0, 8) ?? "null"}: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState},fp=${s.filePath ? path.basename(s.filePath) : "?"})`).join(", ") || "(none)"}`
+      `[getWorkflowSummaries] registry has ${this.instances.size} instances + ${this.cliSessions.size} CLI sessions, viewed=${this.vsCodeViewedId?.slice(0, 8) ?? "null"}: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState},fp=${s.filePath ? path.basename(s.filePath) : "?"})`).join(", ") || "(none)"}`
     );
     return summaries;
+  }
+
+  /**
+   * Load a working file for a specific browser client without changing the VS Code
+   * sidebar's active view (vsCodeViewedId). Used by LOAD_WORKFLOW from external clients.
+   */
+  async loadWorkflowForClient(
+    filePath: string,
+    send: (message: unknown) => void
+  ): Promise<void> {
+    // Parse working file path to get workflowId (used for CLI session lookup)
+    const workflowId = path
+      .basename(filePath)
+      .replace(/\.flightpath\.json$/, "");
+
+    // Check for CLI-managed session first
+    const cliEntry = this.cliSessions.get(workflowId);
+    if (cliEntry) {
+      await this.replayWorkflowStateTo(workflowId, send);
+      return;
+    }
+
+    // Check if already in instances registry by working file path
+    const existing = [...this.instances.values()].find(
+      (w) => w.getSummary().workingFilePath === filePath
+    );
+    if (existing) {
+      await this.replayWorkflowStateTo(existing.id, send);
+      return;
+    }
+
+    // Not in registry — load file without touching vsCodeViewedId
+    const instance = this.buildWorkflowInstance();
+    this.instances.set(instance.id, instance);
+    await instance.loadWorkingFile(filePath);
+    await this.replayWorkflowStateTo(instance.id, send);
   }
 
   /**
@@ -597,16 +688,20 @@ export class WorkflowOrchestrator {
     // Re-hydrate on every READY (handles webview reloads and panels opened after
     // workflow creation, where the original ACTIVE_WORKFLOW_CHANGED was dropped
     // because postMessage no-ops when the view is not yet visible).
-    if (this.viewedInstance) {
-      this.viewedInstance.sendFullStateToDashboard();
-      this.dashboardBroadcastHub.notifyActiveWorkflowChanged(
-        this.viewedInstance.id
-      );
+    const viewed = this.vsCodeViewedId
+      ? (this.instances.get(this.vsCodeViewedId) ??
+        this.vsCodeViewedRetiredInstance)
+      : null;
+    if (viewed) {
+      viewed.sendFullStateToDashboard();
+      this.dashboardBroadcastHub.notifyActiveWorkflowChanged(viewed.id);
       // Re-send run history count so newly connected clients (browser) see the
       // RunSelector without waiting for the next setActiveWorkflow call.
-      this.viewedInstance.sendRunHistoryToDashboard().catch((err) =>
-        Log.warn(`setDashboardReady: failed to send run history: ${err}`)
-      );
+      viewed
+        .sendRunHistoryToDashboard()
+        .catch((err) =>
+          Log.warn(`setDashboardReady: failed to send run history: ${err}`)
+        );
     }
 
     if (this.orchestratorInitialized) {
@@ -687,15 +782,18 @@ export class WorkflowOrchestrator {
     continueFromCurrent?: boolean
   ): Promise<void> {
     const instance = workflowId
-      ? this.workflows.get(workflowId)
-      : this.viewedInstance;
+      ? this.instances.get(workflowId)
+      : this.vsCodeViewedId
+        ? (this.instances.get(this.vsCodeViewedId) ??
+          this.vsCodeViewedRetiredInstance)
+        : null;
 
     if (!instance) {
       Log.warn(`executeWorkflow: workflow ${workflowId ?? "viewed"} not found`);
       return;
     }
 
-    // Note: the instance is registered in this.workflows when its promptQueue
+    // Note: the instance is registered in this.instances when its promptQueue
     // transitions to RUNNING or PAUSED via the onDidChangeState listener wired
     // in buildWorkflowInstance(). Registering there (not here) guarantees
     // getWorkflowSummaries() only ever returns truly running/paused workflows.
@@ -736,7 +834,7 @@ export class WorkflowOrchestrator {
     // load the new file into it — stomping on parallel workflows.
     Log.debug(
       `executePromptFile: loading "${path.basename(filePath)}" into new instance ` +
-        `(${this.workflows.size} workflow(s) currently in registry)`
+        `(${this.instances.size} workflow(s) currently in registry)`
     );
     const instance = await this.createWorkflow(filePath);
     if (!instance) {
@@ -781,7 +879,7 @@ export class WorkflowOrchestrator {
    * Used by per-workflow controls in the dropdown; allows pausing non-active instances.
    */
   async pauseWorkflow(workflowId: string): Promise<void> {
-    const instance = this.workflows.get(workflowId);
+    const instance = this.instances.get(workflowId);
     if (!instance) {
       Log.warn(
         `pauseWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
@@ -796,7 +894,7 @@ export class WorkflowOrchestrator {
    * Used by per-workflow controls in the dropdown; allows resuming non-active instances.
    */
   async resumeWorkflow(workflowId: string): Promise<void> {
-    const instance = this.workflows.get(workflowId);
+    const instance = this.instances.get(workflowId);
     if (!instance) {
       Log.warn(
         `resumeWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
@@ -811,7 +909,7 @@ export class WorkflowOrchestrator {
    * Used by per-workflow controls in the dropdown; allows stopping non-active instances.
    */
   async stopWorkflow(workflowId: string): Promise<void> {
-    const instance = this.workflows.get(workflowId);
+    const instance = this.instances.get(workflowId);
     if (!instance) {
       Log.warn(
         `stopWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
@@ -882,7 +980,11 @@ export class WorkflowOrchestrator {
    * Returns null if no instance exists yet.
    */
   getActivePromptQueue(): PromptQueue | null {
-    return this.viewedInstance?.promptQueue ?? null;
+    const viewed = this.vsCodeViewedId
+      ? (this.instances.get(this.vsCodeViewedId) ??
+        this.vsCodeViewedRetiredInstance)
+      : null;
+    return viewed?.promptQueue ?? null;
   }
 
   async updateWorkflowName(workflowName: string): Promise<void> {
@@ -1145,16 +1247,17 @@ export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
 
   dispose(): void {
-    // Dispose viewedInstance if it is not tracked in the running/paused Map
-    if (this.viewedInstance && !this.workflows.has(this.viewedInstance.id)) {
-      this.viewedInstance.dispose();
+    // Dispose vsCodeViewedRetiredInstance if held (completed/stopped, not in map)
+    if (this.vsCodeViewedRetiredInstance) {
+      this.vsCodeViewedRetiredInstance.dispose();
+      this.vsCodeViewedRetiredInstance = null;
     }
-    this.viewedInstance = null;
+    this.vsCodeViewedId = null;
 
-    for (const instance of this.workflows.values()) {
+    for (const instance of this.instances.values()) {
       instance.dispose();
     }
-    this.workflows.clear();
+    this.instances.clear();
 
     // Dispose all CLI watch sessions
     for (const entry of this.cliSessions.values()) {
@@ -1178,14 +1281,17 @@ export class WorkflowOrchestrator {
    * Get the active WorkflowInstance, creating one if none exists yet.
    */
   private getActiveInstance(): WorkflowInstance {
-    if (this.viewedInstance) {
-      return this.viewedInstance;
+    if (this.vsCodeViewedId) {
+      const inst =
+        this.instances.get(this.vsCodeViewedId) ??
+        this.vsCodeViewedRetiredInstance;
+      if (inst) return inst;
     }
 
     // Lazily create the initial viewed instance
     const instance = this.buildWorkflowInstance();
-    this.viewedInstance = instance;
-    instance.setActive(true);
+    this.vsCodeViewedId = instance.id;
+    this.instances.set(instance.id, instance);
     return instance;
   }
 
@@ -1212,6 +1318,11 @@ export class WorkflowOrchestrator {
       instance.mcpServerProvider = this.mcpServerProvider;
     }
 
+    // Track whether this instance has been announced to the dashboard as running/paused.
+    // Closure variable so it survives field renames and is not confused by pre-registered
+    // idle instances in this.instances.
+    let hasBeenNotifiedAsAdded = false;
+
     // Broadcast summary updates whenever this instance's execution state changes.
     // This covers both active and inactive workflows so the multi-workflow list
     // stays in sync regardless of which workflow is currently displayed.
@@ -1220,7 +1331,7 @@ export class WorkflowOrchestrator {
 
       Log.debug(
         `[onDidChangeState] inst:${instance.id.slice(0, 8)} state=${state.status} name="${summary.workflowName || "(empty)"}" ` +
-          `inRegistry=${this.workflows.has(instance.id)} registrySize=${this.workflows.size} ` +
+          `inRegistry=${this.instances.has(instance.id)} registrySize=${this.instances.size} ` +
           `fp=${summary.filePath ? path.basename(summary.filePath) : "?"} step=${workflowDisplayStep(summary)}/${summary.totalSteps}`
       );
 
@@ -1235,12 +1346,13 @@ export class WorkflowOrchestrator {
       if (
         (state.status === EXECUTION_STATES.RUNNING ||
           state.status === EXECUTION_STATES.PAUSED) &&
-        !this.workflows.has(instance.id)
+        !hasBeenNotifiedAsAdded
       ) {
-        this.workflows.set(instance.id, instance);
+        hasBeenNotifiedAsAdded = true;
+        this.instances.set(instance.id, instance);
         Log.debug(
           `onDidChangeState: registered inst:${instance.id.slice(0, 8)} in running registry on ${state.status} ` +
-            `name="${summary.workflowName || "(empty)"}" (total: ${this.workflows.size})`
+            `name="${summary.workflowName || "(empty)"}" (total: ${this.instances.size})`
         );
         this.dashboardBroadcastHub.notifyWorkflowAdded(summary);
       }
@@ -1250,10 +1362,11 @@ export class WorkflowOrchestrator {
       // Auto-retire when a workflow completes, errors, or stops.
       // All dashboard messages (notifyWorkflowSummaryUpdated) have already been
       // sent synchronously above, so there's nothing to wait for.
-      // Guard with has() — workflows restored from disk in a terminal state are
-      // never registered in this.workflows, so there's nothing to retire.
+      // Guard with hasBeenNotifiedAsAdded — workflows restored from disk in a
+      // terminal state are never announced as running/paused, so there is nothing
+      // to retire.
       if (
-        this.workflows.has(instance.id) &&
+        hasBeenNotifiedAsAdded &&
         (state.status === EXECUTION_STATES.COMPLETED ||
           state.status === EXECUTION_STATES.ERROR ||
           state.status === EXECUTION_STATES.STOPPED)
@@ -1463,7 +1576,7 @@ export class WorkflowOrchestrator {
     // This prevents a conflict where VS Code auto-loaded the workflow in PAUSED state
     // and the CLI is now taking over execution. Without this, the PAUSED instance
     // stays in the Running Workflows section alongside the CLI watch session.
-    for (const [instanceId, instance] of [...this.workflows.entries()]) {
+    for (const [instanceId, instance] of [...this.instances.entries()]) {
       if (instance.getSummary().workingFilePath === workingFilePath) {
         Log.info(
           `[WorkflowOrchestrator] startCliWatchSession: retiring conflicting WorkflowInstance inst:${instanceId.slice(0, 8)} for "${workflowId}"`
@@ -1664,13 +1777,19 @@ export class WorkflowOrchestrator {
     sink: IDashboardSink
   ): Promise<void> {
     try {
-      const history = await this.getOutputHistoryManager().loadHistory(historyFilePath);
+      const history =
+        await this.getOutputHistoryManager().loadHistory(historyFilePath);
       for (const entry of history.orderedEntries) {
         if (
           entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
           entry.target.kind === FINAL_STEP_PHASES.QUEUE
         ) {
-          const stepIndex = (entry.target as { kind: typeof FINAL_STEP_PHASES.QUEUE; stepIndex: number }).stepIndex;
+          const stepIndex = (
+            entry.target as {
+              kind: typeof FINAL_STEP_PHASES.QUEUE;
+              stepIndex: number;
+            }
+          ).stepIndex;
           sink.updateCliOutput(stepIndex, entry.cliOutput as CliOutput);
         }
       }

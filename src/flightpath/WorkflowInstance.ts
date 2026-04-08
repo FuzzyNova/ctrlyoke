@@ -39,6 +39,7 @@ import {
   type QueuePosition,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
+import { WorkflowTaggedSink } from "./WorkflowTaggedSink";
 import type { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -99,8 +100,6 @@ export class WorkflowInstance {
   workflowName: string = "";
   /** Path to the source prompt/workflow file (or generated name for ephemerals) */
   filePath: string = "";
-  /** True when this instance is the one shown in the dashboard */
-  isActive: boolean = false;
   /** Creation timestamp (ms since epoch) */
   readonly createdAt: number;
   /** Timestamp when execution last started (ms since epoch), 0 if never started */
@@ -134,15 +133,8 @@ export class WorkflowInstance {
   /** MCP server provider for injecting user-defined MCP servers (chat harness only) */
   mcpServerProvider?: FlightPathMcpServerProvider;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Background buffering for inactive workflows
-  // ─────────────────────────────────────────────────────────────────────────
-  private bufferedEvents: Array<{
-    type: string;
-    data: unknown;
-    timestamp: number;
-  }> = [];
-  private static readonly MAX_BUFFER_SIZE = 500;
+  /** Per-workflow dashboard sink (wrapped with WorkflowTaggedSink to inject workflowId) */
+  private readonly dashboardSink: IDashboardSink | undefined;
 
   /** Manages all output capture Maps and replay logic for background workflows. */
   private readonly outputCaptureBuffer: OutputCaptureBuffer;
@@ -220,7 +212,7 @@ export class WorkflowInstance {
 
   constructor(
     private readonly platform: PlatformAdapter,
-    private readonly dashboardSink: IDashboardSink | undefined,
+    dashboardSink: IDashboardSink | undefined,
     /**
      * Factory for creating per-run execution integrations.
      * Each call to createIntegrationForMode() produces a fresh, isolated integration.
@@ -245,6 +237,9 @@ export class WorkflowInstance {
   ) {
     this.id = crypto.randomUUID();
     this.createdAt = Date.now();
+    this.dashboardSink = dashboardSink
+      ? new WorkflowTaggedSink(dashboardSink, this.id)
+      : undefined;
 
     // Per-workflow dependencies
     this.promptFileParser = new PromptFileParser(this.platform);
@@ -259,7 +254,7 @@ export class WorkflowInstance {
     this.endConditionHandler = new EndConditionHandler(
       this.endConditionEvaluator,
       this.promptQueue,
-      () => this.activeDashboard,
+      () => this.dashboardSink,
       this.platform
     );
     this.workflowExecutor = new WorkflowExecutor(
@@ -271,11 +266,11 @@ export class WorkflowInstance {
     this.promptFileLoader = new PromptFileLoader(
       this.promptFileParser,
       this.promptQueue,
-      () => this.activeDashboard
+      () => this.dashboardSink
     );
     this.promptFileWatcher = new PromptFileWatcher(
       this.promptQueue,
-      () => this.activeDashboard
+      () => this.dashboardSink
     );
 
     const bufferCallbacks: OutputCaptureCallbacks = {
@@ -307,50 +302,6 @@ export class WorkflowInstance {
   // ─────────────────────────────────────────────────────────────────────────
   // Lifecycle
   // ─────────────────────────────────────────────────────────────────────────
-
-  /**
-   * Returns the dashboard provider only when this instance is the active
-   * (viewed) workflow. Background instances return undefined so their
-   * output is not routed to the UI.
-   */
-  private get activeDashboard(): IDashboardSink | undefined {
-    return this.isActive ? this.dashboardSink : undefined;
-  }
-
-  /**
-   * Mark this instance as the active/visible workflow.
-   * Phase 2: flushes buffered events and sends a full state sync to the dashboard.
-   */
-  setActive(value: boolean): void {
-    const prev = this.isActive;
-    this.isActive = value;
-    Log.debug(
-      `[inst:${this.id.slice(0, 8)}] setActive: ${prev} → ${value} (workflow: ${this.workflowName || "unnamed"})`
-    );
-    if (value) {
-      this.flushBufferedEvents();
-    }
-  }
-
-  /**
-   * Replay buffered state changes to the dashboard and clear the buffer.
-   * Called automatically when this instance becomes the active workflow.
-   */
-  private flushBufferedEvents(): void {
-    if (this.bufferedEvents.length === 0) {
-      Log.trace(
-        `[inst:${this.id.slice(0, 8)}] flushBufferedEvents: no buffered events, sending full state`
-      );
-      this.sendFullStateToDashboard();
-      return;
-    }
-    Log.trace(
-      `[inst:${this.id.slice(0, 8)}] flushBufferedEvents: replaying ${this.bufferedEvents.length} buffered events via full state sync`
-    );
-    // Replay the current state to cover all buffered changes in one shot
-    this.sendFullStateToDashboard();
-    this.bufferedEvents = [];
-  }
 
   /**
    * Send a full SESSION_RESTORED state sync to the dashboard.
@@ -419,8 +370,7 @@ export class WorkflowInstance {
 
   /**
    * Replay run history count to an explicit sink.
-   * Unlike sendRunHistoryToDashboard(), this bypasses activeDashboard so
-   * the sink always receives the update regardless of isActive state.
+   * Unlike sendRunHistoryToDashboard(), this sends to the provided sink directly.
    */
   async replayRunHistoryTo(sink: IDashboardSink): Promise<void> {
     const workingFilePath = this.promptQueue.getState().workingFilePath;
@@ -428,7 +378,8 @@ export class WorkflowInstance {
       return;
     }
     try {
-      const workflowId = this.outputHistoryManager.extractWorkflowId(workingFilePath);
+      const workflowId =
+        this.outputHistoryManager.extractWorkflowId(workingFilePath);
       const [runs, runTimestamps, runStates] = await Promise.all([
         this.outputHistoryManager.getRunsForWorkflow(workflowId),
         this.outputHistoryManager.getRunTimestamps(workflowId),
@@ -462,9 +413,7 @@ export class WorkflowInstance {
         this.outputHistoryManager.getRunStates(workflowId),
       ]);
       if (runs.length > 0) {
-        // activeDashboard returns undefined if the instance was deactivated
-        // between the start of the async op and now — preventing stale updates.
-        this.activeDashboard?.notifyRunHistoryUpdated(
+        this.dashboardSink?.notifyRunHistoryUpdated(
           runs.length,
           runTimestamps,
           runStates
@@ -1812,11 +1761,9 @@ export class WorkflowInstance {
       workspaceFolderPath: this.workspaceFolderPath,
       currentPromptFilePath: this.currentPromptFile?.filePath,
       // Use a getter so dashboardProvider is evaluated lazily each time
-      // WorkflowExecutor accesses it. When this instance is deactivated
-      // (user switches to another workflow), activeDashboard returns
-      // undefined and background output stops flowing to the UI.
+      // WorkflowExecutor accesses it.
       get dashboardProvider() {
-        return self.activeDashboard;
+        return self.dashboardSink;
       },
       // In CLI mode always show the CLI command so it flows through
       // captureOutputInit and into onPromptStart events.
@@ -1925,7 +1872,7 @@ export class WorkflowInstance {
       },
       snapshotService: new WorkspaceSnapshotService(),
       onSnapshotCaptured: (target, snapshot) => {
-        self.activeDashboard?.sendStepUndoDataUpdated(
+        self.dashboardSink?.sendStepUndoDataUpdated(
           target as UndoExecutionTarget,
           snapshot
         );
@@ -2031,7 +1978,7 @@ export class WorkflowInstance {
       this.activeIntegration = activeIntegration;
 
       Log.debug(
-        `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: isActive=${this.isActive}, historyFilePath="${historyFilePath}"`
+        `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: historyFilePath="${historyFilePath}"`
       );
       const workflowContext = this.buildWorkflowExecutionContext(
         activeIntegration,
@@ -2134,23 +2081,6 @@ export class WorkflowInstance {
     );
   }
 
-  private bufferExecutionStateChange(
-    status: QueueState["status"],
-    currentIndex: number
-  ): void {
-    this.bufferedEvents.push({
-      type: "executionStateChanged",
-      data: { status, currentIndex },
-      timestamp: Date.now(),
-    });
-
-    if (this.bufferedEvents.length > WorkflowInstance.MAX_BUFFER_SIZE) {
-      this.bufferedEvents = this.bufferedEvents.slice(
-        -WorkflowInstance.MAX_BUFFER_SIZE
-      );
-    }
-  }
-
   private getAuthoritativeExecutionState(): QueueState["status"] {
     return this.workflowRuntime.status;
   }
@@ -2202,24 +2132,21 @@ export class WorkflowInstance {
     const state = this.promptQueue.getState();
     Log.debug(
       `[inst:${this.id.slice(0, 8)}] Runtime transition ${transition.command}: ${transition.previous.status} -> ${transition.current.status} ` +
-        `(step ${state.currentIndex}/${state.steps.length}, isActive=${this.isActive})`
+        `(step ${state.currentIndex}/${state.steps.length})`
     );
 
     const executionState = this.getAuthoritativeExecutionState();
 
-    if (this.isActive && this.dashboardSink) {
+    if (this.dashboardSink) {
       this.dashboardSink.updateExecutionState(executionState);
       if (transition.command === "complete") {
         this.dashboardSink.updateExecutionCompleted?.();
       }
-      return;
     }
-
-    this.bufferExecutionStateChange(executionState, state.currentIndex);
   }
 
   private onAttemptTransition(transition: WorkflowAttemptTransition): void {
-    if (!this.isActive || !this.dashboardSink) {
+    if (!this.dashboardSink) {
       return;
     }
 
@@ -2297,11 +2224,11 @@ export class WorkflowInstance {
   private onQueueStateChanged(state: QueueState): void {
     const executionState = this.getAuthoritativeExecutionState();
     Log.debug(
-      `[inst:${this.id.slice(0, 8)}] Queue state → ${executionState} (step ${state.currentIndex}/${state.steps.length}, isActive=${this.isActive})`
+      `[inst:${this.id.slice(0, 8)}] Queue state → ${executionState} (step ${state.currentIndex}/${state.steps.length})`
     );
     this.onStatusBarUpdate();
 
-    if (this.isActive && this.dashboardSink) {
+    if (this.dashboardSink) {
       // Detect workflow name changes and push them to the dashboard immediately.
       const newWorkflowName = state.workflowName ?? "";
       if (newWorkflowName && newWorkflowName !== this.lastKnownWorkflowName) {
@@ -2361,7 +2288,7 @@ export class WorkflowInstance {
 
     // Send EXECUTION_STARTED so the dashboard switches from history view to live
     // view and correctly updates step count / continuation state.
-    if (this.isActive && this.dashboardSink) {
+    if (this.dashboardSink) {
       const fileName =
         (this.currentPromptFile
           ? path.basename(this.currentPromptFile.filePath)
@@ -2550,10 +2477,24 @@ export class WorkflowInstance {
         props.timeout !== null && {
           timeout: props.timeout as number,
         }),
-      ...(props.onPass !== undefined && props.onPass !== null && { onPass: props.onPass as "continue" | "stopWorkflow" }),
-      ...(props.onFail !== undefined && props.onFail !== null && { onFail: props.onFail as "continue" | "stopWorkflow" }),
-      ...(props.compareSource !== undefined && props.compareSource !== null && { compareSource: props.compareSource as "auto" | "stdout" | "stderr" | "exitCode" }),
-      ...(props.returns !== undefined && props.returns !== null && { returns: props.returns as string }),
+      ...(props.onPass !== undefined &&
+        props.onPass !== null && {
+          onPass: props.onPass as "continue" | "stopWorkflow",
+        }),
+      ...(props.onFail !== undefined &&
+        props.onFail !== null && {
+          onFail: props.onFail as "continue" | "stopWorkflow",
+        }),
+      ...(props.compareSource !== undefined &&
+        props.compareSource !== null && {
+          compareSource: props.compareSource as
+            | "auto"
+            | "stdout"
+            | "stderr"
+            | "exitCode",
+        }),
+      ...(props.returns !== undefined &&
+        props.returns !== null && { returns: props.returns as string }),
     };
   }
 
@@ -2590,7 +2531,9 @@ export class WorkflowInstance {
         endCondition: coerce<EndCondition>(props.endCondition),
       }),
       ...(props?.preCondition !== undefined && {
-        preCondition: props.preCondition as import("../types/FlightPathTypes").PreCondition | null,
+        preCondition: props.preCondition as
+          | import("../types/FlightPathTypes").PreCondition
+          | null,
       }),
       ...(props?.skills !== undefined && {
         skills: props.skills as string[] | null,

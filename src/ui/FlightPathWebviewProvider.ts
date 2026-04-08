@@ -290,7 +290,8 @@ window.vscodeApi = acquireVsCodeApi();
       status?: StepStatus;
       loopCount: number;
       phase: FinalStepPhase;
-    }
+    },
+    workflowId?: string
   ): Promise<void> {
     this.postMessage({
       type: MESSAGE_TYPES.FILE_SELECTED,
@@ -301,6 +302,7 @@ window.vscodeApi = acquireVsCodeApi();
       finalStepStatus: finalStepRuntime?.status ?? null,
       finalStepLoopCount: finalStepRuntime?.loopCount ?? 0,
       finalStepPhase: finalStepRuntime?.phase ?? null,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
 
     // Extract and send workflow properties to settings panel
@@ -322,7 +324,8 @@ window.vscodeApi = acquireVsCodeApi();
       status?: StepStatus;
       loopCount: number;
       phase: FinalStepPhase;
-    }
+    },
+    workflowId?: string
   ): Promise<void> {
     this.postMessage({
       type: MESSAGE_TYPES.SESSION_RESTORED,
@@ -336,6 +339,7 @@ window.vscodeApi = acquireVsCodeApi();
       finalStepStatus: finalStepRuntime?.status ?? null,
       finalStepLoopCount: finalStepRuntime?.loopCount ?? 0,
       finalStepPhase: finalStepRuntime?.phase ?? null,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
 
     // Extract and send workflow properties to settings panel
@@ -361,22 +365,37 @@ window.vscodeApi = acquireVsCodeApi();
   public notifyRunHistoryUpdated(
     runCount: number,
     runTimestamps?: (number | undefined)[],
-    runStates?: (string | undefined)[]
+    runStates?: (string | undefined)[],
+    workflowId?: string
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.RUN_HISTORY_UPDATED,
       runCount,
       runTimestamps,
       runStates,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
-  public updateProgress(current: number, total: number): void {
-    this.postMessage({ type: MESSAGE_TYPES.PROGRESS_UPDATE, current, total });
+  public updateProgress(
+    current: number,
+    total: number,
+    workflowId?: string
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.PROGRESS_UPDATE,
+      current,
+      total,
+      ...(workflowId !== undefined ? { workflowId } : {}),
+    });
   }
 
-  public updateExecutionState(state: string): void {
-    this.postMessage({ type: MESSAGE_TYPES.EXECUTION_STATE_CHANGED, state });
+  public updateExecutionState(state: string, workflowId?: string): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.EXECUTION_STATE_CHANGED,
+      state,
+      ...(workflowId !== undefined ? { workflowId } : {}),
+    });
   }
 
   public updateStepStatus(
@@ -387,64 +406,92 @@ window.vscodeApi = acquireVsCodeApi();
       message?: string;
       endConditionResult?: unknown;
     },
-    details?: Record<string, unknown>
+    details?: Record<string, unknown>,
+    workflowId?: string
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.STEP_STATUS_CHANGED,
       stepIndex,
       status,
       details,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
   public updateRetryAttempt(
     stepIndex: number,
     currentRetry: number,
-    maxRetries: number
+    maxRetries: number,
+    workflowId?: string
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.RETRY_ATTEMPT_CHANGED,
       stepIndex,
       currentRetry,
       maxRetries,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
-  public updateCliOutput(stepIndex: number, output: CliOutput): void {
-    this.postMessage({ type: MESSAGE_TYPES.CLI_OUTPUT, stepIndex, output });
+  public updateCliOutput(
+    stepIndex: number,
+    output: CliOutput,
+    workflowId?: string
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.CLI_OUTPUT,
+      stepIndex,
+      output,
+      ...(workflowId !== undefined ? { workflowId } : {}),
+    });
   }
 
-  public updateCliStreamingChunk(stepIndex: number, chunk: string): void {
+  public updateCliStreamingChunk(
+    stepIndex: number,
+    chunk: string,
+    workflowId?: string
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.CLI_STREAMING_CHUNK,
       stepIndex,
       chunk,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
-  public updateCliStreamingEvents(stepIndex: number, events: CliEvent[]): void {
+  public updateCliStreamingEvents(
+    stepIndex: number,
+    events: CliEvent[],
+    workflowId?: string
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.CLI_STREAMING_EVENTS,
       stepIndex,
       events,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
   public updateStatusMessage(
     stepIndex: number,
     message: string,
-    severity: StatusMessageSeverity = STATUS_MESSAGE_SEVERITY.INFO
+    severity: StatusMessageSeverity = STATUS_MESSAGE_SEVERITY.INFO,
+    workflowId?: string
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.STATUS_MESSAGE,
       stepIndex,
       message,
       severity,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
-  public updateExecutionCompleted(): void {
-    this.postMessage({ type: MESSAGE_TYPES.EXECUTION_COMPLETED });
+  public updateExecutionCompleted(workflowId?: string): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.EXECUTION_COMPLETED,
+      ...(workflowId !== undefined ? { workflowId } : {}),
+    });
   }
 
   /** Notify webview that a terminal PTY session started */
@@ -509,13 +556,15 @@ window.vscodeApi = acquireVsCodeApi();
   public updateStepsExtended(
     steps: any[],
     finalStep?: WorkflowStep | null,
-    executionState?: string
+    executionState?: string,
+    workflowId?: string
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.STEPS_EXTENDED,
       steps,
       finalStep: finalStep ?? null,
       ...(executionState !== undefined ? { executionState } : {}),
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
@@ -544,50 +593,68 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public updateFinalStep(finalStep: WorkflowStep | null): void {
+  public updateFinalStep(
+    finalStep: WorkflowStep | null,
+    workflowId?: string
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
       finalStep: finalStep,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
   public updateFinalStepStatus(
     status: StepStatus | null,
     loopCount: number,
-    phase: FinalStepPhase | null
+    phase: FinalStepPhase | null,
+    workflowId?: string
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.FINAL_PROMPT_STATUS_CHANGED,
       status,
       loopCount,
       phase,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
-  public updateFinalStepOutput(loopIndex: number, output: CliOutput): void {
+  public updateFinalStepOutput(
+    loopIndex: number,
+    output: CliOutput,
+    workflowId?: string
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.FINAL_PROMPT_OUTPUT,
       loopIndex,
       output,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
-  public updateFinalStepStreamingChunk(loopIndex: number, chunk: string): void {
+  public updateFinalStepStreamingChunk(
+    loopIndex: number,
+    chunk: string,
+    workflowId?: string
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK,
       loopIndex,
       chunk,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
   public updateFinalStepStreamingEvents(
     loopIndex: number,
-    events: CliEvent[]
+    events: CliEvent[],
+    workflowId?: string
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS,
       loopIndex,
       events,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
@@ -596,28 +663,35 @@ window.vscodeApi = acquireVsCodeApi();
    * Only resets prompt statuses and execution state — does not touch CLI outputs
    * or run history so the output panel and run dropdown are preserved.
    */
-  public notifyWorkflowStateReset(steps: any[]): void {
+  public notifyWorkflowStateReset(steps: any[], workflowId?: string): void {
     this.postMessage({
       type: MESSAGE_TYPES.RESET_WORKFLOW_STATE,
       steps,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
   public notifyStartPositionSet(
     steps: WorkflowStep[],
-    currentIndex: number
+    currentIndex: number,
+    workflowId?: string
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.SET_START_POSITION_CONFIRMED,
       steps,
       currentIndex,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
-  public notifyPromptsReordered(steps: WorkflowStep[]): void {
+  public notifyPromptsReordered(
+    steps: WorkflowStep[],
+    workflowId?: string
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED,
       steps,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 
@@ -652,10 +726,11 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public updateWorkflowName(workflowName: string): void {
+  public updateWorkflowName(workflowName: string, workflowId?: string): void {
     this.postMessage({
       type: MESSAGE_TYPES.WORKFLOW_NAME_UPDATED,
       workflowName,
+      ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
 

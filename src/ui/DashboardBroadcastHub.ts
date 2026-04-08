@@ -72,7 +72,8 @@ export class DashboardBroadcastHub
       status?: StepStatus;
       loopCount: number;
       phase: FinalStepPhase;
-    }
+    },
+    workflowId?: string
   ): Promise<void> {
     for (const client of this.clients) {
       await client.updateFileSelected?.(
@@ -80,7 +81,8 @@ export class DashboardBroadcastHub
         steps,
         workflowName,
         finalStep,
-        finalStepRuntime
+        finalStepRuntime,
+        workflowId
       );
     }
   }
@@ -97,7 +99,8 @@ export class DashboardBroadcastHub
       status?: StepStatus;
       loopCount: number;
       phase: FinalStepPhase;
-    }
+    },
+    workflowId?: string
   ): Promise<void> {
     for (const client of this.clients) {
       await client.updateSessionRestored?.(
@@ -108,7 +111,8 @@ export class DashboardBroadcastHub
         currentIndex,
         workflowName,
         finalStep,
-        finalStepRuntime
+        finalStepRuntime,
+        workflowId
       );
     }
   }
@@ -168,28 +172,34 @@ export class DashboardBroadcastHub
   notifyRunHistoryUpdated(
     runCount: number,
     runTimestamps?: (number | undefined)[],
-    runStates?: (string | undefined)[]
+    runStates?: (string | undefined)[],
+    workflowId?: string
   ): void {
     for (const client of this.clients) {
-      client.notifyRunHistoryUpdated?.(runCount, runTimestamps, runStates);
+      client.notifyRunHistoryUpdated?.(
+        runCount,
+        runTimestamps,
+        runStates,
+        workflowId
+      );
     }
   }
 
-  updateProgress(current: number, total: number): void {
+  updateProgress(current: number, total: number, workflowId?: string): void {
     for (const client of this.clients) {
-      client.updateProgress?.(current, total);
+      client.updateProgress?.(current, total, workflowId);
     }
   }
 
-  updateExecutionState(state: string): void {
+  updateExecutionState(state: string, workflowId?: string): void {
     for (const client of this.clients) {
-      client.updateExecutionState?.(state);
+      client.updateExecutionState?.(state, workflowId);
     }
   }
 
-  updateExecutionCompleted(): void {
+  updateExecutionCompleted(workflowId?: string): void {
     for (const client of this.clients) {
-      client.updateExecutionCompleted?.();
+      client.updateExecutionCompleted?.(workflowId);
     }
   }
 
@@ -201,58 +211,84 @@ export class DashboardBroadcastHub
       message?: string;
       endConditionResult?: unknown;
     },
-    details?: Record<string, unknown>
+    details?: Record<string, unknown>,
+    workflowId?: string
   ): void {
     for (const client of this.clients) {
-      client.updateStepStatus?.(stepIndex, status, details);
+      client.updateStepStatus?.(stepIndex, status, details, workflowId);
     }
   }
 
   updateRetryAttempt(
     stepIndex: number,
     currentRetry: number,
-    maxRetries: number
+    maxRetries: number,
+    workflowId?: string
   ): void {
     for (const client of this.clients) {
-      client.updateRetryAttempt?.(stepIndex, currentRetry, maxRetries);
+      client.updateRetryAttempt?.(
+        stepIndex,
+        currentRetry,
+        maxRetries,
+        workflowId
+      );
     }
   }
 
-  updateCliOutput(stepIndex: number, output: unknown): void {
+  updateCliOutput(
+    stepIndex: number,
+    output: unknown,
+    workflowId?: string
+  ): void {
     for (const client of this.clients) {
-      client.updateCliOutput?.(stepIndex, output);
+      client.updateCliOutput?.(stepIndex, output, workflowId);
     }
   }
 
-  updateCliStreamingChunk(stepIndex: number, chunk: string): void {
+  updateCliStreamingChunk(
+    stepIndex: number,
+    chunk: string,
+    workflowId?: string
+  ): void {
     for (const client of this.clients) {
-      client.updateCliStreamingChunk?.(stepIndex, chunk);
+      client.updateCliStreamingChunk?.(stepIndex, chunk, workflowId);
     }
   }
 
-  updateCliStreamingEvents(stepIndex: number, events: CliEvent[]): void {
+  updateCliStreamingEvents(
+    stepIndex: number,
+    events: CliEvent[],
+    workflowId?: string
+  ): void {
     for (const client of this.clients) {
-      client.updateCliStreamingEvents?.(stepIndex, events);
+      client.updateCliStreamingEvents?.(stepIndex, events, workflowId);
     }
   }
 
   updateStatusMessage(
     stepIndex: number,
     message: string,
-    severity?: StatusMessageSeverity
+    severity?: StatusMessageSeverity,
+    workflowId?: string
   ): void {
     for (const client of this.clients) {
-      client.updateStatusMessage?.(stepIndex, message, severity);
+      client.updateStatusMessage?.(stepIndex, message, severity, workflowId);
     }
   }
 
   updateStepsExtended(
     steps: any[],
     finalStep?: WorkflowStep | null,
-    executionState?: string
+    executionState?: string,
+    workflowId?: string
   ): void {
     for (const client of this.clients) {
-      client.updateStepsExtended?.(steps, finalStep, executionState);
+      client.updateStepsExtended?.(
+        steps,
+        finalStep,
+        executionState,
+        workflowId
+      );
     }
   }
 
@@ -266,55 +302,72 @@ export class DashboardBroadcastHub
     }
   }
 
-  updateFinalStep(finalStep: WorkflowStep | null): void {
+  updateFinalStep(finalStep: WorkflowStep | null, workflowId?: string): void {
     for (const client of this.clients) {
-      client.updateFinalStep?.(finalStep);
+      client.updateFinalStep?.(finalStep, workflowId);
     }
   }
 
   updateFinalStepStatus(
     status: StepStatus | null,
     loopCount: number,
-    phase: FinalStepPhase | null
+    phase: FinalStepPhase | null,
+    workflowId?: string
   ): void {
     for (const client of this.clients) {
-      client.updateFinalStepStatus?.(status, loopCount, phase);
+      client.updateFinalStepStatus?.(status, loopCount, phase, workflowId);
     }
   }
 
-  updateFinalStepOutput(loopIndex: number, output: unknown): void {
+  updateFinalStepOutput(
+    loopIndex: number,
+    output: unknown,
+    workflowId?: string
+  ): void {
     for (const client of this.clients) {
-      client.updateFinalStepOutput?.(loopIndex, output);
+      client.updateFinalStepOutput?.(loopIndex, output, workflowId);
     }
   }
 
-  updateFinalStepStreamingChunk(loopIndex: number, chunk: string): void {
+  updateFinalStepStreamingChunk(
+    loopIndex: number,
+    chunk: string,
+    workflowId?: string
+  ): void {
     for (const client of this.clients) {
-      client.updateFinalStepStreamingChunk?.(loopIndex, chunk);
+      client.updateFinalStepStreamingChunk?.(loopIndex, chunk, workflowId);
     }
   }
 
-  updateFinalStepStreamingEvents(loopIndex: number, events: CliEvent[]): void {
+  updateFinalStepStreamingEvents(
+    loopIndex: number,
+    events: CliEvent[],
+    workflowId?: string
+  ): void {
     for (const client of this.clients) {
-      client.updateFinalStepStreamingEvents?.(loopIndex, events);
+      client.updateFinalStepStreamingEvents?.(loopIndex, events, workflowId);
     }
   }
 
-  notifyWorkflowStateReset(steps: any[]): void {
+  notifyWorkflowStateReset(steps: any[], workflowId?: string): void {
     for (const client of this.clients) {
-      client.notifyWorkflowStateReset?.(steps);
+      client.notifyWorkflowStateReset?.(steps, workflowId);
     }
   }
 
-  notifyStartPositionSet(steps: WorkflowStep[], currentIndex: number): void {
+  notifyStartPositionSet(
+    steps: WorkflowStep[],
+    currentIndex: number,
+    workflowId?: string
+  ): void {
     for (const client of this.clients) {
-      client.notifyStartPositionSet?.(steps, currentIndex);
+      client.notifyStartPositionSet?.(steps, currentIndex, workflowId);
     }
   }
 
-  notifyPromptsReordered(steps: WorkflowStep[]): void {
+  notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void {
     for (const client of this.clients) {
-      client.notifyPromptsReordered?.(steps);
+      client.notifyPromptsReordered?.(steps, workflowId);
     }
   }
 
@@ -324,9 +377,9 @@ export class DashboardBroadcastHub
     }
   }
 
-  updateWorkflowName(name: string): void {
+  updateWorkflowName(name: string, workflowId?: string): void {
     for (const client of this.clients) {
-      client.updateWorkflowName?.(name);
+      client.updateWorkflowName?.(name, workflowId);
     }
   }
 

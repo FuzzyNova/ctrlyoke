@@ -27,7 +27,8 @@ export interface IDashboardSink {
       status?: StepStatus;
       loopCount: number;
       phase: FinalStepPhase;
-    }
+    },
+    workflowId?: string
   ): Promise<void>;
 
   updateSessionRestored(
@@ -42,7 +43,8 @@ export interface IDashboardSink {
       status?: StepStatus;
       loopCount: number;
       phase: FinalStepPhase;
-    }
+    },
+    workflowId?: string
   ): Promise<void>;
 
   loadOutputHistoryForWorkflow?(workflowFilePath: string): Promise<void>;
@@ -58,14 +60,15 @@ export interface IDashboardSink {
   notifyRunHistoryUpdated(
     runCount: number,
     runTimestamps?: (number | undefined)[],
-    runStates?: (string | undefined)[]
+    runStates?: (string | undefined)[],
+    workflowId?: string
   ): void;
 
-  updateProgress(current: number, total: number): void;
+  updateProgress(current: number, total: number, workflowId?: string): void;
 
-  updateExecutionState(state: string): void;
+  updateExecutionState(state: string, workflowId?: string): void;
 
-  updateExecutionCompleted?(): void;
+  updateExecutionCompleted?(workflowId?: string): void;
 
   updateStepStatus(
     stepIndex: number,
@@ -75,31 +78,47 @@ export interface IDashboardSink {
       message?: string;
       endConditionResult?: unknown;
     },
-    details?: Record<string, unknown>
+    details?: Record<string, unknown>,
+    workflowId?: string
   ): void;
 
   updateRetryAttempt(
     stepIndex: number,
     currentRetry: number,
-    maxRetries: number
+    maxRetries: number,
+    workflowId?: string
   ): void;
 
-  updateCliOutput(stepIndex: number, output: unknown): void;
+  updateCliOutput(
+    stepIndex: number,
+    output: unknown,
+    workflowId?: string
+  ): void;
 
-  updateCliStreamingChunk(stepIndex: number, chunk: string): void;
+  updateCliStreamingChunk(
+    stepIndex: number,
+    chunk: string,
+    workflowId?: string
+  ): void;
 
-  updateCliStreamingEvents(stepIndex: number, events: CliEvent[]): void;
+  updateCliStreamingEvents(
+    stepIndex: number,
+    events: CliEvent[],
+    workflowId?: string
+  ): void;
 
   updateStatusMessage(
     stepIndex: number,
     message: string,
-    severity?: StatusMessageSeverity
+    severity?: StatusMessageSeverity,
+    workflowId?: string
   ): void;
 
   updateStepsExtended(
     steps: any[],
     finalStep?: WorkflowStep | null,
-    executionState?: string
+    executionState?: string,
+    workflowId?: string
   ): void;
 
   updatePromptDeleted(
@@ -108,30 +127,47 @@ export interface IDashboardSink {
     finalStep?: WorkflowStep | null
   ): void;
 
-  updateFinalStep(finalStep: WorkflowStep | null): void;
+  updateFinalStep(finalStep: WorkflowStep | null, workflowId?: string): void;
 
   updateFinalStepStatus(
     status: StepStatus | null,
     loopCount: number,
-    phase: FinalStepPhase | null
+    phase: FinalStepPhase | null,
+    workflowId?: string
   ): void;
 
-  updateFinalStepOutput(loopIndex: number, output: unknown): void;
+  updateFinalStepOutput(
+    loopIndex: number,
+    output: unknown,
+    workflowId?: string
+  ): void;
 
-  updateFinalStepStreamingChunk(loopIndex: number, chunk: string): void;
+  updateFinalStepStreamingChunk(
+    loopIndex: number,
+    chunk: string,
+    workflowId?: string
+  ): void;
 
-  updateFinalStepStreamingEvents(loopIndex: number, events: CliEvent[]): void;
+  updateFinalStepStreamingEvents(
+    loopIndex: number,
+    events: CliEvent[],
+    workflowId?: string
+  ): void;
 
-  notifyWorkflowStateReset(steps: any[]): void;
+  notifyWorkflowStateReset(steps: any[], workflowId?: string): void;
 
-  notifyStartPositionSet(steps: WorkflowStep[], currentIndex: number): void;
+  notifyStartPositionSet(
+    steps: WorkflowStep[],
+    currentIndex: number,
+    workflowId?: string
+  ): void;
 
-  notifyPromptsReordered(steps: WorkflowStep[]): void;
+  notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void;
 
   /** Called after webview undo/redo to acknowledge the sync (no-op response needed; kept for extensibility). */
   notifyUndoRedoSynced(): void;
 
-  updateWorkflowName(name: string): void;
+  updateWorkflowName(name: string, workflowId?: string): void;
 
   sendStepUndoDataUpdated(
     target: UndoExecutionTarget,

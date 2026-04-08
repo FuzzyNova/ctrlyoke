@@ -291,7 +291,6 @@ suite("WorkflowInstance runtime transitions", () => {
       process.cwd()
     );
 
-    instance.setActive(true);
     instance.promptQueue.loadPrompts({
       steps: [{ prompt: "queue-1" }],
     });
@@ -371,7 +370,6 @@ suite("WorkflowInstance runtime transitions", () => {
       process.cwd()
     );
 
-    instance.setActive(true);
     instance.promptQueue.loadPrompts({
       steps: [{ prompt: "queue-1" }],
     });
@@ -445,7 +443,6 @@ suite("WorkflowInstance runtime transitions", () => {
       process.cwd()
     );
 
-    instance.setActive(true);
     instance.promptQueue.loadPrompts({
       steps: [{ prompt: "queue-1" }],
     });
@@ -603,7 +600,6 @@ suite("WorkflowInstance runtime transitions", () => {
       process.cwd()
     );
 
-    instance.setActive(true);
     instance.promptQueue.loadPrompts({
       steps: [{ prompt: "queue-1" }],
     });
