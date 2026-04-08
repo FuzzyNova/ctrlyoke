@@ -23,6 +23,7 @@ module.exports = {
         "editor-bg": "var(--vscode-editor-background)",
         "editor-fg": "var(--vscode-editor-foreground)",
         foreground: "var(--vscode-foreground)",
+        "panel-bg": "var(--vscode-panel-background)",
         "panel-border": "var(--vscode-panel-border)",
         "sidebar-bg": "var(--vscode-sideBar-background)",
         "sidebar-drop-bg": "var(--vscode-sideBar-dropBackground)",

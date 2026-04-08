@@ -10,10 +10,8 @@ export function ServerSection({ settings, onUpdate }: Props) {
   const server = settings.settings.server;
   const s = "user" as const;
 
-  const { serverRunning, serverUrl } = useSettingsStore((state) => ({
-    serverRunning: state.serverRunning,
-    serverUrl: state.serverUrl,
-  }));
+  const serverRunning = useSettingsStore((state) => state.serverRunning);
+  const serverUrl = useSettingsStore((state) => state.serverUrl);
 
   return (
     <div className="space-y-4">

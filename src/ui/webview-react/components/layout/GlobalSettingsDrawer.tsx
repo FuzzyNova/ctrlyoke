@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { createPortal } from "react-dom";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
@@ -60,9 +59,9 @@ export function GlobalSettingsDrawer() {
     vscode.postMessage({ type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, path, value, scope });
   }
 
-  return createPortal(
+  return (
     <div
-      className={`fixed inset-0 flex flex-col z-[200] bg-panel-bg border-t border-panel-border
+      className={`absolute inset-0 flex flex-col z-40 bg-panel-bg border-t border-panel-border
         transition-transform duration-200 ease-out
         ${globalSettingsOpen ? "translate-y-0" : "translate-y-full"}`}
       aria-hidden={!globalSettingsOpen}
@@ -124,7 +123,6 @@ export function GlobalSettingsDrawer() {
           </div>
         </div>
       </div>
-    </div>,
-    document.body
+    </div>
   );
 }
