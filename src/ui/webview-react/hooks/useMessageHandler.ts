@@ -1135,6 +1135,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // OUTPUT_HISTORY_LOADED - Load a historical run for display
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.OUTPUT_HISTORY_LOADED] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
     const {
       history,
       availableRuns,

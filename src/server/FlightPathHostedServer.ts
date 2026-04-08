@@ -17,6 +17,7 @@ export class FlightPathHostedServer implements IDashboardProvider {
   private wss: WebSocketServer;
   private connections = new Set<WebSocket>();
   private cachedThemeVars: Record<string, string> = {};
+  private nextConnectionId = 1;
 
   constructor(
     private hub: DashboardBroadcastHub,
@@ -219,14 +220,15 @@ export class FlightPathHostedServer implements IDashboardProvider {
   private setupWebSocket(): void {
     this.wss.on("connection", (ws) => {
       this.connections.add(ws);
-      this.sendInitialState(ws);
+      const clientTag = `browser:${this.nextConnectionId++}`;
+      const send = (reply: unknown): void => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(reply));
+      };
+      this.sendInitialState(ws, clientTag);
       ws.on("message", (raw) => {
         try {
           const msg = JSON.parse(raw.toString());
-          this.webviewProvider.routeExternalMessage(msg, (reply) => {
-            if (ws.readyState === WebSocket.OPEN)
-              ws.send(JSON.stringify(reply));
-          });
+          this.webviewProvider.routeExternalMessage(msg, send, clientTag);
         } catch (_e) {
           /* ignore malformed messages */
         }
@@ -235,12 +237,14 @@ export class FlightPathHostedServer implements IDashboardProvider {
     });
   }
 
-  private sendInitialState(ws: WebSocket): void {
+  private sendInitialState(ws: WebSocket, clientTag: string): void {
+    const send = (msg: unknown): void => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+    };
     this.webviewProvider.routeExternalMessage(
       { type: MESSAGE_TYPES.READY },
-      (msg) => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
-      }
+      send,
+      clientTag
     );
     // Push cached theme vars immediately so the client can style itself without waiting
     // for a CAPTURE_THEME_VARS round-trip.

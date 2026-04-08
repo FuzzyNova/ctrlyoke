@@ -47,7 +47,7 @@ export interface IDashboardSink {
     workflowId?: string
   ): Promise<void>;
 
-  loadOutputHistoryForWorkflow?(workflowFilePath: string): Promise<void>;
+  loadOutputHistoryForWorkflow?(workflowFilePath: string, workflowInstanceId?: string): Promise<void>;
 
   updateExecutionStarted(
     workflowId: string,

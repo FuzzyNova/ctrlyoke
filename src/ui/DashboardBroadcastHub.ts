@@ -117,9 +117,9 @@ export class DashboardBroadcastHub
     }
   }
 
-  async loadOutputHistoryForWorkflow(workflowFilePath: string): Promise<void> {
+  async loadOutputHistoryForWorkflow(workflowFilePath: string, workflowInstanceId?: string): Promise<void> {
     for (const client of this.clients) {
-      await client.loadOutputHistoryForWorkflow?.(workflowFilePath);
+      await client.loadOutputHistoryForWorkflow?.(workflowFilePath, workflowInstanceId);
     }
   }
 

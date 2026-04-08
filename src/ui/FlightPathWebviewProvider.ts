@@ -879,9 +879,10 @@ window.vscodeApi = acquireVsCodeApi();
 
   public async routeExternalMessage(
     message: any,
-    postMessage: PostMessageFn
+    postMessage: PostMessageFn,
+    clientTag?: string
   ): Promise<void> {
-    await this.router.route(message, { postMessage });
+    await this.router.route(message, { postMessage, clientTag });
   }
 
   /**
@@ -900,7 +901,8 @@ window.vscodeApi = acquireVsCodeApi();
    * @param workingFilePath Absolute path to the working file
    */
   public async loadOutputHistoryForWorkflow(
-    workingFilePath: string
+    workingFilePath: string,
+    workflowInstanceId?: string
   ): Promise<void> {
     if (!this.outputHistoryManager) {
       return;
@@ -940,6 +942,7 @@ window.vscodeApi = acquireVsCodeApi();
         currentRunIndex: 0,
         runTimestamps,
         runStates,
+        ...(workflowInstanceId !== undefined ? { workflowId: workflowInstanceId } : {}),
       });
     } catch (error) {
       Log.warn("Failed to load output history for workflow:", error);

@@ -50,6 +50,7 @@ import {
 export class WebviewMessageRouter {
   private routeQueue: Promise<void> = Promise.resolve();
   private scopedPostMessage?: PostMessageFn;
+  private scopedClientTag?: string;
   private themeVarsCapturedCallback?: (vars: Record<string, string>) => void;
 
   private readonly handlers: Map<
@@ -78,7 +79,7 @@ export class WebviewMessageRouter {
    */
   async route(message: any, options?: WebviewRouteOptions): Promise<void> {
     this.routeQueue = this.routeQueue.then(() =>
-      this.withScopedPostMessage(options?.postMessage, () =>
+      this.withScopedContext(options?.postMessage, options?.clientTag, () =>
         this.routeSingleMessage(message)
       )
     );
@@ -86,16 +87,20 @@ export class WebviewMessageRouter {
     await this.routeQueue;
   }
 
-  private async withScopedPostMessage(
+  private async withScopedContext(
     postMessage: PostMessageFn | undefined,
+    clientTag: string | undefined,
     action: () => Promise<void>
   ): Promise<void> {
-    const previous = this.scopedPostMessage;
+    const prevPostMessage = this.scopedPostMessage;
+    const prevClientTag = this.scopedClientTag;
     this.scopedPostMessage = postMessage;
+    this.scopedClientTag = clientTag;
     try {
       await action();
     } finally {
-      this.scopedPostMessage = previous;
+      this.scopedPostMessage = prevPostMessage;
+      this.scopedClientTag = prevClientTag;
     }
   }
 
@@ -1503,7 +1508,8 @@ export class WebviewMessageRouter {
   // ============================================================================
 
   private handleWebviewLog(level: WebviewLogLevel, message: string): void {
-    const prefixed = `[Webview] ${message}`;
+    const tag = this.scopedClientTag ?? "panel";
+    const prefixed = `[${tag}] ${message}`;
     switch (level) {
       case LOG_LEVELS.DEBUG:
         Log.debug(prefixed);
@@ -1579,4 +1585,6 @@ export interface WebviewRouterCallbacks {
 
 export interface WebviewRouteOptions {
   postMessage?: PostMessageFn;
+  /** Short label identifying the client for log prefixing, e.g. "panel" or "browser:1" */
+  clientTag?: string;
 }

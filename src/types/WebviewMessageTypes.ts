@@ -737,6 +737,7 @@ export interface OutputHistoryLoadedMessage {
   currentRunIndex: number;
   runTimestamps?: (number | undefined)[];
   runStates?: (string | undefined)[];
+  workflowId?: string;
 }
 
 /**

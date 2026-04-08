@@ -493,6 +493,33 @@ export class WorkflowOrchestrator {
     if (instance) {
       instance.replayFullStateTo(sink);
       await instance.replayRunHistoryTo(sink);
+      // Send the most recent run's output history so the client can display it
+      const workingFilePath = instance.getQueueState().workingFilePath;
+      if (workingFilePath) {
+        try {
+          const om = instance.outputHistoryManager;
+          const fileId = om.extractWorkflowId(workingFilePath);
+          const runs = await om.getRunsForWorkflow(fileId);
+          if (runs.length > 0) {
+            const historyPath = om.getHistoryFilePath(fileId, runs[0]);
+            const [history, runTimestamps, runStates] = await Promise.all([
+              om.loadHistory(historyPath),
+              om.getRunTimestamps(fileId),
+              om.getRunStates(fileId),
+            ]);
+            send({
+              type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
+              history,
+              availableRuns: runs.length,
+              currentRunIndex: 0,
+              runTimestamps,
+              runStates,
+            });
+          }
+        } catch (err) {
+          Log.warn(`replayWorkflowStateTo: failed to load output history for ${workflowId.slice(0, 8)}: ${err}`);
+        }
+      }
       // Send viewer-only terminal sessions so browser clients show a placeholder
       // instead of a blank terminal panel or a broken xterm.
       const ptyManager = getPtyProcessManager();
