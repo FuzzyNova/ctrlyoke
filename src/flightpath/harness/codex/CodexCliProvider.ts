@@ -155,6 +155,7 @@ export class CodexCliProvider implements ICliProvider {
     if (!isInteractive) {
       args.push("exec");
       args.push("--json");
+      args.push("--skip-git-repo-check"); // Allow headless/CI use outside git repos
     }
 
     // Model selection with validation - use resolved property if available
