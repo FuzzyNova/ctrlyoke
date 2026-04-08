@@ -218,6 +218,16 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.CLEAR_WORKFLOW, async () => {
+      if (this.scopedPostMessage) {
+        // External browser client — create a fresh empty instance for this client
+        // only, without touching vsCodeViewedId or clearing the panel's workflow.
+        const orchestrator = this.getOrchestrator();
+        if (orchestrator) {
+          await orchestrator.createWorkflowForClient(this.scopedPostMessage);
+          return;
+        }
+      }
+      // VS Code sidebar path — clears the panel's active workflow.
       await this.callbacks.handleClearWorkflow();
     });
 

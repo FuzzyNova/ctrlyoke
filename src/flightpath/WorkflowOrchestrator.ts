@@ -999,6 +999,12 @@ export class WorkflowOrchestrator {
     await this.createWorkflow();
   }
 
+  async createWorkflowForClient(send: (msg: unknown) => void): Promise<void> {
+    const instance = this.buildWorkflowInstance();
+    this.instances.set(instance.id, instance);
+    await this.replayWorkflowStateTo(instance.id, send);
+  }
+
   getQueueState(): QueueState {
     return this.getActiveInstance().getQueueState();
   }
