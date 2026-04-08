@@ -2,7 +2,7 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { suite, test } from "mocha";
+import { suite, test, setup, teardown } from "mocha";
 import type * as vscode from "vscode";
 import { CliIntegration } from "../../flightpath/harness/CliIntegration";
 import { EXECUTION_MODES } from "../../types/DashboardConstants";
@@ -10,12 +10,9 @@ import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import type { PromptStep } from "../../types/FlightPathTypes";
+import { configService } from "../../config/FlightPathConfigService";
 
 class MockVsCodePlatform implements PlatformAdapter {
-  getConfig<T>(_key: string, defaultValue: T): T {
-    return defaultValue;
-  }
-
   getWorkspaceRoot(): string {
     return process.cwd();
   }
@@ -41,16 +38,6 @@ class MockVsCodePlatform implements PlatformAdapter {
 
   getExtensionContext(): vscode.ExtensionContext {
     return { subscriptions: [] } as unknown as vscode.ExtensionContext;
-  }
-}
-
-class MockHeadlessVsCodePlatform extends MockVsCodePlatform {
-  override getConfig<T>(key: string, defaultValue: T): T {
-    if (key === "cliExecutionMode") {
-      return EXECUTION_MODES.HEADLESS as T;
-    }
-
-    return defaultValue;
   }
 }
 
@@ -122,12 +109,21 @@ function createHeadlessIntegration(
 ): CliIntegration {
   return new CliIntegration(
     createProvider(overrides),
-    new MockHeadlessVsCodePlatform(),
+    new MockVsCodePlatform(),
     false
   );
 }
 
 suite("CliIntegration", () => {
+  setup(() => {
+    configService.setCliOverlay({
+      execution: { mode: EXECUTION_MODES.HEADLESS },
+    });
+  });
+
+  teardown(() => {
+    configService.setCliOverlay({});
+  });
   test("should keep last result snapshot in sync after headless execution", async () => {
     const integration = createHeadlessIntegration();
 

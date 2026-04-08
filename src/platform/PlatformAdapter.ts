@@ -7,13 +7,6 @@
  */
 export interface PlatformAdapter {
   /**
-   * Get a configuration value.
-   * VS Code: reads from vscode.workspace.getConfiguration("flightpath")
-   * CLI: reads from resolved CLI config / environment variables
-   */
-  getConfig<T>(key: string, defaultValue: T): T;
-
-  /**
    * Get the root directory of the current workspace/project.
    * VS Code: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()
    * CLI: config.cwd ?? process.cwd()

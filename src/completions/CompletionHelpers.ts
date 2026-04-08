@@ -3,6 +3,7 @@ import * as path from "path";
 import { getWorkspaceSymbols } from "../utils/AttachmentBuilders";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
+import { configService } from "../config/FlightPathConfigService";
 import {
   getRecentCommits,
   getStashList,
@@ -299,7 +300,7 @@ export function clearFilesCache(): void {
 /**
  * Configuration change watcher for cache invalidation
  */
-let configWatcher: vscode.Disposable | undefined;
+let configWatcher: { dispose(): void } | undefined;
 
 /**
  * Initialize configuration watcher to clear cache on setting change
@@ -307,14 +308,12 @@ let configWatcher: vscode.Disposable | undefined;
 export function initializeCompletionHelpers(
   context: vscode.ExtensionContext
 ): void {
-  // Clear cache when gitignore setting changes
-  configWatcher = vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration("flightpath.respectGitignoreForCompletions")) {
-      clearFilesCache();
-      Log.debug("[Completions] Cache cleared due to gitignore setting change");
-    }
+  // Clear cache when the gitignore setting changes (or any config changes)
+  const unsubscribe = configService.subscribe(() => {
+    clearFilesCache();
+    Log.debug("[Completions] Cache cleared due to config change");
   });
-
+  configWatcher = { dispose: unsubscribe };
   context.subscriptions.push(configWatcher);
 }
 

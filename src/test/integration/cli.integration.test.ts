@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 /**
  * Integration Tests for CopilotCommandLineIntegration
@@ -67,12 +68,9 @@ suite("CLI Integration Tests", () => {
   });
 
   test("Configuration settings should be accessible", () => {
-    const config = vscode.workspace.getConfiguration("flightpath");
-
-    // Test that all our settings exist
-    const scriptTimeout = config.get<number>("scriptTimeout");
-    const integrationMode = config.get<string>("harness");
-    const cliModel = config.get<string>("copilotCliModel");
+    const scriptTimeout = ConfigurationUtils.getScriptTimeoutMs() / 1000;
+    const integrationMode = ConfigurationUtils.getIntegrationMode();
+    const cliModel = ConfigurationUtils.getModelForHarness(integrationMode);
 
     assert.strictEqual(typeof scriptTimeout, "number");
     assert.strictEqual(typeof integrationMode, "string");

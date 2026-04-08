@@ -44,65 +44,6 @@ import { configService } from "../config/FlightPathConfigService";
 import type { FlightPathGlobalSettings } from "../types/FlightPathSettings";
 
 /**
- * Maps VS Code setting keys (after stripping "flightpath." prefix)
- * to their nested config paths in FlightPathGlobalSettings.
- * VS Code settings are the authoritative UI surface for per-user configuration;
- * changes are forwarded into the file-based config service so both stay in sync.
- */
-const VSCODE_SETTINGS_KEY_MAP: Record<string, string> = {
-  "showCliCommand": "ui.showCliCommand",
-  "showCliOutput": "ui.showCliOutput",
-  "logRawCliOutput": "ui.logRawCliOutput",
-  "enableDiagnosticLogs": "enableDiagnosticLogs",
-  "openPromptsInSecondGroup": "ui.openPromptsInSecondGroup",
-  "respectGitignoreForCompletions": "ui.respectGitignoreForCompletions",
-  "confirmDeleteOperations": "ui.confirmDeleteOperations",
-  "confirmResetOperations": "ui.confirmResetOperations",
-  "harness": "harness",
-  "copilotCliModel": "models.copilot-cli",
-  "copilotChatModel": "models.copilot-chat",
-  "claudeCliModel": "models.claude-cli",
-  "codexCliModel": "models.codex-cli",
-  "openCodeCliModel": "models.opencode-cli",
-  "qwenCliModel": "models.qwen-cli",
-  "geminiCliModel": "models.gemini-cli",
-  "cliToolPermissions": "tools.permissionMode",
-  "cliAllowedTools": "tools.allowed",
-  "cliDeniedTools": "tools.denied",
-  "copilotCliAllowedDirs": "tools.copilotAllowedDirs",
-  "copilotCliAllowAllPaths": "tools.copilotAllowAllPaths",
-  "codexSandboxMode": "tools.codexSandboxMode",
-  "codexApprovalPolicy": "tools.codexApprovalPolicy",
-  "codexAllowedDirs": "tools.codexAllowedDirs",
-  "cliExecutionMode": "execution.mode",
-  "maxPromptExecutionTime": "execution.maxPromptTimeout",
-  "scriptTimeout": "execution.scriptTimeout",
-  "closeTerminalWhenPromptCompletes": "execution.closeTerminalOnComplete",
-  "defaultWorkflowFormat": "workflow.defaultFormat",
-  "defaultWorkflowTemplate": "workflow.defaultTemplate",
-  "defaultAgent": "workflow.defaultAgent",
-  "defaultSkills": "workflow.defaultSkills",
-  "resumeExistingSession": "workflow.resumeExistingSession",
-  "autoLoadRecentSession": "workflow.autoLoadRecentSession",
-  "omitAgentsAndSkillsOnResume": "workflow.omitAgentsSkillsOnResume",
-  "priorContext": "workflow.priorContext",
-  "defaultMaxRetries": "workflow.maxRetries",
-  "defaultRetryPrompt": "workflow.retryPrompt",
-  "chatWindowLocation": "chat.windowLocation",
-  "chatInactivityTimeout": "chat.inactivityTimeout",
-  "treatChatTimeoutAsSuccess": "chat.treatTimeoutAsSuccess",
-  "forceAgentModeForChat": "chat.forceAgentMode",
-  "chatUseNativeAttachments": "chat.useNativeAttachments",
-  "mcpServers": "mcp.defaultServers",
-  "saveOutputHistory": "history.saveOutput",
-  "maxHistoryRuns": "history.maxRuns",
-  "maxQueueSize": "queue.maxSize",
-  "maxWorkflowExecutionTime": "queue.maxWorkflowExecutionTime",
-  "unlimitedMode": "queue.unlimitedMode",
-  "notifyOnQueueExtension": "queue.notifyOnExtension",
-};
-
-/**
  * Harness availability status
  */
 export interface HarnessStatus {
@@ -588,8 +529,7 @@ export class WebviewSettingsSync {
     }
 
     const relativeKey = key.slice("flightpath.".length);
-    const mappedKey = VSCODE_SETTINGS_KEY_MAP[relativeKey] ?? relativeKey;
-    const value = configService.getNested(mappedKey);
+    const value = configService.getNested(relativeKey);
 
     this.emitMessage(
       {
@@ -608,8 +548,7 @@ export class WebviewSettingsSync {
     }
 
     const relativeKey = key.slice("flightpath.".length);
-    const mappedKey = VSCODE_SETTINGS_KEY_MAP[relativeKey] ?? relativeKey;
-    await configService.set(mappedKey, value, "user");
+    await configService.set(relativeKey, value, "user");
   }
 
   // ============================================================================
@@ -664,7 +603,7 @@ export class WebviewSettingsSync {
   }
 
   /**
-   * Build global settings object from current VS Code configuration.
+   * Build global settings object from the file-based config service.
    */
   buildGlobalSettings(): Record<string, unknown> {
     const harness = ConfigurationUtils.getIntegrationMode();
@@ -873,12 +812,25 @@ export class WebviewSettingsSync {
   // Global Settings Drawer Handlers
   // ============================================================================
 
-  async handleGlobalSettingsLoadRequest(postMessage: PostMessageFn): Promise<void> {
+  async handleGlobalSettingsLoadRequest(
+    postMessage: PostMessageFn
+  ): Promise<void> {
     const allSettings = configService.getAll();
     const keys: (keyof FlightPathGlobalSettings)[] = [
-      "harness", "models", "additionalArgs", "execution", "tools",
-      "workflow", "chat", "mcp", "hooks", "queue", "history", "ui",
-      "server", "enableDiagnosticLogs",
+      "harness",
+      "models",
+      "additionalArgs",
+      "execution",
+      "tools",
+      "workflow",
+      "chat",
+      "mcp",
+      "hooks",
+      "queue",
+      "history",
+      "ui",
+      "server",
+      "enableDiagnosticLogs",
     ];
     const sources: Partial<Record<string, string>> = {};
     for (const key of keys) {

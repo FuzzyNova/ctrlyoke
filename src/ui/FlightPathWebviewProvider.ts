@@ -63,7 +63,6 @@ export class FlightPathWebviewProvider
   private view?: vscode.WebviewView;
   private workflowOrchestrator?: WorkflowOrchestrator;
   private outputHistoryManager?: OutputHistoryManager;
-  private configChangeDisposable?: vscode.Disposable;
   private modelsLoadedDisposable?: vscode.Disposable;
   private configServiceUnsubscribe?: () => void;
   private runningServerUrl?: string;
@@ -119,17 +118,6 @@ export class FlightPathWebviewProvider
         this.settingsSync.sendModelOptionsUpdate();
       }
     });
-
-    // Listen for VS Code configuration changes (legacy flightpath.* settings)
-    this.configChangeDisposable = vscode.workspace.onDidChangeConfiguration(
-      (e) => {
-        if (e.affectsConfiguration("flightpath")) {
-          if (this.view) {
-            this.settingsSync.sendGlobalSettingsUpdate();
-          }
-        }
-      }
-    );
 
     // Listen for file-based config changes (configService) to keep the webview in sync
     this.configServiceUnsubscribe = configService.subscribe(() => {
@@ -949,7 +937,6 @@ window.vscodeApi = acquireVsCodeApi();
    * Dispose resources
    */
   public dispose(): void {
-    this.configChangeDisposable?.dispose();
     this.modelsLoadedDisposable?.dispose();
     this.configServiceUnsubscribe?.();
   }

@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 /**
  * Integration Tests for CopilotChatIntegration
@@ -54,8 +55,7 @@ suite("Chat Integration Tests", () => {
   });
 
   test("Chat window location setting should work", () => {
-    const config = vscode.workspace.getConfiguration("flightpath");
-    const chatLocation = config.get<string>("chatWindowLocation");
+    const chatLocation = ConfigurationUtils.getChatWindowLocation();
 
     assert.ok(chatLocation);
     assert.ok(
@@ -65,10 +65,8 @@ suite("Chat Integration Tests", () => {
   });
 
   test("Native attachments setting should be configurable", () => {
-    const config = vscode.workspace.getConfiguration("flightpath");
-    const useNativeAttachments = config.get<boolean>(
-      "chatUseNativeAttachments"
-    );
+    const useNativeAttachments =
+      ConfigurationUtils.shouldUseChatNativeAttachments();
 
     assert.strictEqual(typeof useNativeAttachments, "boolean");
   });

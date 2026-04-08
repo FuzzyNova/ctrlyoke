@@ -194,16 +194,12 @@ export class CliIntegration extends HarnessIntegration {
   /**
    * Get the configured execution mode (interactive or headless).
    *
-   * Uses the platform adapter rather than ConfigurationUtils so that
-   * the standalone CLI (CliAdapter) always gets "headless" — the shim
-   * would otherwise return the vscode-shim default ("interactive") which
-   * would trigger createTerminal() and throw at runtime.
+   * In VS Code context, reads from the file-based config service via ConfigurationUtils.
+   * In CLI context, the resolved execution mode (from flags/TTY detection) is written
+   * to the configService overlay in cli.ts, so ConfigurationUtils returns the correct value.
    */
   protected getExecutionMode(): CliExecutionMode {
-    return this.platform.getConfig<string>(
-      "cliExecutionMode",
-      EXECUTION_MODES.INTERACTIVE
-    ) as CliExecutionMode;
+    return ConfigurationUtils.getCliExecutionMode() as CliExecutionMode;
   }
 
   /**

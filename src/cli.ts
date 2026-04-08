@@ -255,7 +255,7 @@ async function runCommand(
 
   // Initialize config service with file-based backends so that settings from
   // ~/.flightpath/settings.json and <workspace>/.flightpath/settings.json are
-  // available to CliAdapter's default getConfig() fallback.
+  // resolved before applying the CLI overlay below.
   const userBackend = createUserConfigBackend();
   const workspaceBackend = createWorkspaceConfigBackend(workingDir);
   configService.setUserBackend(userBackend);
@@ -274,6 +274,11 @@ async function runCommand(
     overlay.execution = { mode: "headless" };
   } else if (options.interactive) {
     overlay.execution = { mode: "interactive" };
+  } else {
+    // Write TTY-detected execution mode to the overlay so that
+    // ConfigurationUtils.getCliExecutionMode() always returns the effective value
+    // regardless of what the user's config file says.
+    overlay.execution = { mode: executionMode };
   }
   if (options.allowAllTools) {
     overlay.tools = { permissionMode: "dangerouslyAllowAll" };
@@ -287,9 +292,7 @@ async function runCommand(
   configService.setCliOverlay(overlay);
 
   const platform = new CliAdapter(config);
-  // Register the adapter with the vscode-shim so ConfigurationUtils calls inside
-  // providers (getCliAllowedTools, getCliToolPermissions, etc.) read CLI flag
-  // values instead of hard-coded defaults.
+  // Register the adapter with the vscode-shim for backward compatibility.
   registerCliAdapter(platform);
   const factory = new IntegrationFactory(platform);
   const harness = resolveHarness(config.harness);

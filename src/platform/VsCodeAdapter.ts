@@ -9,12 +9,6 @@ import type { PlatformAdapter } from "./PlatformAdapter";
 export class VsCodeAdapter implements PlatformAdapter {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
-  getConfig<T>(key: string, defaultValue: T): T {
-    return vscode.workspace
-      .getConfiguration("flightpath")
-      .get<T>(key, defaultValue);
-  }
-
   getWorkspaceRoot(): string {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
   }
