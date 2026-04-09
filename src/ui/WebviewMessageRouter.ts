@@ -6,6 +6,7 @@ import {
   LOG_LEVELS,
   FINAL_STEP_PHASES,
   SESSION_KINDS,
+  PANEL_CLIENT_ID,
   type WebviewLogLevel,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -67,7 +68,7 @@ export class WebviewMessageRouter {
     private readonly callbacks: WebviewRouterCallbacks
   ) {
     this.scopedPostMessage = defaultPostMessage;
-    this.clientId = "panel";
+    this.clientId = PANEL_CLIENT_ID;
     this.handlers = this.buildDispatchTable();
   }
 
@@ -153,7 +154,7 @@ export class WebviewMessageRouter {
         // For browser clients: SESSION_RESTORED (sent during replay) calls applyWorkflowChange()
         // which clears workflowProperties. Send them back so the PropertiesPanel reflects
         // the correct state of the workflow being viewed.
-        if (this.clientId !== "panel") {
+        if (this.clientId !== PANEL_CLIENT_ID) {
           await this.settingsSync.sendWorkflowPropertiesToSettings(
             this.getCurrentPostMessage(),
             this.clientId
@@ -162,7 +163,7 @@ export class WebviewMessageRouter {
       }
 
       // Panel-only extras:
-      if (this.clientId === "panel") {
+      if (this.clientId === PANEL_CLIENT_ID) {
         if (orchestrator) {
           await orchestrator.setDashboardReady(this.scopedPostMessage);
         }
@@ -405,12 +406,16 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.LOAD_RUN_HISTORY, async (message) => {
       await this.serializer.handleLoadRunHistory(
         message.runIndex,
-        this.getCurrentPostMessage()
+        this.getCurrentPostMessage(),
+        this.clientId
       );
     });
 
     table.set(MESSAGE_TYPES.CLEAR_RUN_HISTORY, async () => {
-      await this.serializer.handleClearRunHistory(this.getCurrentPostMessage());
+      await this.serializer.handleClearRunHistory(
+        this.getCurrentPostMessage(),
+        this.clientId
+      );
     });
 
     // ── Dashboard — New Workflow Modal ───────────────────────────────────
@@ -433,7 +438,7 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.CREATE_WORKFLOW, (message) => {
-      if (this.clientId !== "panel") {
+      if (this.clientId !== PANEL_CLIENT_ID) {
         // External browser client — create file then load without changing panel's viewed workflow
         const send = this.scopedPostMessage;
         const orchestrator = this.getOrchestrator();
@@ -479,7 +484,8 @@ export class WebviewMessageRouter {
       }
       this.serializer.handleUpdateWorkflowName(
         message,
-        this.callbacks.updateWorkflowName
+        this.callbacks.updateWorkflowName,
+        this.clientId
       );
     });
 
@@ -617,7 +623,8 @@ export class WebviewMessageRouter {
     // ── Save Workflow ────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST, async () => {
       await this.serializer.handleSaveWorkflowRequest(
-        this.getCurrentPostMessage()
+        this.getCurrentPostMessage(),
+        this.clientId
       );
     });
 
@@ -625,7 +632,8 @@ export class WebviewMessageRouter {
       await this.serializer.handleSaveWorkflow(
         message.filePath,
         message.format,
-        this.getCurrentPostMessage()
+        this.getCurrentPostMessage(),
+        this.clientId
       );
     });
 
@@ -763,7 +771,7 @@ export class WebviewMessageRouter {
       // Block keyboard input for AI CLI sessions from browser clients — interactive
       // control of AI CLI sessions is reserved for the VS Code panel. Browser tabs
       // can view the terminal output but cannot send input to the AI process.
-      if (this.clientId !== "panel") {
+      if (this.clientId !== PANEL_CLIENT_ID) {
         const session = ptyManager.getSession(msg.sessionId as string);
         if (session?.kind === SESSION_KINDS.AI_CLI) return;
       }
@@ -776,7 +784,7 @@ export class WebviewMessageRouter {
       // Block AI CLI resize from browser clients when the panel is also viewing
       // the workflow — the panel's dimensions take priority. Browser clients can
       // resize AI CLI sessions only when the panel is not actively viewing them.
-      if (this.clientId !== "panel") {
+      if (this.clientId !== PANEL_CLIENT_ID) {
         const session = ptyManager.getSession(msg.sessionId as string);
         if (session?.kind === SESSION_KINDS.AI_CLI) {
           const panelViewedId = this.getOrchestrator()?.getActiveWorkflowId();
@@ -1540,7 +1548,7 @@ export class WebviewMessageRouter {
       if (!orchestrator) return "";
       const outputHistoryManager = orchestrator.getOutputHistoryManager();
       const workingFilePath =
-        orchestrator.getQueueState().workingFilePath ?? "";
+        orchestrator.getQueueState(this.clientId).workingFilePath ?? "";
       if (!workingFilePath) return "";
       const workflowId =
         outputHistoryManager.extractWorkflowId(workingFilePath);

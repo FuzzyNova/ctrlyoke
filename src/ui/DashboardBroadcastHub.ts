@@ -18,7 +18,7 @@ export type DashboardClient = IDashboardProvider & Partial<IDashboardSink>;
 /**
  * Broadcasts dashboard updates to every registered dashboard client.
  *
- * All clients (the VS Code sidebar panel and browser WebSocket connections)
+ * All clients (the VS Code panel and browser WebSocket connections)
  * receive ACTIVE_WORKFLOW_CHANGED exclusively through per-client paths such
  * as replayWorkflowStateTo() — never via the hub. The hub's role is limited
  * to broadcasting workflow-registry events and generic messages.
@@ -62,9 +62,15 @@ export class DashboardBroadcastHub
   /** No-op: ACTIVE_WORKFLOW_CHANGED is sent per-client via replayWorkflowStateTo, never broadcast. */
   notifyActiveWorkflowChanged(_workflowId: string): void {}
 
-  async loadOutputHistoryForWorkflow(workflowFilePath: string, workflowInstanceId?: string): Promise<void> {
+  async loadOutputHistoryForWorkflow(
+    workflowFilePath: string,
+    workflowInstanceId?: string
+  ): Promise<void> {
     for (const client of this.clients) {
-      await client.loadOutputHistoryForWorkflow?.(workflowFilePath, workflowInstanceId);
+      await client.loadOutputHistoryForWorkflow?.(
+        workflowFilePath,
+        workflowInstanceId
+      );
     }
   }
 

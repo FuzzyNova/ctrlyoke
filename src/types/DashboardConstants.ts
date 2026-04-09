@@ -291,6 +291,14 @@ export const OPERATION_STATUS = {
 } as const;
 
 // ============================================================================
+// CLIENT IDS - Well-known client identifiers for the dashboard viewer registry
+// ============================================================================
+/** The VS Code sidebar/panel client. Always registered at startup. */
+export const PANEL_CLIENT_ID = "panel" as const;
+/** Prefix for all browser WebSocket client IDs (e.g. "browser:1"). */
+export const BROWSER_CLIENT_PREFIX = "browser:" as const;
+
+// ============================================================================
 // HARNESS IDS - Harness/framework modes for execution
 // ============================================================================
 export const HARNESS_IDS = {

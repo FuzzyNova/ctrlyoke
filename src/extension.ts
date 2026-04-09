@@ -11,6 +11,7 @@ import {
   EXECUTION_STATES,
   QUEUE_POSITION,
   MESSAGE_TYPES,
+  PANEL_CLIENT_ID,
   type QueuePosition,
 } from "./types/DashboardConstants";
 import {
@@ -74,7 +75,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
             throw new Error("FlightPath queue not initialized");
           }
 
-          const queue = workflowOrchestrator.getQueueState();
+          const queue = workflowOrchestrator.getQueueState(PANEL_CLIENT_ID);
           const status = getQueueStatus(promptQueue, queue.workingFilePath);
 
           return new vscode.LanguageModelToolResult([

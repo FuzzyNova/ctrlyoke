@@ -6,6 +6,7 @@ import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
   PROMPT_PROPERTIES,
+  PANEL_CLIENT_ID,
 } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
@@ -49,7 +50,10 @@ export class WorkflowSerializer {
    * Determines the default save path and format from the working file and
    * sends SAVE_WORKFLOW_DIALOG_DATA back so the webview can open the dialog.
    */
-  async handleSaveWorkflowRequest(postMessage?: PostMessageFn): Promise<void> {
+  async handleSaveWorkflowRequest(
+    postMessage?: PostMessageFn,
+    clientId: string = PANEL_CLIENT_ID
+  ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
     const manager = this.getManager();
     if (!manager) {
@@ -60,7 +64,7 @@ export class WorkflowSerializer {
       return;
     }
 
-    const queueState = manager.getQueueState();
+    const queueState = manager.getQueueState(clientId);
     const workingFilePath = queueState.workingFilePath;
 
     if (!workingFilePath) {
@@ -130,7 +134,8 @@ export class WorkflowSerializer {
   async handleSaveWorkflow(
     filePath: string,
     format: "yaml" | "json",
-    postMessage?: PostMessageFn
+    postMessage?: PostMessageFn,
+    clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
     const manager = this.getManager();
@@ -142,7 +147,7 @@ export class WorkflowSerializer {
       return;
     }
 
-    const queueState = manager.getQueueState();
+    const queueState = manager.getQueueState(clientId);
     const workingFilePath = queueState.workingFilePath;
 
     if (!workingFilePath) {
@@ -494,7 +499,8 @@ export class WorkflowSerializer {
 
   async handleUpdateWorkflowName(
     message: any,
-    updateWorkflowNameFn: (name: string) => void
+    updateWorkflowNameFn: (name: string) => void,
+    clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
     const manager = this.getManager();
     if (!manager) {
@@ -503,7 +509,7 @@ export class WorkflowSerializer {
     }
 
     const { workflowName } = message;
-    await manager.updateWorkflowName?.(workflowName);
+    await manager.updateWorkflowName(workflowName, clientId);
     updateWorkflowNameFn(workflowName);
   }
 
@@ -784,7 +790,8 @@ export class WorkflowSerializer {
    */
   async handleLoadRunHistory(
     runIndex: number,
-    postMessage?: PostMessageFn
+    postMessage?: PostMessageFn,
+    clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
     const outputHistoryManager = this.getOutputHistoryManager();
@@ -794,7 +801,7 @@ export class WorkflowSerializer {
 
     try {
       const workingFilePath =
-        this.getManager()?.getQueueState().workingFilePath ?? "";
+        this.getManager()?.getQueueState(clientId).workingFilePath ?? "";
       if (!workingFilePath) {
         return;
       }
@@ -839,7 +846,10 @@ export class WorkflowSerializer {
   /**
    * Handle CLEAR_RUN_HISTORY: delete all history files for the current workflow.
    */
-  async handleClearRunHistory(postMessage?: PostMessageFn): Promise<void> {
+  async handleClearRunHistory(
+    postMessage?: PostMessageFn,
+    clientId: string = PANEL_CLIENT_ID
+  ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
     const outputHistoryManager = this.getOutputHistoryManager();
     if (!outputHistoryManager) {
@@ -858,7 +868,7 @@ export class WorkflowSerializer {
 
     try {
       const workingFilePath =
-        this.getManager()?.getQueueState().workingFilePath ?? "";
+        this.getManager()?.getQueueState(clientId).workingFilePath ?? "";
       if (!workingFilePath) {
         return;
       }

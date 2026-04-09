@@ -10,6 +10,7 @@ import {
   EXECUTION_MODES,
   DEFAULT_MODELS,
   PERMISSION_MODES,
+  PANEL_CLIENT_ID,
   type HarnessStatusString,
 } from "../types/DashboardConstants";
 import {
@@ -301,7 +302,7 @@ export class WebviewSettingsSync {
    */
   async sendWorkflowPropertiesToSettings(
     postMessage: PostMessageFn = this.postMessage,
-    clientId?: string
+    clientId: string
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
@@ -436,7 +437,7 @@ export class WebviewSettingsSync {
     property: string,
     value: any,
     postMessage: PostMessageFn = this.postMessage,
-    clientId?: string
+    clientId: string
   ): Promise<void> {
     await this.handleUpdateWorkflowProperties(
       { [property]: value },
@@ -448,7 +449,7 @@ export class WebviewSettingsSync {
   async handleUpdateWorkflowProperties(
     properties: Record<string, unknown>,
     postMessage: PostMessageFn = this.postMessage,
-    clientId?: string
+    clientId: string
   ): Promise<void> {
     if (Object.keys(properties).length === 0) {
       return;
@@ -696,7 +697,7 @@ export class WebviewSettingsSync {
   getCurrentState(): any {
     const orchestrator = this.getOrchestrator();
     if (orchestrator) {
-      const queueState = orchestrator.getQueueState();
+      const queueState = orchestrator.getQueueState(PANEL_CLIENT_ID);
       const currentFile = orchestrator.getCurrentPromptFile();
       const workflowName = queueState.workflowName;
       const promptQueue = orchestrator.getActivePromptQueue();

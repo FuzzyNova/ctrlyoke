@@ -26,6 +26,7 @@ import {
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
   MESSAGE_TYPES,
+  PANEL_CLIENT_ID,
   type QueuePosition,
   type ActionType,
   type StepStatus,
@@ -93,7 +94,7 @@ export class WorkflowOrchestrator {
   /** Watcher for *.runner.json creation (Entry Point 3: CLI starts while VS Code is open) */
   private runnerJsonCreateWatcher?: vscode.FileSystemWatcher;
 
-  private readonly PANEL_CLIENT_ID = "panel" as const;
+  private readonly PANEL_CLIENT_ID = PANEL_CLIENT_ID;
 
   /** Stored send function for the VS Code panel — set when the panel connects via setDashboardReady. */
   private storedPanelSend?: (msg: unknown) => void;
@@ -962,16 +963,12 @@ export class WorkflowOrchestrator {
     });
   }
 
-  getQueueState(clientId?: string): QueueState {
-    return this.getInstanceForClient(
-      clientId ?? this.PANEL_CLIENT_ID
-    ).getQueueState();
+  getQueueState(clientId: string): QueueState {
+    return this.getInstanceForClient(clientId).getQueueState();
   }
 
-  clearWorkingFilePath(clientId?: string): void {
-    this.getInstanceForClient(
-      clientId ?? this.PANEL_CLIENT_ID
-    ).clearWorkingFilePath();
+  clearWorkingFilePath(clientId: string): void {
+    this.getInstanceForClient(clientId).clearWorkingFilePath();
   }
 
   /**
@@ -988,11 +985,9 @@ export class WorkflowOrchestrator {
 
   async updateWorkflowName(
     workflowName: string,
-    clientId?: string
+    clientId: string
   ): Promise<void> {
-    return this.getInstanceForClient(
-      clientId ?? this.PANEL_CLIENT_ID
-    ).updateWorkflowName(workflowName);
+    return this.getInstanceForClient(clientId).updateWorkflowName(workflowName);
   }
 
   async loadWorkingFile(filePath: string): Promise<void> {
@@ -1060,11 +1055,12 @@ export class WorkflowOrchestrator {
   updateWorkflowPropertyInQueue(
     property: string,
     value: unknown,
-    clientId?: string
+    clientId: string
   ): void {
-    this.getInstanceForClient(
-      clientId ?? this.PANEL_CLIENT_ID
-    ).updateWorkflowPropertyInQueue(property, value);
+    this.getInstanceForClient(clientId).updateWorkflowPropertyInQueue(
+      property,
+      value
+    );
   }
 
   async updateWorkingFileProperties(
@@ -1074,11 +1070,12 @@ export class WorkflowOrchestrator {
       ensureHarnessAndModel?: boolean;
       allowDeletes?: boolean;
     } = {},
-    clientId?: string
+    clientId: string
   ): Promise<{ workingFile: WorkingFile; appliedKeys: string[] } | null> {
-    return this.getInstanceForClient(
-      clientId ?? this.PANEL_CLIENT_ID
-    ).updateWorkingFileProperties(properties, options);
+    return this.getInstanceForClient(clientId).updateWorkingFileProperties(
+      properties,
+      options
+    );
   }
 
   async updatePromptInQueue(
@@ -1087,67 +1084,75 @@ export class WorkflowOrchestrator {
     properties: unknown,
     promptName?: string,
     clearProperties?: string[],
-    clientId?: string
+    clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    return this.getInstanceForClient(
-      clientId ?? this.PANEL_CLIENT_ID
-    ).updatePromptInQueue(index, text, properties, promptName, clearProperties);
+    return this.getInstanceForClient(clientId).updatePromptInQueue(
+      index,
+      text,
+      properties,
+      promptName,
+      clearProperties
+    );
   }
 
   async updateFinalStepInQueue(
     finalStep: PromptStep | null,
     clearProperties?: string[],
-    clientId?: string
+    clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    return this.getInstanceForClient(
-      clientId ?? this.PANEL_CLIENT_ID
-    ).updateFinalStepInQueue(finalStep, clearProperties);
+    return this.getInstanceForClient(clientId).updateFinalStepInQueue(
+      finalStep,
+      clearProperties
+    );
   }
 
   async ensureEphemeralWorkingFile(
-    options?: { initialProperties?: Record<string, unknown> },
-    clientId?: string
+    options: { initialProperties?: Record<string, unknown> } = {},
+    clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    return this.getInstanceForClient(
-      clientId ?? this.PANEL_CLIENT_ID
-    ).ensureEphemeralWorkingFile(options);
+    return this.getInstanceForClient(clientId).ensureEphemeralWorkingFile(
+      options
+    );
   }
 
-  async deletePromptFromQueue(index: number, clientId?: string): Promise<void> {
-    return this.getInstanceForClient(
-      clientId ?? this.PANEL_CLIENT_ID
-    ).deletePromptFromQueue(index);
+  async deletePromptFromQueue(
+    index: number,
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<void> {
+    return this.getInstanceForClient(clientId).deletePromptFromQueue(index);
   }
 
-  async resetWorkflowState(clientId?: string): Promise<void> {
-    return this.getInstanceForClient(
-      clientId ?? this.PANEL_CLIENT_ID
-    ).resetWorkflowState();
+  async resetWorkflowState(
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<void> {
+    return this.getInstanceForClient(clientId).resetWorkflowState();
   }
 
   async reorderPendingPrompts(
     newPendingOrder: number[],
-    clientId?: string
+    clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    return this.getInstanceForClient(
-      clientId ?? this.PANEL_CLIENT_ID
-    ).reorderPendingPrompts(newPendingOrder);
+    return this.getInstanceForClient(clientId).reorderPendingPrompts(
+      newPendingOrder
+    );
   }
 
   async syncStepsForUndoRedo(
     steps: WorkflowStep[],
     finalStep: WorkflowStep | null,
-    clientId?: string
+    clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    return this.getInstanceForClient(
-      clientId ?? this.PANEL_CLIENT_ID
-    ).syncStepsForUndoRedo(steps, finalStep);
+    return this.getInstanceForClient(clientId).syncStepsForUndoRedo(
+      steps,
+      finalStep
+    );
   }
 
-  async setStartPosition(toIndex: number, clientId?: string): Promise<void> {
-    return this.getInstanceForClient(
-      clientId ?? this.PANEL_CLIENT_ID
-    ).setStartPosition(toIndex);
+  async setStartPosition(
+    toIndex: number,
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<void> {
+    return this.getInstanceForClient(clientId).setStartPosition(toIndex);
   }
 
   async executeEphemeralPrompt(
@@ -1156,11 +1161,9 @@ export class WorkflowOrchestrator {
     action: ActionType,
     promptName?: string,
     forceNewWorkflow?: boolean,
-    clientId?: string
+    clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    return this.getInstanceForClient(
-      clientId ?? this.PANEL_CLIENT_ID
-    ).executeEphemeralPrompt(
+    return this.getInstanceForClient(clientId).executeEphemeralPrompt(
       text,
       properties,
       action,
@@ -1346,10 +1349,16 @@ export class WorkflowOrchestrator {
 
   /**
    * Get the WorkflowInstance currently viewed by the given client.
-   * Falls back to the panel's active instance when the client has no viewed
-   * workflow (e.g. panel commands that don't carry a clientId).
+   * All callers must supply a valid clientId — "panel" for the VS Code panel,
+   * "browser:N" for WebSocket clients. Falls back to the active instance as a
+   * last resort but logs a warning so bugs are surfaced immediately.
    */
   private getInstanceForClient(clientId: string): WorkflowInstance {
+    if (!this.viewerRegistry.has(clientId)) {
+      Log.warn(
+        `getInstanceForClient: unregistered clientId "${clientId}" — falling back to active instance. This is likely a bug.`
+      );
+    }
     const id = this.getViewedWorkflowId(clientId);
     if (id) {
       const inst = this.instances.get(id) ?? this.retiredInstances.get(id);
