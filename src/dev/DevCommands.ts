@@ -608,7 +608,7 @@ async function exportDiscoveredModels(): Promise<void> {
  *
  * Opens a minimal WebviewPanel, reads every --vscode-* CSS custom property
  * from getComputedStyle(document.documentElement), then writes the result to
- * docs/reference/vscode-css-vars.json so we can inspect which variables are
+ * dev/reference/vscode-css-vars.json so we can inspect which variables are
  * actually available (and what their values are) in the active theme.
  *
  * Usage: run "FlightPath: Dump CSS Variables" from the command palette (dev only).
@@ -774,7 +774,7 @@ export function registerDevCommands(context: vscode.ExtensionContext): void {
           cmd.includes("copilot") ||
           cmd.includes("workbench.action.chat") ||
           cmd.includes("github.copilot"),
-        "docs/reference/CHAT_COMMANDS.md"
+        "dev/reference/CHAT_COMMANDS.md"
       );
     })
   );
@@ -785,7 +785,7 @@ export function registerDevCommands(context: vscode.ExtensionContext): void {
       await listAndDisplayCommands(
         "All Available VS Code Commands",
         undefined,
-        "docs/reference/VSCODE_COMMANDS.md"
+        "dev/reference/VSCODE_COMMANDS.md"
       );
     })
   );
@@ -855,12 +855,12 @@ export function registerDevCommands(context: vscode.ExtensionContext): void {
         {
           label: "$(list-filter) List Chat Commands",
           description:
-            "Dump Copilot/chat commands → docs/reference/CHAT_COMMANDS.md",
+            "Dump Copilot/chat commands → dev/reference/CHAT_COMMANDS.md",
           command: "flightpath.listChatCommands",
         },
         {
           label: "$(list-unordered) List All VS Code Commands",
-          description: "Dump all commands → docs/reference/VSCODE_COMMANDS.md",
+          description: "Dump all commands → dev/reference/VSCODE_COMMANDS.md",
           command: "flightpath.listAllCommands",
         },
         {
@@ -877,7 +877,7 @@ export function registerDevCommands(context: vscode.ExtensionContext): void {
         {
           label: "$(symbol-color) Dump CSS Variables",
           description:
-            "Write all --vscode-* CSS vars → docs/reference/vscode-css-vars.json",
+            "Write all --vscode-* CSS vars → dev/reference/vscode-css-vars.json",
           command: "flightpath.dumpCssVars",
         },
       ];

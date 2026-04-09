@@ -146,7 +146,19 @@ export class WebviewMessageRouter {
       const orchestrator = this.getOrchestrator();
 
       if (orchestrator) {
-        await orchestrator.handleClientReady(this.clientId, this.scopedPostMessage);
+        await orchestrator.handleClientReady(
+          this.clientId,
+          this.scopedPostMessage
+        );
+        // For browser clients: SESSION_RESTORED (sent during replay) calls applyWorkflowChange()
+        // which clears workflowProperties. Send them back so the PropertiesPanel reflects
+        // the correct state of the workflow being viewed.
+        if (this.clientId !== "panel") {
+          await this.settingsSync.sendWorkflowPropertiesToSettings(
+            this.getCurrentPostMessage(),
+            this.clientId
+          );
+        }
       }
 
       // Panel-only extras:
@@ -209,7 +221,10 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.CLEAR_WORKFLOW, async (_message) => {
       const orchestrator = this.getOrchestrator();
       if (orchestrator) {
-        await orchestrator.createWorkflowForClient(this.scopedPostMessage, this.clientId);
+        await orchestrator.createWorkflowForClient(
+          this.scopedPostMessage,
+          this.clientId
+        );
         return;
       }
       // Fallback when orchestrator is not yet available
@@ -456,7 +471,10 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_NAME, async (message) => {
       const orchestrator = this.getOrchestrator();
       if (orchestrator) {
-        await orchestrator.updateWorkflowName(message.workflowName, this.clientId);
+        await orchestrator.updateWorkflowName(
+          message.workflowName,
+          this.clientId
+        );
         return;
       }
       this.serializer.handleUpdateWorkflowName(
@@ -473,7 +491,11 @@ export class WebviewMessageRouter {
       const orchestrator = this.getOrchestrator();
       if (orchestrator) {
         const filePath: string = message.filePath ?? "";
-        await orchestrator.loadWorkflowForClient(filePath, this.scopedPostMessage, this.clientId);
+        await orchestrator.loadWorkflowForClient(
+          filePath,
+          this.scopedPostMessage,
+          this.clientId
+        );
         return;
       }
       // Fallback when orchestrator is not yet available
@@ -481,8 +503,9 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY, async () => {
-      const currentWorkingFilePath =
-        this.getOrchestrator()?.getQueueState(this.clientId)?.workingFilePath;
+      const currentWorkingFilePath = this.getOrchestrator()?.getQueueState(
+        this.clientId
+      )?.workingFilePath;
       const deleted = await this.serializer.handleClearWorkflowHistory(
         this.getCurrentPostMessage()
       );
@@ -619,16 +642,26 @@ export class WebviewMessageRouter {
       });
     });
 
-    table.set(MESSAGE_TYPES.SWITCH_WORKFLOW, (message) => {
+    table.set(MESSAGE_TYPES.SWITCH_WORKFLOW, async (message) => {
       const workflowId = (message as any).workflowId as string;
       if (!workflowId) return;
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return;
-      orchestrator
-        .replayWorkflowStateTo(workflowId, this.scopedPostMessage, this.clientId)
-        .catch((err) =>
-          Log.warn(`SWITCH_WORKFLOW per-client replay failed: ${err}`)
+      try {
+        await orchestrator.replayWorkflowStateTo(
+          workflowId,
+          this.scopedPostMessage,
+          this.clientId
         );
+        // SESSION_RESTORED (sent by the replay) clears workflowProperties via applyWorkflowChange().
+        // Repopulate them immediately so the PropertiesPanel shows the correct state.
+        await this.settingsSync.sendWorkflowPropertiesToSettings(
+          this.getCurrentPostMessage(),
+          this.clientId
+        );
+      } catch (err) {
+        Log.warn(`SWITCH_WORKFLOW per-client replay failed: ${err}`);
+      }
     });
 
     // ── Per-workflow targeted controls ────────────────────────────────────
@@ -663,8 +696,9 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY, async (message) => {
       const { filePath } = message;
       if (filePath) {
-        const currentWorkingFilePath =
-          this.getOrchestrator()?.getQueueState(this.clientId)?.workingFilePath;
+        const currentWorkingFilePath = this.getOrchestrator()?.getQueueState(
+          this.clientId
+        )?.workingFilePath;
         await this.serializer.handleRemoveWorkflowHistory(filePath);
         // If the deleted file was the currently viewed working file, clear the stale
         // path reference so ensureEphemeralWorkingFile() creates a fresh one on next
@@ -1291,9 +1325,7 @@ export class WebviewMessageRouter {
             target.kind === FINAL_STEP_PHASES.QUEUE
               ? history.promptOutputs[target.stepIndex]
               : history.finalStepOutputs?.[target.loopIndex]
-          ) as
-            | { undoRecord?: UndoRecord }
-            | undefined;
+          ) as { undoRecord?: UndoRecord } | undefined;
           if (stepOutput?.undoRecord) {
             this.emitMessage({
               type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,

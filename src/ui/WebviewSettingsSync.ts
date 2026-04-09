@@ -297,9 +297,11 @@ export class WebviewSettingsSync {
 
   /**
    * Read workflow properties from the working file and send to the settings panel.
+   * Pass clientId to read from the correct client's working file (browser vs panel).
    */
   async sendWorkflowPropertiesToSettings(
-    postMessage: PostMessageFn = this.postMessage
+    postMessage: PostMessageFn = this.postMessage,
+    clientId?: string
   ): Promise<void> {
     const orchestrator = this.getOrchestrator();
     if (!orchestrator) {
@@ -307,7 +309,8 @@ export class WebviewSettingsSync {
     }
 
     try {
-      const workingFilePath = orchestrator.getQueueState()?.workingFilePath;
+      const workingFilePath =
+        orchestrator.getQueueState(clientId)?.workingFilePath;
       if (!workingFilePath) {
         return;
       }
@@ -480,7 +483,7 @@ export class WebviewSettingsSync {
       clientId
     );
 
-    await this.sendWorkflowPropertiesToSettings(postMessage);
+    await this.sendWorkflowPropertiesToSettings(postMessage, clientId);
   }
 
   async handleSetAsDefault(
