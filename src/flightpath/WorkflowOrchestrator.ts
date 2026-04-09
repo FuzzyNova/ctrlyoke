@@ -926,12 +926,12 @@ export class WorkflowOrchestrator {
     send({ type: MESSAGE_TYPES.WORKFLOWS_LIST, workflows: this.getWorkflowSummaries() });
   }
 
-  getQueueState(): QueueState {
-    return this.getActiveInstance().getQueueState();
+  getQueueState(clientId?: string): QueueState {
+    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).getQueueState();
   }
 
-  clearWorkingFilePath(): void {
-    this.getActiveInstance().clearWorkingFilePath();
+  clearWorkingFilePath(clientId?: string): void {
+    this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).clearWorkingFilePath();
   }
 
   /**
@@ -946,8 +946,8 @@ export class WorkflowOrchestrator {
     return viewed?.promptQueue ?? null;
   }
 
-  async updateWorkflowName(workflowName: string): Promise<void> {
-    return this.getActiveInstance().updateWorkflowName(workflowName);
+  async updateWorkflowName(workflowName: string, clientId?: string): Promise<void> {
+    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).updateWorkflowName(workflowName);
   }
 
   async loadWorkingFile(filePath: string): Promise<void> {
@@ -1005,8 +1005,8 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().outputHistoryManager;
   }
 
-  updateWorkflowPropertyInQueue(property: string, value: unknown): void {
-    this.getActiveInstance().updateWorkflowPropertyInQueue(property, value);
+  updateWorkflowPropertyInQueue(property: string, value: unknown, clientId?: string): void {
+    this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).updateWorkflowPropertyInQueue(property, value);
   }
 
   async updateWorkingFileProperties(
@@ -1015,9 +1015,10 @@ export class WorkflowOrchestrator {
       onlyIfUndefined?: boolean;
       ensureHarnessAndModel?: boolean;
       allowDeletes?: boolean;
-    } = {}
+    } = {},
+    clientId?: string
   ): Promise<{ workingFile: WorkingFile; appliedKeys: string[] } | null> {
-    return this.getActiveInstance().updateWorkingFileProperties(
+    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).updateWorkingFileProperties(
       properties,
       options
     );
@@ -1028,9 +1029,10 @@ export class WorkflowOrchestrator {
     text: string,
     properties: unknown,
     promptName?: string,
-    clearProperties?: string[]
+    clearProperties?: string[],
+    clientId?: string
   ): Promise<void> {
-    return this.getActiveInstance().updatePromptInQueue(
+    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).updatePromptInQueue(
       index,
       text,
       properties,
@@ -1041,41 +1043,44 @@ export class WorkflowOrchestrator {
 
   async updateFinalStepInQueue(
     finalStep: PromptStep | null,
-    clearProperties?: string[]
+    clearProperties?: string[],
+    clientId?: string
   ): Promise<void> {
-    return this.getActiveInstance().updateFinalStepInQueue(
+    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).updateFinalStepInQueue(
       finalStep,
       clearProperties
     );
   }
 
-  async ensureEphemeralWorkingFile(options?: {
-    initialProperties?: Record<string, unknown>;
-  }): Promise<void> {
-    return this.getActiveInstance().ensureEphemeralWorkingFile(options);
+  async ensureEphemeralWorkingFile(
+    options?: { initialProperties?: Record<string, unknown> },
+    clientId?: string
+  ): Promise<void> {
+    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).ensureEphemeralWorkingFile(options);
   }
 
-  async deletePromptFromQueue(index: number): Promise<void> {
-    return this.getActiveInstance().deletePromptFromQueue(index);
+  async deletePromptFromQueue(index: number, clientId?: string): Promise<void> {
+    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).deletePromptFromQueue(index);
   }
 
-  async resetWorkflowState(): Promise<void> {
-    return this.getActiveInstance().resetWorkflowState();
+  async resetWorkflowState(clientId?: string): Promise<void> {
+    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).resetWorkflowState();
   }
 
-  async reorderPendingPrompts(newPendingOrder: number[]): Promise<void> {
-    return this.getActiveInstance().reorderPendingPrompts(newPendingOrder);
+  async reorderPendingPrompts(newPendingOrder: number[], clientId?: string): Promise<void> {
+    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).reorderPendingPrompts(newPendingOrder);
   }
 
   async syncStepsForUndoRedo(
     steps: WorkflowStep[],
-    finalStep: WorkflowStep | null
+    finalStep: WorkflowStep | null,
+    clientId?: string
   ): Promise<void> {
-    return this.getActiveInstance().syncStepsForUndoRedo(steps, finalStep);
+    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).syncStepsForUndoRedo(steps, finalStep);
   }
 
-  async setStartPosition(toIndex: number): Promise<void> {
-    return this.getActiveInstance().setStartPosition(toIndex);
+  async setStartPosition(toIndex: number, clientId?: string): Promise<void> {
+    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).setStartPosition(toIndex);
   }
 
   async executeEphemeralPrompt(
@@ -1083,9 +1088,10 @@ export class WorkflowOrchestrator {
     properties: unknown,
     action: ActionType,
     promptName?: string,
-    forceNewWorkflow?: boolean
+    forceNewWorkflow?: boolean,
+    clientId?: string
   ): Promise<void> {
-    return this.getActiveInstance().executeEphemeralPrompt(
+    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).executeEphemeralPrompt(
       text,
       properties,
       action,
@@ -1252,6 +1258,8 @@ export class WorkflowOrchestrator {
 
   /**
    * Get the active WorkflowInstance, creating one if none exists yet.
+   * Always scoped to the panel client. Use getInstanceForClient() when a
+   * specific clientId is available (e.g. from a browser message handler).
    */
   private getActiveInstance(): WorkflowInstance {
     const id = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
@@ -1265,6 +1273,20 @@ export class WorkflowOrchestrator {
     this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
     this.instances.set(instance.id, instance);
     return instance;
+  }
+
+  /**
+   * Get the WorkflowInstance currently viewed by the given client.
+   * Falls back to the panel's active instance when the client has no viewed
+   * workflow (e.g. panel commands that don't carry a clientId).
+   */
+  private getInstanceForClient(clientId: string): WorkflowInstance {
+    const id = this.getViewedWorkflowId(clientId);
+    if (id) {
+      const inst = this.instances.get(id) ?? this.retiredInstances.get(id);
+      if (inst) return inst;
+    }
+    return this.getActiveInstance();
   }
 
   // ─────────────────────────────────────────────────────────────────────────

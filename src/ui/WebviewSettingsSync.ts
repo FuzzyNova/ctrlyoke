@@ -432,17 +432,20 @@ export class WebviewSettingsSync {
   async handleUpdateWorkflowProperty(
     property: string,
     value: any,
-    postMessage: PostMessageFn = this.postMessage
+    postMessage: PostMessageFn = this.postMessage,
+    clientId?: string
   ): Promise<void> {
     await this.handleUpdateWorkflowProperties(
       { [property]: value },
-      postMessage
+      postMessage,
+      clientId
     );
   }
 
   async handleUpdateWorkflowProperties(
     properties: Record<string, unknown>,
-    postMessage: PostMessageFn = this.postMessage
+    postMessage: PostMessageFn = this.postMessage,
+    clientId?: string
   ): Promise<void> {
     if (Object.keys(properties).length === 0) {
       return;
@@ -453,24 +456,29 @@ export class WebviewSettingsSync {
       return;
     }
 
-    if (!orchestrator.getQueueState()?.workingFilePath) {
-      await orchestrator.ensureEphemeralWorkingFile({
-        initialProperties: properties,
-      });
+    if (!orchestrator.getQueueState(clientId)?.workingFilePath) {
+      await orchestrator.ensureEphemeralWorkingFile(
+        { initialProperties: properties },
+        clientId
+      );
     }
 
-    if (!orchestrator.getQueueState()?.workingFilePath) {
+    if (!orchestrator.getQueueState(clientId)?.workingFilePath) {
       Log.warn(
         `handleUpdateWorkflowProperties: no workspace, cannot persist keys [${Object.keys(properties).join(", ")}]`
       );
       return;
     }
 
-    await orchestrator.updateWorkingFileProperties(properties, {
-      allowDeletes: Object.values(properties).some(
-        (propertyValue) => propertyValue === undefined
-      ),
-    });
+    await orchestrator.updateWorkingFileProperties(
+      properties,
+      {
+        allowDeletes: Object.values(properties).some(
+          (propertyValue) => propertyValue === undefined
+        ),
+      },
+      clientId
+    );
 
     await this.sendWorkflowPropertiesToSettings(postMessage);
   }

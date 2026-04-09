@@ -273,14 +273,16 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.REORDER_PROMPTS, async (message) => {
       await this.getOrchestrator()?.reorderPendingPrompts(
-        message.newPendingOrder as number[]
+        message.newPendingOrder as number[],
+        this.clientId
       );
     });
 
     table.set(MESSAGE_TYPES.UNDO_REDO_SYNC, async (message) => {
       await this.getOrchestrator()?.syncStepsForUndoRedo(
         message.steps,
-        message.finalStep ?? null
+        message.finalStep ?? null,
+        this.clientId
       );
       if ("workflowProperties" in message) {
         const workflowProperties = {
@@ -299,7 +301,8 @@ export class WebviewMessageRouter {
         };
         this.settingsSync.handleUpdateWorkflowProperties(
           workflowProperties,
-          this.getCurrentPostMessage()
+          this.getCurrentPostMessage(),
+          this.clientId
         );
       }
     });
@@ -449,7 +452,12 @@ export class WebviewMessageRouter {
     });
 
     // ── Dashboard — Workflow Status ──────────────────────────────────────
-    table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_NAME, (message) => {
+    table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_NAME, async (message) => {
+      const orchestrator = this.getOrchestrator();
+      if (orchestrator) {
+        await orchestrator.updateWorkflowName(message.workflowName, this.clientId);
+        return;
+      }
       this.serializer.handleUpdateWorkflowName(
         message,
         this.callbacks.updateWorkflowName
@@ -473,7 +481,7 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY, async () => {
       const currentWorkingFilePath =
-        this.getOrchestrator()?.getQueueState()?.workingFilePath;
+        this.getOrchestrator()?.getQueueState(this.clientId)?.workingFilePath;
       const deleted = await this.serializer.handleClearWorkflowHistory(
         this.getCurrentPostMessage()
       );
@@ -481,7 +489,7 @@ export class WebviewMessageRouter {
       // Same logic as REMOVE_WORKFLOW_HISTORY — we do NOT call clearWorkflow() to
       // preserve the user's prompts and source file reference.
       if (deleted && currentWorkingFilePath) {
-        this.getOrchestrator()?.clearWorkingFilePath();
+        this.getOrchestrator()?.clearWorkingFilePath(this.clientId);
       }
     });
 
@@ -546,14 +554,16 @@ export class WebviewMessageRouter {
       this.settingsSync.handleUpdateWorkflowProperty(
         message.property,
         message.value,
-        this.getCurrentPostMessage()
+        this.getCurrentPostMessage(),
+        this.clientId
       );
     });
 
     table.set(MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTIES, (message) => {
       this.settingsSync.handleUpdateWorkflowProperties(
         message.properties,
-        this.getCurrentPostMessage()
+        this.getCurrentPostMessage(),
+        this.clientId
       );
     });
 
@@ -653,7 +663,7 @@ export class WebviewMessageRouter {
       const { filePath } = message;
       if (filePath) {
         const currentWorkingFilePath =
-          this.getOrchestrator()?.getQueueState()?.workingFilePath;
+          this.getOrchestrator()?.getQueueState(this.clientId)?.workingFilePath;
         await this.serializer.handleRemoveWorkflowHistory(filePath);
         // If the deleted file was the currently viewed working file, clear the stale
         // path reference so ensureEphemeralWorkingFile() creates a fresh one on next
@@ -664,7 +674,7 @@ export class WebviewMessageRouter {
           path.normalize(filePath).toLowerCase() ===
             path.normalize(currentWorkingFilePath).toLowerCase()
         ) {
-          this.getOrchestrator()?.clearWorkingFilePath();
+          this.getOrchestrator()?.clearWorkingFilePath(this.clientId);
         }
       }
     });
@@ -838,7 +848,8 @@ export class WebviewMessageRouter {
         properties,
         action,
         promptName,
-        forceNewWorkflow
+        forceNewWorkflow,
+        this.clientId
       );
     } catch (error) {
       Log.error("Failed to execute ephemeral prompt:", error);
@@ -867,7 +878,8 @@ export class WebviewMessageRouter {
         text,
         properties,
         promptName,
-        clearProperties
+        clearProperties,
+        this.clientId
       );
     } catch (error) {
       Log.error("Failed to update prompt:", error);
@@ -887,7 +899,8 @@ export class WebviewMessageRouter {
     try {
       await orchestrator.updateFinalStepInQueue(
         message.finalStep ?? null,
-        message.clearProperties
+        message.clearProperties,
+        this.clientId
       );
     } catch (error) {
       Log.error("Failed to update finalStep:", error);
@@ -907,7 +920,7 @@ export class WebviewMessageRouter {
     const { index } = message;
 
     try {
-      await orchestrator.deletePromptFromQueue(index);
+      await orchestrator.deletePromptFromQueue(index, this.clientId);
     } catch (error) {
       Log.error("Failed to delete prompt:", error);
       vscode.window.showErrorMessage(
@@ -924,7 +937,7 @@ export class WebviewMessageRouter {
     }
 
     try {
-      await orchestrator.resetWorkflowState();
+      await orchestrator.resetWorkflowState(this.clientId);
     } catch (error) {
       Log.error("Failed to reset workflow state:", error);
       vscode.window.showErrorMessage(
@@ -941,7 +954,7 @@ export class WebviewMessageRouter {
     }
 
     try {
-      await orchestrator.setStartPosition(toIndex);
+      await orchestrator.setStartPosition(toIndex, this.clientId);
     } catch (error) {
       Log.error("Failed to set start position:", error);
       vscode.window.showErrorMessage(
