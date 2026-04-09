@@ -81,7 +81,7 @@ Adding a new harness requires changes across multiple layers (harness directory,
 
 - **WorkflowOrchestrator** — Singleton registry managing 7 harness integrations and cross-cutting resources (TemplateImporter, WorkflowCommandHandler, WorkspaceSessionManager)
 - **WorkflowStateMachine** — Sole owner of runtime status transitions (idle → running → paused/completed/error); extracted from PromptQueue
-- **DashboardBroadcastHub** — Fan-out hub implementing `IDashboardProvider` + `IDashboardSink`; decouples orchestrator from webview and other sinks
+- **DashboardBroadcastHub** — Fan-out hub implementing `IDashboardProvider` + `IDashboardSink`; decouples orchestrator from webview, hosted server, and other sinks
 - **WorkflowInstance** — Per-workflow execution state container managing PromptQueue, WorkflowExecutor, EndConditionHandler, OutputHistoryManager, OutputCaptureBuffer
 - **PromptQueue** — Prompt list with hash-based deduplication; WorkflowStateMachine owns status; WorkflowExecutor owns the execution loop
 - **PropertyResolver** — Three-tier precedence: prompt-level → workflow-level → VS Code settings
@@ -90,6 +90,8 @@ Adding a new harness requires changes across multiple layers (harness directory,
 - **WorkingFileManager** — Extracted file I/O handler; atomic writes with file locking, disk merge for MCP-appended prompts
 - **PlatformAdapter** — Abstract interface enabling core code to run in both VS Code extension and standalone CLI binary (VsCodeAdapter + CliAdapter)
 - **PtyProcessManager** — Singleton managing node-pty sessions for embedded terminal display (kind: 'ai-cli' or 'shell')
+- **FlightPathConfigService** — Singleton configuration service with multi-tier hierarchy (CLI overlay, workspace config, user config, defaults)
+- **FlightPathHostedServer** — Express/WebSocket server hosting the dashboard in a browser tab; self-registers with DashboardBroadcastHub
 - **User-Defined Hooks** — Cross-cutting feature in `ExecutionProperties.hooks` allowing pre/post execution hooks alongside agent/skills/mcpServers
 - **SettingsJsonHooksTracker** — Manages `.github/hooks/*.json` registration for CLI harnesses; cleans up on deactivation
 - **SettingsJsonMcpTracker** — Parallel-safe MCP server config management in VS Code settings; workspace `.vscode/mcp.json` support
@@ -186,6 +188,7 @@ src/
 ├── cli.ts                        # Standalone CLI binary entry point
 ├── mcp-server.ts                 # Standalone MCP server binary
 ├── completions/                  # IntelliSense and document link providers
+├── config/                       # Configuration service layer (FlightPathConfigService)
 ├── dev/                          # Dev-only commands (stripped in production)
 ├── platform/                     # PlatformAdapter, VsCodeAdapter, CliAdapter, vscode-shim
 ├── flightpath/                   # Core business logic
@@ -212,6 +215,7 @@ src/
 │                                 # WorkspaceSessionManager, OutputHistoryManager,
 │                                 # CliWatchSession, WorkspaceInitializer
 ├── scripts/                      # Hook/notify scripts (6 JS scripts + 1 TypeScript OpenCode plugin)
+├── server/                       # Express/WebSocket server for hosted dashboard
 ├── templates/                    # Built-in workflow/agent templates
 ├── types/                        # Core types and shared constants (7 files)
 ├── ui/

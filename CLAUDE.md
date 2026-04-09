@@ -20,6 +20,8 @@ When editing or analyzing files, read the corresponding instruction file:
 | `src/flightpath/harness/chat/**`       | `.github/instructions/flightpath-chat.instructions.md`       | CopilotChatIntegration (UI automation)                                                         |
 | `src/flightpath/harness/**`            | `.github/instructions/harness-integrations.instructions.md`  | CliIntegration, Harness providers (Copilot, Claude, Codex)                                     |
 | `src/cli.ts`, `src/cli/**`             | `.github/instructions/flightpath-cli-binary.instructions.md` | FlightPath CLI binary, CliAdapter, CliTerminalFormatter                                        |
+| `src/config/**`                        | `.github/instructions/config.instructions.md`                | Configuration service layer (FlightPathConfigService, FileConfigBackend)                       |
+| `src/server/**`                        | `.github/instructions/server.instructions.md`                | Express/WebSocket server for hosted dashboard (FlightPathHostedServer)                         |
 | `src/ui/**`                            | `.github/instructions/ui.instructions.md`                    | Status bar, dashboard, settings webview providers                                              |
 | `src/types/**`                         | `.github/instructions/types.instructions.md`                 | Type definitions and data structures                                                           |
 | `src/templates/**`                     | `.github/instructions/templates.instructions.md`             | End condition script templates                                                                 |
