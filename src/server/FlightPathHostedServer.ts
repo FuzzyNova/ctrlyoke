@@ -4,25 +4,39 @@ import { createServer, Server } from "http";
 import * as path from "path";
 import * as fs from "fs";
 import type { IDashboardProvider } from "../ui/IDashboardProvider";
-import type { WorkflowSummary } from "../types/FlightPathTypes";
-import type { CliOutput } from "../types/WebviewMessageTypes";
+import type { IDashboardSink } from "../types/IDashboardSink";
+import type { WorkflowSummary, WorkflowStep } from "../types/FlightPathTypes";
+import type {
+  CliEvent,
+  CliOutput,
+  UndoExecutionTarget,
+} from "../types/WebviewMessageTypes";
 import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
 import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
-import { MESSAGE_TYPES } from "../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  type FinalStepPhase,
+  type StepStatus,
+  type StatusMessageSeverity,
+} from "../types/DashboardConstants";
+import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
+import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 
-export class FlightPathHostedServer implements IDashboardProvider {
+export class FlightPathHostedServer implements IDashboardProvider, IDashboardSink {
   private app = express();
   private httpServer: Server;
   private wss: WebSocketServer;
   private connections = new Set<WebSocket>();
   private cachedThemeVars: Record<string, string> = {};
   private nextConnectionId = 1;
+  private readonly sink: PostMessageDashboardSink;
 
   constructor(
     private hub: DashboardBroadcastHub,
     private webviewProvider: FlightPathWebviewProvider,
     private port: number
   ) {
+    this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
     this.httpServer = createServer(this.app);
     this.wss = new WebSocketServer({ server: this.httpServer, path: "/ws" });
     this.setupRoutes();
@@ -80,18 +94,36 @@ export class FlightPathHostedServer implements IDashboardProvider {
     });
   }
 
-  notifyRunHistoryUpdated(
-    runCount: number,
-    runTimestamps?: (number | undefined)[],
-    runStates?: (string | undefined)[]
-  ): void {
-    this.broadcast({
-      type: MESSAGE_TYPES.RUN_HISTORY_UPDATED,
-      runCount,
-      runTimestamps,
-      runStates,
-    });
-  }
+  // ── IDashboardSink — delegate to PostMessageDashboardSink ────────────────
+  // Message shapes are single-sourced in PostMessageDashboardSink. Add new
+  // methods there first, then add a one-liner delegate here.
+
+  async updateFileSelected(fileName: string, steps: any[], workflowName?: string, finalStep?: WorkflowStep | null, finalStepRuntime?: { status?: StepStatus; loopCount: number; phase: FinalStepPhase }, workflowId?: string): Promise<void> { return this.sink.updateFileSelected(fileName, steps, workflowName, finalStep, finalStepRuntime, workflowId); }
+  async updateSessionRestored(fileName: string, steps: any[], results: any[], executionState: string, currentIndex: number, workflowName?: string, finalStep?: WorkflowStep | null, finalStepRuntime?: { status?: StepStatus; loopCount: number; phase: FinalStepPhase }, workflowId?: string): Promise<void> { return this.sink.updateSessionRestored(fileName, steps, results, executionState, currentIndex, workflowName, finalStep, finalStepRuntime, workflowId); }
+  updateExecutionStarted(workflowId: string, fileName: string, totalSteps: number, isContinuation?: boolean, preserveStepCount?: number): void { this.sink.updateExecutionStarted(workflowId, fileName, totalSteps, isContinuation, preserveStepCount); }
+  notifyRunHistoryUpdated(runCount: number, runTimestamps?: (number | undefined)[], runStates?: (string | undefined)[], workflowId?: string): void { this.sink.notifyRunHistoryUpdated(runCount, runTimestamps, runStates, workflowId); }
+  updateProgress(current: number, total: number, workflowId?: string): void { this.sink.updateProgress(current, total, workflowId); }
+  updateExecutionState(state: string, workflowId?: string): void { this.sink.updateExecutionState(state, workflowId); }
+  updateExecutionCompleted(workflowId?: string): void { this.sink.updateExecutionCompleted(workflowId); }
+  updateStepStatus(stepIndex: number, status: { state: string; duration?: number; message?: string; endConditionResult?: unknown }, details?: Record<string, unknown>, workflowId?: string): void { this.sink.updateStepStatus(stepIndex, status, details, workflowId); }
+  updateRetryAttempt(stepIndex: number, currentRetry: number, maxRetries: number, workflowId?: string): void { this.sink.updateRetryAttempt(stepIndex, currentRetry, maxRetries, workflowId); }
+  updateCliOutput(stepIndex: number, output: unknown, workflowId?: string): void { this.sink.updateCliOutput(stepIndex, output, workflowId); }
+  updateCliStreamingChunk(stepIndex: number, chunk: string, workflowId?: string): void { this.sink.updateCliStreamingChunk(stepIndex, chunk, workflowId); }
+  updateCliStreamingEvents(stepIndex: number, events: CliEvent[], workflowId?: string): void { this.sink.updateCliStreamingEvents(stepIndex, events, workflowId); }
+  updateStatusMessage(stepIndex: number, message: string, severity?: StatusMessageSeverity, workflowId?: string): void { this.sink.updateStatusMessage(stepIndex, message, severity, workflowId); }
+  updateStepsExtended(steps: any[], finalStep?: WorkflowStep | null, executionState?: string, workflowId?: string): void { this.sink.updateStepsExtended(steps, finalStep, executionState, workflowId); }
+  updatePromptDeleted(fileName: string, steps: any[], finalStep?: WorkflowStep | null): void { this.sink.updatePromptDeleted(fileName, steps, finalStep); }
+  updateFinalStep(finalStep: WorkflowStep | null, workflowId?: string): void { this.sink.updateFinalStep(finalStep, workflowId); }
+  updateFinalStepStatus(status: StepStatus | null, loopCount: number, phase: FinalStepPhase | null, workflowId?: string): void { this.sink.updateFinalStepStatus(status, loopCount, phase, workflowId); }
+  updateFinalStepOutput(loopIndex: number, output: unknown, workflowId?: string): void { this.sink.updateFinalStepOutput(loopIndex, output, workflowId); }
+  updateFinalStepStreamingChunk(loopIndex: number, chunk: string, workflowId?: string): void { this.sink.updateFinalStepStreamingChunk(loopIndex, chunk, workflowId); }
+  updateFinalStepStreamingEvents(loopIndex: number, events: CliEvent[], workflowId?: string): void { this.sink.updateFinalStepStreamingEvents(loopIndex, events, workflowId); }
+  notifyWorkflowStateReset(steps: any[], workflowId?: string): void { this.sink.notifyWorkflowStateReset(steps, workflowId); }
+  notifyStartPositionSet(steps: WorkflowStep[], currentIndex: number, workflowId?: string): void { this.sink.notifyStartPositionSet(steps, currentIndex, workflowId); }
+  notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void { this.sink.notifyPromptsReordered(steps, workflowId); }
+  notifyUndoRedoSynced(): void { this.sink.notifyUndoRedoSynced(); }
+  updateWorkflowName(name: string, workflowId?: string): void { this.sink.updateWorkflowName(name, workflowId); }
+  sendStepUndoDataUpdated(target: UndoExecutionTarget, workspaceSnapshot?: WorkspaceSnapshot): void { this.sink.sendStepUndoDataUpdated(target, workspaceSnapshot); }
 
   // ── Theme var snapshot (fed from VS Code webview capture) ─────────────────
 

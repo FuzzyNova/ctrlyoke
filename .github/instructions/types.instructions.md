@@ -85,6 +85,8 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 
 `FlightPathWebviewProvider` satisfies this interface structurally — no `implements` declaration required.
 
+**Message shapes are single-sourced in `PostMessageDashboardSink` (src/ui/PostMessageDashboardSink.ts).** Both `FlightPathWebviewProvider` and `FlightPathHostedServer` delegate all `IDashboardSink` calls to a `PostMessageDashboardSink` instance — never duplicate message payload construction. See `ui.instructions.md` for the step-by-step process for adding a new method.
+
 **Key methods:**
 
 - `updateFileSelected(fileName, prompts, workflowName?, finalStep?, finalStepRuntime?)` — initial load

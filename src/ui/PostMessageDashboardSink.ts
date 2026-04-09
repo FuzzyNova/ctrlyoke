@@ -353,7 +353,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
   updateWorkflowName(name: string, workflowId?: string): void {
     this.send({
       type: MESSAGE_TYPES.WORKFLOW_NAME_UPDATED,
-      name,
+      workflowName: name,
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }

@@ -80,12 +80,14 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - Output: `src/ui/webview-react/custom-icons.css`
 - Usage: `<i class="custom-icon icon-{name}"></i>`
 
-**PostMessageDashboardSink:** Single-client IDashboardSink that forwards messages via a callback.
+**PostMessageDashboardSink:** Single source of truth for all `IDashboardSink` message shapes.
 
 - Implements `IDashboardSink` by constructing the appropriate message payload for each event and calling `send(msg)`
 - Used by `WorkflowOrchestrator.replayWorkflowStateTo()` to replay full workflow state to a single browser WebSocket client
 - Bypasses `DashboardBroadcastHub` intentionally — replay targets one client without affecting the VS Code sidebar
 - `notifyUndoRedoSynced()` is a no-op (acknowledgement only)
+- **`FlightPathWebviewProvider` and `FlightPathHostedServer` both hold a `PostMessageDashboardSink` instance and delegate all `IDashboardSink` method calls to it.** Message shapes live only here — never duplicate them in callers.
+- **Adding a new `IDashboardSink` method:** (1) add to `IDashboardSink` interface, (2) implement in `PostMessageDashboardSink` (message shape goes here), (3) add a one-liner delegate in `FlightPathHostedServer` (`method(...args) { this.sink.method(...args); }`), (4) add a one-liner delegate or full impl in `FlightPathWebviewProvider` (full impl only if VS Code-specific side effects are needed, e.g. calling `settingsSync`).
 
 **FlightPathMcpServerProvider:** Dynamic MCP server injection for copilot-chat harness.
 

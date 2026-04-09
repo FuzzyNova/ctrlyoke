@@ -5,8 +5,7 @@ import {
   DEFAULT_WORKFLOW_NAME,
   FINAL_STEP_PHASES,
   MESSAGE_TYPES,
-  StatusMessageSeverity,
-  STATUS_MESSAGE_SEVERITY,
+  type StatusMessageSeverity,
   type StepStatus,
   type FinalStepPhase,
 } from "../types/DashboardConstants";
@@ -15,7 +14,6 @@ import type {
   CliOutput,
   UndoExecutionTarget,
   UndoResult,
-  StepUndoDataUpdatedMessage,
   UndoPromptResultMessage,
   UndoRecordUpdatedMessage,
 } from "../types/WebviewMessageTypes";
@@ -32,6 +30,7 @@ import { Log } from "../utils/Log";
 import { onModelsLoaded } from "../utils/ModelRegistry";
 import { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import type { WorkflowSummary } from "../types/FlightPathTypes";
+import { PostMessageDashboardSink } from "./PostMessageDashboardSink";
 import { workflowDisplayStep } from "../types/FlightPathTypes";
 import { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -74,6 +73,9 @@ export class FlightPathWebviewProvider
   private readonly settingsSync: WebviewSettingsSync;
   private readonly serializer: WorkflowSerializer;
   private readonly router: WebviewMessageRouter;
+  // IDashboardSink message shapes are single-sourced here. Pure sink methods
+  // delegate to it; methods with extra VS Code logic call it then do more work.
+  private readonly sink = new PostMessageDashboardSink((msg) => this.postMessage(msg));
 
   /**
    * Get the webview-react directory URI
@@ -298,32 +300,13 @@ window.vscodeApi = acquireVsCodeApi();
     steps: any[],
     workflowName?: string,
     finalStep?: WorkflowStep | null,
-    finalStepRuntime?: {
-      status?: StepStatus;
-      loopCount: number;
-      phase: FinalStepPhase;
-    },
+    finalStepRuntime?: { status?: StepStatus; loopCount: number; phase: FinalStepPhase },
     workflowId?: string
   ): Promise<void> {
-    this.postMessage({
-      type: MESSAGE_TYPES.FILE_SELECTED,
-      fileName,
-      steps,
-      workflowName,
-      finalStep: finalStep ?? null,
-      finalStepStatus: finalStepRuntime?.status ?? null,
-      finalStepLoopCount: finalStepRuntime?.loopCount ?? 0,
-      finalStepPhase: finalStepRuntime?.phase ?? null,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-
-    // Extract and send workflow properties to settings panel
+    await this.sink.updateFileSelected(fileName, steps, workflowName, finalStep, finalStepRuntime, workflowId);
     await this.settingsSync.sendWorkflowPropertiesToSettings();
   }
 
-  /**
-   * Update dashboard when session is restored from working file
-   */
   public async updateSessionRestored(
     fileName: string,
     steps: any[],
@@ -332,179 +315,24 @@ window.vscodeApi = acquireVsCodeApi();
     currentIndex: number,
     workflowName?: string,
     finalStep?: WorkflowStep | null,
-    finalStepRuntime?: {
-      status?: StepStatus;
-      loopCount: number;
-      phase: FinalStepPhase;
-    },
+    finalStepRuntime?: { status?: StepStatus; loopCount: number; phase: FinalStepPhase },
     workflowId?: string
   ): Promise<void> {
-    this.postMessage({
-      type: MESSAGE_TYPES.SESSION_RESTORED,
-      fileName,
-      steps,
-      results,
-      executionState,
-      currentIndex,
-      workflowName,
-      finalStep: finalStep ?? null,
-      finalStepStatus: finalStepRuntime?.status ?? null,
-      finalStepLoopCount: finalStepRuntime?.loopCount ?? 0,
-      finalStepPhase: finalStepRuntime?.phase ?? null,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-
-    // Extract and send workflow properties to settings panel
+    await this.sink.updateSessionRestored(fileName, steps, results, executionState, currentIndex, workflowName, finalStep, finalStepRuntime, workflowId);
     await this.settingsSync.sendWorkflowPropertiesToSettings();
   }
 
-  public updateExecutionStarted(
-    workflowId: string,
-    fileName: string,
-    totalSteps: number,
-    isContinuation?: boolean,
-    preserveStepCount?: number
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.EXECUTION_STARTED,
-      workflowId,
-      fileName,
-      totalSteps,
-      ...(isContinuation ? { isContinuation: true, preserveStepCount } : {}),
-    });
-  }
-
-  public notifyRunHistoryUpdated(
-    runCount: number,
-    runTimestamps?: (number | undefined)[],
-    runStates?: (string | undefined)[],
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.RUN_HISTORY_UPDATED,
-      runCount,
-      runTimestamps,
-      runStates,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public updateProgress(
-    current: number,
-    total: number,
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.PROGRESS_UPDATE,
-      current,
-      total,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public updateExecutionState(state: string, workflowId?: string): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.EXECUTION_STATE_CHANGED,
-      state,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public updateStepStatus(
-    stepIndex: number,
-    status: {
-      state: StepStatus;
-      duration?: number;
-      message?: string;
-      endConditionResult?: unknown;
-    },
-    details?: Record<string, unknown>,
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.STEP_STATUS_CHANGED,
-      stepIndex,
-      status,
-      details,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public updateRetryAttempt(
-    stepIndex: number,
-    currentRetry: number,
-    maxRetries: number,
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.RETRY_ATTEMPT_CHANGED,
-      stepIndex,
-      currentRetry,
-      maxRetries,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public updateCliOutput(
-    stepIndex: number,
-    output: CliOutput,
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.CLI_OUTPUT,
-      stepIndex,
-      output,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public updateCliStreamingChunk(
-    stepIndex: number,
-    chunk: string,
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.CLI_STREAMING_CHUNK,
-      stepIndex,
-      chunk,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public updateCliStreamingEvents(
-    stepIndex: number,
-    events: CliEvent[],
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.CLI_STREAMING_EVENTS,
-      stepIndex,
-      events,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public updateStatusMessage(
-    stepIndex: number,
-    message: string,
-    severity: StatusMessageSeverity = STATUS_MESSAGE_SEVERITY.INFO,
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.STATUS_MESSAGE,
-      stepIndex,
-      message,
-      severity,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public updateExecutionCompleted(workflowId?: string): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.EXECUTION_COMPLETED,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
+  public updateExecutionStarted(workflowId: string, fileName: string, totalSteps: number, isContinuation?: boolean, preserveStepCount?: number): void { this.sink.updateExecutionStarted(workflowId, fileName, totalSteps, isContinuation, preserveStepCount); }
+  public notifyRunHistoryUpdated(runCount: number, runTimestamps?: (number | undefined)[], runStates?: (string | undefined)[], workflowId?: string): void { this.sink.notifyRunHistoryUpdated(runCount, runTimestamps, runStates, workflowId); }
+  public updateProgress(current: number, total: number, workflowId?: string): void { this.sink.updateProgress(current, total, workflowId); }
+  public updateExecutionState(state: string, workflowId?: string): void { this.sink.updateExecutionState(state, workflowId); }
+  public updateStepStatus(stepIndex: number, status: { state: StepStatus; duration?: number; message?: string; endConditionResult?: unknown }, details?: Record<string, unknown>, workflowId?: string): void { this.sink.updateStepStatus(stepIndex, status, details, workflowId); }
+  public updateRetryAttempt(stepIndex: number, currentRetry: number, maxRetries: number, workflowId?: string): void { this.sink.updateRetryAttempt(stepIndex, currentRetry, maxRetries, workflowId); }
+  public updateCliOutput(stepIndex: number, output: CliOutput, workflowId?: string): void { this.sink.updateCliOutput(stepIndex, output, workflowId); }
+  public updateCliStreamingChunk(stepIndex: number, chunk: string, workflowId?: string): void { this.sink.updateCliStreamingChunk(stepIndex, chunk, workflowId); }
+  public updateCliStreamingEvents(stepIndex: number, events: CliEvent[], workflowId?: string): void { this.sink.updateCliStreamingEvents(stepIndex, events, workflowId); }
+  public updateStatusMessage(stepIndex: number, message: string, severity?: StatusMessageSeverity, workflowId?: string): void { this.sink.updateStatusMessage(stepIndex, message, severity, workflowId); }
+  public updateExecutionCompleted(workflowId?: string): void { this.sink.updateExecutionCompleted(workflowId); }
 
   /** Notify webview that a terminal PTY session started */
   public notifyTerminalStarted(
@@ -565,20 +393,18 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public updateStepsExtended(
-    steps: any[],
-    finalStep?: WorkflowStep | null,
-    executionState?: string,
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.STEPS_EXTENDED,
-      steps,
-      finalStep: finalStep ?? null,
-      ...(executionState !== undefined ? { executionState } : {}),
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
+  public updateStepsExtended(steps: any[], finalStep?: WorkflowStep | null, executionState?: string, workflowId?: string): void { this.sink.updateStepsExtended(steps, finalStep, executionState, workflowId); }
+  public updatePromptDeleted(fileName: string, steps: any[], finalStep?: WorkflowStep | null): void { this.sink.updatePromptDeleted(fileName, steps, finalStep); }
+  public updateFinalStep(finalStep: WorkflowStep | null, workflowId?: string): void { this.sink.updateFinalStep(finalStep, workflowId); }
+  public updateFinalStepStatus(status: StepStatus | null, loopCount: number, phase: FinalStepPhase | null, workflowId?: string): void { this.sink.updateFinalStepStatus(status, loopCount, phase, workflowId); }
+  public updateFinalStepOutput(loopIndex: number, output: CliOutput, workflowId?: string): void { this.sink.updateFinalStepOutput(loopIndex, output, workflowId); }
+  public updateFinalStepStreamingChunk(loopIndex: number, chunk: string, workflowId?: string): void { this.sink.updateFinalStepStreamingChunk(loopIndex, chunk, workflowId); }
+  public updateFinalStepStreamingEvents(loopIndex: number, events: CliEvent[], workflowId?: string): void { this.sink.updateFinalStepStreamingEvents(loopIndex, events, workflowId); }
+  /** Only resets prompt statuses and execution state — does not touch CLI outputs or run history. */
+  public notifyWorkflowStateReset(steps: any[], workflowId?: string): void { this.sink.notifyWorkflowStateReset(steps, workflowId); }
+  public notifyStartPositionSet(steps: WorkflowStep[], currentIndex: number, workflowId?: string): void { this.sink.notifyStartPositionSet(steps, currentIndex, workflowId); }
+  public notifyPromptsReordered(steps: WorkflowStep[], workflowId?: string): void { this.sink.notifyPromptsReordered(steps, workflowId); }
+  public notifyUndoRedoSynced(): void { this.sink.notifyUndoRedoSynced(); }
 
   /**
    * Called when a CLI-managed workflow dynamically extends its queue.
@@ -590,126 +416,6 @@ window.vscodeApi = acquireVsCodeApi();
       workflowId,
       steps,
     });
-  }
-
-  public updatePromptDeleted(
-    fileName: string,
-    steps: any[],
-    finalStep?: WorkflowStep | null
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.PROMPT_DELETED,
-      fileName,
-      steps,
-      finalStep: finalStep ?? null,
-    });
-  }
-
-  public updateFinalStep(
-    finalStep: WorkflowStep | null,
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
-      finalStep: finalStep,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public updateFinalStepStatus(
-    status: StepStatus | null,
-    loopCount: number,
-    phase: FinalStepPhase | null,
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.FINAL_PROMPT_STATUS_CHANGED,
-      status,
-      loopCount,
-      phase,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public updateFinalStepOutput(
-    loopIndex: number,
-    output: CliOutput,
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.FINAL_PROMPT_OUTPUT,
-      loopIndex,
-      output,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public updateFinalStepStreamingChunk(
-    loopIndex: number,
-    chunk: string,
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_CHUNK,
-      loopIndex,
-      chunk,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public updateFinalStepStreamingEvents(
-    loopIndex: number,
-    events: CliEvent[],
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS,
-      loopIndex,
-      events,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  /**
-   * Notify webview that workflow execution state was reset.
-   * Only resets prompt statuses and execution state — does not touch CLI outputs
-   * or run history so the output panel and run dropdown are preserved.
-   */
-  public notifyWorkflowStateReset(steps: any[], workflowId?: string): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.RESET_WORKFLOW_STATE,
-      steps,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public notifyStartPositionSet(
-    steps: WorkflowStep[],
-    currentIndex: number,
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.SET_START_POSITION_CONFIRMED,
-      steps,
-      currentIndex,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public notifyPromptsReordered(
-    steps: WorkflowStep[],
-    workflowId?: string
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.REORDER_PROMPTS_CONFIRMED,
-      steps,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
-
-  public notifyUndoRedoSynced(): void {
-    // No payload needed — webview already holds the correct state.
-    // This is a no-op acknowledgement kept for extensibility.
   }
 
   public notifyQueueSizeLimitReached(
@@ -738,13 +444,7 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public updateWorkflowName(workflowName: string, workflowId?: string): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.WORKFLOW_NAME_UPDATED,
-      workflowName,
-      ...(workflowId !== undefined ? { workflowId } : {}),
-    });
-  }
+  public updateWorkflowName(name: string, workflowId?: string): void { this.sink.updateWorkflowName(name, workflowId); }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Multi-workflow coordination notifications (called by WorkflowOrchestrator)
@@ -803,16 +503,7 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   /** Send workspace snapshot data for a completed prompt step to the webview. */
-  public sendStepUndoDataUpdated(
-    target: UndoExecutionTarget,
-    workspaceSnapshot?: WorkspaceSnapshot
-  ): void {
-    this.postMessage({
-      type: MESSAGE_TYPES.STEP_UNDO_DATA_UPDATED,
-      target,
-      workspaceSnapshot,
-    } as StepUndoDataUpdatedMessage);
-  }
+  public sendStepUndoDataUpdated(target: UndoExecutionTarget, workspaceSnapshot?: WorkspaceSnapshot): void { this.sink.sendStepUndoDataUpdated(target, workspaceSnapshot); }
 
   /** Notify webview that an undo record was created or updated for a step. */
   public sendUndoRecordUpdated(
