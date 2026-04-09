@@ -182,6 +182,26 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 **Event emitters:** `PromptQueue` emits state changes; `WorkflowStateMachine` emits `onDidTransition` and `onDidAttemptTransition`; `WorkflowInstance` subscribes and updates dashboard/status bar
 **Detector vs execution integrations:** Detector singletons live for the extension lifetime; execution integrations are per-run and disposed after the `finally` block
 **DashboardBroadcastHub:** Fan-out hub in `src/ui/`; `WorkflowOrchestrator` creates it, registers/unregisters dashboard providers on it, and passes it as `IDashboardSink` to `WorkflowInstance`
+
+**CRITICAL — `replayWorkflowStateTo` is required after loading a working file for the panel:**
+`DashboardBroadcastHub.updateSessionRestored()` is a deliberate **no-op**. SESSION_RESTORED (which carries completed step statuses) is only sent through a direct `PostMessageDashboardSink` — which only exists inside `replayWorkflowStateTo()` and `replayFullStateTo()`. It is never sent via the hub or via `WorkflowTaggedSink`.
+
+Consequence: **any code path that loads a working file for a dashboard client MUST call `replayWorkflowStateTo()` after the load**, not before it, and never send a subset of messages manually. Sending only `ACTIVE_WORKFLOW_CHANGED` or `OUTPUT_HISTORY_LOADED` without SESSION_RESTORED causes the panel to receive no step state, making all step status icons display as idle/pending even for completed runs.
+
+Correct pattern (matches `loadWorkflowForClient` and `loadWorkingFile`):
+```typescript
+const instance = this.buildWorkflowInstance();
+this.instances.set(instance.id, instance);
+await instance.loadWorkingFile(filePath);
+await this.replayWorkflowStateTo(instance.id, send, clientId); // always last
+```
+
+Do NOT:
+```typescript
+await this.createWorkflowForClient(send, clientId); // replays empty state too early
+await instance.loadWorkingFile(filePath);           // SESSION_RESTORED with real data never sent
+await this.dashboardBroadcastHub.loadOutputHistoryForWorkflow(filePath); // hub no-op for session
+```
 </keyPatterns>
 
 <terminology>

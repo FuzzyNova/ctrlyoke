@@ -698,18 +698,20 @@ export class WorkflowOrchestrator {
           await this.getActiveInstance().autoLoadFromWorkingFile(
             workingFilePath
           );
-          // Tell the panel which instance UUID is now active. Without this,
-          // activeWorkflowId stays null and PTY terminal sessions spawned later
-          // (e.g. append-to-completed runs) are stored under the real UUID but
-          // TerminalView looks up sessions under null/"_shell" — no match.
+          // Replay full state to the panel (SESSION_RESTORED + ACTIVE_WORKFLOW_CHANGED
+          // + RUN_HISTORY_UPDATED + OUTPUT_HISTORY_LOADED). This is required because
+          // DashboardBroadcastHub.updateSessionRestored() is a no-op — SESSION_RESTORED
+          // is only sent via direct PostMessageDashboardSink (inside replayWorkflowStateTo),
+          // never via the hub. Without this call the panel receives no step state and all
+          // status icons show as idle/pending even for completed runs.
           const instance = this.getActiveInstance();
-          this.storedPanelSend?.({
-            type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
-            workflowId: instance.id,
-          });
-          await this.dashboardBroadcastHub.loadOutputHistoryForWorkflow(
-            workingFilePath
-          );
+          if (this.storedPanelSend) {
+            await this.replayWorkflowStateTo(
+              instance.id,
+              this.storedPanelSend,
+              this.PANEL_CLIENT_ID
+            );
+          }
         }
       );
     }
@@ -979,11 +981,16 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    // Phase 2: loading a working file creates a new instance alongside any running ones
+    // Phase 2: loading a working file creates a new instance alongside any running ones.
+    // Must use replayWorkflowStateTo after loading so the panel receives SESSION_RESTORED
+    // with actual step state. DashboardBroadcastHub.updateSessionRestored() is a no-op,
+    // so SESSION_RESTORED is only deliverable via a direct PostMessageDashboardSink
+    // (inside replayWorkflowStateTo). Without it, all step status icons show as idle/pending.
     const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
-    await this.createWorkflowForClient(panelSend, this.PANEL_CLIENT_ID);
-    await this.getActiveInstance().loadWorkingFile(filePath);
-    await this.dashboardBroadcastHub.loadOutputHistoryForWorkflow(filePath);
+    const instance = this.buildWorkflowInstance();
+    this.instances.set(instance.id, instance);
+    await instance.loadWorkingFile(filePath);
+    await this.replayWorkflowStateTo(instance.id, panelSend, this.PANEL_CLIENT_ID);
   }
 
   getCurrentPromptFile(): { fileName: string; steps: unknown[] } | null {
