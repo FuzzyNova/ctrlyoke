@@ -11,6 +11,7 @@ function createOrchestratorHarness() {
   internal.dashboardReady = false;
   internal.orchestratorInitialized = false;
   internal.startupAutoLoadTriggered = false;
+  internal.viewerRegistry = new Map<string, string | null>();
 
   let autoLoadCalls = 0;
   internal.triggerAutoLoad = async () => {
