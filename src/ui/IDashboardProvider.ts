@@ -1,6 +1,5 @@
-import type { WorkflowSummary, PromptStep } from "../types/FlightPathTypes";
+import type { WorkflowSummary } from "../types/FlightPathTypes";
 import type { CliOutput } from "../types/WebviewMessageTypes";
-import type { StepStatus, FinalStepPhase } from "../types/DashboardConstants";
 
 /**
  * Platform-agnostic interface for pushing workflow state updates to the dashboard.
@@ -23,37 +22,6 @@ export interface IDashboardProvider {
 
   /** Notify that the active (displayed) workflow changed. */
   notifyActiveWorkflowChanged(workflowId: string): void;
-
-  // ── State initialisation ──────────────────────────────────────────────────
-
-  /** Update the dashboard when a workflow file is selected/loaded. */
-  updateFileSelected(
-    fileName: string,
-    steps: any[],
-    workflowName?: string,
-    finalStep?: PromptStep | null,
-    finalStepRuntime?: {
-      status?: StepStatus;
-      loopCount: number;
-      phase: FinalStepPhase;
-    }
-  ): Promise<void>;
-
-  /** Update the dashboard when a session is restored from a working file. */
-  updateSessionRestored(
-    fileName: string,
-    steps: any[],
-    results: any[],
-    executionState: string,
-    currentIndex: number,
-    workflowName?: string,
-    finalStep?: PromptStep | null,
-    finalStepRuntime?: {
-      status?: StepStatus;
-      loopCount: number;
-      phase: FinalStepPhase;
-    }
-  ): Promise<void>;
 
   // ── CLI watch events ──────────────────────────────────────────────────────
 

@@ -49,8 +49,8 @@ import {
  */
 export class WebviewMessageRouter {
   private routeQueue: Promise<void> = Promise.resolve();
-  private scopedPostMessage?: PostMessageFn;
-  private scopedClientTag?: string;
+  private scopedPostMessage: PostMessageFn;
+  private clientId: string;
   private themeVarsCapturedCallback?: (vars: Record<string, string>) => void;
 
   private readonly handlers: Map<
@@ -65,6 +65,8 @@ export class WebviewMessageRouter {
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
     private readonly callbacks: WebviewRouterCallbacks
   ) {
+    this.scopedPostMessage = defaultPostMessage;
+    this.clientId = "panel";
     this.handlers = this.buildDispatchTable();
   }
 
@@ -93,14 +95,14 @@ export class WebviewMessageRouter {
     action: () => Promise<void>
   ): Promise<void> {
     const prevPostMessage = this.scopedPostMessage;
-    const prevClientTag = this.scopedClientTag;
-    this.scopedPostMessage = postMessage;
-    this.scopedClientTag = clientTag;
+    const prevClientId = this.clientId;
+    if (postMessage !== undefined) this.scopedPostMessage = postMessage;
+    if (clientTag !== undefined) this.clientId = clientTag;
     try {
       await action();
     } finally {
       this.scopedPostMessage = prevPostMessage;
-      this.scopedClientTag = prevClientTag;
+      this.clientId = prevClientId;
     }
   }
 
@@ -137,33 +139,19 @@ export class WebviewMessageRouter {
     const table = new Map<string, (message: any) => void | Promise<void>>();
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
-    table.set(MESSAGE_TYPES.READY, async () => {
+    table.set(MESSAGE_TYPES.READY, async (_message) => {
       Log.debug("Received READY from React — sending INIT");
       this.settingsSync.sendInitialState(this.getCurrentPostMessage());
       const orchestrator = this.getOrchestrator();
 
-      if (this.scopedPostMessage) {
-        // ── External browser client (WebSocket) ──────────────────────────
-        // Replay current state to ONLY this client without touching global
-        // orchestrator flags or broadcasting to VS Code.
+      if (orchestrator) {
+        await orchestrator.handleClientReady(this.clientId, this.scopedPostMessage);
+      }
+
+      // Panel-only extras:
+      if (this.clientId === "panel") {
         if (orchestrator) {
-          const activeId = orchestrator.getActiveWorkflowId();
-          if (activeId) {
-            await orchestrator.replayWorkflowStateTo(
-              activeId,
-              this.scopedPostMessage
-            );
-          }
-          // Send the full loaded-workflow list so the switcher dropdown populates.
-          this.emitMessage({
-            type: MESSAGE_TYPES.WORKFLOWS_LIST,
-            workflows: orchestrator.getWorkflowSummaries(),
-          });
-        }
-      } else {
-        // ── VS Code sidebar ───────────────────────────────────────────────
-        if (orchestrator) {
-          await orchestrator.setDashboardReady();
+          await orchestrator.setDashboardReady(this.scopedPostMessage);
         }
         // Reconnect server running state (handles webview reload while server is up)
         const serverUrl = this.callbacks.getServerUrl?.();
@@ -217,17 +205,13 @@ export class WebviewMessageRouter {
       vscode.commands.executeCommand("flightpath.editCurrentPromptFile");
     });
 
-    table.set(MESSAGE_TYPES.CLEAR_WORKFLOW, async () => {
-      if (this.scopedPostMessage) {
-        // External browser client — create a fresh empty instance for this client
-        // only, without touching vsCodeViewedId or clearing the panel's workflow.
-        const orchestrator = this.getOrchestrator();
-        if (orchestrator) {
-          await orchestrator.createWorkflowForClient(this.scopedPostMessage);
-          return;
-        }
+    table.set(MESSAGE_TYPES.CLEAR_WORKFLOW, async (_message) => {
+      const orchestrator = this.getOrchestrator();
+      if (orchestrator) {
+        await orchestrator.createWorkflowForClient(this.scopedPostMessage, this.clientId);
+        return;
       }
-      // VS Code sidebar path — clears the panel's active workflow.
+      // Fallback when orchestrator is not yet available
       await this.callbacks.handleClearWorkflow();
     });
 
@@ -430,14 +414,14 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.CREATE_WORKFLOW, (message) => {
-      if (this.scopedPostMessage) {
-        // External browser client — create file then load without touching vsCodeViewedId
+      if (this.clientId !== "panel") {
+        // External browser client — create file then load without changing panel's viewed workflow
         const send = this.scopedPostMessage;
         const orchestrator = this.getOrchestrator();
         if (orchestrator) {
           this.serializer
             .handleCreateWorkflow(message, send, (fp) =>
-              orchestrator.loadWorkflowForClient(fp, send)
+              orchestrator.loadWorkflowForClient(fp, send, this.clientId)
             )
             .catch((err) =>
               Log.warn(`CREATE_WORKFLOW per-client load failed: ${err}`)
@@ -445,7 +429,7 @@ export class WebviewMessageRouter {
           return;
         }
       }
-      // VS Code sidebar path — global load (changes vsCodeViewedId)
+      // VS Code sidebar path — global load (updates panel viewer registry)
       this.serializer.handleCreateWorkflow(
         message,
         this.getCurrentPostMessage()
@@ -476,22 +460,14 @@ export class WebviewMessageRouter {
       this.serializer.handleGetRecentWorkflows(this.getCurrentPostMessage());
     });
 
-    table.set(MESSAGE_TYPES.LOAD_WORKFLOW, (message) => {
-      if (this.scopedPostMessage) {
-        // External browser client — use per-client load which never changes
-        // the VS Code sidebar's active view (vsCodeViewedId).
-        const orchestrator = this.getOrchestrator();
-        if (orchestrator) {
-          const filePath: string = message.filePath ?? "";
-          orchestrator
-            .loadWorkflowForClient(filePath, this.scopedPostMessage)
-            .catch((err) =>
-              Log.warn(`LOAD_WORKFLOW per-client load failed: ${err}`)
-            );
-          return;
-        }
+    table.set(MESSAGE_TYPES.LOAD_WORKFLOW, async (message) => {
+      const orchestrator = this.getOrchestrator();
+      if (orchestrator) {
+        const filePath: string = message.filePath ?? "";
+        await orchestrator.loadWorkflowForClient(filePath, this.scopedPostMessage, this.clientId);
+        return;
       }
-      // VS Code sidebar path — global load (changes vsCodeViewedId)
+      // Fallback when orchestrator is not yet available
       this.serializer.handleLoadWorkflow(message);
     });
 
@@ -633,26 +609,15 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.SWITCH_WORKFLOW, (message) => {
-      const { workflowId } = message;
-      if (!workflowId) {
-        return;
-      }
+      const workflowId = (message as any).workflowId as string;
+      if (!workflowId) return;
       const orchestrator = this.getOrchestrator();
-      if (!orchestrator) {
-        return;
-      }
-      if (this.scopedPostMessage) {
-        // External WS client — replay state to just this client without changing
-        // the global active workflow (so the VS Code sidebar is unaffected).
-        orchestrator
-          .replayWorkflowStateTo(workflowId, this.scopedPostMessage)
-          .catch((err) =>
-            Log.warn(`SWITCH_WORKFLOW per-client replay failed: ${err}`)
-          );
-      } else {
-        // VS Code sidebar — change global active workflow and broadcast to all.
-        orchestrator.setActiveWorkflow(workflowId);
-      }
+      if (!orchestrator) return;
+      orchestrator
+        .replayWorkflowStateTo(workflowId, this.scopedPostMessage, this.clientId)
+        .catch((err) =>
+          Log.warn(`SWITCH_WORKFLOW per-client replay failed: ${err}`)
+        );
     });
 
     // ── Per-workflow targeted controls ────────────────────────────────────
@@ -747,7 +712,7 @@ export class WebviewMessageRouter {
       // the PTY is owned exclusively by the VS Code sidebar (ptyPostMessage target).
       // Browser clients receive viewerOnly sessions and won't create an xterm or
       // register onData, but this guard prevents any accidental writes.
-      if (this.scopedPostMessage) {
+      if (this.clientId !== "panel") {
         const session = ptyManager.getSession(msg.sessionId as string);
         if (session?.kind === SESSION_KINDS.AI_CLI) return;
       }
@@ -759,7 +724,7 @@ export class WebviewMessageRouter {
       if (!ptyManager || !msg.sessionId || !msg.cols || !msg.rows) return;
       // Same ownership guard — prevent browser-side ResizeObserver from fighting
       // with the VS Code sidebar's PTY dimensions on AI CLI sessions.
-      if (this.scopedPostMessage) {
+      if (this.clientId !== "panel") {
         const session = ptyManager.getSession(msg.sessionId as string);
         if (session?.kind === SESSION_KINDS.AI_CLI) return;
       }
@@ -1534,7 +1499,7 @@ export class WebviewMessageRouter {
   // ============================================================================
 
   private handleWebviewLog(level: WebviewLogLevel, message: string): void {
-    const tag = this.scopedClientTag ?? "panel";
+    const tag = this.clientId;
     const prefixed = `[${tag}] ${message}`;
     switch (level) {
       case LOG_LEVELS.DEBUG:

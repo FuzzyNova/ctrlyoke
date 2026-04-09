@@ -18,27 +18,15 @@ export type DashboardClient = IDashboardProvider & Partial<IDashboardSink>;
 /**
  * Broadcasts dashboard updates to every registered dashboard client.
  *
- * One client is designated the "panel client" (the VS Code sidebar) via
- * setPanelClient(). Certain messages — notably ACTIVE_WORKFLOW_CHANGED — must
- * only go to the panel client, never broadcast. All other clients (browser
- * WebSocket connections) receive those messages only through per-client paths
- * such as replayWorkflowStateTo().
+ * All clients (the VS Code sidebar panel and browser WebSocket connections)
+ * receive ACTIVE_WORKFLOW_CHANGED exclusively through per-client paths such
+ * as replayWorkflowStateTo() — never via the hub. The hub's role is limited
+ * to broadcasting workflow-registry events and generic messages.
  */
 export class DashboardBroadcastHub
   implements IDashboardProvider, IDashboardSink
 {
   private readonly clients: DashboardClient[] = [];
-  /** The VS Code sidebar panel — the only client that receives hub-driven ACTIVE_WORKFLOW_CHANGED. */
-  private panelClient: DashboardClient | null = null;
-
-  /**
-   * Register the VS Code sidebar as the panel client.
-   * Also adds it to the broadcast list via addClient().
-   */
-  setPanelClient(client: DashboardClient): void {
-    this.panelClient = client;
-    this.addClient(client);
-  }
 
   addClient(client: DashboardClient): void {
     if (!this.clients.includes(client)) {
@@ -50,9 +38,6 @@ export class DashboardBroadcastHub
     const index = this.clients.indexOf(client);
     if (index !== -1) {
       this.clients.splice(index, 1);
-    }
-    if (this.panelClient === client) {
-      this.panelClient = null;
     }
   }
 
@@ -74,67 +59,8 @@ export class DashboardBroadcastHub
     }
   }
 
-  notifyActiveWorkflowChanged(workflowId: string): void {
-    // ACTIVE_WORKFLOW_CHANGED is always per-client, never broadcast.
-    // Only the VS Code sidebar panel receives it via the hub. Browser clients
-    // receive it exclusively through replayWorkflowStateTo(), which sends directly
-    // via the client's scoped postMessage.
-    this.panelClient?.notifyActiveWorkflowChanged(workflowId);
-  }
-
-  async updateFileSelected(
-    fileName: string,
-    steps: any[],
-    workflowName?: string,
-    finalStep?: WorkflowStep | null,
-    finalStepRuntime?: {
-      status?: StepStatus;
-      loopCount: number;
-      phase: FinalStepPhase;
-    },
-    workflowId?: string
-  ): Promise<void> {
-    for (const client of this.clients) {
-      await client.updateFileSelected?.(
-        fileName,
-        steps,
-        workflowName,
-        finalStep,
-        finalStepRuntime,
-        workflowId
-      );
-    }
-  }
-
-  async updateSessionRestored(
-    fileName: string,
-    steps: any[],
-    results: any[],
-    executionState: string,
-    currentIndex: number,
-    workflowName?: string,
-    finalStep?: WorkflowStep | null,
-    finalStepRuntime?: {
-      status?: StepStatus;
-      loopCount: number;
-      phase: FinalStepPhase;
-    },
-    workflowId?: string
-  ): Promise<void> {
-    for (const client of this.clients) {
-      await client.updateSessionRestored?.(
-        fileName,
-        steps,
-        results,
-        executionState,
-        currentIndex,
-        workflowName,
-        finalStep,
-        finalStepRuntime,
-        workflowId
-      );
-    }
-  }
+  /** No-op: ACTIVE_WORKFLOW_CHANGED is sent per-client via replayWorkflowStateTo, never broadcast. */
+  notifyActiveWorkflowChanged(_workflowId: string): void {}
 
   async loadOutputHistoryForWorkflow(workflowFilePath: string, workflowInstanceId?: string): Promise<void> {
     for (const client of this.clients) {
@@ -169,6 +95,12 @@ export class DashboardBroadcastHub
       client.postMessage(message);
     }
   }
+
+  /** No-op: full state is delivered per-client via replayWorkflowStateTo, never broadcast. */
+  async updateFileSelected(): Promise<void> {}
+
+  /** No-op: full state is delivered per-client via replayWorkflowStateTo, never broadcast. */
+  async updateSessionRestored(): Promise<void> {}
 
   updateExecutionStarted(
     workflowId: string,

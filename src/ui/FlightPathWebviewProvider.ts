@@ -890,6 +890,15 @@ window.vscodeApi = acquireVsCodeApi();
     this.workflowOrchestrator = manager;
   }
 
+  /**
+   * Unregister a browser WebSocket client from the viewer registry.
+   * Called by FlightPathHostedServer when a WebSocket connection closes so
+   * retired instances are freed when no clients are viewing them.
+   */
+  public unregisterBrowserClient(clientId: string): void {
+    this.workflowOrchestrator?.unregisterClient(clientId);
+  }
+
   public async routeMessage(message: any): Promise<void> {
     await this.router.route(message);
   }
@@ -1063,6 +1072,11 @@ window.vscodeApi = acquireVsCodeApi();
 
   public postMessage(message: unknown): void {
     this.view?.webview.postMessage(message);
+  }
+
+  /** Returns a scoped send function targeting this panel's webview. */
+  getPanelScopedSend(): (msg: unknown) => void {
+    return (msg) => this.postMessage(msg);
   }
 
   /** Public postMessage for use by PtyProcessManager (terminal output routing) */

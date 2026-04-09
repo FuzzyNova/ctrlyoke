@@ -4,9 +4,8 @@ import { createServer, Server } from "http";
 import * as path from "path";
 import * as fs from "fs";
 import type { IDashboardProvider } from "../ui/IDashboardProvider";
-import type { WorkflowSummary, PromptStep } from "../types/FlightPathTypes";
+import type { WorkflowSummary } from "../types/FlightPathTypes";
 import type { CliOutput } from "../types/WebviewMessageTypes";
-import type { StepStatus, FinalStepPhase } from "../types/DashboardConstants";
 import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
 import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
@@ -53,50 +52,7 @@ export class FlightPathHostedServer implements IDashboardProvider {
     // Intentional no-op. ACTIVE_WORKFLOW_CHANGED must never be broadcast to
     // browser clients — each browser client's active workflow is driven exclusively
     // by replayWorkflowStateTo(), which sends directly via the client's scoped
-    // postMessage. DashboardBroadcastHub.notifyActiveWorkflowChanged() already
-    // routes only to clients[0] (VS Code) so this method should never be called,
-    // but we guard here defensively.
-  }
-
-  async updateFileSelected(
-    _fileName: string,
-    _steps: any[],
-    _workflowName?: string,
-    _finalStep?: PromptStep | null,
-    _finalStepRuntime?: {
-      status?: StepStatus;
-      loopCount: number;
-      phase: FinalStepPhase;
-    }
-  ): Promise<void> {
-    // Intentional no-op — same reasoning as notifyActiveWorkflowChanged.
-    // FILE_SELECTED must never be broadcast to browser clients via the hub;
-    // each browser client's active-workflow view is driven exclusively by
-    // replayWorkflowStateTo(), which sends directly via the client's scoped
-    // postMessage. Broadcasting here would cause every browser tab to jump to
-    // whatever workflow the VS Code sidebar just loaded.
-  }
-
-  async updateSessionRestored(
-    _fileName: string,
-    _steps: any[],
-    _results: any[],
-    _executionState: string,
-    _currentIndex: number,
-    _workflowName?: string,
-    _finalStep?: PromptStep | null,
-    _finalStepRuntime?: {
-      status?: StepStatus;
-      loopCount: number;
-      phase: FinalStepPhase;
-    }
-  ): Promise<void> {
-    // Intentional no-op — same reasoning as notifyActiveWorkflowChanged.
-    // SESSION_RESTORED must never be broadcast to browser clients via the hub;
-    // each browser client's active-workflow view is driven exclusively by
-    // replayWorkflowStateTo(), which sends directly via the client's scoped
-    // postMessage. Broadcasting here would cause every browser tab to jump to
-    // whatever workflow the VS Code sidebar just loaded.
+    // postMessage.
   }
 
   notifyCliWatchOutput(
@@ -231,7 +187,10 @@ export class FlightPathHostedServer implements IDashboardProvider {
           /* ignore malformed messages */
         }
       });
-      ws.on("close", () => this.connections.delete(ws));
+      ws.on("close", () => {
+        this.connections.delete(ws);
+        this.webviewProvider.unregisterBrowserClient(clientTag);
+      });
     });
   }
 

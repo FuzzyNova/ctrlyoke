@@ -93,12 +93,16 @@ export class WorkflowOrchestrator {
   /** Watcher for *.runner.json creation (Entry Point 3: CLI starts while VS Code is open) */
   private runnerJsonCreateWatcher?: vscode.FileSystemWatcher;
 
-  /** UUID of the instance shown in the VS Code sidebar. Not changed by browser-client loads. */
-  private vsCodeViewedId: string | null = null;
+  private readonly PANEL_CLIENT_ID = "panel" as const;
 
-  /** Retired instance still shown in the VS Code sidebar (completed/stopped/error).
-   * Disposed when the next workflow is created. */
-  private vsCodeViewedRetiredInstance: WorkflowInstance | null = null;
+  /** Stored send function for the VS Code panel — set when the panel connects via setDashboardReady. */
+  private storedPanelSend?: (msg: unknown) => void;
+
+  /** Per-client viewer registry: maps clientId → viewed workflowId (or null). */
+  private viewerRegistry = new Map<string, string | null>();
+
+  /** Retired instances keyed by workflowId — held until no client views them. */
+  private retiredInstances = new Map<string, WorkflowInstance>();
 
   // ─────────────────────────────────────────────────────────────────────────
   // Cross-cutting concerns
@@ -137,8 +141,10 @@ export class WorkflowOrchestrator {
     private readonly context: vscode.ExtensionContext,
     dashboardProvider?: DashboardClient
   ) {
+    this.viewerRegistry.set(this.PANEL_CLIENT_ID, null);
+
     if (dashboardProvider) {
-      this.dashboardBroadcastHub.setPanelClient(dashboardProvider);
+      this.dashboardBroadcastHub.addClient(dashboardProvider);
     }
     this.integrationFactory = new VsCodeIntegrationFactory(
       new VsCodeAdapter(context)
@@ -246,11 +252,12 @@ export class WorkflowOrchestrator {
    * Creates a fresh WorkflowInstance and makes it the active workflow.
    * Phase 2: adds it alongside existing instances without clearing the registry.
    */
-  async createWorkflow(
+  private async createWorkflow(
     _filePath?: string
   ): Promise<WorkflowInstance | undefined> {
+    const currentPanelId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
     Log.debug(
-      `createWorkflow: filePath="${_filePath ?? "(none)"}", currently viewed=${this.vsCodeViewedId?.slice(0, 8) ?? "null"}, running=${this.instances.size}`
+      `createWorkflow: filePath="${_filePath ?? "(none)"}", currently viewed=${currentPanelId?.slice(0, 8) ?? "null"}, running=${this.instances.size}`
     );
     // ── Duplicate detection: only running/paused instances are in the Map ──
     if (_filePath) {
@@ -272,7 +279,8 @@ export class WorkflowOrchestrator {
             "Create New Instance"
           );
           if (choice === "Switch to Existing" || choice === undefined) {
-            this.setActiveWorkflow(existing.id);
+            const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
+            await this.replayWorkflowStateTo(existing.id, panelSend, this.PANEL_CLIENT_ID);
             return existing;
           }
           // Fall through to create new instance
@@ -280,17 +288,17 @@ export class WorkflowOrchestrator {
       }
     }
 
-    // Dispose/deactivate the current VS Code viewed instance if applicable
-    const currentViewed = this.vsCodeViewedId
-      ? (this.instances.get(this.vsCodeViewedId) ??
-        this.vsCodeViewedRetiredInstance)
+    // Dispose/deactivate the current panel-viewed instance if applicable
+    const retiredInstance = currentPanelId ? this.retiredInstances.get(currentPanelId) : null;
+    const currentViewed = currentPanelId
+      ? (this.instances.get(currentPanelId) ?? retiredInstance)
       : null;
-    if (this.vsCodeViewedRetiredInstance) {
+    if (retiredInstance) {
       Log.debug(
-        `createWorkflow: disposing retired viewedInstance inst:${this.vsCodeViewedRetiredInstance.id.slice(0, 8)}`
+        `createWorkflow: disposing retired viewedInstance inst:${retiredInstance.id.slice(0, 8)}`
       );
-      this.vsCodeViewedRetiredInstance.dispose();
-      this.vsCodeViewedRetiredInstance = null;
+      retiredInstance.dispose();
+      this.retiredInstances.delete(currentPanelId!);
     } else if (currentViewed) {
       const viewedStatus = currentViewed.getQueueState().status;
       const isIdle =
@@ -301,7 +309,7 @@ export class WorkflowOrchestrator {
           `createWorkflow: disposing idle viewedInstance inst:${currentViewed.id.slice(0, 8)}`
         );
         currentViewed.dispose();
-        this.instances.delete(this.vsCodeViewedId!);
+        this.instances.delete(currentPanelId!);
       } else {
         // It is running/paused — keep it in the registry but do not deactivate
         Log.debug(
@@ -311,18 +319,18 @@ export class WorkflowOrchestrator {
     }
 
     const instance = this.buildWorkflowInstance();
-    this.vsCodeViewedId = instance.id;
+    this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
     this.instances.set(instance.id, instance);
-
-    // Load the prompt file into the new instance if a path was provided
     if (_filePath) {
       await instance.loadPromptFile(_filePath);
     }
 
-    // Send full state sync so the dashboard reflects the new (or file-loaded) state
-    instance.sendFullStateToDashboard();
-    // Notify the dashboard that the active workflow changed (new instance is now viewed)
-    this.dashboardBroadcastHub.notifyActiveWorkflowChanged(instance.id);
+    // Deliver full state to the panel via per-client replay (sends ACTIVE_WORKFLOW_CHANGED first,
+    // then SESSION_RESTORED with current state). If the panel is not yet connected, it will
+    // receive the state when it connects via the READY → handleClientReady path.
+    if (this.storedPanelSend) {
+      await this.replayWorkflowStateTo(instance.id, this.storedPanelSend, this.PANEL_CLIENT_ID);
+    }
 
     return instance;
   }
@@ -340,7 +348,7 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    const isViewed = this.vsCodeViewedId === workflowId;
+    const isViewed = this.isWorkflowViewedByAnyClient(workflowId);
     Log.debug(
       `retireWorkflow: inst:${workflowId.slice(0, 8)} name=\"${instance.workflowName || "(empty)"}\" ` +
         `status=${instance.getQueueState().status}, isViewed=${isViewed}, remaining=${this.instances.size - 1}`
@@ -348,9 +356,9 @@ export class WorkflowOrchestrator {
     this.instances.delete(workflowId);
 
     if (isViewed) {
-      // Keep as vsCodeViewedRetiredInstance so the user still sees the completed result.
-      // It will be disposed when the next workflow is created or the extension is disposed.
-      this.vsCodeViewedRetiredInstance = instance;
+      // Keep in retiredInstances so clients still viewing it can see the completed result.
+      // Each client's entry will be cleaned up when the client switches away or disconnects.
+      this.retiredInstances.set(workflowId, instance);
     } else {
       // Background workflow completed silently — dispose it immediately.
       instance.dispose();
@@ -377,114 +385,15 @@ export class WorkflowOrchestrator {
   }
 
   getActiveWorkflow(): WorkflowInstance | undefined {
-    if (this.vsCodeViewedId) {
-      return (
-        this.instances.get(this.vsCodeViewedId) ??
-        this.vsCodeViewedRetiredInstance ??
-        undefined
-      );
+    const id = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+    if (id) {
+      return this.instances.get(id) ?? this.retiredInstances.get(id) ?? undefined;
     }
     return undefined;
   }
 
   getActiveWorkflowId(): string | null {
-    return this.vsCodeViewedId;
-  }
-
-  setActiveWorkflow(workflowId: string): void {
-    // Check if this is a CLI-managed session
-    const cliEntry = this.cliSessions.get(workflowId);
-    if (cliEntry) {
-      Log.debug(
-        `setActiveWorkflow: switching to CLI-managed session workflowId="${workflowId}"`
-      );
-      this.dashboardBroadcastHub.notifyActiveWorkflowChanged(workflowId);
-      // Send the CLI session's summary so the dashboard shows read-only state
-      this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(cliEntry.summary);
-      // Send full workflow state (prompts + outputs) so the dashboard panels update
-      this.sendCliWorkflowFullStateToDashboard(workflowId, cliEntry).catch(
-        (err) =>
-          Log.warn(
-            `setActiveWorkflow: failed to send full CLI state for "${workflowId}":`,
-            err
-          )
-      );
-      return;
-    }
-
-    const instance = this.instances.get(workflowId);
-    if (!instance) {
-      Log.warn(
-        `setActiveWorkflow: inst:${workflowId.slice(0, 8)} not found in running/paused registry`
-      );
-      throw new Error(
-        `Workflow ${workflowId} not found in running/paused registry`
-      );
-    }
-
-    Log.debug(
-      `setActiveWorkflow: switching from inst:${this.vsCodeViewedId?.slice(0, 8) ?? "null"} → inst:${workflowId.slice(0, 8)} (${instance.workflowName || "unnamed"})`
-    );
-
-    // Dispose/deactivate the current VS Code viewed instance if applicable
-    if (this.vsCodeViewedRetiredInstance) {
-      Log.debug(
-        `setActiveWorkflow: disposing retired viewedInstance inst:${this.vsCodeViewedRetiredInstance.id.slice(0, 8)}`
-      );
-      this.vsCodeViewedRetiredInstance.dispose();
-      this.vsCodeViewedRetiredInstance = null;
-    } else if (this.vsCodeViewedId) {
-      const currentViewed = this.instances.get(this.vsCodeViewedId);
-      if (currentViewed && currentViewed !== instance) {
-        const viewedStatus = currentViewed.getQueueState().status;
-        const isIdle =
-          viewedStatus !== EXECUTION_STATES.RUNNING &&
-          viewedStatus !== EXECUTION_STATES.PAUSED;
-        if (isIdle) {
-          Log.debug(
-            `setActiveWorkflow: disposing idle viewedInstance inst:${currentViewed.id.slice(0, 8)}`
-          );
-          currentViewed.dispose();
-          this.instances.delete(this.vsCodeViewedId);
-        } else {
-          // Running/paused — keep it in the registry.
-          // WorkflowTaggedSink + client-side workflowId filtering handles visibility.
-          Log.debug(
-            `setActiveWorkflow: keeping running viewedInstance inst:${currentViewed.id.slice(0, 8)} in registry`
-          );
-        }
-      }
-    }
-
-    this.vsCodeViewedId = workflowId;
-    this.vsCodeViewedRetiredInstance = null;
-    instance.sendFullStateToDashboard();
-    // Notify the dashboard that the active workflow selection changed.
-    this.dashboardBroadcastHub.notifyActiveWorkflowChanged(workflowId);
-    Log.debug(
-      `setActiveWorkflow: switch complete — inst:${workflowId.slice(0, 8)} is now active`
-    );
-    // Restore run history counter so the RunSelector appears in the output header.
-    // Fire-and-forget: sendRunHistoryToDashboard is async (disk I/O) but non-critical.
-    instance
-      .sendRunHistoryToDashboard()
-      .catch((err) =>
-        Log.warn(
-          `setActiveWorkflow: failed to send run history for inst:${workflowId.slice(0, 8)}:`,
-          err
-        )
-      );
-    const workingFilePath = instance.getSummary().workingFilePath;
-    if (workingFilePath) {
-      this.dashboardBroadcastHub
-        .loadOutputHistoryForWorkflow(workingFilePath)
-        .catch((err) =>
-          Log.warn(
-            `setActiveWorkflow: failed to load output history for inst:${workflowId.slice(0, 8)}:`,
-            err
-          )
-        );
-    }
+    return this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
   }
 
   /**
@@ -495,7 +404,8 @@ export class WorkflowOrchestrator {
    */
   async replayWorkflowStateTo(
     workflowId: string,
-    send: (msg: unknown) => void
+    send: (msg: unknown) => void,
+    clientId: string
   ): Promise<void> {
     const sink = new PostMessageDashboardSink(send);
     send({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
@@ -521,6 +431,7 @@ export class WorkflowOrchestrator {
           });
         }
       }
+      this.setViewedWorkflowId(clientId, workflowId);
       return;
     }
 
@@ -537,6 +448,7 @@ export class WorkflowOrchestrator {
         `replayWorkflowStateTo: workflowId "${workflowId.slice(0, 8)}" not found`
       );
     }
+    this.setViewedWorkflowId(clientId, workflowId);
   }
 
   /** Return summaries without exposing WorkflowInstance internals */
@@ -547,18 +459,19 @@ export class WorkflowOrchestrator {
     );
     const summaries = [...vsSummaries, ...cliSummaries];
     Log.trace(
-      `[getWorkflowSummaries] registry has ${this.instances.size} instances + ${this.cliSessions.size} CLI sessions, viewed=${this.vsCodeViewedId?.slice(0, 8) ?? "null"}: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState},fp=${s.filePath ? path.basename(s.filePath) : "?"})`).join(", ") || "(none)"}`
+      `[getWorkflowSummaries] registry has ${this.instances.size} instances + ${this.cliSessions.size} CLI sessions, viewed=${this.getViewedWorkflowId(this.PANEL_CLIENT_ID)?.slice(0, 8) ?? "null"}: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState},fp=${s.filePath ? path.basename(s.filePath) : "?"})`).join(", ") || "(none)"}`
     );
     return summaries;
   }
 
   /**
    * Load a working file for a specific browser client without changing the VS Code
-   * sidebar's active view (vsCodeViewedId). Used by LOAD_WORKFLOW from external clients.
+   * sidebar's active view. Used by LOAD_WORKFLOW from external clients.
    */
   async loadWorkflowForClient(
     filePath: string,
-    send: (message: unknown) => void
+    send: (message: unknown) => void,
+    clientId: string
   ): Promise<void> {
     // Parse working file path to get workflowId (used for CLI session lookup)
     const workflowId = path
@@ -568,7 +481,7 @@ export class WorkflowOrchestrator {
     // Check for CLI-managed session first
     const cliEntry = this.cliSessions.get(workflowId);
     if (cliEntry) {
-      await this.replayWorkflowStateTo(workflowId, send);
+      await this.replayWorkflowStateTo(workflowId, send, clientId);
       return;
     }
 
@@ -577,15 +490,15 @@ export class WorkflowOrchestrator {
       (w) => w.getSummary().workingFilePath === filePath
     );
     if (existing) {
-      await this.replayWorkflowStateTo(existing.id, send);
+      await this.replayWorkflowStateTo(existing.id, send, clientId);
       return;
     }
 
-    // Not in registry — load file without touching vsCodeViewedId
+    // Not in registry — load file without touching the panel's viewed workflow
     const instance = this.buildWorkflowInstance();
     this.instances.set(instance.id, instance);
     await instance.loadWorkingFile(filePath);
-    await this.replayWorkflowStateTo(instance.id, send);
+    await this.replayWorkflowStateTo(instance.id, send, clientId);
   }
 
   /**
@@ -710,27 +623,32 @@ export class WorkflowOrchestrator {
     }
   }
 
-  async setDashboardReady(): Promise<void> {
+  async setDashboardReady(panelSend?: (msg: unknown) => void): Promise<void> {
     Log.info("✅ Dashboard is ready");
     this.dashboardReady = true;
 
-    // Re-hydrate on every READY (handles webview reloads and panels opened after
-    // workflow creation, where the original ACTIVE_WORKFLOW_CHANGED was dropped
-    // because postMessage no-ops when the view is not yet visible).
-    const viewed = this.vsCodeViewedId
-      ? (this.instances.get(this.vsCodeViewedId) ??
-        this.vsCodeViewedRetiredInstance)
-      : null;
-    if (viewed) {
-      viewed.sendFullStateToDashboard();
-      this.dashboardBroadcastHub.notifyActiveWorkflowChanged(viewed.id);
-      // Re-send run history count so newly connected clients (browser) see the
-      // RunSelector without waiting for the next setActiveWorkflow call.
-      viewed
-        .sendRunHistoryToDashboard()
-        .catch((err) =>
-          Log.warn(`setDashboardReady: failed to send run history: ${err}`)
-        );
+    if (panelSend) {
+      this.storedPanelSend = panelSend;
+      // Re-hydrate via targeted replay to the panel (handles webview reloads).
+      const viewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+      if (viewedId) {
+        await this.replayWorkflowStateTo(viewedId, panelSend, this.PANEL_CLIENT_ID);
+      }
+    } else {
+      // Fallback path when the panel send function is not available (e.g. during tests
+      // or before the webview mounts). Re-send run history so any already-connected
+      // browser clients see the RunSelector on reconnect.
+      const panelId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+      const viewed = panelId
+        ? (this.instances.get(panelId) ?? this.retiredInstances.get(panelId))
+        : null;
+      if (viewed) {
+        viewed
+          .sendRunHistoryToDashboard()
+          .catch((err) =>
+            Log.warn(`setDashboardReady: failed to send run history: ${err}`)
+          );
+      }
     }
 
     if (this.orchestratorInitialized) {
@@ -780,12 +698,15 @@ export class WorkflowOrchestrator {
           await this.getActiveInstance().autoLoadFromWorkingFile(
             workingFilePath
           );
-          // Tell the webview which instance UUID is now active. Without this,
+          // Tell the panel which instance UUID is now active. Without this,
           // activeWorkflowId stays null and PTY terminal sessions spawned later
           // (e.g. append-to-completed runs) are stored under the real UUID but
           // TerminalView looks up sessions under null/"_shell" — no match.
           const instance = this.getActiveInstance();
-          this.dashboardBroadcastHub.notifyActiveWorkflowChanged(instance.id);
+          this.storedPanelSend?.({
+            type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
+            workflowId: instance.id,
+          });
           await this.dashboardBroadcastHub.loadOutputHistoryForWorkflow(
             workingFilePath
           );
@@ -813,11 +734,11 @@ export class WorkflowOrchestrator {
     modeOverride?: Harness,
     continueFromCurrent?: boolean
   ): Promise<void> {
+    const panelViewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
     const instance = workflowId
       ? this.instances.get(workflowId)
-      : this.vsCodeViewedId
-        ? (this.instances.get(this.vsCodeViewedId) ??
-          this.vsCodeViewedRetiredInstance)
+      : panelViewedId
+        ? (this.instances.get(panelViewedId) ?? this.retiredInstances.get(panelViewedId))
         : null;
 
     if (!instance) {
@@ -860,30 +781,14 @@ export class WorkflowOrchestrator {
     modeOverride?: Harness
   ): Promise<void> {
     // Phase 2: load into a new instance (same as loadPromptFile), then execute.
-    // This keeps the two operations DRY — executePromptFile = loadPromptFile + executeWorkflow.
-    // Previously this called getActiveInstance().executePromptFile() which would
-    // clear the active instance's queue (even if it was a running workflow) and
-    // load the new file into it — stomping on parallel workflows.
     Log.debug(
       `executePromptFile: loading "${path.basename(filePath)}" into new instance ` +
         `(${this.instances.size} workflow(s) currently in registry)`
     );
-    const instance = await this.createWorkflow(filePath);
-    if (!instance) {
-      return;
-    }
-    // Guard: if createWorkflow switched to an already-running/paused duplicate,
-    // don't re-execute it — the user just wanted to view it.
-    const status = instance.getQueueState().status;
-    if (
-      status === EXECUTION_STATES.RUNNING ||
-      status === EXECUTION_STATES.PAUSED
-    ) {
-      Log.debug(
-        `executePromptFile: switched to existing ${status} workflow inst:${instance.id.slice(0, 8)}, skipping re-execution`
-      );
-      return;
-    }
+    const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
+    await this.createWorkflowForClient(panelSend, this.PANEL_CLIENT_ID);
+    const instance = this.getActiveInstance();
+    await instance.loadPromptFile(filePath);
     return this.executeWorkflow(undefined, modeOverride);
   }
 
@@ -999,10 +904,24 @@ export class WorkflowOrchestrator {
     await this.createWorkflow();
   }
 
-  async createWorkflowForClient(send: (msg: unknown) => void): Promise<void> {
+  async createWorkflowForClient(send: (msg: unknown) => void, clientId: string): Promise<void> {
     const instance = this.buildWorkflowInstance();
     this.instances.set(instance.id, instance);
-    await this.replayWorkflowStateTo(instance.id, send);
+    await this.replayWorkflowStateTo(instance.id, send, clientId);
+  }
+
+  /**
+   * Unified client-ready handler: registers the client, replays the workflow
+   * state if one was previously viewed, and sends the current workflows list.
+   * Called for both the VS Code panel and browser WebSocket clients.
+   */
+  async handleClientReady(clientId: string, send: (msg: unknown) => void): Promise<void> {
+    this.registerClient(clientId);
+    const viewedId = this.getViewedWorkflowId(clientId);
+    if (viewedId) {
+      await this.replayWorkflowStateTo(viewedId, send, clientId);
+    }
+    send({ type: MESSAGE_TYPES.WORKFLOWS_LIST, workflows: this.getWorkflowSummaries() });
   }
 
   getQueueState(): QueueState {
@@ -1018,9 +937,9 @@ export class WorkflowOrchestrator {
    * Returns null if no instance exists yet.
    */
   getActivePromptQueue(): PromptQueue | null {
-    const viewed = this.vsCodeViewedId
-      ? (this.instances.get(this.vsCodeViewedId) ??
-        this.vsCodeViewedRetiredInstance)
+    const id = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+    const viewed = id
+      ? (this.instances.get(id) ?? this.retiredInstances.get(id))
       : null;
     return viewed?.promptQueue ?? null;
   }
@@ -1040,7 +959,7 @@ export class WorkflowOrchestrator {
       Log.debug(
         `loadWorkingFile: "${workflowId}" is CLI-managed (session exists) — switching view`
       );
-      this.dashboardBroadcastHub.notifyActiveWorkflowChanged(workflowId);
+      this.storedPanelSend?.({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
       this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(
         existingCliEntry.summary
       );
@@ -1061,7 +980,8 @@ export class WorkflowOrchestrator {
     }
 
     // Phase 2: loading a working file creates a new instance alongside any running ones
-    await this.createWorkflow();
+    const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
+    await this.createWorkflowForClient(panelSend, this.PANEL_CLIENT_ID);
     await this.getActiveInstance().loadWorkingFile(filePath);
     await this.dashboardBroadcastHub.loadOutputHistoryForWorkflow(filePath);
   }
@@ -1198,7 +1118,8 @@ export class WorkflowOrchestrator {
       if (selected) {
         try {
           // Create a fresh instance so the resumed workflow is parallel to any running ones
-          await this.createWorkflow();
+          const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
+          await this.createWorkflowForClient(panelSend, this.PANEL_CLIENT_ID);
           await this.getActiveInstance().restoreWorkflowFromWorkingFile(
             selected.filePath
           );
@@ -1245,11 +1166,17 @@ export class WorkflowOrchestrator {
       instance.setCurrentPromptFile(result.filePath, { steps: [] });
       instance.initializeFileWatcher(result.filePath);
 
-      await this.dashboardBroadcastHub.updateFileSelected(
-        result.fileName,
-        [],
-        undefined
-      );
+      // Notify the panel about the new draft file via a targeted FILE_SELECTED message.
+      this.storedPanelSend?.({
+        type: MESSAGE_TYPES.FILE_SELECTED,
+        fileName: result.fileName,
+        steps: [],
+        workflowName: undefined,
+        finalStep: null,
+        finalStepStatus: null,
+        finalStepLoopCount: 0,
+        finalStepPhase: null,
+      });
     }
   }
 
@@ -1286,12 +1213,12 @@ export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
 
   dispose(): void {
-    // Dispose vsCodeViewedRetiredInstance if held (completed/stopped, not in map)
-    if (this.vsCodeViewedRetiredInstance) {
-      this.vsCodeViewedRetiredInstance.dispose();
-      this.vsCodeViewedRetiredInstance = null;
+    // Dispose all retired instances (completed/stopped, not in main map)
+    for (const instance of this.retiredInstances.values()) {
+      instance.dispose();
     }
-    this.vsCodeViewedId = null;
+    this.retiredInstances.clear();
+    this.setViewedWorkflowId(this.PANEL_CLIENT_ID, null);
 
     for (const instance of this.instances.values()) {
       instance.dispose();
@@ -1320,18 +1247,67 @@ export class WorkflowOrchestrator {
    * Get the active WorkflowInstance, creating one if none exists yet.
    */
   private getActiveInstance(): WorkflowInstance {
-    if (this.vsCodeViewedId) {
-      const inst =
-        this.instances.get(this.vsCodeViewedId) ??
-        this.vsCodeViewedRetiredInstance;
+    const id = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+    if (id) {
+      const inst = this.instances.get(id) ?? this.retiredInstances.get(id);
       if (inst) return inst;
     }
 
     // Lazily create the initial viewed instance
     const instance = this.buildWorkflowInstance();
-    this.vsCodeViewedId = instance.id;
+    this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
     this.instances.set(instance.id, instance);
     return instance;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Per-client viewer registry helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  private getViewedWorkflowId(clientId: string): string | null {
+    return this.viewerRegistry.get(clientId) ?? null;
+  }
+
+  private setViewedWorkflowId(clientId: string, workflowId: string | null): void {
+    this.viewerRegistry.set(clientId, workflowId);
+  }
+
+  private isWorkflowViewedByAnyClient(workflowId: string): boolean {
+    for (const viewed of this.viewerRegistry.values()) {
+      if (viewed === workflowId) return true;
+    }
+    return false;
+  }
+
+  registerClient(clientId: string): void {
+    if (!this.viewerRegistry.has(clientId)) {
+      this.viewerRegistry.set(clientId, null);
+    }
+  }
+
+  unregisterClient(clientId: string): void {
+    const workflowId = this.getViewedWorkflowId(clientId);
+    this.viewerRegistry.delete(clientId);
+
+    if (!workflowId) return;
+
+    // If the workflow is in retiredInstances and no other client views it, dispose and remove
+    if (this.retiredInstances.has(workflowId) && !this.isWorkflowViewedByAnyClient(workflowId)) {
+      this.retiredInstances.get(workflowId)?.dispose();
+      this.retiredInstances.delete(workflowId);
+      return;
+    }
+
+    // If the workflow is a live idle instance and no other client views it, dispose and remove
+    const instance = this.instances.get(workflowId);
+    if (instance && !this.isWorkflowViewedByAnyClient(workflowId)) {
+      const status = instance.getQueueState().status;
+      const isIdle = status !== EXECUTION_STATES.RUNNING && status !== EXECUTION_STATES.PAUSED;
+      if (isIdle) {
+        instance.dispose();
+        this.instances.delete(workflowId);
+      }
+    }
   }
 
   /**
