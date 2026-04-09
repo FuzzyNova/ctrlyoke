@@ -121,12 +121,13 @@ export {
   type McpRegistryResultMessage,
 } from "@root/types/WebviewMessageTypes";
 
-// Re-export WorkflowSummary, PriorContext, McpServerConfig, ToolPermissionsOverride, and helpers from FlightPathTypes
+// Re-export WorkflowSummary, PriorContext, McpServerConfig, ToolPermissionsOverride, PreCondition, and helpers from FlightPathTypes
 export type {
   WorkflowSummary,
   PriorContext,
   McpServerConfig,
   ToolPermissionsOverride,
+  PreCondition,
   ToolPermissionMode,
 } from "@root/types/FlightPathTypes";
 export { workflowDisplayStep } from "@root/types/FlightPathTypes";

@@ -28,6 +28,9 @@ import {
 import type {
   WorkflowSummary,
   McpServerConfig,
+  PreCondition,
+  PriorContext,
+  ToolPermissionsOverride,
   UserHookConfig,
   WorkflowStep,
 } from "./FlightPathTypes";
@@ -65,11 +68,12 @@ export {
   type ActionType,
 } from "./DashboardConstants";
 
-// Re-export WorkflowSummary and WorkflowStep for webview consumers
+// Re-export WorkflowSummary, WorkflowStep, and PreCondition for webview consumers
 export type {
   WorkflowSummary,
   WorkflowStep,
   ScriptStep,
+  PreCondition,
 } from "./FlightPathTypes";
 
 // ============================================================================
@@ -237,10 +241,10 @@ export interface PromptStep {
   mcpServers?: (string | McpServerConfig)[] | null;
   hooks?: UserHookConfig[] | null;
   endCondition?: EndConditionConfig | null;
-  preCondition?: import("./FlightPathTypes").PreCondition | null;
-  priorContext?: import("./FlightPathTypes").PriorContext;
+  preCondition?: PreCondition | null;
+  priorContext?: PriorContext;
   additionalArgs?: string | null;
-  toolPermissions?: import("./FlightPathTypes").ToolPermissionsOverride | null;
+  toolPermissions?: ToolPermissionsOverride | null;
   _runtime?: {
     harness?: string;
     model?: string;

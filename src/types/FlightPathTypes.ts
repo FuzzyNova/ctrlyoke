@@ -507,7 +507,7 @@ export const workflowDisplayStep = (
  */
 export interface WorkflowRunnerLock {
   /** Which runner created this lock */
-  runner: import("./DashboardConstants").RunnerId;
+  runner: RunnerId;
   /** OS process ID of the runner (Extension Host PID for vscode, CLI process PID for cli) */
   pid: number;
   /** Unix ms timestamp when execution started */

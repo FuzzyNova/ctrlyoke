@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { VsCodeApi } from "../types/vscode";
 import type { PromptStep } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
-import type { PriorContext, ToolPermissionsOverride } from "../types/messages";
+import type { PriorContext, ToolPermissionsOverride, PreCondition } from "../types/messages";
 import type { EndConditionCompareSource } from "../utils/prompt";
 import { FINAL_STEP_PHASES, EDITOR_TARGET_KINDS } from "../types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
@@ -51,7 +51,7 @@ export interface PropertyValues {
   mcpServers: (string | object)[] | null | undefined; // undefined = inherit, null = none, array = custom
   hooks: object[] | null | undefined; // undefined = inherit, null = none, array = custom
   endCondition?: EndConditionConfig | null;
-  preCondition?: import('../../../types/FlightPathTypes').PreCondition | null;
+  preCondition?: PreCondition | null;
   priorContext?: PriorContext; // undefined = inherit/default
   additionalArgs: Disableable<string>; // undefined = inherit, null = none, string = custom args
   toolPermissions?: ToolPermissionsOverride | null; // undefined = inherit workflow, null = none (omit flags), object = override

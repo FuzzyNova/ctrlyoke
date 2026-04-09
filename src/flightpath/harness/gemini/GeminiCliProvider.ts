@@ -407,7 +407,7 @@ export class GeminiCliProvider implements ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServers?: import("../../../types/FlightPathTypes").McpServerConfig[]
+    userServers?: McpServerConfig[]
   ): Promise<string[] | null> {
     if (!mcpServerPath && (!userServers || userServers.length === 0)) {
       return null;

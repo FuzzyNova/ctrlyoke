@@ -25,7 +25,12 @@ import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 import { parseArgString } from "../../../utils/CliArgParser";
-import type { PromptStep, WorkflowStep, UserHookConfig } from "../../../types/FlightPathTypes";
+import type {
+  PromptStep,
+  WorkflowStep,
+  McpServerConfig,
+  UserHookConfig,
+} from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 const execAsync = promisify(exec);
@@ -482,7 +487,7 @@ export class CodexCliProvider implements ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    _userServers?: import("../../../types/FlightPathTypes").McpServerConfig[]
+    _userServers?: McpServerConfig[]
   ): Promise<string[] | null> {
     // Codex uses inline TOML format which only supports the FlightPath server
     if (!mcpServerPath) {

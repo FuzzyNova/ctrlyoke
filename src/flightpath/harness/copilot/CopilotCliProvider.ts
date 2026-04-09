@@ -33,6 +33,7 @@ import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   PromptStep,
   WorkflowStep,
+  McpServerConfig,
   UserHookConfig,
 } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
@@ -489,7 +490,7 @@ export class CopilotCliProvider implements ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServers?: import("../../../types/FlightPathTypes").McpServerConfig[]
+    userServers?: McpServerConfig[]
   ): Promise<string[] | null> {
     try {
       // Generate MCP config JSON using shared utility

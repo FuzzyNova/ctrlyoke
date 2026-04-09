@@ -31,6 +31,7 @@ import type {
   RedoWorkflowChangesMessage,
   UndoRecord,
 } from "../types/WebviewMessageTypes";
+import type { McpServerConfig } from "../types/FlightPathTypes";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import { getPtyProcessManager } from "../flightpath/harness/PtyProcessManager";
 import {
@@ -1291,7 +1292,7 @@ export class WebviewMessageRouter {
               ? history.promptOutputs[target.stepIndex]
               : history.finalStepOutputs?.[target.loopIndex]
           ) as
-            | { undoRecord?: import("../types/OutputHistoryTypes").UndoRecord }
+            | { undoRecord?: UndoRecord }
             | undefined;
           if (stepOutput?.undoRecord) {
             this.emitMessage({
@@ -1541,9 +1542,7 @@ export class WebviewMessageRouter {
     );
   }
 
-  private async loadMcpWorkspaceServers(): Promise<
-    import("../types/FlightPathTypes").McpServerConfig[]
-  > {
+  private async loadMcpWorkspaceServers(): Promise<McpServerConfig[]> {
     const filePath = this.getMcpWorkspaceServersPath();
     if (!filePath) return [];
     try {
@@ -1556,7 +1555,7 @@ export class WebviewMessageRouter {
   }
 
   private async saveMcpWorkspaceServers(
-    servers: import("../types/FlightPathTypes").McpServerConfig[]
+    servers: McpServerConfig[]
   ): Promise<void> {
     const filePath = this.getMcpWorkspaceServersPath();
     if (!filePath) return;

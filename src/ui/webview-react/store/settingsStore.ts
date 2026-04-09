@@ -18,6 +18,7 @@ import {
 } from "@root/types/DashboardConstants";
 import type {
   FullGlobalSettings,
+  PreCondition,
 } from "@root/types/WebviewMessageTypes";
 
 /**
@@ -102,7 +103,7 @@ export interface WorkflowProperties {
     onPass?: string;
     onFail?: string;
   } | null;
-  preCondition?: import("../../../types/FlightPathTypes").PreCondition | null;
+  preCondition?: PreCondition | null;
   priorContext?: PriorContext;
   additionalArgs?: string | null;
   toolPermissions?: {

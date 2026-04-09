@@ -2,7 +2,12 @@ import type { IResponseParser } from "./IResponseParser";
 import type { INotificationMonitor } from "./INotificationMonitor";
 import type { IToolPermissionMapper, ToolPermissionConfig } from "./IToolPermissionMapper";
 import type { ILogParser } from "./ILogParser";
-import type { PromptStep, UserHookConfig, WorkflowStep } from "../../../../types/FlightPathTypes";
+import type {
+  PromptStep,
+  WorkflowStep,
+  McpServerConfig,
+  UserHookConfig,
+} from "../../../../types/FlightPathTypes";
 import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 
 /** Timeout for CLI version-check subprocesses (checkAvailability + getVersion) */
@@ -156,7 +161,7 @@ export interface ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServers?: import("../../../../types/FlightPathTypes").McpServerConfig[]
+    userServers?: McpServerConfig[]
   ): Promise<string[] | null>;
 
   /**

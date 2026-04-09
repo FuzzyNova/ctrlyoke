@@ -11,6 +11,7 @@ import {
   STEP_STATUS,
   WorkflowStep,
   isScriptStep,
+  PromptRuntimeMetadata,
 } from "../types/FlightPathTypes";
 import { PROMPT_TERMINAL_STATUS } from "../types/DashboardConstants";
 
@@ -790,7 +791,7 @@ export class PromptQueue {
    */
   async persistRuntimeMetadata(
     promptIndex: number,
-    updates: Partial<import("../types/FlightPathTypes").PromptRuntimeMetadata>
+    updates: Partial<PromptRuntimeMetadata>
   ): Promise<void> {
     const prompt = this.state.steps[promptIndex];
     if (!prompt) {

@@ -24,6 +24,8 @@ import {
   WorkflowSummary,
   WorkflowRunnerLock,
   UserHookConfig,
+  DynamicQueueConfig,
+  PreCondition,
 } from "../types/FlightPathTypes";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import {
@@ -1918,7 +1920,7 @@ export class WorkflowInstance {
     return ConfigurationUtils.shouldShowCliCommand();
   }
 
-  private getDynamicQueueConfig(): import("../types/FlightPathTypes").DynamicQueueConfig {
+  private getDynamicQueueConfig(): DynamicQueueConfig {
     return ConfigurationUtils.getDynamicQueueConfig();
   }
 
@@ -2565,9 +2567,7 @@ export class WorkflowInstance {
         endCondition: coerce<EndCondition>(props.endCondition),
       }),
       ...(props?.preCondition !== undefined && {
-        preCondition: props.preCondition as
-          | import("../types/FlightPathTypes").PreCondition
-          | null,
+        preCondition: props.preCondition as PreCondition | null,
       }),
       ...(props?.skills !== undefined && {
         skills: props.skills as string[] | null,
