@@ -30,8 +30,12 @@ import type { PromptFile } from "../../types/FlightPathTypes";
 /** Path to the compiled CLI binary */
 const CLI_PATH = path.resolve(__dirname, "../../cli.js");
 
-/** Timeout (ms) for a single harness run */
-const HARNESS_TIMEOUT_MS = 90_000;
+/**
+ * Timeout (ms) for a single harness run.
+ * These are correctness checks, not performance checks — the limit is generous
+ * to avoid flaky SIGTERM kills under API latency spikes.
+ */
+const HARNESS_TIMEOUT_MS = 900_000; // 15 minutes
 
 /** Full set of supported harness IDs (for typed config maps below). */
 type HarnessId =
@@ -165,6 +169,9 @@ function buildWorkflow(harness: HarnessId, recorderScript: string): PromptFile {
 
   return {
     harness: harness as any,
+    // Force full tool permissions so the AI can actually run bash — avoids
+    // harnesses that require interactive approval blocking in headless mode.
+    toolPermissions: { mode: "dangerouslyAllowAll" },
     ...(HARNESS_MODELS[harness] !== undefined && {
       model: HARNESS_MODELS[harness],
     }),
@@ -208,7 +215,6 @@ function runHarness(
       "run",
       workflowFile,
       "--headless",
-      "--verbose",
       "--timeout",
       "60",
       "--var",
@@ -262,8 +268,7 @@ function runHarness(
 // ---------------------------------------------------------------------------
 
 suite("Harness Hook Tests", function () {
-  // These tests spawn real AI CLI processes — generous timeout.
-  this.timeout(HARNESS_TIMEOUT_MS + 10_000);
+  this.timeout(HARNESS_TIMEOUT_MS);
 
   let tmpDir: string;
   let recorderScript: string;
@@ -288,7 +293,7 @@ suite("Harness Hook Tests", function () {
     const h = harness;
 
     test(`${h}: required hooks fire on successful run`, function () {
-      this.timeout(HARNESS_TIMEOUT_MS + 5_000);
+      this.timeout(HARNESS_TIMEOUT_MS);
 
       const { skipped, exitCode, stdout, stderr, records } = runHarness(
         h,
@@ -300,14 +305,6 @@ suite("Harness Hook Tests", function () {
         console.log(`  ⚠  ${h} — SKIPPED (not installed)`);
         return; // Mocha doesn't have a built-in skip in TDD mode; just return
       }
-
-      // Always show CLI output for visibility
-      console.log(
-        `  --- stdout (${stdout.length} bytes) ---\n${stdout.trimEnd() || "(empty)"}\n  ---`
-      );
-      console.log(
-        `  --- stderr (${stderr.length} bytes) ---\n${stderr.trimEnd() || "(empty)"}\n  ---`
-      );
 
       const firedEvents = new Set(records.map((r) => r.event));
 

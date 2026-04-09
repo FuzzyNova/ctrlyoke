@@ -40,16 +40,19 @@ import {
 // Test scope: harnesses that support the free-tier models we need
 // ---------------------------------------------------------------------------
 
-type TestHarnessId = "copilot-cli" | "opencode-cli";
+type TestHarnessId = "copilot-cli";
 
-const MULTI_STEP_HARNESSES: TestHarnessId[] = ["copilot-cli", "opencode-cli"];
+// opencode-cli excluded: big-pickle model responds without tool use, so it cannot
+// reliably execute bash commands. Only harnesses with proven tool-execution
+// capability belong here.
+const MULTI_STEP_HARNESSES: TestHarnessId[] = ["copilot-cli"];
 
 // ---------------------------------------------------------------------------
 // Suite
 // ---------------------------------------------------------------------------
 
 suite("Workflow Feature Harness Tests", function () {
-  this.timeout(HARNESS_TIMEOUT_MS + 10_000);
+  this.timeout(HARNESS_TIMEOUT_MS);
 
   let tmpDir: string;
   let fileCheckScript: string;
@@ -87,7 +90,7 @@ suite("Workflow Feature Harness Tests", function () {
     const h = harness;
 
     test(`${h}: multi-step workflow runs both steps in sequence`, function () {
-      this.timeout(HARNESS_TIMEOUT_MS + 5_000);
+      this.timeout(HARNESS_TIMEOUT_MS);
 
       const step1File = path.join(tmpDir, `${h}-seq-step1.txt`);
       const step2File = path.join(tmpDir, `${h}-seq-step2.txt`);
@@ -153,7 +156,7 @@ suite("Workflow Feature Harness Tests", function () {
     const h = harness;
 
     test(`${h}: end condition passes on first attempt`, function () {
-      this.timeout(HARNESS_TIMEOUT_MS + 5_000);
+      this.timeout(HARNESS_TIMEOUT_MS);
 
       const outputFile = path.join(tmpDir, `${h}-end-cond.txt`);
 
@@ -211,7 +214,7 @@ suite("Workflow Feature Harness Tests", function () {
   // -------------------------------------------------------------------------
 
   test("copilot-cli: end condition retries once then passes", function () {
-    this.timeout(HARNESS_TIMEOUT_MS * 2 + 5_000); // two LLM calls
+    this.timeout(HARNESS_TIMEOUT_MS);
 
     const counterFile = path.join(tmpDir, "retry-counter.txt");
     const retryMarker = path.join(tmpDir, "copilot-retry-marker.txt");

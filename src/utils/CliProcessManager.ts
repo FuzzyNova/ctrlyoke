@@ -67,9 +67,19 @@ export class CliProcessManager {
 
       this.logger?.(`📤 Spawning: ${command} ${args.join(" ")}`);
 
-      const child = spawn(command, args, {
+      // When using a shell, concatenate command + args into a single string.
+      // Node.js DEP0190 warns when args is non-empty with shell:true because the
+      // shell concatenates them anyway without escaping.  Doing it explicitly here
+      // produces identical behavior and suppresses the warning.
+      const shellMode = options.shell ?? true;
+      const [resolvedCmd, resolvedArgs] =
+        shellMode && args.length > 0
+          ? [`${command} ${args.join(" ")}`, [] as string[]]
+          : [command, args];
+
+      const child = spawn(resolvedCmd, resolvedArgs, {
         cwd: options.cwd || this.workspaceRoot,
-        shell: options.shell ?? true, // Default to true for PATH resolution
+        shell: shellMode,
         stdio: ["ignore", "pipe", "pipe"],
         env: options.env || { ...process.env },
       });
@@ -154,7 +164,9 @@ export class CliProcessManager {
       let stderr = "";
       let settled = false;
 
-      const child = spawn(command, args, {
+      // Same DEP0190 workaround: concatenate when using shell (see spawn() above).
+      const resolvedSimpleCmd = args.length > 0 ? `${command} ${args.join(" ")}` : command;
+      const child = spawn(resolvedSimpleCmd, [], {
         cwd: this.workspaceRoot,
         shell: true,
         env: { ...process.env },

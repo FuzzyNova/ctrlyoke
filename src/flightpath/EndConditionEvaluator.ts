@@ -449,31 +449,40 @@ export class EndConditionEvaluator {
       return true;
     }
 
-    // Boolean interpretation — exit code takes precedence over stdout
+    // Boolean interpretation — explicit stdout output takes priority; exit code is the fallback.
+    // This prevents a script that explicitly prints "false" from being treated as passing
+    // just because it exited cleanly (exit code 0).
+    const isExplicitTrue =
+      actual === "true" ||
+      actual === "1" ||
+      actual === "yes" ||
+      actual === "pass" ||
+      actual === "passed";
+    const isExplicitFalse =
+      actual === "false" ||
+      actual === "0" ||
+      actual === "no" ||
+      actual === "fail" ||
+      actual === "failed";
+
     if (expected === "true") {
+      if (isExplicitFalse) return false; // Explicit "false" stdout overrides exit code
+      if (isExplicitTrue) return true; // Explicit "true" stdout (already caught by exact match above, kept for clarity)
+      // No explicit boolean output — fall back to exit code
       if (exitCode !== undefined) {
         return exitCode === 0;
       }
-      return (
-        actual === "true" ||
-        actual === "1" ||
-        actual === "yes" ||
-        actual === "pass" ||
-        actual === "passed"
-      );
+      return false;
     }
 
     if (expected === "false") {
+      if (isExplicitTrue) return false; // Explicit "true" stdout overrides exit code
+      if (isExplicitFalse) return true; // Explicit "false" stdout
+      // No explicit boolean output — fall back to exit code
       if (exitCode !== undefined) {
         return exitCode !== 0;
       }
-      return (
-        actual === "false" ||
-        actual === "0" ||
-        actual === "no" ||
-        actual === "fail" ||
-        actual === "failed"
-      );
+      return false;
     }
 
     // Numeric comparison

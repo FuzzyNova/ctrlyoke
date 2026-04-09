@@ -19,8 +19,17 @@ import type { PromptFile } from "../../../types/FlightPathTypes";
 /** Path to the compiled CLI binary (resolved relative to the compiled output). */
 export const CLI_PATH = path.resolve(__dirname, "../../../cli.js");
 
-/** Default per-harness timeout in ms.  Individual tests may override. */
-export const HARNESS_TIMEOUT_MS = 90_000;
+/**
+ * Per-harness wall-clock timeout in ms.
+ *
+ * These tests exercise real AI CLI processes end-to-end — they are correctness
+ * checks, not performance checks.  Copilot-cli can take 90-120 s per LLM call
+ * and multi-step / retry / MCP workflows involve two calls.  The generous limit
+ * avoids flaky SIGTERM kills without any need for per-test multipliers.
+ *
+ * Total suite wall time is typically 10-15 minutes.
+ */
+export const HARNESS_TIMEOUT_MS = 900_000; // 15 minutes
 
 /** Supported harness IDs (mirrors the Harness enum string values). */
 export type HarnessId =
@@ -65,16 +74,18 @@ export interface RunResult {
 /**
  * Serialise `workflow` to disk then invoke the FlightPath CLI in headless mode.
  *
- * @param workflow  PromptFile object to execute.
- * @param tmpDir    Working directory for the run; workflow JSON is written here.
- * @param label     Short identifier used for the workflow filename (no spaces).
- * @param vars      Optional `--var key=value` pairs forwarded to the CLI.
+ * @param workflow   PromptFile object to execute.
+ * @param tmpDir     Working directory for the run; workflow JSON is written here.
+ * @param label      Short identifier used for the workflow filename (no spaces).
+ * @param vars       Optional `--var key=value` pairs forwarded to the CLI.
+ * @param timeoutMs  spawnSync wall-clock timeout in ms (default: HARNESS_TIMEOUT_MS).
  */
 export function runWorkflowFile(
   workflow: PromptFile,
   tmpDir: string,
   label: string,
-  vars?: Record<string, string>
+  vars?: Record<string, string>,
+  timeoutMs: number = HARNESS_TIMEOUT_MS
 ): RunResult {
   const workflowFile = path.join(tmpDir, `${label}-test.flightpath.json`);
   fs.writeFileSync(workflowFile, JSON.stringify(workflow, null, 2));
@@ -91,14 +102,13 @@ export function runWorkflowFile(
       "run",
       workflowFile,
       "--headless",
-      "--verbose",
       "--timeout",
       "60",
       ...varArgs,
     ],
     {
       encoding: "utf8",
-      timeout: HARNESS_TIMEOUT_MS,
+      timeout: timeoutMs,
       cwd: tmpDir,
     }
   );
@@ -116,20 +126,17 @@ export function runWorkflowFile(
 // ---------------------------------------------------------------------------
 
 /**
- * Log CLI output to the Mocha reporter and return whether the test should
- * be skipped.  Returns `true` when the harness was not installed (exit 3).
+ * Handle skip detection and return whether the test should be skipped.
+ * Returns `true` when the harness was not installed (exit 3).
+ *
+ * stdout/stderr are intentionally NOT printed here — they are included in
+ * assertion error messages so they only appear when a test actually fails.
  */
 export function logAndMaybeSkip(label: string, result: RunResult): boolean {
   if (result.skipped) {
     console.log(`  ⚠  ${label} — SKIPPED (not installed)`);
     return true;
   }
-  console.log(
-    `  --- stdout (${result.stdout.length} bytes) ---\n${result.stdout.trimEnd() || "(empty)"}\n  ---`
-  );
-  console.log(
-    `  --- stderr (${result.stderr.length} bytes) ---\n${result.stderr.trimEnd() || "(empty)"}\n  ---`
-  );
   return false;
 }
 

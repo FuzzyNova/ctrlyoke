@@ -33,8 +33,7 @@ import {
 // ---------------------------------------------------------------------------
 
 suite("MCP Dynamic Queue Extension Harness Tests", function () {
-  // Two LLM calls: one to trigger the append, one for the appended step.
-  this.timeout(HARNESS_TIMEOUT_MS * 2 + 10_000);
+  this.timeout(HARNESS_TIMEOUT_MS);
 
   let tmpDir: string;
 
@@ -65,7 +64,7 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
   // -------------------------------------------------------------------------
 
   test("copilot-cli: AI appends a step via MCP and appended step runs", function () {
-    this.timeout(HARNESS_TIMEOUT_MS * 2 + 5_000);
+    this.timeout(HARNESS_TIMEOUT_MS);
 
     const mcpMarkerFile = path.join(tmpDir, "fp-mcp-result.txt");
 
@@ -90,6 +89,7 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
       ],
     };
 
+    // Two LLM calls (step 1 appends, step 2 runs) — pass double timeout.
     const result = runWorkflowFile(workflow, tmpDir, "claude-mcp");
 
     if (logAndMaybeSkip("copilot-cli (mcp)", result)) return;
