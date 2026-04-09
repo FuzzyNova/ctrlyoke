@@ -32,7 +32,10 @@ import { saveIfDirty } from "./utils/FileSystemUtils";
 import { getErrorMessage } from "./utils/ErrorUtils";
 import { WorkspaceInitializer } from "./flightpath/orchestration/WorkspaceInitializer";
 import { PATH_CONSTANTS } from "./utils/ConfigurationUtils";
-import { initPtyProcessManager } from "./flightpath/harness/PtyProcessManager";
+import {
+  initPtyProcessManager,
+  setPtyPostMessage,
+} from "./flightpath/harness/PtyProcessManager";
 import { FlightPathMcpServerProvider } from "./ui/FlightPathMcpServerProvider";
 import { configService } from "./config/FlightPathConfigService";
 import {
@@ -328,7 +331,9 @@ export async function activate(context: vscode.ExtensionContext) {
     if (workspaceFolders && workspaceFolders.length > 0) {
       const workspaceConfigBackend = createWorkspaceConfigBackend(
         workspaceFolders[0].uri.fsPath,
-        () => { configService.notify(); }
+        () => {
+          configService.notify();
+        }
       );
       configService.setWorkspaceBackend(workspaceConfigBackend);
     }
@@ -358,6 +363,14 @@ export async function activate(context: vscode.ExtensionContext) {
     webviewProvider.setWorkflowOrchestrator(workflowOrchestrator);
     // Give the provider the hub so config-change broadcasts reach browser tabs too
     webviewProvider.setHub(workflowOrchestrator.getDashboardBroadcastHub());
+
+    // Upgrade PTY postMessage to broadcast terminal messages to all connected clients
+    // (panel + browser tabs). initPtyProcessManager only had the panel reference; now
+    // that the hub exists we redirect through it so browser tabs receive TERMINAL_STARTED,
+    // TERMINAL_OUTPUT, and TERMINAL_ENDED in real-time.
+    setPtyPostMessage((msg) =>
+      workflowOrchestrator.getDashboardBroadcastHub().postMessage(msg)
+    );
 
     // Share OutputHistoryManager with webview provider (single instance)
     webviewProvider.setOutputHistoryManager(

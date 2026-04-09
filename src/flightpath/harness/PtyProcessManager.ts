@@ -1,7 +1,12 @@
 import { execSync } from "child_process";
 import type { IPty } from "node-pty";
 import { Log } from "../../utils/Log";
-import { SESSION_KINDS, TERMINAL_SESSION_STATUS, type SessionKind, type TerminalSessionStatus } from "../../types/DashboardConstants";
+import {
+  SESSION_KINDS,
+  TERMINAL_SESSION_STATUS,
+  type SessionKind,
+  type TerminalSessionStatus,
+} from "../../types/DashboardConstants";
 
 type NodePtyModule = typeof import("node-pty");
 
@@ -195,7 +200,10 @@ export class PtyProcessManager {
     });
 
     ptyInstance.onExit(({ exitCode }: { exitCode: number }) => {
-      session.status = exitCode === 0 ? TERMINAL_SESSION_STATUS.COMPLETED : TERMINAL_SESSION_STATUS.FAILED;
+      session.status =
+        exitCode === 0
+          ? TERMINAL_SESSION_STATUS.COMPLETED
+          : TERMINAL_SESSION_STATUS.FAILED;
       this.sessions.delete(sessionId);
       options.onExit(session, exitCode ?? 1);
       Log.debug(
@@ -366,4 +374,14 @@ export function getPtyProcessManager(): PtyProcessManager | null {
  */
 export function ptyPostMessage(msg: unknown): void {
   _postMessage?.(msg);
+}
+
+/**
+ * Update the PTY postMessage callback without recreating the singleton.
+ * Called from extension.ts after the DashboardBroadcastHub is available so
+ * terminal messages are broadcast to all connected clients (panel + browser tabs)
+ * instead of only the VS Code panel webview.
+ */
+export function setPtyPostMessage(postMessage: (msg: unknown) => void): void {
+  _postMessage = postMessage;
 }

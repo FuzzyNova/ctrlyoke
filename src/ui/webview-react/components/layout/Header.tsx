@@ -152,21 +152,49 @@ export const Header: React.FC<{
   // Handlers
   const handleRun = useCallback(() => {
     if (!canRun) return;
-    vscode.postMessage({ type: MESSAGE_TYPES.RUN });
-  }, [vscode, canRun]);
+    if (activeWorkflowId) {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.RUN_WORKFLOW,
+        workflowId: activeWorkflowId,
+      });
+    } else {
+      vscode.postMessage({ type: MESSAGE_TYPES.RUN });
+    }
+  }, [vscode, canRun, activeWorkflowId]);
 
   const handlePauseResume = useCallback(() => {
     if (isPaused || isStopped) {
-      vscode.postMessage({ type: MESSAGE_TYPES.RESUME });
+      if (activeWorkflowId) {
+        vscode.postMessage({
+          type: MESSAGE_TYPES.RESUME_WORKFLOW,
+          workflowId: activeWorkflowId,
+        });
+      } else {
+        vscode.postMessage({ type: MESSAGE_TYPES.RESUME });
+      }
     } else if (canPause) {
-      vscode.postMessage({ type: MESSAGE_TYPES.PAUSE });
+      if (activeWorkflowId) {
+        vscode.postMessage({
+          type: MESSAGE_TYPES.PAUSE_WORKFLOW,
+          workflowId: activeWorkflowId,
+        });
+      } else {
+        vscode.postMessage({ type: MESSAGE_TYPES.PAUSE });
+      }
     }
-  }, [vscode, isPaused, isStopped, canPause]);
+  }, [vscode, isPaused, isStopped, canPause, activeWorkflowId]);
 
   const handleStop = useCallback(() => {
     if (!canStop) return;
-    vscode.postMessage({ type: MESSAGE_TYPES.STOP });
-  }, [vscode, canStop]);
+    if (activeWorkflowId) {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.STOP_WORKFLOW,
+        workflowId: activeWorkflowId,
+      });
+    } else {
+      vscode.postMessage({ type: MESSAGE_TYPES.STOP });
+    }
+  }, [vscode, canStop, activeWorkflowId]);
 
   const handleUndoRedoAction = useCallback(
     (

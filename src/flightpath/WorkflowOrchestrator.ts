@@ -280,7 +280,11 @@ export class WorkflowOrchestrator {
           );
           if (choice === "Switch to Existing" || choice === undefined) {
             const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
-            await this.replayWorkflowStateTo(existing.id, panelSend, this.PANEL_CLIENT_ID);
+            await this.replayWorkflowStateTo(
+              existing.id,
+              panelSend,
+              this.PANEL_CLIENT_ID
+            );
             return existing;
           }
           // Fall through to create new instance
@@ -289,7 +293,9 @@ export class WorkflowOrchestrator {
     }
 
     // Dispose/deactivate the current panel-viewed instance if applicable
-    const retiredInstance = currentPanelId ? this.retiredInstances.get(currentPanelId) : null;
+    const retiredInstance = currentPanelId
+      ? this.retiredInstances.get(currentPanelId)
+      : null;
     const currentViewed = currentPanelId
       ? (this.instances.get(currentPanelId) ?? retiredInstance)
       : null;
@@ -329,7 +335,11 @@ export class WorkflowOrchestrator {
     // then SESSION_RESTORED with current state). If the panel is not yet connected, it will
     // receive the state when it connects via the READY → handleClientReady path.
     if (this.storedPanelSend) {
-      await this.replayWorkflowStateTo(instance.id, this.storedPanelSend, this.PANEL_CLIENT_ID);
+      await this.replayWorkflowStateTo(
+        instance.id,
+        this.storedPanelSend,
+        this.PANEL_CLIENT_ID
+      );
     }
 
     return instance;
@@ -387,7 +397,9 @@ export class WorkflowOrchestrator {
   getActiveWorkflow(): WorkflowInstance | undefined {
     const id = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
     if (id) {
-      return this.instances.get(id) ?? this.retiredInstances.get(id) ?? undefined;
+      return (
+        this.instances.get(id) ?? this.retiredInstances.get(id) ?? undefined
+      );
     }
     return undefined;
   }
@@ -415,8 +427,11 @@ export class WorkflowOrchestrator {
       instance.replayFullStateTo(sink);
       await instance.replayRunHistoryTo(sink);
       await instance.replayOutputHistoryTo(send);
-      // Send viewer-only terminal sessions so browser clients show a placeholder
-      // instead of a blank terminal panel or a broken xterm.
+      // Send active terminal sessions to the connecting client so it can render
+      // the live terminal. Follow with the reconnect buffer so the client sees
+      // previous output immediately — the same pattern used for panel reconnection
+      // in the READY handler. Live TERMINAL_OUTPUT from the hub will continue to
+      // arrive after this replay completes.
       const ptyManager = getPtyProcessManager();
       if (ptyManager) {
         for (const session of ptyManager.getSessionsForWorkflow(workflowId)) {
@@ -427,8 +442,15 @@ export class WorkflowOrchestrator {
             stepName: session.stepName,
             kind: session.kind,
             promptNumber: session.promptNumber,
-            viewerOnly: true,
           });
+          for (const chunk of session.reconnectBuffer) {
+            send({
+              type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+              workflowId: session.workflowId,
+              sessionId: session.id,
+              data: chunk,
+            });
+          }
         }
       }
       this.setViewedWorkflowId(clientId, workflowId);
@@ -632,7 +654,11 @@ export class WorkflowOrchestrator {
       // Re-hydrate via targeted replay to the panel (handles webview reloads).
       const viewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
       if (viewedId) {
-        await this.replayWorkflowStateTo(viewedId, panelSend, this.PANEL_CLIENT_ID);
+        await this.replayWorkflowStateTo(
+          viewedId,
+          panelSend,
+          this.PANEL_CLIENT_ID
+        );
       }
     } else {
       // Fallback path when the panel send function is not available (e.g. during tests
@@ -740,7 +766,8 @@ export class WorkflowOrchestrator {
     const instance = workflowId
       ? this.instances.get(workflowId)
       : panelViewedId
-        ? (this.instances.get(panelViewedId) ?? this.retiredInstances.get(panelViewedId))
+        ? (this.instances.get(panelViewedId) ??
+          this.retiredInstances.get(panelViewedId))
         : null;
 
     if (!instance) {
@@ -906,7 +933,10 @@ export class WorkflowOrchestrator {
     await this.createWorkflow();
   }
 
-  async createWorkflowForClient(send: (msg: unknown) => void, clientId: string): Promise<void> {
+  async createWorkflowForClient(
+    send: (msg: unknown) => void,
+    clientId: string
+  ): Promise<void> {
     const instance = this.buildWorkflowInstance();
     this.instances.set(instance.id, instance);
     await this.replayWorkflowStateTo(instance.id, send, clientId);
@@ -917,21 +947,31 @@ export class WorkflowOrchestrator {
    * state if one was previously viewed, and sends the current workflows list.
    * Called for both the VS Code panel and browser WebSocket clients.
    */
-  async handleClientReady(clientId: string, send: (msg: unknown) => void): Promise<void> {
+  async handleClientReady(
+    clientId: string,
+    send: (msg: unknown) => void
+  ): Promise<void> {
     this.registerClient(clientId);
     const viewedId = this.getViewedWorkflowId(clientId);
     if (viewedId) {
       await this.replayWorkflowStateTo(viewedId, send, clientId);
     }
-    send({ type: MESSAGE_TYPES.WORKFLOWS_LIST, workflows: this.getWorkflowSummaries() });
+    send({
+      type: MESSAGE_TYPES.WORKFLOWS_LIST,
+      workflows: this.getWorkflowSummaries(),
+    });
   }
 
   getQueueState(clientId?: string): QueueState {
-    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).getQueueState();
+    return this.getInstanceForClient(
+      clientId ?? this.PANEL_CLIENT_ID
+    ).getQueueState();
   }
 
   clearWorkingFilePath(clientId?: string): void {
-    this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).clearWorkingFilePath();
+    this.getInstanceForClient(
+      clientId ?? this.PANEL_CLIENT_ID
+    ).clearWorkingFilePath();
   }
 
   /**
@@ -946,8 +986,13 @@ export class WorkflowOrchestrator {
     return viewed?.promptQueue ?? null;
   }
 
-  async updateWorkflowName(workflowName: string, clientId?: string): Promise<void> {
-    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).updateWorkflowName(workflowName);
+  async updateWorkflowName(
+    workflowName: string,
+    clientId?: string
+  ): Promise<void> {
+    return this.getInstanceForClient(
+      clientId ?? this.PANEL_CLIENT_ID
+    ).updateWorkflowName(workflowName);
   }
 
   async loadWorkingFile(filePath: string): Promise<void> {
@@ -961,7 +1006,10 @@ export class WorkflowOrchestrator {
       Log.debug(
         `loadWorkingFile: "${workflowId}" is CLI-managed (session exists) — switching view`
       );
-      this.storedPanelSend?.({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
+      this.storedPanelSend?.({
+        type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
+        workflowId,
+      });
       this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(
         existingCliEntry.summary
       );
@@ -990,7 +1038,11 @@ export class WorkflowOrchestrator {
     const instance = this.buildWorkflowInstance();
     this.instances.set(instance.id, instance);
     await instance.loadWorkingFile(filePath);
-    await this.replayWorkflowStateTo(instance.id, panelSend, this.PANEL_CLIENT_ID);
+    await this.replayWorkflowStateTo(
+      instance.id,
+      panelSend,
+      this.PANEL_CLIENT_ID
+    );
   }
 
   getCurrentPromptFile(): { fileName: string; steps: unknown[] } | null {
@@ -1005,8 +1057,14 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().outputHistoryManager;
   }
 
-  updateWorkflowPropertyInQueue(property: string, value: unknown, clientId?: string): void {
-    this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).updateWorkflowPropertyInQueue(property, value);
+  updateWorkflowPropertyInQueue(
+    property: string,
+    value: unknown,
+    clientId?: string
+  ): void {
+    this.getInstanceForClient(
+      clientId ?? this.PANEL_CLIENT_ID
+    ).updateWorkflowPropertyInQueue(property, value);
   }
 
   async updateWorkingFileProperties(
@@ -1018,10 +1076,9 @@ export class WorkflowOrchestrator {
     } = {},
     clientId?: string
   ): Promise<{ workingFile: WorkingFile; appliedKeys: string[] } | null> {
-    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).updateWorkingFileProperties(
-      properties,
-      options
-    );
+    return this.getInstanceForClient(
+      clientId ?? this.PANEL_CLIENT_ID
+    ).updateWorkingFileProperties(properties, options);
   }
 
   async updatePromptInQueue(
@@ -1032,13 +1089,9 @@ export class WorkflowOrchestrator {
     clearProperties?: string[],
     clientId?: string
   ): Promise<void> {
-    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).updatePromptInQueue(
-      index,
-      text,
-      properties,
-      promptName,
-      clearProperties
-    );
+    return this.getInstanceForClient(
+      clientId ?? this.PANEL_CLIENT_ID
+    ).updatePromptInQueue(index, text, properties, promptName, clearProperties);
   }
 
   async updateFinalStepInQueue(
@@ -1046,29 +1099,39 @@ export class WorkflowOrchestrator {
     clearProperties?: string[],
     clientId?: string
   ): Promise<void> {
-    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).updateFinalStepInQueue(
-      finalStep,
-      clearProperties
-    );
+    return this.getInstanceForClient(
+      clientId ?? this.PANEL_CLIENT_ID
+    ).updateFinalStepInQueue(finalStep, clearProperties);
   }
 
   async ensureEphemeralWorkingFile(
     options?: { initialProperties?: Record<string, unknown> },
     clientId?: string
   ): Promise<void> {
-    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).ensureEphemeralWorkingFile(options);
+    return this.getInstanceForClient(
+      clientId ?? this.PANEL_CLIENT_ID
+    ).ensureEphemeralWorkingFile(options);
   }
 
   async deletePromptFromQueue(index: number, clientId?: string): Promise<void> {
-    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).deletePromptFromQueue(index);
+    return this.getInstanceForClient(
+      clientId ?? this.PANEL_CLIENT_ID
+    ).deletePromptFromQueue(index);
   }
 
   async resetWorkflowState(clientId?: string): Promise<void> {
-    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).resetWorkflowState();
+    return this.getInstanceForClient(
+      clientId ?? this.PANEL_CLIENT_ID
+    ).resetWorkflowState();
   }
 
-  async reorderPendingPrompts(newPendingOrder: number[], clientId?: string): Promise<void> {
-    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).reorderPendingPrompts(newPendingOrder);
+  async reorderPendingPrompts(
+    newPendingOrder: number[],
+    clientId?: string
+  ): Promise<void> {
+    return this.getInstanceForClient(
+      clientId ?? this.PANEL_CLIENT_ID
+    ).reorderPendingPrompts(newPendingOrder);
   }
 
   async syncStepsForUndoRedo(
@@ -1076,11 +1139,15 @@ export class WorkflowOrchestrator {
     finalStep: WorkflowStep | null,
     clientId?: string
   ): Promise<void> {
-    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).syncStepsForUndoRedo(steps, finalStep);
+    return this.getInstanceForClient(
+      clientId ?? this.PANEL_CLIENT_ID
+    ).syncStepsForUndoRedo(steps, finalStep);
   }
 
   async setStartPosition(toIndex: number, clientId?: string): Promise<void> {
-    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).setStartPosition(toIndex);
+    return this.getInstanceForClient(
+      clientId ?? this.PANEL_CLIENT_ID
+    ).setStartPosition(toIndex);
   }
 
   async executeEphemeralPrompt(
@@ -1091,7 +1158,9 @@ export class WorkflowOrchestrator {
     forceNewWorkflow?: boolean,
     clientId?: string
   ): Promise<void> {
-    return this.getInstanceForClient(clientId ?? this.PANEL_CLIENT_ID).executeEphemeralPrompt(
+    return this.getInstanceForClient(
+      clientId ?? this.PANEL_CLIENT_ID
+    ).executeEphemeralPrompt(
       text,
       properties,
       action,
@@ -1297,7 +1366,10 @@ export class WorkflowOrchestrator {
     return this.viewerRegistry.get(clientId) ?? null;
   }
 
-  private setViewedWorkflowId(clientId: string, workflowId: string | null): void {
+  private setViewedWorkflowId(
+    clientId: string,
+    workflowId: string | null
+  ): void {
     this.viewerRegistry.set(clientId, workflowId);
   }
 
@@ -1321,7 +1393,10 @@ export class WorkflowOrchestrator {
     if (!workflowId) return;
 
     // If the workflow is in retiredInstances and no other client views it, dispose and remove
-    if (this.retiredInstances.has(workflowId) && !this.isWorkflowViewedByAnyClient(workflowId)) {
+    if (
+      this.retiredInstances.has(workflowId) &&
+      !this.isWorkflowViewedByAnyClient(workflowId)
+    ) {
       this.retiredInstances.get(workflowId)?.dispose();
       this.retiredInstances.delete(workflowId);
       return;
@@ -1331,7 +1406,9 @@ export class WorkflowOrchestrator {
     const instance = this.instances.get(workflowId);
     if (instance && !this.isWorkflowViewedByAnyClient(workflowId)) {
       const status = instance.getQueueState().status;
-      const isIdle = status !== EXECUTION_STATES.RUNNING && status !== EXECUTION_STATES.PAUSED;
+      const isIdle =
+        status !== EXECUTION_STATES.RUNNING &&
+        status !== EXECUTION_STATES.PAUSED;
       if (isIdle) {
         instance.dispose();
         this.instances.delete(workflowId);

@@ -168,6 +168,7 @@ export const MESSAGE_TYPES = {
   SWITCH_WORKFLOW: "switchWorkflow", // Switch active workflow: { workflowId }
 
   // Per-workflow targeted controls — Webview → Extension
+  RUN_WORKFLOW: "runWorkflow", // Run/restart specific workflow: { workflowId }
   PAUSE_WORKFLOW: "pauseWorkflow", // Pause specific workflow: { workflowId }
   RESUME_WORKFLOW: "resumeWorkflow", // Resume specific workflow: { workflowId }
   STOP_WORKFLOW: "stopWorkflow", // Stop specific workflow: { workflowId }

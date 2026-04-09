@@ -49,7 +49,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
           className="text-[12px]"
           style={{ color: "var(--vscode-descriptionForeground)" }}
         >
-          Terminal is running in the VS Code sidebar
+          Terminal is running in the VS Code panel
         </span>
       </div>
     );

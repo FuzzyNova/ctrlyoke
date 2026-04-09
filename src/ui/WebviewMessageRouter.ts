@@ -665,6 +665,13 @@ export class WebviewMessageRouter {
     });
 
     // ── Per-workflow targeted controls ────────────────────────────────────
+    table.set(MESSAGE_TYPES.RUN_WORKFLOW, async (message) => {
+      const { workflowId } = message;
+      if (workflowId) {
+        await this.getOrchestrator()?.executeWorkflow(workflowId);
+      }
+    });
+
     table.set(MESSAGE_TYPES.PAUSE_WORKFLOW, async (message) => {
       const { workflowId } = message;
       if (workflowId) {
@@ -753,10 +760,9 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.TERMINAL_INPUT, async (msg) => {
       const ptyManager = getPtyProcessManager();
       if (!ptyManager || !msg.sessionId || !msg.data) return;
-      // Block keyboard input for AI CLI sessions from browser/scoped connections —
-      // the PTY is owned exclusively by the VS Code sidebar (ptyPostMessage target).
-      // Browser clients receive viewerOnly sessions and won't create an xterm or
-      // register onData, but this guard prevents any accidental writes.
+      // Block keyboard input for AI CLI sessions from browser clients — interactive
+      // control of AI CLI sessions is reserved for the VS Code panel. Browser tabs
+      // can view the terminal output but cannot send input to the AI process.
       if (this.clientId !== "panel") {
         const session = ptyManager.getSession(msg.sessionId as string);
         if (session?.kind === SESSION_KINDS.AI_CLI) return;
@@ -767,11 +773,15 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.TERMINAL_RESIZE, async (msg) => {
       const ptyManager = getPtyProcessManager();
       if (!ptyManager || !msg.sessionId || !msg.cols || !msg.rows) return;
-      // Same ownership guard — prevent browser-side ResizeObserver from fighting
-      // with the VS Code sidebar's PTY dimensions on AI CLI sessions.
+      // Block AI CLI resize from browser clients when the panel is also viewing
+      // the workflow — the panel's dimensions take priority. Browser clients can
+      // resize AI CLI sessions only when the panel is not actively viewing them.
       if (this.clientId !== "panel") {
         const session = ptyManager.getSession(msg.sessionId as string);
-        if (session?.kind === SESSION_KINDS.AI_CLI) return;
+        if (session?.kind === SESSION_KINDS.AI_CLI) {
+          const panelViewedId = this.getOrchestrator()?.getActiveWorkflowId();
+          if (panelViewedId === session.workflowId) return;
+        }
       }
       ptyManager.resizeSession(
         msg.sessionId as string,
