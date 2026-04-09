@@ -88,7 +88,7 @@ Built-in templates use YAML (`.flightpath.yaml`). Custom templates use JSON (`.f
 
 Key workflow-level fields used in templates:
 
-- `prompts[]` — main execution sequence
+- `steps[]` — main execution sequence
 - `finalStep` — single prompt run after all `prompts` complete; used with `agent` + `mcpServers: ["flightpath"]` + `priorContext: all` for orchestration loops (see `spec-driven-loop`)
 - `resumeSession: true` on a prompt — continues in the same session as the previous prompt
 
@@ -97,7 +97,7 @@ The `_templateMeta` top-level key is template-only; never appears in executed wo
 
 <contextSyntax>
 **Full file / directory attachment:** `@path/to/file.ts`, `@path/to/dir/`
-**Line range:** `#file:path:startLine-endLine`
+**Line range:** `#selection:path:startLine-endLine`
 **Template file variable:** `@{file:varName}` — substituted before parsing
 
 Use `@path` for attaching whole files in templates — portable across all harnesses.

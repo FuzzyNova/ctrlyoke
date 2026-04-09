@@ -51,7 +51,7 @@ The `flightpath.exportDiscoveredModels` command is part of a repeatable workflow
 
 1. Run extension (`F5`)
 2. Run command: **FlightPath: Export Discovered Models** → writes `scripts/discovered-models.json`
-3. `npm run sync-models -- --import` → updates `src/utils/ModelConstants.ts`
+3. `npm run sync-models:import` → updates `src/utils/ModelConstants.ts`
 4. `npm run sync-models` → syncs `package.json` enums AND `schemas/prompt-schema.json` examples
 5. `npm run generate-schema` → regenerates YAML schema from JSON
 6. Commit all updated files

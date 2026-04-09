@@ -393,7 +393,7 @@ Summary of required layers:
 **Output Format**: JSON streaming (`--stream-json` required)
 **Tool Permissions**: `--dangerously-skip-permissions`, `--tools default`, tool-specific allows/denies
 **File Reference**: `path/to/file.ts` (no @ prefix)
-**MCP Config**: Not supported (no MCP integration in Claude CLI)
+**MCP Config**: Supported via `--mcp-config <file>` with JSON format; auto-approves FlightPath tools (`mcp__flightpath`) and user-defined MCP server tools
 **Models**: Aliases (sonnet, opus, haiku) with `--model` flag
 
 **Session Resumption**: `-c` (continue last) or `-r <thread-id>` (resume specific)
@@ -407,19 +407,20 @@ Summary of required layers:
 **Completion Detection**:
 
 - **Headless**: JSONL events (`{"type":"turn.completed"}`)
-- **Interactive**: notify hook (writes JSON to `~/.flightpath/codex-notifications/{thread-id}.json`)
-- **Hook format**: TOML-style inline config `notify='["node","<script>"]'` via `--config` flag
-- **Monitoring**: Specific file mode (thread ID from initial output) with wildcard fallback
-- **Session ID**: Extracted from JSONL events or notify hook data
-- **User hooks**: Cannot be inlined in TOML — generates a chain script (`flightpath-codex-notify-chain.js`) that runs FlightPath notify hook first, then user hooks sequentially; user hook failures are non-fatal
+- **Interactive**: Hooks via `.codex/hooks.json` (requires `--enable codex_hooks` flag)
+- **Hook format**: JSON object written to `.codex/hooks.json` via `SettingsJsonHooksTracker` (matcher-based: `{ matcher: "", hooks: [{type: "command", command: "..."}] }`)
+- **Monitoring**: Specific file mode (`{sessionId}-stop.json`) with wildcard fallback; standardized format matching Claude/Qwen/Gemini
+- **Session ID**: Extracted from JSONL events or hook notification data
+- **User hooks**: Via `SettingsJsonHooksTracker` (parallel-safe ref-counted); no trusted_hooks.json — Codex hooks run without approval prompts when `codex_hooks` is enabled
+- **Events supported**: `SessionStart`, `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`
 
 **Output Format**: JSONL streaming (one JSON object per line)
 **Tool Permissions**: Same as Copilot (auto-converted from shared settings)
-**File Reference**: `-f path/to/file.ts`
-**MCP Config**: Not supported
+**File Reference**: `path/to/file.ts` (no prefix — Codex does not use `@` or `-f`)
+**MCP Config**: Inline TOML via `-c 'mcp_servers.flightpath={...}'`; only supports FlightPath server (no user MCP servers due to TOML inline format)
 **Models**: GPT-5 variants (gpt-5.2-codex, gpt-5.3-codex, gpt-5.1-codex, gpt-5.1-codex-max, etc.)
 
-**Session Resumption**: `--resume <thread-id>`
+**Session Resumption**: `resume <session-id>` (subcommand, not flag)
 
 **See**: CodexCliProvider.ts, CodexNotificationMonitor.ts, CodexResponseParser.ts, `docs/CODEX_CLI_INTEGRATION.md`
 
@@ -561,13 +562,13 @@ Summary of required layers:
 
 **SettingsJsonHooksTracker** (src/flightpath/harness/shared/SettingsJsonHooksTracker.ts):
 
-- Manages FlightPath hook injection into settings.json for CLIs that use config-file-based hooks (Qwen, Gemini)
+- Manages FlightPath hook injection into settings.json for CLIs that use config-file-based hooks (Qwen, Gemini, Codex)
 - Singleton per tool — one instance per CLI tool name
 - Reference-counted: tracks hook state per workflow (`registerWorkflow` / `unregisterWorkflow`)
 - Captures baseline hooks before any FlightPath modification; restores on last workflow unregister
 - Parallel-safe: each concurrent workflow's hooks are preserved until that specific workflow unregisters
-- Must be called under `mcpTracker.withLock()` to prevent races (both modify the same settings.json)
-- Works with `.qwen/settings.json` or `.gemini/settings.json` (tool-specific subdirectories)
+- Must be called under `mcpTracker.withLock()` to prevent races (both modify the same settings file)
+- Works with `.qwen/settings.json`, `.gemini/settings.json`, or `.codex/hooks.json` (tool-specific subdirectories)
 
 **SettingsJsonMcpTracker** (src/flightpath/harness/shared/SettingsJsonMcpTracker.ts):
 
@@ -658,7 +659,7 @@ Summary of required layers:
 
 **INotificationMonitor key types**:
 
-- `HookConfig`: Union type — `{ type: "json"; config: object }` (Copilot) | `{ type: "json-string"; config: string }` (Claude) | `{ type: "toml-inline"; config: string }` (Codex) | `{ type: "none" }` (OpenCode)
+- `HookConfig`: Union type — `{ type: "json"; config: object }` (Copilot/Qwen/Gemini/Codex: JSON object) | `{ type: "json-string"; config: string }` (Claude: JSON string) | `{ type: "none" }` (OpenCode)
 - `buildHookConfig(scriptPath, notifyDir, workspaceRoot, userHooks?)` — builds hook config with optional user-defined hooks merged alongside FlightPath completion-detection hooks
 - `waitForSessionStart?(config, startTime, runId?, onCancel?)` — optional method for providers that support session start detection
 
@@ -676,13 +677,14 @@ Summary of required layers:
    - Copilot: `.github/hooks/flightpath-<stem>-p<N>.json` (auto-discovered by CLI)
    - Claude: `.flightpath/temp/claude-hook-settings-<stem>-p<N>.json` (passed via `--settings`)
 
-2. **Settings.json with ref-counting** (Gemini, Qwen): Hooks written to `.{tool}/settings.json` via `SettingsJsonHooksTracker`. Reference-counted for parallel safety — baseline captured before modification, restored when last workflow unregisters. Must acquire `SettingsJsonMcpTracker.withLock()` since both hooks and MCP share the same file.
+2. **Settings.json with ref-counting** (Gemini, Qwen, Codex): Hooks written to `.{tool}/settings.json` (or `.codex/hooks.json` for Codex) via `SettingsJsonHooksTracker`. Reference-counted for parallel safety — baseline captured before modification, restored when last workflow unregisters. Must acquire `SettingsJsonMcpTracker.withLock()` since both hooks and MCP share the same file.
+   - Gemini/Qwen: no pre-trust needed for hook commands (auto-trusted via `~/.{tool}/trusted_hooks.json`)
+   - Codex: no trusted_hooks.json — `--enable codex_hooks` flag bypasses approval prompts
 
-3. **Plugin/chain generation** (OpenCode, Codex):
+3. **Plugin/chain generation** (OpenCode):
    - OpenCode: `OpenCodePluginGenerator` embeds user hooks directly in generated completion plugin
-   - Codex: Generates `flightpath-codex-notify-chain.js` chain script (runs FlightPath hook first, then user hooks sequentially; failures non-fatal)
 
-**Pre-trust mechanisms** (Gemini, Qwen): Both auto-approve FlightPath hook commands by writing entries to `~/.{tool}/trusted_hooks.json` with colon-prefixed key format (`:${command}`). Prevents interactive approval prompts during automated workflow execution.
+**Pre-trust mechanisms** (Gemini, Qwen): Both auto-approve FlightPath hook commands by writing entries to `~/.{tool}/trusted_hooks.json` with colon-prefixed key format (`:${command}`). Prevents interactive approval prompts during automated workflow execution. Codex does not need pre-trust — the `--enable codex_hooks` flag is sufficient.
 
 **Event mapping**: Each provider maps generic hook events to CLI-native event names:
 
@@ -710,8 +712,8 @@ Summary of required layers:
 15. **All integrations instantiated eagerly**: WorkflowOrchestrator creates all 7 integrations at startup (not lazy/on-demand)
 16. **CliTerminalFormatter is NOT here**: It lives in `src/cli/CliTerminalFormatter.ts` — it is strictly a FlightPath CLI binary display helper, not a harness utility
 17. **User hooks are cross-cutting**: All 6 CLI providers inject user-defined hooks alongside FlightPath completion-detection hooks; three injection patterns (per-prompt files, settings.json ref-counting, plugin/chain generation)
-18. **Settings.json trackers are parallel-safe**: SettingsJsonHooksTracker and SettingsJsonMcpTracker use AsyncMutex + ref-counting for concurrent workflow execution (Gemini, Qwen)
-19. **ToolBuilder pattern**: Each provider has a `*ToolBuilder.ts` that converts raw tool call payloads into structured `CliEvent` objects, enabling code reuse between LogParser and ResponseParser
+18. **Settings.json trackers are parallel-safe**: SettingsJsonHooksTracker and SettingsJsonMcpTracker use AsyncMutex + ref-counting for concurrent workflow execution (Gemini, Qwen, Codex). Codex uses SettingsJsonMcpTracker solely as a mutex provider (Codex MCP uses inline TOML, not settings.json).
+19. **ToolBuilder pattern**: Most providers have a `*ToolBuilder.ts` that converts raw tool call payloads into structured `CliEvent` objects, enabling code reuse between LogParser and ResponseParser. OpenCode uses `OpenCodeEventMapper.ts` instead (no ToolBuilder).
 20. **CliEventMapper centralizes tool classification**: Single source of truth mapping tool names to semantic types (BASH_COMMAND, FILE_EDIT, MCP_TOOL_CALL, etc.) — replaces ~500 lines of duplicated switch/case
 21. **CliIntegration composes 5 coordinators**: CliPromptPreparer, CliSessionResolverAdapter, CliPromptRuntimeCoordinator, CliTransportCoordinator, and CliExecutionRunner — each has a single responsibility and is independently testable
 22. **Permission/hook dispatch on ICliProvider**: `buildPermissionArgs?()`, `buildNotificationHookArgs?()`, and `buildHeadlessUserHookArgs?()` are optional ICliProvider methods called by CliIntegration at the integration layer — hooks and permissions are no longer embedded inside `buildCliArgs()`

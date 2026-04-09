@@ -67,13 +67,15 @@ Shared utilities for file system operations, logging, validation, CLI process ma
 
 **promptPathUtils:** Pure functions with no Node.js or `vscode` imports — safe for both extension backend and React webview. `looksLikeFilePath(value)` detects lone file-path references (relative `./`, `../`, absolute `/`, Windows drive letter). `PROMPT_FILE_EXTENSIONS` constant.
 
-**McpDiscoveryUtils:** Discovers MCP servers from local config files and the Anthropic public registry. Local sources (priority order, first wins on duplicate id): `.vscode/mcp.json` (key: `servers`), `.mcp.json` (key: `mcpServers`), VS Code user config, `~/.claude.json` (top-level `mcpServers` only). Registry: cursor-based pagination, server-side search via `fetchAnthropicRegistry()`. Safe wrappers (`safeDiscoverLocalMcpServers`, `safeFetchAnthropicRegistry`) never throw — return empty results with error string on failure.
+**McpDiscoveryUtils:** Discovers MCP servers from local config files and the Anthropic public registry. Local sources (priority order, first wins on duplicate id): `.vscode/mcp.json` (key: `servers`), `.mcp.json` (key: `mcpServers`), VS Code user config, `~/.claude.json` (top-level `mcpServers` only). Registry: cursor-based pagination, server-side search via `fetchMcpRegistry()`. Safe wrappers (`safeDiscoverLocalMcpServers`, `safeFetchMcpRegistry`) never throw — return empty results with error string on failure.
 
 **GitUtils:** Git operations via `execFile` with 10s timeout. Functions: `getRecentCommits()` (NUL-delimited log parsing), `getCommitDiff()` (stat + full diff), `getWorkingTreeDiff()` (unstaged changes + untracked file summary), `getStagedDiff()` (cached diff), `getStashList()`, `getStashDiff()`, `searchCommitsBySubject()` (case-insensitive `--grep`), `isValidCommitHash()` (7-40 hex char validation). Returns `CommitInfo` / `StashInfo` interfaces.
 
 **TtlCache:** Generic TTL-based cache for async discovery results. `get(fn)` returns cached items if fresh, otherwise calls `fn` to refresh. `invalidate()` forces refresh on next call. Used by agent/skill discovery to avoid re-scanning filesystem on every request.
 
 **ErrorUtils:** `getErrorMessage(error: unknown): string` — centralizes the `error instanceof Error ? error.message : String(error)` pattern to eliminate duplication across the codebase.
+
+**VarSubstitutor:** Handles `{{varName}}` substitution for CLI variable injection. Variables flow from CLI `--var key=value` flags (merged into `PromptFile.vars`) and workflow-level `vars:` defaults. Applies substitution to: prompt text, resolved model, resolved additionalArgs, hook commands, and endCondition script path + retryPrompt. `substitute(text, vars)` throws a clear error for unresolved placeholders. `hasPlaceholders(text)` detects if text contains any `{{key}}`. `applyToPromptText()` and `applyToResolvedProperties()` are the primary call sites.
 </keyUtilities>
 
 <terminology>

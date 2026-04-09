@@ -36,7 +36,7 @@ Orchestration, parsing, queue, state machine, validation, and template managemen
 **Registry role:** Manages the map of `WorkflowInstance` objects; owns cross-cutting resources.
 **Seven detector integrations** created once at startup (shared): `copilotCli`, `copilotChat`, `claudeCli`, `codexCli`, `openCodeCli`, `qwenCli`, `geminiCli`
 **Harness selection:** Supports copilot-cli (default), copilot-chat, claude-cli, codex-cli, opencode-cli, qwen-cli, gemini-cli
-**WorkflowInstance registry:** `workflows` Map (running/paused instances), `viewedInstance` (displayed in dashboard)
+**WorkflowInstance registry:** `instances` Map (running/paused instances), `vsCodeViewedId` string (ID of instance displayed in dashboard)
 **CLI session tracking:** `cliSessions` Map for `CliWatchSession` objects that watch CLI-managed workflows
 **Orchestrator-scoped helpers:** `TemplateImporter`, `WorkflowCommandHandler`, `WorkspaceSessionManager`, `PromptFileParser`
 **`DashboardBroadcastHub`:** `WorkflowOrchestrator` owns a single `dashboardBroadcastHub` instance (from `src/ui/DashboardBroadcastHub`). It fans out dashboard notifications to all registered dashboard providers and passes itself as `IDashboardSink` to each `WorkflowInstance`.
@@ -48,10 +48,19 @@ Orchestration, parsing, queue, state machine, validation, and template managemen
 **Owns:** `PromptQueue`, `WorkflowStateMachine` (as `workflowRuntime`), `WorkflowExecutor`, `EndConditionHandler`, `EndConditionEvaluator`, `PromptFileLoader`, `PromptFileWatcher`, `OutputHistoryManager`, `OutputCaptureBuffer`, `activeIntegration`
 **`executionIntegrations` map:** Caches per-run integrations keyed by harness ID; reuses the same integration across prompts when harness doesn't change (avoids allocation per prompt in long-running workflows)
 **`lastRunIntegrations`:** Previous run's integrations kept for terminal cleanup (closed at start of next run)
-**Dependencies injected by WorkflowOrchestrator:** `integrationFactory` (for per-run execution integrations), `getDetectorIntegration(harness?)` callback, `onWorkflowNameChange`, `onStatusBarUpdate`, `dashboardSink` (the `DashboardBroadcastHub` cast as `IDashboardSink`)
+**Dependencies injected by WorkflowOrchestrator:** `integrationFactory` (for per-run execution integrations), `getDetectorIntegration(harness?)` callback, `onWorkflowNameChange`, `onStatusBarUpdate`, `dashboardSink` (the `DashboardBroadcastHub` passed in, then wrapped as a `WorkflowTaggedSink` in the constructor to auto-inject `workflowId`)
 **Events:** `onPromptStart`, `onPromptComplete`, `onStreamingEvents`, `onStreamingChunk`, `onWorkflowStatusMessage` — carry typed payloads
 **Background buffering:** `OutputCaptureBuffer` stores per-step output for replay when switching between multiple parallel workflows; `bufferedEvents` array (max 500) for dashboard event replay
 </workflowInstance>
+
+<workflowTaggedSink>
+**`WorkflowTaggedSink.ts`** — thin proxy around `IDashboardSink` that automatically injects `workflowId`.
+- Implements `IDashboardSink`; constructor takes `(inner: IDashboardSink, workflowId: string)`
+- Every method forwards to `inner` with `workflowId` appended — no call sites in `WorkflowInstance` need to pass the ID manually
+- `WorkflowInstance` creates one in its constructor: `new WorkflowTaggedSink(dashboardSink, this.id)`; all internal `this.dashboardSink` references hold the wrapped proxy
+- `updateExecutionStarted` is a pass-through (already receives `workflowId` as its first argument)
+- `notifyUndoRedoSynced` and `sendStepUndoDataUpdated` are pass-throughs (broadcast-to-all semantics, no per-workflow tagging needed)
+</workflowTaggedSink>
 
 <promptQueue>
 **State container** with events (NOT event-driven executor — WorkflowExecutor handles the loop)
@@ -161,6 +170,7 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 - `EndConditionEvaluator` — Script execution
 - `PromptQueue` + `WorkingFileManager` — Queue topology + file persistence
 - `OutputCaptureBuffer` — Output replay for background/parallel workflows
+- `WorkflowTaggedSink` — Proxy that injects `workflowId` into every `IDashboardSink` call
 - `IntegrationFactory` / `VsCodeIntegrationFactory` — Harness integration factories
   </orchestrationClasses>
 
@@ -190,6 +200,7 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 - `./WorkflowInstance.ts` — Per-workflow execution lifecycle container
 - `./WorkflowStateMachine.ts` — Sole owner of runtime status transitions, attempt tracking, and timing
 - `./OutputCaptureBuffer.ts` — Per-step output capture and replay for background workflows
+- `./WorkflowTaggedSink.ts` — Proxy that auto-injects `workflowId` into every `IDashboardSink` call
 - `./WorkingFileManager.ts` — Working file I/O extracted from PromptQueue
 - `./harness/CliIntegration.ts` — Generic CLI integration (composition-based)
 - `./harness/copilot/CopilotCliProvider.ts` — Copilot CLI harness

@@ -80,6 +80,13 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - Output: `src/ui/webview-react/custom-icons.css`
 - Usage: `<i class="custom-icon icon-{name}"></i>`
 
+**PostMessageDashboardSink:** Single-client IDashboardSink that forwards messages via a callback.
+
+- Implements `IDashboardSink` by constructing the appropriate message payload for each event and calling `send(msg)`
+- Used by `WorkflowOrchestrator.replayWorkflowStateTo()` to replay full workflow state to a single browser WebSocket client
+- Bypasses `DashboardBroadcastHub` intentionally — replay targets one client without affecting the VS Code sidebar
+- `notifyUndoRedoSynced()` is a no-op (acknowledgement only)
+
 **FlightPathMcpServerProvider:** Dynamic MCP server injection for copilot-chat harness.
 
 - Implements `vscode.McpServerDefinitionProvider`
@@ -171,6 +178,7 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - `src/ui/WorkflowSerializer.ts` — save/export/template/history operations
 - `src/ui/webview-react/` — React UI implementation (separate instructions file)
 - `src/ui/DashboardBroadcastHub.ts` — fan-out hub implementing IDashboardProvider + IDashboardSink; manages registered dashboard clients
+- `src/ui/PostMessageDashboardSink.ts` — single-client IDashboardSink; forwards messages via callback; used for single-client state replay (bypasses hub)
 - `src/ui/IDashboardProvider.ts` — interface for pushing workflow state updates to the dashboard (WorkflowOrchestrator depends on this)
 - `src/types/IDashboardSink.ts` — interface for fine-grained per-step updates (WorkflowInstance depends on this)
 - `src/flightpath/WorkflowOrchestrator.ts` — creates DashboardBroadcastHub, registers FlightPathWebviewProvider as a client, calls `notifyHarnessAvailability()`

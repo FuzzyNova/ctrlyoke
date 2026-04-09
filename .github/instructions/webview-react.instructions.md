@@ -41,16 +41,21 @@ src/ui/webview-react/
 ├── postcss.config.js        # PostCSS configuration
 ├── tsconfig.json            # TypeScript config for webview
 ├── tsconfig.node.json       # TypeScript config for Vite/Node tooling
+├── vite-env.d.ts            # Vite environment type declarations
+├── vitest.config.ts         # Vitest test configuration
 ├── static/                  # Static assets (custom-icons.css, dictionaries)
 ├── terminalRegistry.ts      # xterm.js instance owner (outside React lifecycle)
 ├── components/              # React components
 │   ├── layout/              # Main layout sections
 │   │   ├── CenterContentArea.tsx # Center panel container
 │   │   ├── EditorSection.tsx     # Prompt editor container
+│   │   ├── GlobalSettingsDrawer.tsx  # Full-screen global settings drawer
+│   │   ├── GlobalSettingsVerticalTabBar.tsx # Vertical tab bar inside GlobalSettingsDrawer
 │   │   ├── Header.tsx            # Workflow controls, execution badge
+│   │   ├── MobilePromptsSidebar.tsx  # Mobile overlay/sidebar for steps navigation
 │   │   ├── OutputSection.tsx     # CLI output rendering
-│   │   ├── PromptsPanel.tsx      # Prompt list with drag-and-drop
-│   │   └── WorkflowPropertiesPanel.tsx    # Harness/model settings
+│   │   ├── WorkflowPropertiesPanel.tsx    # Harness/model settings
+│   │   └── WorkflowStepsPanel.tsx # Workflow steps list with drag-and-drop
 │   ├── editor/              # Editor components
 │   │   ├── AgentQuickPicker.tsx  # Agent override in EditorFooter (left side)
 │   │   ├── CodeMirrorEditor.tsx  # CodeMirror 6 instance
@@ -68,9 +73,9 @@ src/ui/webview-react/
 │   │   ├── BoundaryBar.tsx       # Visual separator between queue and final prompt
 │   │   ├── FinalStepFooter.tsx # Footer for the final prompt section
 │   │   ├── PromptCounter.tsx     # Step count badge
-│   │   ├── PromptItem.tsx        # Single prompt row
-│   │   ├── PromptItemDetails.tsx # Expanded prompt detail view
-│   │   └── StatusIcon.tsx        # Execution status icon
+│   │   ├── PromptStepDetails.tsx # Expanded step detail view
+│   │   ├── StatusIcon.tsx        # Execution status icon
+│   │   └── WorkflowStep.tsx      # Single workflow step row (prompt or script)
 │   ├── output/              # Output rendering components
 │   │   ├── BashOutput.tsx        # Shell command output block
 │   │   ├── CliOutput.tsx         # Main CLI output container
@@ -92,7 +97,19 @@ src/ui/webview-react/
 │   │   ├── TemplateModal.tsx     # New workflow from template
 │   │   ├── WorkflowControls.tsx  # Run/Pause/Stop/Load buttons
 │   │   └── WorkflowStatus.tsx    # Execution state badge
+│   ├── settings/            # Global settings tab sections (used in GlobalSettingsDrawer)
+│   │   ├── ChatSection.tsx           # Chat / Copilot chat settings
+│   │   ├── ExecutionSection.tsx      # Execution behavior settings
+│   │   ├── GeneralSection.tsx        # General extension settings
+│   │   ├── HarnessesSection.tsx      # Per-harness configuration
+│   │   ├── HistorySection.tsx        # Run history / output retention settings
+│   │   ├── McpHooksSection.tsx       # Global MCP servers + lifecycle hooks
+│   │   ├── PermissionsSection.tsx    # Default tool permissions
+│   │   ├── QueueSection.tsx          # Queue behavior settings
+│   │   ├── ServerSection.tsx         # FlightPath server settings
+│   │   └── WorkflowDefaultsSection.tsx # Workflow-level defaults
 │   └── shared/              # Reusable UI components
+│       ├── AnimatedSection.tsx   # Slide-down mount/unmount with CSS animation
 │       ├── Button.tsx            # Base button component
 │       ├── Collapsible.tsx       # Expand/collapse wrapper
 │       ├── CustomSelect.tsx      # Styled select dropdown
@@ -110,18 +127,24 @@ src/ui/webview-react/
 │       ├── PriorContextSelect.tsx # Prior context mode selector (6 keywords + custom)
 │       ├── ResetConfirmModal.tsx # Recoverable action confirm (with "don't ask again")
 │       ├── RunSelector.tsx       # Run history selector
+│       ├── ScriptConditionEditor.tsx # Script step condition editor (compare source, returns)
 │       ├── SkillsSelect.tsx      # Hybrid skills dropdown with portal popup
 │       ├── SplitButton.tsx       # Button with dropdown arrow
+│       ├── UndoRedoControl.tsx   # Undo/redo button control with zundo history
 │       ├── permissionUtils.ts    # Tool permission mode logic per harness
 │       └── tabBadgeUtils.ts      # Tab icon/color override helpers for DrawerTabBar
 ├── hooks/                   # React hooks
 │   ├── terminalMessageHandlers.ts # Terminal PTY message routing
 │   ├── useAttachmentTokenCount.ts # Token counting with attachment caching
+│   ├── useContextPct.ts         # Context percentage (token usage vs window size)
 │   ├── useDesktopLayout.ts      # Desktop 3-panel layout refs and resize logic
+│   ├── useDrawerTabOverrides.ts # Computes tab icon/color overrides for DrawerTabBar
 │   ├── useElementNarrow.ts      # ResizeObserver-based width threshold
 │   ├── useMediaQuery.ts         # Responsive layout detection
 │   ├── useMessageHandler.ts     # Message routing from extension
 │   ├── useMobileLayout.ts       # Mobile single-column layout refs
+│   ├── usePromptStatus.ts       # Step status derived state (icon, color, label)
+│   ├── useStepClickHandler.ts   # Step click → editor navigation + selection
 │   ├── useUndoRedoKeyHandler.ts # Ctrl+Z/Y undo/redo with running guard
 │   └── useVsCodeApi.ts          # VS Code API singleton
 ├── store/                   # Zustand state stores
@@ -134,6 +157,7 @@ src/ui/webview-react/
 │   ├── cliEvents.ts         # CLI event type definitions
 │   ├── drawerPages.ts       # Drawer page constants and tab definitions
 │   ├── dropdownNamespaces.ts # Dropdown namespace constants per harness
+│   ├── index.ts             # Re-exports for convenience
 │   ├── messages.ts          # Re-exports from src/types/
 │   └── vscode.ts            # VS Code API types
 ├── utils/                   # Utility functions
@@ -143,6 +167,7 @@ src/ui/webview-react/
 │   ├── hljsUtils.ts         # Highlight.js integration (language detection, styles)
 │   ├── logger.ts            # Webview logging utilities
 │   ├── markdownExport.ts    # Markdown export generation
+│   ├── outputProjection.ts  # Maps OrderedHistoryEntries → OutputMessages for rendering
 │   ├── outputUtils.ts       # Output formatting helpers
 │   ├── panelAnimation.ts    # Panel animation utilities
 │   ├── prompt.ts            # Prompt text utilities
@@ -150,7 +175,8 @@ src/ui/webview-react/
 │   ├── status.ts            # Status/state helpers
 │   ├── string.ts            # String utilities
 │   ├── time.ts              # Time/duration formatting
-│   └── tokenizer.ts         # Token counting
+│   ├── tokenizer.ts         # Token counting
+│   └── tokenUtils.ts        # Context percentage helpers (calcContextPct)
 └── styles/                  # CSS and Tailwind config
 ```
 
@@ -168,35 +194,59 @@ Five separate stores by domain (avoid mixing concerns):
 interface WorkflowState {
   fileName: string | null;
   workflowName: string | null;
-  prompts: PromptItem[];
+  steps: WorkflowStep[];              // union: PromptStep | ScriptStep
   executionState: ExecutionState;
   currentStep: number;
   totalSteps: number;
-  cliOutputs: Record<number, CliOutput[]>;
+  finalStep: WorkflowStep | null;     // the final (repeating) step
+  finalStepStatus: StepStatus | null;
+  finalStepLoopCount: number;
+  finalStepPhase: FinalStepPhase | null;
+  // Live ordered output entries (queue + finalStep outputs and status messages)
+  liveOrderedEntries: OrderedHistoryEntry[];
+  liveSequence: number;
   retryStates: Record<number, RetryState>;
-  statusMessages: Record<number, StatusMessage[]>;
+  // Streaming state (incremental text before full event arrives)
   streamingChunks: Record<number, string>;
-  // Historical run snapshot for browsing (null = live mode)
-  historyOutputs: HistoryOutputSnapshot | null;
+  finalStepStreamingChunks: Record<number, string>;
+  // Self-contained history snapshot for the currently-viewed historical run
+  historyOutputs: {
+    orderedEntries: OrderedHistoryEntry[];
+    promptOutputs: Record<number, StepOutput>;
+    finalStepOutputs?: Record<number, StepOutput>;
+    runMetadata: Pick<WorkflowOutputHistory, "runId" | "startedAt" | "completedAt" | "executionState">;
+  } | null;
+  workspaceSnapshots: Record<number, WorkspaceSnapshot>;
+  finalStepWorkspaceSnapshots: Record<number, WorkspaceSnapshot>;
+  undoResults: Record<string, UndoResult>;
+  undoRecords: Record<string, UndoRecord>;
+  undoWorkflowProperties: WorkflowProperties;
 }
 ```
 
-**Use cases**: Workflow execution, prompt list, CLI outputs, step progress, run history browsing
+**Use cases**: Workflow execution, step list (queue + final step), ordered output entries, undo/snapshot tracking, run history browsing
 
-**Run history**: When `uiStore.isViewingHistory=true`, `OutputSection` renders from `historyOutputs` instead of `cliOutputs`. Live `cliOutputs` continue updating normally — history browsing has zero impact on live capture.
+**Run history**: When `uiStore.isViewingHistory=true`, `OutputSection` renders from `historyOutputs` instead of `liveOrderedEntries`. Live entries continue updating normally — history browsing has zero impact on live capture.
 
 ### uiStore - Layout and UI State
 
 ```typescript
 interface UiState {
-  // Dropdown hide feature (persisted to localStorage)
+  // Dropdown hide feature (persisted)
   hiddenDropdownOptions: Record<string, string[]>;
   // Panel collapse
-  promptsCollapsed: boolean;
+  stepsCollapsed: boolean;
+  finalStepFooterExpanded: boolean;
   outputCollapsed: boolean;
   editorCollapsed: boolean;
   settingsCollapsed: boolean;
   propertiesDrawerOpen: boolean;
+  // Diff display toggle
+  diffsCollapsed: boolean;
+  diffResetVersion: number;       // bumped on expand/collapse all
+  // Persisted panel sizes
+  lastDesktopSizes: PanelSizes;
+  lastMobileSizes: PanelSizes;
   // Output panel
   selectedOutputStep: number | null; // null = current step
   // Run history browsing
@@ -214,46 +264,87 @@ interface UiState {
   currentTemplate: TemplateInfo | null;
   workflowsDir: string;
   defaultTemplateId: string;
+  templateFileSelection: { variable: string; path: string } | null;
   // Recent workflows
   recentWorkflows: RecentWorkflow[];
   recentWorkflowsDropdownOpen: boolean;
+  // Multi-workflow support
+  loadedWorkflows: WorkflowSummary[];
+  activeWorkflowId: string | null;
   // Loading states
   isLoading: boolean;
   loadingMessage: string | null;
+  // Font sizes (persisted)
+  outputFontSize: number;
+  terminalFontSize: number;
+  // Terminal panel state
+  activeOutputTabs: Record<string, "output" | "terminal">;
+  terminalActiveWorkflows: Set<string>;
+  terminalRailCollapsed: boolean;
+  terminalRailSizePx: number;
+  // Notification toast (transient)
+  toast: { message: string; type: "info" | "success" | "warning" | "error"; visible: boolean } | null;
+  // Footer quick picker (transient)
+  footerOpenPicker: "harness" | "model" | "agent" | "skills" | "permissions" | "context" | null;
+  // MCP Discovery state
+  mcpDiscoveryTab: "local" | "registry";
+  mcpLocalServers: LocalMcpServerEntry[];
+  mcpRegistryServers: RegistryMcpEntry[] | undefined;
+  mcpRegistryQuery: string;
+  mcpRegistryNextCursor: string | undefined;
+  mcpWorkspaceServers: McpServerConfig[] | undefined;
+  // Mobile drawer/sidebar state (transient)
+  mobilePromptsOpen: boolean;
+  mobilePromptsMode: "sidebar" | "fullwidth";
+  mobileSettingsOpen: boolean;
+  // Global settings drawer
+  globalSettingsOpen: boolean;
+  globalSettingsActiveTab: string;
 }
 ```
 
-**Use cases**: Panel collapse, modals, recent files, run history browsing, layout persistence
+**Use cases**: Panel collapse, modals, recent files, run history browsing, terminal state, MCP discovery, mobile layout, global settings drawer
 
-**Persistence**: Synced to localStorage via Zustand `persist` middleware
+**Persistence**: Synced to VS Code webview state API via Zustand `persist` middleware
 
 ### editorStore - Prompt Editor State
 
 ```typescript
 interface EditorState {
-  selectionTarget: EditorSelectionTarget; // NEW_PROMPT | QUEUE(index) | FINAL_PROMPT
+  selectionTarget: EditorSelectionTarget; // NEW_PROMPT | QUEUE(index) | FINAL_STEP
   selectedPromptIndex: number | null; // null = new prompt mode
-  originalPromptData: PromptItem | null; // for Cancel/revert
-  savedNewPromptState: SavedNewPromptState | null; // saved when switching to edit mode
-  pendingEdits: Record<string, SavedNewPromptState>; // unsaved edits cache by target
+  originalPromptData: WorkflowStep | null; // for Cancel/revert
+  savedNewPromptState: SavedNewStepState | null; // saved when switching to edit mode
+  pendingEdits: Record<string, SavedNewStepState>; // unsaved edits cache by target
   hasActiveQueue: boolean;
+  // Step type — determines editor mode (prompt vs script)
+  stepType: "prompt" | "script";
+  // Prompt step content
   promptText: string;
   promptName: string;
-  properties: PropertyValues; // harness, model, agent, skills, hooks, mcpServers, toolPermissions, etc.
+  // Script step content
+  scriptCommand: string;
+  scriptTimeout: number | undefined;
+  scriptOnPass: string;
+  scriptOnFail: string;
+  scriptCompareSource: string;
+  scriptReturns: string;
+  // Shared properties
+  properties: PropertyValues;
   isDirty: boolean;
   validationErrors: Record<string, string>;
 }
 ```
 
-**PropertyValues** includes: `harness`, `model`, `agent`, `skills`, `resumeSession`, `sessionId`, `mcpServers`, `hooks` (object[] | null | undefined), `endCondition`, `priorContext`, `additionalArgs`, `toolPermissions`
+**PropertyValues** includes: `harness`, `model`, `agent`, `skills`, `resumeSession`, `sessionId`, `mcpServers`, `hooks` (object[] | null | undefined), `endCondition`, `preCondition`, `priorContext`, `additionalArgs`, `toolPermissions`
 
 **Inheritance convention**: `undefined` = inherit from workflow/global, `null` = explicitly none, value = override
 
-**Mode determination**: `selectionTarget` drives the editor mode — `NEW_PROMPT` for new, `QUEUE(index)` or `FINAL_PROMPT` for editing existing
+**Mode determination**: `selectionTarget` drives the editor mode — `NEW_PROMPT` for new, `QUEUE(index)` or `FINAL_STEP` for editing existing
 
-**endCondition** is part of `PropertyValues` (not a top-level field)
+**endCondition** and **preCondition** are part of `PropertyValues` (not top-level fields)
 
-**Use cases**: Editor content, prompt properties, save/revert operations
+**Use cases**: Editor content, prompt/script properties, save/revert operations
 
 **Persistence**: Synced to VS Code webview state API via FlightPathDashboardProvider
 
@@ -268,10 +359,13 @@ interface SettingsState {
   globalSettings: GlobalSettings; // includes hooks, toolPermissions, confirmDeleteOperations, etc.
   workflowProperties: WorkflowProperties; // includes hooks, toolPermissions overrides
   workflowLoaded: boolean; // enables settings panel
+  fullGlobalSettings: FullGlobalSettings | null; // loaded on demand from configService
+  serverRunning: boolean; // FlightPath server running state
+  serverUrl: string | null; // server URL when running
 }
 ```
 
-**Use cases**: Harness/model/skills selection, workflow properties, global defaults, hooks resolution
+**Use cases**: Harness/model/skills selection, workflow properties, global defaults, hooks resolution, server control
 
 **Hooks resolution**: `getEffectiveHooks()` resolves prompt → workflow → global inheritance. Returns workflow-level hooks if defined, otherwise global hooks.
 
@@ -462,8 +556,8 @@ Use react-resizable-panels for flexible layout:
 
 ```typescript
 <PanelGroup direction="horizontal">
-  <Panel ref={promptsRef} collapsible>
-    <PromptsPanel />
+  <Panel ref={stepsRef} collapsible>
+    <WorkflowStepsPanel />
   </Panel>
   <Panel ref={outputRef} collapsible>
     <OutputSection />
@@ -627,6 +721,22 @@ The header left side shows Output/Terminal tab buttons (when a terminal session 
 - `ContextQuickPicker` - Resume session + session ID override (book icon, `footerOpenPicker === "context"`)
 
 Each picker receives `isNarrow` and `showLabel` props. Labels are shown when the footer is wide enough (`useElementNarrow(768)`). Override values show bold/colored styling. All pickers use `uiStore.footerOpenPicker` to ensure only one popup is open at a time.
+
+### GlobalSettingsDrawer
+
+Full-screen overlay opened via `uiStore.globalSettingsOpen`. Contains a `GlobalSettingsVerticalTabBar` on the left and renders the active settings section on the right. Tab sections live in `components/settings/` and receive `settings: GlobalSettings` + `onUpdate: (partial) => void` props. State is managed through `settingsStore.fullGlobalSettings` (loaded on demand).
+
+### Mobile Layout
+
+On narrow viewports, `MobilePromptsSidebar` provides chip-based navigation to workflow steps. Controlled by `uiStore.mobilePromptsOpen` and `uiStore.mobilePromptsMode` (`"sidebar"` or `"fullwidth"`). The `useMediaQuery` hook detects mobile breakpoints; `App.tsx` switches between `useDesktopLayout` and `useMobileLayout` refs accordingly.
+
+### ScriptConditionEditor
+
+Used inside the editor for script steps. Renders compare-source selection, expected returns value, and validation. Exports `ScriptConditionValue` interface. Not to be confused with `EndConditionConfig` (for prompt retry logic).
+
+### UndoRedoControl
+
+Wraps zundo temporal store to expose undo/redo as clickable buttons with history depth badge. Mounted in the Header; uses portal for the history dropdown. Disabled when a workflow is running.
 
 </componentPatterns>
 
@@ -795,10 +905,14 @@ async function loadWorkflow(filePath: string) {
 test/
 ├── setup.ts                       # Test setup (jsdom, mocks)
 ├── hooks/
-│   └── useMessageHandler.test.ts  # Message routing tests
+│   ├── useElementNarrow.test.ts   # ResizeObserver width threshold
+│   ├── useMediaQuery.test.ts      # Responsive layout detection
+│   ├── useMessageHandler.test.ts  # Message routing tests
+│   └── useVsCodeApi.test.ts       # VS Code API singleton
 ├── utils/
 │   ├── diff.test.ts               # Diff/patch logic
 │   ├── endCondition.test.ts       # End condition helpers
+│   ├── outputProjection.test.ts   # Output message mapping
 │   ├── outputUtils.test.ts        # Output formatting
 │   ├── prompt.test.ts             # Prompt utilities
 │   ├── promptUndo.test.ts         # Undo action computation
@@ -818,6 +932,8 @@ test/
 │       └── Modal.test.tsx
 └── store/
     ├── editorStore.test.ts
+    ├── settingsStore.test.ts
+    ├── uiStore.test.ts
     ├── workflowStore.test.ts
     └── workflowStore.temporal.test.ts
 ```
@@ -857,7 +973,7 @@ Complete migration map in MIGRATION_MAP.md and MIGRATION_STATUS.md.
 **Breaking changes**:
 
 - VS Code webview state API now stores editorStore only (not full state)
-- localStorage used for UI layout persistence (new in React)
+- VS Code webview state API used for UI layout persistence (via uiStore persist middleware)
 - Message types unchanged (backward compatible with extension)
 
 </migrations>
@@ -917,7 +1033,7 @@ npm run watch                # Watch mode
 2. Add to store state interface
 3. Create action methods (set*, update*, add\*, etc.)
 4. Use immutable updates via Zustand `set()`
-5. Consider persistence (localStorage for UI, VS Code state for editor)
+5. Consider persistence (VS Code webview state for both UI and editor; both use vsCodeRawStorage)
 
 </developmentWorkflow>
 

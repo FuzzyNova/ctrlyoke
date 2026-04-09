@@ -19,7 +19,7 @@ Most scripts are plain CommonJS Node.js (`.js`). The **OpenCode plugin is the ex
 - `getLogsDirFromNotifyDir(notifyDir)` — navigates `notifyDir/../..` to reach `.flightpath/`, appends `logs/`
 - `getWorkspaceRootFromNotifyDir(notifyDir)` — navigates `notifyDir/../../..` to reach workspace root
 - `initializeLogger(scriptName, notifyDir)` — checks `FLIGHTPATH_DIAGNOSTIC_LOGS` env var (injected by FlightPath at spawn time); returns a configured logger when enabled, no-op logger otherwise
-- `readStdinJson(scriptPrefix, debugLog, callback)` — reads all stdin as a single JSON object, handles readline setup, JSON parsing, error reporting, then invokes callback with parsed object; used by all stdin-based hooks (Copilot, Claude, Gemini, Qwen)
+- `readStdinJson(scriptPrefix, debugLog, callback)` — reads all stdin as a single JSON object, handles readline setup, JSON parsing, error reporting, then invokes callback with parsed object; used by all stdin-based hooks (Copilot, Claude, Codex, Gemini, Qwen)
 
 **`flightpath-copilot-hook.js`** — Copilot CLI hook handler
 
@@ -56,16 +56,19 @@ Most scripts are plain CommonJS Node.js (`.js`). The **OpenCode plugin is the ex
 - Start file uses `FLIGHTPATH_RUN_ID` env var as prefix when set, falls back to sessionId
 - Ignores any `hook_event_name` other than `SessionStart` or `Stop` (exits 0)
 
-**`flightpath-codex-notify.js`** — Codex CLI completion notify handler
+**`flightpath-codex-notify.js`** — Codex CLI hook handler
 
-- Handles `agent-turn-complete` events only; ignores all other types
-- Arguments: `node <script> '<notificationJson>'` — entire notification is `process.argv[2]` (not stdin)
-- Notification fields: `type`, `thread-id`, `turn-id`, `cwd`, `input-messages`, `last-assistant-message`
-- Registered via Codex `--config notify='["node","<path>"]'`
-- **Derives the notify directory from `notification.cwd`** (not a CLI argument):
-  `<cwd>/.flightpath/temp/codex-notifications/`
-- Writes `{threadId}.json` with `{ threadId, turnId, status: "completed", cwd, lastMessage, inputMessages }`
-- Uses `FLIGHTPATH_DIAGNOSTIC_LOGS` env var for diagnostic logging (derives logs dir from `notification.cwd`)
+- Handles two events: `SessionStart` (session discovery), `Stop` (completion signal)
+- Arguments: `node <script> <notifyDir>` — hook type read from stdin payload field `hook_event_name`
+- Input: JSON read from **stdin** via `readStdinJson`; relevant fields: `session_id`, `hook_event_name`, `transcript_path`, `cwd`, `permission_mode`, `stop_hook_active`, `last_assistant_message`, `source`
+- Registered via `.codex/hooks.json` (requires `--enable codex_hooks`):
+  ```json
+  { "hooks": { "SessionStart": [{ "matcher": "", "hooks": [{ "type": "command", "command": "node <script> <notifyDir>" }] }], "Stop": [...] } }
+  ```
+- `SessionStart` → `{runId|sessionId}-start.json`, `Stop` → `{sessionId}-stop.json`
+- Start file uses `FLIGHTPATH_RUN_ID` env var as prefix when set, falls back to sessionId
+- Has unconditional invocation logging (writes to log before any diagnostic flag checks for troubleshooting)
+- Ignores any `hook_event_name` other than `SessionStart` or `Stop` (exits 0)
 
 **`flightpath-gemini-hook.js`** — Gemini CLI hook handler
 
@@ -111,7 +114,7 @@ Most scripts are plain CommonJS Node.js (`.js`). The **OpenCode plugin is the ex
 <notificationMechanism>
 All scripts write JSON notification files that FlightPath's `*NotificationMonitor` polls for:
 
-1. Parse input (stdin for Copilot/Claude/Gemini/Qwen, argv[2] JSON string for Codex, env vars + plugin API for OpenCode)
+1. Parse input (stdin for Copilot/Claude/Codex/Gemini/Qwen, env vars + plugin API for OpenCode)
 2. Write a JSON notification file to `.flightpath/temp/<harness>-notifications/`
 3. The corresponding `*NotificationMonitor` polls that directory
 
@@ -119,19 +122,17 @@ All scripts write JSON notification files that FlightPath's `*NotificationMonito
 
 - Start events: `{runId|sessionId}-start.json` — uses `FLIGHTPATH_RUN_ID` env var when set (prevents parallel-workflow collision), falls back to sessionId
 - Stop events: `{sessionId}-stop.json`
-- Codex (unique): `{threadId}.json` (single file, completion only)
 - Copilot fallback: `${hookType}-${Date.now()}.json` when no session ID available
 - OpenCode stop: `session.idle` event (no session tracking needed, unlike the older JS version)
 
 **Notify directory source:**
 
 - Copilot: passed as `argv[2]` by the CLI provider
-- Claude/Gemini/Qwen: passed as `argv[2]` by the CLI provider
-- Codex: derived at runtime from `notification.cwd` (Codex provides workspace path in the payload)
+- Claude/Codex/Gemini/Qwen: passed as `argv[2]` by the CLI provider
 - OpenCode: passed via `FLIGHTPATH_NOTIFY_DIR` environment variable
 
 **Cross-cutting: `FLIGHTPATH_RUN_ID`:**
-All scripts (except Codex) use the `FLIGHTPATH_RUN_ID` env var — a per-prompt UUID injected by FlightPath at spawn time — as the start file name prefix. This allows `waitForSessionStart` to do a direct file lookup instead of a wildcard scan, preventing races when multiple workflows run in parallel.
+All scripts (except OpenCode plugin which uses it via env var directly) use the `FLIGHTPATH_RUN_ID` env var — a per-prompt UUID injected by FlightPath at spawn time — as the start file name prefix. This allows `waitForSessionStart` to do a direct file lookup instead of a wildcard scan, preventing races when multiple workflows run in parallel.
 </notificationMechanism>
 
 <buildAndDeploy>
@@ -153,9 +154,9 @@ All scripts (except Codex) use the `FLIGHTPATH_RUN_ID` env var — a per-prompt 
 Debug logging is **opt-in**: scripts check the `FLIGHTPATH_DIAGNOSTIC_LOGS` environment variable (set to `"true"` by the extension when `flightpath.enableDiagnosticLogs` is enabled and injected into the CLI process env at spawn time). When enabled, logs go to `<workspace>/.flightpath/logs/<script-name>-debug.log`. All log errors are silently swallowed so they never interfere with hook execution.
 
 - Stdin-based hooks (Copilot, Claude, Gemini, Qwen) use `initializeLogger()` from utils
-- Codex derives the logs directory from `notification.cwd`
+- Codex uses `initializeLogger()` from utils; also derives the logs directory from `argv[2]` notifyDir for the unconditional invocation log
 - OpenCode derives the logs directory from `FLIGHTPATH_NOTIFY_DIR`; logging is gated on `notifyDir` being set
-- Qwen additionally writes an unconditional invocation log entry before any flag checks (for troubleshooting hook registration)
+- Qwen and Codex additionally write an unconditional invocation log entry before any flag checks (for troubleshooting hook registration)
   </debugLogging>
 
 <guidelines>

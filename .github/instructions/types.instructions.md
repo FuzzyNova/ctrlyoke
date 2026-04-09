@@ -3,7 +3,7 @@ applyTo: "src/types/**"
 ---
 
 <purpose>
-Core data structures and constants for FlightPath extension. TypeScript strict mode enforced. Seven primary files:
+Core data structures and constants for FlightPath extension. TypeScript strict mode enforced. Nine primary files:
 - **FlightPathTypes.ts** - Core workflow and integration types
 - **IDashboardSink.ts** - Interface decoupling WorkflowInstance from VS Code API
 - **DashboardConstants.ts** - Shared constants (SINGLE SOURCE OF TRUTH for all string literals, enums, and UI values)
@@ -11,6 +11,8 @@ Core data structures and constants for FlightPath extension. TypeScript strict m
 - **WebviewMessageTypes.ts** - Consolidated message types for extension ↔ webview communication
 - **OutputHistoryTypes.ts** - Per-run workflow output history, workspace snapshots, and undo types
 - **WorkflowContextTypes.ts** - Workflow context passed to harness sendPrompt calls
+- **FlightPathSettings.ts** - Structured global settings interface replacing per-key VS Code settings
+- **WorkflowTimelineTypes.ts** - Event-sourced timeline storage for workflow run history (v2)
 </purpose>
 
 <flightPathTypes>
@@ -30,21 +32,45 @@ Core data structures and constants for FlightPath extension. TypeScript strict m
 
 **Re-export:** `ToolPermissionMode` from `IToolPermissionMapper` — `"dangerouslyAllowAll" | "allowAll" | "custom"`
 
-**`ExecutionProperties` interface** — shared by `PromptFile`, `PromptItem`, `PromptRuntimeMetadata`. Three-tier precedence: prompt-level > workflow-level > global settings.
+**`ExecutionProperties` interface** — shared by `PromptFile`, `PromptStep`, `PromptRuntimeMetadata`. Three-tier precedence: prompt-level > workflow-level > global settings.
 
-Fields: `harness?`, `model?`, `agent?: string | null` (null = explicitly disable), `skills?: string[] | null`, `resumeSession?`, `mcpServers?: (string | McpServerConfig)[] | null` (null = explicitly disable), `sessionId?: string | number`, `endCondition?: EndCondition | null` (null = explicitly disable), `priorContext?: PriorContext`, `additionalArgs?: string | null`, `toolPermissions?: ToolPermissionsOverride | null` (null = passthrough to harness local config), `hooks?: UserHookConfig[] | null` (null or [] = explicitly no hooks)
+Fields: `harness?`, `model?`, `agent?: string | null` (null = explicitly disable), `skills?: string[] | null`, `resumeSession?`, `mcpServers?: (string | McpServerConfig)[] | null` (null = explicitly disable), `sessionId?: string | number`, `endCondition?: EndCondition | null` (null = explicitly disable), `preCondition?: PreCondition | null` (null = explicitly disable), `priorContext?: PriorContext`, `additionalArgs?: string | null`, `toolPermissions?: ToolPermissionsOverride | null` (null = passthrough to harness local config), `hooks?: UserHookConfig[] | null` (null or [] = explicitly no hooks)
 
-**Core interfaces:**
+**Script/step types:**
 
-- `PromptFile extends ExecutionProperties` — `prompt?`, `prompts?: PromptItem[]`, `finalStep?: PromptItem`
-- `PromptItem extends ExecutionProperties` — `name?`, `prompt`, `sessionId?`, `_runtime?: PromptRuntimeMetadata`
-- `PromptRuntimeMetadata extends ExecutionProperties` — `startedAt`, `completedAt?`, `terminalStatus?: "completed" | "cancelled" | "failed"`, `retryCount?`, `responseText?` (for priorContext injection)
+- `ScriptProperties` — `script`, `compareSource?: EndConditionCompareSource`, `returns?`, `timeout?` — shared base for EndCondition, PreCondition, and ScriptStep
+- `EndCondition extends ScriptProperties` — `returns` (required), `maxRetries?`, `retryPrompt?`, `resumeSessionOnRetry?`, `onPass?: EndConditionAction`, `onFail?: EndConditionAction`
+- `PreCondition extends ScriptProperties` — `onPass?: PreConditionAction`, `onFail?: PreConditionAction`
+- `EndConditionAction` — `"continue" | "retry" | "stopWorkflow"`
+- `PreConditionAction` — `"continue" | "skipPrompt" | "stopWorkflow"`
+- `ScriptStepAction` — `"continue" | "stopWorkflow"`
+
+**Core workflow step interfaces:**
+
+- `PromptFile extends ExecutionProperties` — `prompt?`, `steps?: WorkflowStep[]`, `finalStep?: WorkflowStep`, `vars?: Record<string, string>` (workflow-level variable defaults for `{{varName}}` substitution)
+- `PromptStep extends ExecutionProperties` — `type?: "prompt"`, `name?`, `prompt`, `sessionId?`, `_runtime?: PromptRuntimeMetadata`
+- `ScriptStep extends ScriptProperties` — `type: "script"`, `name?`, `onPass?: ScriptStepAction`, `onFail?: ScriptStepAction`, `_runtime?: PromptRuntimeMetadata`
+- `WorkflowStep = PromptStep | ScriptStep` — discriminated union; use `isScriptStep()` type guard
+- `WorkflowStepType` — `"prompt" | "script"` (derived from `STEP_TYPES`)
+- `PromptRuntimeMetadata extends ExecutionProperties` — `startedAt`, `completedAt?`, `terminalStatus?: PromptTerminalStatus`, `retryCount?`, `responseText?` (for priorContext injection)
 - `WorkingFile extends PromptFile` — `originalFile?`, `workflowName`, `startedAt`, `lastModifiedAt?`, `_runtime?: WorkingFileRuntime`
 - `WorkingFileRuntime` — `currentIndex`, `executionState: ExecutionState`, `finalStep?: FinalStepRuntimeState`
 - `FinalStepRuntimeState` — `phase: FinalStepPhase`, `loopCount`, `status?`, `startedAt?`, `completedAt?`, `responseTexts?: string[]`
-- `QueueState` — `currentIndex`, `status: ExecutionState`, `prompts`, `results`, `stopped`, `completedIndices: Set<string>`, `totalExecutionTime`, `queueExtensions`, `lastReloadTime?`, `startTime?`, `pausedTime?`, `totalPausedDuration`, `workingFilePath?`, `workflowName?`
+
+**Runtime state machine types:**
+
+- `WorkflowRuntimeState` — `status: ExecutionState`, `stopped`, `startTime?`, `pausedTime?`, `totalPausedDuration` — owned by `WorkflowStateMachine`
+- `WorkflowRuntimeCommand` — `"startExecution" | "pause" | "resume" | "requestStop" | "confirmStopped" | "complete" | "fail" | "reopenForContinuation"`
+- `WorkflowRuntimeTransition` — `command`, `previous: WorkflowRuntimeState`, `current: WorkflowRuntimeState`, `timestampMs`
+- `WorkflowAttemptTarget` — `{ kind: "queue"; stepIndex } | { kind: "finalStep"; loopIndex }`
+- `WorkflowAttemptState` — `target`, `attemptIndex`, `status: WorkflowAttemptStatus`, `startedAt`, `completedAt?`, `retryCount?`, `maxRetries?`, `failureReason?`
+- `WorkflowAttemptCommand` — derived from `WORKFLOW_ATTEMPT_COMMANDS` (`beginAttempt | scheduleRetry | completeAttempt | failAttempt | cancelAttempt`)
+- `WorkflowAttemptTransition` — `command`, `previous?`, `current: WorkflowAttemptState`, `timestampMs`
+
+**Queue/result interfaces:**
+
+- `QueueState extends WorkflowRuntimeState` — `currentIndex`, `steps: WorkflowStep[]`, `results`, `completedIndices: Set<string>`, `totalExecutionTime`, `queueExtensions`, `lastReloadTime?`, `workingFilePath?`, `workflowName?`
 - `PromptResult` — `prompt`, `status: StepStatus`, `timestamp`, `endConditionResult?`, `error?`, `retryCount?`, `scriptOutput?`
-- `EndCondition` — `script`, `returns`, `compareSource?: EndConditionCompareSource`, `timeout?`, `maxRetries?`, `retryPrompt?`, `resumeSessionOnRetry?`
 - `DynamicQueueConfig` — `maxQueueSize`, `maxWorkflowExecutionTime`, `unlimitedMode`, `notifyOnExtension`
 - `WorkflowSummary` — `id`, `workflowName`, `filePath`, `workingFilePath?`, `executionState`, `currentStep` (0-indexed), `totalSteps`, `startedAt?`, `completedAt?`, `managedBy?: RunnerId`
 - `WorkflowRunnerLock` — `runner: RunnerId`, `pid`, `startedAt`, `lastHeartbeat`, `instanceId`, `workflowId`
@@ -169,7 +195,9 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 
 Workflow context passed to harness `sendPrompt` calls. Single source of truth — replaces all per-file inline type duplicates. Add fields here; no other file needs updating for new context properties.
 
-**`WorkflowContext` interface:** `promptIndex`, `allPrompts: PromptItem[]`, `filePath?`, `workflowName?` (human-readable, for temp file naming), `instanceId?` (workflow UUID for PTY session keying), `workingFilePath?` (sets `FLIGHTPATH_WORKING_FILE` for MCP), `resolvedProperties?: ResolvedProperties`, `workflowFile?: PromptFile`, `promptQueue?: PromptQueue`, `finalStepSessionId?` (consumed by SessionResolver when sessionId is the "finalStep" sentinel)
+**`WorkflowWorkingFilePersistence` interface:** `updateWorkingFile(skipMerge?: boolean): Promise<void>` — minimal working-file persistence hook exposed to harnesses.
+
+**`WorkflowContext` interface:** `promptIndex`, `allPrompts: WorkflowStep[]`, `filePath?`, `workflowName?` (human-readable, for temp file naming), `instanceId?` (workflow UUID for PTY session keying), `workingFilePath?` (sets `FLIGHTPATH_WORKING_FILE` for MCP), `resolvedProperties?: ResolvedProperties`, `workflowFile?: PromptFile`, `workingFilePersistence?: WorkflowWorkingFilePersistence`, `getFinalStepResponseTexts?: () => string[]` (read-only accessor for prior-context finalStep loop responses), `finalStepSessionId?` (consumed by SessionResolver when sessionId is the "finalStep" sentinel)
 </workflowContextTypes>
 
 <dashboardConstants>
@@ -194,22 +222,84 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 - `QUEUE_POSITION` — `next | end | beforeCurrent`
 - `EDITOR_TARGET_KINDS` — `newPrompt`
 - `EDITOR_PLACEHOLDER_TEXT` — `DEFAULT`, `FINAL_PROMPT` (placeholder hints for CodeMirrorEditor)
+- `WORKFLOW_ATTEMPT_STATUS` — `running | retrying | completed | failed | cancelled`
+- `PROMPT_TERMINAL_STATUS` — `completed | cancelled | failed` (subset of STEP_STATUS; absent = completed)
+- `INTERACTIVE_ABORT_KINDS` — `user-cancelled | process-exited`
 - `TERMINAL_SESSION_STATUS` — `running | completed | failed`
 - `SESSION_KINDS` — `ai-cli | shell`
-- `SESSION_ID_SENTINELS` — `{ FINAL_PROMPT: "finalStep" }` (resume session from prior finalStep loop)
-- `PROMPT_PROPERTIES` — property name constants: `PROMPT`, `ID`, `HARNESS`, `MODEL`, `AGENT`, `SKILLS`, `RESUME_SESSION`, `SESSION_ID`, `MCP_SERVERS`, `HOOKS`, `END_CONDITION`
+- `SESSION_ID_SENTINELS` — `{ FINAL_STEP: "finalStep" }` (resume session from prior finalStep loop)
+- `PRIOR_CONTEXT_KEYWORDS` — `all | previous | none | finalStepAll | finalStepPrevious`
+- `PRIOR_CONTEXT_ITEM_TYPES` — `finalStep` (discriminant for PriorContextItem.type)
+- `STEP_TYPES` — `prompt | script` (discriminant for WorkflowStep union)
+- `PROMPT_PROPERTIES` — property name constants: `PROMPT`, `ID`, `NAME`, `STEPS`, `FINAL_STEP`, `VARS`, `STEP_TYPE`, `SCRIPT`, `TIMEOUT`, `COMPARE_SOURCE`, `RETURNS`, `ON_PASS`, `ON_FAIL`, `HARNESS`, `MODEL`, `AGENT`, `SKILLS`, `RESUME_SESSION`, `SESSION_ID`, `MCP_SERVERS`, `HOOKS`, `END_CONDITION`, `PRE_CONDITION`, `PRIOR_CONTEXT`, `ADDITIONAL_ARGS`, `TOOL_PERMISSIONS`
 - `END_CONDITION_PROPERTIES` — `SCRIPT`, `RETURNS`, `TIMEOUT`, `MAX_RETRIES`, `RETRY_PROMPT`, `RESUME_SESSION_ON_RETRY`
 - `CLI_EVENT_TYPES` — `text | thinking | bashCommand | fileRead | fileWrite | fileEdit | fileDelete | mcpToolCall | webSearch | toolCall | toolResult`
 - `OPERATION_STATUS` — `initiated | completed | failed`
 - `STATUS_MESSAGE_SEVERITY` — `info | warning | error`
-- `RUNNER_IDS` — `vscode | cli` (written into workflow lock files)
+- `RUNNER_IDS` — `vscode | cli | server` (written into workflow lock files)
+- `PERMISSION_MODES` — `dangerouslyAllowAll | allowAll | custom | none`
 - `LOCK_STATUS` — `none | stale | active-vscode | active-cli`
 - `LOG_LEVELS` — `debug | info | warn | error` (webview → extension LOG_MESSAGE payload)
 - `ATTACHMENT_PREFIXES` — `file | symbol | directory | selection | git` (id namespace for `<attachment>` XML elements)
+- `OUTPUT_HISTORY_KINDS` — `cli | status | runtime` (discriminant for OrderedHistoryEntry union)
+- `WORKFLOW_ATTEMPT_COMMANDS` — `beginAttempt | scheduleRetry | completeAttempt | failAttempt | cancelAttempt`
 - `DEFAULT_WORKFLOW_NAME` — `"New Workflow"`
 
-**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `FinalStepPhase`, `HarnessId`, `StatusMessageSeverity`, `ActionType`, `QueuePosition`, `FileOperationStatus`, `CliEventType`, `HarnessStatusString`, `WebviewLogLevel`, `RunnerId`, `LockStatus`, `ExecutionMode`, `EditorTargetKind`, `TerminalSessionStatus`, `SessionKind`
+**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `FinalStepPhase`, `HarnessId`, `StatusMessageSeverity`, `ActionType`, `QueuePosition`, `FileOperationStatus`, `CliEventType`, `HarnessStatusString`, `WebviewLogLevel`, `RunnerId`, `LockStatus`, `ExecutionMode`, `EditorTargetKind`, `TerminalSessionStatus`, `SessionKind`, `WorkflowAttemptStatus`, `PromptTerminalStatus`, `InteractiveAbortKind`, `PermissionMode`, `StepType`, `PriorContextKeyword`, `PriorContextItemType`, `OutputHistoryKind`, `WorkflowAttemptCommandValue`
 </dashboardConstants>
+
+<flightPathSettings>
+**File: FlightPathSettings.ts**
+
+Structured global settings interface replacing per-key VS Code settings. Single source of truth for all extension configuration.
+
+**`FlightPathGlobalSettings` interface** — grouped by concern:
+
+- **Core:** `harness: HarnessId`, `models: Partial<Record<HarnessId, string>>`, `additionalArgs: Partial<Record<HarnessId, string>>`
+- **Execution:** `execution: { mode, maxPromptTimeout, scriptTimeout, closeTerminalOnComplete }`
+- **Tools:** `tools: { permissionMode, allowed, denied, copilotAllowedDirs, copilotAllowAllPaths, codexSandboxMode, codexApprovalPolicy, codexAllowedDirs }`
+- **Workflow:** `workflow: { defaultFormat, defaultTemplate, defaultAgent, defaultSkills, resumeExistingSession, priorContext, autoLoadRecentSession, maxRetries, retryPrompt, omitAgentsSkillsOnResume }`
+- **Chat:** `chat: { windowLocation, inactivityTimeout, treatTimeoutAsSuccess, forceAgentMode, useNativeAttachments }`
+- **MCP & Hooks:** `mcp: { defaultServers }`, `hooks: UserHookConfig[]`
+- **Queue:** `queue: { maxSize, maxWorkflowExecutionTime, unlimitedMode, notifyOnExtension }`
+- **History:** `history: { saveOutput, maxRuns }`
+- **UI:** `ui: { showCliOutput, showCliCommand, logRawCliOutput, openPromptsInSecondGroup, respectGitignoreForCompletions, confirmDeleteOperations, confirmResetOperations }`
+- **Server:** `server: { enabled, port, standalonePort, theme, tls? }`
+- **Advanced:** `enableDiagnosticLogs: boolean`
+
+**`PartialFlightPathSettings`** — shallow-partial version for config file contents (each top-level group is `Partial<...>`).
+
+**`FLIGHTPATH_SETTINGS_DEFAULTS`** — `FlightPathGlobalSettings` constant with all default values. Reference this when merging user config or resetting settings.
+</flightPathSettings>
+
+<workflowTimelineTypes>
+**File: WorkflowTimelineTypes.ts**
+
+Event-sourced timeline storage for workflow run history (v2 format, supersedes v1 `OutputHistoryTypes`). Stores events as an append-only JSONL file alongside a manifest.
+
+**Storage constants:**
+
+- `TIMELINE_STORAGE_FILES` — `{ MANIFEST: "manifest.json", EVENTS: "events.jsonl" }`
+- `TIMELINE_STORAGE_KIND` — `"timeline"` (manifest discriminant)
+- `TIMELINE_SCHEMA_VERSION` — `"2.0.0"`
+- `TIMELINE_EVENT_TYPES` — `workflowRuntimeTransitionRecorded | cliOutputRecorded | statusMessageRecorded | workspaceSnapshotCaptured | undoApplied | redoApplied` (plus legacy read-compat events: `statusMessagesUpdated | workspaceSnapshotUpdated | undoRecordUpdated`)
+
+**`WorkflowRunManifest` interface:** `schemaVersion`, `storageKind`, `workflowId`, `runId`, `startedAt`, `completedAt?`, `executionState`, `runStepCount`, `eventCount`, `nextSequence`, `lastUpdatedAt`
+
+**`WorkflowRuntimeTransitionPayload` interface:** `command: WorkflowRuntimeCommand`, `previous: WorkflowRuntimeState`, `current: WorkflowRuntimeState`
+
+**Event draft interfaces** (pre-write, no `workflowId/runId/sequence`): `WorkflowRuntimeTransitionRecordedEventDraft`, `CliOutputRecordedEventDraft` (with `attemptIndex`), `StatusMessageRecordedEventDraft`, `WorkspaceSnapshotCapturedEventDraft`, `UndoAppliedEventDraft`, `RedoAppliedEventDraft` — plus legacy drafts retained for read-compat.
+
+**Persisted event interfaces** (with `workflowId`, `runId`, `sequence`): same names without `Draft` suffix.
+
+**Discriminated union types:**
+
+- `WorkflowTimelineEventType` — string union derived from `TIMELINE_EVENT_TYPES`
+- `WorkflowTimelineEventDraft` — union of all draft event interfaces
+- `WorkflowTimelineEvent` — union of all persisted event interfaces
+
+**Targeting:** Targeted events (`CliOutputRecordedEvent`, `StatusMessageRecordedEvent`, workspace/undo events) include `target: OutputExecutionTarget` from `OutputHistoryTypes`; runtime transition events are run-level (no target).
+</workflowTimelineTypes>
 
 <typeSafetyPatterns>
 **Import constants from DashboardConstants (NEVER hardcode strings):**
@@ -253,7 +343,7 @@ const resumeSession =
   ConfigurationUtils.getResumeSession();
 ```
 
-**Null-disableable field semantics (`agent`, `skills`, `additionalArgs`, `hooks`, `toolPermissions`, `mcpServers`, `endCondition`):** `null` explicitly disables the inherited value; `undefined` inherits from the next tier. Always use `??` (not `||`) when checking these fields.
+**Null-disableable field semantics (`agent`, `skills`, `additionalArgs`, `hooks`, `toolPermissions`, `mcpServers`, `endCondition`, `preCondition`):** `null` explicitly disables the inherited value; `undefined` inherits from the next tier. Always use `??` (not `||`) when checking these fields.
 </typeSafetyPatterns>
 
 <relatedFiles>
@@ -287,7 +377,7 @@ const resumeSession =
 3. **Type Safety** - Use ExecutionState, StepStatus, MessageType, HarnessId, FinalStepPhase, etc. instead of raw strings
 4. **Import Consistency** - Always import from DashboardConstants for shared values
 5. **Harness terminology** - Use "harness" (not "provider") for AI framework/tool selection
-6. **Null semantics for agent/skills/additionalArgs/hooks/toolPermissions/mcpServers/endCondition** - `null` = explicitly disable, `undefined` = inherit; use `??` not `||`
+6. **Null semantics for agent/skills/additionalArgs/hooks/toolPermissions/mcpServers/endCondition/preCondition** - `null` = explicitly disable, `undefined` = inherit; use `??` not `||`
 7. **When adding new constants:**
    - Add to appropriate constant object in DashboardConstants.ts
    - Export as const with `as const` assertion

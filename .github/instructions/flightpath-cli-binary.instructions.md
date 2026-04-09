@@ -27,13 +27,15 @@ The FlightPath CLI adds only: argument parsing (Commander.js), TTY detection, `C
 **`src/cli.ts`** — Entry point. Calls `setRuntimeMode(RUNNER_IDS.CLI)` immediately on load, then defines Commander commands (`run`, `validate`). Orchestrates the execution flow:
 
 1. Parses CLI flags into `ResolvedCliConfig`
-2. Instantiates `CliAdapter` + registers it via `registerCliAdapter()`
-3. Creates `IntegrationFactory(platform)` + `WorkflowInstance`
-4. In headless mode, subscribes: `onPromptStart`, `onStreamingEvents`, `onStreamingChunk`, `onWorkflowStatusMessage`, `onPromptComplete`
-5. Calls `instance.loadPromptFile()` or `instance.loadPromptString()` (for `--prompt`), acquires `WorkflowLockManager` lock with 5s heartbeat
-6. Applies `--resume` / `--new-session` overrides to the first prompt's `sessionId`
-7. Calls `instance.executeLoadedPromptFile(harness)`
-8. Maps final state to an exit code via `getExitCode()`, releases lock
+2. Initialises `configService` with file-based backends: `setUserBackend(createUserConfigBackend())`, `setWorkspaceBackend(createWorkspaceConfigBackend(cwd))`, then `setCliOverlay(overlay)` for any explicitly-provided flags
+3. Instantiates `CliAdapter` + registers it via `registerCliAdapter()`
+4. Creates `IntegrationFactory(platform)` + `WorkflowInstance`
+5. In headless mode, subscribes: `onPromptStart`, `onStreamingEvents`, `onStreamingChunk`, `onWorkflowStatusMessage`, `onPromptComplete`
+6. Calls `instance.loadPromptFile()` or `instance.loadPromptString()` (for `--prompt`), acquires `WorkflowLockManager` lock with 5s heartbeat
+7. Merges `--var` flags into `workflowFile.vars` (CLI vars override workflow-level defaults)
+8. Applies `--resume` / `--new-session` overrides to the first prompt's `sessionId`
+9. Calls `instance.executeLoadedPromptFile(harness)`
+10. Maps final state to an exit code via `getExitCode()`, releases lock
 
 **`src/platform/CliAdapter.ts`** — Implements `PlatformAdapter`. Maps CLI flags to config keys that `ConfigurationUtils.get()` reads inside harness providers. Key mappings:
 
@@ -46,6 +48,9 @@ The FlightPath CLI adds only: argument parsing (Commander.js), TTY detection, `C
 | `cliExecutionMode`                                     | `"interactive"` or `"headless"` (TTY-detected or forced)                  |
 | `copilotCliModel` / `claudeCliModel` / `codexCliModel` | `--model` flag                                                            |
 | `scriptTimeout` / `maxPromptExecutionTime`             | `--script-timeout` / `--timeout` (converted back to seconds)              |
+| `vars`                                                 | `--var key=value` flags (merged over workflow-level `vars:` defaults)     |
+
+For any key not explicitly mapped above, `getConfig()` falls back to: (1) a direct property on `ResolvedCliConfig` with the same name, then (2) `configService.getNested(key)` (reads from user/workspace config files).
 
 VS Code-only features (`focusDashboard`) are not implemented.
 

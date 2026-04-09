@@ -86,18 +86,18 @@ Default uses last request (-1). Returns typed events array.
 - `inlineReference` items emitted as backtick text (filename only)
 - Structural items (`prepareToolInvocation`, `mcpServersStarting`, `textEditGroup`, `codeblockUri`, `undoStop`) are skipped
 
-**Tool call upgrades** — generic `TOOL_CALL` events are upgraded to specific typed events:
+**Tool call upgrades** — generic `TOOL_CALL` events are upgraded to specific typed events. Copilot Chat display IDs are first normalized to canonical names, then upgraded. Falls back to ID-based matching for unknown tools.
 
-| Canonical name                 | Upgraded event type  |
-| ------------------------------ | -------------------- |
-| `create_file`                  | `FILE_WRITE`         |
-| `replace_string_in_file`       | `FILE_EDIT`          |
-| `multi_replace_string_in_file` | Multiple `FILE_EDIT` |
-| `run_in_terminal`              | `BASH_COMMAND`       |
-| `read_file`                    | `FILE_READ`          |
-| `delete_file`                  | `FILE_DELETE`        |
-
-**Copilot tool ID normalization** — maps Copilot Chat display IDs to canonical names before upgrade (e.g. `copilot_createFile` → `create_file`). Falls back to ID-based matching for unknown tools.
+| Copilot display ID              | Canonical name               | Upgraded event type    |
+| ------------------------------- | ---------------------------- | ---------------------- |
+| `copilot_createFile`            | `create_file`                | `FILE_WRITE`           |
+| `copilot_replaceString`         | `replace_string_in_file`     | `FILE_EDIT`            |
+| `copilot_multiReplaceString`    | `multi_replace_string_in_file` | Multiple `FILE_EDIT` |
+| `copilot_readFile`              | `read_file`                  | `FILE_READ`            |
+| `copilot_deleteFile`            | `delete_file`                | `FILE_DELETE`          |
+| `copilot_renameFile`            | `rename_file`                | _(none — stays `TOOL_CALL`)_ |
+| `copilot_moveFile`              | `move_file`                  | _(none — stays `TOOL_CALL`)_ |
+| _(no display ID mapping)_       | `run_in_terminal`            | `BASH_COMMAND`         |
 
 **Static helpers (used by ChatSessionMonitor):**
 
@@ -149,7 +149,7 @@ Default uses last request (-1). Returns typed events array.
 <nativeAttachments>
 **NativeAttachmentHandler** (used when `chatUseNativeAttachments=true`):
 
-- Parses `#file:` and `#sym:` references from prompt via `parseAllFileReferences()`
+- Parses `@path` (file/directory) and `#sym:` (symbol) references from prompt via `parseAllFileReferences()`
 - Symbol references resolved to file locations via `resolveSymbol()` before attaching
 - Directories: `workbench.action.chat.attachFolder`
 - Files: open in editor (beside, preview) → `github.copilot.chat.attachFile` → close editor

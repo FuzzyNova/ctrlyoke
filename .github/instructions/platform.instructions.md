@@ -27,22 +27,24 @@ PlatformAdapter.ts          ← Abstract interface (the contract)
 <platformAdapter>
 **PlatformAdapter** (`PlatformAdapter.ts`) — the interface contract:
 
-| Method                            | VS Code                                                 | CLI                                                                   |
-| --------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------- |
-| `getConfig<T>(key, default)`      | `vscode.workspace.getConfiguration("flightpath").get()` | Switch on key → maps CLI flags to config values                       |
-| `getWorkspaceRoot()`              | `workspaceFolders[0].uri.fsPath`                        | `config.cwd ?? process.cwd()`                                         |
-| `log(message)`                    | `showInformationMessage()`                              | `console.log()` (suppressed when `--quiet`)                           |
-| `warn(message)`                   | `showWarningMessage()`                                  | `console.warn()` (suppressed when `--quiet`)                          |
-| `error(message)`                  | `showErrorMessage()`                                    | `console.error()` (always shown)                                      |
-| `showProgress(message)`           | No-op (status bar handles it)                           | `process.stdout.write("\r…")` (suppressed when `--quiet` or `--json`) |
-| `showChoice(message, ...options)` | `showWarningMessage(message, ...options)`               | Returns `undefined` (headless — no interactive prompts)               |
-| `getExtensionPath()`              | `context.extensionPath`                                 | Resolves package root from `__filename`                               |
+| Method                            | VS Code                                   | CLI                                                                   |
+| --------------------------------- | ----------------------------------------- | --------------------------------------------------------------------- |
+| `getWorkspaceRoot()`              | `workspaceFolders[0].uri.fsPath`          | `config.cwd ?? process.cwd()`                                         |
+| `log(message)`                    | `showInformationMessage()`                | `console.log()` (suppressed when `--quiet`)                           |
+| `warn(message)`                   | `showWarningMessage()`                    | `console.warn()` (suppressed when `--quiet`)                          |
+| `error(message)`                  | `showErrorMessage()`                      | `console.error()` (always shown)                                      |
+| `showProgress(message)`           | No-op (status bar handles it)             | `process.stdout.write("\r…")` (suppressed when `--quiet` or `--json`) |
+| `showChoice(message, ...options)` | `showWarningMessage(message, ...options)` | Returns `undefined` (headless — no interactive prompts)               |
+| `getExtensionPath()`              | `context.extensionPath`                   | Resolves package root from `__filename`                               |
+
+> **Note:** `getConfig<T>(key, default)` is **not** part of the `PlatformAdapter` interface. In VS Code, config is read via `vscode.workspace.getConfiguration()` directly. In CLI, the vscode-shim intercepts that same call and delegates to `CliAdapter.getConfig()` (see `<vscodeShim>` and `<cliAdapter>`).
 
 **Optional methods** (implemented by VsCodeAdapter only):
 
 - `openTextFile(path)` — opens editor tab
 - `focusDashboard()` — executes `flightpath.dashboard.focus` command
 - `isVsCode()` — returns `true`; used by `CliIntegration` to decide between VS Code terminal and `spawn` with `stdio: "inherit"`
+- `getExtensionContext()` — returns the underlying `vscode.ExtensionContext`; used by VS Code-only code (WorkflowOrchestrator, terminal creation, etc.)
   </platformAdapter>
 
 <cliAdapter>
@@ -54,9 +56,12 @@ PlatformAdapter.ts          ← Abstract interface (the contract)
 - `allowedTools[]`, `deniedTools[]`, `allowAllTools` (boolean)
 - `additionalDirs[]`, `resume`, `newSession`
 - `verbose`, `quiet`, `json`, `color`, `headless`
+- `vars: Record<string, string>` — variables from `--var key=value` flags; merged over workflow `vars: defaults`; substituted as `{{key}}` in prompt text, model, additionalArgs, hook commands, and endCondition script paths
 - `cliExecutionMode`: `"interactive" | "headless"` (detected from TTY or overridden by flags)
 
 **Key `getConfig()` mappings:**
+
+> `getConfig<T>(key, default)` is defined on `CliAdapter` (not on the `PlatformAdapter` interface). It is bridged into config consumers via the vscode-shim's `workspace.getConfiguration().get()`.
 
 | Config Key                                             | Source                                                                                             |
 | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
@@ -66,7 +71,7 @@ PlatformAdapter.ts          ← Abstract interface (the contract)
 | `cliExecutionMode`                                     | `config.cliExecutionMode`                                                                          |
 | `copilotCliModel` / `claudeCliModel` / `codexCliModel` | All map to `config.model` (single `--model` flag)                                                  |
 | `scriptTimeout` / `maxPromptExecutionTime`             | Stored in ms, converted to seconds (÷1000) to match `ConfigurationUtils` expectations              |
-| Other keys                                             | Fallback: direct property access on config object                                                  |
+| Other keys                                             | First: direct property on config object; then: `configService.getNested(key)`; finally: `defaultValue` |
 
 **Behavioral differences from VsCodeAdapter:**
 
@@ -88,22 +93,23 @@ PlatformAdapter.ts          ← Abstract interface (the contract)
 **Adapter registration bridge:**
 
 ```typescript
-registerCliAdapter(adapter); // Called in cli.ts after constructing CliAdapter
+registerCliAdapter(adapter);   // Called in cli.ts after constructing CliAdapter
+unregisterCliAdapter();        // Test/teardown only — clears the registered adapter
 ```
 
 Once registered, `workspace.getConfiguration().get(key, default)` delegates to `adapter.getConfig(key, default)` instead of returning the default. This makes `ConfigurationUtils` calls inside CLI provider code (e.g. `getCliAllowedTools()`) transparently reflect CLI flags.
 
 **Stubbed API surfaces:**
 
-| Namespace    | Behavior                                                                                                                                                               |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `window`     | All message/dialog methods return `undefined`; `createTerminal()` throws (must never be called in CLI)                                                                 |
-| `workspace`  | `getConfiguration()` delegates to registered adapter; `fs` delegates to Node.js `fs`; `openTextDocument` reads via `fs.readFile`; `createFileSystemWatcher` is a no-op |
-| `commands`   | `executeCommand()` returns `undefined`                                                                                                                                 |
-| `Uri`        | Wraps paths in `{ fsPath, scheme, path }` objects                                                                                                                      |
-| `lm`         | `selectChatModels()` returns `[]`                                                                                                                                      |
-| `languages`  | `createDiagnosticCollection()` returns no-op                                                                                                                           |
-| `extensions` | `getExtension()` returns `undefined`                                                                                                                                   |
+| Namespace    | Behavior                                                                                                                                                                            |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `window`     | `showInformationMessage/Warning/Error` return `undefined`; `createOutputChannel` returns no-op channel; `setStatusBarMessage` returns no-op disposable; `showQuickPick`/`showTextDocument`/`onDidChangeActiveTextEditor` are no-ops; `createTerminal()` throws (must never be called in CLI) |
+| `workspace`  | `getConfiguration()` delegates to registered adapter; `fs` has `stat`, `readFile`, `writeFile`, `createDirectory`, `readDirectory` (all via Node.js `fs`); `openTextDocument` reads via `fs.readFile`; `createFileSystemWatcher` is a no-op |
+| `commands`   | `executeCommand()` returns `undefined`                                                                                                                                              |
+| `Uri`        | `file()` wraps path in `{ fsPath, scheme, path }`; `joinPath()` uses `path.join`; `parse()` wraps URI string                                                                       |
+| `lm`         | `selectChatModels()` returns `[]`                                                                                                                                                   |
+| `languages`  | `createDiagnosticCollection()` returns no-op                                                                                                                                        |
+| `extensions` | `getExtension()` returns `undefined`                                                                                                                                                |
 
 **Types and classes stubbed:** `Disposable`, `Position`, `Range`, `RelativePattern`, `EventEmitter<T>`, `FileType` enum, `ConfigurationTarget` enum — all match VS Code API signatures.
 
