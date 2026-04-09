@@ -42,6 +42,7 @@ import { WebviewMessageRouter } from "./WebviewMessageRouter";
 import type { IDashboardProvider } from "./IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { PostMessageFn } from "./WebviewSettingsSync";
+import { DashboardBroadcastHub } from "./DashboardBroadcastHub";
 
 // Re-export CliOutput for external use
 export type { CliOutput } from "../types/WebviewMessageTypes";
@@ -64,6 +65,7 @@ export class FlightPathWebviewProvider
   private _pendingActiveWorkflowId: string | undefined;
   private workflowOrchestrator?: WorkflowOrchestrator;
   private outputHistoryManager?: OutputHistoryManager;
+  private hub?: DashboardBroadcastHub;
   private modelsLoadedDisposable?: vscode.Disposable;
   private configServiceUnsubscribe?: () => void;
   private runningServerUrl?: string;
@@ -120,10 +122,14 @@ export class FlightPathWebviewProvider
       }
     });
 
-    // Listen for file-based config changes (configService) to keep the webview in sync
+    // Listen for file-based config changes (configService) to keep all clients in sync.
+    // When the hub is available (after orchestrator init), broadcast to panel + all browser
+    // tabs. Before the hub is wired up (early startup), fall back to panel-only.
     this.configServiceUnsubscribe = configService.subscribe(() => {
       if (this.view) {
-        this.settingsSync.sendGlobalSettingsUpdate();
+        this.settingsSync.sendGlobalSettingsUpdate(
+          this.hub ? (msg) => this.hub!.postMessage(msg) : undefined
+        );
       }
     });
 
@@ -901,6 +907,14 @@ window.vscodeApi = acquireVsCodeApi();
    */
   public setOutputHistoryManager(manager: OutputHistoryManager): void {
     this.outputHistoryManager = manager;
+  }
+
+  /**
+   * Set DashboardBroadcastHub reference so config-change notifications
+   * broadcast to all clients (panel + browser tabs), not just the panel.
+   */
+  public setHub(hub: DashboardBroadcastHub): void {
+    this.hub = hub;
   }
 
   /**

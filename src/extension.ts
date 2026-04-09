@@ -356,6 +356,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Set orchestrator reference in webview provider (for getting current state)
     webviewProvider.setWorkflowOrchestrator(workflowOrchestrator);
+    // Give the provider the hub so config-change broadcasts reach browser tabs too
+    webviewProvider.setHub(workflowOrchestrator.getDashboardBroadcastHub());
 
     // Share OutputHistoryManager with webview provider (single instance)
     webviewProvider.setOutputHistoryManager(

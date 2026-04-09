@@ -27,7 +27,7 @@ constructor(hub: DashboardBroadcastHub, webviewProvider: FlightPathWebviewProvid
 <dashboardProviderImpl>
 All `IDashboardProvider` methods call `this.broadcast(message)` to fan out to every open WebSocket connection.
 
-**Exception — `notifyActiveWorkflowChanged`:** deliberate no-op. Each browser client's active-workflow view is driven exclusively by `replayWorkflowStateTo()` scoped to that connection. The hub already routes `ACTIVE_WORKFLOW_CHANGED` only to clients[0] (VS Code), but the no-op guards against future hub changes.
+**Exceptions — methods that must never broadcast to browser clients:** `notifyActiveWorkflowChanged`, `updateFileSelected`, and `updateSessionRestored` are all deliberate no-ops. Each browser client's active-workflow view is driven exclusively by `replayWorkflowStateTo()` scoped to that connection. Broadcasting any of these would cause every open browser tab to jump to whatever workflow the VS Code sidebar just loaded. The hub already routes `ACTIVE_WORKFLOW_CHANGED` only to the panel client, but the no-ops guard against future hub changes and prevent the same class of bug in the file-selected/session-restored paths.
 
 **Theme vars:** `updateThemeVars(vars)` caches the latest snapshot and broadcasts `THEME_VARS_UPDATED`. Called from `extension.ts` via `setThemeVarsCapturedCallback` after VS Code captures CSS custom properties from its own webview.
 </dashboardProviderImpl>
@@ -102,7 +102,7 @@ webviewProvider.setThemeVarsCapturedCallback(undefined);
 
 <conventions>
 - **Single broadcast method:** all `IDashboardProvider` implementations call `this.broadcast(message)` — never write to individual connections directly except in `sendInitialState()` (scoped send needed there).
-- **No active-workflow broadcasts:** never broadcast `ACTIVE_WORKFLOW_CHANGED` to browser clients; each client's active view is owned by its connection-scoped `routeExternalMessage` flow.
+- **No active-view broadcasts:** never broadcast `ACTIVE_WORKFLOW_CHANGED`, `FILE_SELECTED`, or `SESSION_RESTORED` to browser clients; each client's active view is owned by its connection-scoped `replayWorkflowStateTo()` flow.
 - **Theme vars flow:** VS Code webview captures CSS vars → `setThemeVarsCapturedCallback` fires → `updateThemeVars()` caches + broadcasts → new clients get the cache immediately in `sendInitialState()`.
 - **HTML patching:** all VS Code URI placeholders (`{{...}}`) must be handled in `buildHtml()`; never leave unresolved placeholders reaching the browser.
 - **Path resolution:** `resolveWebviewDist()` uses `path.join(__dirname, "ui", "webview-react")` — esbuild sets `__dirname` to `out/` at runtime.

@@ -59,51 +59,44 @@ export class FlightPathHostedServer implements IDashboardProvider {
   }
 
   async updateFileSelected(
-    fileName: string,
-    steps: any[],
-    workflowName?: string,
-    finalStep?: PromptStep | null,
-    finalStepRuntime?: {
+    _fileName: string,
+    _steps: any[],
+    _workflowName?: string,
+    _finalStep?: PromptStep | null,
+    _finalStepRuntime?: {
       status?: StepStatus;
       loopCount: number;
       phase: FinalStepPhase;
     }
   ): Promise<void> {
-    this.broadcast({
-      type: MESSAGE_TYPES.FILE_SELECTED,
-      fileName,
-      steps,
-      workflowName,
-      finalStep,
-      finalStepRuntime,
-    });
+    // Intentional no-op — same reasoning as notifyActiveWorkflowChanged.
+    // FILE_SELECTED must never be broadcast to browser clients via the hub;
+    // each browser client's active-workflow view is driven exclusively by
+    // replayWorkflowStateTo(), which sends directly via the client's scoped
+    // postMessage. Broadcasting here would cause every browser tab to jump to
+    // whatever workflow the VS Code sidebar just loaded.
   }
 
   async updateSessionRestored(
-    fileName: string,
-    steps: any[],
-    results: any[],
-    executionState: string,
-    currentIndex: number,
-    workflowName?: string,
-    finalStep?: PromptStep | null,
-    finalStepRuntime?: {
+    _fileName: string,
+    _steps: any[],
+    _results: any[],
+    _executionState: string,
+    _currentIndex: number,
+    _workflowName?: string,
+    _finalStep?: PromptStep | null,
+    _finalStepRuntime?: {
       status?: StepStatus;
       loopCount: number;
       phase: FinalStepPhase;
     }
   ): Promise<void> {
-    this.broadcast({
-      type: MESSAGE_TYPES.SESSION_RESTORED,
-      fileName,
-      steps,
-      results,
-      executionState,
-      currentIndex,
-      workflowName,
-      finalStep,
-      finalStepRuntime,
-    });
+    // Intentional no-op — same reasoning as notifyActiveWorkflowChanged.
+    // SESSION_RESTORED must never be broadcast to browser clients via the hub;
+    // each browser client's active-workflow view is driven exclusively by
+    // replayWorkflowStateTo(), which sends directly via the client's scoped
+    // postMessage. Broadcasting here would cause every browser tab to jump to
+    // whatever workflow the VS Code sidebar just loaded.
   }
 
   notifyCliWatchOutput(
