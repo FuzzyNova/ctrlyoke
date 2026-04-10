@@ -26,7 +26,7 @@ export class CopilotNotificationMonitor
 {
   /** Logical → Copilot native event name mapping. Shared with CopilotChatIntegration. */
   static readonly EVENT_MAP: Record<string, string> = {
-    stop: "sessionEnd",
+    stop: "agentStop",
     sessionStart: "sessionStart",
     preToolUse: "preToolUse",
     postToolUse: "postToolUse",
@@ -91,21 +91,23 @@ export class CopilotNotificationMonitor
     // Map logical event names to Copilot's native event names
     const eventMap = CopilotNotificationMonitor.EVENT_MAP;
 
-    // Start with FlightPath's entries
+    // Start with FlightPath's entries (use eventMap as single source of truth for native event names)
+    const nativeSessionStart = eventMap.sessionStart;
+    const nativeStop = eventMap.stop;
     const hooks: Record<string, unknown[]> = {
-      sessionStart: [
+      [nativeSessionStart]: [
         {
           type: "command",
-          bash: `node "${bashScriptPath}" "${bashNotifyDir}" "sessionStart"`,
-          powershell: `node "${psScriptPath}" "${psNotifyDir}" "sessionStart"`,
+          bash: `node "${bashScriptPath}" "${bashNotifyDir}" "${nativeSessionStart}"`,
+          powershell: `node "${psScriptPath}" "${psNotifyDir}" "${nativeSessionStart}"`,
           timeoutSec: 10,
         },
       ],
-      sessionEnd: [
+      [nativeStop]: [
         {
           type: "command",
-          bash: `node "${bashScriptPath}" "${bashNotifyDir}" "sessionEnd"`,
-          powershell: `node "${psScriptPath}" "${psNotifyDir}" "sessionEnd"`,
+          bash: `node "${bashScriptPath}" "${bashNotifyDir}" "${nativeStop}"`,
+          powershell: `node "${psScriptPath}" "${psNotifyDir}" "${nativeStop}"`,
           timeoutSec: 10,
         },
       ],

@@ -19,7 +19,7 @@
  *   "version": 1,
  *   "hooks": {
  *     "sessionStart": [{"type": "command", "bash": "node <script> <dir> sessionStart"}],
- *     "sessionEnd": [{"type": "command", "bash": "node <script> <dir> sessionEnd"}]
+ *     "agentStop": [{"type": "command", "bash": "node <script> <dir> agentStop"}]
  *   }
  * }
  *
@@ -30,12 +30,12 @@
  *   "cwd": "C:\\dev\\FlightPath",
  *   "source": "new",          // sessionStart only
  *   "initialPrompt": "...",   // sessionStart only
- *   "reason": "complete"      // sessionEnd only
+ *   "reason": "complete"      // agentStop only
  * }
  *
  * Arguments:
  * - argv[2]: Notification directory
- * - argv[3]: Hook type (sessionStart | sessionEnd)
+ * - argv[3]: Hook type (sessionStart | agentStop)
  *
  * Debug logging: All hook data logged to <workspace>/.flightpath/logs/flightpath-copilot-hook-debug.log
  */
@@ -89,7 +89,7 @@ function main() {
       });
     }
 
-    if (hookType === "sessionStart" || hookType === "sessionEnd") {
+    if (hookType === "sessionStart" || hookType === "agentStop") {
       if (!fs.existsSync(notifyDir)) {
         fs.mkdirSync(notifyDir, { recursive: true });
         debugLog("📁 Created notification directory", { notifyDir });
@@ -97,7 +97,7 @@ function main() {
 
       // Use same file naming convention as flightpath-claude-hook.js:
       //   sessionStart → {runId|sessionId}-start.json  (runId when FLIGHTPATH_RUN_ID set)
-      //   sessionEnd   → {sessionId}-stop.json
+      //   agentStop    → {sessionId}-stop.json
       const safeSessionId = sessionId ? path.basename(sessionId) : null;
       const runId = process.env.FLIGHTPATH_RUN_ID
         ? path.basename(process.env.FLIGHTPATH_RUN_ID)

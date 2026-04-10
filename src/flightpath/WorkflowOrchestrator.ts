@@ -99,6 +99,9 @@ export class WorkflowOrchestrator {
   /** Stored send function for the VS Code panel — set when the panel connects via setDashboardReady. */
   private storedPanelSend?: (msg: unknown) => void;
 
+  /** Called once after the startup auto-load (including deferred loads) completes. */
+  private storedPostAutoLoadCallback?: () => Promise<void>;
+
   /** Per-client viewer registry: maps clientId → viewed workflowId (or null). */
   private viewerRegistry = new Map<string, string | null>();
 
@@ -646,6 +649,16 @@ export class WorkflowOrchestrator {
     }
   }
 
+  /**
+   * Register a one-shot callback invoked after the startup auto-load finishes
+   * (whether it runs immediately or is deferred until initialization completes).
+   * The router uses this to send WORKFLOW_PROPERTIES_UPDATE once the working
+   * file path is known.
+   */
+  setPostAutoLoadCallback(callback: () => Promise<void>): void {
+    this.storedPostAutoLoadCallback = callback;
+  }
+
   async setDashboardReady(panelSend?: (msg: unknown) => void): Promise<void> {
     Log.info("✅ Dashboard is ready");
     this.dashboardReady = true;
@@ -738,6 +751,10 @@ export class WorkflowOrchestrator {
               this.storedPanelSend,
               this.PANEL_CLIENT_ID
             );
+          }
+          if (this.storedPostAutoLoadCallback) {
+            await this.storedPostAutoLoadCallback();
+            this.storedPostAutoLoadCallback = undefined;
           }
         }
       );
@@ -947,13 +964,25 @@ export class WorkflowOrchestrator {
    * Unified client-ready handler: registers the client, replays the workflow
    * state if one was previously viewed, and sends the current workflows list.
    * Called for both the VS Code panel and browser WebSocket clients.
+   *
+   * For browser clients with no previously-viewed workflow, falls back to the
+   * panel's currently viewed workflow so the browser mirrors the panel state
+   * on first connect (same auto-load behaviour as the panel).
    */
   async handleClientReady(
     clientId: string,
     send: (msg: unknown) => void
   ): Promise<void> {
     this.registerClient(clientId);
-    const viewedId = this.getViewedWorkflowId(clientId);
+    let viewedId = this.getViewedWorkflowId(clientId);
+
+    // Browser clients connecting for the first time have no viewed workflow.
+    // Fall back to whatever the panel is currently viewing so the browser
+    // mirrors the panel's session on first connect.
+    if (!viewedId && clientId !== this.PANEL_CLIENT_ID) {
+      viewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+    }
+
     if (viewedId) {
       await this.replayWorkflowStateTo(viewedId, send, clientId);
     }

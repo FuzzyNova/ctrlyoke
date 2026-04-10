@@ -166,11 +166,19 @@ export class WebviewMessageRouter {
       // Panel-only extras:
       if (this.clientId === PANEL_CLIENT_ID) {
         if (orchestrator) {
+          // Register the callback before setDashboardReady so it's in place
+          // whether the auto-load runs immediately (orchestrator already init'd)
+          // or is deferred until initialize() completes.
+          orchestrator.setPostAutoLoadCallback(async () => {
+            await this.settingsSync.sendWorkflowPropertiesToSettings(
+              this.getCurrentPostMessage(),
+              this.clientId
+            );
+          });
           await orchestrator.setDashboardReady(this.scopedPostMessage);
-          // setDashboardReady calls replayWorkflowStateTo (webview reload) and/or
-          // triggerAutoLoad — both emit SESSION_RESTORED which triggers
-          // applyWorkflowChange(). Repopulate properties so the PropertiesPanel
-          // reflects the auto-loaded (or replayed) workflow's saved configuration.
+          // setDashboardReady may replay an existing workflow (webview reload).
+          // If it did, sendWorkflowPropertiesToSettings is needed here too since
+          // the callback only fires from triggerAutoLoad (not from the replay).
           await this.settingsSync.sendWorkflowPropertiesToSettings(
             this.getCurrentPostMessage(),
             this.clientId
@@ -689,10 +697,14 @@ export class WebviewMessageRouter {
     });
 
     // ── Per-workflow targeted controls ────────────────────────────────────
-    table.set(MESSAGE_TYPES.RUN_WORKFLOW, async (message) => {
+    table.set(MESSAGE_TYPES.RUN_WORKFLOW, (message) => {
       const { workflowId } = message;
       if (workflowId) {
-        await this.getOrchestrator()?.executeWorkflow(workflowId);
+        // Fire-and-forget: executeWorkflow runs the entire workflow loop and must
+        // not be awaited here — awaiting would block the routeQueue for the full
+        // duration of the run, preventing stop/pause/switch-workflow/terminal-input
+        // messages from ever being processed.
+        void this.getOrchestrator()?.executeWorkflow(workflowId);
       }
     });
 

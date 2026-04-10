@@ -75,7 +75,7 @@ export interface McpServerConfig {
  *
  * | Logical name      | Claude/Qwen      | Copilot CLI        | Gemini CLI   | Codex  | OpenCode                |
  * |-------------------|------------------|--------------------|--------------|--------|-------------------------|
- * | "stop"            | Stop             | sessionEnd         | AfterAgent   | notify | session.status idle      |
+ * | "stop"            | Stop             | agentStop          | AfterAgent   | notify | session.status idle      |
  * | "sessionStart"    | SessionStart     | sessionStart       | SessionStart | (none) | session.created          |
  * | "preToolUse"      | PreToolUse       | preToolUse         | BeforeTool   | (none) | tool.execute.before      |
  * | "postToolUse"     | PostToolUse      | postToolUse        | AfterTool    | (none) | tool.execute.after       |

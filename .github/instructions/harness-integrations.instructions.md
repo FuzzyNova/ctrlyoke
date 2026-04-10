@@ -354,15 +354,15 @@ Summary of required layers:
 **Completion Detection**:
 
 - **Headless**: Process exit (deterministic)
-- **Interactive**: sessionStart + sessionEnd hooks (write JSON to `.flightpath/temp/copilot-notifications/`)
+- **Interactive**: sessionStart + agentStop hooks (write JSON to `.flightpath/temp/copilot-notifications/`)
 - **Hook format**: `.github/hooks/flightpath-<stem>-p<promptIndex>.json` with bash/powershell fields
 - **Per-prompt files**: Each prompt gets a unique hook file — no merging conflicts in parallel workflows
 - **File naming**: `session-{sessionId}.json` in notification directory; `status` field distinguishes start/end
   - sessionStart writes: `{ status: "started", sessionId: "...", hookType: "sessionStart" }`
-  - sessionEnd overwrites: `{ status: "completed", sessionId: "...", hookType: "sessionEnd" }`
+  - agentStop overwrites: `{ status: "completed", sessionId: "...", hookType: "agentStop" }`
 - **Monitoring**: Status-aware mode — polls `session-{sessionId}.json` for `status: "completed"`, skips `status: "started"`
 - **Session ID**: Extracted from sessionStart hook notification (no log file search needed)
-- **User hooks**: Appended to FlightPath hooks per event (sessionStart, sessionEnd) in the hook config JSON
+- **User hooks**: Appended to FlightPath hooks per event (sessionStart, agentStop) in the hook config JSON
 - **Cleanup**: Hook files tracked in `interactiveHookFilePaths[]` for deletion after workflow
 
 **Output Format**: Plain text with statistics on stderr
@@ -688,7 +688,7 @@ Summary of required layers:
 
 **Event mapping**: Each provider maps generic hook events to CLI-native event names:
 
-- `stop` → Copilot: `sessionEnd`, Claude: `Stop`, Gemini: `AfterAgent`, Qwen: `Stop`
+- `stop` → Copilot: `agentStop`, Claude: `Stop`, Gemini: `AfterAgent`, Qwen: `Stop`
 - `sessionStart` → all: respective native `SessionStart` / `sessionStart`
 - Claude/Qwen additionally support: `preToolUse`, `postToolUse`
 - Qwen additionally supports: `userPromptSubmit`

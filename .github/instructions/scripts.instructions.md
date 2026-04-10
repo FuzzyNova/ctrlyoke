@@ -23,7 +23,7 @@ Most scripts are plain CommonJS Node.js (`.js`). The **OpenCode plugin is the ex
 
 **`flightpath-copilot-hook.js`** — Copilot CLI hook handler
 
-- Handles two events: `sessionStart`, `sessionEnd`
+- Handles two events: `sessionStart`, `agentStop`
 - Arguments: `node <script> <notifyDir> <hookType>`
 - Input: JSON read from **stdin** via `readStdinJson` (Copilot pipes hook payload including `sessionId`, `cwd`)
 - Registered via `.github/hooks/*.json` config files (one per event):
@@ -39,7 +39,7 @@ Most scripts are plain CommonJS Node.js (`.js`). The **OpenCode plugin is the ex
   ```
 - Writes notification files using the **shared schema** so `NotificationMonitorBase` can share all monitoring logic:
   - `sessionStart` → `{runId|sessionId}-start.json` with `{ hookEvent: "SessionStart", status: "started", ... }`
-  - `sessionEnd` → `{sessionId}-stop.json` with `{ hookEvent: "Stop", status: "completed", ... }`
+  - `agentStop` → `{sessionId}-stop.json` with `{ hookEvent: "Stop", status: "completed", ... }`
 - Start file uses `FLIGHTPATH_RUN_ID` env var as prefix when set (for parallel-workflow collision avoidance), falls back to sessionId
 - Falls back to `${hookType}-${Date.now()}.json` if no session ID is present
 
