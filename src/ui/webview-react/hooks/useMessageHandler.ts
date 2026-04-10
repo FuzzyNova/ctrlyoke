@@ -170,13 +170,13 @@ function applyWorkflowChange(): void {
 
   editorStore.setHasActiveQueue(true);
 
-  // Reset workflow properties so stale values from the previous workflow don't
-  // persist. The extension sends WORKFLOW_PROPERTIES_UPDATE immediately after
-  // FILE_SELECTED / SESSION_RESTORED with the new workflow's values (populated
-  // with VS Code defaults for any unset properties), so the WorkflowPropertiesPanel
-  // will be updated to reflect the new workflow's actual configuration.
-  useSettingsStore.getState().clearWorkflowProperties();
-  useWorkflowStore.getState().syncIncomingWorkflowProperties({});
+  // Do NOT clear workflowProperties here. The extension sends WORKFLOW_PROPERTIES_UPDATE
+  // in a separate message after SESSION_RESTORED, which means clearing here causes a
+  // visible flash: the panel renders once with global defaults (cleared state) before
+  // settling on the correct values. Instead, we leave the previous workflow's properties
+  // in place and let WORKFLOW_PROPERTIES_UPDATE do a full atomic replacement — its
+  // setWorkflowProperties() call replaces the entire object, so unset fields correctly
+  // fall through to global defaults without an intermediate "global defaults" render.
   useSettingsStore.getState().setWorkflowLoaded(true);
 }
 

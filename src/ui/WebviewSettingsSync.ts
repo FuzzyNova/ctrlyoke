@@ -350,6 +350,12 @@ export class WebviewSettingsSync {
       );
     } catch (error) {
       Log.error("Failed to send workflow properties to settings:", error);
+      // Send empty properties so the panel doesn't display stale values from the
+      // previous workflow (applyWorkflowChange no longer clears them proactively).
+      this.emitMessage(
+        { type: MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE, workflowProperties: {} },
+        postMessage
+      );
     }
   }
 

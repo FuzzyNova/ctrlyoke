@@ -502,6 +502,13 @@ export class WebviewMessageRouter {
           this.scopedPostMessage,
           this.clientId
         );
+        // FILE_SELECTED (emitted during replay) calls applyWorkflowChange() which
+        // clears workflowProperties. Repopulate them so the PropertiesPanel reflects
+        // the loaded workflow's saved configuration — same pattern as SWITCH_WORKFLOW.
+        await this.settingsSync.sendWorkflowPropertiesToSettings(
+          this.getCurrentPostMessage(),
+          this.clientId
+        );
         return;
       }
       // Fallback when orchestrator is not yet available
