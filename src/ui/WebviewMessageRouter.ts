@@ -726,16 +726,15 @@ export class WebviewMessageRouter {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return;
       try {
-        // Skip terminal replay: the client's xterm.js registry is intact across
-        // workflow switches (terminalRegistry is module-level, outside React).
-        // Re-sending TERMINAL_STARTED would trigger clearAiCliSessions() in
-        // terminalMessageHandlers, disposing the live xterm and causing the
-        // "briefly see scrollback then blank" bug — for both panel and browser.
+        // Include terminal replay so clients switching to a workflow with an active
+        // PTY session receive TERMINAL_STARTED and enter view-only mode if another
+        // client is the controller. The TERMINAL_STARTED handler is idempotent:
+        // if the session is already registered it updates controller state only,
+        // avoiding the old "briefly see scrollback then blank" flicker.
         await orchestrator.replayWorkflowStateTo(
           workflowId,
           this.scopedPostMessage,
-          this.clientId,
-          { skipTerminalReplay: true }
+          this.clientId
         );
         // SESSION_RESTORED (sent by the replay) clears workflowProperties via applyWorkflowChange().
         // Repopulate them immediately so the PropertiesPanel shows the correct state.

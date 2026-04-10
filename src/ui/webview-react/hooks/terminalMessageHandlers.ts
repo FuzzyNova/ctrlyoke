@@ -77,6 +77,25 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       return;
     }
 
+    // Determine if this client is the controller for this session.
+    // If controllerClientId is undefined, auto-claim by sending TERMINAL_CLAIM_CONTROL.
+    const myClientId = uiState.myClientId;
+    const isController =
+      controllerClientId === undefined || controllerClientId === myClientId;
+
+    // Idempotency: if this exact session is already registered (e.g. client switched away
+    // and back, or is a new viewer joining a workflow that already sent TERMINAL_STARTED),
+    // just update controller state without clearing and recreating the xterm instance.
+    // Clearing+recreating causes a "briefly see scrollback then blank" flicker.
+    const existingSessions = useTerminalStore.getState().sessions[workflowId] ?? [];
+    if (existingSessions.some((s) => s.id === sessionId)) {
+      useTerminalStore.getState().setSessionController(workflowId, sessionId, isController);
+      if (controllerClientId === undefined) {
+        sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, { workflowId, sessionId });
+      }
+      return;
+    }
+
     // For ai-cli sessions, only one should exist at a time per workflow.
     // Replace any previous ai-cli session so prompts within a run don't accumulate
     // separate xterm views. (clearAiCliSessions at WORKFLOW_STARTED handles run-to-run
@@ -91,12 +110,6 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
         termStore.clearAiCliSessions(workflowId);
       }
     }
-
-    // Determine if this client is the controller for this session.
-    // If controllerClientId is undefined, auto-claim by sending TERMINAL_CLAIM_CONTROL.
-    const myClientId = uiState.myClientId;
-    const isController =
-      controllerClientId === undefined || controllerClientId === myClientId;
 
     useTerminalStore.getState().addSession({
       id: sessionId,
