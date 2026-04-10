@@ -48,18 +48,20 @@ export function ChatSection({ settings, onUpdate }: Props) {
         Chat (Copilot Chat Harness)
       </h3>
       <div>
-        <label className="block text-xs text-description-fg mb-1">Chat window location</label>
+        <label htmlFor="chat-window-location" className="block text-xs text-description-fg mb-1">Chat window location</label>
         <CustomSelect
+          id="chat-window-location"
           value={chat.windowLocation}
           onChange={(v) => onUpdate("chat.windowLocation", v, s)}
           options={WINDOW_LOCATION_OPTIONS}
         />
       </div>
       <div>
-        <label className="block text-xs text-description-fg mb-1">
+        <label htmlFor="chat-inactivity-timeout" className="block text-xs text-description-fg mb-1">
           Inactivity timeout (seconds)
         </label>
         <input
+          id="chat-inactivity-timeout"
           type="number"
           min={0}
           value={chat.inactivityTimeout}

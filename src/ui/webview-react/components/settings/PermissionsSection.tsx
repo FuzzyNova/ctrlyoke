@@ -70,10 +70,11 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
       {isCustom && (
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-description-fg mb-1">
+            <label htmlFor="tools-allowed" className="block text-xs text-description-fg mb-1">
               Allowed tools (comma-separated)
             </label>
             <textarea
+              id="tools-allowed"
               rows={3}
               value={tools.allowed.join(", ")}
               onChange={(e) =>
@@ -90,10 +91,11 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
             />
           </div>
           <div>
-            <label className="block text-xs text-description-fg mb-1">
+            <label htmlFor="tools-denied" className="block text-xs text-description-fg mb-1">
               Denied tools (comma-separated)
             </label>
             <textarea
+              id="tools-denied"
               rows={3}
               value={tools.denied.join(", ")}
               onChange={(e) =>
@@ -122,10 +124,11 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
           onChange={(v) => onUpdate("tools.copilotAllowAllPaths", v, s)}
         />
         <div className="mt-2">
-          <label className="block text-xs text-description-fg mb-1">
+          <label htmlFor="copilot-allowed-dirs" className="block text-xs text-description-fg mb-1">
             Allowed directories (one per line)
           </label>
           <textarea
+            id="copilot-allowed-dirs"
             rows={3}
             value={tools.copilotAllowedDirs.join("\n")}
             onChange={(e) =>
@@ -148,26 +151,29 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
         </h3>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-description-fg mb-1">Sandbox mode</label>
+            <label htmlFor="codex-sandbox-mode" className="block text-xs text-description-fg mb-1">Sandbox mode</label>
             <CustomSelect
+              id="codex-sandbox-mode"
               value={tools.codexSandboxMode}
               onChange={(v) => onUpdate("tools.codexSandboxMode", v, s)}
               options={CODEX_SANDBOX_OPTIONS}
             />
           </div>
           <div>
-            <label className="block text-xs text-description-fg mb-1">Approval policy</label>
+            <label htmlFor="codex-approval-policy" className="block text-xs text-description-fg mb-1">Approval policy</label>
             <CustomSelect
+              id="codex-approval-policy"
               value={tools.codexApprovalPolicy}
               onChange={(v) => onUpdate("tools.codexApprovalPolicy", v, s)}
               options={CODEX_APPROVAL_OPTIONS}
             />
           </div>
           <div>
-            <label className="block text-xs text-description-fg mb-1">
+            <label htmlFor="codex-allowed-dirs" className="block text-xs text-description-fg mb-1">
               Allowed directories (one per line)
             </label>
             <textarea
+              id="codex-allowed-dirs"
               rows={3}
               value={tools.codexAllowedDirs.join("\n")}
               onChange={(e) =>

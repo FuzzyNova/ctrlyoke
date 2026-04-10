@@ -56,8 +56,10 @@ export function ServerSection({ settings, onUpdate }: Props) {
               {serverUrl}
             </a>
             <button
+              type="button"
               onClick={() => navigator.clipboard.writeText(serverUrl)}
               title="Copy URL"
+              aria-label="Copy URL"
               className="shrink-0 text-description-fg hover:text-foreground"
             >
               <i className="codicon codicon-copy" />
@@ -66,8 +68,9 @@ export function ServerSection({ settings, onUpdate }: Props) {
         )}
 
         <div>
-          <label className="block text-xs text-description-fg mb-1">Server port</label>
+          <label htmlFor="server-port" className="block text-xs text-description-fg mb-1">Server port</label>
           <input
+            id="server-port"
             type="number"
             value={server.port}
             onChange={(e) => onUpdate("server.port", Number(e.target.value), s)}
@@ -76,8 +79,9 @@ export function ServerSection({ settings, onUpdate }: Props) {
         </div>
 
         <div>
-          <label className="block text-xs text-description-fg mb-1">Standalone port</label>
+          <label htmlFor="server-standalone-port" className="block text-xs text-description-fg mb-1">Standalone port</label>
           <input
+            id="server-standalone-port"
             type="number"
             value={server.standalonePort}
             onChange={(e) => onUpdate("server.standalonePort", Number(e.target.value), s)}

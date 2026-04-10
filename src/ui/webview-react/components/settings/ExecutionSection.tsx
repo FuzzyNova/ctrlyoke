@@ -47,18 +47,20 @@ export function ExecutionSection({ settings, onUpdate }: Props) {
         Execution
       </h3>
       <div>
-        <label className="block text-xs text-description-fg mb-1">Execution mode</label>
+        <label htmlFor="exec-mode" className="block text-xs text-description-fg mb-1">Execution mode</label>
         <CustomSelect
+          id="exec-mode"
           value={exec.mode}
           onChange={(v) => onUpdate("execution.mode", v, s)}
           options={MODE_OPTIONS}
         />
       </div>
       <div>
-        <label className="block text-xs text-description-fg mb-1">
+        <label htmlFor="exec-max-prompt-timeout" className="block text-xs text-description-fg mb-1">
           Max prompt timeout (seconds, -1 = unlimited)
         </label>
         <input
+          id="exec-max-prompt-timeout"
           type="number"
           min={-1}
           value={exec.maxPromptTimeout}
@@ -69,10 +71,11 @@ export function ExecutionSection({ settings, onUpdate }: Props) {
         />
       </div>
       <div>
-        <label className="block text-xs text-description-fg mb-1">
+        <label htmlFor="exec-script-timeout" className="block text-xs text-description-fg mb-1">
           Script timeout (seconds)
         </label>
         <input
+          id="exec-script-timeout"
           type="number"
           min={1}
           value={exec.scriptTimeout}

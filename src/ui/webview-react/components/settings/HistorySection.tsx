@@ -47,10 +47,11 @@ export function HistorySection({ settings, onUpdate }: Props) {
         onChange={(v) => onUpdate("history.saveOutput", v, s)}
       />
       <div>
-        <label className="block text-xs text-description-fg mb-1">
+        <label htmlFor="history-max-runs" className="block text-xs text-description-fg mb-1">
           Max history runs (-1 = unlimited)
         </label>
         <input
+          id="history-max-runs"
           type="number"
           min={-1}
           value={history.maxRuns}

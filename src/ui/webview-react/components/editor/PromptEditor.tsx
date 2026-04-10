@@ -727,10 +727,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         <div className="flex flex-col flex-1 overflow-auto px-3 py-3 gap-4 bg-editor-bg">
           {/* Script command */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-foreground">
+            <label htmlFor="script-command" className="text-xs font-medium text-foreground">
               Script command
             </label>
             <input
+              id="script-command"
               type="text"
               value={scriptCommand}
               onChange={(e) => setScriptCommand(e.target.value)}
@@ -744,10 +745,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           {/* On Pass + On Fail (side-by-side) */}
           <div className="flex gap-3">
             <div className="flex flex-col gap-1 flex-1">
-              <label className="text-xs font-medium text-foreground">
+              <label htmlFor="script-on-pass" className="text-xs font-medium text-foreground">
                 On Pass
               </label>
               <select
+                id="script-on-pass"
                 value={scriptOnPass}
                 onChange={(e) => setScriptOnPass(e.target.value)}
                 disabled={isCLIManaged}
@@ -759,10 +761,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               </select>
             </div>
             <div className="flex flex-col gap-1 flex-1">
-              <label className="text-xs font-medium text-foreground">
+              <label htmlFor="script-on-fail" className="text-xs font-medium text-foreground">
                 On Fail
               </label>
               <select
+                id="script-on-fail"
                 value={scriptOnFail}
                 onChange={(e) => setScriptOnFail(e.target.value)}
                 disabled={isCLIManaged}
@@ -778,10 +781,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           {/* Compare Source + Expected Return (side-by-side) */}
           <div className="flex gap-3">
             <div className="flex flex-col gap-1 flex-1">
-              <label className="text-xs font-medium text-foreground">
+              <label htmlFor="script-compare-source" className="text-xs font-medium text-foreground">
                 Compare Source
               </label>
               <select
+                id="script-compare-source"
                 value={scriptCompareSource}
                 onChange={(e) => setScriptCompareSource(e.target.value)}
                 disabled={isCLIManaged}
@@ -795,10 +799,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               </select>
             </div>
             <div className="flex flex-col gap-1 flex-1">
-              <label className="text-xs font-medium text-foreground">
+              <label htmlFor="script-expected-return" className="text-xs font-medium text-foreground">
                 Expected Return
               </label>
               <input
+                id="script-expected-return"
                 type="text"
                 value={scriptReturns}
                 onChange={(e) => setScriptReturns(e.target.value)}
@@ -812,10 +817,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
           {/* Timeout */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-foreground">
+            <label htmlFor="script-timeout" className="text-xs font-medium text-foreground">
               Timeout (ms)
             </label>
             <input
+              id="script-timeout"
               type="number"
               min={0}
               step={1000}

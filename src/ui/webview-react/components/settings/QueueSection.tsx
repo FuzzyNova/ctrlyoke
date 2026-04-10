@@ -41,10 +41,11 @@ export function QueueSection({ settings, onUpdate }: Props) {
         Queue
       </h3>
       <div>
-        <label className="block text-xs text-description-fg mb-1">
+        <label htmlFor="queue-max-size" className="block text-xs text-description-fg mb-1">
           Max queue size
         </label>
         <input
+          id="queue-max-size"
           type="number"
           min={1}
           value={queue.maxSize}
@@ -55,10 +56,11 @@ export function QueueSection({ settings, onUpdate }: Props) {
         />
       </div>
       <div>
-        <label className="block text-xs text-description-fg mb-1">
+        <label htmlFor="queue-max-execution-time" className="block text-xs text-description-fg mb-1">
           Max workflow execution time (seconds, -1 = unlimited)
         </label>
         <input
+          id="queue-max-execution-time"
           type="number"
           min={-1}
           value={queue.maxWorkflowExecutionTime}

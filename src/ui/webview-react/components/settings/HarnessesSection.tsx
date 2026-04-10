@@ -31,8 +31,9 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
         Default Harness
       </h3>
       <div className="grid grid-cols-[120px_1fr] items-center gap-2">
-        <label className="text-xs text-description-fg">Active harness</label>
+        <label htmlFor="harness-active" className="text-xs text-description-fg">Active harness</label>
         <select
+          id="harness-active"
           value={settings.settings.harness}
           onChange={(e) => onUpdate("harness", e.target.value, s)}
           className="bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
@@ -66,9 +67,10 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
             >
               <div className="text-sm font-medium text-foreground">{info.name}</div>
               <div className="grid grid-cols-[80px_1fr] items-center gap-2">
-                <label className="text-xs text-description-fg">Model</label>
+                <label htmlFor={`model-${harnessId}`} className="text-xs text-description-fg">Model</label>
                 {discoveredModels.length > 0 ? (
                   <CustomSelect
+                    id={`model-${harnessId}`}
                     value={currentModel}
                     onChange={(v) => onUpdate(`models.${harnessId}`, v || undefined, s)}
                     options={[
@@ -78,6 +80,7 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
                   />
                 ) : (
                   <input
+                    id={`model-${harnessId}`}
                     type="text"
                     value={currentModel}
                     onChange={(e) =>
@@ -90,8 +93,9 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
               </div>
               {!isChat && (
                 <div className="grid grid-cols-[80px_1fr] items-center gap-2">
-                  <label className="text-xs text-description-fg">Extra args</label>
+                  <label htmlFor={`extra-args-${harnessId}`} className="text-xs text-description-fg">Extra args</label>
                   <input
+                    id={`extra-args-${harnessId}`}
                     type="text"
                     value={(additionalArgs as Record<string, string | undefined>)[harnessId] ?? ""}
                     onChange={(e) =>
