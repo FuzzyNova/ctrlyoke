@@ -151,9 +151,10 @@ export class WebviewMessageRouter {
           this.clientId,
           this.scopedPostMessage
         );
-        // For browser clients: SESSION_RESTORED (sent during replay) calls applyWorkflowChange()
-        // which clears workflowProperties. Send them back so the PropertiesPanel reflects
-        // the correct state of the workflow being viewed.
+        // For browser clients: SESSION_RESTORED (sent during replay) triggers
+        // applyWorkflowChange() which no longer clears workflowProperties, but
+        // WORKFLOW_PROPERTIES_UPDATE is still needed to replace any stale values
+        // from the previously-viewed workflow with the correct ones.
         if (this.clientId !== PANEL_CLIENT_ID) {
           await this.settingsSync.sendWorkflowPropertiesToSettings(
             this.getCurrentPostMessage(),
@@ -166,6 +167,14 @@ export class WebviewMessageRouter {
       if (this.clientId === PANEL_CLIENT_ID) {
         if (orchestrator) {
           await orchestrator.setDashboardReady(this.scopedPostMessage);
+          // setDashboardReady calls replayWorkflowStateTo (webview reload) and/or
+          // triggerAutoLoad — both emit SESSION_RESTORED which triggers
+          // applyWorkflowChange(). Repopulate properties so the PropertiesPanel
+          // reflects the auto-loaded (or replayed) workflow's saved configuration.
+          await this.settingsSync.sendWorkflowPropertiesToSettings(
+            this.getCurrentPostMessage(),
+            this.clientId
+          );
         }
         // Reconnect server running state (handles webview reload while server is up)
         const serverUrl = this.callbacks.getServerUrl?.();
