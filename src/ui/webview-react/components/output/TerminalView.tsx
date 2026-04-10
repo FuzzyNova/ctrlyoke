@@ -120,7 +120,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
                 workflowId={workflowId}
                 sessionId={session.id}
                 isVisible={session.id === activeSessionId}
-                viewerOnly={session.viewerOnly ?? false}
               />
             ))
           )}

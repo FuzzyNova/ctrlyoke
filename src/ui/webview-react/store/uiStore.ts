@@ -238,6 +238,10 @@ interface UiState {
   // Startup overlay — true once STARTUP_COMPLETE (or WORKFLOW_LOADED) is received.
   // NOT persisted: every panel open should show the overlay until startup settles.
   startupReady: boolean;
+
+  // This client's identity assigned by the extension host on connect.
+  // Used to derive isController for terminal sessions.
+  myClientId: string;
 }
 
 /**
@@ -396,6 +400,9 @@ interface UiActions {
   // Startup overlay
   setStartupReady: (ready: boolean) => void;
 
+  // Client identity
+  setMyClientId: (clientId: string) => void;
+
   // Reset UI to defaults
   resetUi: () => void;
 }
@@ -458,6 +465,7 @@ const initialState: UiState = {
   globalSettingsOpen: false,
   globalSettingsActiveTab: "general",
   startupReady: false,
+  myClientId: "",
 };
 
 // Fields to persist via vscode.getState()/setState()
@@ -869,6 +877,7 @@ export const useUiStore = create<UiState & UiActions>()(
       // ============================================================================
 
       setStartupReady: (ready) => set({ startupReady: ready }),
+      setMyClientId: (clientId) => set({ myClientId: clientId }),
 
       // ============================================================================
       // RESET

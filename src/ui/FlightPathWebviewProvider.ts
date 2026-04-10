@@ -10,6 +10,10 @@ import {
   type FinalStepPhase,
   PANEL_CLIENT_ID,
 } from "../types/DashboardConstants";
+import {
+  getPtyProcessManager,
+  ptyPostMessage,
+} from "../flightpath/harness/PtyProcessManager";
 import type {
   CliEvent,
   CliOutput,
@@ -772,6 +776,20 @@ window.vscodeApi = acquireVsCodeApi();
    */
   public unregisterBrowserClient(clientId: string): void {
     this.workflowOrchestrator?.unregisterClient(clientId);
+    // Release controller ownership for any sessions this client was controlling.
+    // This lets another viewer claim control after the browser tab closes.
+    const ptyManager = getPtyProcessManager();
+    if (ptyManager) {
+      const released = ptyManager.releaseControllerForClient(clientId);
+      for (const session of released) {
+        ptyPostMessage({
+          type: MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
+          workflowId: session.workflowId,
+          sessionId: session.id,
+          controllerClientId: undefined,
+        });
+      }
+    }
   }
 
   public async routeMessage(message: any): Promise<void> {

@@ -18,10 +18,11 @@ export interface TerminalSession {
   /** Chunks buffered before TerminalInstance mounts — flushed on mount */
   pendingOutput: string[];
   /**
-   * True when this client is a secondary observer — the PTY is owned by the VS Code
-   * sidebar (or whichever client spawned it). No xterm is created; a message is shown.
+   * True when this client owns interactive control of the PTY (input + resize).
+   * Defaults to true optimistically; updated by TERMINAL_CONTROLLER_CHANGED.
+   * When false, the terminal renders in view-only mode with a badge.
    */
-  viewerOnly?: boolean;
+  isController: boolean;
 }
 
 interface TerminalState {
@@ -44,6 +45,13 @@ interface TerminalActions {
     chunk: string
   ) => void;
   clearPendingOutput: (workflowId: string, sessionId: string) => void;
+
+  /** Update isController for a session when TERMINAL_CONTROLLER_CHANGED arrives */
+  setSessionController: (
+    workflowId: string,
+    sessionId: string,
+    isController: boolean
+  ) => void;
 
   /** Called on new run start — clears only ai-cli sessions; shell sessions survive */
   clearAiCliSessions: (workflowId: string) => void;
@@ -131,6 +139,14 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
       set((state) => {
         const sessions = (state.sessions[workflowId] ?? []).map((s) =>
           s.id === sessionId ? { ...s, pendingOutput: [] } : s
+        );
+        return { sessions: { ...state.sessions, [workflowId]: sessions } };
+      }),
+
+    setSessionController: (workflowId, sessionId, isController) =>
+      set((state) => {
+        const sessions = (state.sessions[workflowId] ?? []).map((s) =>
+          s.id === sessionId ? { ...s, isController } : s
         );
         return { sessions: { ...state.sessions, [workflowId]: sessions } };
       }),

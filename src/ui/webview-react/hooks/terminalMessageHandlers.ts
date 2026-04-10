@@ -14,12 +14,22 @@ import { WebviewLog } from "@utils/logger";
 import { useTerminalStore } from "../store/terminalStore";
 import { useUiStore } from "../store/uiStore";
 import { terminalRegistry } from "../terminalRegistry";
+import { sendMessage } from "@hooks/useMessageHandler";
 import type { MessageHandlerMap } from "./useMessageHandler";
 
 /**
  * Register all terminal-related message handlers into the provided handler map.
  */
 export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
+  // --------------------------------------------------------------------------
+  // CLIENT_ID_ASSIGNED - Extension tells this client its own identity
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.CLIENT_ID_ASSIGNED] = (message: any) => {
+    const { clientId } = message;
+    if (clientId) {
+      useUiStore.getState().setMyClientId(clientId as string);
+    }
+  };
   // --------------------------------------------------------------------------
   // TERMINAL_OUTPUT - PTY output data; route directly to xterm or buffer it
   // --------------------------------------------------------------------------
@@ -43,19 +53,21 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
   // TERMINAL_STARTED - New PTY session created; register in store and rail
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.TERMINAL_STARTED] = (message: any) => {
-    const { workflowId, sessionId, stepName, kind, promptNumber } = message;
+    const { workflowId, sessionId, stepName, kind, promptNumber, controllerClientId } = message;
     if (!workflowId || !sessionId) return;
 
-    const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+    const uiState = useUiStore.getState();
+    const activeWorkflowId = uiState.activeWorkflowId;
     WebviewLog.debug(
-      `[TERMINAL_STARTED] workflowId=inst:${workflowId?.slice(0, 8)} sessionId=${sessionId?.slice(0, 8)} kind=${kind} activeWorkflowId=inst:${activeWorkflowId?.slice(0, 8) ?? "null"} match=${workflowId === activeWorkflowId}`
+      `[TERMINAL_STARTED] workflowId=inst:${workflowId?.slice(0, 8)} sessionId=${sessionId?.slice(0, 8)} kind=${kind} activeWorkflowId=inst:${activeWorkflowId?.slice(0, 8) ?? "null"} match=${workflowId === activeWorkflowId} controllerClientId=${controllerClientId?.slice(0, 12) ?? "none"}`
     );
 
-    // viewerOnly sessions (sent via replayWorkflowStateTo for browser clients) may
-    // be for any workflow. Live sessions must match this client's active workflow —
-    // reject them otherwise to prevent terminals from hijacking the wrong client's view.
+    // Sessions replayed with a controllerClientId (from replayWorkflowStateTo) may
+    // be for any workflow. Live sessions without a controller must match this client's
+    // active workflow — reject them otherwise to prevent terminals from hijacking the
+    // wrong client's view.
     if (
-      !message.viewerOnly &&
+      controllerClientId === undefined &&
       activeWorkflowId &&
       workflowId !== activeWorkflowId
     ) {
@@ -80,6 +92,12 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       }
     }
 
+    // Determine if this client is the controller for this session.
+    // If controllerClientId is undefined, auto-claim by sending TERMINAL_CLAIM_CONTROL.
+    const myClientId = uiState.myClientId;
+    const isController =
+      controllerClientId === undefined || controllerClientId === myClientId;
+
     useTerminalStore.getState().addSession({
       id: sessionId,
       workflowId,
@@ -88,18 +106,35 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       promptNumber,
       status: TERMINAL_SESSION_STATUS.RUNNING,
       pendingOutput: [],
-      viewerOnly: message.viewerOnly === true,
+      isController,
     });
 
     useUiStore.getState().setTerminalSessionActive(workflowId, true);
 
     // Auto-switch to Terminal tab when an ai-cli session starts.
-    // Also promote this workflow to active if needed — ACTIVE_WORKFLOW_CHANGED
-    // may have been silently dropped if it was posted before the webview panel
-    // was visible (postMessage no-ops when this.view is null).
     if (kind === SESSION_KINDS.AI_CLI) {
       useUiStore.getState().setActiveOutputTab(workflowId, "terminal");
     }
+
+    // Auto-claim if no controller is assigned — the first client to send wins
+    if (controllerClientId === undefined) {
+      sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, { workflowId, sessionId });
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // TERMINAL_CONTROLLER_CHANGED - Controller assignment updated; refresh isController
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED] = (message: any) => {
+    const { workflowId, sessionId, controllerClientId } = message;
+    if (!workflowId || !sessionId) return;
+    const myClientId = useUiStore.getState().myClientId;
+    const isController =
+      controllerClientId === undefined || controllerClientId === myClientId;
+    useTerminalStore.getState().setSessionController(workflowId, sessionId, isController);
+    WebviewLog.debug(
+      `[TERMINAL_CONTROLLER_CHANGED] sessionId=${sessionId?.slice(0, 8)} controllerClientId=${controllerClientId?.slice(0, 12) ?? "none"} isController=${isController}`
+    );
   };
 
   // --------------------------------------------------------------------------

@@ -18,12 +18,6 @@ interface TerminalInstanceProps {
   sessionId: string;
   /** false = display:none (rail switching within workflow) */
   isVisible: boolean;
-  /**
-   * True when this client does not own the PTY (e.g. browser tab viewing a
-   * workflow whose interactive terminal is attached to the VS Code sidebar).
-   * Renders an informational placeholder instead of creating an xterm.
-   */
-  viewerOnly?: boolean;
 }
 
 /**
@@ -32,30 +26,25 @@ interface TerminalInstanceProps {
  * Delegates all xterm lifecycle to terminalRegistry — this component
  * only manages the DOM attachment point and React lifecycle hooks.
  * xterm.js instances survive React unmounts via the module-level registry.
+ *
+ * When `session.isController` is false this client is a viewer: xterm output
+ * is still rendered but input routing is disabled and a "View Only" badge is shown.
+ * The user can click "Take Control" to claim the session.
  */
 export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
   workflowId,
   sessionId,
   isVisible,
-  viewerOnly = false,
 }) => {
-  if (viewerOnly) {
-    return (
-      <div
-        className="flex items-center justify-center h-full select-none px-4 text-center"
-        style={{ display: isVisible ? "flex" : "none" }}
-      >
-        <span
-          className="text-[12px]"
-          style={{ color: "var(--vscode-descriptionForeground)" }}
-        >
-          Terminal is running in the VS Code panel
-        </span>
-      </div>
-    );
-  }
   const containerRef = useRef<HTMLDivElement>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+
+  // Subscribe to controller status — re-evaluate on every change
+  const sessions = useTerminalStore(
+    (s) => s.sessions[workflowId] ?? EMPTY_SESSIONS
+  );
+  const session = sessions.find((s) => s.id === sessionId);
+  const isController = session?.isController ?? true;
 
   // Mount effect: create registry entry, attach to DOM, flush pending output
   useEffect(() => {
@@ -74,11 +63,11 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       // we flushed pendingOutput after attach() those earlier chunks would be
       // written out-of-order (after chunks that arrived during the WebGL import).
       const { sessions, clearPendingOutput } = useTerminalStore.getState();
-      const session = (sessions[workflowId] ?? []).find(
+      const sess = (sessions[workflowId] ?? []).find(
         (s) => s.id === sessionId
       );
-      if (session?.pendingOutput.length) {
-        for (const chunk of session.pendingOutput) {
+      if (sess?.pendingOutput.length) {
+        for (const chunk of sess.pendingOutput) {
           entry.term.write(chunk);
         }
         clearPendingOutput(workflowId, sessionId);
@@ -91,8 +80,12 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         containerRef.current
       );
 
-      // Register onData for input routing (skip if session is frozen or already listening)
-      if (!entry.frozen && !entry.onDataDisposable) {
+      // Register onData for input routing — skip if session is frozen, already listening,
+      // or this client is a viewer (isController=false)
+      const currentSession = useTerminalStore
+        .getState()
+        .sessions[workflowId]?.find((s) => s.id === sessionId);
+      if (!entry.frozen && !entry.onDataDisposable && currentSession?.isController !== false) {
         entry.onDataDisposable = entry.term.onData((input) => {
           sendMessage(MESSAGE_TYPES.TERMINAL_INPUT, {
             workflowId,
@@ -108,18 +101,24 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         });
       }
 
-      // ResizeObserver: fit xterm to container and notify PTY of new dimensions
+      // ResizeObserver: fit xterm to container; only the controller notifies the PTY
       const observer = new ResizeObserver(() => {
         if (!entry.term.element) return;
         try {
           entry.fitAddon.fit();
           const { cols, rows } = entry.term;
-          sendMessage(MESSAGE_TYPES.TERMINAL_RESIZE, {
-            workflowId,
-            sessionId,
-            cols,
-            rows,
-          });
+          // Only send resize if this client is the controller
+          const isCtrl = useTerminalStore
+            .getState()
+            .sessions[workflowId]?.find((s) => s.id === sessionId)?.isController;
+          if (isCtrl !== false) {
+            sendMessage(MESSAGE_TYPES.TERMINAL_RESIZE, {
+              workflowId,
+              sessionId,
+              cols,
+              rows,
+            });
+          }
         } catch {
           // Ignore — may fire before terminal is fully initialized
         }
@@ -148,6 +147,33 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     };
   }, [workflowId, sessionId]);
 
+  // When isController changes from false→true (viewer claiming control), re-register onData
+  useEffect(() => {
+    if (!isController) return;
+    const entry = terminalRegistry.get(workflowId, sessionId);
+    if (!entry || entry.frozen || entry.onDataDisposable) return;
+    entry.onDataDisposable = entry.term.onData((input) => {
+      sendMessage(MESSAGE_TYPES.TERMINAL_INPUT, {
+        workflowId,
+        sessionId,
+        data: input,
+      });
+      const captured = entry.inputCapture.accumulate(input);
+      if (captured) {
+        console.debug("[FlightPath] Ad-hoc prompt captured:", captured);
+      }
+    });
+  }, [isController, workflowId, sessionId]);
+
+  // When isController changes from true→false (control claimed by another client), dispose onData
+  useEffect(() => {
+    if (isController) return;
+    const entry = terminalRegistry.get(workflowId, sessionId);
+    if (!entry || entry.frozen) return;
+    entry.onDataDisposable?.dispose();
+    entry.onDataDisposable = undefined;
+  }, [isController, workflowId, sessionId]);
+
   return (
     <div
       ref={containerRef}
@@ -162,6 +188,8 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     >
       {/* "Process exited" overlay for frozen ai-cli sessions */}
       <FrozenOverlay workflowId={workflowId} sessionId={sessionId} />
+      {/* "View Only" badge for non-controller clients */}
+      {!isController && <ViewOnlyBadge workflowId={workflowId} sessionId={sessionId} />}
     </div>
   );
 };
@@ -194,6 +222,49 @@ const FrozenOverlay: React.FC<{ workflowId: string; sessionId: string }> = ({
           ? "Process exited with error"
           : "Process exited"}
       </span>
+    </div>
+  );
+};
+
+/**
+ * View-only banner shown when this client is observing but not controlling the terminal.
+ * The "Take Control" button sends TERMINAL_CLAIM_CONTROL to claim ownership.
+ */
+const ViewOnlyBadge: React.FC<{ workflowId: string; sessionId: string }> = ({
+  workflowId,
+  sessionId,
+}) => {
+  const sessions = useTerminalStore(
+    (s) => s.sessions[workflowId] ?? EMPTY_SESSIONS
+  );
+  const session = sessions.find((s) => s.id === sessionId);
+
+  // Don't show badge for ended sessions — FrozenOverlay handles that
+  if (session?.status !== TERMINAL_SESSION_STATUS.RUNNING) return null;
+
+  const handleTakeControl = () => {
+    sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, { workflowId, sessionId });
+  };
+
+  return (
+    <div
+      className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-3 py-1"
+      style={{ background: "rgba(0,0,0,0.55)", zIndex: 10 }}
+    >
+      <span className="text-[11px] select-none" style={{ color: "var(--vscode-descriptionForeground)" }}>
+        View Only
+      </span>
+      <button
+        onClick={handleTakeControl}
+        className="text-[11px] px-2 py-0.5 rounded select-none cursor-pointer"
+        style={{
+          background: "var(--vscode-button-secondaryBackground, rgba(255,255,255,0.12))",
+          color: "var(--vscode-button-secondaryForeground, var(--vscode-descriptionForeground))",
+          border: "1px solid var(--vscode-button-secondaryBorder, transparent)",
+        }}
+      >
+        Take Control
+      </button>
     </div>
   );
 };

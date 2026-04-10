@@ -81,6 +81,8 @@ export class PtySession {
   readonly promptNumber?: number;
   readonly pty: IPty;
   status: TerminalSessionStatus;
+  /** The clientId that owns interactive control of this session (input + resize). */
+  controllerClientId: string | undefined;
 
   // Ring buffer for webview reconnection: recent output replayed when webview JS context is recreated
   readonly reconnectBuffer: string[] = [];
@@ -158,6 +160,53 @@ export interface SpawnPtyOptions {
  */
 export class PtyProcessManager {
   private sessions = new Map<string, PtySession>();
+  /**
+   * workflowId → clientId that should become the controller for the next PTY session
+   * spawned for that workflow. Set by the WebviewMessageRouter when a client triggers
+   * a run, consumed (and cleared) at spawn time.
+   */
+  private pendingControllers = new Map<string, string>();
+
+  /**
+   * Register the client that should own the next PTY session spawned for a workflow.
+   * Called from the RUN_WORKFLOW message handler before executeWorkflow() is called.
+   */
+  setPendingController(workflowId: string, clientId: string): void {
+    this.pendingControllers.set(workflowId, clientId);
+  }
+
+  private consumePendingController(workflowId: string): string | undefined {
+    const clientId = this.pendingControllers.get(workflowId);
+    this.pendingControllers.delete(workflowId);
+    return clientId;
+  }
+
+  /**
+   * Assign a client as the controller of a session.
+   * Returns the session if successfully assigned (always succeeds — overwrites previous controller).
+   */
+  assignController(sessionId: string, clientId: string): PtySession | undefined {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.controllerClientId = clientId;
+    }
+    return session;
+  }
+
+  /**
+   * Clear the controller for all sessions owned by the given client (e.g. on disconnect).
+   * Returns the affected sessions so callers can broadcast the change.
+   */
+  releaseControllerForClient(clientId: string): PtySession[] {
+    const affected: PtySession[] = [];
+    for (const session of this.sessions.values()) {
+      if (session.controllerClientId === clientId) {
+        session.controllerClientId = undefined;
+        affected.push(session);
+      }
+    }
+    return affected;
+  }
 
   /**
    * Spawn a new PTY session.
@@ -191,6 +240,8 @@ export class PtyProcessManager {
       ptyInstance,
       options.promptNumber
     );
+    // Consume any pending controller registration set before the spawn was triggered
+    session.controllerClientId = this.consumePendingController(options.workflowId);
 
     this.sessions.set(sessionId, session);
 

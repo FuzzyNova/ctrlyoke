@@ -470,6 +470,10 @@ export class WorkflowOrchestrator {
         const ptyManager = getPtyProcessManager();
         if (ptyManager) {
           for (const session of ptyManager.getSessionsForWorkflow(workflowId)) {
+            // Auto-assign controller to the first client to reconnect for this session
+            if (session.controllerClientId === undefined) {
+              session.controllerClientId = clientId;
+            }
             send({
               type: MESSAGE_TYPES.TERMINAL_STARTED,
               workflowId: session.workflowId,
@@ -477,6 +481,7 @@ export class WorkflowOrchestrator {
               stepName: session.stepName,
               kind: session.kind,
               promptNumber: session.promptNumber,
+              controllerClientId: session.controllerClientId,
             });
             for (const chunk of session.reconnectBuffer) {
               send({
