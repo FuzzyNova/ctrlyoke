@@ -102,6 +102,16 @@ export class WorkflowOrchestrator {
   /** Called once after the startup auto-load (including deferred loads) completes. */
   private storedPostAutoLoadCallback?: () => Promise<void>;
 
+  /**
+   * Browser clients that connected before startup auto-load completed.
+   * Each callback receives the loaded workflowId and is responsible for
+   * replaying state + sending properties to that client.
+   * Cleared (and fired or discarded) after triggerAutoLoad resolves.
+   */
+  private pendingBrowserAutoLoadCallbacks: Array<
+    (workflowId: string) => Promise<void>
+  > = [];
+
   /** Per-client viewer registry: maps clientId → viewed workflowId (or null). */
   private viewerRegistry = new Map<string, string | null>();
 
@@ -659,6 +669,26 @@ export class WorkflowOrchestrator {
     this.storedPostAutoLoadCallback = callback;
   }
 
+  /**
+   * True once startup auto-load has been triggered (may still be in progress).
+   * Browser clients use this to decide whether to register a pending callback
+   * or whether auto-load already ran and no callback is needed.
+   */
+  get isAutoLoadTriggered(): boolean {
+    return this.startupAutoLoadTriggered;
+  }
+
+  /**
+   * Register a callback for a browser client that connected before startup
+   * auto-load completed. Called with the loaded workflowId when auto-load
+   * finishes, or silently discarded if no session was found.
+   */
+  addBrowserAutoLoadCallback(
+    callback: (workflowId: string) => Promise<void>
+  ): void {
+    this.pendingBrowserAutoLoadCallbacks.push(callback);
+  }
+
   async setDashboardReady(panelSend?: (msg: unknown) => void): Promise<void> {
     Log.info("✅ Dashboard is ready");
     this.dashboardReady = true;
@@ -756,9 +786,17 @@ export class WorkflowOrchestrator {
             await this.storedPostAutoLoadCallback();
             this.storedPostAutoLoadCallback = undefined;
           }
+          // Replay to browser clients that connected before auto-load completed.
+          for (const cb of this.pendingBrowserAutoLoadCallbacks) {
+            await cb(instance.id);
+          }
+          this.pendingBrowserAutoLoadCallbacks = [];
         }
       );
     }
+    // Clear pending browser callbacks regardless — if no session was found,
+    // auto-load won't fire again and these callbacks would never be called.
+    this.pendingBrowserAutoLoadCallbacks = [];
   }
 
   // ─────────────────────────────────────────────────────────────────────────

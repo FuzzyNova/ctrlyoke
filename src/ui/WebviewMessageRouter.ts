@@ -160,6 +160,22 @@ export class WebviewMessageRouter {
             this.getCurrentPostMessage(),
             this.clientId
           );
+          // If startup auto-load hasn't fired yet, this client connected before
+          // the panel loaded its session. Register a callback so the browser
+          // receives a full replay once auto-load completes, matching the
+          // behaviour of clients that connect after auto-load (handled by the
+          // handleClientReady panel-viewedId fallback above).
+          if (!orchestrator.isAutoLoadTriggered) {
+            const send = this.scopedPostMessage;
+            const clientId = this.clientId;
+            orchestrator.addBrowserAutoLoadCallback(async (workflowId) => {
+              await orchestrator.replayWorkflowStateTo(workflowId, send, clientId);
+              await this.settingsSync.sendWorkflowPropertiesToSettings(
+                this.getCurrentPostMessage(),
+                clientId
+              );
+            });
+          }
         }
       }
 
