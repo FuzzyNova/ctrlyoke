@@ -16,6 +16,7 @@ interface RecentWorkflowsProps {
   onSelect: (filePath: string) => void;
   onClearHistory: () => void;
   onRemove?: (filePath: string) => void;
+  onNewWorkflow?: () => void;
   className?: string;
 }
 
@@ -34,6 +35,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
   onSelect,
   onClearHistory,
   onRemove,
+  onNewWorkflow,
   className = "",
 }) => {
   return (
@@ -46,9 +48,14 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
       {/* Scrollable Items */}
       <div className="workflow-menu-items overflow-y-auto overflow-x-hidden flex-1 min-h-0 py-1">
         {workflows.length === 0 ? (
-          <div className="workflow-menu-empty px-3 py-6 text-center text-description-fg text-sm">
-            No workflows found
-          </div>
+          <button
+            type="button"
+            onClick={() => onNewWorkflow?.()}
+            className="w-full px-3 py-2 text-left text-sm text-description-fg hover:bg-list-hover-bg hover:text-list-highlight-fg flex items-center gap-2"
+          >
+            <i className="codicon codicon-add text-[11px]" />
+            New Workflow
+          </button>
         ) : (
           workflows.map((workflow) => {
             const isCurrent = workflow.filePath === currentFilePath;

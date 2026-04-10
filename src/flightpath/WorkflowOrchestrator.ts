@@ -103,14 +103,14 @@ export class WorkflowOrchestrator {
   private storedPostAutoLoadCallback?: () => Promise<void>;
 
   /**
-   * Browser clients that connected before startup auto-load completed.
-   * Each callback receives the loaded workflowId and is responsible for
-   * replaying state + sending properties to that client.
-   * Cleared (and fired or discarded) after triggerAutoLoad resolves.
+   * Resolves to the loaded workflow ID (or null if no session was found) once
+   * triggerAutoLoad() completes. Browser clients await this instead of
+   * registering pending callbacks, eliminating the startup race condition.
    */
-  private pendingBrowserAutoLoadCallbacks: Array<
-    (workflowId: string) => Promise<void>
-  > = [];
+  private readonly startupAutoLoadSettled: Promise<string | null>;
+  private resolveStartupAutoLoad!: (id: string | null) => void;
+  /** True once startupAutoLoadSettled has been resolved (set in triggerAutoLoad finally). */
+  private _autoLoadHasSettled: boolean = false;
 
   /** Per-client viewer registry: maps clientId → viewed workflowId (or null). */
   private viewerRegistry = new Map<string, string | null>();
@@ -146,6 +146,7 @@ export class WorkflowOrchestrator {
   // Initialization gates
   private dashboardReady: boolean = false;
   private orchestratorInitialized: boolean = false;
+  /** Guards triggerStartupAutoLoadIfReady so triggerAutoLoad fires at most once. */
   private startupAutoLoadTriggered: boolean = false;
 
   /** MCP server provider for injecting user-defined MCP servers into VS Code (chat harness only) */
@@ -155,6 +156,12 @@ export class WorkflowOrchestrator {
     private readonly context: vscode.ExtensionContext,
     dashboardProvider?: DashboardClient
   ) {
+    // Create the startup auto-load promise — browser clients await this instead
+    // of registering pending callbacks, eliminating the startup race condition.
+    this.startupAutoLoadSettled = new Promise((resolve) => {
+      this.resolveStartupAutoLoad = resolve;
+    });
+
     this.viewerRegistry.set(this.PANEL_CLIENT_ID, null);
 
     if (dashboardProvider) {
@@ -434,10 +441,13 @@ export class WorkflowOrchestrator {
     clientId: string
   ): Promise<void> {
     const sink = new PostMessageDashboardSink(send);
-    send({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
 
-    const instance = this.instances.get(workflowId);
+    // Check live instances first, then retired (terminal-state workflows that were
+    // loaded for viewing — e.g. completed workflows selected from recent list).
+    const instance =
+      this.instances.get(workflowId) ?? this.retiredInstances.get(workflowId);
     if (instance) {
+      send({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
       instance.replayFullStateTo(sink);
       await instance.replayRunHistoryTo(sink);
       await instance.replayOutputHistoryTo(send);
@@ -474,17 +484,18 @@ export class WorkflowOrchestrator {
     // CLI-managed session
     const cliEntry = this.cliSessions.get(workflowId);
     if (cliEntry) {
+      send({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
       await this.sendCliWorkflowFullStateToDashboard(
         workflowId,
         cliEntry,
         sink
       );
+      this.setViewedWorkflowId(clientId, workflowId);
     } else {
       Log.warn(
         `replayWorkflowStateTo: workflowId "${workflowId.slice(0, 8)}" not found`
       );
     }
-    this.setViewedWorkflowId(clientId, workflowId);
   }
 
   /** Return summaries without exposing WorkflowInstance internals */
@@ -530,9 +541,13 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    // Not in registry — load file without touching the panel's viewed workflow
+    // Not in registry — load file without touching the panel's viewed workflow.
+    // Set viewedId BEFORE loadWorkingFile so retireWorkflow (triggered by terminal
+    // state during load) sees isViewed=true and keeps the instance in retiredInstances
+    // instead of disposing it immediately.
     const instance = this.buildWorkflowInstance();
     this.instances.set(instance.id, instance);
+    this.setViewedWorkflowId(clientId, instance.id);
     await instance.loadWorkingFile(filePath);
     await this.replayWorkflowStateTo(instance.id, send, clientId);
   }
@@ -670,23 +685,31 @@ export class WorkflowOrchestrator {
   }
 
   /**
-   * True once startup auto-load has been triggered (may still be in progress).
-   * Browser clients use this to decide whether to register a pending callback
-   * or whether auto-load already ran and no callback is needed.
+   * True once the startup auto-load promise has resolved (whether or not a
+   * session was found). Browser clients and the panel READY fast-path use this
+   * to determine whether STARTUP_COMPLETE needs to be sent directly.
    */
   get isAutoLoadTriggered(): boolean {
-    return this.startupAutoLoadTriggered;
+    return this._autoLoadHasSettled;
   }
 
   /**
-   * Register a callback for a browser client that connected before startup
-   * auto-load completed. Called with the loaded workflowId when auto-load
-   * finishes, or silently discarded if no session was found.
+   * Awaitable version of the startup auto-load result.
+   * Resolves to the loaded workflow ID, or null if no session was found.
+   * Browser clients await this in the READY handler to eliminate the race
+   * condition that existed with the old pending-callback approach.
    */
-  addBrowserAutoLoadCallback(
-    callback: (workflowId: string) => Promise<void>
-  ): void {
-    this.pendingBrowserAutoLoadCallbacks.push(callback);
+  awaitStartupAutoLoad(): Promise<string | null> {
+    return this.startupAutoLoadSettled;
+  }
+
+  /**
+   * Returns true if the given client already has a viewed workflow assigned.
+   * Used by the READY handler to avoid double-replaying browser clients that
+   * handleClientReady already served via the panel's viewedId fallback.
+   */
+  hasViewedWorkflow(clientId: string): boolean {
+    return !!this.getViewedWorkflowId(clientId);
   }
 
   async setDashboardReady(panelSend?: (msg: unknown) => void): Promise<void> {
@@ -744,59 +767,65 @@ export class WorkflowOrchestrator {
   }
 
   private async triggerAutoLoad(): Promise<void> {
-    if (
-      ConfigurationUtils.shouldAutoLoadRecentSession() &&
-      this.currentWorkspaceFolder
-    ) {
-      Log.debug("Triggering auto-load of recent session");
+    let loadedWorkflowId: string | null = null;
+    try {
+      if (
+        ConfigurationUtils.shouldAutoLoadRecentSession() &&
+        this.currentWorkspaceFolder
+      ) {
+        Log.debug("Triggering auto-load of recent session");
 
-      await this.workspaceSessionManager.autoLoadRecentSession(
-        this.currentWorkspaceFolder.uri.fsPath,
-        async (workingFilePath: string) => {
-          // Skip auto-loading if this working file is actively managed by the CLI.
-          // The CliWatchSession was already created in setupCliWatching(), so the
-          // workflow is already visible in the Running section — auto-loading it
-          // as a VS Code instance would create a conflicting viewedInstance.
-          const lockStatus =
-            await WorkflowLockManager.checkLock(workingFilePath);
-          if (lockStatus === LOCK_STATUS.ACTIVE_CLI) {
-            Log.debug(
-              `triggerAutoLoad: skipping CLI-managed workflow "${path.basename(workingFilePath)}"`
+        await this.workspaceSessionManager.autoLoadRecentSession(
+          this.currentWorkspaceFolder.uri.fsPath,
+          async (workingFilePath: string) => {
+            // Skip auto-loading if this working file is actively managed by the CLI.
+            // The CliWatchSession was already created in setupCliWatching(), so the
+            // workflow is already visible in the Running section — auto-loading it
+            // as a VS Code instance would create a conflicting viewedInstance.
+            const lockStatus =
+              await WorkflowLockManager.checkLock(workingFilePath);
+            if (lockStatus === LOCK_STATUS.ACTIVE_CLI) {
+              Log.debug(
+                `triggerAutoLoad: skipping CLI-managed workflow "${path.basename(workingFilePath)}"`
+              );
+              return;
+            }
+            await this.getActiveInstance().autoLoadFromWorkingFile(
+              workingFilePath
             );
-            return;
+            // Replay full state to the panel (SESSION_RESTORED + ACTIVE_WORKFLOW_CHANGED
+            // + RUN_HISTORY_UPDATED + OUTPUT_HISTORY_LOADED). This is required because
+            // DashboardBroadcastHub.updateSessionRestored() is a no-op — SESSION_RESTORED
+            // is only sent via direct PostMessageDashboardSink (inside replayWorkflowStateTo),
+            // never via the hub. Without this call the panel receives no step state and all
+            // status icons show as idle/pending even for completed runs.
+            const instance = this.getActiveInstance();
+            if (this.storedPanelSend) {
+              await this.replayWorkflowStateTo(
+                instance.id,
+                this.storedPanelSend,
+                this.PANEL_CLIENT_ID
+              );
+            }
+            if (this.storedPostAutoLoadCallback) {
+              await this.storedPostAutoLoadCallback();
+              this.storedPostAutoLoadCallback = undefined;
+            }
+            // Capture the loaded workflow ID so the finally block can resolve
+            // the promise and browser clients can replay the correct session.
+            loadedWorkflowId = instance.id;
           }
-          await this.getActiveInstance().autoLoadFromWorkingFile(
-            workingFilePath
-          );
-          // Replay full state to the panel (SESSION_RESTORED + ACTIVE_WORKFLOW_CHANGED
-          // + RUN_HISTORY_UPDATED + OUTPUT_HISTORY_LOADED). This is required because
-          // DashboardBroadcastHub.updateSessionRestored() is a no-op — SESSION_RESTORED
-          // is only sent via direct PostMessageDashboardSink (inside replayWorkflowStateTo),
-          // never via the hub. Without this call the panel receives no step state and all
-          // status icons show as idle/pending even for completed runs.
-          const instance = this.getActiveInstance();
-          if (this.storedPanelSend) {
-            await this.replayWorkflowStateTo(
-              instance.id,
-              this.storedPanelSend,
-              this.PANEL_CLIENT_ID
-            );
-          }
-          if (this.storedPostAutoLoadCallback) {
-            await this.storedPostAutoLoadCallback();
-            this.storedPostAutoLoadCallback = undefined;
-          }
-          // Replay to browser clients that connected before auto-load completed.
-          for (const cb of this.pendingBrowserAutoLoadCallbacks) {
-            await cb(instance.id);
-          }
-          this.pendingBrowserAutoLoadCallbacks = [];
-        }
-      );
+        );
+      }
+    } finally {
+      // Always settle the promise and broadcast STARTUP_COMPLETE, regardless of
+      // whether a session was found or an exception occurred. This ensures:
+      // - Browser clients awaiting awaitStartupAutoLoad() unblock immediately.
+      // - The webview overlay lifts via hub broadcast (panel fresh startup).
+      this._autoLoadHasSettled = true;
+      this.resolveStartupAutoLoad(loadedWorkflowId);
+      this.dashboardBroadcastHub.notifyStartupComplete();
     }
-    // Clear pending browser callbacks regardless — if no session was found,
-    // auto-load won't fire again and these callbacks would never be called.
-    this.pendingBrowserAutoLoadCallbacks = [];
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -819,12 +848,26 @@ export class WorkflowOrchestrator {
     continueFromCurrent?: boolean
   ): Promise<void> {
     const panelViewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-    const instance = workflowId
-      ? this.instances.get(workflowId)
-      : panelViewedId
+    // When a specific workflowId is given, check retiredInstances as a fallback
+    // so that restarting a STOPPED/COMPLETED workflow that was just retired works.
+    // Remove from retiredInstances first so the instance can re-register in
+    // this.instances when execution starts again.
+    let instance: WorkflowInstance | null | undefined;
+    if (workflowId) {
+      instance = this.instances.get(workflowId);
+      if (!instance) {
+        const retired = this.retiredInstances.get(workflowId);
+        if (retired) {
+          this.retiredInstances.delete(workflowId);
+          instance = retired;
+        }
+      }
+    } else {
+      instance = panelViewedId
         ? (this.instances.get(panelViewedId) ??
           this.retiredInstances.get(panelViewedId))
         : null;
+    }
 
     if (!instance) {
       Log.warn(`executeWorkflow: workflow ${workflowId ?? "viewed"} not found`);
@@ -1096,9 +1139,14 @@ export class WorkflowOrchestrator {
     // with actual step state. DashboardBroadcastHub.updateSessionRestored() is a no-op,
     // so SESSION_RESTORED is only deliverable via a direct PostMessageDashboardSink
     // (inside replayWorkflowStateTo). Without it, all step status icons show as idle/pending.
+    //
+    // Set viewedId BEFORE loadWorkingFile so retireWorkflow (triggered by terminal
+    // state during load) sees isViewed=true and keeps the instance in retiredInstances
+    // instead of disposing it — otherwise replayWorkflowStateTo can't find it.
     const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
     const instance = this.buildWorkflowInstance();
     this.instances.set(instance.id, instance);
+    this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
     await instance.loadWorkingFile(filePath);
     await this.replayWorkflowStateTo(
       instance.id,
@@ -1515,37 +1563,35 @@ export class WorkflowOrchestrator {
       instance.mcpServerProvider = this.mcpServerProvider;
     }
 
-    // Track whether this instance has been announced to the dashboard as running/paused.
-    // Closure variable so it survives field renames and is not confused by pre-registered
-    // idle instances in this.instances.
-    let hasBeenNotifiedAsAdded = false;
-
     // Broadcast summary updates whenever this instance's execution state changes.
     // This covers both active and inactive workflows so the multi-workflow list
     // stays in sync regardless of which workflow is currently displayed.
     instance.promptQueue.onDidChangeState((state) => {
       const summary = instance.getSummary();
+      const inRegistry = this.instances.has(instance.id);
 
       Log.debug(
         `[onDidChangeState] inst:${instance.id.slice(0, 8)} state=${state.status} name="${summary.workflowName || "(empty)"}" ` +
-          `inRegistry=${this.instances.has(instance.id)} registrySize=${this.instances.size} ` +
+          `inRegistry=${inRegistry} registrySize=${this.instances.size} ` +
           `fp=${summary.filePath ? path.basename(summary.filePath) : "?"} step=${workflowDisplayStep(summary)}/${summary.totalSteps}`
       );
 
-      // Register in the running/paused registry the first time this instance
-      // becomes RUNNING or PAUSED.  Doing this here (rather than eagerly in
-      // executeWorkflow) guarantees that getWorkflowSummaries() never returns
-      // an IDLE workflow and that notifyWorkflowAdded() always fires with an
-      // accurate RUNNING/PAUSED state — eliminating the race condition where a
-      // GET_WORKFLOWS_LIST request processed before the runtime entered RUNNING would
-      // return an IDLE summary that the webview filter drops, incorrectly
-      // clearing loadedWorkflows.
+      // Register in the running/paused registry whenever this instance enters
+      // RUNNING or PAUSED and is not already tracked.  Using the registry
+      // membership check (rather than a one-shot closure flag) lets a retired
+      // instance be re-registered if the user restarts it from the dashboard.
+      // Doing this here (rather than eagerly in executeWorkflow) guarantees
+      // that getWorkflowSummaries() never returns an IDLE workflow and that
+      // notifyWorkflowAdded() always fires with an accurate RUNNING/PAUSED
+      // state — eliminating the race condition where a GET_WORKFLOWS_LIST
+      // request processed before the runtime entered RUNNING would return an
+      // IDLE summary that the webview filter drops, incorrectly clearing
+      // loadedWorkflows.
       if (
         (state.status === EXECUTION_STATES.RUNNING ||
           state.status === EXECUTION_STATES.PAUSED) &&
-        !hasBeenNotifiedAsAdded
+        !inRegistry
       ) {
-        hasBeenNotifiedAsAdded = true;
         this.instances.set(instance.id, instance);
         Log.debug(
           `onDidChangeState: registered inst:${instance.id.slice(0, 8)} in running registry on ${state.status} ` +
@@ -1559,11 +1605,10 @@ export class WorkflowOrchestrator {
       // Auto-retire when a workflow completes, errors, or stops.
       // All dashboard messages (notifyWorkflowSummaryUpdated) have already been
       // sent synchronously above, so there's nothing to wait for.
-      // Guard with hasBeenNotifiedAsAdded — workflows restored from disk in a
-      // terminal state are never announced as running/paused, so there is nothing
-      // to retire.
+      // Guard with inRegistry — workflows restored from disk in a terminal
+      // state are never in this.instances, so there is nothing to retire.
       if (
-        hasBeenNotifiedAsAdded &&
+        inRegistry &&
         (state.status === EXECUTION_STATES.COMPLETED ||
           state.status === EXECUTION_STATES.ERROR ||
           state.status === EXECUTION_STATES.STOPPED)

@@ -1056,6 +1056,22 @@ function createMessageHandlers(): MessageHandlerMap {
     const editorStore = useEditorStore.getState();
     settingsStore.setWorkflowLoaded(true);
     editorStore.setHasActiveQueue(true);
+    // Belt-and-suspenders: lift the startup overlay if STARTUP_COMPLETE hasn't
+    // arrived yet (e.g. reconnect/reload path where WORKFLOW_LOADED arrives first).
+    useUiStore.getState().setStartupReady(true);
+  };
+
+  // --------------------------------------------------------------------------
+  // STARTUP_COMPLETE - Extension startup sequence finished (with or without session)
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.STARTUP_COMPLETE] = () => {
+    useUiStore.getState().setStartupReady(true);
+    // If startup completed with no session, auto-create a blank workflow so the
+    // user lands on "New Workflow" rather than the "No workflow loaded" empty state.
+    const { fileName } = useWorkflowStore.getState();
+    if (!fileName) {
+      getVsCodeApi().postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
+    }
   };
 
   // --------------------------------------------------------------------------

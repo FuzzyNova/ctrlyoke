@@ -225,6 +225,9 @@ export const MESSAGE_TYPES = {
   TERMINAL_SPAWN_SHELL: "terminalSpawnShell", // webview → extension: { workflowId, cwd }
   TERMINAL_RESTART_SHELL: "terminalRestartShell", // webview → extension: { workflowId, sessionId }
   TERMINAL_CLOSE_SHELL: "terminalCloseShell", // webview → extension: { workflowId, sessionId }
+
+  // Startup lifecycle — Extension → Webview
+  STARTUP_COMPLETE: "startupComplete", // Extension → Webview: startup sequence done (with or without auto-load)
 } as const;
 
 // ============================================================================

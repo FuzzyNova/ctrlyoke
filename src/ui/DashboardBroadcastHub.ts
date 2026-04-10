@@ -12,6 +12,7 @@ import type {
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { IDashboardProvider } from "./IDashboardProvider";
+import { MESSAGE_TYPES } from "../types/DashboardConstants";
 
 export type DashboardClient = IDashboardProvider & Partial<IDashboardSink>;
 
@@ -99,6 +100,13 @@ export class DashboardBroadcastHub
   postMessage(message: unknown): void {
     for (const client of this.clients) {
       client.postMessage(message);
+    }
+  }
+
+  /** Broadcast STARTUP_COMPLETE to all currently-registered clients. */
+  notifyStartupComplete(): void {
+    for (const client of this.clients) {
+      client.postMessage({ type: MESSAGE_TYPES.STARTUP_COMPLETE });
     }
   }
 

@@ -27,9 +27,13 @@ beforeEach(() => {
 });
 
 describe("WorkflowStatus — empty state", () => {
-  it("shows 'No workflow loaded' when fileName is null", () => {
+  it("shows 'New Workflow' when fileName is null", () => {
     render(<WorkflowStatus />);
-    expect(screen.getByText(/No workflow loaded/i)).toBeInTheDocument();
+    // The display name button shows "New Workflow"; the hidden RecentWorkflows
+    // dropdown also renders a "New Workflow" button (CSS-hidden), so use
+    // getAllByText and assert at least one match is in the document.
+    const matches = screen.getAllByText(/New Workflow/i);
+    expect(matches.length).toBeGreaterThan(0);
   });
 });
 

@@ -8,6 +8,7 @@ import type { UndoableWorkflowState } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
+import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
 
 interface UndoRedoControlProps {
   isRunning: boolean;
@@ -89,7 +90,7 @@ function describeChange(
   next: UndoableWorkflowState
 ): string {
   if (prev.workflowName !== next.workflowName) {
-    return `Renamed to "${next.workflowName ?? "Untitled"}"`;
+    return `Renamed to "${next.workflowName ?? DEFAULT_WORKFLOW_NAME}"`;
   }
 
   const prevLen = prev.steps.length;

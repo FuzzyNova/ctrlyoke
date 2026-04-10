@@ -234,6 +234,10 @@ interface UiState {
   // Global settings drawer state
   globalSettingsOpen: boolean;
   globalSettingsActiveTab: string;
+
+  // Startup overlay — true once STARTUP_COMPLETE (or WORKFLOW_LOADED) is received.
+  // NOT persisted: every panel open should show the overlay until startup settles.
+  startupReady: boolean;
 }
 
 /**
@@ -389,6 +393,9 @@ interface UiActions {
   closeGlobalSettings: () => void;
   setGlobalSettingsTab: (tab: string) => void;
 
+  // Startup overlay
+  setStartupReady: (ready: boolean) => void;
+
   // Reset UI to defaults
   resetUi: () => void;
 }
@@ -450,6 +457,7 @@ const initialState: UiState = {
   mobileSettingsOpen: false,
   globalSettingsOpen: false,
   globalSettingsActiveTab: "general",
+  startupReady: false,
 };
 
 // Fields to persist via vscode.getState()/setState()
@@ -855,6 +863,12 @@ export const useUiStore = create<UiState & UiActions>()(
       closeGlobalSettings: () => set({ globalSettingsOpen: false }),
 
       setGlobalSettingsTab: (tab) => set({ globalSettingsActiveTab: tab }),
+
+      // ============================================================================
+      // STARTUP OVERLAY
+      // ============================================================================
+
+      setStartupReady: (ready) => set({ startupReady: ready }),
 
       // ============================================================================
       // RESET

@@ -156,26 +156,35 @@ export class WebviewMessageRouter {
         // WORKFLOW_PROPERTIES_UPDATE is still needed to replace any stale values
         // from the previously-viewed workflow with the correct ones.
         if (this.clientId !== PANEL_CLIENT_ID) {
+          const send = this.scopedPostMessage;
+          const clientId = this.clientId;
+
+          // Await startup auto-load completion regardless of when this client
+          // connected (before, during, or after). The promise always resolves.
+          // This eliminates the race condition where the old boolean flag was
+          // true (triggered) but the auto-load callback hadn't fired yet.
+          const loadedWorkflowId = await orchestrator.awaitStartupAutoLoad();
+
+          // If auto-load found a session AND handleClientReady hasn't already
+          // replayed it (via the panel's viewedId fallback), send a targeted
+          // replay now with the definitive workflow ID.
+          const alreadyReplayed = orchestrator.hasViewedWorkflow(clientId);
+          if (loadedWorkflowId && !alreadyReplayed) {
+            await orchestrator.replayWorkflowStateTo(
+              loadedWorkflowId,
+              send,
+              clientId
+            );
+          }
+
           await this.settingsSync.sendWorkflowPropertiesToSettings(
             this.getCurrentPostMessage(),
-            this.clientId
+            clientId
           );
-          // If startup auto-load hasn't fired yet, this client connected before
-          // the panel loaded its session. Register a callback so the browser
-          // receives a full replay once auto-load completes, matching the
-          // behaviour of clients that connect after auto-load (handled by the
-          // handleClientReady panel-viewedId fallback above).
-          if (!orchestrator.isAutoLoadTriggered) {
-            const send = this.scopedPostMessage;
-            const clientId = this.clientId;
-            orchestrator.addBrowserAutoLoadCallback(async (workflowId) => {
-              await orchestrator.replayWorkflowStateTo(workflowId, send, clientId);
-              await this.settingsSync.sendWorkflowPropertiesToSettings(
-                this.getCurrentPostMessage(),
-                clientId
-              );
-            });
-          }
+          // Send STARTUP_COMPLETE directly — the hub broadcast from
+          // triggerAutoLoad's finally block may have fired before this client
+          // connected, so we guarantee delivery here.
+          this.settingsSync.sendStartupComplete(this.getCurrentPostMessage());
         }
       }
 
@@ -199,6 +208,12 @@ export class WebviewMessageRouter {
             this.getCurrentPostMessage(),
             this.clientId
           );
+          // Fast-path: if auto-load has already settled (webview reload or
+          // panel reconnect), triggerAutoLoad won't re-run so the hub broadcast
+          // won't fire again. Send STARTUP_COMPLETE directly so the overlay lifts.
+          if (orchestrator.isAutoLoadTriggered) {
+            this.settingsSync.sendStartupComplete(this.getCurrentPostMessage());
+          }
         }
         // Reconnect server running state (handles webview reload while server is up)
         const serverUrl = this.callbacks.getServerUrl?.();

@@ -374,6 +374,15 @@ export class WebviewSettingsSync {
   }
 
   /**
+   * Send STARTUP_COMPLETE to a specific client (targeted, not broadcast).
+   * Used by the fast path in the READY handler for panel reloads and browser
+   * clients that connected after the hub broadcast from triggerAutoLoad fired.
+   */
+  sendStartupComplete(postMessage: PostMessageFn = this.postMessage): void {
+    this.emitMessage({ type: MESSAGE_TYPES.STARTUP_COMPLETE }, postMessage);
+  }
+
+  /**
    * Return the current harness status map (for in-process callers).
    */
   getHarnessStatus(): Record<string, HarnessStatus> {

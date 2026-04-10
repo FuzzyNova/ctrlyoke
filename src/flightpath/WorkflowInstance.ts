@@ -319,7 +319,7 @@ export class WorkflowInstance {
     const executionState = this.getAuthoritativeExecutionState();
     const fileName = this.currentPromptFile
       ? path.basename(this.currentPromptFile.filePath)
-      : state.workflowName || "Untitled";
+      : state.workflowName || DEFAULT_WORKFLOW_NAME;
     Log.trace(
       `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${executionState}, currentIndex=${state.currentIndex}, prompts=${state.steps.length}, bufferSteps=${this.outputCaptureBuffer.stepBufferSize}, finalBufferLoops=${this.outputCaptureBuffer.finalStepBufferSize}`
     );
@@ -352,7 +352,7 @@ export class WorkflowInstance {
     const executionState = this.getAuthoritativeExecutionState();
     const fileName = this.currentPromptFile
       ? path.basename(this.currentPromptFile.filePath)
-      : state.workflowName || "Untitled";
+      : state.workflowName || DEFAULT_WORKFLOW_NAME;
     sink.updateSessionRestored(
       fileName,
       state.steps,
@@ -1573,7 +1573,7 @@ export class WorkflowInstance {
       const currentState = this.promptQueue.getState();
       const fileName = this.currentPromptFile
         ? path.basename(this.currentPromptFile.filePath)
-        : "Untitled";
+        : DEFAULT_WORKFLOW_NAME;
       this.dashboardSink.updatePromptDeleted(
         fileName,
         currentState.steps,

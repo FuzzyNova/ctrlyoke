@@ -7,3 +7,4 @@ export { CenterContentArea } from "./CenterContentArea";
 export { MobilePromptsSidebar } from "./MobilePromptsSidebar";
 export { GlobalSettingsDrawer } from "./GlobalSettingsDrawer";
 export { GlobalSettingsVerticalTabBar } from "./GlobalSettingsVerticalTabBar";
+export { StartupOverlay } from "./StartupOverlay";

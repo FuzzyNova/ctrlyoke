@@ -30,6 +30,7 @@ import {
   CenterContentArea,
   MobilePromptsSidebar,
   GlobalSettingsDrawer,
+  StartupOverlay,
 } from "./components/layout";
 
 function App() {
@@ -456,6 +457,9 @@ function App() {
 
           {/* Global Settings Drawer — slides up from bottom, sits above all other content */}
           <GlobalSettingsDrawer />
+
+          {/* Startup overlay — covers full layout until STARTUP_COMPLETE arrives */}
+          <StartupOverlay />
         </div>
       </div>
     );
@@ -633,6 +637,9 @@ function App() {
 
       {/* Global Settings Drawer — slides up from bottom, z-40 */}
       <GlobalSettingsDrawer />
+
+      {/* Startup overlay — covers full layout until STARTUP_COMPLETE arrives */}
+      <StartupOverlay />
       </div>
     </div>
   );

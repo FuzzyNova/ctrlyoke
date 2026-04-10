@@ -47,6 +47,8 @@ render cycle.
 
 ## 2. Browser client stuck on "No workflow loaded" during startup auto-load race
 
+> **Resolved** — fixed as part of `dev/backlog/STARTUP_LOADING_OVERLAY_PLAN.md`.
+
 **Symptom:** A browser tab that opens at the exact moment the VS Code extension is initializing
 (after `startupAutoLoadTriggered` is set to `true` but before `triggerAutoLoad` has finished
 loading the session) will land in an unrecoverable state: it shows "No workflow loaded" and
@@ -64,13 +66,12 @@ before `triggerAutoLoad`'s inner callback has fired. A browser connecting in thi
 sees `isAutoLoadTriggered === true` (skips registering a callback) but also sees the panel's
 `viewedId === null` (no replay yet). Both recovery paths are missed simultaneously.
 
-**Why we're not fixing it:** `startupAutoLoadTriggered` is set immediately before
-`triggerAutoLoad()` is called and `triggerAutoLoad` calls `autoLoadRecentSession` which
-synchronously resolves before yielding control. The practical window is sub-millisecond and
-requires a WebSocket `connection` event to fire at a specific point inside a synchronous JS
-call stack — not achievable under normal conditions.
+**Note on original "sub-millisecond" characterization:** `autoLoadRecentSession` contains
+multiple real async I/O awaits (`fs.stat`, directory read, JSON file read). The actual race
+window is 100–500ms, not sub-millisecond. The race is real and reproducible.
 
-**Proper fix if it ever becomes observable:** Replace the boolean flag with a `Promise<string | null>`
-that resolves to the loaded workflow ID (or `null` if no session). `isAutoLoadTriggered`
-becomes `await autoLoadPromise`, and both recovery paths merge: any client connecting during
-or after auto-load simply awaits the same promise and receives the definitive result.
+**Fix:** Replace `startupAutoLoadTriggered: boolean` with a `Promise<string | null>` that
+resolves to the loaded workflow ID (or `null`) in `triggerAutoLoad()`'s `finally` block.
+Browser clients in `WebviewMessageRouter`'s READY handler `await` this promise regardless of
+when they connect, then receive a targeted replay if needed. The `pendingBrowserAutoLoadCallbacks`
+mechanism is removed as it is fully subsumed by the promise approach.

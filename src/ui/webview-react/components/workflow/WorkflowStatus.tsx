@@ -8,6 +8,7 @@ import {
   EXECUTION_STATES,
   RUNNER_IDS,
 } from "../../types/messages";
+import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
 import { RecentWorkflows } from "./RecentWorkflows";
 import { RunningWorkflowItem } from "./RunningWorkflowItem";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
@@ -262,18 +263,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
   const displayName = fileName
     ? workflowName || getWorkflowNameFromPath(fileName)
-    : "";
-
-  // No workflow loaded - show empty state
-  if (!fileName) {
-    return (
-      <div className={`workflow-status ${className}`}>
-        <span className="text-description-fg italic text-sm">
-          No workflow loaded
-        </span>
-      </div>
-    );
-  }
+    : DEFAULT_WORKFLOW_NAME;
 
   return (
     <div ref={containerRef} className={`workflow-status relative ${className}`}>
@@ -430,6 +420,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             onSelect={handleSelectWorkflow}
             onClearHistory={handleClearHistory}
             onRemove={handleRemoveWorkflow}
+            onNewWorkflow={() => {
+              vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
+              setIsDropdownOpen(false);
+            }}
           />
         </div>
       </div>

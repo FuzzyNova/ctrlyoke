@@ -1086,4 +1086,5 @@ export type IncomingMessage =
   | McpRegistryResultMessage
   | McpWorkspaceServersResultMessage
   | GlobalSettingsLoadedMessage
-  | GlobalSettingUpdatedMessage;
+  | GlobalSettingUpdatedMessage
+  | { type: typeof MESSAGE_TYPES.STARTUP_COMPLETE };
