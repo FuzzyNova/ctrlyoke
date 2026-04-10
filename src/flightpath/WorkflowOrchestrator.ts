@@ -434,11 +434,20 @@ export class WorkflowOrchestrator {
    * function without changing the global active workflow or broadcasting to
    * other clients. Used by SWITCH_WORKFLOW from external WebSocket clients
    * so each browser tab can view a different workflow independently.
+   *
+   * @param options.skipTerminalReplay - When true, omit TERMINAL_STARTED and
+   *   reconnect-buffer TERMINAL_OUTPUT messages. Pass this for workflow
+   *   *switches* (both panel and browser) where the xterm.js registry is
+   *   already intact, and for the panel's setDashboardReady path where the
+   *   READY handler's dedicated PTY reconnect loop sends terminals.
+   *   Leave false (default) for initial client connections and reloads where
+   *   the client's xterm registry has been wiped.
    */
   async replayWorkflowStateTo(
     workflowId: string,
     send: (msg: unknown) => void,
-    clientId: string
+    clientId: string,
+    options?: { skipTerminalReplay?: boolean }
   ): Promise<void> {
     const sink = new PostMessageDashboardSink(send);
 
@@ -451,29 +460,32 @@ export class WorkflowOrchestrator {
       instance.replayFullStateTo(sink);
       await instance.replayRunHistoryTo(sink);
       await instance.replayOutputHistoryTo(send);
-      // Send active terminal sessions to the connecting client so it can render
-      // the live terminal. Follow with the reconnect buffer so the client sees
-      // previous output immediately — the same pattern used for panel reconnection
-      // in the READY handler. Live TERMINAL_OUTPUT from the hub will continue to
-      // arrive after this replay completes.
-      const ptyManager = getPtyProcessManager();
-      if (ptyManager) {
-        for (const session of ptyManager.getSessionsForWorkflow(workflowId)) {
-          send({
-            type: MESSAGE_TYPES.TERMINAL_STARTED,
-            workflowId: session.workflowId,
-            sessionId: session.id,
-            stepName: session.stepName,
-            kind: session.kind,
-            promptNumber: session.promptNumber,
-          });
-          for (const chunk of session.reconnectBuffer) {
+      // Replay active terminal sessions to the client so it can render the live
+      // terminal. Only needed for initial connections and reloads where the
+      // client's xterm.js registry has been wiped. Callers that know the client's
+      // registry is intact (workflow switches, panel setDashboardReady) pass
+      // skipTerminalReplay: true so we don't clear and dispose live xtermjs
+      // instances that already hold the correct scrollback.
+      if (!options?.skipTerminalReplay) {
+        const ptyManager = getPtyProcessManager();
+        if (ptyManager) {
+          for (const session of ptyManager.getSessionsForWorkflow(workflowId)) {
             send({
-              type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+              type: MESSAGE_TYPES.TERMINAL_STARTED,
               workflowId: session.workflowId,
               sessionId: session.id,
-              data: chunk,
+              stepName: session.stepName,
+              kind: session.kind,
+              promptNumber: session.promptNumber,
             });
+            for (const chunk of session.reconnectBuffer) {
+              send({
+                type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+                workflowId: session.workflowId,
+                sessionId: session.id,
+                data: chunk,
+              });
+            }
           }
         }
       }
@@ -719,12 +731,15 @@ export class WorkflowOrchestrator {
     if (panelSend) {
       this.storedPanelSend = panelSend;
       // Re-hydrate via targeted replay to the panel (handles webview reloads).
+      // Skip terminal replay — the panel READY handler's dedicated PTY reconnect
+      // loop sends TERMINAL_STARTED + reconnect buffers after this returns.
       const viewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
       if (viewedId) {
         await this.replayWorkflowStateTo(
           viewedId,
           panelSend,
-          this.PANEL_CLIENT_ID
+          this.PANEL_CLIENT_ID,
+          { skipTerminalReplay: true }
         );
       }
     } else {
@@ -1052,7 +1067,8 @@ export class WorkflowOrchestrator {
    */
   async handleClientReady(
     clientId: string,
-    send: (msg: unknown) => void
+    send: (msg: unknown) => void,
+    options?: { skipTerminalReplay?: boolean }
   ): Promise<void> {
     this.registerClient(clientId);
     let viewedId = this.getViewedWorkflowId(clientId);
@@ -1065,7 +1081,7 @@ export class WorkflowOrchestrator {
     }
 
     if (viewedId) {
-      await this.replayWorkflowStateTo(viewedId, send, clientId);
+      await this.replayWorkflowStateTo(viewedId, send, clientId, options);
     }
     send({
       type: MESSAGE_TYPES.WORKFLOWS_LIST,

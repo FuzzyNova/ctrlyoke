@@ -147,9 +147,17 @@ export class WebviewMessageRouter {
       const orchestrator = this.getOrchestrator();
 
       if (orchestrator) {
+        // The panel has a dedicated PTY reconnect loop later in this handler
+        // that sends TERMINAL_STARTED + reconnect buffers. Skip terminal replay
+        // inside handleClientReady for the panel to avoid double-sending and the
+        // associated xterm dispose+recreate cycle that caused the
+        // "briefly see scrollback then goes blank" bug. Browser clients (which
+        // have no separate PTY loop) use the default skipTerminalReplay: false
+        // so they receive terminal state on initial connect and reload.
         await orchestrator.handleClientReady(
           this.clientId,
-          this.scopedPostMessage
+          this.scopedPostMessage,
+          this.clientId === PANEL_CLIENT_ID ? { skipTerminalReplay: true } : undefined
         );
         // For browser clients: SESSION_RESTORED (sent during replay) triggers
         // applyWorkflowChange() which no longer clears workflowProperties, but
@@ -711,10 +719,16 @@ export class WebviewMessageRouter {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return;
       try {
+        // Skip terminal replay: the client's xterm.js registry is intact across
+        // workflow switches (terminalRegistry is module-level, outside React).
+        // Re-sending TERMINAL_STARTED would trigger clearAiCliSessions() in
+        // terminalMessageHandlers, disposing the live xterm and causing the
+        // "briefly see scrollback then blank" bug — for both panel and browser.
         await orchestrator.replayWorkflowStateTo(
           workflowId,
           this.scopedPostMessage,
-          this.clientId
+          this.clientId,
+          { skipTerminalReplay: true }
         );
         // SESSION_RESTORED (sent by the replay) clears workflowProperties via applyWorkflowChange().
         // Repopulate them immediately so the PropertiesPanel shows the correct state.
