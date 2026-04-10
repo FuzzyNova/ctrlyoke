@@ -224,9 +224,9 @@ export const Header: React.FC<{
 
   return (
     <>
-      <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_1fr] gap-x-4 gap-y-1.5 items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
+      <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_1fr] gap-x-4 gap-y-1.5 items-center px-1 sm:px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
         {/* Left Section: Workflow Controls + Save + Undo/Redo buttons */}
-        <div className="header-left flex items-center gap-2">
+        <div className="header-left flex items-center gap-0.5 sm:gap-2">
           <WorkflowControls />
           {/* Save button */}
           <button
@@ -335,7 +335,7 @@ export const Header: React.FC<{
         </div>
 
         {/* Right Section: Control Buttons */}
-        <div className="header-right justify-self-end flex items-center gap-1">
+        <div className="header-right justify-self-end flex items-center gap-0.5 sm:gap-1">
           {/* Run/Restart Button (icon-only) */}
           <button
             className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
