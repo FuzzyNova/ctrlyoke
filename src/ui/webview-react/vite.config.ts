@@ -34,6 +34,11 @@ export default defineConfig(({ mode }) => ({
           src: "static/custom-icons.css",
           dest: ".",
         },
+        // Copy extension logo for browser-hosted dashboard background
+        {
+          src: "../../../images/flightpath-icon.svg",
+          dest: ".",
+        },
       ],
     }),
   ],

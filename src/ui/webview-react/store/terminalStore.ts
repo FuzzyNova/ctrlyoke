@@ -14,6 +14,8 @@ export interface TerminalSession {
   stepName: string;
   kind: SessionKind;
   promptNumber?: number;
+  /** HarnessId for AI CLI sessions (e.g. "claude-cli"). Undefined for shell sessions. */
+  harnessId?: string;
   status: TerminalSessionStatus;
   /** Chunks buffered before TerminalInstance mounts — flushed on mount */
   pendingOutput: string[];

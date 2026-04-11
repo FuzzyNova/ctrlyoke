@@ -6,6 +6,7 @@ import {
   HarnessConfig,
   CLI_VERSION_CHECK_TIMEOUT_MS,
 } from "../shared/interfaces/ICliProvider";
+import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
@@ -63,6 +64,7 @@ export class ClaudeCliProvider implements ICliProvider {
 
   readonly config: HarnessConfig = {
     name: "claude",
+    harnessId: HARNESS_IDS.CLAUDE_CLI,
     displayName: "Claude Code CLI",
     terminalName: "Claude",
     installHint: "Install via: npm install -g @anthropic-ai/claude-code",

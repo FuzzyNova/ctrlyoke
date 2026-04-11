@@ -7,6 +7,7 @@ import {
   HarnessConfig,
   CLI_VERSION_CHECK_TIMEOUT_MS,
 } from "../shared/interfaces/ICliProvider";
+import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -66,6 +67,7 @@ const execAsync = promisify(exec);
 export class OpenCodeCliProvider implements ICliProvider {
   readonly config: HarnessConfig = {
     name: "opencode",
+    harnessId: HARNESS_IDS.OPENCODE_CLI,
     displayName: "OpenCode CLI",
     terminalName: "OpenCode",
     installHint: "Install via: npm install -g opencode-ai",

@@ -248,6 +248,7 @@ export class WebviewMessageRouter {
               stepName: session.stepName,
               kind: session.kind,
               promptNumber: session.promptNumber,
+              harnessId: session.harnessId,
               controllerClientId: session.controllerClientId,
             });
             // Flush reconnect buffer

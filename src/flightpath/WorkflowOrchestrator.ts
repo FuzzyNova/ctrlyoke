@@ -481,6 +481,7 @@ export class WorkflowOrchestrator {
               stepName: session.stepName,
               kind: session.kind,
               promptNumber: session.promptNumber,
+              harnessId: session.harnessId,
               controllerClientId: session.controllerClientId,
             });
             for (const chunk of session.reconnectBuffer) {

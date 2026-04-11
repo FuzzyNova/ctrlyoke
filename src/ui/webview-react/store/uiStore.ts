@@ -439,7 +439,7 @@ const initialState: UiState = {
   toast: null,
   activeOutputTabs: {},
   terminalActiveWorkflows: new Set<string>(),
-  terminalRailCollapsed: false,
+  terminalRailCollapsed: true,
   terminalRailSizePx: 140,
   isViewingHistory: false,
   viewingRunIndex: 0,

@@ -220,7 +220,7 @@ export const MESSAGE_TYPES = {
   TERMINAL_OUTPUT: "terminalOutput", // extension → webview: { workflowId, sessionId, data }
   TERMINAL_INPUT: "terminalInput", // webview → extension: { workflowId, sessionId, data }
   TERMINAL_RESIZE: "terminalResize", // webview → extension: { workflowId, sessionId, cols, rows }
-  TERMINAL_STARTED: "terminalStarted", // extension → webview: { workflowId, sessionId, stepName, kind, controllerClientId? }
+  TERMINAL_STARTED: "terminalStarted", // extension → webview: { workflowId, sessionId, stepName, kind, harnessId?, promptNumber?, controllerClientId? }
   TERMINAL_ENDED: "terminalEnded", // extension → webview: { workflowId, sessionId, kind, exitCode }
   TERMINAL_SPAWN_SHELL: "terminalSpawnShell", // webview → extension: { workflowId, cwd }
   TERMINAL_RESTART_SHELL: "terminalRestartShell", // webview → extension: { workflowId, sessionId }

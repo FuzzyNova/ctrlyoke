@@ -343,11 +343,11 @@ export class FlightPathHostedServer
     let html = fs.readFileSync(indexPath, "utf8");
 
     // Replace VS Code URI placeholders with server-relative paths.
-    // typo.js is only available via VS Code's URI scheme — omit for browser.
-    html = html.replace(/<script\s+src="\{\{typoUri\}\}"><\/script>/g, "");
+    // typo.js is copied to webview-react/ by Vite and served as a static asset.
+    html = html.replace(/\{\{typoUri\}\}/g, "/typo.js");
     html = html.replace(/\{\{codiconsUri\}\}/g, "/codicons/codicon.css");
     html = html.replace(/\{\{customIconsUri\}\}/g, "/custom-icons.css");
-    html = html.replace(/\{\{logoUri\}\}/g, "");
+    html = html.replace(/\{\{logoUri\}\}/g, "/flightpath-icon.svg");
     // Vite adds crossorigin to module scripts; remove it for same-origin serving.
     html = html.replace(
       /<script type="module" crossorigin/g,
@@ -357,7 +357,7 @@ export class FlightPathHostedServer
     // Add spell-checker dictionary paths as data attributes on <body>.
     html = html.replace(
       "<body>",
-      `<body data-aff-uri="/dictionaries/en_US/en_US.aff" data-dic-uri="/dictionaries/en_US/en_US.dic" data-logo-uri="">`
+      `<body data-aff-uri="/dictionaries/en_US/en_US.aff" data-dic-uri="/dictionaries/en_US/en_US.dic" data-logo-uri="/flightpath-icon.svg">`
     );
 
     // Replace the VS Code-specific CSP with a browser-compatible policy.

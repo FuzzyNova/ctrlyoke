@@ -79,6 +79,8 @@ export class PtySession {
   readonly stepName: string;
   readonly kind: SessionKind;
   readonly promptNumber?: number;
+  /** HarnessId for AI CLI sessions (e.g. "claude-cli"). Undefined for shell sessions. */
+  readonly harnessId?: string;
   readonly pty: IPty;
   status: TerminalSessionStatus;
   /** The clientId that owns interactive control of this session (input + resize). */
@@ -94,13 +96,15 @@ export class PtySession {
     stepName: string,
     kind: SessionKind,
     ptyInstance: IPty,
-    promptNumber?: number
+    promptNumber?: number,
+    harnessId?: string
   ) {
     this.id = id;
     this.workflowId = workflowId;
     this.stepName = stepName;
     this.kind = kind;
     this.promptNumber = promptNumber;
+    this.harnessId = harnessId;
     this.pty = ptyInstance;
     this.status = TERMINAL_SESSION_STATUS.RUNNING;
   }
@@ -132,6 +136,8 @@ export interface SpawnPtyOptions {
   stepName: string;
   kind: SessionKind;
   promptNumber?: number;
+  /** HarnessId for AI CLI sessions (e.g. "claude-cli"). Omit for shell sessions. */
+  harnessId?: string;
   /**
    * Pre-supply a session ID so the caller can post TERMINAL_STARTED to the
    * webview *before* spawning — ensuring the session exists in the store
@@ -238,7 +244,8 @@ export class PtyProcessManager {
       options.stepName,
       options.kind,
       ptyInstance,
-      options.promptNumber
+      options.promptNumber,
+      options.harnessId
     );
     // Consume any pending controller registration set before the spawn was triggered
     session.controllerClientId = this.consumePendingController(options.workflowId);

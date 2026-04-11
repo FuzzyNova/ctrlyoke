@@ -17,6 +17,8 @@ import {
 import { TerminalInstance } from "./TerminalInstance";
 import type { TerminalSession } from "@store/terminalStore";
 import { SEPARATOR_VERTICAL } from "../../constants";
+import { HarnessIcon } from "../shared/HarnessIcon";
+import type { HarnessId } from "../../types/messages";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
 const EMPTY_SESSIONS: TerminalSession[] = [];
@@ -231,7 +233,7 @@ const RailEntry: React.FC<RailEntryProps> = ({
       onClick={onClick}
       title={session.stepName}
     >
-      <StatusDot status={session.status} />
+      <SessionIcon session={session} />
       <span className="truncate flex-1">{session.stepName}</span>
     </button>
   );
@@ -267,7 +269,7 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
       }}
       title={session.stepName}
     >
-      <StatusDot status={session.status} />
+      <SessionIcon session={session} />
       <span className="truncate flex-1">{session.stepName}</span>
       {isEnded && (
         <button
@@ -317,10 +319,26 @@ const CompactRailEntry: React.FC<CompactRailEntryProps> = ({
     onClick={onClick}
     title={session.stepName}
   >
-    <StatusDot status={session.status} />
+    <SessionIcon session={session} />
     <span className="text-[9px] font-mono">{label}</span>
   </button>
 );
+
+/**
+ * Shows the harness icon for AI CLI sessions, or a status dot for shell sessions.
+ */
+const SessionIcon: React.FC<{ session: TerminalSession }> = ({ session }) => {
+  if (session.harnessId) {
+    return (
+      <HarnessIcon
+        harnessId={session.harnessId as HarnessId}
+        size={12}
+        className="flex-shrink-0"
+      />
+    );
+  }
+  return <StatusDot status={session.status} />;
+};
 
 const StatusDot: React.FC<{ status: TerminalSession["status"] }> = ({
   status,

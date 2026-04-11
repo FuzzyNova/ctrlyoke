@@ -9,6 +9,7 @@ import type {
   UserHookConfig,
 } from "../../../../types/FlightPathTypes";
 import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
+import type { HarnessId } from "../../../../types/DashboardConstants";
 
 /** Timeout for CLI version-check subprocesses (checkAvailability + getVersion) */
 export const CLI_VERSION_CHECK_TIMEOUT_MS = 30_000;
@@ -19,6 +20,9 @@ export const CLI_VERSION_CHECK_TIMEOUT_MS = 30_000;
 export interface HarnessConfig {
   /** Harness name (e.g., "copilot", "claude", "codex") */
   name: string;
+
+  /** Canonical harness ID from HARNESS_IDS (e.g., HARNESS_IDS.CLAUDE_CLI) */
+  harnessId: HarnessId;
 
   /** Display name for status messages */
   displayName: string;

@@ -16,6 +16,13 @@
     if (msg.type === "themeVarsUpdated") {
       const style = document.documentElement.style;
       for (const [k, v] of Object.entries(msg.vars)) style.setProperty(k, v);
+      // Replicate VS Code's body class so dark-mode detection works in the browser
+      // (e.g. CodeMirror reads document.body.classList.contains("vscode-dark")).
+      const kind = msg.vars["--fp-color-theme-kind"];
+      if (kind) {
+        document.body.classList.remove("vscode-dark", "vscode-light", "vscode-high-contrast");
+        document.body.classList.add(kind === "dark" ? "vscode-dark" : kind === "high-contrast" ? "vscode-high-contrast" : "vscode-light");
+      }
       return;
     }
 

@@ -615,7 +615,18 @@ function createThemeExtension() {
         fontFamily: "var(--vscode-editor-font-family)",
       },
     },
-    { dark: document.body.classList.contains("vscode-dark") }
+    {
+      // CodeMirror only supports dark:true/false — no separate high-contrast mode.
+      // In VS Code the body carries "vscode-dark"; in the browser-hosted dashboard
+      // --fp-color-theme-kind is injected on :root via buildThemeStyleBlock and
+      // mirrored onto the body class by standalone-shim.js, so both checks work.
+      dark:
+        document.body.classList.contains("vscode-dark") ||
+        window
+          .getComputedStyle(document.documentElement)
+          .getPropertyValue("--fp-color-theme-kind")
+          .trim() !== "light",
+    }
   );
 }
 
@@ -634,6 +645,21 @@ function createLinterThemeExtension() {
     ".cm-lintRange-warning": {
       backgroundImage:
         "url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%226%22 height=%223%22><path d=%22m0 2.5 l2 -1.5 l1 0 l2 1.5 l1 0%22 stroke=%22orange%22 fill=%22none%22 stroke-width=%22.7%22/></svg>')",
+    },
+    // Lint tooltip container — explicit VS Code vars so it's correct in both
+    // dark and light modes regardless of CodeMirror's own dark/light defaults.
+    ".cm-tooltip.cm-tooltip-lint": {
+      backgroundColor:
+        "var(--vscode-editorWidget-background, var(--vscode-editor-background))",
+      border:
+        "1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border))",
+      boxShadow: "0 2px 8px var(--vscode-widget-shadow)",
+      color:
+        "var(--vscode-editorWidget-foreground, var(--vscode-editor-foreground))",
+    },
+    ".cm-diagnosticMessage": {
+      color:
+        "var(--vscode-editorWidget-foreground, var(--vscode-editor-foreground))",
     },
     ".cm-diagnosticAction": {
       display: "block",

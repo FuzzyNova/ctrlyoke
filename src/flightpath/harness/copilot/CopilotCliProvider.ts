@@ -7,6 +7,7 @@ import {
   HarnessConfig,
   CLI_VERSION_CHECK_TIMEOUT_MS,
 } from "../shared/interfaces/ICliProvider";
+import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
@@ -65,6 +66,7 @@ const execAsync = promisify(exec);
 export class CopilotCliProvider implements ICliProvider {
   readonly config: HarnessConfig = {
     name: "copilot",
+    harnessId: HARNESS_IDS.COPILOT_CLI,
     displayName: "GitHub Copilot CLI",
     terminalName: "Copilot",
     installHint: "Install via: npm install -g @github/copilot",

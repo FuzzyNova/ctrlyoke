@@ -23,7 +23,7 @@ import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { CODEX_CLI_MODELS, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
-import { PERMISSION_MODES } from "../../../types/DashboardConstants";
+import { PERMISSION_MODES, HARNESS_IDS } from "../../../types/DashboardConstants";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   PromptStep,
@@ -78,6 +78,7 @@ export class CodexCliProvider implements ICliProvider {
 
   readonly config: HarnessConfig = {
     name: "codex",
+    harnessId: HARNESS_IDS.CODEX_CLI,
     displayName: "Codex CLI",
     terminalName: "Codex",
     installHint: "Install via: npm install -g @openai/codex-cli",

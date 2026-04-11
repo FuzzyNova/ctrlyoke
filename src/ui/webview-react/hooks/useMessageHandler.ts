@@ -115,6 +115,17 @@ export function captureAndSendThemeVars(
     /* ignore */
   }
 
+  // Capture theme kind from body class so browser-hosted clients can replicate it.
+  // Stored as a synthetic CSS custom property so it flows through the same
+  // cachedThemeVars / buildThemeStyleBlock pipeline as the --vscode-* vars.
+  const bodyClasses = document.body.classList;
+  const themeKind = bodyClasses.contains("vscode-high-contrast")
+    ? "high-contrast"
+    : bodyClasses.contains("vscode-dark")
+      ? "dark"
+      : "light";
+  vars["--fp-color-theme-kind"] = themeKind;
+
   vscodeApi.postMessage({ type: MESSAGE_TYPES.THEME_VARS_CAPTURED, vars });
 }
 

@@ -176,6 +176,7 @@ export class CliTransportCoordinator {
         ? workflowContext.promptIndex + 1
         : undefined;
       const preSessionId = `ai-cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const harnessId = this.deps.provider.config.harnessId;
 
       postMessage({
         type: MESSAGE_TYPES.TERMINAL_STARTED,
@@ -184,6 +185,7 @@ export class CliTransportCoordinator {
         stepName,
         kind: SESSION_KINDS.AI_CLI,
         promptNumber,
+        harnessId,
       });
 
       const session = ptyManager.spawnPty({
@@ -191,6 +193,7 @@ export class CliTransportCoordinator {
         stepName,
         kind: SESSION_KINDS.AI_CLI,
         promptNumber,
+        harnessId,
         sessionId: preSessionId,
         command: shell,
         args: shellArgs,
