@@ -737,6 +737,10 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               onChange={(e) => setScriptCommand(e.target.value)}
               placeholder="e.g. npm test"
               disabled={isCLIManaged}
+              autoCorrect="off"
+              autoCapitalize="off"
+              autoComplete="off"
+              spellCheck={false}
               className="px-2 py-1.5 text-xs bg-input-bg text-input-fg border border-input-border rounded outline-none focus:border-focus-border disabled:opacity-50"
               style={{ boxShadow: "none" }}
             />

@@ -442,6 +442,13 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         createLinkDecorationExtension(),
         createFileRefDecorationExtension(),
         createClickHandlerExtension(vscode),
+        // iOS Safari: enable the word-suggestion bar above the keyboard and
+        // autocapitalization. CodeMirror defaults these to "off" which suppresses
+        // the native suggestion strip entirely on iPhone/iPad.
+        EditorView.contentAttributes.of({
+          autocorrect: "on",
+          autocapitalize: "sentences",
+        }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             const newValue = update.state.doc.toString();
