@@ -38,6 +38,8 @@ import {
   STEP_STATUS,
   STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
+  CONDITION_ACTIONS,
+  COMPARE_SOURCES,
   type ActionType,
   type QueuePosition,
 } from "../types/DashboardConstants";
@@ -2515,19 +2517,15 @@ export class WorkflowInstance {
         }),
       ...(props.onPass !== undefined &&
         props.onPass !== null && {
-          onPass: props.onPass as "continue" | "stopWorkflow",
+          onPass: props.onPass as typeof CONDITION_ACTIONS.CONTINUE | typeof CONDITION_ACTIONS.STOP_WORKFLOW,
         }),
       ...(props.onFail !== undefined &&
         props.onFail !== null && {
-          onFail: props.onFail as "continue" | "stopWorkflow",
+          onFail: props.onFail as typeof CONDITION_ACTIONS.CONTINUE | typeof CONDITION_ACTIONS.STOP_WORKFLOW,
         }),
       ...(props.compareSource !== undefined &&
         props.compareSource !== null && {
-          compareSource: props.compareSource as
-            | "auto"
-            | "stdout"
-            | "stderr"
-            | "exitCode",
+          compareSource: props.compareSource as typeof COMPARE_SOURCES[keyof typeof COMPARE_SOURCES],
         }),
       ...(props.returns !== undefined &&
         props.returns !== null && { returns: props.returns as string }),

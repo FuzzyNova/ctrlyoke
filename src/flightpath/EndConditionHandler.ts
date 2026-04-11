@@ -6,7 +6,7 @@ import {
   type WorkflowAttemptTarget,
   type EndConditionAction,
 } from "../types/FlightPathTypes";
-import { STATUS_MESSAGE_SEVERITY } from "../types/DashboardConstants";
+import { STATUS_MESSAGE_SEVERITY, CONDITION_ACTIONS } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
 import {
   EndConditionEvaluator,
@@ -95,12 +95,12 @@ export class EndConditionHandler {
     retryContext: RetryContext,
     sendRetryPrompt: SendRetryPromptCallback
   ): Promise<EndConditionHandlerResult> {
-    const onPass: EndConditionAction = prompt.endCondition?.onPass ?? "continue";
-    const onFail: EndConditionAction = prompt.endCondition?.onFail ?? "stopWorkflow";
+    const onPass: EndConditionAction = prompt.endCondition?.onPass ?? CONDITION_ACTIONS.CONTINUE;
+    const onFail: EndConditionAction = prompt.endCondition?.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
 
     // Apply maxRetries default of 1 when either field is "retry" and maxRetries is unset
     if (
-      (onPass === "retry" || onFail === "retry") &&
+      (onPass === CONDITION_ACTIONS.RETRY || onFail === CONDITION_ACTIONS.RETRY) &&
       prompt.endCondition &&
       prompt.endCondition.maxRetries === undefined
     ) {
@@ -123,7 +123,7 @@ export class EndConditionHandler {
         currentResult.scriptOutput = evaluationResult.stdout;
       }
 
-      if (onPass === "stopWorkflow") {
+      if (onPass === CONDITION_ACTIONS.STOP_WORKFLOW) {
         const reason = "End condition passed with onPass: stopWorkflow";
         retryContext.runtime.failAttempt(
           retryContext.attemptTarget,
@@ -133,10 +133,10 @@ export class EndConditionHandler {
         return { shouldContinue: false, failureReason: reason };
       }
 
-      // "continue" or "retry" — advance to next step
+      // CONTINUE or RETRY — advance to next step
       // Note: onPass "retry" (re-run while passing) requires orchestrator-level loop support;
       // for now it behaves as "continue" to avoid breaking workflow state.
-      if (onPass === "retry") {
+      if (onPass === CONDITION_ACTIONS.RETRY) {
         Log.info(
           "⚠️ onPass: retry is not yet fully implemented — advancing to next step"
         );
@@ -151,7 +151,7 @@ export class EndConditionHandler {
     }
 
     // Failure case — apply onFail action
-    if (onFail === "continue") {
+    if (onFail === CONDITION_ACTIONS.CONTINUE) {
       // Advance despite failure
       Log.warn("⚠️ End condition failed, continuing due to onFail: continue");
       this.promptQueue.resetRetryCount();

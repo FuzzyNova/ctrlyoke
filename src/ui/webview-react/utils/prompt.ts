@@ -6,15 +6,12 @@ import {
   STEP_STATUS,
   PROMPT_PROPERTIES,
   type StepStatus,
+  type CompareSource,
 } from "../types/messages";
 
 export { PROMPT_PROPERTIES };
 
-export type EndConditionCompareSource =
-  | "auto"
-  | "stdout"
-  | "stderr"
-  | "exitCode";
+export type EndConditionCompareSource = CompareSource;
 
 /**
  * End condition configuration

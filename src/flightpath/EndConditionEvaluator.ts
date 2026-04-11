@@ -7,6 +7,7 @@ import {
   type ScriptProperties,
   type EndConditionCompareSource,
 } from "../types/FlightPathTypes";
+import { COMPARE_SOURCES } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
   PATH_CONSTANTS,
@@ -395,7 +396,7 @@ export class EndConditionEvaluator {
     const expectedLower = returns.trim().toLowerCase();
 
     switch (compareSource) {
-      case "exitCode": {
+      case COMPARE_SOURCES.EXIT_CODE: {
         // Directly compare exit code — boolean keywords or exact integer string
         if (expectedLower === "true") return result.exitCode === 0;
         if (expectedLower === "false")
@@ -404,15 +405,15 @@ export class EndConditionEvaluator {
         return !isNaN(expectedCode) && result.exitCode === expectedCode;
       }
 
-      case "stderr":
+      case COMPARE_SOURCES.STDERR:
         // Compare stderr, no exit code requirement
         return this.checkResult(result.stderr ?? "", returns);
 
-      case "stdout":
+      case COMPARE_SOURCES.STDOUT:
         // Compare stdout, require clean exit
         return this.checkResult(result.result, returns) && result.success;
 
-      case "auto":
+      case COMPARE_SOURCES.AUTO:
       default: {
         // "true"/"false" use exit code; everything else compares stdout + requires clean exit
         const checkSuccess = this.checkResult(

@@ -20,6 +20,8 @@ import {
   STATUS_MESSAGE_SEVERITY,
   FINAL_STEP_PHASES,
   STEP_TYPES,
+  CONDITION_ACTIONS,
+  COMPARE_SOURCES,
 } from "../types/DashboardConstants";
 import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
@@ -466,23 +468,23 @@ export class WorkflowExecutor {
         workflowFileForPre.vars
       );
       const preAction: PreConditionAction = preResult.passed
-        ? (resolvedPreCondition.onPass ?? "continue")
-        : (resolvedPreCondition.onFail ?? "skipPrompt");
+        ? (resolvedPreCondition.onPass ?? CONDITION_ACTIONS.CONTINUE)
+        : (resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT);
 
       Log.debug(
         `Pre-condition ${preResult.passed ? "passed" : "failed"} → action: ${preAction}`
       );
 
-      if (preAction === "skipPrompt") {
+      if (preAction === CONDITION_ACTIONS.SKIP_PROMPT) {
         return this.handleSkippedStep(step, target, context);
       }
-      if (preAction === "stopWorkflow") {
+      if (preAction === CONDITION_ACTIONS.STOP_WORKFLOW) {
         Log.info("Pre-condition stopWorkflow triggered");
         this.getRuntime().fail();
         await this.promptQueue.commitRuntimeTransition();
         return false;
       }
-      // "continue" — fall through and run the step
+      // CONTINUE — fall through and run the step
     }
     const workflowFile = this.promptQueue.getWorkflowFile();
     let resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
@@ -785,7 +787,7 @@ export class WorkflowExecutor {
     const evalResult = await this.endConditionEvaluator.evaluateCondition(
       {
         script: step.script,
-        compareSource: step.compareSource ?? "exitCode",
+        compareSource: step.compareSource ?? COMPARE_SOURCES.EXIT_CODE,
         returns: step.returns ?? "0",
         timeout: timeout,
       },
@@ -865,20 +867,20 @@ export class WorkflowExecutor {
       );
     }
 
-    const onPass = step.onPass ?? "continue";
-    const onFail = step.onFail ?? "stopWorkflow";
+    const onPass = step.onPass ?? CONDITION_ACTIONS.CONTINUE;
+    const onFail = step.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
     const shouldContinue = succeeded
-      ? onPass !== "stopWorkflow"
-      : onFail !== "stopWorkflow";
+      ? onPass !== CONDITION_ACTIONS.STOP_WORKFLOW
+      : onFail !== CONDITION_ACTIONS.STOP_WORKFLOW;
     const terminalStatus = shouldContinue
       ? STEP_STATUS.COMPLETED
       : STEP_STATUS.FAILED;
 
-    if (!succeeded && onFail === "stopWorkflow") {
+    if (!succeeded && onFail === CONDITION_ACTIONS.STOP_WORKFLOW) {
       Log.error(
         `Script step failed (exit code ${evalResult.exitCode}): ${stepLabel}`
       );
-    } else if (succeeded && onPass === "stopWorkflow") {
+    } else if (succeeded && onPass === CONDITION_ACTIONS.STOP_WORKFLOW) {
       Log.info(
         `Script step passed but onPass=stopWorkflow, stopping: ${stepLabel}`
       );

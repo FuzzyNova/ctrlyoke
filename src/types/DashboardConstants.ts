@@ -555,6 +555,26 @@ export const STEP_TYPES = {
 } as const;
 
 // ============================================================================
+// CONDITION_ACTIONS - onPass/onFail action values for endCondition, preCondition, scriptStep
+// ============================================================================
+export const CONDITION_ACTIONS = {
+  CONTINUE: "continue",
+  STOP_WORKFLOW: "stopWorkflow",
+  RETRY: "retry",
+  SKIP_PROMPT: "skipPrompt",
+} as const;
+
+// ============================================================================
+// COMPARE_SOURCES - compareSource values for script evaluation
+// ============================================================================
+export const COMPARE_SOURCES = {
+  AUTO: "auto",
+  STDOUT: "stdout",
+  STDERR: "stderr",
+  EXIT_CODE: "exitCode",
+} as const;
+
+// ============================================================================
 // PROMPT PROPERTY NAMES - Single source of truth for PromptStep properties
 // Used by dashboard.js to access prompt properties consistently
 // ============================================================================
@@ -753,3 +773,7 @@ export type OutputHistoryKind =
 export type WorkflowAttemptCommandValue =
   (typeof WORKFLOW_ATTEMPT_COMMANDS)[keyof typeof WORKFLOW_ATTEMPT_COMMANDS];
 export type StepType = (typeof STEP_TYPES)[keyof typeof STEP_TYPES];
+export type ConditionAction =
+  (typeof CONDITION_ACTIONS)[keyof typeof CONDITION_ACTIONS];
+export type CompareSource =
+  (typeof COMPARE_SOURCES)[keyof typeof COMPARE_SOURCES];

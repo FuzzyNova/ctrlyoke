@@ -14,6 +14,7 @@ import {
   SESSION_ID_SENTINELS,
   RUNNER_IDS,
   HARNESS_IDS,
+  CONDITION_ACTIONS,
   type PriorContext,
   type HarnessId,
   type ToolPermissionMode,
@@ -692,7 +693,7 @@ export const WorkflowPropertiesPanel: React.FC<{
         });
       } else {
         const defaultPreCondition: import("@root/types/FlightPathTypes").PreCondition =
-          { script: "", onFail: "skipPrompt" };
+          { script: "", onFail: CONDITION_ACTIONS.SKIP_PROMPT };
         settingsStore.updateWorkflowProperty(
           "preCondition",
           defaultPreCondition

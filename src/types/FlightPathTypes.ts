@@ -11,6 +11,10 @@ import {
   type WorkflowAttemptStatus,
   STEP_TYPES,
   PRIOR_CONTEXT_KEYWORDS,
+  CONDITION_ACTIONS,
+  COMPARE_SOURCES,
+  type ConditionAction,
+  type CompareSource,
 } from "./DashboardConstants";
 import { ToolPermissionMode } from "../flightpath/harness/shared/interfaces/IToolPermissionMapper";
 export type { ToolPermissionMode };
@@ -385,20 +389,16 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
  * - `"exitCode"`: Compare the numeric exit code. Use `"0"` for success, or any integer string.
  *   `"true"`/`"false"` are also accepted and map to exit 0 / non-zero.
  */
-export type EndConditionCompareSource =
-  | "auto"
-  | "stdout"
-  | "stderr"
-  | "exitCode";
+export type EndConditionCompareSource = CompareSource;
 
 /** Action options for endCondition onPass/onFail */
-export type EndConditionAction = "continue" | "retry" | "stopWorkflow";
+export type EndConditionAction = Exclude<ConditionAction, "skipPrompt">;
 
 /** Action options for preCondition onPass/onFail */
-export type PreConditionAction = "continue" | "skipPrompt" | "stopWorkflow";
+export type PreConditionAction = Exclude<ConditionAction, "retry">;
 
 /** Action options for scriptStep onPass/onFail */
-export type ScriptStepAction = "continue" | "stopWorkflow";
+export type ScriptStepAction = Exclude<ConditionAction, "retry" | "skipPrompt">;
 
 /**
  * Shared script execution properties used by endCondition, preCondition, and scriptStep.

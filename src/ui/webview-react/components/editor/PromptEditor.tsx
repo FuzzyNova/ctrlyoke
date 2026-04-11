@@ -11,6 +11,8 @@ import { CodeMirrorEditor } from "./CodeMirrorEditor";
 import { PropertiesDrawer } from "./PropertiesDrawer";
 import { EditorFooter } from "./EditorFooter";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
+import { ScriptConditionEditor } from "../shared/ScriptConditionEditor";
+import type { ScriptConditionValue } from "../shared/ScriptConditionEditor";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
@@ -19,6 +21,8 @@ import {
   ACTION_TYPES,
   EDITOR_TARGET_KINDS,
   EDITOR_PLACEHOLDER_TEXT,
+  CONDITION_ACTIONS,
+  COMPARE_SOURCES,
 } from "../../types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
@@ -428,9 +432,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           properties: {
             type: STEP_TYPES.SCRIPT,
             ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
-            ...(scriptOnPass !== "continue" && { onPass: scriptOnPass }),
-            ...(scriptOnFail !== "stopWorkflow" && { onFail: scriptOnFail }),
-            ...(scriptCompareSource !== "auto" && { compareSource: scriptCompareSource }),
+            ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && { onPass: scriptOnPass }),
+            ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && { onFail: scriptOnFail }),
+            ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && { compareSource: scriptCompareSource }),
             ...(scriptReturns && { returns: scriptReturns }),
           },
           action: finalAction,
@@ -522,9 +526,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             script: command,
             ...(promptName.trim() ? { name: promptName.trim() } : {}),
             ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
-            ...(scriptOnPass !== "continue" && { onPass: scriptOnPass }),
-            ...(scriptOnFail !== "stopWorkflow" && { onFail: scriptOnFail }),
-            ...(scriptCompareSource !== "auto" && { compareSource: scriptCompareSource }),
+            ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && { onPass: scriptOnPass }),
+            ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && { onFail: scriptOnFail }),
+            ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && { compareSource: scriptCompareSource }),
             ...(scriptReturns && { returns: scriptReturns }),
           },
         });
@@ -662,6 +666,19 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     [setPromptText]
   );
 
+  // Sync ScriptConditionEditor value to individual script store fields
+  const handleScriptChange = useCallback(
+    (updated: ScriptConditionValue) => {
+      setScriptCommand(updated.script ?? "");
+      setScriptTimeout(updated.timeout);
+      setScriptOnPass(updated.onPass ?? CONDITION_ACTIONS.CONTINUE);
+      setScriptOnFail(updated.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW);
+      setScriptCompareSource(updated.compareSource ?? COMPARE_SOURCES.AUTO);
+      setScriptReturns(updated.returns ?? "");
+    },
+    [setScriptCommand, setScriptTimeout, setScriptOnPass, setScriptOnFail, setScriptCompareSource, setScriptReturns]
+  );
+
   // Get button text based on pending prompts
   const getRunButtonText = () => {
     return hasPendingPrompts() ? "Run Next" : "Run";
@@ -724,123 +741,22 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
       {/* Script step fields (script mode only) */}
       {isScriptMode && (
-        <div className="flex flex-col flex-1 overflow-auto px-3 py-3 gap-4 bg-editor-bg">
-          {/* Script command */}
-          <div className="flex flex-col gap-1">
-            <label htmlFor="script-command" className="text-xs font-medium text-foreground">
-              Script command
-            </label>
-            <input
-              id="script-command"
-              type="text"
-              value={scriptCommand}
-              onChange={(e) => setScriptCommand(e.target.value)}
-              placeholder="e.g. npm test"
-              disabled={isCLIManaged}
-              autoCorrect="off"
-              autoCapitalize="off"
-              autoComplete="off"
-              spellCheck={false}
-              className="px-2 py-1.5 text-xs bg-input-bg text-input-fg border border-input-border rounded outline-none focus:border-focus-border disabled:opacity-50"
-              style={{ boxShadow: "none" }}
-            />
-          </div>
-
-          {/* On Pass + On Fail (side-by-side) */}
-          <div className="flex gap-3">
-            <div className="flex flex-col gap-1 flex-1">
-              <label htmlFor="script-on-pass" className="text-xs font-medium text-foreground">
-                On Pass
-              </label>
-              <select
-                id="script-on-pass"
-                value={scriptOnPass}
-                onChange={(e) => setScriptOnPass(e.target.value)}
-                disabled={isCLIManaged}
-                className="px-2 py-1.5 text-xs bg-input-bg text-input-fg border border-input-border rounded outline-none focus:border-focus-border disabled:opacity-50"
-                style={{ boxShadow: "none" }}
-              >
-                <option value="continue">Continue</option>
-                <option value="stopWorkflow">Stop Workflow</option>
-              </select>
-            </div>
-            <div className="flex flex-col gap-1 flex-1">
-              <label htmlFor="script-on-fail" className="text-xs font-medium text-foreground">
-                On Fail
-              </label>
-              <select
-                id="script-on-fail"
-                value={scriptOnFail}
-                onChange={(e) => setScriptOnFail(e.target.value)}
-                disabled={isCLIManaged}
-                className="px-2 py-1.5 text-xs bg-input-bg text-input-fg border border-input-border rounded outline-none focus:border-focus-border disabled:opacity-50"
-                style={{ boxShadow: "none" }}
-              >
-                <option value="continue">Continue</option>
-                <option value="stopWorkflow">Stop Workflow</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Compare Source + Expected Return (side-by-side) */}
-          <div className="flex gap-3">
-            <div className="flex flex-col gap-1 flex-1">
-              <label htmlFor="script-compare-source" className="text-xs font-medium text-foreground">
-                Compare Source
-              </label>
-              <select
-                id="script-compare-source"
-                value={scriptCompareSource}
-                onChange={(e) => setScriptCompareSource(e.target.value)}
-                disabled={isCLIManaged}
-                className="px-2 py-1.5 text-xs bg-input-bg text-input-fg border border-input-border rounded outline-none focus:border-focus-border disabled:opacity-50"
-                style={{ boxShadow: "none" }}
-              >
-                <option value="auto">Auto</option>
-                <option value="stdout">Stdout</option>
-                <option value="stderr">Stderr</option>
-                <option value="exitCode">Exit Code</option>
-              </select>
-            </div>
-            <div className="flex flex-col gap-1 flex-1">
-              <label htmlFor="script-expected-return" className="text-xs font-medium text-foreground">
-                Expected Return
-              </label>
-              <input
-                id="script-expected-return"
-                type="text"
-                value={scriptReturns}
-                onChange={(e) => setScriptReturns(e.target.value)}
-                placeholder="e.g. true or 0"
-                disabled={isCLIManaged}
-                className="px-2 py-1.5 text-xs bg-input-bg text-input-fg border border-input-border rounded outline-none focus:border-focus-border disabled:opacity-50"
-                style={{ boxShadow: "none" }}
-              />
-            </div>
-          </div>
-
-          {/* Timeout */}
-          <div className="flex flex-col gap-1">
-            <label htmlFor="script-timeout" className="text-xs font-medium text-foreground">
-              Timeout (ms)
-            </label>
-            <input
-              id="script-timeout"
-              type="number"
-              min={0}
-              step={1000}
-              value={scriptTimeout ?? ""}
-              onChange={(e) =>
-                setScriptTimeout(
-                  e.target.value !== "" ? Number(e.target.value) : undefined
-                )
-              }
-              placeholder="Default (from settings)"
-              disabled={isCLIManaged}
-              className="px-2 py-1.5 text-xs bg-input-bg text-input-fg border border-input-border rounded outline-none focus:border-focus-border disabled:opacity-50 w-48"
-              style={{ boxShadow: "none" }}
-            />
-          </div>
+        <div className="flex flex-col flex-1 overflow-auto px-3 py-3 bg-editor-bg">
+          <ScriptConditionEditor
+            variant="scriptStep"
+            value={{
+              script: scriptCommand,
+              timeout: scriptTimeout,
+              onPass: scriptOnPass,
+              onFail: scriptOnFail,
+              compareSource: scriptCompareSource,
+              returns: scriptReturns,
+            }}
+            onChange={handleScriptChange}
+            scriptLabel="Script command"
+            disabled={isCLIManaged}
+            idPrefix="script-step"
+          />
         </div>
       )}
 

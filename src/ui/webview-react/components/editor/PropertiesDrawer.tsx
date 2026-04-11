@@ -10,6 +10,7 @@ import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
 import {
   HARNESS_IDS,
+  CONDITION_ACTIONS,
   type HarnessId,
   type PriorContext,
   type ToolPermissionsOverride,
@@ -75,7 +76,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     } else {
       setProperty("preCondition", {
         script: "",
-        onFail: "skipPrompt",
+        onFail: CONDITION_ACTIONS.SKIP_PROMPT,
       } as import("../../../../types/FlightPathTypes").PreCondition);
     }
   };

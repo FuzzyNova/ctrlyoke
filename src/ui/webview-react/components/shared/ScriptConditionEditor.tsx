@@ -5,24 +5,31 @@ import {
   COMPARE_SOURCE_LABELS,
   type EndConditionCompareSource,
 } from "../../utils/endCondition";
+import { CONDITION_ACTIONS, COMPARE_SOURCES } from "../../types/messages";
 import type { SelectOption } from "./CustomSelect";
 
 const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
-  ["auto", "stdout", "stderr", "exitCode"] as EndConditionCompareSource[]
+  Object.values(COMPARE_SOURCES) as EndConditionCompareSource[]
 ).map((v) => ({ value: v, label: COMPARE_SOURCE_LABELS[v] }));
 
 /** Action options for end condition (onPass/onFail) */
 const END_CONDITION_ACTION_OPTIONS: SelectOption[] = [
-  { value: "continue", label: "Continue" },
-  { value: "retry", label: "Retry" },
-  { value: "stopWorkflow", label: "Stop Workflow" },
+  { value: CONDITION_ACTIONS.CONTINUE, label: "Continue" },
+  { value: CONDITION_ACTIONS.RETRY, label: "Retry" },
+  { value: CONDITION_ACTIONS.STOP_WORKFLOW, label: "Stop Workflow" },
 ];
 
 /** Action options for pre-condition (onPass/onFail) */
 const PRE_CONDITION_ACTION_OPTIONS: SelectOption[] = [
-  { value: "continue", label: "Continue" },
-  { value: "skipPrompt", label: "Skip Prompt" },
-  { value: "stopWorkflow", label: "Stop Workflow" },
+  { value: CONDITION_ACTIONS.CONTINUE, label: "Continue" },
+  { value: CONDITION_ACTIONS.SKIP_PROMPT, label: "Skip Prompt" },
+  { value: CONDITION_ACTIONS.STOP_WORKFLOW, label: "Stop Workflow" },
+];
+
+/** Action options for script step (onPass/onFail) */
+const SCRIPT_STEP_ACTION_OPTIONS: SelectOption[] = [
+  { value: CONDITION_ACTIONS.CONTINUE, label: "Continue" },
+  { value: CONDITION_ACTIONS.STOP_WORKFLOW, label: "Stop Workflow" },
 ];
 
 /**
@@ -47,14 +54,20 @@ interface ScriptConditionEditorProps {
   value: ScriptConditionValue | null | undefined;
   /** Called whenever any field changes */
   onChange: (updated: ScriptConditionValue) => void;
-  /** "endCondition" shows retry fields; "preCondition" shows skip-prompt action options */
-  variant: "endCondition" | "preCondition";
+  /**
+   * "endCondition" shows retry fields;
+   * "preCondition" shows skip-prompt action options;
+   * "scriptStep" shows continue/stopWorkflow only with optional timeout
+   */
+  variant: "endCondition" | "preCondition" | "scriptStep";
   /** Narrow layout mode (stacks columns vertically) */
   narrow?: boolean;
   /** Disables all inputs */
   disabled?: boolean;
   /** HTML id prefix for inputs (for accessibility) */
   idPrefix?: string;
+  /** Label for the script input field (defaults to "Script") */
+  scriptLabel?: string;
 }
 
 /**
@@ -79,25 +92,34 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   narrow = false,
   disabled = false,
   idPrefix = variant,
+  scriptLabel = "Script",
 }) => {
   const v = value ?? {};
+  const isScriptStep = variant === "scriptStep";
   const actionOptions =
     variant === "endCondition"
       ? END_CONDITION_ACTION_OPTIONS
-      : PRE_CONDITION_ACTION_OPTIONS;
+      : variant === "preCondition"
+        ? PRE_CONDITION_ACTION_OPTIONS
+        : SCRIPT_STEP_ACTION_OPTIONS;
 
   const hasRetry =
     variant === "endCondition" &&
-    (v.onPass === "retry" || v.onFail === "retry");
+    (v.onPass === CONDITION_ACTIONS.RETRY || v.onFail === CONDITION_ACTIONS.RETRY);
 
-  // Local string state for timeout to prevent auto-reset when clearing
-  const [timeoutInput, setTimeoutInput] = useState(String(v.timeout ?? 30000));
+  // Local string state for timeout to prevent auto-reset when clearing.
+  // scriptStep: empty string means "inherit from settings" (undefined); others default to 30000.
+  const [timeoutInput, setTimeoutInput] = useState(
+    v.timeout !== undefined ? String(v.timeout) : isScriptStep ? "" : "30000"
+  );
   const [maxRetriesInput, setMaxRetriesInput] = useState(
     String(v.maxRetries ?? 1)
   );
 
   useEffect(() => {
-    setTimeoutInput(String(v.timeout ?? 30000));
+    setTimeoutInput(v.timeout !== undefined ? String(v.timeout) : isScriptStep ? "" : "30000");
+  // isScriptStep is derived from the variant prop which doesn't change at runtime
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [v.timeout]);
 
   useEffect(() => {
@@ -107,20 +129,20 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const update = (patch: Partial<ScriptConditionValue>) =>
     onChange({ ...v, ...patch });
 
-  const compareSource = (v.compareSource ?? "auto") as EndConditionCompareSource;
+  const compareSource = (v.compareSource ?? COMPARE_SOURCES.AUTO) as EndConditionCompareSource;
   const compareSourceHint =
-    compareSource === "auto"
+    compareSource === COMPARE_SOURCES.AUTO
       ? "'true'/'false' check exit code; other values compare stdout"
-      : compareSource === "stdout"
+      : compareSource === COMPARE_SOURCES.STDOUT
         ? "Compares stdout text output (requires a clean exit)"
-        : compareSource === "stderr"
+        : compareSource === COMPARE_SOURCES.STDERR
           ? "Compares stderr text output (exit code not checked)"
           : "Compares the numeric exit code directly (e.g. '0', '1')";
 
   // Shown under Expected Return when exit code semantics apply — clarifies the
   // counterintuitive shell convention: success=0, failure=non-zero.
   const returnsExitCodeHint =
-    compareSource === "auto" || compareSource === "exitCode"
+    compareSource === COMPARE_SOURCES.AUTO || compareSource === COMPARE_SOURCES.EXIT_CODE
       ? "Shell exit codes: true = 0 (success)  ·  false = non-zero (failure)"
       : null;
 
@@ -132,7 +154,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           htmlFor={`${idPrefix}-script`}
           className="text-xs font-medium text-foreground"
         >
-          Script
+          {scriptLabel}
         </label>
         <input
           type="text"
@@ -141,6 +163,10 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           onChange={(e) => update({ script: e.target.value })}
           placeholder="npm test"
           disabled={disabled}
+          autoCorrect="off"
+          autoCapitalize="off"
+          autoComplete="off"
+          spellCheck={false}
           className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
         />
       </div>
@@ -203,7 +229,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           </label>
           <CustomSelect
             id={`${idPrefix}-on-pass`}
-            value={v.onPass ?? "continue"}
+            value={v.onPass ?? CONDITION_ACTIONS.CONTINUE}
             onChange={(val) => update({ onPass: val })}
             options={actionOptions}
             disabled={disabled}
@@ -218,7 +244,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           </label>
           <CustomSelect
             id={`${idPrefix}-on-fail`}
-            value={v.onFail ?? (variant === "preCondition" ? "skipPrompt" : "stopWorkflow")}
+            value={v.onFail ?? (variant === "preCondition" ? CONDITION_ACTIONS.SKIP_PROMPT : CONDITION_ACTIONS.STOP_WORKFLOW)}
             onChange={(val) => update({ onFail: val })}
             options={actionOptions}
             disabled={disabled}
@@ -295,13 +321,26 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             value={timeoutInput}
             onChange={(e) => setTimeoutInput(e.target.value)}
             onBlur={() => {
-              const parsed = parseInt(timeoutInput);
-              const val = isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
-              setTimeoutInput(String(val));
-              update({ timeout: val });
+              if (isScriptStep) {
+                // scriptStep: empty = inherit from settings (undefined); no minimum enforced
+                if (timeoutInput.trim() === "") {
+                  update({ timeout: undefined });
+                } else {
+                  const parsed = parseInt(timeoutInput);
+                  const val = isNaN(parsed) ? undefined : parsed;
+                  setTimeoutInput(val !== undefined ? String(val) : "");
+                  update({ timeout: val });
+                }
+              } else {
+                const parsed = parseInt(timeoutInput);
+                const val = isNaN(parsed) || parsed < 1000 ? 30000 : parsed;
+                setTimeoutInput(String(val));
+                update({ timeout: val });
+              }
             }}
-            min={1000}
-            max={300000}
+            min={isScriptStep ? 0 : 1000}
+            max={isScriptStep ? undefined : 300000}
+            placeholder={isScriptStep ? "Default (from settings)" : undefined}
             disabled={disabled}
             className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
           />
