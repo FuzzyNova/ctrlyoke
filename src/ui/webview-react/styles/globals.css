@@ -79,6 +79,12 @@
 
   /* Layout */
   --header-button-height: 26px;
+
+  /* iOS safe area inset — non-zero only when viewport-fit=cover and running on a
+     device with a home indicator or camera notch (e.g. iPhone without home button).
+     Falls back to 0px on desktop and older devices. */
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-top: env(safe-area-inset-top, 0px);
 }
 
 /* ============================================================================
@@ -433,6 +439,16 @@ button .codicon {
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
     height: 6px;
+  }
+
+  /* iOS safe area bottom spacer — expands to env(safe-area-inset-bottom), 0px elsewhere.
+     Place one as the last flex child of the root h-dvh container (App.tsx) so the
+     flex-1 content area is automatically shortened by the home indicator height.
+     Every element inside — panels, absolute overlays, footers — then clears the
+     indicator without per-component padding. */
+  .safe-area-spacer {
+    height: var(--safe-area-bottom);
+    flex-shrink: 0;
   }
 
   /* Background logo - uses CSS mask to apply foreground color to SVG */

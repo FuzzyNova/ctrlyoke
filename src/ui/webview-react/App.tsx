@@ -267,7 +267,7 @@ function App() {
 
   if (isMobile) {
     return (
-      <div className="h-screen w-full flex flex-col bg-editor-bg text-foreground border-l border-r">
+      <div className="h-dvh w-full flex flex-col bg-editor-bg text-foreground border-l border-r">
         <Header
           onToggleMobilePrompts={toggleMobilePrompts}
           onToggleMobileSettings={toggleMobileSettings}
@@ -461,6 +461,13 @@ function App() {
           {/* Startup overlay — covers full layout until STARTUP_COMPLETE arrives */}
           <StartupOverlay />
         </div>
+
+        {/* iOS safe area spacer — lifts all content above the home indicator.
+            height = env(safe-area-inset-bottom), 0px on non-iOS / desktop.
+            Placing it here (flex sibling of the main content area) means every
+            element inside — panels, overlays, footers — automatically clears the
+            home indicator without per-component padding. */}
+        <div className="safe-area-spacer" aria-hidden="true" />
       </div>
     );
   }
@@ -470,7 +477,7 @@ function App() {
   // ============================================================================
 
   return (
-    <div className="h-screen w-full flex flex-col bg-editor-bg text-foreground">
+    <div className="h-dvh w-full flex flex-col bg-editor-bg text-foreground">
       <Header />
 
       {/* Main layout: relative container enables GlobalSettingsDrawer overlay */}
@@ -641,6 +648,9 @@ function App() {
       {/* Startup overlay — covers full layout until STARTUP_COMPLETE arrives */}
       <StartupOverlay />
       </div>
+
+      {/* iOS safe area spacer — see mobile layout comment above */}
+      <div className="safe-area-spacer" aria-hidden="true" />
     </div>
   );
 }
