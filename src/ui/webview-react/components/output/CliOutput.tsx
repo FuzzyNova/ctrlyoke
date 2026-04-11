@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState, memo } from "react";
 import { formatTime } from "@utils/outputUtils";
 import { calcContextPct } from "@utils/tokenUtils";
+import { generateId } from "@utils/string";
 import { BashOutput } from "./BashOutput";
 import { MarkdownText } from "./MarkdownText";
 import {
@@ -577,7 +578,7 @@ export const CliOutput = memo<CliOutputProps>(
 
     const onUndoFile = useCallback(
       (path: string, eventIndex: number) => {
-        const newRequestId = crypto.randomUUID();
+        const newRequestId = generateId();
         const showRedo =
           effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true;
 
@@ -879,7 +880,7 @@ export const CliOutput = memo<CliOutputProps>(
         output.workingDirectory ?? "",
         alreadyUndone
       );
-      setDialogState({ mode: "undo", input, requestId: crypto.randomUUID() });
+      setDialogState({ mode: "undo", input, requestId: generateId() });
     }, [
       allStepOutputs,
       effectiveSnapshot,
@@ -893,7 +894,7 @@ export const CliOutput = memo<CliOutputProps>(
       setDialogState({
         mode: "redo",
         redoInstructions: effectiveUndoRecord.redoInstructions,
-        requestId: crypto.randomUUID(),
+        requestId: generateId(),
       });
     }, [effectiveUndoRecord]);
 
@@ -999,6 +1000,7 @@ export const CliOutput = memo<CliOutputProps>(
                     e.stopPropagation();
                     handlePromptUndo();
                   }}
+                  style={{ touchAction: "manipulation" }}
                   className="text-link-fg hover:text-link-active-fg transition-colors"
                 >
                   <i className="codicon codicon-discard mr-1" />
@@ -1012,6 +1014,7 @@ export const CliOutput = memo<CliOutputProps>(
                     e.stopPropagation();
                     handlePromptRedo();
                   }}
+                  style={{ touchAction: "manipulation" }}
                   className="text-terminal-ansiGreen hover:opacity-80 transition-opacity"
                 >
                   <i className="codicon codicon-redo mr-1" />

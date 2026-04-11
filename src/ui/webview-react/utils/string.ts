@@ -85,3 +85,24 @@ export function toTitleCase(str: string): string {
     .map((word) => capitalize(word))
     .join(" ");
 }
+
+/**
+ * Generate a unique ID string.
+ *
+ * Prefers `crypto.randomUUID()` when available (modern browsers).
+ * Falls back to `crypto.getRandomValues()` for iOS Safari < 15.4 and other
+ * older browsers that support the Web Crypto API but not randomUUID().
+ */
+export function generateId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // Fallback: build a UUID-shaped string from getRandomValues (iOS Safari 3.1+)
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  // Set version 4 and variant bits per RFC 4122
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
+}

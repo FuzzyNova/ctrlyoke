@@ -13,6 +13,7 @@ import { useElementNarrow } from "@hooks/useElementNarrow";
 import { CliOutput, StatusMessage } from "../output";
 import { PanelBar, RunSelector, IconToggleButton } from "../shared";
 import { generateDiffLines } from "@utils/outputUtils";
+import { generateId } from "@utils/string";
 import { generateMarkdownExport } from "@utils/markdownExport";
 import {
   mapOrderedHistoryEntriesToMessages,
@@ -787,7 +788,7 @@ export const OutputSection: React.FC = () => {
                   target: undoTarget,
                   workspacePath,
                   redoInstructions: effectiveUndoRecord!.redoInstructions,
-                  requestId: crypto.randomUUID(),
+                  requestId: generateId(),
                 });
               },
             }
@@ -813,7 +814,7 @@ export const OutputSection: React.FC = () => {
                   target: undoTarget,
                   workspacePath,
                   input,
-                  requestId: crypto.randomUUID(),
+                  requestId: generateId(),
                 });
               },
             }
@@ -1024,14 +1025,16 @@ export const OutputSection: React.FC = () => {
                   );
                   return (
                     <button
+                      type="button"
                       className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-link-fg hover:text-link-active-fg transition-colors"
+                      style={{ touchAction: "manipulation" }}
                       title={`Undo workflow changes (${count} file${count !== 1 ? "s" : ""})`}
                       onClick={() =>
                         setWorkflowDialogState({
                           mode: "undo",
                           workspacePath: workflowUndoRedoData.workspacePath,
                           entries: workflowUndoRedoData.undoEntries,
-                          requestId: crypto.randomUUID(),
+                          requestId: generateId(),
                         })
                       }
                     >
@@ -1051,14 +1054,16 @@ export const OutputSection: React.FC = () => {
                   );
                   return (
                     <button
+                      type="button"
                       className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-terminal-ansiGreen hover:opacity-80 transition-opacity"
+                      style={{ touchAction: "manipulation" }}
                       title={`Redo workflow changes (${count} file${count !== 1 ? "s" : ""})`}
                       onClick={() =>
                         setWorkflowDialogState({
                           mode: "redo",
                           workspacePath: workflowUndoRedoData.workspacePath,
                           entries: workflowUndoRedoData.redoEntries,
-                          requestId: crypto.randomUUID(),
+                          requestId: generateId(),
                         })
                       }
                     >

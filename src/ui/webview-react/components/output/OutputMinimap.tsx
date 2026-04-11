@@ -97,9 +97,24 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
   scrollTop,
 }) => {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  // pinnedKey: popup opened by tap/click (stays open until tapped away).
+  // Separate from hoveredKey so mouse-hover and touch-tap don't conflict.
+  const [pinnedKey, setPinnedKey] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isThumbHovered, setIsThumbHovered] = useState(false);
   const railRef = useRef<HTMLDivElement>(null);
+
+  // Dismiss the pinned popup when clicking/tapping anywhere outside it.
+  // Uses only 'click' (not 'touchend') to avoid a race where touchend fires
+  // before click and incorrectly resets pinnedKey before the toggle runs.
+  useEffect(() => {
+    if (!pinnedKey) return;
+    const dismiss = () => setPinnedKey(null);
+    document.addEventListener("click", dismiss);
+    return () => {
+      document.removeEventListener("click", dismiss);
+    };
+  }, [pinnedKey]);
 
   // Compute viewport indicator dimensions.
   // Thumb height is floored at MIN_THUMB_PX so it remains grabbable even when
@@ -141,10 +156,8 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
 
   // ── Draggable thumb ────────────────────────────────────────────────────────
 
-  const handleThumbMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation(); // prevent rail jump handler from firing
+  const startThumbDrag = useCallback(
+    (startY: number) => {
       const el = scrollContainerRef.current;
       const rail = railRef.current;
       if (!el || !rail) return;
@@ -152,16 +165,14 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
       const canScroll = el.scrollHeight > el.clientHeight;
       if (!canScroll) return;
 
-      const startY = e.clientY;
       const startScrollTop = el.scrollTop;
       const railHeight = rail.clientHeight;
 
       setIsDragging(true);
 
-      const onMove = (moveEvent: MouseEvent) => {
+      const onMouseMove = (moveEvent: MouseEvent) => {
         const delta = moveEvent.clientY - startY;
         const maxScroll = el.scrollHeight - el.clientHeight;
-        // Scale mouse delta by the same ratio as thumb height → rail height
         const scrollDelta = (delta / railHeight) * el.scrollHeight;
         el.scrollTop = Math.max(
           0,
@@ -169,41 +180,86 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
         );
       };
 
-      const onUp = () => {
-        setIsDragging(false);
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
+      const onTouchMove = (moveEvent: TouchEvent) => {
+        const delta = moveEvent.touches[0].clientY - startY;
+        const maxScroll = el.scrollHeight - el.clientHeight;
+        const scrollDelta = (delta / railHeight) * el.scrollHeight;
+        el.scrollTop = Math.max(
+          0,
+          Math.min(maxScroll, startScrollTop + scrollDelta)
+        );
       };
 
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
+      const cleanup = () => {
+        setIsDragging(false);
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", cleanup);
+        document.removeEventListener("touchmove", onTouchMove);
+        document.removeEventListener("touchend", cleanup);
+      };
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", cleanup);
+      document.addEventListener("touchmove", onTouchMove, { passive: true });
+      document.addEventListener("touchend", cleanup);
     },
     [scrollContainerRef]
   );
 
+  const handleThumbMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation(); // prevent rail jump handler from firing
+      startThumbDrag(e.clientY);
+    },
+    [startThumbDrag]
+  );
+
+  const handleThumbTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      e.stopPropagation(); // prevent rail touch handler from firing
+      startThumbDrag(e.touches[0].clientY);
+    },
+    [startThumbDrag]
+  );
+
   // ── Rail background click — jump to position ───────────────────────────────
 
-  const handleRailMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      // Only handle direct clicks on the rail, not on children (thumb, markers)
-      if (e.target !== e.currentTarget) return;
+  const jumpToRailPosition = useCallback(
+    (clientY: number, target: EventTarget | null) => {
       const rail = railRef.current;
       const el = scrollContainerRef.current;
       if (!rail || !el) return;
+      // Only handle direct taps on the rail background, not on children
+      if (target !== rail) return;
 
       const canScroll = el.scrollHeight > el.clientHeight;
       if (!canScroll) return;
 
       const rect = rail.getBoundingClientRect();
-      const fraction = (e.clientY - rect.top) / rect.height;
+      const fraction = (clientY - rect.top) / rect.height;
       const maxScroll = el.scrollHeight - el.clientHeight;
-      // Center the viewport on the clicked position
+      // Center the viewport on the tapped position
       el.scrollTop = Math.max(
         0,
         Math.min(maxScroll, fraction * el.scrollHeight - el.clientHeight / 2)
       );
     },
     [scrollContainerRef]
+  );
+
+  const handleRailMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      jumpToRailPosition(e.clientY, e.target);
+    },
+    [jumpToRailPosition]
+  );
+
+  const handleRailTouchStart = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      jumpToRailPosition(e.touches[0].clientY, e.target);
+    },
+    [jumpToRailPosition]
   );
 
   // ── Marker click — scroll to step ─────────────────────────────────────────
@@ -234,7 +290,8 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
       className="relative flex-shrink-0 w-[14px] bg-sidebar-bg border-l border-panel-border"
       aria-hidden="true"
       onMouseDown={handleRailMouseDown}
-      style={{ cursor: canScroll ? "pointer" : "default" }}
+      onTouchStart={handleRailTouchStart}
+      style={{ cursor: canScroll ? "pointer" : "default", touchAction: "none" }}
     >
       {/* Diff overlays — rendered below thumb and markers */}
       {steps.map((step) => (
@@ -335,6 +392,7 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
           transition: isDragging ? "none" : "background 0.1s",
         }}
         onMouseDown={handleThumbMouseDown}
+        onTouchStart={handleThumbTouchStart}
         onMouseEnter={() => setIsThumbHovered(true)}
         onMouseLeave={() => setIsThumbHovered(false)}
         onKeyDown={(e) => {
@@ -356,7 +414,8 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
       {/* Step markers */}
       {steps.map((step) => {
         const topPct = step.scrollFraction * 100;
-        const isHovered = hoveredKey === step.key;
+        // isHovered: true when mouse-hovering OR popup was pinned open by tap
+        const isHovered = hoveredKey === step.key || pinnedKey === step.key;
         const { undo, redo } = step.undoActions;
         const hasUndo = undo !== null;
         const hasRedo = redo !== null;
@@ -390,18 +449,28 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
             }}
             onMouseEnter={() => setHoveredKey(step.key)}
             onMouseLeave={() => setHoveredKey(null)}
-            onClick={() => setHoveredKey(step.key)}
+            onClick={(e) => {
+              // stopPropagation prevents the document dismiss-listener from
+              // immediately closing the popup we're about to open.
+              e.stopPropagation();
+              setPinnedKey((prev) =>
+                prev === step.key ? null : step.key
+              );
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                setHoveredKey(step.key);
+                setPinnedKey((prev) =>
+                  prev === step.key ? null : step.key
+                );
               } else if (e.key === "Escape") {
                 setHoveredKey(null);
+                setPinnedKey(null);
               }
             }}
             aria-label={`Step ${step.label}: ${hasUndo ? "undo available. " : ""}${hasRedo ? "redo available." : ""}`}
           >
-            {/* Speech-bubble popup — visible on hover */}
+            {/* Speech-bubble popup — visible on hover (mouse) or when pinned open (touch/click) */}
             {isHovered && (
               <div className="flex items-stretch mr-[3px]">
                 {/* Bubble body */}
@@ -420,8 +489,10 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        setPinnedKey(null);
                         redo.onTrigger();
                       }}
+                      style={{ touchAction: "manipulation" }}
                       className="flex items-center gap-1 text-[10px] text-terminal-ansiGreen hover:opacity-80 transition-opacity leading-tight focus:outline-none"
                     >
                       <i className="codicon codicon-redo text-[10px]" />
@@ -435,8 +506,10 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        setPinnedKey(null);
                         undo.onTrigger();
                       }}
+                      style={{ touchAction: "manipulation" }}
                       className="flex items-center gap-1 text-[10px] text-link-fg hover:text-link-active-fg transition-colors leading-tight focus:outline-none"
                     >
                       <i className="codicon codicon-discard text-[10px]" />
