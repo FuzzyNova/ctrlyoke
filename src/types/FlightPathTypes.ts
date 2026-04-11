@@ -11,8 +11,6 @@ import {
   type WorkflowAttemptStatus,
   STEP_TYPES,
   PRIOR_CONTEXT_KEYWORDS,
-  CONDITION_ACTIONS,
-  COMPARE_SOURCES,
   type ConditionAction,
   type CompareSource,
 } from "./DashboardConstants";
