@@ -152,9 +152,11 @@ export const EditorSection: React.FC = () => {
         >
           <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
           <i className="codicon codicon-edit text-[14px]" />
-          <span className="text-[11px] font-semibold uppercase tracking-wide">
-            Editor
-          </span>
+          {!isNarrow && (
+            <span className="text-[11px] font-semibold uppercase tracking-wide">
+              Editor
+            </span>
+          )}
         </div>
 
         {/* Step type toggle — Prompt | Script */}

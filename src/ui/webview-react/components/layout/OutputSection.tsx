@@ -11,7 +11,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { CliOutput, StatusMessage } from "../output";
-import { PanelBar, RunSelector, IconToggleButton } from "../shared";
+import { RunSelector, IconToggleButton } from "../shared";
 import { generateDiffLines } from "@utils/outputUtils";
 import { generateId } from "@utils/string";
 import { generateMarkdownExport } from "@utils/markdownExport";
@@ -852,15 +852,30 @@ export const OutputSection: React.FC = () => {
 
   if (outputCollapsed) {
     return (
-      <PanelBar
-        orientation="horizontal"
-        icon="terminal"
-        title="Output"
+      <div
+        className="flex flex-row items-center w-full h-[30px] px-2 gap-1 border-b border-panel-border bg-sidebar-bg cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
         onClick={() => {
           triggerPanelAnimation();
           toggleOutputCollapse();
         }}
-      />
+        role="button"
+        aria-label="Expand output"
+        tabIndex={0}
+        onKeyDown={(e) =>
+          e.key === "Enter" && (triggerPanelAnimation(), toggleOutputCollapse())
+        }
+      >
+        <i className="codicon codicon-chevron-right text-[12px]" />
+        <i className="codicon codicon-output text-[14px]" />
+        <span className="text-[11px] font-semibold uppercase tracking-wide">
+          Output
+        </span>
+        <span className="text-[11px] text-description-fg mx-1">/</span>
+        <i className="codicon codicon-terminal text-[14px]" />
+        <span className="text-[11px] font-semibold uppercase tracking-wide">
+          Terminal
+        </span>
+      </div>
     );
   }
 
@@ -893,14 +908,13 @@ export const OutputSection: React.FC = () => {
             }
           >
             <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
-            <i className="codicon codicon-terminal text-[14px]" />
           </div>
 
           {/* Output / Terminal tab buttons */}
           {showTerminalTab ? (
             <div className="flex items-center ml-1">
               <button
-                className={`text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 transition-colors
+                className={`text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 flex items-center gap-1 transition-colors
                   ${
                     activeOutputTab === "output"
                       ? "text-foreground border-b border-foreground"
@@ -908,7 +922,8 @@ export const OutputSection: React.FC = () => {
                   }`}
                 onClick={() => setActiveOutputTab(terminalWorkflowId, "output")}
               >
-                Output
+                <i className="codicon codicon-output text-[13px]" />
+                {!isHeaderNarrow && <span>Output</span>}
               </button>
               <button
                 className={`text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 flex items-center gap-1 transition-colors
@@ -929,14 +944,16 @@ export const OutputSection: React.FC = () => {
                   }
                 }}
               >
-                Terminal
+                <i className="codicon codicon-terminal text-[13px]" />
+                {!isHeaderNarrow && <span>Terminal</span>}
                 {terminalSessionActive && (
                   <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                 )}
               </button>
             </div>
           ) : (
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-description-fg ml-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-description-fg ml-1 flex items-center gap-1">
+              <i className="codicon codicon-output text-[13px]" />
               Output
             </span>
           )}
@@ -953,9 +970,11 @@ export const OutputSection: React.FC = () => {
               >
                 <i className="codicon codicon-sm codicon-remove" />
               </button>
-              <span className="text-[10px] text-description-fg tabular-nums w-[20px] text-center select-none">
-                {outputFontSize}
-              </span>
+              {!isHeaderNarrow && (
+                <span className="text-[10px] text-description-fg tabular-nums w-[20px] text-center select-none">
+                  {outputFontSize}
+                </span>
+              )}
               <button
                 className="icon-btn py-0 px-0.5"
                 title="Increase font size"
@@ -977,9 +996,11 @@ export const OutputSection: React.FC = () => {
               >
                 <i className="codicon codicon-sm codicon-remove" />
               </button>
-              <span className="text-[10px] text-description-fg tabular-nums w-[20px] text-center select-none">
-                {terminalFontSize}
-              </span>
+              {!isHeaderNarrow && (
+                <span className="text-[10px] text-description-fg tabular-nums w-[20px] text-center select-none">
+                  {terminalFontSize}
+                </span>
+              )}
               <button
                 className="icon-btn py-0 px-0.5"
                 title="Increase terminal font size"
@@ -994,7 +1015,7 @@ export const OutputSection: React.FC = () => {
         </div>
 
         {/* Right: controls */}
-        <div className="ml-auto flex items-center gap-2">
+        <div className={`ml-auto flex items-center ${isHeaderNarrow ? "gap-1" : "gap-2"}`}>
           {activeOutputTab === "terminal" && (
             <>
               <button
