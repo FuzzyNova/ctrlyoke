@@ -26,16 +26,18 @@ than a cache hit) on every resumed turn. Anthropic will likely fix this, but inj
 sidesteps it entirely by never restarting the process.
 
 ### Terminal Teardown Latency
-Each prompt transition currently involves:
-1. Kill terminal session
-2. Wait for PTY cleanup
-3. Spawn new Claude process
-4. Wait for Claude TUI to initialize
-5. Claude re-reads workspace context
-6. Prompt finally begins
+Each prompt transition in restart mode involves:
+1. Spawn new PTY session with `claude --resume <sessionId>`
+2. Wait for Claude TUI to initialize
+3. Claude re-reads workspace context
+4. Wait for `SessionStart` hook
+5. Prompt finally begins
+
+(The old PTY session from prompt N is not explicitly killed — Claude exits naturally after
+the Stop hook fires, closing its PTY. But the new session startup is still the bottleneck.)
 
 In inject mode: Stop hook fires → write next prompt to PTY → Claude responds immediately.
-No startup overhead.
+No spawn, no startup, no session discovery wait.
 
 ---
 
@@ -138,6 +140,98 @@ session. `SessionStart` won't fire again for follow-up prompts (Claude didn't re
 so session ID tracking must be adjusted: retain the session ID from the initial
 `SessionStart` notification for the duration of the inject-mode chain.
 
+### Controller Handoff on Injection
+Any client (controller or viewer) may send a continuation prompt. When a client sends an
+inject-mode continuation, it **automatically takes control** of the terminal — mirroring
+the existing `restart` mode precedent where the client that triggers a `--resume` spawn
+is assigned as the new controller by `PtyProcessManager.consumePendingController()`.
+
+Rationale: injecting a prompt is an active editorial act equivalent to spawning a new
+terminal. Having the injecting client own the resulting session is the consistent and
+expected UX. Multi-viewer scenarios where a mobile client injects while a desktop client
+should stay in control are edge cases not worth special-casing at this stage.
+
+Implementation: before writing the injected text to the PTY, call
+`ptyProcessManager.setPendingController(workflowId, clientId)` with the injecting
+client's ID so the assignment is ready when the webview-side session update is broadcast.
+
+---
+
+### Terminal Lifecycle (Confirmed Current Behaviour — No Change Needed)
+
+After investigating all teardown call sites, **PTY sessions (node-pty) are already kept
+alive after workflow completion and are not killed on workflow switching**. The
+"teardown-on-navigation" fear was unfounded for the PTY path.
+
+#### Full teardown call site map
+
+| Call site | What it kills | PTY killed? |
+|---|---|---|
+| `WorkflowInstance.dispose()` (ext. deactivation) | `lastRunIntegrations.closeTerminal()` → `processManager.disposeTerminal()` → VS Code terminal only | **No** |
+| `WorkflowInstance.startWorkflowExecution()` finally | `execIntegration.dispose()` → `processManager.disposeProcess()` (if `closeTerminalWhenPromptCompletes=false`) | **No** |
+| `WorkflowInstance.startWorkflowExecution()` pre-run cleanup | `lastRunIntegrations.closeTerminal()` → VS Code terminal only | **No** |
+| `WorkflowInstance.getIntegrationForPrompt()` harness switch (line 1827) | `closeTerminal()` → VS Code terminal only | **No** |
+| `CliTransportCoordinator.cancel()` | `ptyManager.killSession()` | **Yes** — user abort only |
+| `PtyProcessManager.dispose()` | All PTY sessions | **Yes** — extension deactivation |
+| `WebviewMessageRouter` KILL_TERMINAL | Single PTY session by ID | **Yes** — user-initiated from webview |
+
+`closeTerminal()` and `dispose()` only operate on `CliProcessManager.terminal`
+(VS Code terminal, used in the legacy shell-integration path). In the node-pty path
+`CliProcessManager.currentProcess` is undefined (the process runs inside the PTY), so
+`disposeProcess()` is also a no-op. PTY sessions die only via natural process exit,
+user cancel, or explicit kill from the webview.
+
+#### Implications — PTY process
+
+- **PTY sessions outlive workflow completion** — no explicit teardown on switch or
+  completion in the node-pty path.
+- **`FrozenOverlay` behaviour** is correct: it dims only when `TERMINAL_ENDED` has
+  fired (PTY process actually exited), not on workflow completion.
+
+#### The actual "terminal gone" bug — root cause unknown, needs live debugging
+
+The observed "terminal disappears on switch-back" is **not** a PTY kill, and it is
+**not** triggered by `TERMINAL_ENDED`. All harnesses — including Claude — keep their TUI
+running after responding. The process waits at the prompt; the user sees the process-exit
+footer only after explicitly quitting. `TERMINAL_ENDED` therefore never fires for a
+completed workflow.
+
+Since `TERMINAL_ENDED` never fires, `setActiveOutputTab(workflowId, "output")` in that
+handler is never reached. `activeOutputTab` stays as `"terminal"` across workflow
+switches. Yet the terminal is still visually absent on switch-back.
+
+**Suspected area:** The xterm.js DOM reattachment path triggered by SWITCH_WORKFLOW.
+`replayWorkflowStateTo()` sends `TERMINAL_STARTED` for live PTY sessions; the webview's
+TERMINAL_STARTED handler checks idempotency (returns early if sessionId already in store)
+and then calls `terminalRegistry.attach()` to reinsert the DOM element. A race or
+state-inconsistency in that `mount()` async path may cause the container to be populated
+but not visible, or the reattach to silently fail.
+
+**Status:** Requires live debugging during implementation — cannot be diagnosed from code
+inspection alone. This is a known risk item for the inject mode implementation; the
+"terminal tab stays active but appears blank on switch-back" issue should be investigated
+as part of the inject mode dev cycle.
+
+#### VS Code terminal path — not dead code but effectively legacy
+
+`CliTransportCoordinator.startInteractiveProcess` falls through to the VS Code
+shell-integration path (`createFreshTerminal`) only when `getPtyProcessManager()`
+returns null. In normal VS Code operation the PTY manager is always initialized. The
+fallback fires only in tests or a startup race. Keep it; do not remove.
+
+#### Multi-harness workflow (e.g. prompt 1 = claude, prompt 2 = copilot)
+
+When switching harnesses mid-workflow (`getIntegrationForPrompt`, line 1827),
+`closeTerminal()` is called on the previous harness's integration. In the PTY path this
+is a no-op: the claude PTY session from prompt 1 remains alive while copilot's PTY
+session spawns for prompt 2. Both sessions coexist.
+
+At the end of the workflow `dispose()` is called on both integrations. Neither kills a
+PTY session. Both harness TUIs remain alive and injectable.
+
+**Confirmed: multi-harness workflows already give each harness a live terminal after
+completion.** No code changes needed for this scenario.
+
 ---
 
 ## Implementation
@@ -179,7 +273,28 @@ initial start should be passed through.
 `CliSessionResolverAdapter` or equivalent must be told: "in inject mode, reuse the
 session ID from prompt N for prompt N+1 without waiting for a new SessionStart."
 
-### 6. `package.json`
+### 6. Controller Assignment on Inject
+Before writing the injected prompt to the PTY, call
+`ptyProcessManager.setPendingController(workflowId, injectingClientId)`.
+`PtyProcessManager` already persists the controller via `workflowRunControllers`; the
+next `TERMINAL_CONTROLLER_CHANGED` broadcast (triggered by the existing flow or by a
+small explicit `assignController()` call) propagates the change to all webview clients.
+
+### 7. Investigate "terminal gone on switch-back" bug
+**Prerequisite for inject mode to be usable.** Root cause not yet identified from code
+inspection; requires live debugging during implementation.
+
+Suspected path: `SWITCH_WORKFLOW` → `replayWorkflowStateTo()` sends `TERMINAL_STARTED`
+→ TERMINAL_STARTED idempotency check returns early (sessionId already in store) → skips
+`terminalRegistry.attach()` re-call → xterm DOM element is never reinserted into the
+container for the newly active panel.
+
+Investigation entry point: `terminalMessageHandlers.ts` TERMINAL_STARTED handler
+(lines 90-111) and `TerminalInstance.tsx` `mount()` effect. Add debug logging around
+`terminalRegistry.attach()` call to confirm whether it's being invoked and whether the
+DOM insertion succeeds when switching back to a completed workflow.
+
+### 8. `package.json`
 Add setting declaration under `contributes.configuration.properties`.
 
 ---
@@ -211,15 +326,31 @@ Add setting declaration under `contributes.configuration.properties`.
 - No per-workflow or per-prompt override needed — this is a machine-level execution
   preference.
 
+### Workflow Status Dropdown — Terminal Presence Indicator
+For each workflow listed in the status dropdown, show a small terminal icon when that
+workflow has one or more running (non-exited) PTY sessions open. Overlay the count on
+the icon when there are two or more sessions (e.g., one AI-CLI + one shell).
+
+- Source the session counts from `PtyProcessManager.getSessionsForWorkflow(workflowId)`
+  filtered to `status === TERMINAL_SESSION_STATUS.RUNNING`.
+- The indicator is informational only — no click action required at this stage.
+- Kept alive terminals from completed workflows will naturally appear here, letting the
+  user know a TUI is still available for inject-mode follow-ups.
+
 ---
 
 ## Open Questions
 
-1. Does `PtyProcessManager` already expose a `write()` method for an active session,
-   or does it need to be added?
+1. ~~Does `PtyProcessManager` already expose a `write()` method for an active session?~~
+   **Resolved:** `PtyProcessManager.writeToSession(sessionId, data)` already exists
+   (line 341 of `PtyProcessManager.ts`). No new method needed.
 2. Does the Claude TUI interpret a bare `\n` (newline) as prompt submission, or does
    it need `\r` or a specific key sequence? Verify against Claude Code's TUI input
    handling.
 3. Multi-line prompts: if the prompt text contains newlines, Claude's TUI may interpret
    intermediate newlines as submissions. May need to use the `--input-format` flag or
    paste mode if Claude supports it, or escape newlines differently.
+4. ~~Where exactly is the terminal teardown-on-navigation triggered?~~
+   **Resolved:** There is no teardown-on-navigation. `closeTerminal()` and `dispose()` in
+   the node-pty path only affect VS Code terminals, not PTY sessions. PTY sessions already
+   outlive workflow completion and workflow switching — no code change needed.
