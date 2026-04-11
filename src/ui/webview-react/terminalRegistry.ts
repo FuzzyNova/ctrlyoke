@@ -71,6 +71,12 @@ export interface RegistryEntry {
   frozen: boolean;
   /** Disposable returned by term.onData (stored so we can dispose it when freezing) */
   onDataDisposable?: { dispose(): void };
+  /**
+   * Controller's column count, set when this client is a viewer.
+   * Used by the ResizeObserver to maintain fixed cols while allowing rows to adapt
+   * to the local container height. Undefined when this client is the controller.
+   */
+  controllerCols?: number;
 }
 
 // key: `${workflowId}:${sessionId}`
@@ -220,7 +226,17 @@ export const terminalRegistry = {
     }
     requestAnimationFrame(() => {
       try {
-        entry.fitAddon.fit();
+        if (entry.controllerCols != null) {
+          // Viewer mode: lock to controller's cols, derive rows from container height
+          const dims = entry.fitAddon.proposeDimensions();
+          const rows = Math.max(1, dims?.rows ?? entry.term.rows);
+          entry.term.resize(entry.controllerCols, rows);
+          entry.domEl.style.width = "fit-content";
+          entry.domEl.style.marginLeft = "auto";
+          entry.domEl.style.marginRight = "auto";
+        } else {
+          entry.fitAddon.fit();
+        }
       } catch {
         // May throw if container has no dimensions yet — safe to ignore
       }
@@ -276,6 +292,54 @@ export const terminalRegistry = {
       } catch {
         // Ignore — terminal may not be attached
       }
+    }
+  },
+
+  /**
+   * Apply the controller's column count to a viewer's xterm instance.
+   * - Resizes the terminal to controllerCols × (rows derived from container height)
+   *   so line-wrapping matches the controller's PTY exactly.
+   * - Shrinks domEl to fit-content width (sized by the xterm canvas) so the
+   *   container's overflow-x:auto scrollbar fires when the viewer is narrower.
+   * - Centers domEl with auto margins when the viewer is wider.
+   * Called when TERMINAL_SIZE_CHANGED arrives for a non-controller client,
+   * and when isController transitions from true→false.
+   */
+  applyControllerSize(workflowId: string, sessionId: string, cols: number): void {
+    const entry = registry.get(makeKey(workflowId, sessionId));
+    if (!entry) return;
+    entry.controllerCols = cols;
+
+    // Compute rows from the current container height so the viewer fills vertically
+    const dims = entry.fitAddon.proposeDimensions();
+    const rows = dims?.rows ?? entry.term.rows;
+    try {
+      entry.term.resize(cols, Math.max(1, rows));
+    } catch {
+      // May throw if terminal isn't fully initialized yet — safe to ignore
+    }
+
+    // Shrink domEl to canvas width so parent overflow-x:auto triggers correctly
+    entry.domEl.style.width = "fit-content";
+    entry.domEl.style.marginLeft = "auto";
+    entry.domEl.style.marginRight = "auto";
+  },
+
+  /**
+   * Restore fit-to-container sizing when this client becomes the controller.
+   * Undoes the fit-content width and auto margins set by applyControllerSize.
+   */
+  clearControllerSize(workflowId: string, sessionId: string): void {
+    const entry = registry.get(makeKey(workflowId, sessionId));
+    if (!entry) return;
+    entry.controllerCols = undefined;
+    entry.domEl.style.width = "100%";
+    entry.domEl.style.marginLeft = "";
+    entry.domEl.style.marginRight = "";
+    try {
+      entry.fitAddon.fit();
+    } catch {
+      // Ignore — terminal may not be visible
     }
   },
 

@@ -177,6 +177,11 @@ export class CliTransportCoordinator {
         : undefined;
       const preSessionId = `ai-cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const harnessId = this.deps.provider.config.harnessId;
+      // Peek at the expected controller before spawning so TERMINAL_STARTED carries
+      // controllerClientId from the outset. Without this, all observers see undefined
+      // and race to claim control, so a random client wins instead of the one that
+      // actually triggered the run.
+      const controllerClientId = ptyManager.getExpectedController(workflowId);
 
       postMessage({
         type: MESSAGE_TYPES.TERMINAL_STARTED,
@@ -186,6 +191,7 @@ export class CliTransportCoordinator {
         kind: SESSION_KINDS.AI_CLI,
         promptNumber,
         harnessId,
+        controllerClientId,
       });
 
       const session = ptyManager.spawnPty({

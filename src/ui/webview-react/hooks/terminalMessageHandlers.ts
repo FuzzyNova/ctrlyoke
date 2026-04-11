@@ -152,6 +152,24 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
   };
 
   // --------------------------------------------------------------------------
+  // TERMINAL_SIZE_CHANGED - Controller's PTY was resized; viewers must match
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.TERMINAL_SIZE_CHANGED] = (message: any) => {
+    const { workflowId, sessionId, cols } = message;
+    if (!workflowId || !sessionId || !cols) return;
+
+    // Always record the controller cols so ResizeObserver can maintain them
+    useTerminalStore.getState().setSessionControllerSize(workflowId, sessionId, cols as number);
+
+    // Only apply to the local xterm if this client is a viewer (not the controller)
+    const sessions = useTerminalStore.getState().sessions[workflowId] ?? [];
+    const session = sessions.find((s) => s.id === sessionId);
+    if (session?.isController === false) {
+      terminalRegistry.applyControllerSize(workflowId, sessionId, cols as number);
+    }
+  };
+
+  // --------------------------------------------------------------------------
   // TERMINAL_ENDED - PTY session exited; freeze registry entry, update rail
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.TERMINAL_ENDED] = (message: any) => {

@@ -39,12 +39,13 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
-  // Subscribe to controller status — re-evaluate on every change
+  // Subscribe to controller status and controller cols — re-evaluate on every change
   const sessions = useTerminalStore(
     (s) => s.sessions[workflowId] ?? EMPTY_SESSIONS
   );
   const session = sessions.find((s) => s.id === sessionId);
   const isController = session?.isController ?? true;
+  const controllerCols = session?.controllerCols;
 
   // Mount effect: create registry entry, attach to DOM, flush pending output
   useEffect(() => {
@@ -71,6 +72,14 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
           entry.term.write(chunk);
         }
         clearPendingOutput(workflowId, sessionId);
+      }
+
+      // Seed the registry entry with the controller's col count if already known
+      // (TERMINAL_SIZE_CHANGED may have arrived before this mount ran).
+      // attach()'s requestAnimationFrame checks entry.controllerCols and applies
+      // viewer sizing instead of fitAddon.fit() when this is set.
+      if (sess?.isController === false && sess.controllerCols != null) {
+        entry.controllerCols = sess.controllerCols;
       }
 
       // Attach the xterm DOM element into this container (async: loads WebGL addon on first open)
@@ -101,23 +110,31 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         });
       }
 
-      // ResizeObserver: fit xterm to container; only the controller notifies the PTY
+      // ResizeObserver: fit xterm to container; only the controller notifies the PTY.
+      // Viewers keep cols locked to the controller's value to prevent double line-wrap.
       const observer = new ResizeObserver(() => {
         if (!entry.term.element) return;
         try {
-          entry.fitAddon.fit();
-          const { cols, rows } = entry.term;
-          // Only send resize if this client is the controller
-          const isCtrl = useTerminalStore
+          const sessNow = useTerminalStore
             .getState()
-            .sessions[workflowId]?.find((s) => s.id === sessionId)?.isController;
+            .sessions[workflowId]?.find((s) => s.id === sessionId);
+          const isCtrl = sessNow?.isController;
           if (isCtrl !== false) {
+            // Controller: fit to container, then report new dimensions to PTY
+            entry.fitAddon.fit();
+            const { cols, rows } = entry.term;
             sendMessage(MESSAGE_TYPES.TERMINAL_RESIZE, {
               workflowId,
               sessionId,
               cols,
               rows,
             });
+          } else if (entry.controllerCols != null) {
+            // Viewer: keep cols fixed at controller's width, let rows adapt to
+            // the local container height so the terminal fills vertically.
+            const dims = entry.fitAddon.proposeDimensions();
+            const rows = Math.max(1, dims?.rows ?? entry.term.rows);
+            entry.term.resize(entry.controllerCols, rows);
           }
         } catch {
           // Ignore — may fire before terminal is fully initialized
@@ -148,6 +165,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
   }, [workflowId, sessionId]);
 
   // When isController changes from false→true (viewer claiming control), re-register onData
+  // and restore fit-to-container sizing.
   useEffect(() => {
     if (!isController) return;
     const entry = terminalRegistry.get(workflowId, sessionId);
@@ -163,16 +181,52 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         console.debug("[FlightPath] Ad-hoc prompt captured:", captured);
       }
     });
+    // Becoming controller: restore fit-to-container sizing.
+    // If we were previously a viewer, also send TERMINAL_RESIZE so the PTY is
+    // updated to our local viewport size and TERMINAL_SIZE_CHANGED is broadcast
+    // to all other viewers — without this they stay at the old controller's width.
+    const wasViewer = entry.controllerCols != null;
+    terminalRegistry.clearControllerSize(workflowId, sessionId);
+    if (wasViewer && !entry.frozen) {
+      requestAnimationFrame(() => {
+        try {
+          entry.fitAddon.fit();
+          const { cols, rows } = entry.term;
+          sendMessage(MESSAGE_TYPES.TERMINAL_RESIZE, {
+            workflowId,
+            sessionId,
+            cols,
+            rows,
+          });
+        } catch {
+          // Ignore — terminal may not be visible
+        }
+      });
+    }
   }, [isController, workflowId, sessionId]);
 
-  // When isController changes from true→false (control claimed by another client), dispose onData
+  // When isController changes from true→false (control claimed by another client),
+  // dispose onData and apply the controller's known column width.
   useEffect(() => {
     if (isController) return;
     const entry = terminalRegistry.get(workflowId, sessionId);
     if (!entry || entry.frozen) return;
     entry.onDataDisposable?.dispose();
     entry.onDataDisposable = undefined;
+    // Apply controller sizing if we already know it (TERMINAL_SIZE_CHANGED may have
+    // arrived before this effect fired, or arrives later and triggers reapplication)
+    if (entry.controllerCols != null) {
+      terminalRegistry.applyControllerSize(workflowId, sessionId, entry.controllerCols);
+    }
   }, [isController, workflowId, sessionId]);
+
+  // When controllerCols changes while already a viewer, reapply the new size.
+  // This handles the case where TERMINAL_SIZE_CHANGED arrives after isController
+  // has already been set to false.
+  useEffect(() => {
+    if (isController || controllerCols == null) return;
+    terminalRegistry.applyControllerSize(workflowId, sessionId, controllerCols);
+  }, [controllerCols, isController, workflowId, sessionId]);
 
   return (
     <div
@@ -183,7 +237,11 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         display: isVisible ? "flex" : "none",
         flexDirection: "column",
         position: "relative",
-        overflow: "hidden",
+        // Controllers fill their container with no overflow (fitAddon sizes exactly).
+        // Viewers lock xterm to the controller's col-width; if narrower they get a
+        // horizontal scrollbar, if wider the xterm is centered via auto margins.
+        overflowX: isController ? "hidden" : "auto",
+        overflowY: "hidden",
       }}
     >
       {/* "Process exited" overlay for frozen ai-cli sessions */}

@@ -871,6 +871,15 @@ export class WebviewMessageRouter {
         msg.cols as number,
         msg.rows as number
       );
+      // Broadcast the new dimensions to all clients so viewers can match the
+      // controller's terminal width and avoid line-wrap display artifacts.
+      ptyPostMessage({
+        type: MESSAGE_TYPES.TERMINAL_SIZE_CHANGED,
+        workflowId: session.workflowId,
+        sessionId: session.id,
+        cols: msg.cols as number,
+        rows: msg.rows as number,
+      });
     });
 
     table.set(MESSAGE_TYPES.TERMINAL_SPAWN_SHELL, async (msg) => {

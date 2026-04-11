@@ -25,6 +25,12 @@ export interface TerminalSession {
    * When false, the terminal renders in view-only mode with a badge.
    */
   isController: boolean;
+  /**
+   * Column count of the controller's PTY, broadcast via TERMINAL_SIZE_CHANGED.
+   * Used by viewer clients to lock their xterm width to the controller's so that
+   * line-wrapping in the output matches exactly.
+   */
+  controllerCols?: number;
 }
 
 interface TerminalState {
@@ -53,6 +59,13 @@ interface TerminalActions {
     workflowId: string,
     sessionId: string,
     isController: boolean
+  ) => void;
+
+  /** Store the controller's PTY column count when TERMINAL_SIZE_CHANGED arrives */
+  setSessionControllerSize: (
+    workflowId: string,
+    sessionId: string,
+    cols: number
   ) => void;
 
   /** Called on new run start — clears only ai-cli sessions; shell sessions survive */
@@ -149,6 +162,14 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
       set((state) => {
         const sessions = (state.sessions[workflowId] ?? []).map((s) =>
           s.id === sessionId ? { ...s, isController } : s
+        );
+        return { sessions: { ...state.sessions, [workflowId]: sessions } };
+      }),
+
+    setSessionControllerSize: (workflowId, sessionId, cols) =>
+      set((state) => {
+        const sessions = (state.sessions[workflowId] ?? []).map((s) =>
+          s.id === sessionId ? { ...s, controllerCols: cols } : s
         );
         return { sessions: { ...state.sessions, [workflowId]: sessions } };
       }),

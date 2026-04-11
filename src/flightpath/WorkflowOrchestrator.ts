@@ -21,6 +21,7 @@ import {
   workflowDisplayStep,
 } from "../types/FlightPathTypes";
 import {
+  ACTION_TYPES,
   HARNESS_IDS,
   LOCK_STATUS,
   FINAL_STEP_PHASES,
@@ -483,6 +484,16 @@ export class WorkflowOrchestrator {
               promptNumber: session.promptNumber,
               harnessId: session.harnessId,
               controllerClientId: session.controllerClientId,
+            });
+            // Immediately follow with current PTY dimensions so viewers can match
+            // the controller's width without waiting for the next resize event.
+            // session.pty.cols reflects the controller's most recent TERMINAL_RESIZE.
+            send({
+              type: MESSAGE_TYPES.TERMINAL_SIZE_CHANGED,
+              workflowId: session.workflowId,
+              sessionId: session.id,
+              cols: session.pty.cols,
+              rows: session.pty.rows,
             });
             for (const chunk of session.reconnectBuffer) {
               send({
@@ -1300,7 +1311,30 @@ export class WorkflowOrchestrator {
     forceNewWorkflow?: boolean,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    return this.getInstanceForClient(clientId).executeEphemeralPrompt(
+    const instance = this.getInstanceForClient(clientId);
+
+    // When this action will trigger a new workflow run, register the initiating client
+    // as the PTY controller so TERMINAL_STARTED carries the correct controllerClientId
+    // instead of undefined — preventing all observers from racing to claim control.
+    const isRunAction =
+      action === ACTION_TYPES.RUN ||
+      action === ACTION_TYPES.RUN_NEXT ||
+      action === ACTION_TYPES.RUN_BEFORE_CURRENT;
+    if (isRunAction || forceNewWorkflow) {
+      const summary = instance.getSummary();
+      const wouldStart =
+        forceNewWorkflow ||
+        !summary.totalSteps ||
+        summary.executionState === EXECUTION_STATES.IDLE ||
+        summary.executionState === EXECUTION_STATES.COMPLETED ||
+        summary.executionState === EXECUTION_STATES.STOPPED ||
+        summary.executionState === EXECUTION_STATES.ERROR;
+      if (wouldStart) {
+        getPtyProcessManager()?.setPendingController(instance.id, clientId);
+      }
+    }
+
+    return instance.executeEphemeralPrompt(
       text,
       properties,
       action,

@@ -227,6 +227,7 @@ export const MESSAGE_TYPES = {
   TERMINAL_CLOSE_SHELL: "terminalCloseShell", // webview → extension: { workflowId, sessionId }
   TERMINAL_CONTROLLER_CHANGED: "terminalControllerChanged", // broadcast: { workflowId, sessionId, controllerClientId: string | undefined }
   TERMINAL_CLAIM_CONTROL: "terminalClaimControl", // webview → extension: { workflowId, sessionId }
+  TERMINAL_SIZE_CHANGED: "terminalSizeChanged", // extension → all: { workflowId, sessionId, cols, rows } — controller's PTY dimensions for viewer sync
 
   // Client identity — Extension → Webview once per connection
   CLIENT_ID_ASSIGNED: "clientIdAssigned", // { clientId: string }

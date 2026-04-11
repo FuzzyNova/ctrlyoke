@@ -172,10 +172,19 @@ export class PtyProcessManager {
    * a run, consumed (and cleared) at spawn time.
    */
   private pendingControllers = new Map<string, string>();
+  /**
+   * workflowId → clientId that is the controller for the current run.
+   * Persists across steps within a single run so that step 2, 3, etc. inherit
+   * the same controller as step 1 without another race. Overwritten when a
+   * fresh setPendingController call arrives (new run) or when a client claims
+   * control via TERMINAL_CLAIM_CONTROL.
+   */
+  private workflowRunControllers = new Map<string, string>();
 
   /**
    * Register the client that should own the next PTY session spawned for a workflow.
-   * Called from the RUN_WORKFLOW message handler before executeWorkflow() is called.
+   * Called from the RUN_WORKFLOW message handler before executeWorkflow() is called,
+   * and from WorkflowOrchestrator when an ephemeral prompt triggers an auto-start.
    */
   setPendingController(workflowId: string, clientId: string): void {
     this.pendingControllers.set(workflowId, clientId);
@@ -188,13 +197,30 @@ export class PtyProcessManager {
   }
 
   /**
+   * Return the clientId that will be assigned as controller for the next PTY spawn,
+   * without consuming the pending override. Checks the one-shot pending override first,
+   * then falls back to the persistent run controller so that step 2+ of a multi-step
+   * workflow inherits the same controller as step 1.
+   *
+   * Called by CliTransportCoordinator before it sends TERMINAL_STARTED so that the
+   * message carries the correct controllerClientId from the outset, preventing all
+   * observers from racing to claim control.
+   */
+  getExpectedController(workflowId: string): string | undefined {
+    return this.pendingControllers.get(workflowId) ?? this.workflowRunControllers.get(workflowId);
+  }
+
+  /**
    * Assign a client as the controller of a session.
-   * Returns the session if successfully assigned (always succeeds — overwrites previous controller).
+   * Also updates the persistent run controller so that subsequent steps in the
+   * same workflow run inherit the new owner (e.g. after TERMINAL_CLAIM_CONTROL).
+   * Returns the session if successfully assigned.
    */
   assignController(sessionId: string, clientId: string): PtySession | undefined {
     const session = this.sessions.get(sessionId);
     if (session) {
       session.controllerClientId = clientId;
+      this.workflowRunControllers.set(session.workflowId, clientId);
     }
     return session;
   }
@@ -247,8 +273,15 @@ export class PtyProcessManager {
       options.promptNumber,
       options.harnessId
     );
-    // Consume any pending controller registration set before the spawn was triggered
-    session.controllerClientId = this.consumePendingController(options.workflowId);
+    // Resolve controller: consume any one-shot pending override (set by RUN_WORKFLOW or
+    // an ephemeral-prompt auto-start), then fall back to the persistent run controller
+    // so that steps 2+ in a multi-step workflow inherit the same owner as step 1.
+    const pendingClientId = this.consumePendingController(options.workflowId);
+    const controllerClientId = pendingClientId ?? this.workflowRunControllers.get(options.workflowId);
+    session.controllerClientId = controllerClientId;
+    if (controllerClientId) {
+      this.workflowRunControllers.set(options.workflowId, controllerClientId);
+    }
 
     this.sessions.set(sessionId, session);
 
@@ -397,6 +430,7 @@ export class PtyProcessManager {
       }
     }
     this.sessions.clear();
+    this.workflowRunControllers.clear();
     Log.debug("🖥️ PtyProcessManager disposed — all PTY sessions killed");
   }
 }
