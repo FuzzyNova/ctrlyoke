@@ -188,29 +188,33 @@ user cancel, or explicit kill from the webview.
 - **`FrozenOverlay` behaviour** is correct: it dims only when `TERMINAL_ENDED` has
   fired (PTY process actually exited), not on workflow completion.
 
-#### The actual "terminal gone" bug — root cause unknown, needs live debugging
+#### The actual "terminal gone" bug — **FIXED**
 
-The observed "terminal disappears on switch-back" is **not** a PTY kill, and it is
-**not** triggered by `TERMINAL_ENDED`. All harnesses — including Claude — keep their TUI
-running after responding. The process waits at the prompt; the user sees the process-exit
-footer only after explicitly quitting. `TERMINAL_ENDED` therefore never fires for a
-completed workflow.
+**Root cause** (discovered via live log analysis): Both `loadWorkingFile()` (panel path)
+and `loadWorkflowForClient()` (browser client path) only checked `this.instances` (live
+instances) before creating a new `WorkflowInstance`. They never checked
+`this.retiredInstances`. Since every completed workflow is immediately retired, switching
+back to it always created a fresh instance with a new ID, orphaning the PTY sessions that
+were keyed to the old instance ID. `replayWorkflowStateTo` for the new instance found 0
+PTY sessions, so no `TERMINAL_STARTED` was sent — the terminal tab appeared blank.
 
-Since `TERMINAL_ENDED` never fires, `setActiveOutputTab(workflowId, "output")` in that
-handler is never reached. `activeOutputTab` stays as `"terminal"` across workflow
-switches. Yet the terminal is still visually absent on switch-back.
+**Secondary bug**: `retireWorkflow` disposed instances immediately when `isViewed=false`,
+which happened whenever a new idle placeholder instance was created on re-run (before the
+completion callback could check). PTY sessions were orphaned in `PtyProcessManager` with
+no `WorkflowInstance` to hold the instance→PTY mapping.
 
-**Suspected area:** The xterm.js DOM reattachment path triggered by SWITCH_WORKFLOW.
-`replayWorkflowStateTo()` sends `TERMINAL_STARTED` for live PTY sessions; the webview's
-TERMINAL_STARTED handler checks idempotency (returns early if sessionId already in store)
-and then calls `terminalRegistry.attach()` to reinsert the DOM element. A race or
-state-inconsistency in that `mount()` async path may cause the container to be populated
-but not visible, or the reattach to silently fail.
+**Fix** (in `WorkflowOrchestrator.ts`):
+1. **`loadWorkflowForClient()` and `loadWorkingFile()`** — both now check
+   `retiredInstances` by working file path before creating a new instance. If a retired
+   instance for the same file already exists, it is reused (so PTY sessions keyed to that
+   instance ID remain accessible).
+2. **`retireWorkflow()`** — now checks `hasActivePty` in addition to `isViewed`. An
+   instance is kept in `retiredInstances` (not disposed) if `isViewed || hasActivePty`.
+   This ensures completed workflows with running TUI sessions are never silently discarded
+   even when no client is currently viewing them at retire time.
 
-**Status:** Requires live debugging during implementation — cannot be diagnosed from code
-inspection alone. This is a known risk item for the inject mode implementation; the
-"terminal tab stays active but appears blank on switch-back" issue should be investigated
-as part of the inject mode dev cycle.
+**Result:** Switching away from a completed workflow and back correctly restores all
+running terminals — identical behaviour to switching between idle and running workflows.
 
 #### VS Code terminal path — not dead code but effectively legacy
 
@@ -280,19 +284,11 @@ Before writing the injected prompt to the PTY, call
 next `TERMINAL_CONTROLLER_CHANGED` broadcast (triggered by the existing flow or by a
 small explicit `assignController()` call) propagates the change to all webview clients.
 
-### 7. Investigate "terminal gone on switch-back" bug
-**Prerequisite for inject mode to be usable.** Root cause not yet identified from code
-inspection; requires live debugging during implementation.
+### 7. ~~Investigate "terminal gone on switch-back" bug~~ — **DONE**
 
-Suspected path: `SWITCH_WORKFLOW` → `replayWorkflowStateTo()` sends `TERMINAL_STARTED`
-→ TERMINAL_STARTED idempotency check returns early (sessionId already in store) → skips
-`terminalRegistry.attach()` re-call → xterm DOM element is never reinserted into the
-container for the newly active panel.
-
-Investigation entry point: `terminalMessageHandlers.ts` TERMINAL_STARTED handler
-(lines 90-111) and `TerminalInstance.tsx` `mount()` effect. Add debug logging around
-`terminalRegistry.attach()` call to confirm whether it's being invoked and whether the
-DOM insertion succeeds when switching back to a completed workflow.
+Root cause found and fixed. See the "Terminal Lifecycle" section above for the full
+analysis. No further investigation needed — switching back to a completed workflow
+with active PTY sessions now works correctly.
 
 ### 8. `package.json`
 Add setting declaration under `contributes.configuration.properties`.

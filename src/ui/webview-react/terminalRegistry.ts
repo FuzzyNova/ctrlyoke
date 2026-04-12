@@ -190,6 +190,12 @@ export const terminalRegistry = {
     container: HTMLElement
   ): Promise<void> {
     const entry = registry.get(makeKey(workflowId, sessionId));
+    const isFirstRender = !entry?.term.element;
+    console.debug(
+      `[terminalRegistry.attach] wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
+        `entryExists=${!!entry} firstRender=${isFirstRender} ` +
+        `containerConnected=${container.isConnected} containerSize=${container.offsetWidth}x${container.offsetHeight}`
+    );
     if (!entry) return;
     if (!entry.term.element) {
       // First render — open the terminal into the domEl, then load WebGL renderer
@@ -226,6 +232,12 @@ export const terminalRegistry = {
     }
     requestAnimationFrame(() => {
       try {
+        const containerSize = `${container.offsetWidth}x${container.offsetHeight}`;
+        const containerDisplay = getComputedStyle(container).display;
+        console.debug(
+          `[terminalRegistry.attach] rAF resize — container display=${containerDisplay} size=${containerSize} ` +
+            `domElConnected=${entry.domEl.isConnected} controllerCols=${entry.controllerCols ?? "none"}`
+        );
         if (entry.controllerCols != null) {
           // Viewer mode: lock to controller's cols, derive rows from container height
           const dims = entry.fitAddon.proposeDimensions();
@@ -249,7 +261,12 @@ export const terminalRegistry = {
    * Called when the workflow tab is switched away from.
    */
   detach(workflowId: string, sessionId: string): void {
-    registry.get(makeKey(workflowId, sessionId))?.domEl.remove();
+    const entry = registry.get(makeKey(workflowId, sessionId));
+    console.debug(
+      `[terminalRegistry.detach] wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
+        `entryExists=${!!entry} domElConnected=${entry?.domEl.isConnected ?? false}`
+    );
+    entry?.domEl.remove();
   },
 
   /**

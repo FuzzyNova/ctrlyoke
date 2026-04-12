@@ -28,6 +28,7 @@ import {
   OUTPUT_HISTORY_KINDS,
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
+  TERMINAL_SESSION_STATUS,
   type QueuePosition,
   type ActionType,
   type StepStatus,
@@ -381,18 +382,29 @@ export class WorkflowOrchestrator {
     }
 
     const isViewed = this.isWorkflowViewedByAnyClient(workflowId);
+    const ptyManager = getPtyProcessManager();
+    const activePtySessions = ptyManager
+      ? ptyManager
+          .getSessionsForWorkflow(workflowId)
+          .filter((s) => s.status === TERMINAL_SESSION_STATUS.RUNNING)
+      : [];
+    const hasActivePty = activePtySessions.length > 0;
     Log.debug(
       `retireWorkflow: inst:${workflowId.slice(0, 8)} name=\"${instance.workflowName || "(empty)"}\" ` +
-        `status=${instance.getQueueState().status}, isViewed=${isViewed}, remaining=${this.instances.size - 1}`
+        `status=${instance.getQueueState().status}, isViewed=${isViewed}, hasActivePty=${hasActivePty}(${activePtySessions.length}), remaining=${this.instances.size - 1}`
     );
     this.instances.delete(workflowId);
 
-    if (isViewed) {
-      // Keep in retiredInstances so clients still viewing it can see the completed result.
-      // Each client's entry will be cleaned up when the client switches away or disconnects.
+    if (isViewed || hasActivePty) {
+      // Keep in retiredInstances if a client is still viewing it OR if PTY sessions remain
+      // alive. In the latter case, the user may switch back to this workflow and expect to
+      // see (and interact with) the still-running terminal. Each client's entry is cleaned
+      // up when the client switches away or disconnects; PTY-only entries are cleaned up
+      // when the last PTY session exits (via onExit → replayWorkflowStateTo finding 0 sessions
+      // → no TERMINAL_STARTED sent → TerminalInstance unmount → nothing holds the entry).
       this.retiredInstances.set(workflowId, instance);
     } else {
-      // Background workflow completed silently — dispose it immediately.
+      // Background workflow completed silently with no active terminals — dispose immediately.
       instance.dispose();
     }
 
@@ -454,6 +466,13 @@ export class WorkflowOrchestrator {
 
     // Check live instances first, then retired (terminal-state workflows that were
     // loaded for viewing — e.g. completed workflows selected from recent list).
+    const inLive = this.instances.has(workflowId);
+    const inRetired = this.retiredInstances.has(workflowId);
+    Log.debug(
+      `[replayWorkflowStateTo] inst:${workflowId.slice(0, 8)} clientId=${clientId.slice(0, 12)} ` +
+        `skipTerminalReplay=${options?.skipTerminalReplay ?? false} ` +
+        `inLive=${inLive} inRetired=${inRetired}`
+    );
     const instance =
       this.instances.get(workflowId) ?? this.retiredInstances.get(workflowId);
     if (instance) {
@@ -470,11 +489,22 @@ export class WorkflowOrchestrator {
       if (!options?.skipTerminalReplay) {
         const ptyManager = getPtyProcessManager();
         if (ptyManager) {
-          for (const session of ptyManager.getSessionsForWorkflow(workflowId)) {
+          const sessionsForWorkflow = ptyManager.getSessionsForWorkflow(workflowId);
+          Log.debug(
+            `[replayWorkflowStateTo] terminal replay for inst:${workflowId.slice(0, 8)} — ` +
+              `found ${sessionsForWorkflow.length} PTY session(s): ` +
+              `[${sessionsForWorkflow.map((s) => `${s.id.slice(0, 8)}(status=${s.status},kind=${s.kind})`).join(", ") || "none"}]`
+          );
+          for (const session of sessionsForWorkflow) {
             // Auto-assign controller to the first client to reconnect for this session
             if (session.controllerClientId === undefined) {
               session.controllerClientId = clientId;
             }
+            Log.debug(
+              `[replayWorkflowStateTo] sending TERMINAL_STARTED for session ${session.id.slice(0, 8)} ` +
+                `kind=${session.kind} controllerClientId=${session.controllerClientId?.slice(0, 12) ?? "none"} ` +
+                `reconnectBuffer=${session.reconnectBuffer.length} chunks`
+            );
             send({
               type: MESSAGE_TYPES.TERMINAL_STARTED,
               workflowId: session.workflowId,
@@ -566,7 +596,19 @@ export class WorkflowOrchestrator {
       (w) => w.getSummary().workingFilePath === filePath
     );
     if (existing) {
+      this.setViewedWorkflowId(clientId, existing.id);
       await this.replayWorkflowStateTo(existing.id, send, clientId);
+      return;
+    }
+
+    // Check retired instances (completed/stopped workflows) by working file path.
+    // Reuse the existing retired instance so its PTY sessions remain accessible.
+    const existingRetired = [...this.retiredInstances.values()].find(
+      (w) => w.getSummary().workingFilePath === filePath
+    );
+    if (existingRetired) {
+      this.setViewedWorkflowId(clientId, existingRetired.id);
+      await this.replayWorkflowStateTo(existingRetired.id, send, clientId);
       return;
     }
 
@@ -1177,6 +1219,22 @@ export class WorkflowOrchestrator {
     // state during load) sees isViewed=true and keeps the instance in retiredInstances
     // instead of disposing it — otherwise replayWorkflowStateTo can't find it.
     const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
+
+    // Reuse an existing retired instance for this file if one exists.
+    // This preserves PTY session associations so terminals survive workflow switches.
+    const existingRetiredForPanel = [...this.retiredInstances.values()].find(
+      (w) => w.getSummary().workingFilePath === filePath
+    );
+    if (existingRetiredForPanel) {
+      this.setViewedWorkflowId(this.PANEL_CLIENT_ID, existingRetiredForPanel.id);
+      await this.replayWorkflowStateTo(
+        existingRetiredForPanel.id,
+        panelSend,
+        this.PANEL_CLIENT_ID
+      );
+      return;
+    }
+
     const instance = this.buildWorkflowInstance();
     this.instances.set(instance.id, instance);
     this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
@@ -1550,7 +1608,17 @@ export class WorkflowOrchestrator {
     clientId: string,
     workflowId: string | null
   ): void {
+    const prev = this.viewerRegistry.get(clientId);
     this.viewerRegistry.set(clientId, workflowId);
+    if (prev !== workflowId) {
+      const prevInRetired = prev ? this.retiredInstances.has(prev) : false;
+      const prevStillViewed = prev ? this.isWorkflowViewedByAnyClient(prev) : false;
+      Log.debug(
+        `[setViewedWorkflowId] clientId=${clientId.slice(0, 12)} ` +
+          `prev=inst:${prev?.slice(0, 8) ?? "null"}(retired=${prevInRetired},stillViewed=${prevStillViewed}) ` +
+          `→ inst:${workflowId?.slice(0, 8) ?? "null"}`
+      );
+    }
   }
 
   private isWorkflowViewedByAnyClient(workflowId: string): boolean {
@@ -1568,6 +1636,11 @@ export class WorkflowOrchestrator {
 
   unregisterClient(clientId: string): void {
     const workflowId = this.getViewedWorkflowId(clientId);
+    Log.debug(
+      `[unregisterClient] clientId=${clientId.slice(0, 12)} ` +
+        `was viewing inst:${workflowId?.slice(0, 8) ?? "null"} ` +
+        `(retired=${workflowId ? this.retiredInstances.has(workflowId) : false})`
+    );
     this.viewerRegistry.delete(clientId);
 
     if (!workflowId) return;
@@ -1577,6 +1650,9 @@ export class WorkflowOrchestrator {
       this.retiredInstances.has(workflowId) &&
       !this.isWorkflowViewedByAnyClient(workflowId)
     ) {
+      Log.debug(
+        `[unregisterClient] disposing retired inst:${workflowId.slice(0, 8)} — no clients viewing it`
+      );
       this.retiredInstances.get(workflowId)?.dispose();
       this.retiredInstances.delete(workflowId);
       return;

@@ -90,10 +90,10 @@
           "items": { "type": "string" },
           "description": "Explicitly denied tools (used when permissionMode is 'custom')."
         },
-        "copilotAllowedDirs": {
+        "allowedDirs": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Directories Copilot CLI is allowed to access."
+          "description": "Additional directories to allow tool access to. Applies to copilot-cli, claude-cli, codex-cli, and qwen-cli. Not supported by gemini-cli, opencode-cli, or copilot-chat."
         },
         "copilotAllowAllPaths": {
           "type": "boolean",
@@ -108,11 +108,6 @@
           "type": "string",
           "enum": ["untrusted", "on-request", "never"],
           "description": "Approval policy for Codex CLI tool calls."
-        },
-        "codexAllowedDirs": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Directories Codex CLI is allowed to access."
         }
       }
     },

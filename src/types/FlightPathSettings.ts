@@ -24,13 +24,13 @@ export interface FlightPathGlobalSettings {
     permissionMode: "dangerouslyAllowAll" | "allowAll" | "custom";
     allowed: string[];
     denied: string[];
+    // Shared across copilot-cli, claude-cli, codex-cli, qwen-cli (not supported by gemini-cli, opencode-cli, copilot-chat)
+    allowedDirs: string[];
     // Copilot CLI-specific
-    copilotAllowedDirs: string[];
     copilotAllowAllPaths: boolean;
     // Codex CLI-specific
     codexSandboxMode: "read-only" | "workspace-write" | "danger-full-access";
     codexApprovalPolicy: "untrusted" | "on-request" | "never";
-    codexAllowedDirs: string[];
   };
 
   // Workflow defaults
@@ -154,11 +154,10 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
       "shell(docker rmi:*)",
       "shell(kubectl delete:*)",
     ],
-    copilotAllowedDirs: [],
+    allowedDirs: [],
     copilotAllowAllPaths: true,
     codexSandboxMode: "workspace-write",
     codexApprovalPolicy: "on-request",
-    codexAllowedDirs: [],
   },
   workflow: {
     defaultFormat: "yaml",

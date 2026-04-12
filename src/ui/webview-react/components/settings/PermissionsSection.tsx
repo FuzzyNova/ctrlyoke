@@ -122,28 +122,22 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
       </div>
       <div className="border-t border-panel-border pt-4">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          Copilot CLI
+          Allowed Directories
         </h3>
-        <ToggleRow
-          label="Allow all paths"
-          description="Allow the Copilot CLI to access all file paths."
-          checked={tools.copilotAllowAllPaths}
-          onChange={(v) => onUpdate("tools.copilotAllowAllPaths", v, s)}
-        />
-        <div className="mt-2">
+        <div>
           <label
-            htmlFor="copilot-allowed-dirs"
+            htmlFor="allowed-dirs"
             className="block text-xs text-description-fg mb-1"
           >
-            Allowed directories (one per line)
+            Additional directories (one per line)
           </label>
           <textarea
-            id="copilot-allowed-dirs"
+            id="allowed-dirs"
             rows={3}
-            value={tools.copilotAllowedDirs.join("\n")}
+            value={tools.allowedDirs.join("\n")}
             onChange={(e) =>
               onUpdate(
-                "tools.copilotAllowedDirs",
+                "tools.allowedDirs",
                 e.target.value
                   .split("\n")
                   .map((d) => d.trim())
@@ -153,7 +147,22 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
             }
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
           />
+          <p className="text-xs text-description-fg mt-1">
+            Applies to copilot-cli, claude-cli, codex-cli, and qwen-cli. Not
+            supported by gemini-cli, opencode-cli, or copilot-chat.
+          </p>
         </div>
+      </div>
+      <div className="border-t border-panel-border pt-4">
+        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+          Copilot CLI
+        </h3>
+        <ToggleRow
+          label="Allow all paths"
+          description="Allow the Copilot CLI to access all file paths."
+          checked={tools.copilotAllowAllPaths}
+          onChange={(v) => onUpdate("tools.copilotAllowAllPaths", v, s)}
+        />
       </div>
       <div className="border-t border-panel-border pt-4">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
@@ -186,30 +195,6 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
               value={tools.codexApprovalPolicy}
               onChange={(v) => onUpdate("tools.codexApprovalPolicy", v, s)}
               options={CODEX_APPROVAL_OPTIONS}
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="codex-allowed-dirs"
-              className="block text-xs text-description-fg mb-1"
-            >
-              Allowed directories (one per line)
-            </label>
-            <textarea
-              id="codex-allowed-dirs"
-              rows={3}
-              value={tools.codexAllowedDirs.join("\n")}
-              onChange={(e) =>
-                onUpdate(
-                  "tools.codexAllowedDirs",
-                  e.target.value
-                    .split("\n")
-                    .map((d) => d.trim())
-                    .filter(Boolean),
-                  s
-                )
-              }
-              className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
             />
           </div>
         </div>

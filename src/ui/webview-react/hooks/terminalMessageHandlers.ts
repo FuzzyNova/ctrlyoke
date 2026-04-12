@@ -88,7 +88,14 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     // just update controller state without clearing and recreating the xterm instance.
     // Clearing+recreating causes a "briefly see scrollback then blank" flicker.
     const existingSessions = useTerminalStore.getState().sessions[workflowId] ?? [];
-    if (existingSessions.some((s) => s.id === sessionId)) {
+    const alreadyExists = existingSessions.some((s) => s.id === sessionId);
+    WebviewLog.debug(
+      `[TERMINAL_STARTED] idempotency check wf=${workflowId?.slice(0, 8)} sess=${sessionId?.slice(0, 8)} ` +
+        `alreadyExists=${alreadyExists} isController=${isController} ` +
+        `registryHasEntry=${!!terminalRegistry.get(workflowId, sessionId)} ` +
+        `activeWorkflowId=${activeWorkflowId?.slice(0, 8) ?? "null"}`
+    );
+    if (alreadyExists) {
       useTerminalStore.getState().setSessionController(workflowId, sessionId, isController);
       if (controllerClientId === undefined) {
         sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, { workflowId, sessionId });

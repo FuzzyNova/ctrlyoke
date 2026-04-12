@@ -237,10 +237,11 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get allowed directories for CLI operations
+   * Get allowed directories for CLI operations (copilot-cli, claude-cli, codex-cli, qwen-cli).
+   * Not supported by gemini-cli, opencode-cli, or copilot-chat.
    */
   getCliAllowedDirs(): string[] {
-    return configService.get("tools").copilotAllowedDirs;
+    return configService.get("tools").allowedDirs;
   },
 
   /**
@@ -390,13 +391,6 @@ export const ConfigurationUtils = {
    */
   getCodexApprovalPolicy(): string {
     return configService.get("tools").codexApprovalPolicy;
-  },
-
-  /**
-   * Get allowed directories for Codex CLI
-   */
-  getCodexAllowedDirs(): string[] {
-    return configService.get("tools").codexAllowedDirs;
   },
 
   // ============================================================

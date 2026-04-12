@@ -50,13 +50,30 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
   // Mount effect: create registry entry, attach to DOM, flush pending output
   useEffect(() => {
     let cancelled = false;
+    console.debug(
+      `[TerminalInstance] mount effect start wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
+        `isVisible=${isVisible} containerConnected=${containerRef.current?.isConnected ?? false} ` +
+        `registryHasEntry=${!!terminalRegistry.get(workflowId, sessionId)}`
+    );
 
     async function mount() {
-      if (!containerRef.current) return;
+      if (!containerRef.current) {
+        console.debug(`[TerminalInstance] mount aborted — containerRef.current is null`);
+        return;
+      }
 
       // Create or retrieve the registry entry (async: dynamic imports)
       const entry = await terminalRegistry.create(workflowId, sessionId);
-      if (cancelled || !containerRef.current) return;
+      if (cancelled || !containerRef.current) {
+        console.debug(
+          `[TerminalInstance] mount aborted after create — cancelled=${cancelled} containerNull=${!containerRef.current}`
+        );
+        return;
+      }
+      console.debug(
+        `[TerminalInstance] mount: entry created/retrieved wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
+          `isNewEntry=${!entry.term.element}`
+      );
 
       // Flush buffered output immediately after the entry lands in the registry,
       // before attach()'s async WebGL import. Any TERMINAL_OUTPUT messages that
@@ -87,6 +104,11 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         workflowId,
         sessionId,
         containerRef.current
+      );
+      console.debug(
+        `[TerminalInstance] attach complete wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
+          `domElConnected=${terminalRegistry.get(workflowId, sessionId)?.domEl.isConnected ?? false} ` +
+          `containerConnected=${containerRef.current?.isConnected ?? false}`
       );
 
       // Register onData for input routing — skip if session is frozen, already listening,
@@ -151,6 +173,10 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
 
     return () => {
       cancelled = true;
+      console.debug(
+        `[TerminalInstance] unmount cleanup wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
+          `registryHasEntry=${!!terminalRegistry.get(workflowId, sessionId)}`
+      );
       // Dispose onData listener so it isn't duplicated when the component remounts
       const entry = terminalRegistry.get(workflowId, sessionId);
       if (entry && !entry.frozen) {

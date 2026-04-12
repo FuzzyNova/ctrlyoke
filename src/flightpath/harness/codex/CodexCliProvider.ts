@@ -294,7 +294,7 @@ export class CodexCliProvider implements ICliProvider {
     args.push(...permissionArgs);
     // Add additional allowed directories when not in dangerous mode
     if (config.mode !== PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
-      const additionalDirs = ConfigurationUtils.getCodexAllowedDirs();
+      const additionalDirs = ConfigurationUtils.getCliAllowedDirs();
       additionalDirs.forEach((dir: string) => {
         args.push("--add-dir", dir);
       });
