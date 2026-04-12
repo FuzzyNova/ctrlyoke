@@ -136,12 +136,8 @@ export class CliIntegration extends HarnessIntegration {
   /** Execution orchestration helper extracted from CliIntegration. */
   private readonly executionRunner: CliExecutionRunner;
 
-  /** Workflow display name used for VS Code terminal tab naming */
+  /** Workflow display name used for logging */
   private workflowName?: string;
-
-  /** Current prompt index (1-based) and total, for terminal tab naming */
-  private currentPromptNumber?: number;
-  private currentPromptTotal?: number;
 
   /**
    * Create a new CLI integration with the specified CLI provider.
@@ -216,30 +212,6 @@ export class CliIntegration extends HarnessIntegration {
    */
   setWorkflowName(name: string | undefined): void {
     this.workflowName = name;
-  }
-
-  /**
-   * Build the VS Code terminal tab name.
-   *
-   * Format: "FP: {Harness}" when no workflow is loaded,
-   *         "FP: {Harness} · {name} [{n}/{total}]" when a workflow is active.
-   *
-   * Workflow name is capped at 25 characters; VS Code handles tab-level
-   * truncation naturally when many terminals are open.
-   */
-  private buildTerminalName(): string {
-    const base = `FP: ${this.provider.config.terminalName}`;
-    if (!this.workflowName) {
-      return base;
-    }
-    const cleaned = this.workflowName.trim();
-    const short = cleaned.length > 25 ? `${cleaned.slice(0, 24)}…` : cleaned;
-    const promptSuffix =
-      this.currentPromptNumber !== undefined &&
-      this.currentPromptTotal !== undefined
-        ? ` [${this.currentPromptNumber}/${this.currentPromptTotal}]`
-        : "";
-    return `${base} · ${short}${promptSuffix}`;
   }
 
   // ============================================================
@@ -383,13 +355,8 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   private handleBeforeInteractiveStart(
-    workflowContext?: WorkflowContext
-  ): void {
-    if (workflowContext) {
-      this.currentPromptNumber = workflowContext.promptIndex + 1;
-      this.currentPromptTotal = workflowContext.allPrompts.length;
-    }
-  }
+    _workflowContext?: WorkflowContext
+  ): void {}
 
   private handleCommandPrepared(params: {
     promptArgument: string;
@@ -520,7 +487,6 @@ export class CliIntegration extends HarnessIntegration {
       processManager: this.processManager,
       runtimeState: {
         getWorkspaceRoot: () => this.getWorkspaceRoot(),
-        getTerminalName: () => this.buildTerminalName(),
         getWorkflowName: () => this.workflowName,
         isCancelling: () => this.isCancelling,
       },
@@ -741,7 +707,7 @@ export class CliIntegration extends HarnessIntegration {
    * CliAdapter does not, so `"getExtensionContext" in this.platform` is false.
    *
    * This lets CliIntegration choose between:
-   *  - VS Code interactive path: createTerminal() + shell integration
+   *  - VS Code interactive path: PTY session via PtyProcessManager
    *  - CLI interactive path: spawn() with stdio:'inherit'
    */
   private isVsCodeContext(): boolean {
@@ -1112,8 +1078,6 @@ export class CliIntegration extends HarnessIntegration {
         this.applyExecutionSession(executionSession);
       }
       this.activeSession = undefined;
-      this.currentPromptNumber = undefined;
-      this.currentPromptTotal = undefined;
     }
   }
 }

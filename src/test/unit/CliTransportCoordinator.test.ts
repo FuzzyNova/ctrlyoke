@@ -57,7 +57,7 @@ suite("CliTransportCoordinator", () => {
       } as any,
       runtimeState: {
         getWorkspaceRoot: () => process.cwd(),
-        getTerminalName: () => "FP: Test",
+
         isCancelling: () => false,
       },
       hostCallbacks: {
@@ -158,7 +158,7 @@ suite("CliTransportCoordinator", () => {
         } as any,
         runtimeState: {
           getWorkspaceRoot: () => process.cwd(),
-          getTerminalName: () => "FP: Test",
+
           isCancelling: () => false,
         },
         hostCallbacks: {
@@ -191,7 +191,8 @@ suite("CliTransportCoordinator", () => {
           shouldLogRawCliOutput: () => boolean;
         }
       ).shouldLogRawCliOutput = originalShouldLogRawCliOutput;
-      (Log as unknown as { debug(message: string): void }).debug = originalDebug;
+      (Log as unknown as { debug(message: string): void }).debug =
+        originalDebug;
     }
   });
 
@@ -230,7 +231,7 @@ suite("CliTransportCoordinator", () => {
       processManager: {} as any,
       runtimeState: {
         getWorkspaceRoot: () => process.cwd(),
-        getTerminalName: () => "FP: Test",
+
         getWorkflowName: () => "named-workflow",
         isCancelling: () => false,
       },
@@ -248,6 +249,7 @@ suite("CliTransportCoordinator", () => {
       },
       getPtyManager: () =>
         ({
+          getExpectedController: (_workflowId: string) => undefined,
           spawnPty: (config: {
             sessionId: string;
             workflowId: string;
@@ -261,7 +263,7 @@ suite("CliTransportCoordinator", () => {
         }) as any,
     });
 
-    await coordinator.startInteractiveProcess([], "prompt", []);
+    await coordinator.startInteractiveProcess([], "prompt");
 
     assert.strictEqual(postedMessages[0]?.workflowId, "named-workflow");
   });
@@ -314,7 +316,7 @@ suite("CliTransportCoordinator", () => {
       } as any,
       runtimeState: {
         getWorkspaceRoot: () => process.cwd(),
-        getTerminalName: () => "FP: Test",
+
         isCancelling: () => false,
       },
       hostCallbacks: {

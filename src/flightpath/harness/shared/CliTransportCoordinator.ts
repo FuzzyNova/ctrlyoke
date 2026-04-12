@@ -1,4 +1,3 @@
-import type * as vscode from "vscode";
 import type { CliEvent } from "../../../types/CliOutputTypes";
 import { MESSAGE_TYPES, SESSION_KINDS } from "../../../types/DashboardConstants";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
@@ -21,7 +20,6 @@ interface CliTransportCoordinatorCommandInfo {
 
 interface CliTransportCoordinatorRuntimeState {
   getWorkspaceRoot: () => string | undefined;
-  getTerminalName: () => string;
   getWorkflowName?: () => string | undefined;
   isCancelling: () => boolean;
 }
@@ -46,7 +44,6 @@ export interface CliTransportCoordinatorDeps {
 }
 
 export class CliTransportCoordinator {
-  private currentExecution?: vscode.TerminalShellExecution;
   private currentPtySession?: PtySession;
 
   constructor(private readonly deps: CliTransportCoordinatorDeps) {}
@@ -134,7 +131,6 @@ export class CliTransportCoordinator {
   async startInteractiveProcess(
     args: string[],
     promptArgument: string,
-    tempFilePaths: string[],
     workflowContext?: WorkflowContext,
     env?: Record<string, string>
   ): Promise<void> {
@@ -232,26 +228,7 @@ export class CliTransportCoordinator {
       Log.info(
         `🖥️ PTY session spawned: "${stepName}" (${session.id.slice(0, 8)}) workflowId=inst:${workflowId.slice(0, 8)}`
       );
-      return;
     }
-
-    const terminal = await this.createFreshTerminal(env);
-    Log.info(`🖥️ Opened terminal: "${this.deps.runtimeState.getTerminalName()}"`);
-    if (tempFilePaths.length > 0) {
-      Log.debug(
-        `📁 Interactive mode using ${tempFilePaths.length} temp file(s)`
-      );
-    }
-    terminal.show();
-
-    this.deps.hostCallbacks.onStreamingChunk(
-      "📺 Interactive mode: Output is streaming to the VS Code terminal.\n" +
-        "   View the terminal for real-time output.\n\n"
-    );
-
-    const shellIntegration =
-      await this.deps.processManager.waitForShellIntegration(terminal);
-    this.currentExecution = shellIntegration.executeCommand(tuiCommand);
   }
 
   async executeHeadless(
@@ -335,10 +312,7 @@ export class CliTransportCoordinator {
     }
   }
 
-  closeTerminal(): void {
-    this.deps.processManager.disposeTerminal();
-    this.currentExecution = undefined;
-  }
+  closeTerminal(): void {}
 
   async cancel(): Promise<boolean> {
     if (this.currentPtySession) {
@@ -349,14 +323,11 @@ export class CliTransportCoordinator {
       this.currentPtySession = undefined;
     }
 
-    const hasActiveProcess =
-      !!this.currentExecution || this.deps.processManager.isActive();
-    if (!hasActiveProcess) {
+    if (!this.deps.processManager.isActive()) {
       return false;
     }
 
-    await this.deps.processManager.cancel(this.currentExecution);
-    this.currentExecution = undefined;
+    await this.deps.processManager.cancel();
     return true;
   }
 
@@ -366,34 +337,7 @@ export class CliTransportCoordinator {
     } else {
       this.deps.processManager.disposeProcess();
     }
-    this.currentExecution = undefined;
     this.currentPtySession = undefined;
-  }
-
-  private async createFreshTerminal(
-    env?: Record<string, string>
-  ): Promise<vscode.Terminal> {
-    this.disposeTerminalIfExists();
-    return await this.deps.processManager.createTerminal(
-      this.deps.runtimeState.getTerminalName(),
-      this.deps.runtimeState.getWorkspaceRoot(),
-      env
-    );
-  }
-
-  private disposeTerminalIfExists(): void {
-    const hasTerminal = !!this.deps.processManager.getTerminal();
-    if (hasTerminal) {
-      Log.info(
-        `🗑️ Closing previous terminal before starting next prompt (was: "${this.deps.runtimeState.getTerminalName()}")`
-      );
-    } else {
-      Log.debug(
-        "🗑️ disposeTerminalIfExists: no terminal open, nothing to close"
-      );
-    }
-    this.deps.processManager.disposeTerminal();
-    this.currentExecution = undefined;
   }
 
   private async spawnProcess(

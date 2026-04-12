@@ -24,7 +24,6 @@ interface CliExecutionTransportCoordinator {
   startInteractiveProcess(
     args: string[],
     promptArgument: string,
-    tempFilePaths: string[],
     workflowContext?: WorkflowContext,
     env?: Record<string, string>
   ): Promise<void>;
@@ -260,7 +259,6 @@ export class CliExecutionRunner {
       await this.deps.transportCoordinator.startInteractiveProcess(
         args,
         session.promptArgument,
-        session.tempFilePaths,
         session.workflowContext,
         terminalEnv
       );

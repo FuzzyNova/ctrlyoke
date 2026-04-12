@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import { spawn, ChildProcess } from "child_process";
 import kill from "tree-kill";
 
@@ -25,26 +24,19 @@ export interface SpawnResult {
 /**
  * Configuration constants for process management
  */
-const SHELL_INTEGRATION_TIMEOUT_MS = 5000;
 const KILL_ESCALATION_DELAY_MS = 3000;
-const TERMINAL_CTRL_C_DELAY_MS = 100;
-const TERMINAL_DISPOSE_DELAY_MS = 800;
 
 /**
- * Manages CLI process spawning and VS Code terminal lifecycle.
+ * Manages CLI process spawning.
  *
  * Responsibilities:
  * - Spawn CLI processes (headless and interactive)
- * - Create and manage VS Code terminals
  * - Graceful process shutdown (SIGTERM → SIGKILL escalation)
- * - Terminal shell integration handling
- * - Coordinated cancellation (both process and terminal)
+ * - Coordinated cancellation
  */
 export class CliProcessManager {
   private currentProcess?: ChildProcess;
   private killTimeoutId?: NodeJS.Timeout;
-  private terminal?: vscode.Terminal;
-  private shellIntegration?: vscode.TerminalShellIntegration;
 
   constructor(
     private workspaceRoot: string,
@@ -202,113 +194,10 @@ export class CliProcessManager {
   }
 
   /**
-   * Create a fresh VS Code terminal with specified name.
-   * Disposes existing terminal if present.
+   * Cancel current process execution.
+   * SIGKILL immediately (user-initiated stop, no grace period needed).
    */
-  async createTerminal(
-    name: string,
-    cwd?: string,
-    env?: Record<string, string>
-  ): Promise<vscode.Terminal> {
-    this.disposeTerminal();
-
-    this.terminal = vscode.window.createTerminal({
-      name,
-      cwd: cwd || this.workspaceRoot,
-      env,
-    });
-
-    return this.terminal;
-  }
-
-  /**
-   * Wait for shell integration to become available on terminal.
-   * Required for using executeCommand() and read() APIs.
-   */
-  async waitForShellIntegration(
-    terminal: vscode.Terminal,
-    timeoutMs: number = SHELL_INTEGRATION_TIMEOUT_MS
-  ): Promise<vscode.TerminalShellIntegration> {
-    const startTime = Date.now();
-
-    return new Promise((resolve, reject) => {
-      const checkInterval = setInterval(() => {
-        if (terminal.shellIntegration) {
-          clearInterval(checkInterval);
-          this.shellIntegration = terminal.shellIntegration;
-          resolve(terminal.shellIntegration);
-        } else if (Date.now() - startTime > timeoutMs) {
-          clearInterval(checkInterval);
-          reject(
-            new Error(
-              `Shell integration not available after ${timeoutMs}ms - check your shell configuration`
-            )
-          );
-        }
-      }, 100);
-    });
-  }
-
-  /**
-   * Dispose the current terminal if it exists.
-   */
-  disposeTerminal(): void {
-    if (this.terminal) {
-      this.terminal.dispose();
-      this.terminal = undefined;
-      this.shellIntegration = undefined;
-    }
-  }
-
-  /**
-   * Get the current terminal reference (if any).
-   */
-  getTerminal(): vscode.Terminal | undefined {
-    return this.terminal;
-  }
-
-  /**
-   * Get the current shell integration (if any).
-   */
-  getShellIntegration(): vscode.TerminalShellIntegration | undefined {
-    return this.shellIntegration;
-  }
-
-  /**
-   * Cancel current execution (process or terminal).
-   * For terminal: Sends Ctrl+C twice, then disposes
-   * For process: SIGKILL immediately (user-initiated stop, no grace period needed)
-   */
-  async cancel(
-    currentExecution?: vscode.TerminalShellExecution
-  ): Promise<void> {
-    // Handle interactive terminal execution
-    if (currentExecution && this.terminal) {
-      this.logger?.(
-        "⏹️ Sending Ctrl+C to terminal (twice for TUI cancellation)..."
-      );
-
-      // Most TUIs require Ctrl+C twice to actually stop
-      this.terminal.sendText("\x03");
-
-      // Send second Ctrl+C after brief delay
-      setTimeout(() => {
-        if (this.terminal) {
-          this.terminal.sendText("\x03");
-          this.logger?.("⏹️ Second Ctrl+C sent");
-        }
-      }, TERMINAL_CTRL_C_DELAY_MS);
-
-      // Dispose the terminal after allowing time for both Ctrl+C to process
-      setTimeout(() => {
-        if (this.terminal) {
-          this.logger?.("🗑️ Disposing terminal after cancellation");
-          this.disposeTerminal();
-        }
-      }, TERMINAL_DISPOSE_DELAY_MS);
-    }
-
-    // Handle headless process execution - kill immediately, no grace period
+  async cancel(): Promise<void> {
     if (this.currentProcess) {
       this.logger?.(
         "⏹️ Force-killing headless CLI process (user-initiated stop)..."
@@ -338,10 +227,10 @@ export class CliProcessManager {
   }
 
   /**
-   * Check if there's an active process or terminal.
+   * Check if there's an active process.
    */
   isActive(): boolean {
-    return !!this.currentProcess || !!this.terminal;
+    return !!this.currentProcess;
   }
 
   /**
@@ -403,11 +292,10 @@ export class CliProcessManager {
   }
 
   /**
-   * Clean up all resources (terminal and process).
+   * Clean up all resources.
    */
   dispose(): void {
     this.disposeProcess();
-    this.disposeTerminal();
   }
 
   /**
