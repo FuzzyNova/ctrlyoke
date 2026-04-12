@@ -209,6 +209,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             <button
               type="button"
               onClick={() => !option.disabled && handleSelect(option.value)}
+              onTouchEnd={(e) => { if (!option.disabled) { e.preventDefault(); handleSelect(option.value); } }}
               disabled={option.disabled}
               className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit disabled:cursor-not-allowed"
             >
@@ -224,6 +225,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                   e.stopPropagation();
                   onHideOption?.(option.value);
                 }}
+                onTouchEnd={(e) => { e.preventDefault(); onHideOption?.(option.value); }}
                 className="flex-shrink-0 px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
               >
                 <i className="codicon codicon-eye-closed text-[11px]" />
@@ -251,6 +253,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                   e.stopPropagation();
                   onUnhideOption?.(option.value);
                 }}
+                onTouchEnd={(e) => { e.preventDefault(); onUnhideOption?.(option.value); }}
                 className="flex-shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
               >
                 <i className="codicon codicon-eye text-[11px]" />
@@ -259,6 +262,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               <button
                 type="button"
                 onClick={() => handleSelectHidden(option.value)}
+                onTouchEnd={(e) => { e.preventDefault(); handleSelectHidden(option.value); }}
                 className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer"
               >
                 {option.label}
@@ -279,6 +283,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
           type="button"
           disabled={hiddenOptions.length === 0}
           onClick={() => setShowHidden((s) => !s)}
+          onTouchEnd={(e) => { e.preventDefault(); setShowHidden((s) => !s); }}
           className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
         >
           {showHidden

@@ -183,6 +183,25 @@
     background: transparent;
   }
 
+  /* Mobile: remove the default blue tap-highlight flash on touch devices. */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Mobile: remove the 300ms tap delay on all interactive elements.
+     "manipulation" allows single-finger tap/scroll but disables double-tap zoom,
+     which is what eliminates the delay. Does not affect the terminal container
+     (which uses touch-action:none via inline style for full touch control). */
+  button,
+  [role="button"],
+  a,
+  input,
+  select,
+  textarea,
+  label {
+    touch-action: manipulation;
+  }
+
   /* Base button styles — minimal reset only.
      All visual styling (background, color, padding, border) must be applied
      via explicit Tailwind classes on each button element. */

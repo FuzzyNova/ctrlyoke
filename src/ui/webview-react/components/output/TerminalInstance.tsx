@@ -56,6 +56,35 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         `registryHasEntry=${!!terminalRegistry.get(workflowId, sessionId)}`
     );
 
+    // Touch-scroll support: translate touch-drag into xterm scrollLines().
+    // Defined at effect scope so the cleanup return can call removeEventListener
+    // with the same stable function references.
+    let touchStartY = 0;
+    let touchScrollAccum = 0;
+    let touchEl: HTMLElement | null = null;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartY = e.touches[0].clientY;
+      touchScrollAccum = 0;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!e.touches.length) return;
+      const deltaPixels = touchStartY - e.touches[0].clientY;
+      touchStartY = e.touches[0].clientY;
+      const currentEntry = terminalRegistry.get(workflowId, sessionId);
+      if (!currentEntry) return;
+      const fontSize = (currentEntry.term.options.fontSize as number | undefined) ?? 14;
+      const lineHeight = (currentEntry.term.options.lineHeight as number | undefined) ?? 1.2;
+      touchScrollAccum += deltaPixels / (fontSize * lineHeight);
+      const lines = Math.trunc(touchScrollAccum);
+      if (lines !== 0) {
+        currentEntry.term.scrollLines(lines);
+        touchScrollAccum -= lines;
+      }
+      e.preventDefault();
+    };
+
     async function mount() {
       if (!containerRef.current) {
         console.debug(`[TerminalInstance] mount aborted — containerRef.current is null`);
@@ -132,6 +161,14 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         });
       }
 
+      // Register touch-scroll listeners on the container so the user can drag
+      // through the scrollback buffer on mobile.
+      touchEl = containerRef.current;
+      if (touchEl) {
+        touchEl.addEventListener("touchstart", handleTouchStart, { passive: true });
+        touchEl.addEventListener("touchmove", handleTouchMove, { passive: false });
+      }
+
       // ResizeObserver: fit xterm to container; only the controller notifies the PTY.
       // Viewers keep cols locked to the controller's value to prevent double line-wrap.
       const observer = new ResizeObserver(() => {
@@ -187,6 +224,9 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       terminalRegistry.detach(workflowId, sessionId);
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
+      // Remove touch-scroll listeners
+      touchEl?.removeEventListener("touchstart", handleTouchStart);
+      touchEl?.removeEventListener("touchmove", handleTouchMove);
     };
   }, [workflowId, sessionId]);
 
@@ -268,6 +308,10 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         // horizontal scrollbar, if wider the xterm is centered via auto margins.
         overflowX: isController ? "hidden" : "auto",
         overflowY: "hidden",
+        // Disable browser pan/zoom on the terminal so our touch-scroll handler
+        // has exclusive control over touch events. The browser would otherwise
+        // try to scroll the page instead of the xterm scrollback buffer.
+        touchAction: "none",
       }}
     >
       {/* "Process exited" overlay for frozen ai-cli sessions */}
