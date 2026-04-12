@@ -4,7 +4,7 @@ export { OutputSection } from "./OutputSection";
 export { EditorSection } from "./EditorSection";
 export { WorkflowPropertiesPanel } from "./WorkflowPropertiesPanel";
 export { CenterContentArea } from "./CenterContentArea";
-export { MobilePromptsSidebar } from "./MobilePromptsSidebar";
+export { PromptChipRail } from "../prompts/PromptChipRail";
 export { GlobalSettingsDrawer } from "./GlobalSettingsDrawer";
 export { GlobalSettingsVerticalTabBar } from "./GlobalSettingsVerticalTabBar";
 export { StartupOverlay } from "./StartupOverlay";

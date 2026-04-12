@@ -6,3 +6,4 @@ export {
 export { PromptStepDetails } from "./PromptStepDetails";
 export { StatusIcon } from "./StatusIcon";
 export { PromptCounter } from "./PromptCounter";
+export { PromptChipRail } from "./PromptChipRail";

@@ -15,7 +15,7 @@ import {
 } from "../prompts/WorkflowStep";
 import { FinalStepFooter } from "../prompts/FinalStepFooter";
 import { PromptCounter } from "../prompts/PromptCounter";
-import { PanelBar } from "../shared";
+import { PromptChipRail } from "../prompts/PromptChipRail";
 import {
   MESSAGE_TYPES,
   STEP_STATUS,
@@ -115,11 +115,9 @@ function SortableWorkflowStepWrapper({
  * - Retry and end condition result display
  */
 export const WorkflowStepsPanel: React.FC<{
-  panelBarOrientation?: "horizontal" | "vertical";
   onRequestSidebar?: () => void;
   onRequestClose?: () => void;
 }> = ({
-  panelBarOrientation = "vertical",
   onRequestSidebar,
   onRequestClose,
 }) => {
@@ -564,14 +562,7 @@ export const WorkflowStepsPanel: React.FC<{
   }
 
   if (promptsCollapsed && !isMobileMode) {
-    return (
-      <PanelBar
-        orientation={panelBarOrientation}
-        icon="list-unordered"
-        title="Steps"
-        onClick={handleToggle}
-      />
-    );
+    return <PromptChipRail onExpand={handleToggle} />;
   }
 
   return (

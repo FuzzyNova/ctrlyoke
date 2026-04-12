@@ -7,7 +7,7 @@ import { OUTPUT_HISTORY_KINDS, FINAL_STEP_PHASES } from "../types/messages";
  * Returns a `getContextPct(stepIndex)` helper that looks up the context-window
  * usage percentage for a queued prompt step.
  *
- * Single source of truth shared by WorkflowStepsPanel and MobilePromptsSidebar.
+ * Single source of truth shared by WorkflowStepsPanel and PromptChipRail.
  */
 export function useContextPct() {
   const { liveOrderedEntries, historyOutputs } = useWorkflowStore();

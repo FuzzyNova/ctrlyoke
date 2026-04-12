@@ -1,7 +1,7 @@
 # All Available VS Code Commands
 
-**Generated:** 2026-03-27T18:31:02.144Z  
-**Total Commands:** 3869
+**Generated:** 2026-04-12T19:52:22.618Z  
+**Total Commands:** 3873
 
 ---
 
@@ -57,6 +57,7 @@
 - `agentSessions.toggleAgentSessionsSidebar`
 - `agentSessionsViewer.find`
 - `agentSessionsViewer.refresh`
+- `aiCustomization.generateDebugReport`
 - `aiCustomization.openManagementEditor`
 - `aiCustomizationManagement.copyPath`
 - `aiCustomizationManagement.delete`
@@ -180,7 +181,7 @@
 - `cancelLinkedEditingInput`
 - `cancelRenameInput`
 - `cancelSelection`
-- `changeEditorIndentation12`
+- `changeEditorIndentation11`
 - `chat.action.focus`
 - `chat.configureToolSets`
 - `chat.enablePremiumOverages`
@@ -698,6 +699,11 @@
 - `editor.action.removeCommentLine`
 - `editor.action.removeDuplicateLines`
 - `editor.action.rename`
+- `editor.action.renderWhitespace.all`
+- `editor.action.renderWhitespace.boundary`
+- `editor.action.renderWhitespace.none`
+- `editor.action.renderWhitespace.selection`
+- `editor.action.renderWhitespace.trailing`
 - `editor.action.replaceAll`
 - `editor.action.replaceOne`
 - `editor.action.resetSuggestSize`
@@ -939,8 +945,10 @@
 - `flightpath.dashboard.resetViewLocation`
 - `flightpath.dashboard.toggleVisibility`
 - `flightpath.devMenu`
+- `flightpath.disableServer`
 - `flightpath.dumpCssVars`
 - `flightpath.editCurrentPromptFile`
+- `flightpath.enableServer`
 - `flightpath.exportDiscoveredModels`
 - `flightpath.importAgents`
 - `flightpath.importWorkflowTemplates`
@@ -1161,7 +1169,6 @@
 - `git.viewStagedChanges`
 - `git.viewUntrackedChanges`
 - `github.copilot.acceptCursorPanelSolution`
-- `github.copilot.buildLocalWorkspaceIndex`
 - `github.copilot.buildRemoteWorkspaceIndex`
 - `github.copilot.chat.applyCopilotCLIAgentSessionChanges`
 - `github.copilot.chat.applyCopilotCLIAgentSessionChanges.apply`
@@ -1186,8 +1193,6 @@
 - `github.copilot.chat.debug.exportLogItem`
 - `github.copilot.chat.debug.exportPromptArchive`
 - `github.copilot.chat.debug.exportPromptLogsAsJson`
-- `github.copilot.chat.debug.exportSingleTrajectory`
-- `github.copilot.chat.debug.exportTrajectories`
 - `github.copilot.chat.debug.hideElements`
 - `github.copilot.chat.debug.hideGhostRequests`
 - `github.copilot.chat.debug.hideNesRequests`
@@ -1215,10 +1220,8 @@
 - `github.copilot.chat.openPullRequestReroute`
 - `github.copilot.chat.openSuggestionsPanel`
 - `github.copilot.chat.openUserPreferences`
+- `github.copilot.chat.otel.exportAgentTracesDB`
 - `github.copilot.chat.otel.flush`
-- `github.copilot.chat.replay`
-- `github.copilot.chat.replay.disableWorkspaceEditTracing`
-- `github.copilot.chat.replay.enableWorkspaceEditTracing`
 - `github.copilot.chat.rerunWithCopilotDebug`
 - `github.copilot.chat.review`
 - `github.copilot.chat.review.apply`
@@ -1241,7 +1244,6 @@
 - `github.copilot.chat.review.unstagedChanges`
 - `github.copilot.chat.review.unstagedFileChange`
 - `github.copilot.chat.sendCompletionFeedback`
-- `github.copilot.chat.showAsChatSession`
 - `github.copilot.chat.startCopilotDebugCommand`
 - `github.copilot.chat.toggleStatusMenu`
 - `github.copilot.chat.tools.memory.clearMemories`
@@ -1261,6 +1263,7 @@
 - `github.copilot.cli.sessions.openWorktreeInTerminal`
 - `github.copilot.cli.sessions.rename`
 - `github.copilot.cli.sessions.resumeInTerminal`
+- `github.copilot.cli.sessions.setTitle`
 - `github.copilot.cloud.resetWorkspaceConfirmations`
 - `github.copilot.cloud.sessions.installPRExtension`
 - `github.copilot.cloud.sessions.openInBrowser`
@@ -1316,6 +1319,12 @@
 - `github.copilot.search.feedback`
 - `github.copilot.search.markHelpful`
 - `github.copilot.search.markUnhelpful`
+- `github.copilot.sessions.commit`
+- `github.copilot.sessions.commitAndSync`
+- `github.copilot.sessions.discardChanges`
+- `github.copilot.sessions.initializeRepository`
+- `github.copilot.sessions.refreshChanges`
+- `github.copilot.sessions.sync`
 - `github.copilot.startDebugging`
 - `github.copilot.survey.signalUsage`
 - `github.copilot.terminal.explainTerminalLastCommand`
@@ -2101,7 +2110,6 @@
 - `targetsWsl.open`
 - `targetsWsl.resetViewLocation`
 - `terminal.focus`
-- `terminal.integrated.suggest.clearCachedGlobals`
 - `terminal.removeView`
 - `terminal.resetViewContainerLocation`
 - `terminal.resetViewLocation`
@@ -2246,6 +2254,7 @@
 - `update.restart`
 - `update.restartToUpdate`
 - `update.showCurrentReleaseNotes`
+- `update.showUpdateInfo`
 - `update.showUpdateReleaseNotes`
 - `update.updating`
 - `variables.collapse`
@@ -2405,9 +2414,11 @@
 - `workbench.action.chat.configureTools`
 - `workbench.action.chat.copyAll`
 - `workbench.action.chat.copyCodeBlock`
+- `workbench.action.chat.copyFinalResponse`
 - `workbench.action.chat.copyItem`
 - `workbench.action.chat.copyKatexMathSource`
 - `workbench.action.chat.copyLink`
+- `workbench.action.chat.createPlugin`
 - `workbench.action.chat.disableTips`
 - `workbench.action.chat.discardCompareEdits`
 - `workbench.action.chat.dismissTip`
@@ -2445,6 +2456,7 @@
 - `workbench.action.chat.insertSearchResults`
 - `workbench.action.chat.insertTroubleshootCommand`
 - `workbench.action.chat.inspectChatModel`
+- `workbench.action.chat.inspectChatModelReferences`
 - `workbench.action.chat.installPluginFromSource`
 - `workbench.action.chat.logChatIndex`
 - `workbench.action.chat.logInputHistory`
@@ -2481,7 +2493,6 @@
 - `workbench.action.chat.openInSidebar`
 - `workbench.action.chat.openModePicker`
 - `workbench.action.chat.openModelPicker`
-- `workbench.action.chat.openNewChatSessionExternal.openai-codex`
 - `workbench.action.chat.openNewChatSessionInPlace.agent-host-copilot`
 - `workbench.action.chat.openNewChatSessionInPlace.claude-code`
 - `workbench.action.chat.openNewChatSessionInPlace.copilot-cloud-agent`
@@ -2556,7 +2567,9 @@
 - `workbench.action.chat.showContextUsage`
 - `workbench.action.chat.showExtensionsUsingCopilot`
 - `workbench.action.chat.showOutput`
+- `workbench.action.chat.signInIndicator`
 - `workbench.action.chat.skipTool`
+- `workbench.action.chat.startOver`
 - `workbench.action.chat.startParameterizedPrompt`
 - `workbench.action.chat.startVoiceChat`
 - `workbench.action.chat.steerWithMessage`
@@ -2871,6 +2884,7 @@
 - `workbench.action.openActiveLogOutputFile`
 - `workbench.action.openActiveLogOutputFileInNewWindow`
 - `workbench.action.openAgentSessionsWelcome`
+- `workbench.action.openAgentsWindow`
 - `workbench.action.openApplicationSettingsJson`
 - `workbench.action.openChat`
 - `workbench.action.openChat.commentIcon`
@@ -2916,7 +2930,6 @@
 - `workbench.action.openRemoteSettings`
 - `workbench.action.openRemoteSettingsFile`
 - `workbench.action.openRequestFeatureUrl`
-- `workbench.action.openSessionsWindow`
 - `workbench.action.openSettings`
 - `workbench.action.openSettings2`
 - `workbench.action.openSettingsJson`
@@ -3093,6 +3106,7 @@
 - `workbench.action.splitEditorToPreviousGroup`
 - `workbench.action.splitEditorToRightGroup`
 - `workbench.action.splitEditorUp`
+- `workbench.action.startTracing`
 - `workbench.action.stopTracing`
 - `workbench.action.switchWindow`
 - `workbench.action.tasks.build`
@@ -3281,6 +3295,7 @@
 - `workbench.action.toggleMaximizedPanel`
 - `workbench.action.toggleMenuBar`
 - `workbench.action.toggleModalEditorMaximized`
+- `workbench.action.toggleModalEditorSidebar`
 - `workbench.action.toggleMultiCursorModifier`
 - `workbench.action.toggleNotebookClipboardLog`
 - `workbench.action.togglePanel`
@@ -3323,14 +3338,6 @@
 - `workbench.actions.syncData.reset`
 - `workbench.actions.table.workbench.panel.markers.view.viewAsTable`
 - `workbench.actions.table.workbench.panel.markers.view.viewAsTree`
-- `workbench.actions.treeView.platformio-debug.disassembly.collapseAll`
-- `workbench.actions.treeView.platformio-debug.disassembly.refresh`
-- `workbench.actions.treeView.platformio-debug.memory.collapseAll`
-- `workbench.actions.treeView.platformio-debug.memory.refresh`
-- `workbench.actions.treeView.platformio-debug.peripherals.collapseAll`
-- `workbench.actions.treeView.platformio-debug.peripherals.refresh`
-- `workbench.actions.treeView.platformio-debug.registers.collapseAll`
-- `workbench.actions.treeView.platformio-debug.registers.refresh`
 - `workbench.actions.treeView.workbench.panel.markers.view.collapseAll`
 - `workbench.actions.updateIndicator`
 - `workbench.actions.view.problems`
@@ -3635,7 +3642,6 @@
 - `workbench.scm.action.setTreeViewModeNavigation`
 - `workbench.scm.action.toggleQuickDiffVisibility.git.quickDiffProvider`
 - `workbench.scm.action.toggleQuickDiffVisibility.git.secondaryQuickDiffProvider`
-- `workbench.scm.action.toggleRepositoryVisibility.scm0`
 - `workbench.scm.focus`
 - `workbench.scm.history.focus`
 - `workbench.scm.history.open`
@@ -3841,9 +3847,7 @@
 - `workbench.views.mcp.installed.resetViewLocation`
 - `workbench.views.mcp.marketplace.focus`
 - `workbench.views.mcp.marketplace.open`
-- `workbench.views.mcp.marketplace.removeView`
 - `workbench.views.mcp.marketplace.resetViewLocation`
-- `workbench.views.mcp.marketplace.toggleVisibility`
 - `workbench.views.mcp.welcomeView.focus`
 - `workbench.views.mcp.welcomeView.open`
 - `workbench.views.mcp.welcomeView.resetViewLocation`

@@ -28,7 +28,7 @@ import {
   EditorSection,
   WorkflowPropertiesPanel,
   CenterContentArea,
-  MobilePromptsSidebar,
+  PromptChipRail,
   GlobalSettingsDrawer,
   StartupOverlay,
 } from "./components/layout";
@@ -274,149 +274,142 @@ function App() {
         />
 
         {/* Main area — relative container for absolute overlays */}
-        <div className="flex-1 relative overflow-hidden flex">
-          {/* Sidebar prompts — flex sibling, takes 72px, pushes center right */}
-          {mobilePromptsOpen && mobilePromptsMode === "sidebar" && (
-            <div className="w-[72px] flex-shrink-0 h-full border-r border-panel-border bg-sidebar-bg overflow-y-auto">
-              <MobilePromptsSidebar />
-            </div>
-          )}
-
-          {/* Center content: output + editor vertical split */}
-          <div className="flex-1 flex flex-col min-w-0">
-            {allMobileCenterCollapsed ? (
-              /* Both collapsed: plain flex stack of the two collapsed bars */
-              <div className="flex flex-col flex-1 relative bg-editor-bg">
-                {(() => {
-                  const logoUrl =
-                    document.body.getAttribute("data-logo-uri") || "";
-                  return (
-                    <div
-                      className="background-logo"
-                      style={{
-                        WebkitMaskImage: logoUrl ? `url('${logoUrl}')` : "none",
-                        maskImage: logoUrl ? `url('${logoUrl}')` : "none",
-                      }}
-                      aria-hidden="true"
-                    />
-                  );
-                })()}
-                <div className="relative z-10 flex flex-col flex-1">
-                  <div className="flex-none">
-                    <OutputSection />
-                  </div>
-                  <div className="flex-none">
-                    <EditorSection />
-                  </div>
+        <div className="flex-1 relative overflow-hidden flex flex-col">
+          {allMobileCenterCollapsed ? (
+            /* Both collapsed: plain flex stack of the two collapsed bars */
+            <div className="flex flex-col flex-1 relative bg-editor-bg">
+              {(() => {
+                const logoUrl =
+                  document.body.getAttribute("data-logo-uri") || "";
+                return (
+                  <div
+                    className="background-logo"
+                    style={{
+                      WebkitMaskImage: logoUrl ? `url('${logoUrl}')` : "none",
+                      maskImage: logoUrl ? `url('${logoUrl}')` : "none",
+                    }}
+                    aria-hidden="true"
+                  />
+                );
+              })()}
+              <div className="relative z-10 flex flex-col flex-1">
+                <div className="flex-none">
+                  <OutputSection />
+                </div>
+                <div className="flex-none">
+                  <EditorSection />
                 </div>
               </div>
-            ) : (
-              /* At least one center panel open: vertical resizable Group */
-              <Group
-                groupRef={mobile.mobileCenterGroupRef}
-                orientation="vertical"
-                className="flex-1"
-                id="flightpath-mobile-layout"
+            </div>
+          ) : (
+            /* At least one center panel open: vertical resizable Group */
+            <Group
+              groupRef={mobile.mobileCenterGroupRef}
+              orientation="vertical"
+              className="flex-1"
+              id="flightpath-mobile-layout"
+            >
+              <Panel
+                panelRef={mobile.mobileOutputRef}
+                defaultSize={mobile.mobileMountDefaults.current.output}
+                collapsible
+                collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
+                minSize={PANEL_MIN_SIZE_CENTER}
+                id="mobile-output-panel"
+                onResize={() => {
+                  if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
+                    return;
+                  const isCollapsed =
+                    mobile.mobileOutputRef.current?.isCollapsed() ?? false;
+                  const size =
+                    mobile.mobileOutputRef.current?.getSize().asPercentage ??
+                    null;
+                  if (!isCollapsed && size != null) {
+                    mobile.lastMobileSizes.current.output = size;
+                    useUiStore
+                      .getState()
+                      .setLastMobileSizes({ output: size });
+                  }
+                  if (isCollapsed !== outputCollapsed) {
+                    setOutputCollapsed(isCollapsed);
+                  }
+                }}
               >
-                <Panel
-                  panelRef={mobile.mobileOutputRef}
-                  defaultSize={mobile.mobileMountDefaults.current.output}
-                  collapsible
-                  collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
-                  minSize={PANEL_MIN_SIZE_CENTER}
-                  id="mobile-output-panel"
-                  onResize={() => {
-                    if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
-                      return;
-                    const isCollapsed =
-                      mobile.mobileOutputRef.current?.isCollapsed() ?? false;
-                    const size =
-                      mobile.mobileOutputRef.current?.getSize().asPercentage ??
-                      null;
-                    if (!isCollapsed && size != null) {
-                      mobile.lastMobileSizes.current.output = size;
-                      useUiStore
-                        .getState()
-                        .setLastMobileSizes({ output: size });
-                    }
-                    if (isCollapsed !== outputCollapsed) {
-                      setOutputCollapsed(isCollapsed);
-                    }
-                  }}
-                >
-                  <OutputSection />
-                </Panel>
+                {/* Flex row so the sidebar PUSHES the output right rather than
+                    overlaying it. Fullwidth overlay is absolute inside the
+                    output area — scoped to the output panel, never the editor. */}
+                <div className="flex h-full">
+                  {/* Sidebar chip rail — 32px flex sibling, pushes output right */}
+                  {mobilePromptsOpen && mobilePromptsMode === "sidebar" && (
+                    <div className="w-[32px] flex-shrink-0 h-full border-r border-panel-border bg-sidebar-bg">
+                      <PromptChipRail
+                        onExpand={() => setMobilePromptsMode("fullwidth")}
+                      />
+                    </div>
+                  )}
 
-                <Separator className={SEPARATOR_HORIZONTAL} />
+                  {/* Output area: takes remaining space; fullwidth overlay is
+                      absolute here so it cannot bleed into the editor panel */}
+                  <div className="relative flex-1 min-w-0 h-full">
+                    <OutputSection />
 
-                <Panel
-                  panelRef={mobile.mobileEditorRef}
-                  defaultSize={mobile.mobileMountDefaults.current.editor}
-                  collapsible
-                  collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
-                  minSize={PANEL_MIN_SIZE_CENTER}
-                  id="mobile-editor-panel"
-                  onResize={() => {
-                    if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
-                      return;
-                    const isCollapsed =
-                      mobile.mobileEditorRef.current?.isCollapsed() ?? false;
-                    const size =
-                      mobile.mobileEditorRef.current?.getSize().asPercentage ??
-                      null;
-                    if (!isCollapsed && size != null) {
-                      mobile.lastMobileSizes.current.editor = size;
-                      useUiStore
-                        .getState()
-                        .setLastMobileSizes({ editor: size });
-                    }
-                    if (isCollapsed !== editorCollapsed) {
-                      setEditorCollapsed(isCollapsed);
-                    }
-                  }}
-                >
-                  <EditorSection />
-                </Panel>
-              </Group>
-            )}
-          </div>
+                    {/* Fullwidth steps — covers the output area only */}
+                    {((mobilePromptsOpen &&
+                      mobilePromptsMode === "fullwidth") ||
+                      promptsOverlayClosing) && (
+                      <div
+                        className={`absolute inset-0 z-20 bg-editor-bg flex flex-col ${promptsOverlayClosing ? "animate-slide-out-left" : "animate-slide-in-left"}`}
+                        onAnimationEnd={
+                          promptsOverlayClosing
+                            ? () => {
+                                setPromptsOverlayClosing(false);
+                                promptsAfterClose.current?.();
+                                promptsAfterClose.current = null;
+                              }
+                            : undefined
+                        }
+                      >
+                        <WorkflowStepsPanel
+                          onRequestSidebar={handlePromptsRequestSidebar}
+                          onRequestClose={handlePromptsRequestClose}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Panel>
 
-          {/* Full-width prompts overlay */}
-          {((mobilePromptsOpen && mobilePromptsMode === "fullwidth") ||
-            promptsOverlayClosing) && (
-            <>
-              {/* Backdrop — tap outside returns to sidebar mode (hidden while closing) */}
-              {!promptsOverlayClosing && (
-                <div
-                  className="absolute inset-0 z-20"
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Return to sidebar"
-                  onClick={handlePromptsRequestSidebar}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ")
-                      handlePromptsRequestSidebar();
-                  }}
-                />
-              )}
-              <div
-                className={`absolute inset-0 z-30 bg-editor-bg flex flex-col ${promptsOverlayClosing ? "animate-slide-out-left" : "animate-slide-in-left"}`}
-                onAnimationEnd={
-                  promptsOverlayClosing
-                    ? () => {
-                        setPromptsOverlayClosing(false);
-                        promptsAfterClose.current?.();
-                        promptsAfterClose.current = null;
-                      }
-                    : undefined
-                }
+              <Separator className={SEPARATOR_HORIZONTAL} />
+
+              <Panel
+                panelRef={mobile.mobileEditorRef}
+                defaultSize={mobile.mobileMountDefaults.current.editor}
+                collapsible
+                collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
+                minSize={PANEL_MIN_SIZE_CENTER}
+                id="mobile-editor-panel"
+                onResize={() => {
+                  if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
+                    return;
+                  const isCollapsed =
+                    mobile.mobileEditorRef.current?.isCollapsed() ?? false;
+                  const size =
+                    mobile.mobileEditorRef.current?.getSize().asPercentage ??
+                    null;
+                  if (!isCollapsed && size != null) {
+                    mobile.lastMobileSizes.current.editor = size;
+                    useUiStore
+                      .getState()
+                      .setLastMobileSizes({ editor: size });
+                  }
+                  if (isCollapsed !== editorCollapsed) {
+                    setEditorCollapsed(isCollapsed);
+                  }
+                }}
               >
-                <WorkflowStepsPanel
-                  onRequestSidebar={handlePromptsRequestSidebar}
-                  onRequestClose={handlePromptsRequestClose}
-                />
-              </div>
-            </>
+                <EditorSection />
+              </Panel>
+            </Group>
           )}
 
           {/* Settings overlay drawer */}

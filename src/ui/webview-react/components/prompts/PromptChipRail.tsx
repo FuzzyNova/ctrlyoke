@@ -1,6 +1,15 @@
+/**
+ * PromptChipRail — compact chip list for collapsed/narrow prompt navigation.
+ *
+ * Renders one chip per prompt showing its slot number + status icon. Used in:
+ *  - Desktop: the collapsed WorkflowStepsPanel (32px wide Panel bar)
+ *  - Mobile: the 32px sidebar that pushes the output panel right
+ *
+ * Width is determined by the parent container. Internal layout adapts to the
+ * available space — no fixed width is applied here.
+ */
 import React, { useState, useEffect, useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
-import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { sendMessage } from "@hooks/useMessageHandler";
 import {
@@ -8,7 +17,7 @@ import {
   useContextPct,
   useStepClickHandler,
 } from "@hooks/index";
-import { StatusIcon } from "../prompts/StatusIcon";
+import { StatusIcon } from "./StatusIcon";
 import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
@@ -31,7 +40,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 
-// ─── SortableChip ────────────────────────────────────────────────────────────
+// ─── ChipContent ─────────────────────────────────────────────────────────────
 
 type ChipProps = {
   /** 1-based display slot (visual position, not absolute index) */
@@ -44,33 +53,6 @@ type ChipProps = {
   onChipClick: () => void;
   onSetStart: (e: React.MouseEvent) => void;
 };
-
-function SortableChip({
-  id,
-  disabled,
-  ...chipProps
-}: ChipProps & { id: string; disabled: boolean }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id, disabled });
-
-  const style = {
-    transform: transform ? `translate3d(0, ${transform.y}px, 0)` : undefined,
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <ChipContent {...chipProps} />
-    </div>
-  );
-}
 
 function ChipContent({
   slotNumber,
@@ -134,21 +116,50 @@ function ChipContent({
   );
 }
 
-// ─── MobilePromptsSidebar ────────────────────────────────────────────────────
+// ─── SortableChip ─────────────────────────────────────────────────────────────
+
+function SortableChip({
+  id,
+  disabled,
+  ...chipProps
+}: ChipProps & { id: string; disabled: boolean }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id, disabled });
+
+  const style = {
+    transform: transform ? `translate3d(0, ${transform.y}px, 0)` : undefined,
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <ChipContent {...chipProps} />
+    </div>
+  );
+}
+
+// ─── PromptChipRail ───────────────────────────────────────────────────────────
+
+interface PromptChipRailProps {
+  /** Called when the user taps the header to expand to the full panel view. */
+  onExpand: () => void;
+}
 
 /**
- * MobilePromptsSidebar — compact 72 px sidebar showing prompt chips.
+ * Compact sortable chip list. Width is owned by the parent container.
  *
- * Each chip layout:
- *   Row 1: [prompt number]  [status icon]
- *   Row 2: [set-start btn]  [context %]   ← shown when relevant
- *
- * Done prompts (index < currentStep) are static. Pending prompts are sortable
- * via dnd-kit — same reorder logic as the fullwidth WorkflowStepsPanel.
+ * The header is a single clickable row that triggers `onExpand`. Pending
+ * prompts support drag-to-reorder (same logic as WorkflowStepsPanel).
  */
-export const MobilePromptsSidebar: React.FC = () => {
+export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   const { steps: prompts, currentStep, executionState } = useWorkflowStore();
-  const { setMobilePromptsMode } = useUiStore();
 
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const canChangeStartPosition =
@@ -159,18 +170,17 @@ export const MobilePromptsSidebar: React.FC = () => {
   const getContextPct = useContextPct();
   const handleStepClick = useStepClickHandler();
 
-  // Stable sortable IDs for the pending slice — same pattern as WorkflowStepsPanel.
   const [sortableIds, setSortableIds] = useState<string[]>(() =>
     prompts
       .slice(currentStep)
-      .map((_, i) => `prompt-pending-${currentStep + i}`)
+      .map((_, i) => `chip-pending-${currentStep + i}`)
   );
 
   useEffect(() => {
     setSortableIds(
       prompts
         .slice(currentStep)
-        .map((_, i) => `prompt-pending-${currentStep + i}`)
+        .map((_, i) => `chip-pending-${currentStep + i}`)
     );
   }, [prompts, currentStep]);
 
@@ -196,8 +206,6 @@ export const MobilePromptsSidebar: React.FC = () => {
       );
       sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, { newPendingOrder });
 
-      // Cancel any active queue-prompt selection — the selected index may now
-      // refer to a different prompt after reorder.
       const editorStore = useEditorStore.getState();
       if (editorStore.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
         editorStore.cancelEdit();
@@ -208,30 +216,30 @@ export const MobilePromptsSidebar: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header bar — same 30px height as the fullwidth WorkflowStepsPanel header. */}
-      <div className="flex items-center h-[30px] flex-shrink-0 border-b border-panel-border bg-sidebar-bg">
-        <button
-          className="flex items-center justify-center w-[20px] h-[20px] ml-1 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
-          onClick={() => setMobilePromptsMode("fullwidth")}
-          title="Expand prompts"
-          aria-label="Expand prompts to full view"
-        >
-          <i className="codicon codicon-arrow-right text-[12px]" />
-        </button>
-        <i className="codicon codicon-list-unordered text-[14px] ml-1" />
+      {/* Header: single clickable row, expands to full panel on click */}
+      <div
+        className="flex items-center justify-center h-[30px] flex-shrink-0 border-b border-panel-border bg-sidebar-bg cursor-pointer hover:bg-toolbar-hover-bg transition-colors"
+        onClick={onExpand}
+        role="button"
+        tabIndex={0}
+        aria-label="Expand prompts"
+        title="Expand prompts"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") onExpand();
+        }}
+      >
+        <i className="codicon codicon-list-unordered text-[12px] text-description-fg" />
       </div>
 
-      {/* Prompt chips */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Prompt chips — scrollable */}
+      <div className="flex-1 overflow-y-auto min-h-0">
         {prompts.length === 0 ? (
-          <div className="flex items-center justify-center py-4">
-            <span className="text-[9px] text-description-fg text-center px-1">
-              No prompts
-            </span>
+          <div className="flex items-center justify-center py-2">
+            <i className="codicon codicon-dash text-[10px] text-description-fg" />
           </div>
         ) : (
           <>
-            {/* Done chips — static, not draggable */}
+            {/* Done chips — static */}
             {prompts.slice(0, currentStep).map((prompt, i) => {
               const status = getPromptStatus(prompt, i);
               const contextPct = getContextPct(i);
@@ -266,7 +274,7 @@ export const MobilePromptsSidebar: React.FC = () => {
                 strategy={verticalListSortingStrategy}
               >
                 {sortableIds.map((id, visualIdx) => {
-                  const index = parseInt(id.replace("prompt-pending-", ""));
+                  const index = parseInt(id.replace("chip-pending-", ""));
                   const prompt = prompts[index];
                   if (!prompt) return null;
                   const isCurrentStep = visualIdx === 0;
