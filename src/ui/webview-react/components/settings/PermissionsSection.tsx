@@ -25,7 +25,9 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
       <span className="flex flex-col">
         <span className="text-sm text-foreground">{label}</span>
         {description && (
-          <span className="text-xs text-description-fg mt-0.5">{description}</span>
+          <span className="text-xs text-description-fg mt-0.5">
+            {description}
+          </span>
         )}
       </span>
     </label>
@@ -53,7 +55,6 @@ const CODEX_APPROVAL_OPTIONS = [
 export function PermissionsSection({ settings, onUpdate }: Props) {
   const tools = settings.settings.tools;
   const s = "user" as const;
-  const isCustom = tools.permissionMode === "custom";
 
   return (
     <div className="space-y-4">
@@ -67,52 +68,58 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
           options={PERMISSION_MODE_OPTIONS}
         />
       </div>
-      {isCustom && (
-        <div className="space-y-3">
-          <div>
-            <label htmlFor="tools-allowed" className="block text-xs text-description-fg mb-1">
-              Allowed tools (comma-separated)
-            </label>
-            <textarea
-              id="tools-allowed"
-              rows={3}
-              value={tools.allowed.join(", ")}
-              onChange={(e) =>
-                onUpdate(
-                  "tools.allowed",
-                  e.target.value
-                    .split(",")
-                    .map((t) => t.trim())
-                    .filter(Boolean),
-                  s
-                )
-              }
-              className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
-            />
-          </div>
-          <div>
-            <label htmlFor="tools-denied" className="block text-xs text-description-fg mb-1">
-              Denied tools (comma-separated)
-            </label>
-            <textarea
-              id="tools-denied"
-              rows={3}
-              value={tools.denied.join(", ")}
-              onChange={(e) =>
-                onUpdate(
-                  "tools.denied",
-                  e.target.value
-                    .split(",")
-                    .map((t) => t.trim())
-                    .filter(Boolean),
-                  s
-                )
-              }
-              className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
-            />
-          </div>
+      <div className="space-y-3 mt-2">
+        <div>
+          <label
+            htmlFor="tools-allowed"
+            className="block text-xs text-description-fg mb-1"
+          >
+            Allowed tools (one per line)
+          </label>
+          <textarea
+            id="tools-allowed"
+            rows={3}
+            value={tools.allowed.join("\n")}
+            onChange={(e) =>
+              onUpdate(
+                "tools.allowed",
+                e.target.value
+                  .split("\n")
+                  .map((t) => t.trim())
+                  .filter(Boolean),
+                s
+              )
+            }
+            placeholder={"read\nglob\ngrep"}
+            className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
+          />
         </div>
-      )}
+        <div>
+          <label
+            htmlFor="tools-denied"
+            className="block text-xs text-description-fg mb-1"
+          >
+            Denied tools (one per line)
+          </label>
+          <textarea
+            id="tools-denied"
+            rows={3}
+            value={tools.denied.join("\n")}
+            onChange={(e) =>
+              onUpdate(
+                "tools.denied",
+                e.target.value
+                  .split("\n")
+                  .map((t) => t.trim())
+                  .filter(Boolean),
+                s
+              )
+            }
+            placeholder={"shell(rm:*)\nwrite"}
+            className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
+          />
+        </div>
+      </div>
       <div className="border-t border-panel-border pt-4">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           Copilot CLI
@@ -124,7 +131,10 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
           onChange={(v) => onUpdate("tools.copilotAllowAllPaths", v, s)}
         />
         <div className="mt-2">
-          <label htmlFor="copilot-allowed-dirs" className="block text-xs text-description-fg mb-1">
+          <label
+            htmlFor="copilot-allowed-dirs"
+            className="block text-xs text-description-fg mb-1"
+          >
             Allowed directories (one per line)
           </label>
           <textarea
@@ -151,7 +161,12 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
         </h3>
         <div className="space-y-3">
           <div>
-            <label htmlFor="codex-sandbox-mode" className="block text-xs text-description-fg mb-1">Sandbox mode</label>
+            <label
+              htmlFor="codex-sandbox-mode"
+              className="block text-xs text-description-fg mb-1"
+            >
+              Sandbox mode
+            </label>
             <CustomSelect
               id="codex-sandbox-mode"
               value={tools.codexSandboxMode}
@@ -160,7 +175,12 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
             />
           </div>
           <div>
-            <label htmlFor="codex-approval-policy" className="block text-xs text-description-fg mb-1">Approval policy</label>
+            <label
+              htmlFor="codex-approval-policy"
+              className="block text-xs text-description-fg mb-1"
+            >
+              Approval policy
+            </label>
             <CustomSelect
               id="codex-approval-policy"
               value={tools.codexApprovalPolicy}
@@ -169,7 +189,10 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
             />
           </div>
           <div>
-            <label htmlFor="codex-allowed-dirs" className="block text-xs text-description-fg mb-1">
+            <label
+              htmlFor="codex-allowed-dirs"
+              className="block text-xs text-description-fg mb-1"
+            >
               Allowed directories (one per line)
             </label>
             <textarea

@@ -1,4 +1,5 @@
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import { PRIOR_CONTEXT_KEYWORDS } from "@root/types/DashboardConstants";
 import { CustomSelect } from "../shared/CustomSelect";
 
 interface Props {
@@ -60,9 +61,11 @@ const FORMAT_OPTIONS = [
 ];
 
 const PRIOR_CONTEXT_OPTIONS = [
-  { value: "none", label: "None" },
-  { value: "reuse", label: "Reuse" },
-  { value: "summarize", label: "Summarize" },
+  { value: PRIOR_CONTEXT_KEYWORDS.NONE, label: "None" },
+  { value: PRIOR_CONTEXT_KEYWORDS.ALL, label: "All" },
+  { value: PRIOR_CONTEXT_KEYWORDS.PREVIOUS, label: "Previous" },
+  { value: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL, label: "Final Step (All)" },
+  { value: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS, label: "Final Step (Previous)" },
 ];
 
 export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
@@ -100,7 +103,7 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
       </FieldRow>
       <FieldRow label="Default prior context" description="How to handle prior context between prompts.">
         <CustomSelect
-          value={wf.priorContext || "none"}
+          value={wf.priorContext || PRIOR_CONTEXT_KEYWORDS.NONE}
           onChange={(v) => onUpdate("workflow.priorContext", v, s)}
           options={PRIOR_CONTEXT_OPTIONS}
         />

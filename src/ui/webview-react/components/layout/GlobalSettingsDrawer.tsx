@@ -86,7 +86,7 @@ export function GlobalSettingsDrawer() {
             <span className="codicon codicon-close" />
           </button>
 
-          <div className="p-4 pr-12">
+          <div className="p-4 pr-12 max-w-2xl">
             {fullSettings && activeTab === "general" && (
               <GeneralSection settings={fullSettings} onUpdate={handleUpdate} />
             )}

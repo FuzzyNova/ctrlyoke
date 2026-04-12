@@ -290,6 +290,13 @@ export class WebviewMessageRouter {
           this.scopedPostMessage,
           this.clientId
         );
+        // A new workflow has no working file, so sendWorkflowPropertiesToSettings
+        // returns early without sending anything. Explicitly clear the panel so it
+        // shows global defaults instead of the previous workflow's properties.
+        this.emitMessage({
+          type: MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE,
+          workflowProperties: {},
+        });
         return;
       }
       // Fallback when orchestrator is not yet available

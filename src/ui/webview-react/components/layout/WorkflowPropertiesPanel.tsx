@@ -1305,6 +1305,22 @@ export const WorkflowPropertiesPanel: React.FC<{
                     htmlFor="settings-allowed-tools"
                     description="Tool patterns to allow (one per line). Uses Copilot CLI format — auto-converted for Claude/Qwen."
                     className="flex-1 min-h-0"
+                    setAsDefaultButton={
+                      <SetAsDefaultButton
+                        property="toolPermissions.allowedTools"
+                        show={
+                          JSON.stringify(effectiveAllowedTools) !==
+                          JSON.stringify(globalSettings.toolPermissions.allowedTools ?? [])
+                        }
+                        onSetDefault={() =>
+                          handleSetAsDefault("toolPermissions", {
+                            ...(workflowProperties.toolPermissions ?? {}),
+                            allowedTools: effectiveAllowedTools,
+                            deniedTools: effectiveDeniedTools,
+                          })
+                        }
+                      />
+                    }
                   >
                     <textarea
                       id="settings-allowed-tools"
@@ -1336,6 +1352,22 @@ export const WorkflowPropertiesPanel: React.FC<{
                     htmlFor="settings-denied-tools"
                     description="Tool patterns to deny (one per line, takes precedence over allow list)."
                     className="flex-1 min-h-0"
+                    setAsDefaultButton={
+                      <SetAsDefaultButton
+                        property="toolPermissions.deniedTools"
+                        show={
+                          JSON.stringify(effectiveDeniedTools) !==
+                          JSON.stringify(globalSettings.toolPermissions.deniedTools ?? [])
+                        }
+                        onSetDefault={() =>
+                          handleSetAsDefault("toolPermissions", {
+                            ...(workflowProperties.toolPermissions ?? {}),
+                            allowedTools: effectiveAllowedTools,
+                            deniedTools: effectiveDeniedTools,
+                          })
+                        }
+                      />
+                    }
                   >
                     <textarea
                       id="settings-denied-tools"
