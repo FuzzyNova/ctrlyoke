@@ -168,6 +168,10 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           Codex CLI
         </h3>
+        <p className="text-xs text-description-fg mb-3">
+          Sandbox mode and approval policy only apply when Permission Mode is
+          set to <span className="font-medium text-foreground">Custom</span>.
+        </p>
         <div className="space-y-3">
           <div>
             <label

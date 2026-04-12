@@ -132,6 +132,7 @@ Only flags that were explicitly passed by the user go into the overlay — Comma
 </settingsStructure>
 
 <conventions>
+- **Global settings are always editable** — never disable or hide global settings controls based on the current value of another global setting. Global settings are workflow-level defaults; a workflow can override any setting (e.g., `permissionMode: custom`), so a user must be able to pre-configure all related settings regardless of what the global default is set to. Conditional disabling belongs only in the workflow properties panel, where the active workflow's actual values are known.
 - **Always read settings via `configService`** — never read config files directly or call `vscode.workspace.getConfiguration` in core code.
 - **`ConfigurationUtils` is the canonical accessor** — it wraps `configService.get()` calls in named helper functions (e.g. `getScriptTimeout()`, `getCliModel()`). Prefer adding a new helper there rather than calling `configService.get()` inline.
 - **`set()` at the right scope** — workspace settings affect the current project; user settings are global across all workspaces. Use workspace scope by default for project-specific settings.
