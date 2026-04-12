@@ -1,7 +1,7 @@
 # Parallel Step Execution Within a Single Workflow
 
-> **Last Updated:** April 10, 2026  
-> **Status:** Not yet implemented — this plan has been updated to reflect the current codebase state.
+> **Last Updated:** April 11, 2026  
+> **Status:** Not yet implemented — plan audited against live codebase, storage model finalised, cleared for implementation.
 
 ## Changes Since Plan Was Written
 
@@ -126,9 +126,13 @@ Worse than Option A: verbose (must repeat `group` and `parallel` on each step), 
 
 ### What is NOT allowed within a parallel group
 
-1. **`resumeSession: true`** — parallel steps cannot share a session. Each step must be a
-   fresh AI CLI invocation. Validate at parse time; emit a clear error.
-2. **`sessionId` referencing another step in the same group** — same reason.
+1. **Two or more steps resolving to the same session simultaneously.** This is the core
+   constraint — harnesses either throw or produce split-brain output when two processes
+   attach to the same session at once. The collision cases, validated at parse time:
+   - **Multiple steps with `resumeSession: true` and no `sessionId`** — all would target the
+     "most recent" session of the harness type, which is the same session. Emit a clear error
+     naming the conflicting steps.
+   - **Multiple steps with the same explicit `sessionId`** — same collision. Emit a clear error.
 3. **Dynamic queue extension (`mcpServers: ["flightpath"]`)** — if a parallel step tries to
    append more steps to the queue mid-execution, the ordering semantics are undefined.
    Disallow at parse time.
@@ -155,7 +159,29 @@ Worse than Option A: verbose (must repeat `group` and `parallel` on each step), 
   (`PtyProcessManager`, `TerminalView`, `TerminalInstance`) already supports multiple
   concurrent PTY sessions with a session rail, controller arbitration, and per-prompt
   terminal tabs. Parallel steps each get their own terminal tab in the session rail,
-  identified by sub-step label (e.g., "2a", "2b", "2c").
+  identified by their sequential step number (e.g., "2. research-auth", "3. research-db").
+- **`resumeSession: true` with a unique `sessionId` per step** — the canonical pattern for
+  continuing work from a prior parallel group:
+  ```yaml
+  - parallel:
+      - name: research-A      # → completes as step 1, session saved
+      - name: research-B      # → completes as step 2, session saved
+  - parallel:
+      - name: implement-A
+        resumeSession: true
+        sessionId: 1          # resumes research-A session ✅
+      - name: implement-B
+        resumeSession: true
+        sessionId: 2          # resumes research-B session ✅ (different session)
+  ```
+  Each `sessionId` must be unique within the group (otherwise both steps target the same
+  session simultaneously — a hard error). If a referenced session is not found at runtime,
+  the existing best-effort fallback applies: start a fresh session and log a warning (same
+  as sequential steps with a missing session).
+- **`resumeSession: true` with no `sessionId` on a single step in a group** — allowed as
+  best-effort. The step resumes the most recent session of its harness type. A parse-time
+  warning is emitted if more than one step in the group does this (they'd collide). A single
+  step using this pattern is unambiguous and works identically to the sequential behavior.
 - The step after a parallel group can use `resumeSession: false` (default) for a clean
   synthesis, or can reference group results via `priorContext` pointing to specific step
   indices (once those steps have completed)
@@ -202,27 +228,84 @@ per-run (not per-workflow). The parallel group executor requests N fresh instanc
 then releases them when the group completes. This is a change to how harness instances are
 managed but does not change the harness classes themselves.
 
-### PromptQueue State
+### Internal Storage Model (Critical Decision)
 
-`PromptQueue` currently models steps as a flat indexed array with `WorkflowStep` items
-(`PromptStep | ScriptStep`). The parallel group needs representation in the state machine:
+**`steps` is flat everywhere — one representation, no translation layer.**
+
+The `parallel:` key in YAML is syntactic sugar. The parser expands it immediately — parallel
+sub-steps go directly into the flat `steps` array alongside sequential steps. Group membership
+is tracked in a companion `groups` array at both the file and runtime layers.
 
 ```typescript
-// Flat steps array at parse time (after expansion)
-// ParallelGroup is a discriminated union alongside WorkflowStep
-type StepItem = WorkflowStep | ParallelGroup;
-
-interface ParallelGroup {
-  kind: "parallel";
-  steps: WorkflowStep[]; // PromptStep | ScriptStep
-  failFast?: boolean;    // default: true
+interface ParallelGroupRange {
+  /** Inclusive flat indices of the steps in this group */
+  startIndex: number;
+  endIndex: number;
+  failFast: boolean;
   status: "pending" | "running" | "completed" | "failed";
-  stepStatuses: Map<number, StepStatus>; // stepIndex → status
 }
 ```
 
-For step numbering in the dashboard (e.g., "Prompt 3/7"), the parallel group counts as a
-single numbered step with sub-steps labeled "3a", "3b", "3c".
+Both `PromptFile` and `QueueState` gain `groups?: ParallelGroupRange[]`. No new step-level
+union type is introduced — `WorkflowStep` stays `PromptStep | ScriptStep`, and `PromptFile.steps`
+stays `WorkflowStep[]`.
+
+**Why flat everywhere (and why not a two-layer nested model):**
+
+A nested model (`PromptFile.steps: Array<WorkflowStep | ParallelGroupItem>` at the file layer,
+flattened at the runtime layer) was considered and rejected because:
+
+1. **Extra type complexity for no benefit.** `WorkflowFileStep` vs `WorkflowStep` is a
+   distinction that exists only to represent nesting that we don't want at runtime anyway.
+   The parser is the only place that sees the `parallel:` key — it can immediately flatten.
+
+2. **`PromptFile` IS the working file.** Working files (`.flightpath/.queue/*.json`) are
+   persisted `PromptFile` instances. If `PromptFile.steps` was nested, working files would
+   store nested groups, requiring an expand step on every reload. With flat + `groups`,
+   the working file is already in execution-ready form.
+
+3. **Pre-release freedom.** We're not locked in to any existing `PromptFile.steps` consumers.
+   Adding `groups?` to `PromptFile` is a clean additive change.
+
+**What changes vs what stays the same:**
+
+| Item                                | Change                                                         |
+| ----------------------------------- | -------------------------------------------------------------- |
+| `PromptFile`                        | Gains `groups?: ParallelGroupRange[]` — flat `steps` unchanged |
+| `QueueState`                        | Gains `groups: ParallelGroupRange[]`                           |
+| `WorkflowStep` union                | **No change** — stays `PromptStep \| ScriptStep`               |
+| `PromptFile.steps` type             | **No change** — stays `WorkflowStep[]`                         |
+| `priorContext` resolution           | **No change** — `allPrompts[i]` still returns the right step   |
+| `getProgress().total`               | **No change** — step count is correct                          |
+| `WorkflowAttemptTarget.stepIndex`   | **No change** — flat indices work as-is                        |
+| `captureOutputInit(stepIndex, ...)` | **No change** — each step has its own flat index               |
+| `PromptFileParser`                  | Flattens `parallel:` groups into `steps` + populates `groups`  |
+| `PromptQueue.loadFromFile()`        | Reads `groups` from file — no expand/translate step needed     |
+| `mergeDiskSteps()`                  | Operates on flat `WorkflowStep[]` — already compatible         |
+| `WorkflowExecutor`                  | Detects group membership via `groups`; fans out grouped steps  |
+
+**`PromptQueue` helpers:**
+
+```typescript
+/** Returns the ParallelGroupRange this step belongs to, or undefined if sequential */
+getGroupForStep(stepIndex: number): ParallelGroupRange | undefined
+
+/** Returns true if stepIndex is the FIRST step of a parallel group */
+isGroupStart(stepIndex: number): boolean
+```
+
+---
+
+### PromptQueue State
+
+`PromptQueue.state` gains `groups: ParallelGroupRange[]` alongside the existing flat `steps`
+array. All other `QueueState` fields (`currentIndex`, `completedIndices`, `results`, etc.)
+are unchanged — they operate on flat step indices as they always have.
+
+For step numbering (e.g., "Prompt 3/7"), each step in a parallel group gets its own sequential
+integer — the same scheme as sequential steps. A workflow with 1 setup step, a 3-step parallel
+group, and 1 synthesis step has steps numbered 1–5. The group boundary is communicated by
+`groups` metadata and visual grouping in the UI, not the step numbers themselves.
 
 ### Current Architecture Context (as of April 2026)
 
@@ -288,17 +371,17 @@ contained steps, with a header bar showing the group label and shared properties
 │  ╭─ Parallel Group (3 steps) ────────────────╮  │
 │  │ ⊞ failFast: on                            │  │
 │  ├───────────────────────────────────────────┤  │
-│  │  2a. research-auth            ● running   │  │
-│  │      Research authentication...           │  │
+│  │  2. research-auth             ● running   │  │
+│  │     Research authentication...            │  │
 │  ├───────────────────────────────────────────┤  │
-│  │  2b. research-db              ✓ complete  │  │
-│  │      Research database schema...          │  │
+│  │  3. research-db               ✓ complete  │  │
+│  │     Research database schema...           │  │
 │  ├───────────────────────────────────────────┤  │
-│  │  2c. research-perf            pending     │  │
-│  │      Profile hot paths...                 │  │
+│  │  4. research-perf             pending     │  │
+│  │     Profile hot paths...                  │  │
 │  ╰───────────────────────────────────────────╯  │
 ├─────────────────────────────────────────────────┤
-│  3. synthesize                       pending    │
+│  5. synthesize                       pending    │
 │     Based on the research...                    │
 └─────────────────────────────────────────────────┘
 ```
@@ -311,7 +394,10 @@ contained steps, with a header bar showing the group label and shared properties
   left border accent (`border-l-4 border-parallel-group-accent`) to visually group steps
 - **Indented sub-steps**: Each parallel step is rendered with left padding (`pl-4`) inside
   the group container, using the existing `WorkflowStepItem` component
-- **Step numbering**: Sub-steps use "2a", "2b", "2c" format (parent group number + letter)
+- **Step numbering**: Sub-steps use sequential integers from the global step sequence (e.g.,
+  if the group starts at step 2 and has 3 steps, they are numbered 2, 3, 4). This is fully
+  compatible with the existing `priorContext` integer index system — `priorContext: [2, 3, 4]`
+  on the synthesis step works with no schema or runtime changes.
 - **Status icons**: Each sub-step shows its own status icon (pending, running, completed,
   failed) independently
 
@@ -359,8 +445,8 @@ components handle each step's output independently via `DashboardBroadcastHub`.
 Parallel steps work seamlessly with the existing terminal infrastructure:
 
 - Each parallel step spawns its own PTY session via `PtyProcessManager.spawnPty()`
-- Sessions are tagged with `promptNumber` (the group's step number) and
-  `stepName` (e.g., "2a. research-auth")
+- Sessions are tagged with `promptNumber` (the step's own sequential integer, e.g., 2, 3, 4)
+  and `stepName` (e.g., "2. research-auth")
 - The session rail shows all parallel step terminals as separate tabs
 - Users can click between tabs to monitor or interact with any parallel step
 - Controller arbitration works independently per session
@@ -395,8 +481,8 @@ The terminal infrastructure is already built and supports parallel steps out of 
   - Frozen overlay for ended sessions ("Process exited")
 
 **For parallel steps:** Each step in a parallel group gets its own PTY session via
-`PtyProcessManager.spawnPty()`, tagged with the group index and sub-step label
-(e.g., `stepName: "2a. research-auth"`, `promptNumber: 2`). The session rail displays
+`PtyProcessManager.spawnPty()`, tagged with the step's sequential integer and name
+(e.g., `stepName: "2. research-auth"`, `promptNumber: 2`). The session rail displays
 all parallel step terminals as tabs, and the user can switch between them to monitor
 progress or interact with any step. This works identically in headless mode (no terminal
 shown) and interactive mode (terminal tabs in the rail).
@@ -457,29 +543,29 @@ priorContext, additionalArgs, toolPermissions).
 
 ## Files Changed
 
-| File                                                       | Change                                             |
-| ---------------------------------------------------------- | -------------------------------------------------- |
-| `schemas/prompt-schema.json`                               | Add `parallelGroup` to `workflowStep` oneOf union  |
-| `src/types/FlightPathTypes.ts`                             | Add `ParallelGroup` interface, update `WorkflowStep` union |
-| `src/types/DashboardConstants.ts`                          | Add `STEP_TYPES.PARALLEL` constant                 |
-| `src/types/WebviewMessageTypes.ts`                         | Add parallel group message types for UI updates    |
-| `src/flightpath/PromptFileParser.ts`                       | Parse `parallel:` groups with validation           |
-| `src/flightpath/PromptQueue.ts`                            | State machine handles `ParallelGroup` as a unit    |
-| `src/flightpath/WorkflowExecutor.ts`                       | Fan-out logic for parallel groups                  |
-| `src/flightpath/IntegrationFactory.ts`                     | Support creating N harness instances for a group   |
-| `src/flightpath/harness/PtyProcessManager.ts`              | Tag parallel step sessions with group/sub-step IDs |
-| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx` | Render parallel groups with wrapper component |
-| `src/ui/webview-react/components/prompts/ParallelGroupPanel.tsx` | **New component**: parallel group wrapper with header, failFast toggle, drag-and-drop |
-| `src/ui/webview-react/components/layout/OutputSection.tsx` | Group header dividers, parallel output routing   |
-| `src/ui/webview-react/components/output/TerminalView.tsx`  | Already supports multi-tab — no changes needed   |
-| `src/ui/webview-react/components/output/TerminalInstance.tsx` | Already supports multi-session — no changes needed |
-| `src/ui/DashboardBroadcastHub.ts`                          | Multi-step output tagging and fan-out              |
-| `src/ui/webview-react/components/prompts/PromptsPanel.tsx` | Indented cluster in prompt list (if used separately) |
-| `src/ui/webview-react/store/workflowStore.ts`              | Handle parallel group state, step reordering across groups |
-| `src/ui/webview-react/store/terminalStore.ts`              | Already supports multi-session — no changes needed |
-| `src/test/promptFileParser.test.ts`                        | Parallel group parsing tests                       |
-| `src/test/workflowExecutor.test.ts`                        | Parallel execution + failure handling tests        |
-| `src/test/parallelGroupPanel.test.tsx`                     | UI component tests for drag-and-drop, failFast toggle |
+| File                                                             | Change                                                                                                                                       |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schemas/prompt-schema.json`                                     | Add `parallelGroup` to new `workflowStepsItem` definition used in `steps` array only (not `finalStep`)                                       |
+| `src/types/FlightPathTypes.ts`                                   | Add `ParallelGroupRange` interface; add `groups?` to `PromptFile` and `QueueState`; `WorkflowStep` and `PromptFile.steps` type **unchanged** |
+| `src/types/DashboardConstants.ts`                                | Add `STEP_TYPES.PARALLEL` constant                                                                                                           |
+| `src/types/WebviewMessageTypes.ts`                               | Add parallel group message types for UI updates                                                                                              |
+| `src/flightpath/PromptFileParser.ts`                             | Parse `parallel:` groups into `ParallelGroupItem` at file layer; validate constraints                                                        |
+| `src/flightpath/PromptQueue.ts`                                  | Flatten `WorkflowFileStep[]` to `WorkflowStep[]` + `groups: ParallelGroupRange[]`; add `getGroupForStep()` / `isGroupStart()` helpers        |
+| `src/flightpath/WorkflowExecutor.ts`                             | Fan-out logic using `isGroupStart()` / `getGroupForStep()`                                                                                   |
+| `src/flightpath/IntegrationFactory.ts`                           | No interface changes — `createForExecution(harness)` already creates isolated instances; called N times by the executor                      |
+| `src/flightpath/harness/PtyProcessManager.ts`                    | Tag parallel step sessions with their flat step index as `promptNumber`                                                                      |
+| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx`  | Use `groups` from `QueueState` to render parallel group wrappers                                                                             |
+| `src/ui/webview-react/components/prompts/ParallelGroupPanel.tsx` | **New component**: parallel group wrapper with header, failFast toggle, drag-and-drop                                                        |
+| `src/ui/webview-react/components/layout/OutputSection.tsx`       | Group header dividers, parallel output routing                                                                                               |
+| `src/ui/webview-react/components/output/TerminalView.tsx`        | Already supports multi-tab — no changes needed                                                                                               |
+| `src/ui/webview-react/components/output/TerminalInstance.tsx`    | Already supports multi-session — no changes needed                                                                                           |
+| `src/ui/DashboardBroadcastHub.ts`                                | Broadcast output tagged with flat step index (already works — no structural changes)                                                         |
+| `src/ui/webview-react/components/prompts/PromptsPanel.tsx`       | Indented cluster in prompt list (if used separately)                                                                                         |
+| `src/ui/webview-react/store/workflowStore.ts`                    | Consume `groups` from `QueueState`; handle step reordering across group boundaries                                                           |
+| `src/ui/webview-react/store/terminalStore.ts`                    | Already supports multi-session — no changes needed                                                                                           |
+| `src/test/promptFileParser.test.ts`                              | Parallel group parsing and validation tests                                                                                                  |
+| `src/test/workflowExecutor.test.ts`                              | Parallel execution + failure handling tests                                                                                                  |
+| `src/test/parallelGroupPanel.test.tsx`                           | UI component tests for drag-and-drop, failFast toggle                                                                                        |
 
 ---
 
@@ -487,33 +573,46 @@ priorContext, additionalArgs, toolPermissions).
 
 ### Phase 1 — Schema + Parsing + Sequential Fallback
 
-1. **Add `ParallelGroup` to JSON schema and `FlightPathTypes.ts`**
-   - Add `parallelGroup` definition to `schemas/prompt-schema.json`
-   - Add `ParallelGroup` interface to `FlightPathTypes.ts`:
+1. **Add `ParallelGroupRange` to `FlightPathTypes.ts` and update schema**
+   - Add `ParallelGroupRange` interface to `FlightPathTypes.ts`:
      ```typescript
-     interface ParallelGroup {
-       kind: "parallel";
-       steps: WorkflowStep[];
+     interface ParallelGroupRange {
+       startIndex: number; // inclusive flat index of first step in group
+       endIndex: number; // inclusive flat index of last step in group
        failFast: boolean; // default: true
+       status: "pending" | "running" | "completed" | "failed";
      }
      ```
-   - Update `WorkflowStep` union: `type WorkflowStep = PromptStep | ScriptStep | ParallelGroup`
+   - Add `groups?: ParallelGroupRange[]` to `PromptFile` and `QueueState`
+   - `WorkflowStep` stays `PromptStep | ScriptStep` — **no changes to this union**
+   - `PromptFile.steps` stays `WorkflowStep[]` — **no type change**
    - Add `STEP_TYPES.PARALLEL = "parallel"` constant to `DashboardConstants.ts`
+   - **Schema**: Add a `workflowStepsItem` definition (used only in the `steps` array) that
+     extends `workflowStep` with `parallelGroup` as an additional oneOf option. `finalStep`
+     continues referencing `workflowStep` (no parallel groups allowed there). The `parallel:`
+     key is schema-only — the parser expands it; it does NOT appear in the type system.
 
-2. **Update `PromptFileParser` to parse `parallel:` groups**
-   - Parse `parallel:` key in steps array into `ParallelGroup` objects
+2. **Update `PromptFileParser` to parse and flatten `parallel:` groups**
+   - When `parallel:` key is encountered in the `steps` array, flatten the sub-steps directly
+     into the output `steps` array and record the range in `groups`
+   - Output is `PromptFile` with flat `steps: WorkflowStep[]` + populated `groups` — no
+     intermediate nested type, no translate step needed at load time
    - Validate constraints at parse time:
-     - Reject `resumeSession: true` within parallel steps
-     - Reject `sessionId` referencing sibling parallel steps
+     - Reject multiple steps in the same group that all have `resumeSession: true` with no `sessionId` (they'd all target the same "most recent" session)
+     - Reject duplicate `sessionId` values within the same group (two steps cannot resume the same session simultaneously)
      - Reject nested parallel groups
      - Reject `mcpServers` containing `"flightpath"` (dynamic queue extension)
-     - Reject `priorContext` referencing steps within the same group
+     - Reject `priorContext` referencing steps within the same group (cross-reference `groups` range)
    - Provide clear error messages for each validation failure
+   - `PromptQueue.loadFromFile()`: reads `groups` from the parsed `PromptFile` — no expand step
+     needed. Add `getGroupForStep(i)` and `isGroupStart(i)` helpers.
+   - `mergeDiskSteps()` operates on flat `WorkflowStep[]` as before — no changes needed
 
 3. **`WorkflowExecutor` runs parallel group steps sequentially (fallback)**
-   - Detect `ParallelGroup` in execution loop
-   - Iterate through group steps sequentially (correct behavior, not parallel yet)
-   - Track group state (all steps must complete before continuing)
+   - Detect `isGroupStart(state.currentIndex)` in the execution loop
+   - Get the group range via `getGroupForStep(state.currentIndex)`
+   - Run all steps in `startIndex..endIndex` sequentially (correct result, not parallel yet)
+   - After all group steps complete, execution continues normally at `endIndex + 1`
    - Unblocks schema and UI work without concurrent execution complexity
 
 4. **UI: `ParallelGroupPanel` component**
@@ -522,7 +621,7 @@ priorContext, additionalArgs, toolPermissions).
      - Header bar: `⊞ Parallel Group (N steps)` + `failFast` toggle pill
      - Rounded border container with left accent border
      - Indented sub-steps using existing `WorkflowStepItem` component
-     - Sub-step numbering: "2a", "2b", "2c" format
+     - Sub-step numbering: sequential integers from the global step sequence (2, 3, 4…)
    - Integrate into `WorkflowStepsPanel.tsx`:
      - Detect `ParallelGroup` in steps array
      - Render `ParallelGroupPanel` wrapper for parallel groups, `SortableWorkflowStepWrapper` for sequential steps
@@ -547,11 +646,17 @@ priorContext, additionalArgs, toolPermissions).
 ### Phase 2 — True Concurrent Execution
 
 7. **`WorkflowExecutor` fans out with `Promise.allSettled`**
-   - Create parallel group execution context
-   - Spawn N harness instances via `IntegrationFactory.createForExecution()`
-   - Each step runs on its own harness instance independently
-   - Capture output via existing callback infrastructure
-   - Merge results back into parent queue state when all complete
+   - When `isGroupStart(state.currentIndex)` is true, enter parallel fan-out mode
+   - Get the group range: all steps from `startIndex` to `endIndex`
+   - For each step in the group: call `context.getIntegrationForPrompt(step, harness)` to obtain
+     a dedicated integration. `WorkflowExecutionContext.getIntegrationForPrompt` is provided by
+     `WorkflowInstance` and already supports creating isolated instances via
+     `IntegrationFactory.createForExecution()` — no changes to the callback signature needed
+   - Wrap each step in its own `executeSinglePrompt()` call (no structural changes to that method)
+   - Fan out with `Promise.allSettled(groupSteps.map(step => executeSinglePrompt(...)))`
+   - After settling: advance `currentIndex` past `endIndex`, merge results, update group status
+   - Capture output via existing `captureOutputInit(stepIndex, ...)` callbacks — each step uses
+     its own flat `stepIndex`, so the output infrastructure needs no changes
 
 8. **`failFast` cancellation logic**
    - Monitor step failures during parallel execution
@@ -565,7 +670,7 @@ priorContext, additionalArgs, toolPermissions).
    - Handle streaming chunks from multiple sources simultaneously
 
 10. **Terminal integration for parallel steps**
-    - Tag PTY sessions with group index and sub-step label
+    - Tag PTY sessions with each step's sequential integer (`promptNumber`) and name
     - Update `PtyProcessManager.spawnPty()` to accept `promptNumber` and `stepName`
     - Session rail already handles multiple tabs — no UI changes needed
 
@@ -579,22 +684,20 @@ priorContext, additionalArgs, toolPermissions).
 
 ### Phase 3 — Polish (Optional)
 
-12. **Context passing between parallel steps and synthesis**
-    - Design `priorContext` references for parallel group results
-    - e.g., `priorContext: [2, 3, 4]` to reference specific parallel step outputs
-    - Or context file references: `@.flightpath/temp/parallel-results.md`
+12. ~~**Context passing between parallel steps and synthesis**~~ — **No work needed.**
+    Because steps are stored flat, `priorContext: [2, 3, 4]` on the synthesis step already
+    works with zero changes to the `priorContext` resolution logic.
 
 ---
 
 ## Open Questions
 
-1. **Context passing between parallel steps and the synthesis step:** How does the
-   synthesis prompt reference what the parallel steps found? Today this is done via
-   `priorContext` (with values like `"all"`, `"previous"`, or `[1, 3]` for specific
-   prompt indices) or via `responseText` stored in `_runtime`. For parallel groups, each
-   step has its own session. The synthesis step could use `priorContext: [2, 3, 4]` to
-   reference specific parallel step outputs by index — worth designing when we get there.
-   Alternative: write results to a temp file and reference via `@.flightpath/temp/output.md`.
+1. ✅ **Context passing between parallel steps and the synthesis step:** Because parallel
+   steps use sequential integers in the global step sequence (e.g., steps 2, 3, 4 for a
+   3-step parallel group), the synthesis step can use `priorContext: [2, 3, 4]` with the
+   existing integer-index system — no schema or runtime changes needed. The temp file
+   alternative (`@.flightpath/temp/output.md`) remains available if users prefer it, but
+   `priorContext` integer arrays work out of the box.
 
 2. **Headless vs interactive mode for parallel steps:** Both modes are supported. The
    terminal infrastructure (`PtyProcessManager` + `TerminalView` + `TerminalInstance`)
@@ -607,11 +710,14 @@ priorContext, additionalArgs, toolPermissions).
    per step, matching the existing `endCondition` semantics. Each step evaluates its own
    end condition independently via `EndConditionEvaluator` in an isolated child process.
 
-4. **Session resume after a parallel group:** Can a step after the group use
-   `resumeSession: true`? No — there are N completed sessions from the group, not one.
-   The step after a parallel group always starts a fresh session unless `sessionId`
-   explicitly references one of the group's step IDs (e.g., `sessionId: 2` to resume
-   the session from step 2 in the parallel group).
+4. **Session resume within and after a parallel group:** `resumeSession: true` is allowed
+   inside a parallel group as long as no two steps in the group resolve to the same session.
+   The canonical safe pattern: `resumeSession: true` + a unique `sessionId` per step. A single
+   step using `resumeSession: true` without a `sessionId` is best-effort (resumes most recent
+   session). Multiple steps using `resumeSession: true` without `sessionId` is a parse-time
+   error (they'd all target the same "most recent" session). After a parallel group,
+   `resumeSession: true` without a `sessionId` resumes the last sub-step's session, which is
+   deterministic but unusual — prefer explicit `sessionId`.
 
 5. **Working file persistence during parallel execution:** The working file is updated
    sequentially as steps complete. If the workflow is interrupted mid-parallel-group,
@@ -636,29 +742,31 @@ priorContext, additionalArgs, toolPermissions).
 
 ### Is the plan ready to implement?
 
-**Yes, with the following understanding:** The architecture is well-defined, the UI design
-is clear, and the existing infrastructure (terminal, output capture, state machine) already
-supports the concurrent execution model. No major blockers exist.
+**Yes, with the following understanding (updated after implementation audit):** The internal
+storage model has been clarified (flat `state.steps` + companion `groups` array — see the
+"Internal Storage Model" section above). All other architectural claims verified against the
+actual codebase. No blockers remain.
 
 ### Prerequisites already met
 
 ✅ **Terminal infrastructure**: `PtyProcessManager` + `TerminalView` + `TerminalInstance`
-   fully support multiple concurrent PTY sessions with session rail, controller
-   arbitration, and per-prompt terminal tabs. No additional terminal work needed.
+fully support multiple concurrent PTY sessions with session rail, controller
+arbitration, and per-prompt terminal tabs. No additional terminal work needed.
 
 ✅ **Output capture infrastructure**: `captureOutputInit`, `captureChunk`, `captureEvents`,
-   `captureCompletedOutput` callbacks already exist in `WorkflowExecutionContext`.
-   `DashboardBroadcastHub` already handles multi-source output fan-out.
+`captureCompletedOutput` callbacks already exist in `WorkflowExecutionContext`.
+`DashboardBroadcastHub` already handles multi-source output fan-out.
 
 ✅ **State machine**: `WorkflowStateMachine` owns runtime state transitions, extracted from
-   `PromptQueue`. Clean separation makes adding parallel group state straightforward.
+`PromptQueue`. Clean separation makes adding parallel group state straightforward.
 
-✅ **Harness lifecycle**: `IntegrationFactory.createForExecution()` creates per-run isolated
-   integrations. No shared state between executions — perfect for parallel step isolation.
+✅ **Harness lifecycle**: `IntegrationFactory.createForExecution(harness)` creates per-run
+isolated integrations (verified: exists at `src/flightpath/IntegrationFactory.ts:103`).
+No shared state between executions — calling it N times gives N independent instances.
 
 ✅ **UI component patterns**: `WorkflowStepsPanel.tsx` already uses `dnd-kit` for drag-and-drop,
-   `SortableWorkflowStepWrapper` for sortable items, and `WorkflowStepItem` for step rendering.
-   The parallel group wrapper is a natural extension of these patterns.
+`SortableWorkflowStepWrapper` for sortable items, and `WorkflowStepItem` for step rendering.
+The parallel group wrapper is a natural extension of these patterns.
 
 ### Features that need to be built first
 
@@ -673,7 +781,8 @@ supports the concurrent execution model. No major blockers exist.
 - Wrapper shows header bar with group label (`⊞ Parallel Group (N steps)`) and
   clickable `failFast` toggle pill
 - Sub-steps indented inside wrapper, using existing `WorkflowStepItem` component
-- Sub-step numbering: "2a", "2b", "2c" (parent group number + letter suffix)
+- Sub-step numbering: sequential integers from the global step sequence (not "2a/2b" suffixes
+  or "2.1/2.2" notation — see step numbering decision below)
 - Drag-and-drop: steps can be dragged into/out of/between groups; groups can be
   dragged as units
 - Group wrapper uses `dnd-kit` nested sortable pattern (container + items)
@@ -686,51 +795,72 @@ supports the concurrent execution model. No major blockers exist.
 
 **Terminal View:**
 
-- Each parallel step gets its own PTY session tagged with `promptNumber` (group number)
-  and `stepName` (e.g., "2a. research-auth")
+- Each parallel step gets its own PTY session tagged with `promptNumber` (the step's own
+  sequential integer) and `stepName` (e.g., "2. research-auth")
 - Session rail shows all parallel step terminals as tabs — no UI changes needed
 
 ### Key Design Decisions Made
 
-1. **ParallelGroup has exactly one shared property: `failFast`**. All other configuration
+1. **Flat-everywhere storage model.** `steps` is always a flat `WorkflowStep[]` at both the
+   file and runtime layers. Group membership is a companion `groups: ParallelGroupRange[]`.
+   No `WorkflowFileStep` union type, no two-layer translation. The `parallel:` key is YAML
+   syntax only — the parser expands it immediately. This was chosen (over a nested model) because
+   we're pre-release and can afford the cleanest design: one type, no translation, `PromptFile`
+   interface barely changes, and `priorContext` / all other consumers are unaffected.
+
+2. **ParallelGroup has exactly one shared property: `failFast`**. All other configuration
    is per-step (harness, model, agent, endCondition, etc.).
 
-2. **Interactive mode is fully supported**. Terminal infrastructure already handles
+3. **Interactive mode is fully supported**. Terminal infrastructure already handles
    multiple concurrent sessions with session rail. No restrictions needed.
 
-3. **Nested parallel groups are disallowed in Phase 1**. Flat groups only to keep
+4. **Nested parallel groups are disallowed in Phase 1**. Flat groups only to keep
    complexity manageable.
 
-4. **Dynamic queue extension (`mcpServers: ["flightpath"]`) is disallowed** within
+5. **Dynamic queue extension (`mcpServers: ["flightpath"]`) is disallowed** within
    parallel groups to avoid undefined ordering semantics.
 
-5. **`priorContext` referencing steps within the same parallel group is disallowed**
+6. **`priorContext` referencing steps within the same parallel group is disallowed**
    because those steps haven't completed yet.
 
-6. **Parallel groups are only allowed in the queue phase**, not inside `finalStep` loops.
+7. **Parallel groups are only allowed in the queue phase**, not inside `finalStep` loops.
    The `finalStep` must be a single `PromptStep` or `ScriptStep`.
 
-7. **Steps after a parallel group cannot use `resumeSession: true`** because there are
-   N completed sessions from the group, not one. They can use `sessionId` to reference
-   a specific parallel step's session.
+8. **Session resume in parallel groups is allowed with uniqueness enforcement.** `resumeSession: true`
+   + unique `sessionId` per step is the canonical pattern. A single step with `resumeSession: true`
+   and no `sessionId` is best-effort (resumes most recent harness session). The only parse-time
+   error: multiple steps in the same group resolving to the same session (duplicate `sessionId`,
+   or multiple steps with `resumeSession: true` and no `sessionId`).
+
+9. **Parallel step numbering uses sequential integers, not letter suffixes or sub-indices.**
+   Each step in a parallel group gets its own integer in the global step sequence (e.g.,
+   a 3-step parallel group starting at position 2 produces steps 2, 3, 4). Rejected
+   alternatives:
+   - **"2a, 2b, 2c"**: would break `priorContext` (which expects integer indices); offers
+     no benefit over visual UI grouping; unwieldy at scale (100 parallel steps → "2a"…"2cv")
+   - **"2.1, 2.2, 2.3"**: same `priorContext` incompatibility; fractional indices add
+     parsing complexity for no gain
+     Sequential integers keep the existing `priorContext: [2, 3, 4]` syntax working on the
+     synthesis step with zero changes to the schema or runtime.
 
 ### Open Questions (resolved)
 
 - ✅ Headless vs interactive: **Both supported** (terminal infrastructure handles it)
 - ✅ End condition interaction: **Per step** (matches existing semantics)
-- ✅ Session resume after group: **No** (N sessions, not one; use `sessionId` to reference specific step)
+- ✅ Session resume in/after group: `resumeSession: true` + unique `sessionId` per step is fully allowed (including cross-group resumption). Single step `resumeSession: true` + no sessionId is best-effort. Multiple steps without sessionId or with duplicate sessionId in same group → parse-time error. Runtime fallback (session not found → new session + warning) applies as for sequential steps.
 - ✅ Working file persistence: **Per-step `_runtime.completedAt`** (matches existing tracking)
 - ✅ Resource limits: **Future consideration** (`flightpath.maxParallelSteps` setting)
 - ✅ `finalStep` interaction: **Groups only in queue phase** (finalStep is single step)
+- ✅ Step numbering: **Sequential integers** — no letter suffixes (2a/2b) or sub-indices (2.1/2.2).
+  Each parallel step occupies its own integer in the global sequence. `priorContext` arrays
+  work unchanged. Visual grouping is communicated by the YAML structure and UI wrapper.
 
 ### Remaining Open Questions (to be resolved during implementation)
 
-1. **Context passing to synthesis step:** Should we support `priorContext` arrays
-   referencing parallel step outputs by index (e.g., `[2, 3, 4]`), or should users
-   write results to a temp file and reference it via `@.flightpath/temp/output.md`?
-   The array approach is cleaner but requires updating the `priorContext` type to
-   support "step indices that may not match prompt numbers". Temp file approach works
-   today with no schema changes.
+1. ✅ **Context passing to synthesis step:** Because parallel steps use sequential integers
+   (not "2a/2b" notation), `priorContext: [2, 3, 4]` on the synthesis step works with the
+   existing system and no schema changes. Step indices in `priorContext` already match step
+   numbers — no special handling needed for parallel steps.
 
 2. **Undo/redo for parallel groups:** The undo system (`zundo` + `temporal` store)
    snapshots the steps array. When a parallel group is undone, do we restore the

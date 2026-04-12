@@ -10,13 +10,22 @@ The new `PriorContextSelect` introduced a local `customError` state + red-border
 
 ## Affected Dropdowns
 
-| Dropdown                    | Location     | Validation scenario                                                            |
-| --------------------------- | ------------ | ------------------------------------------------------------------------------ |
-| Model                       | Both drawers | Loaded model ID not in `getModelsForHarness(harness)` list                     |
-| Agent                       | Both drawers | Loaded agent path not found in `availableAgents`                               |
-| Skills                      | Both drawers | One or more loaded skills not found in `availableSkills`                       |
-| Prior Context (range input) | Both drawers | Invalid range notation while in custom mode _(already implemented)_            |
-| Harness                     | Both drawers | Not a known harness ID _(edge case; `HarnessDropdown` always has all options)_ |
+| Dropdown                    | Location         | Validation scenario                                                            |
+| --------------------------- | ---------------- | ------------------------------------------------------------------------------ |
+| Model                       | Both drawers     | Loaded model ID not in `getModelsForHarness(harness)` list                     |
+| Agent                       | Both drawers     | Loaded agent path not found in `availableAgents`                               |
+| Skills                      | Both drawers     | One or more loaded skills not found in `availableSkills`                       |
+| Prior Context (range input) | Both drawers     | Invalid range notation while in custom mode _(already implemented)_            |
+| Harness                     | Both drawers     | Not a known harness ID _(edge case; `HarnessDropdown` always has all options)_ |
+| Session ID (parallel group) | PropertiesDrawer | Two or more steps in the same parallel group share the same `sessionId` value  |
+
+> **Note on `sessionId` conflict detection:** This is a parallel-group-specific validation — it
+> requires cross-step context (knowing which other steps share the same group) that is not
+> available within a single step's `PropertiesDrawer` instance. The warning must therefore be
+> computed at the workflow level (e.g., in `workflowStore.ts` or the parent panel that renders
+> the group) and passed down to each `PropertiesDrawer` as a `sessionIdWarning?: string` prop.
+> This is deferred to the parallel steps implementation — it is not part of the initial
+> dropdown validation utility work.
 
 ---
 
@@ -204,3 +213,31 @@ The rendering is intentionally not abstracted into a wrapper component. Each dro
 - Validating global VS Code settings values — those are the user's responsibility in the settings UI.
 - Validating values that are `undefined` (inherited) — those carry no explicit user choice at this level.
 - Validating `sessionId` or `additionalArgs` free-text fields — content is too open-ended to validate statically.
+
+---
+
+## Broader Error Handling Gap (Out of Scope for This Plan)
+
+The current FlightPath error surface has three tiers:
+
+| Tier | Mechanism | User-visible result |
+|---|---|---|
+| Schema validation | AJV at parse time in `PromptFileParser` | VS Code diagnostic (squiggly + Problems panel) |
+| Semantic validation | Business rule checks in `PromptFileParser` | `platform.error()` toast notification |
+| Runtime fallbacks | Best-effort degradation (e.g., session not found → new session) | Log warning only — **not surfaced to user** |
+
+**The gap:** Runtime warnings are logged but never reach the dashboard or the user. A workflow
+that silently starts fresh sessions when it shouldn't, skips steps due to unmet pre-conditions,
+or uses a model that falls back to a harness default — the user has no visibility into any of
+this during or after execution.
+
+**Recommended future plan (separate backlog item):** A `WorkflowDiagnosticsService` that collects
+warnings during execution and surfaces them:
+- In the Output section as a `[Warning]` label on the relevant step
+- As a summary badge on the step in the Prompts Panel (yellow ⚠ icon)
+- Optionally in a dedicated "Diagnostics" tab in the workflow drawer
+
+This would cover runtime warnings (session fallback, model fallback, pre-condition skip) as
+well as the parse-time semantic errors (currently shown only as a toast that disappears). The
+dropdown validation work in this plan addresses the _before-run_ static check; the future plan
+would address _during/after-run_ dynamic feedback.
