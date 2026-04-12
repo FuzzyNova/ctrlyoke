@@ -623,9 +623,11 @@ export class CliIntegration extends HarnessIntegration {
 
     // Dispatch permission args at the integration layer so providers don't have to
     // limit permissions to headless-only in buildCliArgs().
+    // Use session.resolvedProperties (prompt > workflow > settings) so prompt-level
+    // overrides take precedence over workflow-level defaults.
     const permissionArgs =
       this.provider.buildPermissionArgs?.(
-        session.workflowContext?.resolvedProperties?.toolPermissions
+        session.resolvedProperties?.toolPermissions
       ) ?? [];
     baseArgs.push(...permissionArgs);
 
