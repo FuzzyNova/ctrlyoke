@@ -593,7 +593,7 @@ export const WorkflowStepsPanel: React.FC<{
             title="Collapse to sidebar"
             aria-label="Collapse steps to sidebar"
           >
-            <i className="codicon codicon-arrow-left text-[12px]" />
+            <i className="codicon codicon-chevron-left text-[12px]" />
           </button>
         )}
         <i className="codicon codicon-list-unordered text-[14px] ml-1" />

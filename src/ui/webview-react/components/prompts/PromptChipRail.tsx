@@ -9,8 +9,10 @@
  * available space — no fixed width is applied here.
  */
 import React, { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useEditorStore } from "@store/editorStore";
+import { useUiStore } from "@store/uiStore";
 import { sendMessage } from "@hooks/useMessageHandler";
 import {
   usePromptStatus,
@@ -22,6 +24,9 @@ import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
   FINAL_STEP_PHASES,
+  STEP_STATUS,
+  RUNNER_IDS,
+  type StepStatus,
 } from "../../types/messages";
 import {
   DndContext,
@@ -40,6 +45,95 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 
+// ─── ChipContextMenu ─────────────────────────────────────────────────────────
+
+type ContextMenuItem = {
+  label: string;
+  icon: string;
+  disabled: boolean;
+  disabledTitle?: string;
+  onClick: () => void;
+};
+
+type ContextMenuState = {
+  x: number;
+  y: number;
+  items: ContextMenuItem[];
+};
+
+type ChipContextMenuProps = ContextMenuState & { onClose: () => void };
+
+/**
+ * Fixed-position context menu rendered into document.body via portal.
+ *
+ * Close behaviour: a `pointerdown` listener on `document` closes the menu when
+ * the user clicks or right-clicks anywhere outside it. `pointerdown` fires
+ * before `contextmenu`, so right-clicking another chip will close this menu
+ * first, then the chip's own `onContextMenu` handler opens a new one.
+ *
+ * Clicks *inside* the menu stop `pointerdown` propagation so the document
+ * listener doesn't fire and menu-item `click` events still reach their handler.
+ */
+function ChipContextMenu({
+  x,
+  y,
+  items,
+  onClose,
+}: ChipContextMenuProps) {
+  // Clamp so the menu doesn't overflow the right edge of the viewport
+  const menuWidth = 170;
+  const adjustedX = Math.min(x, window.innerWidth - menuWidth - 4);
+
+  useEffect(() => {
+    const close = () => onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      style={{ position: "fixed", top: y, left: adjustedX, zIndex: 9999 }}
+      className="bg-editor-bg border border-panel-border rounded shadow-lg py-0.5 min-w-[160px]"
+      // Stop pointerdown from reaching the document listener so item clicks work
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+    >
+      {items.map((item, i) => (
+        <button
+          key={i}
+          className={`flex items-center gap-1.5 w-full px-2.5 py-1 text-[11px] text-left transition-colors ${
+            item.disabled
+              ? "text-description-fg cursor-not-allowed opacity-50"
+              : "text-foreground hover:bg-toolbar-hover-bg cursor-pointer"
+          }`}
+          disabled={item.disabled}
+          title={item.disabled ? item.disabledTitle : undefined}
+          onClick={() => {
+            if (item.disabled) return;
+            onClose();
+            item.onClick();
+          }}
+        >
+          <i className={`codicon ${item.icon} text-[10px]`} />
+          {item.label}
+        </button>
+      ))}
+    </div>,
+    document.body
+  );
+}
+
 // ─── ChipContent ─────────────────────────────────────────────────────────────
 
 type ChipProps = {
@@ -47,25 +141,19 @@ type ChipProps = {
   slotNumber: number;
   status: ReturnType<ReturnType<typeof usePromptStatus>>;
   contextPct: number | undefined;
-  canSetStart: boolean;
-  startPositionDirection: "rewind" | "forward";
   canReorder: boolean;
   onChipClick: () => void;
-  onSetStart: (e: React.MouseEvent) => void;
+  onOpenContextMenu: (x: number, y: number) => void;
 };
 
 function ChipContent({
   slotNumber,
   status,
   contextPct,
-  canSetStart,
-  startPositionDirection,
   canReorder,
   onChipClick,
-  onSetStart,
+  onOpenContextMenu,
 }: ChipProps) {
-  const hasSecondRow = canSetStart || contextPct !== undefined;
-
   return (
     <div
       className={`flex flex-col px-1 py-1 border-b border-panel-border hover:bg-toolbar-hover-bg transition-colors${canReorder ? " cursor-grab active:cursor-grabbing" : " cursor-pointer"}`}
@@ -78,7 +166,12 @@ function ChipContent({
           onChipClick();
         }
       }}
-      title={`Prompt ${slotNumber}`}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onOpenContextMenu(e.clientX, e.clientY);
+      }}
+      title={`Prompt ${slotNumber} — right-click for options`}
     >
       {/* Row 1: slot number + status icon */}
       <div className="flex items-center justify-between w-full">
@@ -88,30 +181,61 @@ function ChipContent({
         <StatusIcon status={status} className="text-[16px]" />
       </div>
 
-      {/* Row 2: set-start button + context % (only when relevant) */}
-      {hasSecondRow && (
-        <div className="flex items-center justify-between w-full mt-0.5">
-          {canSetStart ? (
-            <button
-              className="flex items-center justify-center w-[14px] h-[14px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
-              onClick={onSetStart}
-              title={`Start from prompt ${slotNumber}`}
-              aria-label={`Set start position to prompt ${slotNumber}`}
-            >
-              <i
-                className={`codicon ${startPositionDirection === "rewind" ? "codicon-debug-reverse-continue" : "codicon-debug-step-over"} text-[9px]`}
-              />
-            </button>
-          ) : (
-            <span />
-          )}
-          {contextPct !== undefined && (
-            <span className="text-[9px] text-description-fg leading-none">
-              {contextPct}%
-            </span>
-          )}
+      {/* Row 2: context % on its own row */}
+      {contextPct !== undefined && (
+        <div className="flex items-center justify-end w-full mt-0.5">
+          <span className="text-[9px] text-description-fg leading-none">
+            {contextPct}%
+          </span>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── FinalStepChip ────────────────────────────────────────────────────────────
+
+type FinalStepChipProps = {
+  status: StepStatus;
+  hasFinalStep: boolean;
+  onChipClick: () => void;
+  onOpenContextMenu: (x: number, y: number) => void;
+};
+
+function FinalStepChip({
+  status,
+  hasFinalStep,
+  onChipClick,
+  onOpenContextMenu,
+}: FinalStepChipProps) {
+  return (
+    <div
+      className="flex flex-col px-1 py-1 border-t-2 border-panel-border hover:bg-toolbar-hover-bg transition-colors cursor-pointer"
+      role="button"
+      tabIndex={0}
+      onClick={onChipClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onChipClick();
+        }
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onOpenContextMenu(e.clientX, e.clientY);
+      }}
+      title="Final Step — right-click for options"
+    >
+      {/* Row 1: "F" label + status icon */}
+      <div className="flex items-center justify-between w-full">
+        <span
+          className={`text-[10px] leading-none select-none font-semibold ${hasFinalStep ? "text-terminal-ansiGreen" : "text-description-fg"}`}
+        >
+          F
+        </span>
+        <StatusIcon status={status} disabled={!hasFinalStep} className="text-[16px]" />
+      </div>
     </div>
   );
 }
@@ -157,9 +281,25 @@ interface PromptChipRailProps {
  *
  * The header is a single clickable row that triggers `onExpand`. Pending
  * prompts support drag-to-reorder (same logic as WorkflowStepsPanel).
+ * Right-clicking a chip opens a single shared context menu with
+ * position-management options. A final step chip is rendered at the bottom.
  */
 export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
-  const { steps: prompts, currentStep, executionState } = useWorkflowStore();
+  const {
+    steps: prompts,
+    currentStep,
+    executionState,
+    finalStep,
+    finalStepStatus,
+    finalStepPhase,
+  } = useWorkflowStore();
+  const { loadedWorkflows, activeWorkflowId, setFinalStepFooterExpanded } =
+    useUiStore();
+  const { selectFinalStep, selectPrompt } = useEditorStore();
+
+  const isCLIManaged =
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
+    RUNNER_IDS.CLI;
 
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const canChangeStartPosition =
@@ -169,6 +309,42 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   const getPromptStatus = usePromptStatus();
   const getContextPct = useContextPct();
   const handleStepClick = useStepClickHandler();
+
+  // Final step derived state
+  const hasFinalStep = !!finalStep;
+  const finalStepIsReadOnly =
+    isCLIManaged ||
+    (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
+      finalStepStatus === STEP_STATUS.RUNNING);
+  const finalStepEffectiveStatus: StepStatus = hasFinalStep
+    ? (finalStepStatus ?? "pending")
+    : "pending";
+
+  const handleFinalStepClick = useCallback(() => {
+    if (isCLIManaged) return;
+    if (finalStep) {
+      selectFinalStep(finalStep);
+    } else {
+      setFinalStepFooterExpanded(true);
+      selectPrompt({ kind: FINAL_STEP_PHASES.FINAL_STEP }, { prompt: "" });
+    }
+  }, [
+    isCLIManaged,
+    finalStep,
+    selectFinalStep,
+    setFinalStepFooterExpanded,
+    selectPrompt,
+  ]);
+
+  const handleDisableFinalStep = useCallback(() => {
+    if (isCLIManaged || !finalStep) return;
+    sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, { finalStep: null });
+  }, [isCLIManaged, finalStep]);
+
+  // Single shared context menu state — only one menu is ever open at a time.
+  // Lifting state here (rather than per-chip) ensures right-clicking a second
+  // chip replaces the first menu rather than stacking a second one.
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const [sortableIds, setSortableIds] = useState<string[]>(() =>
     prompts
@@ -216,9 +392,9 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header: single clickable row, expands to full panel on click */}
+      {/* Header: chevron + list icon stacked, expands to full panel on click */}
       <div
-        className="flex items-center justify-center h-[30px] flex-shrink-0 border-b border-panel-border bg-sidebar-bg cursor-pointer hover:bg-toolbar-hover-bg transition-colors"
+        className="flex flex-col items-center justify-center py-1.5 flex-shrink-0 border-b border-panel-border bg-sidebar-bg cursor-pointer hover:bg-toolbar-hover-bg transition-colors select-none"
         onClick={onExpand}
         role="button"
         tabIndex={0}
@@ -228,11 +404,12 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
           if (e.key === "Enter" || e.key === " ") onExpand();
         }}
       >
-        <i className="codicon codicon-list-unordered text-[12px] text-description-fg" />
+        <i className="codicon codicon-chevron-right text-[12px] text-description-fg" />
+        <i className="codicon codicon-list-unordered text-[12px] text-description-fg mt-1" />
       </div>
 
-      {/* Prompt chips — scrollable */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      {/* Prompt chips — scrollable, scrollbars hidden */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 scrollbar-hide">
         {prompts.length === 0 ? (
           <div className="flex items-center justify-center py-2">
             <i className="codicon codicon-dash text-[10px] text-description-fg" />
@@ -249,16 +426,27 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                   slotNumber={i + 1}
                   status={status}
                   contextPct={contextPct}
-                  canSetStart={canChangeStartPosition}
-                  startPositionDirection="rewind"
                   canReorder={false}
                   onChipClick={() => handleStepClick(i)}
-                  onSetStart={(e) => {
-                    e.stopPropagation();
-                    sendMessage(MESSAGE_TYPES.SET_START_POSITION, {
-                      toIndex: i,
-                    });
-                  }}
+                  onOpenContextMenu={(x, y) =>
+                    setContextMenu({
+                      x,
+                      y,
+                      items: [
+                        {
+                          label: "Set start position",
+                          icon: "codicon-debug-reverse-continue",
+                          disabled: !canChangeStartPosition,
+                          disabledTitle:
+                            "Cannot change start position while workflow is running",
+                          onClick: () =>
+                            sendMessage(MESSAGE_TYPES.SET_START_POSITION, {
+                              toIndex: i,
+                            }),
+                        },
+                      ],
+                    })
+                  }
                 />
               );
             })}
@@ -289,16 +477,29 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                       slotNumber={slotNumber}
                       status={status}
                       contextPct={contextPct}
-                      canSetStart={canChangeStartPosition && !isCurrentStep}
-                      startPositionDirection="forward"
                       canReorder={canReorder && !isCurrentStep}
                       onChipClick={() => handleStepClick(index)}
-                      onSetStart={(e) => {
-                        e.stopPropagation();
-                        sendMessage(MESSAGE_TYPES.SET_START_POSITION, {
-                          toIndex: currentStep + visualIdx,
-                        });
-                      }}
+                      onOpenContextMenu={(x, y) =>
+                        setContextMenu({
+                          x,
+                          y,
+                          items: [
+                            {
+                              label: "Set start position",
+                              icon: "codicon-debug-step-over",
+                              disabled:
+                                !canChangeStartPosition || isCurrentStep,
+                              disabledTitle: isCurrentStep
+                                ? "Already the current start position"
+                                : "Cannot change start position while workflow is running",
+                              onClick: () =>
+                                sendMessage(MESSAGE_TYPES.SET_START_POSITION, {
+                                  toIndex: currentStep + visualIdx,
+                                }),
+                            },
+                          ],
+                        })
+                      }
                     />
                   );
                 })}
@@ -307,6 +508,38 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
           </>
         )}
       </div>
+
+      {/* Final step chip — pinned at bottom, always visible */}
+      <FinalStepChip
+        status={finalStepEffectiveStatus}
+        hasFinalStep={hasFinalStep}
+        onChipClick={handleFinalStepClick}
+        onOpenContextMenu={(x, y) =>
+          setContextMenu({
+            x,
+            y,
+            items: [
+              {
+                label: "Disable final step",
+                icon: "codicon-trash",
+                disabled: !hasFinalStep || finalStepIsReadOnly,
+                disabledTitle: !hasFinalStep
+                  ? "No final step configured"
+                  : "Cannot disable while final step is running",
+                onClick: handleDisableFinalStep,
+              },
+            ],
+          })
+        }
+      />
+
+      {/* Single shared context menu — only one is ever rendered */}
+      {contextMenu && (
+        <ChipContextMenu
+          {...contextMenu}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 };
