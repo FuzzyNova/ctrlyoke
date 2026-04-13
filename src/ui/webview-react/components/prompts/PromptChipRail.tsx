@@ -394,7 +394,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
     <div className="flex flex-col h-full">
       {/* Header: chevron + list icon stacked, expands to full panel on click */}
       <div
-        className="flex flex-col items-center justify-center py-1.5 flex-shrink-0 border-b border-panel-border bg-sidebar-bg cursor-pointer hover:bg-toolbar-hover-bg transition-colors select-none"
+        className="flex flex-col items-center justify-center py-1.5 flex-shrink-0 border-b border-panel-border cursor-pointer hover:bg-toolbar-hover-bg transition-colors select-none"
         onClick={onExpand}
         role="button"
         tabIndex={0}

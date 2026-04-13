@@ -35,6 +35,7 @@ import {
   MESSAGE_TYPES,
   OUTPUT_HISTORY_KINDS,
   QUEUE_POSITION,
+  SESSION_KINDS,
   STEP_STATUS,
   STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
@@ -68,6 +69,11 @@ import {
   type PromptCompleteData,
 } from "./OutputCaptureBuffer";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
+import {
+  getPtyProcessManager,
+  ptyPostMessage,
+  resolveWindowsShell,
+} from "./harness/PtyProcessManager";
 export type {
   PromptStartData,
   PromptCompleteData,
@@ -1069,6 +1075,14 @@ export class WorkflowInstance {
    * Resume execution from paused state.
    */
   async resume(): Promise<void> {
+    // STOPPED = a step was appended to a completed workflow via reopenForContinuation().
+    // Use executeLoadedPromptFile so EXECUTION_STARTED is sent to the webview and the
+    // history file is properly initialised for the new step's output.
+    if (this.workflowRuntime.status === EXECUTION_STATES.STOPPED) {
+      await this.executeLoadedPromptFile(undefined, true);
+      return;
+    }
+
     if (!this.workflowRuntime.resume()) {
       return;
     }
@@ -1915,6 +1929,70 @@ export class WorkflowInstance {
           snapshot
         );
       },
+      spawnScriptPty: isCli()
+        ? undefined
+        : (options) => {
+            return new Promise<number>((resolve) => {
+              const ptyManager = getPtyProcessManager();
+              if (!ptyManager) {
+                Log.warn("[spawnScriptPty] PtyProcessManager not available");
+                resolve(1);
+                return;
+              }
+
+              const workflowId = self.id;
+              const preSessionId = `script-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+              const controllerClientId = ptyManager.getExpectedController(workflowId);
+
+              // TERMINAL_STARTED must be sent before spawnPty so the webview
+              // session store is populated before any TERMINAL_OUTPUT arrives.
+              ptyPostMessage({
+                type: MESSAGE_TYPES.TERMINAL_STARTED,
+                workflowId,
+                sessionId: preSessionId,
+                stepName: options.stepName,
+                kind: SESSION_KINDS.AI_CLI,
+                controllerClientId,
+              });
+
+              // Wrap the script in a shell so PTY interactive input works.
+              const isWindows = process.platform === "win32";
+              const shell = isWindows ? resolveWindowsShell() : "/bin/sh";
+              const shellArgs = isWindows
+                ? ["-NoProfile", "-Command", options.script]
+                : ["-c", options.script];
+
+              ptyManager.spawnPty({
+                workflowId,
+                stepName: options.stepName,
+                kind: SESSION_KINDS.AI_CLI,
+                sessionId: preSessionId,
+                command: shell,
+                args: shellArgs,
+                cwd: options.cwd,
+                onData: (ptySession, chunk) => {
+                  ptyPostMessage({
+                    type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+                    workflowId: ptySession.workflowId,
+                    sessionId: ptySession.id,
+                    data: chunk,
+                  });
+                  // Strip ANSI codes for the CliOutput panel (xterm handles them natively)
+                  options.onOutput(chunk.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, ""));
+                },
+                onExit: (ptySession, exitCode) => {
+                  ptyPostMessage({
+                    type: MESSAGE_TYPES.TERMINAL_ENDED,
+                    workflowId: ptySession.workflowId,
+                    sessionId: ptySession.id,
+                    kind: ptySession.kind,
+                    exitCode,
+                  });
+                  resolve(exitCode);
+                },
+              });
+            });
+          },
     };
   }
 

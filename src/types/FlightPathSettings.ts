@@ -203,8 +203,8 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
   },
   server: {
     enabled: false,
-    port: 3000,
-    standalonePort: 3001,
+    port: 4747,
+    standalonePort: 4748,
     theme: "auto",
   },
   enableDiagnosticLogs: false,

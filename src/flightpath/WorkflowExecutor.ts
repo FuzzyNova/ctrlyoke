@@ -16,6 +16,7 @@ import {
 import type { FlightPathMcpServerProvider } from "../ui/FlightPathMcpServerProvider";
 import { WorkflowContext } from "../types/WorkflowContextTypes";
 import {
+  EXECUTION_MODES,
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
   FINAL_STEP_PHASES,
@@ -120,6 +121,25 @@ export interface WorkflowExecutionContext {
   ) => void;
   /** MCP server provider for injecting user-defined MCP servers into VS Code's MCP subsystem (chat harness only) */
   mcpServerProvider?: FlightPathMcpServerProvider;
+  /**
+   * Spawn a PTY session for interactive script execution.
+   * Wraps the script in a shell so PTY interactive input works correctly.
+   * Sends TERMINAL_STARTED / TERMINAL_OUTPUT / TERMINAL_ENDED to the webview and
+   * resolves with the process exit code when the PTY exits.
+   * Only available when running inside the VS Code extension (not CLI mode).
+   */
+  spawnScriptPty?: (options: {
+    /** Human-readable step label shown in the terminal tab header. */
+    stepName: string;
+    /** Signed step index used as the CLI output slot. */
+    stepIndex: number;
+    /** Raw script string from the step definition (e.g. ".flightpath/scripts/check.py arg"). */
+    script: string;
+    /** Working directory for the script process. */
+    cwd: string;
+    /** Called for each output chunk — used to stream text to the CliOutput panel. */
+    onOutput: (chunk: string) => void;
+  }) => Promise<number>;
 }
 
 type ExecutionTarget = WorkflowAttemptTarget;
@@ -745,6 +765,13 @@ export class WorkflowExecutor {
   /**
    * Execute a script step — runs a shell command with no AI harness interaction.
    *
+   * In headless mode the script runs in a child process with stdout streamed live
+   * to the CliOutput panel via updateCliStreamingChunk.
+   *
+   * In interactive mode the script runs inside a PTY session so it can prompt for
+   * user input. Output is simultaneously streamed to the CliOutput panel (ANSI
+   * stripped) and sent as TERMINAL_OUTPUT to the embedded xterm terminal.
+   *
    * @param step      The ScriptStep to execute
    * @param stepIndex The queue step index (use -1 for finalStep)
    * @param context   Workflow execution context
@@ -783,67 +810,124 @@ export class WorkflowExecutor {
         ? step.timeout * 1000
         : ConfigurationUtils.getScriptTimeoutMs();
 
-    // Build script evaluation config — compareSource/returns from step or default to exit code 0
-    const evalResult = await this.endConditionEvaluator.evaluateCondition(
-      {
+    const signedStepIndex = this.getSignedStepIndex(target);
+    const timestampMs = Date.now();
+
+    // Emit an initial streaming placeholder so the CliOutput panel appears immediately.
+    const initCliOutput = {
+      prompt: step.script,
+      response: "",
+      elapsed: 0,
+      isStreaming: true,
+      source: STEP_TYPES.SCRIPT,
+      timestampMs,
+      cliCommand: step.script,
+      workingDirectory: context.workspaceFolderPath,
+    };
+    if (context.dashboardProvider && signedStepIndex >= 0) {
+      context.dashboardProvider.updateCliOutput(signedStepIndex, initCliOutput);
+    } else if (context.dashboardProvider && target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+      context.dashboardProvider.updateFinalStepOutput(target.loopIndex, initCliOutput);
+    }
+
+    // Streaming callback — strips ANSI codes for the CliOutput text panel.
+    const onStreamChunk = (chunk: string): void => {
+      if (!context.dashboardProvider) return;
+      if (signedStepIndex >= 0) {
+        context.dashboardProvider.updateCliStreamingChunk(signedStepIndex, chunk);
+      }
+      // Note: finalStep streaming chunks reuse the same slot; updateFinalStepStreamingChunk
+      // is not exposed on IDashboardSink but finalStep script steps are uncommon, so we
+      // only stream to the queue slot for now.
+    };
+
+    // ─── Interactive mode: run inside a PTY so the user can provide input ────
+    const isInteractive =
+      ConfigurationUtils.getCliExecutionMode() === EXECUTION_MODES.INTERACTIVE;
+    let ptyExitCode: number | undefined;
+
+    if (isInteractive && context.spawnScriptPty) {
+      Log.info(`[script:interactive] spawning PTY for: ${stepLabel}`);
+      ptyExitCode = await context.spawnScriptPty({
+        stepName: stepLabel,
+        stepIndex: signedStepIndex,
         script: step.script,
-        compareSource: step.compareSource ?? COMPARE_SOURCES.EXIT_CODE,
-        returns: step.returns ?? "0",
-        timeout: timeout,
-      },
-      context.workspaceFolderPath,
-      this.promptQueue.getWorkflowFile().vars
-    );
+        cwd: context.workspaceFolderPath ?? process.cwd(),
+        onOutput: onStreamChunk,
+      });
+    }
+
+    // ─── Headless mode (or PTY unavailable): run as child process ────────────
+    // Always run evaluateCondition so we get the structured result (stdout/stderr,
+    // passed flag, duration) needed for the final CliOutput and history entry.
+    // In interactive mode we skip this since the PTY already ran the script.
+    let evalResult: Awaited<ReturnType<typeof this.endConditionEvaluator.evaluateCondition>> | undefined;
+
+    if (!isInteractive || ptyExitCode === undefined) {
+      evalResult = await this.endConditionEvaluator.evaluateCondition(
+        {
+          script: step.script,
+          compareSource: step.compareSource ?? COMPARE_SOURCES.EXIT_CODE,
+          returns: step.returns ?? "0",
+          timeout: timeout,
+        },
+        context.workspaceFolderPath,
+        this.promptQueue.getWorkflowFile().vars,
+        onStreamChunk
+      );
+    }
+
+    // For interactive mode, synthesise an EvaluationResult from the PTY exit code.
+    if (evalResult === undefined) {
+      const exitCode = ptyExitCode ?? 1;
+      const passed = EndConditionEvaluator.evaluateExitCodeResult(
+        exitCode,
+        step.returns,
+        step.compareSource
+      );
+      evalResult = {
+        passed,
+        stdout: "",
+        stderr: "",
+        result: "",
+        duration: 0,
+        exitCode,
+      };
+    }
 
     const succeeded = evalResult.passed;
 
-    // Send script output to the dashboard as a CliOutput with source: "script"
-    // so the UI renders it with terminal formatting (whitespace preserved, exit code summary).
+    // Build final output text (headless: from evalResult; interactive: empty since xterm shows it)
     const rawOutput = [evalResult.stdout, evalResult.stderr]
       .filter(Boolean)
       .join("\n")
       .trim();
-
-    // Strip ANSI escape codes — script processes (npm, node, etc.) emit colour codes
-    // that are unreadable as literal characters in the output panel.
+    // Strip ANSI escape codes for the CliOutput text panel.
     const outputText = rawOutput.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
 
-    const signedStepIndex = this.getSignedStepIndex(target);
-    const scriptCliOutput = {
+    const finalCliOutput = {
       prompt: step.script,
       response: outputText,
       elapsed: evalResult.duration / 1000,
       isStreaming: false,
       source: STEP_TYPES.SCRIPT,
       exitCode: evalResult.exitCode ?? (succeeded ? 0 : 1),
-      timestampMs: Date.now(),
+      timestampMs,
       cliCommand: step.script,
       workingDirectory: context.workspaceFolderPath,
     };
 
     if (context.dashboardProvider && signedStepIndex >= 0) {
-      context.dashboardProvider.updateCliOutput(
-        signedStepIndex,
-        scriptCliOutput
-      );
-    } else if (
-      context.dashboardProvider &&
-      target.kind === FINAL_STEP_PHASES.FINAL_STEP
-    ) {
-      context.dashboardProvider.updateFinalStepOutput(
-        target.loopIndex,
-        scriptCliOutput
-      );
+      context.dashboardProvider.updateCliOutput(signedStepIndex, finalCliOutput);
+    } else if (context.dashboardProvider && target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+      context.dashboardProvider.updateFinalStepOutput(target.loopIndex, finalCliOutput);
     }
 
     // Capture for output history replay (same pattern as updateDashboardWithResponse)
     if (signedStepIndex >= 0) {
-      context.captureCompletedOutput?.(signedStepIndex, scriptCliOutput);
+      context.captureCompletedOutput?.(signedStepIndex, finalCliOutput);
     } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      context.captureFinalStepCompletedOutput?.(
-        target.loopIndex,
-        scriptCliOutput
-      );
+      context.captureFinalStepCompletedOutput?.(target.loopIndex, finalCliOutput);
     }
 
     if (context.historyFilePath && context.outputHistoryManager) {
@@ -851,7 +935,7 @@ export class WorkflowExecutor {
         .saveExecutionOutput(
           context.historyFilePath,
           this.toOutputExecutionTarget(target),
-          [scriptCliOutput]
+          [finalCliOutput]
         )
         .catch((err) =>
           Log.warn("Failed to save script step output to history:", err)

@@ -40,6 +40,36 @@ export class EndConditionEvaluator {
   }
 
   /**
+   * Evaluate whether an exit code satisfies a condition's returns/compareSource criteria.
+   * Used when output is unavailable (e.g. interactive PTY execution).
+   * Falls back to exit code 0 = pass for stdout/stderr comparisons where we have no output.
+   */
+  static evaluateExitCodeResult(
+    exitCode: number,
+    returns: string | undefined,
+    compareSource: EndConditionCompareSource = "auto"
+  ): boolean {
+    if (returns === undefined) return exitCode === 0;
+    const expectedLower = returns.trim().toLowerCase();
+
+    if (compareSource === COMPARE_SOURCES.EXIT_CODE) {
+      if (expectedLower === "true") return exitCode === 0;
+      if (expectedLower === "false") return exitCode !== 0;
+      const expected = parseInt(returns.trim(), 10);
+      return !isNaN(expected) && exitCode === expected;
+    }
+
+    // AUTO mode: boolean keywords use exit code
+    if (compareSource === COMPARE_SOURCES.AUTO) {
+      if (expectedLower === "true") return exitCode === 0;
+      if (expectedLower === "false") return exitCode !== 0;
+    }
+
+    // STDOUT / STDERR / AUTO with non-boolean: no output available — default to exit code 0
+    return exitCode === 0;
+  }
+
+  /**
    * Parse script command to separate script path from arguments.
    * Handles both space-separated and quoted arguments.
    * @returns { scriptPath: string, args: string[] }
@@ -62,11 +92,15 @@ export class EndConditionEvaluator {
    * When `returns` is absent, exit code 0 = pass.
    * @param vars Optional variable map — injected as FLIGHTPATH_VAR_<KEY> environment
    *   variables so end condition scripts can branch on workflow variables.
+   * @param onOutput Optional streaming callback — called for each stdout chunk as it
+   *   arrives so callers can forward live output to the dashboard without waiting for
+   *   the process to finish.
    */
   async evaluateCondition(
     condition: ScriptProperties,
     workingDirectory?: string,
-    vars?: Record<string, string>
+    vars?: Record<string, string>,
+    onOutput?: (chunk: string) => void
   ): Promise<EvaluationResult> {
     const startTime = Date.now();
 
@@ -117,7 +151,8 @@ export class EndConditionEvaluator {
         command.args,
         workingDirectory,
         timeout,
-        vars
+        vars,
+        onOutput
       );
 
       const passed = this.evaluateSuccess(
@@ -269,7 +304,8 @@ export class EndConditionEvaluator {
     args: string[],
     workingDirectory?: string,
     timeout: number = ConfigurationUtils.getScriptTimeoutMs(),
-    vars?: Record<string, string>
+    vars?: Record<string, string>,
+    onOutput?: (chunk: string) => void
   ): Promise<{
     success: boolean;
     result: string;
@@ -315,6 +351,7 @@ export class EndConditionEvaluator {
         cwd: workingDirectory || this.platform.getWorkspaceRoot(),
         timeout,
         env: cleanEnv,
+        onStdout: onOutput,
       });
 
       return {
