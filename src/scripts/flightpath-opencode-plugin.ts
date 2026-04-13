@@ -17,11 +17,22 @@
 //   Format: [{ "event": "stop"|"sessionStart"|..., "command": "node ..." }, ...]
 //
 // Plugin behaviour:
-//  - Tracks main sessions (no parentID) via session.created
-//  - Writes {runId}-start.json on session.created for main sessions
-//  - Listens to session.status events: idle = stop, busy = userPromptSubmit
-//  - Writes {sessionId}-stop.json on session.status idle (completion detection)
-//  - Note: session.created has a known OpenCode bug — may not fire (#14808)
+//  - Tracks CHILD sessions (with parentID) via session.created to avoid false stops
+//  - On session.status idle: fires stop hooks for any session NOT known to be a child
+//  - On session.status busy: fires userPromptSubmit hooks for non-child sessions
+//  - Writes {runId}-start.json on session.created / session.updated for main sessions
+//  - Writes {sessionId}-stop.json on session.status idle for completion detection
+//  - tool.execute.before/after handled as trigger hooks (not via event callback)
+//
+// Session tracking rationale:
+//  - OpenCode bug #14808: session.created may not fire to the plugin for the MAIN session
+//    because the event is published before the plugin's event subscription is active.
+//  - Child (sub-agent) sessions are created DURING execution, so their session.created
+//    events reliably reach the plugin. We track these as childSessions.
+//  - By checking "NOT in childSessions" instead of "in mainSessions", we correctly
+//    identify the main session even when session.created misses.
+//  - session.updated is also used as a fallback to capture the main session id for
+//    start file writing.
 //
 // Diagnostic logging:
 //  - Enabled when FLIGHTPATH_DIAGNOSTIC_LOGS=true
@@ -36,8 +47,16 @@ const RUN_ID: string | undefined = process.env.FLIGHTPATH_RUN_ID;
 const workspaceRoot: string =
   process.env.FLIGHTPATH_WORKSPACE_ROOT || process.cwd();
 
-// Track main sessions (top-level, no parentID) to filter out sub-agent sessions.
+// Track CHILD sessions (sub-agents) to avoid treating them as completion events.
+// Child sessions have a parentID and are created DURING execution, so their
+// session.created events reach the plugin reliably (unlike the main session).
+const childSessions = new Set<string>();
+
+// Track main sessions for start file deduplication.
 const mainSessions = new Set<string>();
+
+// Track which sessions have had their start file written.
+const startFilesWritten = new Set<string>();
 
 // Load user hooks from the sidecar JSON file written by FlightPath alongside this plugin.
 // Format: [{ event: "stop"|"sessionStart"|"preToolUse"|"postToolUse"|"userPromptSubmit", command: string }]
@@ -68,10 +87,10 @@ function _runUserHooks(event: string): void {
   }
 }
 
-// Diagnostic logging — only when notifyDir is set (interactive mode).
+// Diagnostic logging — derive logs dir from NOTIFY_DIR (interactive) or workspaceRoot (headless).
 const _logsDir = NOTIFY_DIR
   ? path.resolve(NOTIFY_DIR, "..", "..", "logs")
-  : null;
+  : path.join(workspaceRoot, ".flightpath", "logs");
 let _logPath: string | null = null;
 try {
   if (process.env.FLIGHTPATH_DIAGNOSTIC_LOGS === "true" && _logsDir) {
@@ -100,6 +119,37 @@ export const FlightPathHook = async (_hookContext: unknown) => {
     diagnosticsEnabled: _logPath !== null,
   });
 
+  /**
+   * Write the start notification file for a main session (once per session).
+   * Called from both session.created and session.updated handlers so that
+   * the file is written even when session.created misses due to OpenCode bug #14808.
+   */
+  function _writeStartFile(sessionId: string): void {
+    if (!NOTIFY_DIR || startFilesWritten.has(sessionId)) return;
+    startFilesWritten.add(sessionId);
+    try {
+      mkdirSync(NOTIFY_DIR, { recursive: true });
+      const startName = RUN_ID || sessionId;
+      const startFile = `${NOTIFY_DIR}/${startName}-start.json`;
+      writeFileSync(
+        startFile,
+        JSON.stringify({
+          hookEvent: "SessionStart",
+          sessionId,
+          status: "started",
+          timestamp: Date.now(),
+        })
+      );
+      _debugLog("✅ Wrote start file", {
+        file: startFile,
+        runId: RUN_ID,
+        sessionId,
+      });
+    } catch (e) {
+      _debugLog("❌ Failed to write start file", { error: String(e) });
+    }
+  }
+
   return {
     event: async ({
       event,
@@ -117,38 +167,41 @@ export const FlightPathHook = async (_hookContext: unknown) => {
           sessionId: session.id,
           parentID: session.parentID ?? null,
         });
-        if (!session.parentID) {
+        if (session.parentID) {
+          // Track child (sub-agent) sessions so we can ignore their idle events.
+          childSessions.add(session.id);
+          _debugLog("👶 Tracking child session", { sessionId: session.id });
+        } else {
+          // Main session — track it and write start file.
           mainSessions.add(session.id);
-          if (NOTIFY_DIR) {
-            try {
-              mkdirSync(NOTIFY_DIR, { recursive: true });
-              const startName = RUN_ID || session.id;
-              const startFile = `${NOTIFY_DIR}/${startName}-start.json`;
-              writeFileSync(
-                startFile,
-                JSON.stringify({
-                  hookEvent: "SessionStart",
-                  sessionId: session.id,
-                  status: "started",
-                  timestamp: Date.now(),
-                })
-              );
-              _debugLog("✅ Wrote start file", {
-                file: startFile,
-                runId: RUN_ID,
-                sessionId: session.id,
-              });
-            } catch (e) {
-              _debugLog("❌ Failed to write start file", { error: String(e) });
-            }
-          }
+          _writeStartFile(session.id);
           _runUserHooks("sessionStart");
+        }
+      }
+
+      // session.updated fires reliably during execution (e.g., when title is generated).
+      // Use it as a fallback to capture the main session when session.created was missed
+      // due to the plugin subscription race condition (OpenCode bug #14808).
+      if (event.type === "session.updated") {
+        const session = event.properties.info as {
+          id: string;
+          parentID?: string;
+        };
+        if (!session.parentID && !mainSessions.has(session.id)) {
+          mainSessions.add(session.id);
+          _debugLog("🔄 session.updated — captured main session (fallback)", {
+            sessionId: session.id,
+          });
+          _writeStartFile(session.id);
+          // Do NOT fire sessionStart user hook here — it may have already fired
+          // via session.created, and we don't want to fire it twice.
         }
       }
 
       if (event.type === "session.deleted") {
         const deletedId = (event.properties.info as { id: string }).id;
         mainSessions.delete(deletedId);
+        childSessions.delete(deletedId);
         _debugLog("🗑️ session.deleted", { sessionId: deletedId });
       }
 
@@ -157,46 +210,79 @@ export const FlightPathHook = async (_hookContext: unknown) => {
           sessionID: string;
           status: { type: string };
         };
+        // Treat any non-child session as the main session.
+        // This is intentional: session.created for the MAIN session may not reach the
+        // plugin due to a startup timing race (bug #14808), so we cannot rely on
+        // mainSessions.has(). Child sessions are created during execution and their
+        // session.created events DO reach the plugin reliably.
+        const isChildSession = childSessions.has(sessionID);
         _debugLog("🔄 session.status", {
           sessionID,
           statusType: status.type,
-          isMainSession: mainSessions.has(sessionID),
+          isChild: isChildSession,
         });
 
-        if (status.type === "busy" && mainSessions.has(sessionID)) {
-          _debugLog("⏩ session.status busy", { sessionID });
-          _runUserHooks("userPromptSubmit");
-        } else if (status.type === "idle" && mainSessions.has(sessionID)) {
-          _debugLog("🛑 session.status idle", { sessionID });
-          if (NOTIFY_DIR) {
-            try {
-              mkdirSync(NOTIFY_DIR, { recursive: true });
-              const stopFile = `${NOTIFY_DIR}/${sessionID}-stop.json`;
-              writeFileSync(
-                stopFile,
-                JSON.stringify({
-                  hookEvent: "Stop",
-                  sessionId: sessionID,
-                  status: "completed",
-                  timestamp: Date.now(),
-                })
-              );
-              _debugLog("✅ Wrote stop file", { file: stopFile, sessionID });
-            } catch (e) {
-              _debugLog("❌ Failed to write stop file", { error: String(e) });
+        if (!isChildSession) {
+          if (status.type === "busy") {
+            _debugLog("⏩ session.status busy (main)", { sessionID });
+            _runUserHooks("userPromptSubmit");
+          } else if (status.type === "idle") {
+            _debugLog("🛑 session.status idle (main)", { sessionID });
+            if (NOTIFY_DIR) {
+              try {
+                mkdirSync(NOTIFY_DIR, { recursive: true });
+                const stopFile = `${NOTIFY_DIR}/${sessionID}-stop.json`;
+                writeFileSync(
+                  stopFile,
+                  JSON.stringify({
+                    hookEvent: "Stop",
+                    sessionId: sessionID,
+                    status: "completed",
+                    timestamp: Date.now(),
+                  })
+                );
+                _debugLog("✅ Wrote stop file", { file: stopFile, sessionID });
+              } catch (e) {
+                _debugLog("❌ Failed to write stop file", {
+                  error: String(e),
+                });
+              }
             }
+            _runUserHooks("stop");
           }
-          _runUserHooks("stop");
         }
       }
+    },
 
-      if (event.type === "tool.execute.before") {
-        _runUserHooks("preToolUse");
-      }
+    // tool.execute.before and tool.execute.after are OpenCode trigger hooks —
+    // they are called directly by the OpenCode runtime (not via the event bus).
+    // They must be returned as top-level keys on the hooks object, NOT handled
+    // inside the event callback (which would never receive them).
+    "tool.execute.before": async (
+      _input: { tool: string; sessionID: string; callID: string },
+      _output: { args: unknown }
+    ) => {
+      _debugLog("🔧 tool.execute.before", {
+        tool: _input.tool,
+        sessionID: _input.sessionID,
+      });
+      _runUserHooks("preToolUse");
+    },
 
-      if (event.type === "tool.execute.after") {
-        _runUserHooks("postToolUse");
-      }
+    "tool.execute.after": async (
+      _input: {
+        tool: string;
+        sessionID: string;
+        callID: string;
+        args: unknown;
+      },
+      _output: { title: string; output: string; metadata: unknown }
+    ) => {
+      _debugLog("✅ tool.execute.after", {
+        tool: _input.tool,
+        sessionID: _input.sessionID,
+      });
+      _runUserHooks("postToolUse");
     },
   };
 };
