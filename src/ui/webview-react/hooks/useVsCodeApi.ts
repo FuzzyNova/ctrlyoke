@@ -10,8 +10,13 @@ interface VsCodeApi {
 declare global {
   interface Window {
     vscodeApi?: VsCodeApi;
+    __flightpathStandalone?: boolean;
   }
 }
+
+/** True when the UI is served by FlightPathHostedServer (browser tab), not the VS Code panel. */
+export const isStandalone =
+  typeof window !== "undefined" && !!window.__flightpathStandalone;
 
 let vscodeApi: VsCodeApi | undefined;
 

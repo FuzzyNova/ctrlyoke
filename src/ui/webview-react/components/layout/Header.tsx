@@ -7,7 +7,7 @@ import {
   EXECUTION_STATES,
   RUNNER_IDS,
 } from "../../types/messages";
-import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { WebviewLog } from "@utils/logger";
 import { WorkflowControls } from "../workflow/WorkflowControls";
@@ -267,8 +267,8 @@ export const Header: React.FC<{
           >
             <i className="codicon codicon-settings-gear" />
           </button>
-          {/* Start/Stop Server button (desktop only) */}
-          {!isMobile && (
+          {/* Start/Stop Server button (desktop only, hidden in browser client) */}
+          {!isMobile && !isStandalone && (
             <button
               className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border transition-colors ${
                 serverRunning

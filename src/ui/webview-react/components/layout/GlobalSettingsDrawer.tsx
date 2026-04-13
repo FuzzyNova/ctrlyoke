@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { GlobalSettingsVerticalTabBar } from "./GlobalSettingsVerticalTabBar";
 import {
@@ -17,7 +17,7 @@ import {
   ServerSection,
 } from "../settings";
 
-const TABS = [
+const ALL_TABS = [
   { id: "general", label: "General", icon: "codicon-settings" },
   { id: "workflow", label: "Workflow Defaults", icon: "codicon-git-branch" },
   { id: "harnesses", label: "Harnesses & Models", icon: "codicon-server" },
@@ -29,6 +29,10 @@ const TABS = [
   { id: "history", label: "History & Safety", icon: "codicon-history" },
   { id: "server", label: "Server", icon: "codicon-cloud" },
 ];
+
+const TABS = isStandalone
+  ? ALL_TABS.filter((t) => t.id !== "server")
+  : ALL_TABS;
 
 export function GlobalSettingsDrawer() {
   const vscode = useVsCodeApi();

@@ -33,6 +33,8 @@
   // Reconnect on server restart (development convenience)
   ws.addEventListener("close", () => setTimeout(() => location.reload(), 1500));
 
+  window.__flightpathStandalone = true;
+
   window.vscodeApi = {
     postMessage(msg) {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));

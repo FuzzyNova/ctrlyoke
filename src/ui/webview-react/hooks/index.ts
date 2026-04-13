@@ -2,7 +2,7 @@
  * Hooks index - exports all React hooks
  */
 
-export { useVsCodeApi, getVsCodeApi } from "./useVsCodeApi";
+export { useVsCodeApi, getVsCodeApi, isStandalone } from "./useVsCodeApi";
 export {
   useMessageHandler,
   sendMessage,

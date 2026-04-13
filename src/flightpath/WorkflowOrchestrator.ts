@@ -415,7 +415,7 @@ export class WorkflowOrchestrator {
   }
 
   getWorkflow(workflowId: string): WorkflowInstance | undefined {
-    return this.instances.get(workflowId);
+    return this.findInstance(workflowId);
   }
 
   getAllWorkflows(): WorkflowInstance[] {
@@ -928,19 +928,14 @@ export class WorkflowOrchestrator {
     // this.instances when execution starts again.
     let instance: WorkflowInstance | null | undefined;
     if (workflowId) {
-      instance = this.instances.get(workflowId);
-      if (!instance) {
-        const retired = this.retiredInstances.get(workflowId);
-        if (retired) {
-          this.retiredInstances.delete(workflowId);
-          instance = retired;
-        }
+      instance = this.findInstance(workflowId);
+      // If found in retiredInstances, un-retire it so it can re-register in
+      // this.instances when it transitions to RUNNING/PAUSED.
+      if (instance) {
+        this.retiredInstances.delete(workflowId);
       }
     } else {
-      instance = panelViewedId
-        ? (this.instances.get(panelViewedId) ??
-          this.retiredInstances.get(panelViewedId))
-        : null;
+      instance = panelViewedId ? this.findInstance(panelViewedId) : null;
     }
 
     if (!instance) {
@@ -1033,12 +1028,18 @@ export class WorkflowOrchestrator {
    * Used by per-workflow controls in the dropdown; allows resuming non-active instances.
    */
   async resumeWorkflow(workflowId: string): Promise<void> {
-    const instance = this.instances.get(workflowId);
+    const instance = this.findInstance(workflowId);
     if (!instance) {
       Log.warn(
         `resumeWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
       );
       return;
+    }
+    // If the instance is retired (terminal state reached but still alive),
+    // remove it from retiredInstances so it can re-register in this.instances
+    // when it transitions to RUNNING/PAUSED via the onDidChangeState listener.
+    if (this.retiredInstances.has(workflowId)) {
+      this.retiredInstances.delete(workflowId);
     }
     return instance.resume();
   }
@@ -1556,6 +1557,21 @@ export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
   // Private helpers
   // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Find a workflow instance regardless of whether it is currently executing
+   * (in `instances`) or has reached a terminal state but is still alive
+   * (in `retiredInstances`).
+   *
+   * Use this for operations that must work on both live and retired workflows
+   * (e.g. resumeWorkflow, executeWorkflow).  Operations that are only valid
+   * while a workflow is actively running (pauseWorkflow, stopWorkflow) should
+   * keep using `this.instances.get(id)` directly so the semantic boundary
+   * stays explicit.
+   */
+  private findInstance(workflowId: string): WorkflowInstance | undefined {
+    return this.instances.get(workflowId) ?? this.retiredInstances.get(workflowId);
+  }
 
   /**
    * Get the active WorkflowInstance, creating one if none exists yet.
