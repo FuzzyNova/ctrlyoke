@@ -6,6 +6,7 @@ import {
   ViewPlugin,
   Decoration,
   highlightActiveLine,
+  tooltips,
 } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
@@ -112,6 +113,22 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       viewRef.current.contentDOM.contentEditable = readOnly ? "false" : "true";
     }
   }, [readOnly]);
+
+  // Trigger CodeMirror tooltip remeasure when the visual viewport changes
+  // (e.g. mobile keyboard opens/closes, or iOS page-scrolls to keep the
+  // focused input in view). The body-mounted tooltip container shifts with
+  // page scroll, so this ensures the position is recalculated on the next RAF.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handleViewportChange = () => viewRef.current?.requestMeasure();
+    vv.addEventListener("resize", handleViewportChange);
+    vv.addEventListener("scroll", handleViewportChange);
+    return () => {
+      vv.removeEventListener("resize", handleViewportChange);
+      vv.removeEventListener("scroll", handleViewportChange);
+    };
+  }, []);
 
   // Initialize Typo.js spell checker
   useEffect(() => {
@@ -408,6 +425,16 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         highlightActiveLine(),
         highlightSelectionMatches(),
         createSpellCheckExtension(typoCheckerRef),
+        // Mount autocomplete tooltips on document.body so they escape the
+        // overflow:hidden ancestors (critical on iOS where CodeMirror forces
+        // position:absolute for tooltips, which causes them to be clipped and
+        // hidden behind the EditorFooter). The body container is outside any
+        // overflow:hidden chain, so the tooltip renders above the footer.
+        // We intentionally omit tooltipSpace here — the default windowSpace
+        // (document.documentElement.clientHeight) matches what coordsAtPos
+        // uses for cursor Y, avoiding the mismatch that would hide the tooltip
+        // when vv.offsetTop is non-zero (iOS browser chrome height).
+        tooltips({ parent: document.body }),
         autocompletion({
           override: [customCompletions, pathCompletions],
           activateOnTyping: true,
