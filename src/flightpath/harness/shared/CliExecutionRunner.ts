@@ -7,6 +7,7 @@ import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { Log } from "../../../utils/Log";
+import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { CliLogMonitor } from "../CliLogMonitor";
 import type { CliExecutionSession } from "./CliExecutionSession";
 import type { CliFailureTracker } from "./CliFailureTracker";
@@ -37,6 +38,8 @@ interface CliExecutionTransportCoordinator {
       exitCode: number;
     }) => Promise<boolean>
   ): Promise<boolean>;
+  /** Write text to the currently active PTY session. Returns false if no session is active. */
+  writeToCurrentPtySession(text: string): boolean;
 }
 
 interface CliInteractiveStartupCoordinatorLike {
@@ -83,7 +86,32 @@ export interface CliExecutionRunnerDeps {
   };
 }
 
+/** State captured after a successful interactive execution, used by inject mode. */
+export interface InteractiveInjectContext {
+  /** Absolute path to the session log file being monitored. */
+  logPath: string;
+  /** Claude / AI session ID (null if not yet extracted). */
+  sessionId: string | null;
+  /**
+   * The resolved properties used when the process was spawned.
+   * Inject mode compares these against the next prompt's resolved properties to
+   * detect incompatible spawn-time config changes (model, permissions, hooks, etc.)
+   * that would require a fresh process instead.
+   */
+  spawnedWith?: ResolvedProperties;
+  /** The resolved session ID that was passed to the initial spawn (may differ from sessionId). */
+  spawnedWithSessionId?: string;
+}
+
 export class CliExecutionRunner {
+  /**
+   * Context from the most recent successful interactive execution.
+   * Set after `executeInTerminal` succeeds and cleared on reset/cancel.
+   * When inject mode is active, the next prompt reuses this instead of spawning
+   * a fresh PTY session.
+   */
+  private lastInteractiveContext?: InteractiveInjectContext;
+
   constructor(private readonly deps: CliExecutionRunnerDeps) {}
 
   async executeInteractive(
@@ -109,6 +137,89 @@ export class CliExecutionRunner {
     }
 
     return result.success;
+  }
+
+  /**
+   * Returns true when there is a previous interactive context available for inject mode.
+   * Callers should also check `getLastInteractiveContext()` to verify spawn-arg compatibility.
+   */
+  hasInteractiveContext(): boolean {
+    return this.lastInteractiveContext !== undefined;
+  }
+
+  /**
+   * Returns the context captured from the most recent successful interactive execution,
+   * or undefined if no prior interactive execution has completed.
+   */
+  getLastInteractiveContext(): InteractiveInjectContext | undefined {
+    return this.lastInteractiveContext;
+  }
+
+  /**
+   * Execute the next prompt by injecting it into the already-running PTY session.
+   *
+   * Inject mode skips PTY spawn and SessionStart waiting. It writes the prepared
+   * prompt text directly into the TUI (as if the user typed it and pressed Enter),
+   * then monitors the existing log file from the current time forward.
+   *
+   * Prerequisites: `hasInteractiveContext()` must return true and the PTY session
+   * from the prior prompt must still be running.
+   *
+   * @returns `{ injected: false }` when the PTY is unavailable (caller should fall back).
+   *          `{ injected: true, success }` when the inject and monitoring completed.
+   */
+  async executeInteractiveInject(
+    session: CliExecutionSession
+  ): Promise<{ injected: false } | { injected: true; success: boolean }> {
+    if (!this.lastInteractiveContext) {
+      Log.warn(
+        "⚠️ Inject mode: no previous interactive context — PTY may not be running"
+      );
+      return { injected: false };
+    }
+
+    const startTime = new Date();
+
+    // Submit the prepared prompt text to the running TUI.
+    // "\r" matches what xterm.js sends when the user presses Enter.
+    const written = this.deps.transportCoordinator.writeToCurrentPtySession(
+      session.promptArgument + "\r"
+    );
+
+    if (!written) {
+      Log.warn(
+        "⚠️ Inject mode: PTY session not active — Claude TUI may have exited"
+      );
+      return { injected: false };
+    }
+
+    Log.info(
+      `🔤 Injected prompt into existing PTY session (${session.promptArgument.length} chars)`
+    );
+
+    try {
+      const result = await this.monitorLogFile(
+        this.lastInteractiveContext.logPath,
+        session,
+        {
+          sessionId: this.lastInteractiveContext.sessionId,
+          startTime,
+        }
+      );
+
+      session.setExtractedSessionId(
+        result.sessionId ?? this.lastInteractiveContext.sessionId ?? undefined
+      );
+
+      // Propagate any updated session ID into the inject context for the next prompt.
+      if (result.sessionId) {
+        this.lastInteractiveContext.sessionId = result.sessionId;
+      }
+
+      return { injected: true, success: result.success };
+    } finally {
+      await this.deps.factories.cleanupTempFiles(session.tempFilePaths);
+    }
   }
 
   async executeHeadless(
@@ -276,10 +387,26 @@ export class CliExecutionRunner {
         return { success: false };
       }
 
-      return await this.monitorLogFile(discovery.logPath, session, {
+      // Capture context for potential inject-mode follow-up prompts.
+      this.lastInteractiveContext = {
+        logPath: discovery.logPath,
+        sessionId: discovery.sessionId,
+        spawnedWith: session.resolvedProperties,
+        spawnedWithSessionId: session.resolvedSessionId,
+      };
+
+      const result = await this.monitorLogFile(discovery.logPath, session, {
         sessionId: discovery.sessionId,
         startTime,
       });
+
+      // Keep lastInteractiveContext in sync with the latest session ID in case
+      // the log monitor extracted a new one during this run.
+      if (result.sessionId) {
+        this.lastInteractiveContext.sessionId = result.sessionId;
+      }
+
+      return result;
     } catch (error) {
       Log.error("❌ Interactive execution error", error);
       this.deps.runtimeState.setFailureReason(getErrorMessage(error));

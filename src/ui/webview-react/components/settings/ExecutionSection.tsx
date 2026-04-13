@@ -37,6 +37,11 @@ const MODE_OPTIONS = [
   { value: "headless", label: "Headless" },
 ];
 
+const CONTINUATION_MODE_OPTIONS = [
+  { value: "restart", label: "Restart (default)" },
+  { value: "inject", label: "Inject (keep TUI alive)" },
+];
+
 export function ExecutionSection({ settings, onUpdate }: Props) {
   const exec = settings.settings.execution;
   const s = "user" as const;
@@ -54,6 +59,20 @@ export function ExecutionSection({ settings, onUpdate }: Props) {
           onChange={(v) => onUpdate("execution.mode", v, s)}
           options={MODE_OPTIONS}
         />
+      </div>
+      <div>
+        <label htmlFor="exec-continuation-mode" className="block text-xs text-description-fg mb-1">
+          Continuation mode (interactive)
+        </label>
+        <CustomSelect
+          id="exec-continuation-mode"
+          value={exec.continuationMode ?? "restart"}
+          onChange={(v) => onUpdate("execution.continuationMode", v, s)}
+          options={CONTINUATION_MODE_OPTIONS}
+        />
+        <p className="text-xs text-description-fg mt-1">
+          Inject keeps the TUI alive between prompts — faster and avoids the Claude Code resume cache bug.
+        </p>
       </div>
       <div>
         <label htmlFor="exec-max-prompt-timeout" className="block text-xs text-description-fg mb-1">

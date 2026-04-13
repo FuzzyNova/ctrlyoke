@@ -56,6 +56,11 @@
           "enum": ["interactive", "headless"],
           "description": "Whether prompts run in an interactive terminal or headless mode."
         },
+        "continuationMode": {
+          "type": "string",
+          "enum": ["restart", "inject"],
+          "description": "Controls how follow-up prompts are sent in interactive mode. 'restart' kills and restarts the terminal (uses --resume). 'inject' keeps the TUI alive and writes the next prompt directly into the PTY."
+        },
         "maxPromptTimeout": {
           "type": "number",
           "description": "Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited."

@@ -96,6 +96,7 @@ function createRunner(options?: {
         failureTracker.capturePtyExit(0, []);
       },
       executeHeadless: async () => true,
+      writeToCurrentPtySession: () => false,
     },
     failureTracker,
     factories: {

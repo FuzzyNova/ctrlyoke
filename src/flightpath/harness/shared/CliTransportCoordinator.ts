@@ -312,6 +312,23 @@ export class CliTransportCoordinator {
     }
   }
 
+  /**
+   * Write text directly into the currently active PTY session.
+   * Used by inject mode to submit follow-up prompts without restarting the TUI.
+   * @returns true if the write succeeded, false if no PTY session is active.
+   */
+  writeToCurrentPtySession(text: string): boolean {
+    if (!this.currentPtySession) {
+      return false;
+    }
+    const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
+    if (!ptyManager) {
+      return false;
+    }
+    ptyManager.writeToSession(this.currentPtySession.id, text);
+    return true;
+  }
+
   closeTerminal(): void {}
 
   async cancel(): Promise<boolean> {

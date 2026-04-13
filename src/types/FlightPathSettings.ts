@@ -19,6 +19,8 @@ export interface FlightPathGlobalSettings {
   // Execution
   execution: {
     mode: "interactive" | "headless";
+    /** Controls how follow-up prompts are delivered in interactive mode. */
+    continuationMode: "restart" | "inject";
     maxPromptTimeout: number; // seconds, -1 = unlimited
     scriptTimeout: number; // seconds
     closeTerminalOnComplete: boolean;
@@ -125,6 +127,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
   additionalArgs: {},
   execution: {
     mode: "interactive",
+    continuationMode: "restart",
     maxPromptTimeout: 10800,
     scriptTimeout: 30,
     closeTerminalOnComplete: false,

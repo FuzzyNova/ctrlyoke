@@ -18,6 +18,7 @@ sequential prompts where the TUI is already running.
 ## Motivation
 
 ### Resume Cache Bug (Anthropic upstream)
+
 When Claude Code resumes a session via `--resume`, it filters conversation history
 (`filterUnresolvedToolUses`, `filterOrphanedThinkingOnlyMessages`, etc.) before sending
 to the API. This changes the message structure, breaking the cache prefix match. The
@@ -26,15 +27,16 @@ than a cache hit) on every resumed turn. Anthropic will likely fix this, but inj
 sidesteps it entirely by never restarting the process.
 
 ### Terminal Teardown Latency
+
 Each prompt transition in restart mode involves:
+
 1. Spawn new PTY session with `claude --resume <sessionId>`
 2. Wait for Claude TUI to initialize
 3. Claude re-reads workspace context
 4. Wait for `SessionStart` hook
 5. Prompt finally begins
 
-(The old PTY session from prompt N is not explicitly killed — Claude exits naturally after
-the Stop hook fires, closing its PTY. But the new session startup is still the bottleneck.)
+(The old PTY session from prompt N is not explicitly killed until the next prompt is sent, But the new session startup is still the bottleneck.)
 
 In inject mode: Stop hook fires → write next prompt to PTY → Claude responds immediately.
 No spawn, no startup, no session discovery wait.
@@ -50,14 +52,15 @@ Settings live in the file-based config system (`~/.flightpath/settings.json` / `
 ```typescript
 execution: {
   mode: "interactive" | "headless";
-  continuationMode: "restart" | "inject";  // ← new
+  continuationMode: "restart" | "inject"; // ← new
   maxPromptTimeout: number;
   scriptTimeout: number;
   closeTerminalOnComplete: boolean;
-};
+}
 ```
 
 Also add the default in `FLIGHTPATH_SETTINGS_DEFAULTS`:
+
 ```typescript
 execution: {
   mode: "interactive",
@@ -112,6 +115,7 @@ static getInteractiveContinuationMode(): "restart" | "inject" {
 ## How It Works
 
 ### Current Flow (restart mode)
+
 ```
 Prompt N completes → Stop hook fires → FlightPath detects completion
 → killTerminal()
@@ -121,6 +125,7 @@ Prompt N completes → Stop hook fires → FlightPath detects completion
 ```
 
 ### Inject Mode Flow
+
 ```
 Prompt N completes → Stop hook fires → FlightPath detects completion
 → writeToTerminal(promptN+1 text + "\n")
@@ -130,17 +135,20 @@ Prompt N completes → Stop hook fires → FlightPath detects completion
 No kill. No spawn. No `--resume`. The Claude TUI receives the text as if a human typed it.
 
 ### First Prompt
+
 The first prompt in a workflow always starts Claude normally (potentially with `--resume`
 if `resumeSession: true` on the first step). Inject mode only activates for subsequent
 prompts within the same run.
 
 ### Session ID Tracking
+
 In inject mode, the session ID naturally carries forward — Claude is still in the same
 session. `SessionStart` won't fire again for follow-up prompts (Claude didn't restart),
 so session ID tracking must be adjusted: retain the session ID from the initial
 `SessionStart` notification for the duration of the inject-mode chain.
 
 ### Controller Handoff on Injection
+
 Any client (controller or viewer) may send a continuation prompt. When a client sends an
 inject-mode continuation, it **automatically takes control** of the terminal — mirroring
 the existing `restart` mode precedent where the client that triggers a `--resume` spawn
@@ -165,15 +173,15 @@ alive after workflow completion and are not killed on workflow switching**. The
 
 #### Full teardown call site map
 
-| Call site | What it kills | PTY killed? |
-|---|---|---|
-| `WorkflowInstance.dispose()` (ext. deactivation) | `lastRunIntegrations.closeTerminal()` → `processManager.disposeTerminal()` → VS Code terminal only | **No** |
-| `WorkflowInstance.startWorkflowExecution()` finally | `execIntegration.dispose()` → `processManager.disposeProcess()` (if `closeTerminalWhenPromptCompletes=false`) | **No** |
-| `WorkflowInstance.startWorkflowExecution()` pre-run cleanup | `lastRunIntegrations.closeTerminal()` → VS Code terminal only | **No** |
-| `WorkflowInstance.getIntegrationForPrompt()` harness switch (line 1827) | `closeTerminal()` → VS Code terminal only | **No** |
-| `CliTransportCoordinator.cancel()` | `ptyManager.killSession()` | **Yes** — user abort only |
-| `PtyProcessManager.dispose()` | All PTY sessions | **Yes** — extension deactivation |
-| `WebviewMessageRouter` KILL_TERMINAL | Single PTY session by ID | **Yes** — user-initiated from webview |
+| Call site                                                               | What it kills                                                                                                 | PTY killed?                           |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `WorkflowInstance.dispose()` (ext. deactivation)                        | `lastRunIntegrations.closeTerminal()` → `processManager.disposeTerminal()` → VS Code terminal only            | **No**                                |
+| `WorkflowInstance.startWorkflowExecution()` finally                     | `execIntegration.dispose()` → `processManager.disposeProcess()` (if `closeTerminalWhenPromptCompletes=false`) | **No**                                |
+| `WorkflowInstance.startWorkflowExecution()` pre-run cleanup             | `lastRunIntegrations.closeTerminal()` → VS Code terminal only                                                 | **No**                                |
+| `WorkflowInstance.getIntegrationForPrompt()` harness switch (line 1827) | `closeTerminal()` → VS Code terminal only                                                                     | **No**                                |
+| `CliTransportCoordinator.cancel()`                                      | `ptyManager.killSession()`                                                                                    | **Yes** — user abort only             |
+| `PtyProcessManager.dispose()`                                           | All PTY sessions                                                                                              | **Yes** — extension deactivation      |
+| `WebviewMessageRouter` KILL_TERMINAL                                    | Single PTY session by ID                                                                                      | **Yes** — user-initiated from webview |
 
 `closeTerminal()` and `dispose()` only operate on `CliProcessManager.terminal`
 (VS Code terminal, used in the legacy shell-integration path). In the node-pty path
@@ -204,6 +212,7 @@ completion callback could check). PTY sessions were orphaned in `PtyProcessManag
 no `WorkflowInstance` to hold the instance→PTY mapping.
 
 **Fix** (in `WorkflowOrchestrator.ts`):
+
 1. **`loadWorkflowForClient()` and `loadWorkingFile()`** — both now check
    `retiredInstances` by working file path before creating a new instance. If a retired
    instance for the same file already exists, it is reused (so PTY sessions keyed to that
@@ -238,51 +247,44 @@ completion.** No code changes needed for this scenario.
 
 ---
 
-## Implementation
+## Implementation — **DONE**
 
-### 1. Settings wiring (four files)
-- `src/types/FlightPathSettings.ts` — add `continuationMode` to `execution` type and defaults
-- `schemas/settings-schema.json` — add `continuationMode` to `execution.properties`
-- `package.json` — add `flightpath.interactiveContinuationMode` to contributes.configuration
-- `src/ui/WebviewSettingsSync.ts` — add `"interactiveContinuationMode": "execution.continuationMode"` to `VSCODE_SETTINGS_KEY_MAP`
-- `src/utils/ConfigurationUtils.ts` — add `getInteractiveContinuationMode()` reading `configService.get("execution").continuationMode`
+### 1. ~~Settings wiring~~ — **DONE**
 
-### 2. `CliIntegration.ts` — `runExecutionSession()`
-After Stop hook fires for prompt N and there is a prompt N+1:
-- Check `ConfigurationUtils.getInteractiveContinuationMode()`
-- If `"inject"`: call `injectPromptIntoTerminal(promptText)` instead of the normal
-  kill → restart cycle
-- If `"restart"`: existing behavior unchanged
+- `src/types/FlightPathSettings.ts` — `continuationMode: "restart" | "inject"` added to `execution` type + default `"restart"`
+- `schemas/settings-schema.json` — `continuationMode` enum added to `execution.properties`
+- `src/utils/ConfigurationUtils.ts` — `getInteractiveContinuationMode()` added
+- `src/ui/webview-react/components/settings/ExecutionSection.tsx` — continuation mode dropdown added under execution mode
 
-### 3. `CliIntegration.ts` — `injectPromptIntoTerminal()`
-New private method:
-```typescript
-private async injectPromptIntoTerminal(promptText: string): Promise<void> {
-  // Write prompt text to the active PTY session
-  // PtyProcessManager or the active terminal reference handles the write
-  // Append "\n" to submit (equivalent to pressing Enter in the TUI)
-}
-```
+> **Note:** `package.json` and `WebviewSettingsSync.ts` changes were not needed. The extension's settings UI talks directly to the file-based config service. `handleReadConfig`/`handleUpdateConfig` in `WebviewSettingsSync` strip the `flightpath.` prefix and resolve nested keys automatically — no manual mapping required.
 
-The exact PTY write API depends on how `PtyProcessManager` exposes writes to an
-existing session. May require surfacing a `write(sessionId, text)` method if not
-already available.
+### 2. ~~`CliIntegration.ts` — `runExecutionSession()`~~ — **DONE**
 
-### 4. `CliInteractiveStartupCoordinator.ts`
-In inject mode, the coordinator's `waitForSessionStart()` must be skipped for follow-up
-prompts (Claude didn't restart, so `SessionStart` won't fire). The session ID from the
-initial start should be passed through.
+`shouldUseInjectMode(session)` guard added at the top of `runExecutionSession()`:
+- Checks continuation mode setting, `promptIndex > 0`, and `hasInteractiveContext()`
+- Calls `executionRunner.executeInteractiveInject(session)` when all three pass
+- Falls through to restart mode if `injected: false` (PTY unavailable)
 
-### 5. Session ID Handling
-`CliSessionResolverAdapter` or equivalent must be told: "in inject mode, reuse the
-session ID from prompt N for prompt N+1 without waiting for a new SessionStart."
+### 3. ~~`CliIntegration.ts` — inject path~~ — **DONE** (in `CliExecutionRunner`)
 
-### 6. Controller Assignment on Inject
-Before writing the injected prompt to the PTY, call
-`ptyProcessManager.setPendingController(workflowId, injectingClientId)`.
-`PtyProcessManager` already persists the controller via `workflowRunControllers`; the
-next `TERMINAL_CONTROLLER_CHANGED` broadcast (triggered by the existing flow or by a
-small explicit `assignController()` call) propagates the change to all webview clients.
+Implemented as `CliExecutionRunner.executeInteractiveInject()`:
+- Writes `session.promptArgument + "\r"` to the active PTY via `transportCoordinator.writeToCurrentPtySession()`
+- Calls `monitorLogFile()` with the stored log path and `startTime = new Date()` — `NotificationMonitorBase.monitorForCompletion()` uses `isFileNewerThan(stopFile, startTime)` so old stop files from prompt N are naturally filtered out
+- Propagates session ID back to `session.setExtractedSessionId()`
+
+> **Open question (Q2):** Does `"\r"` correctly submit in the Claude TUI? Verify empirically — may need `"\r\n"` or a different sequence.
+
+### 4. ~~`CliInteractiveStartupCoordinator.ts`~~ — **Not needed**
+
+Inject mode bypasses the coordinator entirely — `startInteractiveProcess()` and `resolveSession()` are never called for injected prompts. `startTime = new Date()` passed to `monitorLogFile()` handles all filtering of prior-session log entries.
+
+### 5. ~~Session ID Handling~~ — **Done**
+
+Session ID reuse is automatic. `CliExecutionRunner.lastInteractiveContext` stores `{ logPath, sessionId }` after prompt N's `executeInTerminal()` completes. The stored `sessionId` is passed to `monitorLogFile()` for prompt N+1. `monitorForCompletion()` filters by `startTime` via `isFileNewerThan()`, so the old stop file is ignored.
+
+### 6. Controller Assignment on Inject — **Deferred**
+
+`ptyProcessManager.setPendingController()` not called for injected prompts — existing controller stays assigned. Implement if per-client inject triggering becomes a requirement.
 
 ### 7. ~~Investigate "terminal gone on switch-back" bug~~ — **DONE**
 
@@ -290,8 +292,9 @@ Root cause found and fixed. See the "Terminal Lifecycle" section above for the f
 analysis. No further investigation needed — switching back to a completed workflow
 with active PTY sessions now works correctly.
 
-### 8. `package.json`
-Add setting declaration under `contributes.configuration.properties`.
+### 8. ~~`package.json`~~ — **Not needed**
+
+The settings UI talks to the file-based config service directly. No `contributes.configuration` entry required.
 
 ---
 
@@ -323,6 +326,7 @@ Add setting declaration under `contributes.configuration.properties`.
   preference.
 
 ### Workflow Status Dropdown — Terminal Presence Indicator
+
 For each workflow listed in the status dropdown, show a small terminal icon when that
 workflow has one or more running (non-exited) PTY sessions open. Overlay the count on
 the icon when there are two or more sessions (e.g., one AI-CLI + one shell).

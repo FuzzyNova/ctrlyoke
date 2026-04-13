@@ -321,6 +321,15 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Get interactive continuation mode ("restart" or "inject").
+   * "restart" kills and restarts the terminal for each follow-up prompt.
+   * "inject" keeps the TUI alive and writes the next prompt directly into the PTY.
+   */
+  getInteractiveContinuationMode(): "restart" | "inject" {
+    return configService.get("execution").continuationMode;
+  },
+
+  /**
    * Check if terminal should be closed when each interactive prompt completes
    */
   shouldCloseTerminalWhenPromptCompletes(): boolean {

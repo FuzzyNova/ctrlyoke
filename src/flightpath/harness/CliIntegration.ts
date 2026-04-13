@@ -332,6 +332,89 @@ export class CliIntegration extends HarnessIntegration {
   // INTERACTIVE TUI EXECUTION
   // ============================================================
 
+  /**
+   * Returns true when inject mode should be used for the given session.
+   *
+   * Conditions:
+   * 1. The global setting is "inject"
+   * 2. This is a follow-up prompt (promptIndex > 0)
+   * 3. There is a previous interactive context (PTY + log file)
+   * 4. The spawn-time configuration is compatible — model, tool permissions, hooks,
+   *    MCP servers, and additional args must all match the spawned process. Any
+   *    prompt-level override that changes these requires a fresh process instead.
+   */
+  private shouldUseInjectMode(session: CliExecutionSession): boolean {
+    if (ConfigurationUtils.getInteractiveContinuationMode() !== "inject") {
+      return false;
+    }
+    const promptIndex = session.workflowContext?.promptIndex ?? 0;
+    if (promptIndex === 0) {
+      return false;
+    }
+    const ctx = this.executionRunner.getLastInteractiveContext();
+    if (!ctx) {
+      return false;
+    }
+    const reason = CliIntegration.getInjectIncompatibilityReason(
+      ctx,
+      session.resolvedProperties,
+      session.resolvedSessionId
+    );
+    if (reason) {
+      Log.info(
+        `↩️ Inject mode skipped for prompt ${promptIndex + 1}: ${reason} — using restart`
+      );
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Returns a human-readable reason why inject mode cannot be used, or null if compatible.
+   *
+   * Checks the spawn-time configuration fields that are fixed for the lifetime of a
+   * Claude process. Any prompt-level override of these requires killing the current
+   * process and restarting with the new args.
+   */
+  private static getInjectIncompatibilityReason(
+    ctx: import("./shared/CliExecutionRunner").InteractiveInjectContext,
+    curr: ResolvedProperties | undefined,
+    currSessionId: string | undefined
+  ): string | null {
+    const prev = ctx.spawnedWith;
+
+    // Explicit session ID pointing to a different session than the running one
+    if (currSessionId !== undefined && currSessionId !== ctx.sessionId && currSessionId !== ctx.spawnedWithSessionId) {
+      return `explicit sessionId "${currSessionId}" differs from running session`;
+    }
+
+    if (!prev || !curr) {
+      return null; // no stored config to compare against — allow inject
+    }
+
+    if (curr.model !== prev.model) {
+      return `model changed (${prev.model} → ${curr.model})`;
+    }
+
+    if (JSON.stringify(curr.toolPermissions) !== JSON.stringify(prev.toolPermissions)) {
+      return "toolPermissions changed";
+    }
+
+    if (JSON.stringify(curr.hooks) !== JSON.stringify(prev.hooks)) {
+      return "hooks changed";
+    }
+
+    if (JSON.stringify(curr.mcpServers) !== JSON.stringify(prev.mcpServers)) {
+      return "mcpServers changed";
+    }
+
+    if ((curr.additionalArgs ?? "") !== (prev.additionalArgs ?? "")) {
+      return `additionalArgs changed`;
+    }
+
+    return null;
+  }
+
   private getInteractiveAbortState(): ReturnType<
     typeof this.failureTracker.getInteractiveAbortState
   > {
@@ -576,6 +659,18 @@ export class CliIntegration extends HarnessIntegration {
   ): Promise<boolean> {
     const mode = this.getExecutionMode();
     const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
+
+    // Inject mode: for follow-up prompts in interactive mode, write directly into
+    // the running TUI instead of killing and restarting with --resume.
+    if (isInteractive && this.shouldUseInjectMode(session)) {
+      const injectResult = await this.executionRunner.executeInteractiveInject(session);
+      if (injectResult.injected) {
+        return injectResult.success;
+      }
+      // Fall through to restart mode if the PTY is no longer available.
+      Log.info("↩️ Inject mode unavailable — falling back to restart mode");
+    }
+
     const workspaceRoot = this.getWorkspaceRoot();
     const extensionPath = this.platform.getExtensionPath();
 
