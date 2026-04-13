@@ -97,6 +97,26 @@ function App() {
     setSettingsOverlayClosing(true);
   };
 
+  // Header toggle handlers — route through close animation when panels are already open.
+  // Calling toggleMobilePrompts/toggleMobileSettings directly skips the animation path.
+  const handleToggleMobilePrompts = () => {
+    if (mobilePromptsOpen && mobilePromptsMode === "fullwidth") {
+      promptsAfterClose.current = () => closeMobilePrompts();
+      setPromptsOverlayClosing(true);
+    } else {
+      toggleMobilePrompts();
+    }
+  };
+
+  const handleToggleMobileSettings = () => {
+    if (mobileSettingsOpen) {
+      settingsAfterClose.current = () => closeMobileSettings();
+      setSettingsOverlayClosing(true);
+    } else {
+      toggleMobileSettings();
+    }
+  };
+
   // Track isMobile to detect layout transitions in render body below
   const wasMobileRef = useRef(isMobile);
 
@@ -269,8 +289,8 @@ function App() {
     return (
       <div className="h-dvh w-full flex flex-col bg-editor-bg text-foreground border-l border-r">
         <Header
-          onToggleMobilePrompts={toggleMobilePrompts}
-          onToggleMobileSettings={toggleMobileSettings}
+          onToggleMobilePrompts={handleToggleMobilePrompts}
+          onToggleMobileSettings={handleToggleMobileSettings}
         />
 
         {/* Main area — relative container for absolute overlays */}
