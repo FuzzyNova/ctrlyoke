@@ -266,7 +266,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     : DEFAULT_WORKFLOW_NAME;
 
   return (
-    <div ref={containerRef} className={`workflow-status relative ${className}`}>
+    <div ref={containerRef} className={`workflow-status relative min-w-0 ${className}`}>
       {/* Editing Mode */}
       {isEditing ? (
         <input
@@ -277,7 +277,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={saveEdit}
-          className="workflow-name-edit-input px-2 py-1 text-sm font-semibold min-w-[200px] max-w-[400px] bg-input-bg text-input-fg border border-focus-border rounded outline-none"
+          className="workflow-name-edit-input w-full px-2 py-1 text-sm font-semibold bg-input-bg text-input-fg border border-focus-border rounded outline-none"
           style={{
             boxShadow: "0 0 0 1px var(--vscode-focusBorder)",
           }}
@@ -285,7 +285,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       ) : (
         /* Display Mode - Split Button Style */
         <div
-          className={`workflow-split-button inline-flex border rounded overflow-hidden max-w-full sm:max-w-[500px] w-full sm:w-auto flex-1 min-w-0 transition-colors ${isDropdownOpen ? "border-cmd-active-border" : "border-cmd-border"}`}
+          className={`workflow-split-button flex border rounded overflow-hidden max-w-full sm:max-w-[500px] w-full sm:w-auto min-w-0 transition-colors ${isDropdownOpen ? "border-cmd-active-border" : "border-cmd-border"}`}
         >
           {/* Main Button - Workflow Name */}
           <button
@@ -296,7 +296,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           >
             <div className="flex items-center justify-between gap-2 overflow-hidden">
               {/* Workflow Name */}
-              <span className="font-semibold text-sm truncate flex-1">
+              <span className="font-semibold text-sm truncate flex-1 min-w-0">
                 {displayName}
               </span>
 
