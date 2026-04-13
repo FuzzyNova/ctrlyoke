@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
+import { useElementNarrow } from "@hooks/useElementNarrow";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { GlobalSettingsVerticalTabBar } from "./GlobalSettingsVerticalTabBar";
 import {
@@ -19,15 +20,15 @@ import {
 
 const ALL_TABS = [
   { id: "general", label: "General", icon: "codicon-settings" },
-  { id: "workflow", label: "Workflow Defaults", icon: "codicon-git-branch" },
-  { id: "harnesses", label: "Harnesses & Models", icon: "codicon-server" },
+  { id: "workflow", label: "Workflow Defaults", icon: "codicon-globe" },
+  { id: "harnesses", label: "Harnesses & Models", icon: "codicon-robot" },
   { id: "permissions", label: "Permissions", icon: "codicon-shield" },
   { id: "execution", label: "Execution", icon: "codicon-play" },
   { id: "chat", label: "Chat", icon: "codicon-comment-discussion" },
   { id: "mcp", label: "MCP & Hooks", icon: "codicon-plug" },
   { id: "queue", label: "Queue", icon: "codicon-list-unordered" },
-  { id: "history", label: "History & Safety", icon: "codicon-history" },
-  { id: "server", label: "Server", icon: "codicon-cloud" },
+  { id: "history", label: "History", icon: "codicon-history" },
+  { id: "server", label: "Server", icon: "codicon-server" },
 ];
 
 const TABS = isStandalone
@@ -41,6 +42,8 @@ export function GlobalSettingsDrawer() {
   const setActiveTab = useUiStore((s) => s.setGlobalSettingsTab);
   const closeGlobalSettings = useUiStore((s) => s.closeGlobalSettings);
   const fullSettings = useSettingsStore((s) => s.fullGlobalSettings);
+  const serverRunning = useSettingsStore((s) => s.serverRunning);
+  const [drawerRef, isNarrow] = useElementNarrow(580);
 
   // Load settings when opened
   useEffect(() => {
@@ -59,58 +62,90 @@ export function GlobalSettingsDrawer() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [globalSettingsOpen, closeGlobalSettings]);
 
-  function handleUpdate(path: string, value: unknown, scope: "workspace" | "user") {
-    vscode.postMessage({ type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, path, value, scope });
+  function handleUpdate(
+    path: string,
+    value: unknown,
+    scope: "workspace" | "user"
+  ) {
+    vscode.postMessage({
+      type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+      path,
+      value,
+      scope,
+    });
   }
 
   return (
     <div
+      ref={drawerRef}
       className={`absolute inset-0 flex flex-col z-40 bg-panel-bg border-t border-panel-border
         transition-transform duration-200 ease-out
         ${globalSettingsOpen ? "translate-y-0" : "translate-y-full"}`}
       aria-hidden={!globalSettingsOpen}
     >
+      {/* Title bar — always visible, never scrolls */}
+      <div className="flex items-center justify-between px-3 py-0.5 border-b border-panel-border shrink-0">
+        <div className="w-7" />
+        <span className="text-sm uppercase font-medium text-description-fg">
+          Settings
+        </span>
+        <button
+          className="control-button flex items-center justify-center w-5 h-5 rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+          onClick={closeGlobalSettings}
+          title="Close Global Settings"
+          aria-label="Close Global Settings"
+        >
+          <span className="codicon codicon-close" />
+        </button>
+      </div>
+
       <div className="flex flex-1 min-h-0">
         {/* Left: vertical tab bar */}
         <GlobalSettingsVerticalTabBar
-          tabs={TABS}
+          tabs={TABS.map((t) => t.id === "server" ? { ...t, indicator: serverRunning } : t)}
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          iconOnly={isNarrow}
         />
 
         {/* Right: section content */}
-        <div className="flex-1 overflow-y-auto relative">
-          {/* Close button */}
-          <button
-            className="absolute top-2 right-2 control-button flex items-center justify-center w-7 h-7 rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover z-10"
-            onClick={closeGlobalSettings}
-            title="Close Global Settings"
-            aria-label="Close Global Settings"
-          >
-            <span className="codicon codicon-close" />
-          </button>
-
-          <div className="p-4 pr-12 max-w-2xl">
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-4 max-w-2xl">
             {fullSettings && activeTab === "general" && (
               <GeneralSection settings={fullSettings} onUpdate={handleUpdate} />
             )}
             {fullSettings && activeTab === "workflow" && (
-              <WorkflowDefaultsSection settings={fullSettings} onUpdate={handleUpdate} />
+              <WorkflowDefaultsSection
+                settings={fullSettings}
+                onUpdate={handleUpdate}
+              />
             )}
             {fullSettings && activeTab === "harnesses" && (
-              <HarnessesSection settings={fullSettings} onUpdate={handleUpdate} />
+              <HarnessesSection
+                settings={fullSettings}
+                onUpdate={handleUpdate}
+              />
             )}
             {fullSettings && activeTab === "permissions" && (
-              <PermissionsSection settings={fullSettings} onUpdate={handleUpdate} />
+              <PermissionsSection
+                settings={fullSettings}
+                onUpdate={handleUpdate}
+              />
             )}
             {fullSettings && activeTab === "execution" && (
-              <ExecutionSection settings={fullSettings} onUpdate={handleUpdate} />
+              <ExecutionSection
+                settings={fullSettings}
+                onUpdate={handleUpdate}
+              />
             )}
             {fullSettings && activeTab === "chat" && (
               <ChatSection settings={fullSettings} onUpdate={handleUpdate} />
             )}
             {fullSettings && activeTab === "mcp" && (
-              <McpHooksSection settings={fullSettings} onUpdate={handleUpdate} />
+              <McpHooksSection
+                settings={fullSettings}
+                onUpdate={handleUpdate}
+              />
             )}
             {fullSettings && activeTab === "queue" && (
               <QueueSection settings={fullSettings} onUpdate={handleUpdate} />
@@ -122,7 +157,9 @@ export function GlobalSettingsDrawer() {
               <ServerSection settings={fullSettings} onUpdate={handleUpdate} />
             )}
             {!fullSettings && (
-              <div className="text-description-fg text-sm">Loading settings…</div>
+              <div className="text-description-fg text-sm">
+                Loading settings…
+              </div>
             )}
           </div>
         </div>

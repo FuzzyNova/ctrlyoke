@@ -830,8 +830,12 @@ export class WorkflowExecutor {
       context.dashboardProvider.updateFinalStepOutput(target.loopIndex, initCliOutput);
     }
 
+    // Accumulate output chunks so interactive mode has output to save to history.
+    const outputChunks: string[] = [];
+
     // Streaming callback — strips ANSI codes for the CliOutput text panel.
     const onStreamChunk = (chunk: string): void => {
+      outputChunks.push(chunk);
       if (!context.dashboardProvider) return;
       if (signedStepIndex >= 0) {
         context.dashboardProvider.updateCliStreamingChunk(signedStepIndex, chunk);
@@ -887,10 +891,10 @@ export class WorkflowExecutor {
       );
       evalResult = {
         passed,
-        stdout: "",
+        stdout: outputChunks.join(""),
         stderr: "",
         result: "",
-        duration: 0,
+        duration: Date.now() - timestampMs,
         exitCode,
       };
     }

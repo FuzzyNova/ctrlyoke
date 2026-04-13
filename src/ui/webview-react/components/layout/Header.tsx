@@ -1,13 +1,12 @@
 import React, { useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
-import { useSettingsStore } from "@store/settingsStore";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
   RUNNER_IDS,
 } from "../../types/messages";
-import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
+import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { WebviewLog } from "@utils/logger";
 import { WorkflowControls } from "../workflow/WorkflowControls";
@@ -85,7 +84,6 @@ export const Header: React.FC<{
   const isMobile = useIsMobile();
   const { fileName, executionState } = useWorkflowStore();
   const hasPrompts = useWorkflowStore((s) => s.steps.length > 0);
-  const serverRunning = useSettingsStore((s) => s.serverRunning);
   const {
     loadedWorkflows,
     activeWorkflowId,
@@ -224,7 +222,7 @@ export const Header: React.FC<{
 
   return (
     <>
-      <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_1fr] gap-x-4 gap-y-1.5 items-center px-1 sm:px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
+      <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_1fr] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center px-1 sm:px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
         {/* Left Section: Workflow Controls + Save + Undo/Redo buttons */}
         <div className="header-left flex items-center gap-0.5 sm:gap-2">
           <WorkflowControls />
@@ -267,29 +265,6 @@ export const Header: React.FC<{
           >
             <i className="codicon codicon-settings-gear" />
           </button>
-          {/* Start/Stop Server button (desktop only, hidden in browser client) */}
-          {!isMobile && !isStandalone && (
-            <button
-              className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border transition-colors ${
-                serverRunning
-                  ? "border-btn-primary-border bg-btn-primary-bg text-btn-primary-fg hover:bg-btn-primary-hover"
-                  : "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              }`}
-              onClick={() =>
-                vscode.postMessage({
-                  type: serverRunning
-                    ? MESSAGE_TYPES.DISABLE_SERVER
-                    : MESSAGE_TYPES.ENABLE_SERVER,
-                })
-              }
-              title={serverRunning ? "Stop Server" : "Start Server"}
-              aria-label={serverRunning ? "Stop server" : "Start server"}
-            >
-              <i
-                className={`codicon ${serverRunning ? "codicon-debug-stop" : "codicon-play-circle"}`}
-              />
-            </button>
-          )}
         </div>
 
         {/* Save Workflow Dialog — rendered here for co-location with SaveWorkflowButton */}

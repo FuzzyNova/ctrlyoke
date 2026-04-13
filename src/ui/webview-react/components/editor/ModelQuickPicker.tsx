@@ -57,7 +57,7 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
       showLabel={showLabel}
       icon={
         <i
-          className={`codicon codicon-hubot transition-opacity ${properties.model !== undefined ? "text-focus-border" : "opacity-40"}`}
+          className={`codicon codicon-robot transition-opacity ${properties.model !== undefined ? "text-focus-border" : "opacity-40"}`}
         />
       }
       valueLabel={valueLabel}

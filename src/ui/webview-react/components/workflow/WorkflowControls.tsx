@@ -81,14 +81,14 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       <SplitButton
         mainLabel={
           <span className="flex items-center gap-1.5">
-            <i className="codicon codicon-add" />
+            <i className="codicon codicon-add py-0.5" />
             <span className="sm:inline hidden">New</span>
           </span>
         }
         mainAction={handleNewWorkflow}
         options={dropdownOptions}
         variant="primary"
-        mainTitle="Clear current workflow and start blank"
+        mainTitle="Create new workflow"
         dropdownTitle="More workflow actions"
         dropdownAriaLabel="Open workflow menu"
       />
