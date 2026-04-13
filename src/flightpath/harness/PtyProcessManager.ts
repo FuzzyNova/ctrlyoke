@@ -3,8 +3,10 @@ import type { IPty } from "node-pty";
 import { Log } from "../../utils/Log";
 import {
   SESSION_KINDS,
+  SHELL_KINDS,
   TERMINAL_SESSION_STATUS,
   type SessionKind,
+  type ShellKind,
   type TerminalSessionStatus,
 } from "../../types/DashboardConstants";
 
@@ -55,6 +57,17 @@ function shellDisplayName(shellPath: string): string {
   return base.replace(/\.exe$/i, "");
 }
 
+/**
+ * Map a shell executable path to a ShellKind discriminant used by the UI
+ * to pick the appropriate terminal icon.
+ */
+function resolveShellKind(shellPath: string): ShellKind {
+  const name = shellDisplayName(shellPath).toLowerCase();
+  if (name === "pwsh") return SHELL_KINDS.PWSH;
+  if (name === "powershell") return SHELL_KINDS.POWERSHELL;
+  return SHELL_KINDS.BASH;
+}
+
 /** Lazy-load node-pty at spawn time; returns null if native binary is unavailable. */
 function loadNodePty(): NodePtyModule | null {
   try {
@@ -64,7 +77,7 @@ function loadNodePty(): NodePtyModule | null {
   }
 }
 
-export type { SessionKind };
+export type { SessionKind, ShellKind };
 
 const DEFAULT_COLS = 220;
 const DEFAULT_ROWS = 50;
@@ -81,6 +94,8 @@ export class PtySession {
   readonly promptNumber?: number;
   /** HarnessId for AI CLI sessions (e.g. "claude-cli"). Undefined for shell sessions. */
   readonly harnessId?: string;
+  /** Shell variant for SHELL sessions (pwsh / powershell / bash). Undefined for ai-cli sessions. */
+  readonly shellKind?: ShellKind;
   readonly pty: IPty;
   status: TerminalSessionStatus;
   /** The clientId that owns interactive control of this session (input + resize). */
@@ -97,7 +112,8 @@ export class PtySession {
     kind: SessionKind,
     ptyInstance: IPty,
     promptNumber?: number,
-    harnessId?: string
+    harnessId?: string,
+    shellKind?: ShellKind
   ) {
     this.id = id;
     this.workflowId = workflowId;
@@ -105,6 +121,7 @@ export class PtySession {
     this.kind = kind;
     this.promptNumber = promptNumber;
     this.harnessId = harnessId;
+    this.shellKind = shellKind;
     this.pty = ptyInstance;
     this.status = TERMINAL_SESSION_STATUS.RUNNING;
   }
@@ -138,6 +155,8 @@ export interface SpawnPtyOptions {
   promptNumber?: number;
   /** HarnessId for AI CLI sessions (e.g. "claude-cli"). Omit for shell sessions. */
   harnessId?: string;
+  /** Shell variant for SHELL sessions. Omit for ai-cli sessions. */
+  shellKind?: ShellKind;
   /**
    * Pre-supply a session ID so the caller can post TERMINAL_STARTED to the
    * webview *before* spawning — ensuring the session exists in the store
@@ -271,7 +290,8 @@ export class PtyProcessManager {
       options.kind,
       ptyInstance,
       options.promptNumber,
-      options.harnessId
+      options.harnessId,
+      options.shellKind
     );
     // Resolve controller: consume any one-shot pending override (set by RUN_WORKFLOW or
     // an ephemeral-prompt auto-start), then fall back to the persistent run controller
@@ -326,6 +346,7 @@ export class PtyProcessManager {
       workflowId: opts.workflowId,
       stepName: shellDisplayName(shell),
       kind: SESSION_KINDS.SHELL,
+      shellKind: resolveShellKind(shell),
       command: shell,
       args: [],
       cwd: opts.cwd,

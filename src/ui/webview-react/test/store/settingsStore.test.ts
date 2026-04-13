@@ -167,6 +167,8 @@ describe("setGlobalSettings", () => {
       confirmResetOperations: false,
       priorContext: "none",
       workspaceRoot: "",
+      defaultEndCondition: null,
+      defaultPreCondition: null,
     };
     useSettingsStore.getState().setGlobalSettings(settings);
     expect(useSettingsStore.getState().globalSettings.harness).toBe(

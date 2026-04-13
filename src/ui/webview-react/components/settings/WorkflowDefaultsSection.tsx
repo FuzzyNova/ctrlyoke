@@ -1,6 +1,9 @@
+import React, { useState } from "react";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import { PRIOR_CONTEXT_KEYWORDS } from "@root/types/DashboardConstants";
 import { CustomSelect } from "../shared/CustomSelect";
+import { ScriptConditionEditor, type ScriptConditionValue } from "../shared/ScriptConditionEditor";
+import { AnimatedSection } from "../shared/AnimatedSection";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -72,6 +75,33 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
   const wf = settings.settings.workflow;
   const s = "user" as const;
 
+  const [preConditionEnabled, setPreConditionEnabled] = useState(
+    wf.defaultPreCondition !== null && wf.defaultPreCondition !== undefined
+  );
+  const [endConditionEnabled, setEndConditionEnabled] = useState(
+    wf.defaultEndCondition !== null && wf.defaultEndCondition !== undefined
+  );
+
+  function handlePreConditionToggle(enabled: boolean) {
+    setPreConditionEnabled(enabled);
+    if (!enabled) {
+      onUpdate("workflow.defaultPreCondition", null, s);
+    } else {
+      const initial = wf.defaultPreCondition ?? { script: "", onFail: "skipPrompt" };
+      onUpdate("workflow.defaultPreCondition", initial, s);
+    }
+  }
+
+  function handleEndConditionToggle(enabled: boolean) {
+    setEndConditionEnabled(enabled);
+    if (!enabled) {
+      onUpdate("workflow.defaultEndCondition", null, s);
+    } else {
+      const initial = wf.defaultEndCondition ?? { script: "", returns: "true" };
+      onUpdate("workflow.defaultEndCondition", initial, s);
+    }
+  }
+
   return (
     <div className="space-y-1">
       <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
@@ -108,15 +138,6 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
           options={PRIOR_CONTEXT_OPTIONS}
         />
       </FieldRow>
-      <FieldRow label="Default max retries" description="Number of retries on end condition failure.">
-        <input
-          type="number"
-          min={0}
-          value={wf.maxRetries}
-          onChange={(e) => onUpdate("workflow.maxRetries", parseInt(e.target.value, 10) || 0, s)}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
-        />
-      </FieldRow>
       <div className="pt-2 space-y-1">
         <ToggleRow
           label="Resume existing session"
@@ -136,6 +157,60 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
           checked={wf.omitAgentsSkillsOnResume}
           onChange={(v) => onUpdate("workflow.omitAgentsSkillsOnResume", v, s)}
         />
+      </div>
+
+      {/* Default Pre-Condition */}
+      <div className="pt-4 border-t border-panel-border">
+        <label
+          className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg cursor-pointer mb-1"
+          title="Default pre-condition gate applied to all new workflows. Individual prompts can override or disable this."
+        >
+          <input
+            type="checkbox"
+            checked={preConditionEnabled}
+            onChange={(e) => handlePreConditionToggle(e.target.checked)}
+            className="w-4 h-4 accent-focus-border cursor-pointer"
+          />
+          Default Pre-Condition
+        </label>
+        <p className="text-xs text-description-fg mb-2">
+          Script gate that runs before each prompt in new workflows. Prompts can override or disable it.
+        </p>
+        <AnimatedSection visible={preConditionEnabled}>
+          <ScriptConditionEditor
+            variant="preCondition"
+            value={(wf.defaultPreCondition ?? null) as ScriptConditionValue | null}
+            onChange={(updated) => onUpdate("workflow.defaultPreCondition", updated, s)}
+            idPrefix="global-default-pre"
+          />
+        </AnimatedSection>
+      </div>
+
+      {/* Default End Condition */}
+      <div className="pt-4 border-t border-panel-border">
+        <label
+          className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg cursor-pointer mb-1"
+          title="Default end condition applied to all new workflows. Individual prompts can override or disable this."
+        >
+          <input
+            type="checkbox"
+            checked={endConditionEnabled}
+            onChange={(e) => handleEndConditionToggle(e.target.checked)}
+            className="w-4 h-4 accent-focus-border cursor-pointer"
+          />
+          Default End Condition
+        </label>
+        <p className="text-xs text-description-fg mb-2">
+          Validation that runs after each prompt in new workflows. Prompts can override or disable it.
+        </p>
+        <AnimatedSection visible={endConditionEnabled}>
+          <ScriptConditionEditor
+            variant="endCondition"
+            value={(wf.defaultEndCondition ?? null) as ScriptConditionValue | null}
+            onChange={(updated) => onUpdate("workflow.defaultEndCondition", updated, s)}
+            idPrefix="global-default-end"
+          />
+        </AnimatedSection>
       </div>
     </div>
   );

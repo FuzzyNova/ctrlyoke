@@ -1,5 +1,10 @@
 import type { HarnessId } from "./DashboardConstants";
-import type { McpServerConfig, UserHookConfig } from "./FlightPathTypes";
+import type {
+  EndCondition,
+  McpServerConfig,
+  PreCondition,
+  UserHookConfig,
+} from "./FlightPathTypes";
 
 export interface FlightPathGlobalSettings {
   // Core
@@ -42,9 +47,11 @@ export interface FlightPathGlobalSettings {
     resumeExistingSession: boolean;
     priorContext: string;
     autoLoadRecentSession: boolean;
-    maxRetries: number;
-    retryPrompt: string;
     omitAgentsSkillsOnResume: boolean;
+    /** Default end condition applied to all new workflows. null/undefined = disabled. */
+    defaultEndCondition?: EndCondition | null;
+    /** Default pre-condition applied to all new workflows. null/undefined = disabled. */
+    defaultPreCondition?: PreCondition | null;
   };
 
   // Chat
@@ -167,9 +174,9 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     resumeExistingSession: false,
     priorContext: "none",
     autoLoadRecentSession: true,
-    maxRetries: 3,
-    retryPrompt: "",
     omitAgentsSkillsOnResume: true,
+    defaultEndCondition: null,
+    defaultPreCondition: null,
   },
   chat: {
     windowLocation: "chatPanel",

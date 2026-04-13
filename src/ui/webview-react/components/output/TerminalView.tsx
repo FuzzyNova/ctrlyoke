@@ -13,6 +13,7 @@ import {
   MESSAGE_TYPES,
   TERMINAL_SESSION_STATUS,
   SESSION_KINDS,
+  SHELL_KINDS,
 } from "../../types/messages";
 import { TerminalInstance } from "./TerminalInstance";
 import type { TerminalSession } from "@store/terminalStore";
@@ -128,82 +129,86 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
         </div>
       </Panel>
 
-      <Separator className={SEPARATOR_VERTICAL} />
+      {sessions.length > 1 && (
+        <>
+          <Separator className={SEPARATOR_VERTICAL} />
 
-      {/* Session rail — resizable, collapsible to compact numbered view */}
-      <Panel
-        id="terminal-session-rail"
-        panelRef={railRef}
-        defaultSize={
-          initialRailCollapsed.current
-            ? "30px"
-            : `${initialRailSizePx.current}px`
-        }
-        minSize="80px"
-        maxSize="50"
-        collapsible
-        collapsedSize="30px"
-        onResize={(panelSize) => {
-          if (!railResizeMountedRef.current) return;
-          const collapsed = railRef.current?.isCollapsed() ?? false;
-          setRailCollapsed(collapsed);
-          setTerminalRailCollapsed(collapsed);
-          if (!collapsed) {
-            setTerminalRailSizePx(panelSize.inPixels);
-          }
-        }}
-      >
-        <div className="flex flex-col h-full bg-sidebar-bg overflow-y-auto">
-          {/* AI CLI sessions */}
-          {aiCliSessions.map((session, idx) =>
-            railCollapsed ? (
-              <CompactRailEntry
-                key={session.id}
-                session={session}
-                label={String(session.promptNumber ?? idx + 1)}
-                isActive={session.id === activeSessionId}
-                onClick={() => setActiveSession(workflowId, session.id)}
-              />
-            ) : (
-              <RailEntry
-                key={session.id}
-                session={session}
-                isActive={session.id === activeSessionId}
-                onClick={() => setActiveSession(workflowId, session.id)}
-              />
-            )
-          )}
+          {/* Session rail — resizable, collapsible to compact numbered view */}
+          <Panel
+            id="terminal-session-rail"
+            panelRef={railRef}
+            defaultSize={
+              initialRailCollapsed.current
+                ? "30px"
+                : `${initialRailSizePx.current}px`
+            }
+            minSize="80px"
+            maxSize="50"
+            collapsible
+            collapsedSize="30px"
+            onResize={(panelSize) => {
+              if (!railResizeMountedRef.current) return;
+              const collapsed = railRef.current?.isCollapsed() ?? false;
+              setRailCollapsed(collapsed);
+              setTerminalRailCollapsed(collapsed);
+              if (!collapsed) {
+                setTerminalRailSizePx(panelSize.inPixels);
+              }
+            }}
+          >
+            <div className="flex flex-col h-full bg-sidebar-bg overflow-y-auto">
+              {/* AI CLI sessions */}
+              {aiCliSessions.map((session, idx) =>
+                railCollapsed ? (
+                  <CompactRailEntry
+                    key={session.id}
+                    session={session}
+                    label={String(session.promptNumber ?? idx + 1)}
+                    isActive={session.id === activeSessionId}
+                    onClick={() => setActiveSession(workflowId, session.id)}
+                  />
+                ) : (
+                  <RailEntry
+                    key={session.id}
+                    session={session}
+                    isActive={session.id === activeSessionId}
+                    onClick={() => setActiveSession(workflowId, session.id)}
+                  />
+                )
+              )}
 
-          {/* Divider between ai-cli and shell sections */}
-          {hasBothKinds && (
-            <div className="border-t border-panel-border my-1 flex-shrink-0" />
-          )}
+              {/* Divider between ai-cli and shell sections */}
+              {hasBothKinds && (
+                <div className="border-t border-panel-border my-1 flex-shrink-0" />
+              )}
 
-          {/* Shell sessions */}
-          {shellSessions.map((session) =>
-            railCollapsed ? (
-              <CompactRailEntry
-                key={session.id}
-                session={session}
-                label="sh"
-                isActive={session.id === activeSessionId}
-                onClick={() => setActiveSession(workflowId, session.id)}
-              />
-            ) : (
-              <ShellRailEntry
-                key={session.id}
-                session={session}
-                isActive={session.id === activeSessionId}
-                onClick={() => setActiveSession(workflowId, session.id)}
-                onRestart={() => handleRestartShell(session)}
-                onClose={() => handleCloseShell(session)}
-              />
-            )
-          )}
+              {/* Shell sessions */}
+              {shellSessions.map((session) =>
+                railCollapsed ? (
+                  <CompactRailEntry
+                    key={session.id}
+                    session={session}
+                    label="sh"
+                    isActive={session.id === activeSessionId}
+                    onClick={() => setActiveSession(workflowId, session.id)}
+                  />
+                ) : (
+                  <ShellRailEntry
+                    key={session.id}
+                    session={session}
+                    isActive={session.id === activeSessionId}
+                    onClick={() => setActiveSession(workflowId, session.id)}
+                    onRestart={() => handleRestartShell(session)}
+                    onClose={() => handleCloseShell(session)}
+                  />
+                )
+              )}
 
-          {!railCollapsed && <div className="flex-1" />}
-        </div>
-      </Panel>
+              {!railCollapsed && <div className="flex-1" />}
+            </div>
+          </Panel>
+        </>
+      )}
     </Group>
   );
 };
@@ -286,14 +291,14 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
       )}
       <button
         className="icon-btn py-0 px-0.5 opacity-70 hover:opacity-100 flex-shrink-0"
-        title="Close"
-        aria-label="Close"
+        title="Close terminal"
+        aria-label="Close terminal"
         onClick={(e) => {
           e.stopPropagation();
           onClose();
         }}
       >
-        <i className="codicon codicon-close text-[11px]" />
+        <i className="codicon codicon-trash text-[11px]" />
       </button>
     </div>
   );
@@ -325,7 +330,7 @@ const CompactRailEntry: React.FC<CompactRailEntryProps> = ({
 );
 
 /**
- * Shows the harness icon for AI CLI sessions, or a status dot for shell sessions.
+ * Shows the harness icon for AI CLI sessions, or a shell-type codicon for shell sessions.
  */
 const SessionIcon: React.FC<{ session: TerminalSession }> = ({ session }) => {
   if (session.harnessId) {
@@ -337,13 +342,36 @@ const SessionIcon: React.FC<{ session: TerminalSession }> = ({ session }) => {
       />
     );
   }
-  return <StatusDot status={session.status} />;
+  return <ShellIcon shellKind={session.shellKind} status={session.status} />;
 };
 
-const StatusDot: React.FC<{ status: TerminalSession["status"] }> = ({
-  status,
-}) => {
-  if (status === TERMINAL_SESSION_STATUS.RUNNING) {
+/**
+ * Shell session icon — picks a codicon based on the detected shell variant.
+ * Falls back to a status dot when shellKind is unavailable (legacy sessions).
+ */
+const ShellIcon: React.FC<{
+  shellKind: TerminalSession["shellKind"];
+  status: TerminalSession["status"];
+}> = ({ shellKind, status }) => {
+  const isRunning = status === TERMINAL_SESSION_STATUS.RUNNING;
+
+  if (shellKind === SHELL_KINDS.PWSH) {
+    return (
+      <i className="codicon codicon-terminal text-[11px] flex-shrink-0" />
+    );
+  }
+  if (shellKind === SHELL_KINDS.POWERSHELL) {
+    return (
+      <i className="codicon codicon-terminal-powershell text-[11px] flex-shrink-0" />
+    );
+  }
+  if (shellKind === SHELL_KINDS.BASH) {
+    return (
+      <i className="codicon codicon-terminal-bash text-[11px] flex-shrink-0" />
+    );
+  }
+  // Fallback for legacy sessions without shellKind
+  if (isRunning) {
     return (
       <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
     );

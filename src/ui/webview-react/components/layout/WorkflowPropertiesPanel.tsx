@@ -276,6 +276,22 @@ export const WorkflowPropertiesPanel: React.FC<{
           JSON.stringify(normalize(globalSettings.hooks))
         );
       }
+      // Deep comparison for endCondition — null/undefined both mean "no condition"
+      if (property === "endCondition") {
+        const normalize = (v: unknown) => (v == null ? null : v);
+        return (
+          JSON.stringify(normalize(workflowValue)) !==
+          JSON.stringify(normalize(globalSettings.defaultEndCondition))
+        );
+      }
+      // Deep comparison for preCondition — null/undefined both mean "no condition"
+      if (property === "preCondition") {
+        const normalize = (v: unknown) => (v == null ? null : v);
+        return (
+          JSON.stringify(normalize(workflowValue)) !==
+          JSON.stringify(normalize(globalSettings.defaultPreCondition))
+        );
+      }
       // Deep comparison for toolPermissions — normalize null/undefined/none
       // to a canonical form so the button hides when values match the global defaults.
       if (property === "toolPermissions") {
@@ -625,13 +641,11 @@ export const WorkflowPropertiesPanel: React.FC<{
           value: undefined,
         });
       } else {
-        // Initialize with defaults
-        const defaultEndCondition = {
+        // Initialize from global default if set, otherwise use hardcoded defaults
+        const globalDefault = useSettingsStore.getState().globalSettings.defaultEndCondition;
+        const defaultEndCondition = globalDefault ?? {
           script: "",
           returns: "true",
-          timeout: 30000,
-          maxRetries: 0,
-          retryPrompt: "",
         };
         settingsStore.updateWorkflowProperty(
           "endCondition",
@@ -692,8 +706,10 @@ export const WorkflowPropertiesPanel: React.FC<{
           value: undefined,
         });
       } else {
+        // Initialize from global default if set, otherwise use hardcoded defaults
+        const globalDefault = useSettingsStore.getState().globalSettings.defaultPreCondition;
         const defaultPreCondition: import("@root/types/FlightPathTypes").PreCondition =
-          { script: "", onFail: CONDITION_ACTIONS.SKIP_PROMPT };
+          globalDefault ?? { script: "", onFail: CONDITION_ACTIONS.SKIP_PROMPT };
         settingsStore.updateWorkflowProperty(
           "preCondition",
           defaultPreCondition
@@ -1126,21 +1142,35 @@ export const WorkflowPropertiesPanel: React.FC<{
             <div className="space-y-4">
               {/* Pre-Condition Section */}
               <div>
-                <label
-                  htmlFor="settings-pre-condition-enabled"
-                  className="flex items-center gap-2 text-[11px] font-semibold uppercase text-description-fg cursor-pointer mb-3"
-                  title="Runs a script before each prompt. Use to gate execution based on a condition."
-                >
-                  <input
-                    type="checkbox"
-                    id="settings-pre-condition-enabled"
-                    aria-label="Enable Pre-Condition"
-                    checked={preConditionEnabled}
-                    onChange={(e) => handlePreConditionToggle(e.target.checked)}
-                    className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
-                  />
-                  Enable Pre-Condition
-                </label>
+                <div className="flex items-center justify-between mb-3">
+                  <label
+                    htmlFor="settings-pre-condition-enabled"
+                    className="flex items-center gap-2 text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
+                    title="Runs a script before each prompt. Use to gate execution based on a condition."
+                  >
+                    <input
+                      type="checkbox"
+                      id="settings-pre-condition-enabled"
+                      aria-label="Enable Pre-Condition"
+                      checked={preConditionEnabled}
+                      onChange={(e) => handlePreConditionToggle(e.target.checked)}
+                      className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
+                    />
+                    Enable Pre-Condition
+                  </label>
+                  {preConditionEnabled && (
+                    <SetAsDefaultButton
+                      property="preCondition"
+                      show={isDifferentFromGlobal("preCondition")}
+                      onSetDefault={() =>
+                        handleSetAsDefault(
+                          "preCondition",
+                          workflowProperties.preCondition
+                        )
+                      }
+                    />
+                  )}
+                </div>
 
                 {/* Pre-condition fields — animated slide-down on show/hide */}
                 <AnimatedSection visible={preConditionEnabled}>
@@ -1163,21 +1193,35 @@ export const WorkflowPropertiesPanel: React.FC<{
               </div>
               {/* End Condition Section */}
               <div>
-                <label
-                  htmlFor="settings-end-condition-enabled"
-                  className="flex items-center gap-2 text-[11px] font-semibold uppercase text-description-fg cursor-pointer mb-3"
-                  title="Validation runs after each prompt completes. Individual prompts can override or disable this."
-                >
-                  <input
-                    type="checkbox"
-                    id="settings-end-condition-enabled"
-                    aria-label="Enable End Condition"
-                    checked={endConditionEnabled}
-                    onChange={(e) => handleEndConditionToggle(e.target.checked)}
-                    className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
-                  />
-                  Enable End Condition
-                </label>
+                <div className="flex items-center justify-between mb-3">
+                  <label
+                    htmlFor="settings-end-condition-enabled"
+                    className="flex items-center gap-2 text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
+                    title="Validation runs after each prompt completes. Individual prompts can override or disable this."
+                  >
+                    <input
+                      type="checkbox"
+                      id="settings-end-condition-enabled"
+                      aria-label="Enable End Condition"
+                      checked={endConditionEnabled}
+                      onChange={(e) => handleEndConditionToggle(e.target.checked)}
+                      className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
+                    />
+                    Enable End Condition
+                  </label>
+                  {endConditionEnabled && (
+                    <SetAsDefaultButton
+                      property="endCondition"
+                      show={isDifferentFromGlobal("endCondition")}
+                      onSetDefault={() =>
+                        handleSetAsDefault(
+                          "endCondition",
+                          workflowProperties.endCondition
+                        )
+                      }
+                    />
+                  )}
+                </div>
 
                 {/* End condition fields — animated slide-down on show/hide */}
                 <AnimatedSection visible={endConditionEnabled}>

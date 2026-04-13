@@ -249,6 +249,7 @@ export class WebviewMessageRouter {
               kind: session.kind,
               promptNumber: session.promptNumber,
               harnessId: session.harnessId,
+              shellKind: session.shellKind,
               controllerClientId: session.controllerClientId,
             });
             // Flush reconnect buffer
@@ -924,6 +925,7 @@ export class WebviewMessageRouter {
         sessionId: session.id,
         stepName: session.stepName,
         kind: SESSION_KINDS.SHELL,
+        shellKind: session.shellKind,
         controllerClientId: session.controllerClientId,
       });
     });
@@ -962,6 +964,7 @@ export class WebviewMessageRouter {
           sessionId: newSession.id,
           stepName: newSession.stepName,
           kind: SESSION_KINDS.SHELL,
+          shellKind: newSession.shellKind,
         });
       }
     });

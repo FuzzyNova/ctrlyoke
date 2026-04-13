@@ -525,6 +525,10 @@ export class WebviewSettingsSync {
       await ConfigurationUtils.setDefaultMcpServers(value ?? []);
     } else if (property === "hooks") {
       await ConfigurationUtils.setDefaultHooks(value ?? []);
+    } else if (property === "endCondition") {
+      await ConfigurationUtils.setDefaultEndCondition(value ?? null);
+    } else if (property === "preCondition") {
+      await ConfigurationUtils.setDefaultPreCondition(value ?? null);
     } else if (property === "toolPermissions") {
       const override = value as ToolPermissionsOverride | null;
       await ConfigurationUtils.updateSetting(
@@ -702,6 +706,8 @@ export class WebviewSettingsSync {
         ConfigurationUtils.shouldConfirmDeleteOperations(),
       confirmResetOperations: ConfigurationUtils.shouldConfirmResetOperations(),
       priorContext: ConfigurationUtils.getPriorContext(),
+      defaultEndCondition: ConfigurationUtils.getDefaultEndCondition() ?? null,
+      defaultPreCondition: ConfigurationUtils.getDefaultPreCondition() ?? null,
       workspaceRoot,
     };
   }

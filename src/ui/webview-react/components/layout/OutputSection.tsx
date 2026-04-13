@@ -12,6 +12,7 @@ import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { CliOutput, StatusMessage } from "../output";
 import { RunSelector, IconToggleButton } from "../shared";
+import { HarnessIcon } from "../shared/HarnessIcon";
 import { generateDiffLines } from "@utils/outputUtils";
 import { generateId } from "@utils/string";
 import { generateMarkdownExport } from "@utils/markdownExport";
@@ -36,6 +37,9 @@ import {
   EXECUTION_MODES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  SESSION_KINDS,
+  SHELL_KINDS,
+  type HarnessId,
 } from "../../types/messages";
 import { CLI_EVENT_TYPES } from "../../types/cliEvents";
 import {
@@ -49,6 +53,7 @@ import type { WorkflowStepEntry } from "../output/UndoChangesDialog";
 import { TerminalView } from "../output/TerminalView";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
+import { terminalRegistry } from "../../terminalRegistry";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` returning a new
 // array reference on every useSyncExternalStore snapshot call.
@@ -165,8 +170,24 @@ export const OutputSection: React.FC = () => {
   const terminalSessions = useTerminalStore(
     (s) => s.sessions[terminalWorkflowId] ?? EMPTY_TERMINAL_SESSIONS
   );
+  const activeTerminalSessionId = useTerminalStore(
+    (s) => s.activeSessionIds[terminalWorkflowId] ?? null
+  );
+  const terminalRailCollapsed = useUiStore((s) => s.terminalRailCollapsed);
   const showTerminalTab = true;
   const terminalSessionActive = terminalActiveWorkflows.has(terminalWorkflowId);
+
+  // Compact terminal header: shown when there is exactly one session (rail is hidden)
+  // OR when the session rail is collapsed (user narrowed it). In both cases the full
+  // title isn't visible in the rail, so we surface it in the header instead.
+  const isTerminalCompact =
+    activeOutputTab === "terminal" &&
+    terminalSessions.length > 0 &&
+    (terminalSessions.length === 1 || terminalRailCollapsed);
+  const activeTerminalSession =
+    terminalSessions.find((s) => s.id === activeTerminalSessionId) ??
+    terminalSessions[0] ??
+    null;
 
   const [headerRef, isHeaderNarrow] = useElementNarrow(600);
 
@@ -1018,6 +1039,33 @@ export const OutputSection: React.FC = () => {
         <div className={`ml-auto flex items-center ${isHeaderNarrow ? "gap-1" : "gap-2"}`}>
           {activeOutputTab === "terminal" && (
             <>
+              {/* Active session icon + title — only shown when rail is collapsed */}
+              {isTerminalCompact && activeTerminalSession && (
+                <div className="flex items-center gap-1.5 min-w-0 mr-1">
+                  {activeTerminalSession.harnessId ? (
+                    <HarnessIcon
+                      harnessId={activeTerminalSession.harnessId as HarnessId}
+                      size={12}
+                      className="flex-shrink-0"
+                    />
+                  ) : (
+                    <i
+                      className={`codicon ${
+                        activeTerminalSession.shellKind === SHELL_KINDS.PWSH
+                          ? "codicon-terminal"
+                          : activeTerminalSession.shellKind === SHELL_KINDS.POWERSHELL
+                            ? "codicon-terminal-powershell"
+                            : "codicon-terminal-bash"
+                      } text-[12px] flex-shrink-0`}
+                    />
+                  )}
+                  <span className="text-[11px] text-foreground truncate max-w-[120px]">
+                    {activeTerminalSession.stepName}
+                  </span>
+                </div>
+              )}
+
+              {/* New Terminal button */}
               <button
                 className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-description-fg hover:text-foreground transition-colors"
                 title="New Terminal"
@@ -1031,8 +1079,31 @@ export const OutputSection: React.FC = () => {
                 }}
               >
                 <i className="codicon codicon-add text-[12px]" />
-                <span>New Terminal</span>
+                {!isTerminalCompact && <span>New Terminal</span>}
               </button>
+
+              {/* Trash button — only in compact mode for deletable (shell) sessions */}
+              {isTerminalCompact &&
+                activeTerminalSession?.kind === SESSION_KINDS.SHELL && (
+                  <button
+                    className="icon-btn py-0 px-1"
+                    title="Close terminal"
+                    aria-label="Close terminal"
+                    onClick={() => {
+                      if (!activeTerminalSession) return;
+                      const vscode = getVsCodeApi();
+                      vscode?.postMessage({
+                        type: MESSAGE_TYPES.TERMINAL_CLOSE_SHELL,
+                        workflowId: terminalWorkflowId,
+                        sessionId: activeTerminalSession.id,
+                      });
+                      terminalRegistry.clearSession(terminalWorkflowId, activeTerminalSession.id);
+                      useTerminalStore.getState().removeSession(terminalWorkflowId, activeTerminalSession.id);
+                    }}
+                  >
+                    <i className="codicon codicon-trash text-[12px]" />
+                  </button>
+                )}
             </>
           )}
           {activeOutputTab === "output" && (

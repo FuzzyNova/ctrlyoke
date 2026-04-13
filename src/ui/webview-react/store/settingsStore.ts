@@ -20,6 +20,7 @@ import type {
   FullGlobalSettings,
   PreCondition,
 } from "@root/types/WebviewMessageTypes";
+import type { EndCondition } from "@root/types/FlightPathTypes";
 
 /**
  * Model option for dropdowns
@@ -80,6 +81,8 @@ export interface GlobalSettings {
   confirmResetOperations: boolean;
   priorContext: string;
   workspaceRoot: string;
+  defaultEndCondition: EndCondition | null;
+  defaultPreCondition: PreCondition | null;
 }
 
 /**
@@ -237,6 +240,8 @@ const initialGlobalSettings: GlobalSettings = {
   confirmResetOperations: true,
   priorContext: "none",
   workspaceRoot: "",
+  defaultEndCondition: null,
+  defaultPreCondition: null,
 };
 
 const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {

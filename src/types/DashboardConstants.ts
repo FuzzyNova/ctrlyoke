@@ -220,7 +220,7 @@ export const MESSAGE_TYPES = {
   TERMINAL_OUTPUT: "terminalOutput", // extension → webview: { workflowId, sessionId, data }
   TERMINAL_INPUT: "terminalInput", // webview → extension: { workflowId, sessionId, data }
   TERMINAL_RESIZE: "terminalResize", // webview → extension: { workflowId, sessionId, cols, rows }
-  TERMINAL_STARTED: "terminalStarted", // extension → webview: { workflowId, sessionId, stepName, kind, harnessId?, promptNumber?, controllerClientId? }
+  TERMINAL_STARTED: "terminalStarted", // extension → webview: { workflowId, sessionId, stepName, kind, harnessId?, promptNumber?, shellKind?, controllerClientId? }
   TERMINAL_ENDED: "terminalEnded", // extension → webview: { workflowId, sessionId, kind, exitCode }
   TERMINAL_SPAWN_SHELL: "terminalSpawnShell", // webview → extension: { workflowId, cwd }
   TERMINAL_RESTART_SHELL: "terminalRestartShell", // webview → extension: { workflowId, sessionId }
@@ -512,6 +512,20 @@ export const SESSION_KINDS = {
   AI_CLI: "ai-cli",
   SHELL: "shell",
 } as const;
+
+// ============================================================================
+// SHELL KINDS - Specific shell variant for SHELL sessions
+// ============================================================================
+export const SHELL_KINDS = {
+  /** PowerShell 7+ (pwsh.exe) */
+  PWSH: "pwsh",
+  /** Windows PowerShell 5.1 fallback (powershell.exe) */
+  POWERSHELL: "powershell",
+  /** bash / zsh / sh or any Unix shell */
+  BASH: "bash",
+} as const;
+
+export type ShellKind = (typeof SHELL_KINDS)[keyof typeof SHELL_KINDS];
 
 // ============================================================================
 // SESSION ID SENTINELS - Special sessionId values with reserved meanings

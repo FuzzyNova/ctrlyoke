@@ -1,7 +1,9 @@
 import {
   DynamicQueueConfig,
+  EndCondition,
   Harness,
   McpServerConfig,
+  PreCondition,
   UserHookConfig,
 } from "../types/FlightPathTypes";
 import {
@@ -173,17 +175,49 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get default max retries for end conditions
+   * Get the default end condition for new workflows (null/undefined = disabled)
    */
-  getDefaultMaxRetries(): number {
-    return configService.get("workflow").maxRetries;
+  getDefaultEndCondition(): EndCondition | null | undefined {
+    return configService.get("workflow").defaultEndCondition;
   },
 
   /**
-   * Get default retry prompt template
+   * Get the default pre-condition for new workflows (null/undefined = disabled)
+   */
+  getDefaultPreCondition(): PreCondition | null | undefined {
+    return configService.get("workflow").defaultPreCondition;
+  },
+
+  /**
+   * Get default max retries for end conditions (reads from defaultEndCondition)
+   */
+  getDefaultMaxRetries(): number {
+    return configService.get("workflow").defaultEndCondition?.maxRetries ?? 0;
+  },
+
+  /**
+   * Get default retry prompt template (reads from defaultEndCondition)
    */
   getDefaultRetryPrompt(): string {
-    return configService.get("workflow").retryPrompt;
+    return configService.get("workflow").defaultEndCondition?.retryPrompt ?? "";
+  },
+
+  /**
+   * Set the default end condition in settings
+   */
+  async setDefaultEndCondition(
+    value: EndCondition | null
+  ): Promise<void> {
+    await configService.set("workflow.defaultEndCondition", value, "user");
+  },
+
+  /**
+   * Set the default pre-condition in settings
+   */
+  async setDefaultPreCondition(
+    value: PreCondition | null
+  ): Promise<void> {
+    await configService.set("workflow.defaultPreCondition", value, "user");
   },
 
   /**

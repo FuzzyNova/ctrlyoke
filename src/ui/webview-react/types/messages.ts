@@ -31,6 +31,7 @@ export {
   EDITOR_PLACEHOLDER_TEXT,
   TERMINAL_SESSION_STATUS,
   SESSION_KINDS,
+  SHELL_KINDS,
   STEP_TYPES,
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
@@ -52,6 +53,7 @@ export {
   type EditorTargetKind,
   type TerminalSessionStatus,
   type SessionKind,
+  type ShellKind,
 } from "@root/types/DashboardConstants";
 
 // Re-export all message and data types from WebviewMessageTypes

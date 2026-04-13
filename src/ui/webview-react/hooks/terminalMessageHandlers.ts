@@ -53,7 +53,7 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
   // TERMINAL_STARTED - New PTY session created; register in store and rail
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.TERMINAL_STARTED] = (message: any) => {
-    const { workflowId, sessionId, stepName, kind, promptNumber, harnessId, controllerClientId } = message;
+    const { workflowId, sessionId, stepName, kind, promptNumber, harnessId, shellKind, controllerClientId } = message;
     if (!workflowId || !sessionId) return;
 
     const uiState = useUiStore.getState();
@@ -125,6 +125,7 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       kind: kind ?? SESSION_KINDS.AI_CLI,
       promptNumber,
       harnessId,
+      shellKind,
       status: TERMINAL_SESSION_STATUS.RUNNING,
       pendingOutput: [],
       isController,
