@@ -89,7 +89,7 @@ const REQUIRED_HOOKS: Record<HarnessId, string[]> = {
 const TOOL_HOOKS: Record<HarnessId, string[]> = {
   "copilot-cli": ["preToolUse", "postToolUse"],
   "claude-cli": ["preToolUse", "postToolUse"],
-  "codex-cli": [],
+  "codex-cli": ["preToolUse", "postToolUse"],
   "opencode-cli": ["preToolUse", "postToolUse"],
   "qwen-cli": ["preToolUse", "postToolUse"],
   "gemini-cli": ["preToolUse", "postToolUse"],
@@ -101,8 +101,8 @@ const TOOL_HOOKS: Record<HarnessId, string[]> = {
 const SESSION_HOOKS: Record<HarnessId, string[]> = {
   "copilot-cli": ["sessionStart", "userPromptSubmit"],
   "claude-cli": ["sessionStart", "userPromptSubmit"],
-  "codex-cli": [],
-  "opencode-cli": ["sessionStart"],
+  "codex-cli": ["sessionStart", "userPromptSubmit"],
+  "opencode-cli": ["sessionStart", "userPromptSubmit"],
   "qwen-cli": ["sessionStart", "userPromptSubmit"],
   "gemini-cli": ["sessionStart", "userPromptSubmit"],
 };

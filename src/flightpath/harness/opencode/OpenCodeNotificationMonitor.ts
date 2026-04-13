@@ -13,11 +13,11 @@ import type { UserHookConfig } from "../../../types/FlightPathTypes";
  * Completion detection strategy: OpenCode TypeScript plugin system.
  *
  * Before the TUI launches, OpenCodeCliProvider writes a CommonJS plugin to
- * .opencode/plugin/flightpath-completion-hook.js. The plugin listens for
- * session.created and session.status idle events, then writes:
+ * .opencode/plugin/flightpath-completion-hook.ts. The plugin listens for
+ * session.created, session.idle, and session.busy events, then writes:
  *
  *   {sessionId}-start.json → on session.created (for early session ID capture)
- *   {sessionId}-stop.json  → on session.status idle (for completion detection)
+ *   {sessionId}-stop.json  → on session.idle (for completion detection)
  *
  * These match the standardized two-file format used by Claude and Copilot harnesses,
  * so all monitoring logic is inherited from NotificationMonitorBase unchanged.

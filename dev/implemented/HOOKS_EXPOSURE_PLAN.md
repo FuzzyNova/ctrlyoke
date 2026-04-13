@@ -245,13 +245,13 @@ prompts:
 /**
  * Logical hook event names — mapped to CLI-specific event names at inject time.
  *
- * | Logical name      | Claude/Qwen      | Copilot CLI         | Gemini CLI   | Codex  | OpenCode                |
- * |-------------------|------------------|---------------------|--------------|--------|-------------------------|
- * | "stop"            | Stop             | sessionEnd          | AfterAgent   | notify | session.status idle     |
- * | "sessionStart"    | SessionStart     | sessionStart        | SessionStart | (none) | session.created         |
- * | "preToolUse"      | PreToolUse       | preToolUse          | BeforeTool   | (none) | tool.execute.before     |
- * | "postToolUse"     | PostToolUse      | postToolUse         | AfterTool    | (none) | tool.execute.after      |
- * | "userPromptSubmit"| UserPromptSubmit | userPromptSubmitted | BeforeAgent  | (none) | (none)                  |
+ * | Logical name      | Claude/Qwen      | Copilot CLI         | Gemini CLI   | Codex            | OpenCode                |
+ * |-------------------|------------------|---------------------|--------------|------------------|-------------------------|
+ * | "stop"            | Stop             | agentStop           | AfterAgent   | Stop             | session.status { idle } |
+ * | "sessionStart"    | SessionStart     | sessionStart        | SessionStart | SessionStart     | session.created         |
+ * | "preToolUse"      | PreToolUse       | preToolUse          | BeforeTool   | PreToolUse       | tool.execute.before     |
+ * | "postToolUse"     | PostToolUse      | postToolUse         | AfterTool    | PostToolUse      | tool.execute.after      |
+ * | "userPromptSubmit"| UserPromptSubmit | userPromptSubmitted | BeforeAgent  | UserPromptSubmit | session.status { busy } |
  */
 export type HookEvent =
   | "stop"
@@ -360,13 +360,13 @@ getUserHookEventName(event: HookEvent): string | null {
 }
 ```
 
-| Logical Event      | Claude CLI     | Qwen CLI           | Copilot CLI    | Gemini CLI     | Codex CLI | OpenCode CLI                       |
-| ------------------ | -------------- | ------------------ | -------------- | -------------- | --------- | ---------------------------------- |
-| `stop`             | `Stop`         | `Stop`             | `sessionEnd`   | `AfterAgent`   | `notify`  | `session.status idle`              |
-| `sessionStart`     | `SessionStart` | `SessionStart`     | `sessionStart` | `SessionStart` | (none)    | `session.created`                  |
-| `preToolUse`       | `PreToolUse`   | `PreToolUse`       | `preToolUse`   | `BeforeTool`   | (none)    | `tool.execute.before`              |
-| `postToolUse`      | `PostToolUse`  | `PostToolUse`      | `postToolUse`  | `AfterTool`    | (none)    | `tool.execute.after`               |
-| `userPromptSubmit` | `UserPromptSubmit` | `UserPromptSubmit` | `userPromptSubmitted` | `BeforeAgent` | (none) | (none)                        |
+| Logical Event      | Claude CLI         | Qwen CLI           | Copilot CLI           | Gemini CLI     | Codex CLI          | OpenCode CLI                      |
+| ------------------ | ------------------ | ------------------ | --------------------- | -------------- | ------------------ | --------------------------------- |
+| `stop`             | `Stop`             | `Stop`             | `agentStop`           | `AfterAgent`   | `Stop`             | `session.status { type: "idle" }` |
+| `sessionStart`     | `SessionStart`     | `SessionStart`     | `sessionStart`        | `SessionStart` | `SessionStart`     | `session.created`                 |
+| `preToolUse`       | `PreToolUse`       | `PreToolUse`       | `preToolUse`          | `BeforeTool`   | `PreToolUse`       | `tool.execute.before`             |
+| `postToolUse`      | `PostToolUse`      | `PostToolUse`      | `postToolUse`         | `AfterTool`    | `PostToolUse`      | `tool.execute.after`              |
+| `userPromptSubmit` | `UserPromptSubmit` | `UserPromptSubmit` | `userPromptSubmitted` | `BeforeAgent`  | `UserPromptSubmit` | `session.status { type: "busy" }` |
 
 ### Claude CLI
 
@@ -476,9 +476,9 @@ for (const cmd of USER_STOP_HOOKS) {
 }
 ```
 
-**Event coverage:** OpenCode's plugin system receives all events from the OpenCode process. The plugin handles `session.created`, `session.status idle`, `tool.execute.before`, and `tool.execute.after`. All four logical events (`stop`, `sessionStart`, `preToolUse`, `postToolUse`) are fully supported; `userPromptSubmit` has no OpenCode equivalent.
+**Event coverage:** OpenCode's plugin system receives all events from the OpenCode process. The plugin handles `session.created`, `session.status` (checking `status.type` for `"idle"` and `"busy"`), `tool.execute.before`, and `tool.execute.after`. All five logical events (`stop`, `sessionStart`, `preToolUse`, `postToolUse`, `userPromptSubmit`) are fully supported. Note: `sessionStart` has a known OpenCode bug (#14808) and may not fire in all cases.
 
-**No conflict with existing OpenCode configuration:** OpenCode's MCP config (`.opencode/opencode.json`) is unaffected — it's a separate concern from the plugin. The plugin file at `.opencode/plugin/flightpath-completion-hook.js` is written and cleaned up entirely by FlightPath. No merge needed.
+**No conflict with existing OpenCode configuration:** OpenCode's MCP config (`.opencode/opencode.json`) is unaffected — it's a separate concern from the plugin. The plugin file at `.opencode/plugin/flightpath-completion-hook.ts` is written and cleaned up entirely by FlightPath. No merge needed.
 
 **Implementation changes:**
 

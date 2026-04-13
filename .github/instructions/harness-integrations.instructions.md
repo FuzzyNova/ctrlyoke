@@ -431,10 +431,10 @@ Summary of required layers:
 **Completion Detection**:
 
 - **Headless**: JSONL events (`session.status` idle events) via `--format json`
-- **Interactive**: TypeScript plugin written to `.opencode/plugin/flightpath-completion-hook.js` before each run; the plugin fires on session status changes
+- **Interactive**: TypeScript plugin written to `.opencode/plugin/flightpath-completion-hook.ts` before each run; the plugin fires on session status changes
 - **Monitoring**: Plugin-based (not hook file polling)
 - **Session ID**: Extracted from JSONL events
-- **User hooks**: Embedded directly in generated plugin by `OpenCodePluginGenerator`; if no user hooks, static plugin file copied as-is
+- **User hooks**: Written to a JSON sidecar file `flightpath-hooks.json` alongside the plugin; the static plugin reads it at startup — no code generation
 
 **Output Format**: JSONL streaming (`--format json`, `opencode run "prompt"` for headless; `opencode --prompt "..."` for interactive)
 **Tool Permissions**: Config-file driven (`opencode.json`); `OpenCodeToolPermissionMapper` returns `[]` (no CLI permission args)
@@ -442,7 +442,9 @@ Summary of required layers:
 **MCP Config**: Written to `.opencode/opencode.json` (auto-discovered, format: `{ mcp: { flightpath: { type: "local", command: [...] } } }`)
 **Models**: `provider/model` format (e.g. `anthropic/claude-sonnet-4-6`, `openai/gpt-5`)
 
-**Additional files**: `OpenCodeEventMapper.ts` — provider-specific event mapping, `OpenCodePluginGenerator.ts` — generates completion plugin with optional user hooks
+**Event coverage**: All 5 logical hook events are fully supported — `stop` (session.status idle), `sessionStart` (session.created), `preToolUse` (tool.execute.before), `postToolUse` (tool.execute.after), `userPromptSubmit` (session.status busy). Note: `sessionStart` has a known OpenCode bug (#14808) and may not fire in all cases.
+
+**User hooks**: Stored in a JSON sidecar file `{workspaceRoot}/.opencode/plugin/flightpath-hooks.json` written by `deployCompletionPlugin()`. The static plugin reads this at startup — no code generation needed.
 
 **Session Resumption**: `-s <sessionId>`
 
@@ -682,16 +684,20 @@ Summary of required layers:
    - Codex: no trusted_hooks.json — `--enable codex_hooks` flag bypasses approval prompts
 
 3. **Plugin/chain generation** (OpenCode):
-   - OpenCode: `OpenCodePluginGenerator` embeds user hooks directly in generated completion plugin
+   - OpenCode: `deployCompletionPlugin()` writes a JSON sidecar (`flightpath-hooks.json`) with user hook commands; the static plugin reads this at startup
 
 **Pre-trust mechanisms** (Gemini, Qwen): Both auto-approve FlightPath hook commands by writing entries to `~/.{tool}/trusted_hooks.json` with colon-prefixed key format (`:${command}`). Prevents interactive approval prompts during automated workflow execution. Codex does not need pre-trust — the `--enable codex_hooks` flag is sufficient.
 
-**Event mapping**: Each provider maps generic hook events to CLI-native event names:
+**Event mapping**: All 6 CLI harnesses now support all 5 logical hook events (full coverage achieved):
 
-- `stop` → Copilot: `agentStop`, Claude: `Stop`, Gemini: `AfterAgent`, Qwen: `Stop`
-- `sessionStart` → all: respective native `SessionStart` / `sessionStart`
-- Claude/Qwen additionally support: `preToolUse`, `postToolUse`
-- Qwen additionally supports: `userPromptSubmit`
+| Logical Event      | Claude/Qwen        | Copilot CLI           | Gemini CLI     | Codex              | OpenCode              |
+| ------------------ | ------------------ | --------------------- | -------------- | ------------------ | --------------------- |
+| `stop`             | `Stop`             | `agentStop`           | `AfterAgent`   | `Stop`             | `session.idle`        |
+| `sessionStart`     | `SessionStart`     | `sessionStart`        | `SessionStart` | `SessionStart`     | `session.created`     |
+| `preToolUse`       | `PreToolUse`       | `preToolUse`          | `BeforeTool`   | `PreToolUse`       | `tool.execute.before` |
+| `postToolUse`      | `PostToolUse`      | `postToolUse`         | `AfterTool`    | `PostToolUse`      | `tool.execute.after`  |
+| `userPromptSubmit` | `UserPromptSubmit` | `userPromptSubmitted` | `BeforeAgent`  | `UserPromptSubmit` | `session.busy`        |
+
   </userDefinedHooks>
 
 <importantNotes>

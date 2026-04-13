@@ -28,7 +28,6 @@ import type {
   UserHookConfig,
 } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
-import { OpenCodePluginGenerator } from "./OpenCodePluginGenerator";
 
 const execAsync = promisify(exec);
 
@@ -194,7 +193,11 @@ export class OpenCodeCliProvider implements ICliProvider {
     const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
     const hasUserHooks = (userHooks?.length ?? 0) > 0;
     if (workspaceRoot && (isInteractive || hasUserHooks)) {
-      await this.deployCompletionPlugin(workspaceRoot, extensionPath, userHooks);
+      await this.deployCompletionPlugin(
+        workspaceRoot,
+        extensionPath,
+        userHooks
+      );
     }
 
     // Extra CLI flags from additionalArgs (appended before prompt positional arg)
@@ -462,11 +465,16 @@ export class OpenCodeCliProvider implements ICliProvider {
   /**
    * Deploy the FlightPath completion plugin to .opencode/plugin/ before launching the TUI.
    *
-   * The plugin listens for session.created and session.status idle events,
-   * writing notification files for CliIntegration's file-polling completion detection.
+   * Always copies the static flightpath-opencode-plugin.ts file (fully type-checked,
+   * no code generation). When user hooks are configured, a JSON sidecar file is written
+   * alongside the plugin — the plugin reads this at startup to discover what commands to run.
+   *
+   * Sidecar format: {workspaceRoot}/.opencode/plugin/flightpath-hooks.json
+   *   [{"event":"stop","command":"node ./my-script.js"}, ...]
    *
    * @param workspaceRoot Workspace root directory
    * @param extensionPath Extension installation path (used to locate the plugin template)
+   * @param userHooks Optional user-defined hooks to embed via sidecar file
    */
   private async deployCompletionPlugin(
     workspaceRoot: string,
@@ -483,16 +491,27 @@ export class OpenCodeCliProvider implements ICliProvider {
         "scripts",
         "flightpath-opencode-plugin.ts"
       );
+      const sidecarPath = path.join(pluginDir, "flightpath-hooks.json");
 
       await fs.promises.mkdir(pluginDir, { recursive: true });
 
+      // Always copy the static plugin (type-checked, no code generation).
+      await fs.promises.copyFile(sourcePath, pluginPath);
+
+      // Write or remove the sidecar hooks file.
       if (userHooks && userHooks.length > 0) {
-        // Generate a customized plugin with user hooks embedded
-        const pluginContent = OpenCodePluginGenerator.generate(userHooks);
-        await fs.promises.writeFile(pluginPath, pluginContent, "utf-8");
+        const sidecar = userHooks.map((h) => ({
+          event: h.event,
+          command: h.command,
+        }));
+        await fs.promises.writeFile(
+          sidecarPath,
+          JSON.stringify(sidecar, null, 2),
+          "utf-8"
+        );
       } else {
-        // No user hooks — copy the static plugin file as-is
-        await fs.promises.copyFile(sourcePath, pluginPath);
+        // Remove any stale sidecar from a prior run that had user hooks.
+        await fs.promises.unlink(sidecarPath).catch(() => {});
       }
 
       this.pluginFilePath = pluginPath;
