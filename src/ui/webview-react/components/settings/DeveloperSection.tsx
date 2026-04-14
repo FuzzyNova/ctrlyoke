@@ -10,7 +10,6 @@ const TERMINATION_WARNING =
 interface DevAction {
   label: string;
   messageType: string;
-  warning?: boolean;
   disabled?: boolean;
 }
 
@@ -52,19 +51,16 @@ export function DeveloperSection() {
     {
       label: "Reload Window",
       messageType: MESSAGE_TYPES.DEV_RELOAD_WINDOW,
-      warning: true,
       disabled: !dev.commands.reloadWindow,
     },
     {
       label: "Rebuild Extension & Reload",
       messageType: MESSAGE_TYPES.DEV_BUILD_EXTENSION_AND_RELOAD,
-      warning: true,
       disabled: !dev.commands.reloadWindow,
     },
     {
       label: "Rebuild All & Reload",
       messageType: MESSAGE_TYPES.DEV_BUILD_ALL_AND_RELOAD,
-      warning: true,
       disabled: !dev.commands.reloadWindow,
     },
     ...(dev.commands.restartExtensionHost
@@ -72,19 +68,12 @@ export function DeveloperSection() {
           {
             label: "Restart Extension Host",
             messageType: MESSAGE_TYPES.DEV_RESTART_EXTENSION_HOST,
-            warning: true,
           },
         ]
       : []),
   ];
 
   function sendAction(action: DevAction) {
-    if (action.warning) {
-      const confirmed = window.confirm(`${TERMINATION_WARNING}\n\nContinue?`);
-      if (!confirmed) {
-        return;
-      }
-    }
     vscode.postMessage({ type: action.messageType });
   }
 
@@ -115,7 +104,7 @@ export function DeveloperSection() {
             <Button
               key={action.messageType}
               type="button"
-              variant={action.warning ? "secondary" : "primary"}
+              variant="primary"
               size="sm"
               disabled={buildDisabled || action.disabled}
               onClick={() => sendAction(action)}

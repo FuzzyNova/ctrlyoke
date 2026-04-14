@@ -123,7 +123,9 @@ async function runNpmBuild(
   return await new Promise<DevBuildResult>((resolve) => {
     const child = spawn(npmCommand, ["run", scriptName], {
       cwd: context.extensionUri.fsPath,
-      shell: false,
+      // On Windows, .cmd files must be launched through the shell (cmd.exe);
+      // spawning them directly with shell:false causes EINVAL.
+      shell: process.platform === "win32",
       env: process.env,
     });
     let settled = false;
