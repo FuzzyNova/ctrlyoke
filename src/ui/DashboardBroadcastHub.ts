@@ -121,7 +121,8 @@ export class DashboardBroadcastHub
     fileName: string,
     totalSteps: number,
     isContinuation?: boolean,
-    preserveStepCount?: number
+    preserveStepCount?: number,
+    isInjectMode?: boolean
   ): void {
     for (const client of this.clients) {
       client.updateExecutionStarted?.(
@@ -129,7 +130,8 @@ export class DashboardBroadcastHub
         fileName,
         totalSteps,
         isContinuation,
-        preserveStepCount
+        preserveStepCount,
+        isInjectMode
       );
     }
   }

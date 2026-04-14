@@ -73,6 +73,9 @@ interface TerminalActions {
 
   /** Called on new run start — clears only ai-cli sessions; shell sessions survive */
   clearAiCliSessions: (workflowId: string) => void;
+
+  /** Revive a previously ended ai-cli session back to RUNNING (inject mode resume) */
+  resumeSession: (workflowId: string, sessionId: string) => void;
 }
 
 const initialState: TerminalState = {
@@ -173,6 +176,14 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
       set((state) => {
         const sessions = (state.sessions[workflowId] ?? []).map((s) =>
           s.id === sessionId ? { ...s, controllerCols: cols } : s
+        );
+        return { sessions: { ...state.sessions, [workflowId]: sessions } };
+      }),
+
+    resumeSession: (workflowId, sessionId) =>
+      set((state) => {
+        const sessions = (state.sessions[workflowId] ?? []).map((s) =>
+          s.id === sessionId ? { ...s, status: TERMINAL_SESSION_STATUS.RUNNING } : s
         );
         return { sessions: { ...state.sessions, [workflowId]: sessions } };
       }),

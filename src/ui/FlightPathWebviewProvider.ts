@@ -365,14 +365,16 @@ window.vscodeApi = acquireVsCodeApi();
     fileName: string,
     totalSteps: number,
     isContinuation?: boolean,
-    preserveStepCount?: number
+    preserveStepCount?: number,
+    isInjectMode?: boolean
   ): void {
     this.sink.updateExecutionStarted(
       workflowId,
       fileName,
       totalSteps,
       isContinuation,
-      preserveStepCount
+      preserveStepCount,
+      isInjectMode
     );
   }
   public notifyRunHistoryUpdated(

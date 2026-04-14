@@ -88,7 +88,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
     fileName: string,
     totalSteps: number,
     isContinuation?: boolean,
-    preserveStepCount?: number
+    preserveStepCount?: number,
+    isInjectMode?: boolean
   ): void {
     this.send({
       type: MESSAGE_TYPES.EXECUTION_STARTED,
@@ -96,6 +97,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       fileName,
       totalSteps,
       ...(isContinuation ? { isContinuation: true, preserveStepCount } : {}),
+      ...(isInjectMode ? { isInjectMode: true } : {}),
     });
   }
 

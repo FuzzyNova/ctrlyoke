@@ -155,6 +155,39 @@ export abstract class HarnessIntegration {
   }
 
   /**
+   * Returns true if this integration can be reused for the next run without disposing
+   * and recreating it. True when inject mode is configured and the underlying PTY
+   * session is still alive with a known inject context.
+   *
+   * Overridden by CliIntegration; all other harnesses return false (default).
+   */
+  canReuseForInject(): boolean {
+    return false;
+  }
+
+  /**
+   * Reset per-run mutable state so the integration can be handed to a new workflow
+   * execution without side-effects from the previous run.
+   * Called by WorkflowInstance when reusing a live integration via liveInjectIntegration.
+   */
+  resetForNewRun(): void {
+    this.isCancelling = false;
+    this.lastFailureReason = null;
+  }
+
+  /**
+   * Register a one-shot callback that fires when the PTY session underlying this
+   * integration exits (user killed the terminal, process crashed, etc.).
+   * The callback is responsible for disposing the integration and clearing the
+   * WorkflowInstance.liveInjectIntegration reference.
+   *
+   * Default: no-op for non-PTY harnesses. Overridden by CliIntegration.
+   */
+  onPtySessionEnded(_callback: () => void): void {
+    // no-op for non-PTY integrations
+  }
+
+  /**
    * Clean up workflow-scoped artifacts created during execution (e.g. MCP config files).
    *
    * Called from the finally block in WorkflowInstance.startWorkflowExecution after

@@ -362,6 +362,12 @@ export interface ExecutionStartedMessage {
    * Only meaningful when isContinuation=true.
    */
   preserveStepCount?: number;
+  /**
+   * When true, this run reuses the existing PTY via inject mode.
+   * The webview must NOT clear the existing ai-cli terminal session — it should
+   * unfreeze and resume it instead so the same xterm instance shows the new output.
+   */
+  isInjectMode?: boolean;
 }
 
 /**

@@ -181,14 +181,41 @@ export class CliExecutionRunner {
     const startTime = new Date();
 
     // Submit the prepared prompt text to the running TUI.
-    // "\r" matches what xterm.js sends when the user presses Enter.
-    const written = this.deps.transportCoordinator.writeToCurrentPtySession(
-      session.promptArgument + "\r"
+    // Some TUIs (Copilot CLI confirmed) use focus tracking and only activate their
+    // keyboard input handler after receiving the "focus-in" VT sequence (ESC [ I = \x1b[I).
+    // Without it, the text and Enter are silently ignored even though the PTY write succeeds.
+    // Prepending \x1b[I tells the TUI it has focus, enabling input acceptance.
+    // TUIs that don't use focus tracking (Claude CLI) safely ignore the sequence.
+    // "\r" (CR, 0x0D) is the submit key — same byte xterm.js sends when Enter is pressed.
+    // "\n" (LF) acts as a newline in multi-line input boxes, NOT submit.
+    // Send focus-in first, then wait a tick for the TUI to switch its input mode,
+    // then send the text + Enter. If they arrive in the same PTY write the TUI's
+    // focus handler may not yet be ready when the text bytes are consumed.
+    const focusIn = "\x1b[I";
+    const textAndSubmit = session.promptArgument + "\r";
+    Log.debug(
+      `[inject] writing focus-in then text to PTY: ${JSON.stringify(focusIn + textAndSubmit)} hex=${Buffer.from(focusIn + textAndSubmit).toString("hex")}`
     );
+    this.deps.transportCoordinator.writeToCurrentPtySession(focusIn);
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    const written =
+      this.deps.transportCoordinator.writeToCurrentPtySession(textAndSubmit);
 
     if (!written) {
+      Log.warn("⚠️ Inject mode: PTY session not active — TUI may have exited");
+      return { injected: false };
+    }
+
+    // Yield to the event loop so any pending PTY exit events from the prior prompt
+    // can propagate before we commit to monitoring. Without this yield, writeToCurrentPtySession
+    // can return true (currentPtySession is still set) even when the process has already
+    // exited but its onExit callback hasn't fired yet. A single await tick is enough —
+    // PTY onExit callbacks are macrotasks that fire in the next event loop iteration.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    if (this.deps.failureTracker.getPtyTermination()) {
       Log.warn(
-        "⚠️ Inject mode: PTY session not active — Claude TUI may have exited"
+        "⚠️ Inject mode: PTY process exited immediately after write — TUI does not support injection (prompt sent to dead process). Falling back to restart mode."
       );
       return { injected: false };
     }

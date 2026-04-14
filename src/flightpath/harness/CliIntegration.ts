@@ -121,6 +121,9 @@ export class CliIntegration extends HarnessIntegration {
   /** Tracks PTY exits, process-exit classification, and captured PTY tail output. */
   private readonly failureTracker = new CliFailureTracker();
 
+  /** One-shot callback registered by WorkflowInstance to dispose this integration when the PTY exits. */
+  private ptySessionEndedCallback?: () => void;
+
   /** Prompt/file assembly helper extracted from CliIntegration. */
   private readonly promptPreparer: CliPromptPreparer;
 
@@ -337,9 +340,10 @@ export class CliIntegration extends HarnessIntegration {
    *
    * Conditions:
    * 1. The global setting is "inject"
-   * 2. This is a follow-up prompt (promptIndex > 0)
-   * 3. There is a previous interactive context (PTY + log file)
-   * 4. The spawn-time configuration is compatible — model, tool permissions, hooks,
+   * 2. There is a previous interactive context (PTY + log file). This is set either
+   *    by a previous prompt in the same integration run, or carried over from a prior
+   *    run when WorkflowInstance re-inserts the live integration into executionIntegrations.
+   * 3. The spawn-time configuration is compatible — model, tool permissions, hooks,
    *    MCP servers, and additional args must all match the spawned process. Any
    *    prompt-level override that changes these requires a fresh process instead.
    */
@@ -347,14 +351,11 @@ export class CliIntegration extends HarnessIntegration {
     if (ConfigurationUtils.getInteractiveContinuationMode() !== "inject") {
       return false;
     }
-    const promptIndex = session.workflowContext?.promptIndex ?? 0;
-    if (promptIndex === 0) {
-      return false;
-    }
     const ctx = this.executionRunner.getLastInteractiveContext();
     if (!ctx) {
       return false;
     }
+    const promptIndex = session.workflowContext?.promptIndex ?? 0;
     const reason = CliIntegration.getInjectIncompatibilityReason(
       ctx,
       session.resolvedProperties,
@@ -454,6 +455,15 @@ export class CliIntegration extends HarnessIntegration {
 
   private handlePtyExit(session: PtySession, exitCode: number): void {
     this.failureTracker.capturePtyExit(exitCode, session.reconnectBuffer);
+
+    // Notify WorkflowInstance that the PTY session is gone so it can clean up
+    // liveInjectIntegration and dispose this integration.
+    const endedCb = this.ptySessionEndedCallback;
+    if (endedCb) {
+      this.ptySessionEndedCallback = undefined;
+      endedCb();
+    }
+
     if (exitCode !== 0) {
       Log.warn(
         `⚠️ AI CLI PTY session ${session.id} exited with code ${exitCode} — workflow step will be stopped`
@@ -660,8 +670,11 @@ export class CliIntegration extends HarnessIntegration {
     const mode = this.getExecutionMode();
     const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
 
-    // Inject mode: for follow-up prompts in interactive mode, write directly into
-    // the running TUI instead of killing and restarting with --resume.
+    // Inject mode: write directly into the running TUI instead of killing and
+    // restarting with --resume. Works for sequential follow-up prompts within a
+    // run AND for the first prompt of a resumed workflow — when the integration is
+    // reused via WorkflowInstance.liveInjectIntegration, lastInteractiveContext is
+    // already populated and shouldUseInjectMode passes without needing promptIndex > 0.
     if (isInteractive && this.shouldUseInjectMode(session)) {
       const injectResult = await this.executionRunner.executeInteractiveInject(session);
       if (injectResult.injected) {
@@ -1066,6 +1079,43 @@ export class CliIntegration extends HarnessIntegration {
     this.transportCoordinator.dispose(
       ConfigurationUtils.shouldCloseTerminalWhenPromptCompletes()
     );
+  }
+
+  /**
+   * Returns true when inject mode is configured AND the last run left a live PTY
+   * session with known inject context. WorkflowInstance checks this in the
+   * startWorkflowExecution finally block to decide whether to keep this integration
+   * alive for the next run instead of disposing it.
+   */
+  override canReuseForInject(): boolean {
+    const injectMode = ConfigurationUtils.getInteractiveContinuationMode() === "inject";
+    const hasCtx = this.executionRunner.hasInteractiveContext();
+    const hasPty = this.transportCoordinator.hasLivePtySession();
+    Log.debug(
+      `[canReuseForInject] injectMode=${injectMode} hasCtx=${hasCtx} hasPty=${hasPty}`
+    );
+    return injectMode && hasCtx && hasPty;
+  }
+
+  /**
+   * Reset per-run mutable state before this integration is reused for a new workflow
+   * execution. Clears cancellation/failure flags and the failure tracker so the new
+   * run starts with a clean slate.
+   */
+  override resetForNewRun(): void {
+    super.resetForNewRun();
+    this.failureTracker.reset();
+    this.activeSession = undefined;
+    this.ptySessionEndedCallback = undefined;
+  }
+
+  /**
+   * Register a one-shot callback that fires when the PTY session underlying this
+   * integration exits. Used by WorkflowInstance to clean up liveInjectIntegration
+   * when the user kills the terminal between runs.
+   */
+  override onPtySessionEnded(callback: () => void): void {
+    this.ptySessionEndedCallback = callback;
   }
 
   /**

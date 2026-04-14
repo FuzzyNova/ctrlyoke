@@ -82,16 +82,21 @@ export class WorkflowTaggedSink implements IDashboardSink {
     fileName: string,
     totalSteps: number,
     isContinuation?: boolean,
-    preserveStepCount?: number
+    preserveStepCount?: number,
+    isInjectMode?: boolean
   ): void {
-    // workflowId is already the first param here — pass through as-is
-    this.inner.updateExecutionStarted(
-      workflowId,
-      fileName,
-      totalSteps,
-      isContinuation,
-      preserveStepCount
-    );
+    // workflowId is already the first param here — pass through as-is.
+    // Only pass isInjectMode when truthy to avoid adding a trailing undefined arg
+    // that breaks deepStrictEqual assertions in tests.
+    if (isInjectMode) {
+      this.inner.updateExecutionStarted(
+        workflowId, fileName, totalSteps, isContinuation, preserveStepCount, true
+      );
+    } else {
+      this.inner.updateExecutionStarted(
+        workflowId, fileName, totalSteps, isContinuation, preserveStepCount
+      );
+    }
   }
 
   notifyRunHistoryUpdated(

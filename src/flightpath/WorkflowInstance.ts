@@ -178,6 +178,21 @@ export class WorkflowInstance {
    */
   private lastRunIntegrations: HarnessIntegration[] = [];
 
+  /**
+   * Live integrations saved across workflow runs when inject mode is active, keyed by
+   * the same harness ID used in executionIntegrations (e.g. "copilot-cli", "claude-cli").
+   * One entry per harness that completed a prompt with an active PTY session. A multi-harness
+   * workflow (prompt 1 = copilot-cli, prompt 2 = claude-cli) produces two entries, so the
+   * next run can inject into whichever harness its first prompt targets.
+   *
+   * Instead of disposing these integrations at the end of a run (which would sever the PTY
+   * connection), WorkflowInstance holds them here. On the next run they are re-inserted into
+   * executionIntegrations so createIntegrationForMode returns the correct live instance — the
+   * PTY and lastInteractiveContext from the previous run are fully intact.
+   * Each entry is removed and disposed when its PTY process exits.
+   */
+  private readonly liveInjectIntegrations = new Map<string, HarnessIntegration>();
+
   // ─────────────────────────────────────────────────────────────────────────
   // Streaming event forwarding — aggregates events from all execution integrations
   // so callers (e.g. the standalone CLI) can subscribe once on the instance.
@@ -493,6 +508,11 @@ export class WorkflowInstance {
       prev.closeTerminal();
     }
     this.lastRunIntegrations = [];
+    // Dispose all live inject integrations held across runs (PTY still alive).
+    for (const integration of this.liveInjectIntegrations.values()) {
+      integration.dispose();
+    }
+    this.liveInjectIntegrations.clear();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -991,27 +1011,33 @@ export class WorkflowInstance {
       if (this.dashboardSink && totalSteps > 0) {
         if (continueFromCurrent || isIdleContinuation) {
           const currentIndex = currentQueueState.currentIndex;
+          const willInject = integration.canReuseForInject();
           Log.debug(
-            `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${currentIndex}, totalSteps=${totalSteps}`
+            `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${currentIndex}, totalSteps=${totalSteps}, isInjectMode=${willInject}`
           );
-          this.dashboardSink.updateExecutionStarted(
-            this.id,
-            fileName,
-            totalSteps,
-            true,
-            currentIndex
-          );
+          if (willInject) {
+            this.dashboardSink.updateExecutionStarted(
+              this.id, fileName, totalSteps, true, currentIndex, true
+            );
+          } else {
+            this.dashboardSink.updateExecutionStarted(
+              this.id, fileName, totalSteps, true, currentIndex
+            );
+          }
         } else if (isAppendContinuation) {
+          const willInject = integration.canReuseForInject();
           Log.debug(
-            `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true (append-to-completed), preserveStepCount=${prevCompletedCount}, totalSteps=${totalSteps}`
+            `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true (append-to-completed), preserveStepCount=${prevCompletedCount}, totalSteps=${totalSteps}, isInjectMode=${willInject}`
           );
-          this.dashboardSink.updateExecutionStarted(
-            this.id,
-            fileName,
-            totalSteps,
-            true,
-            prevCompletedCount
-          );
+          if (willInject) {
+            this.dashboardSink.updateExecutionStarted(
+              this.id, fileName, totalSteps, true, prevCompletedCount, true
+            );
+          } else {
+            this.dashboardSink.updateExecutionStarted(
+              this.id, fileName, totalSteps, true, prevCompletedCount
+            );
+          }
         } else {
           Log.debug(
             `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${totalSteps}`
@@ -2008,6 +2034,23 @@ export class WorkflowInstance {
     harnessOverride?: Harness
   ): HarnessIntegration {
     const harness = harnessOverride ?? ConfigurationUtils.getIntegrationMode();
+
+    // If a live integration from the previous run is waiting in liveInjectIntegrations,
+    // promote it into executionIntegrations immediately — before checking the cache or
+    // creating a new instance. This ensures the live one wins even when
+    // executeLoadedPromptFile calls createIntegrationForMode() before startWorkflowExecution
+    // has a chance to run its own restore loop.
+    const live = this.liveInjectIntegrations.get(harness);
+    if (live) {
+      this.liveInjectIntegrations.delete(harness);
+      live.resetForNewRun();
+      this.executionIntegrations.set(harness, live);
+      Log.info(
+        `[inst:${this.id.slice(0, 8)}] ♻️ Reusing live inject integration (harness=${harness}) from previous run`
+      );
+      return live;
+    }
+
     const cached = this.executionIntegrations.get(harness);
     if (cached) {
       Log.debug(`♻️ Reusing cached integration for harness: ${harness}`);
@@ -2090,6 +2133,21 @@ export class WorkflowInstance {
     }
 
     try {
+      // Re-insert all live integrations saved from the previous run (inject mode with PTY
+      // still alive) into executionIntegrations so createIntegrationForMode finds and returns
+      // the correct one. This keeps each PTY connection and lastInteractiveContext intact,
+      // enabling immediate inject regardless of which harness the next prompt targets.
+      // Any remaining liveInjectIntegrations entries that weren't consumed by
+      // createIntegrationForMode() above (e.g. harnesses not used in this run) are
+      // drained here so they don't linger. Each entry's onPtySessionEnded callback
+      // will eventually clean it up via dispose() when the PTY exits.
+      // (In the normal single-harness case this map is already empty because
+      //  executeLoadedPromptFile already called createIntegrationForMode().)
+      Log.debug(
+        `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: liveInjectIntegrations.size=${this.liveInjectIntegrations.size} (should be 0 in normal flow)`
+      );
+      this.liveInjectIntegrations.clear();
+
       const activeIntegration = integration || this.createIntegrationForMode();
       this.activeIntegration = activeIntegration;
 
@@ -2120,15 +2178,16 @@ export class WorkflowInstance {
         );
       }
 
-      // Dispose all execution integrations created for this run.
-      // They are short-lived (one run), not registered with context.subscriptions,
-      // so must be disposed manually to release their EventEmitter resources.
-      // Save references first so the next run can close any terminals that were
-      // intentionally left open (closeTerminalWhenPromptCompletes = false).
-      this.lastRunIntegrations = [...this.executionIntegrations.values()];
+      // Dispose all execution integrations created for this run, unless they have
+      // a live PTY with inject context — those are saved to liveInjectIntegrations
+      // so the next run can reuse them without re-spawning.
+      this.lastRunIntegrations = [];
       const workspaceRoot =
         this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
-      for (const execIntegration of this.executionIntegrations.values()) {
+      Log.debug(
+        `[inst:${this.id.slice(0, 8)}] startWorkflowExecution finally: executionIntegrations.size=${this.executionIntegrations.size}`
+      );
+      for (const [harnessKey, execIntegration] of this.executionIntegrations.entries()) {
         if (workspaceRoot) {
           await execIntegration
             .cleanupWorkflowArtifacts(workingFilePath, workspaceRoot)
@@ -2136,7 +2195,23 @@ export class WorkflowInstance {
               Log.warn("Failed to clean up workflow artifacts:", err)
             );
         }
-        execIntegration.dispose();
+        if (execIntegration.canReuseForInject()) {
+          // PTY still alive and inject context set — keep the integration alive
+          // for the next run rather than destroying it. Store under the same map key
+          // so the restore code can insert it where createIntegrationForMode looks.
+          // Register a one-shot exit callback so we dispose it if the terminal is
+          // killed between runs.
+          this.liveInjectIntegrations.set(harnessKey, execIntegration);
+          execIntegration.onPtySessionEnded(() => {
+            this.liveInjectIntegrations.delete(harnessKey);
+            execIntegration.dispose();
+          });
+        } else {
+          // Normal path: terminal closed or inject mode not active — dispose now
+          // and save so the next run can close any VS Code terminal tab left open.
+          this.lastRunIntegrations.push(execIntegration);
+          execIntegration.dispose();
+        }
       }
       this.executionIntegrations.clear();
 

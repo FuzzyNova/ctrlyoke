@@ -329,6 +329,15 @@ export class CliTransportCoordinator {
     return true;
   }
 
+  /**
+   * Store the inject context (log path + AI session ID) on the currently active PTY session.
+   * Called by CliExecutionRunner after session startup so the context survives integration
+   * lifecycle changes and can be retrieved on workflow resume.
+   */
+  hasLivePtySession(): boolean {
+    return this.currentPtySession !== undefined;
+  }
+
   closeTerminal(): void {}
 
   async cancel(): Promise<boolean> {

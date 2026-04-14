@@ -477,6 +477,12 @@ export class WorkflowOrchestrator {
       this.instances.get(workflowId) ?? this.retiredInstances.get(workflowId);
     if (instance) {
       send({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
+      // Update viewerRegistry immediately — before any awaits — so that retireWorkflow
+      // called from a concurrent state-change event sees isViewed=true and keeps the
+      // instance in retiredInstances rather than discarding it. Moving this after the
+      // awaits created a race: the workflow could complete during replayRunHistoryTo or
+      // replayOutputHistoryTo, causing retirement with stale (false) isViewed.
+      this.setViewedWorkflowId(clientId, workflowId);
       instance.replayFullStateTo(sink);
       await instance.replayRunHistoryTo(sink);
       await instance.replayOutputHistoryTo(send);
@@ -536,7 +542,7 @@ export class WorkflowOrchestrator {
           }
         }
       }
-      this.setViewedWorkflowId(clientId, workflowId);
+      // setViewedWorkflowId already called before awaits above.
       return;
     }
 
@@ -544,12 +550,13 @@ export class WorkflowOrchestrator {
     const cliEntry = this.cliSessions.get(workflowId);
     if (cliEntry) {
       send({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
+      // Update viewerRegistry before the await for the same reason as above.
+      this.setViewedWorkflowId(clientId, workflowId);
       await this.sendCliWorkflowFullStateToDashboard(
         workflowId,
         cliEntry,
         sink
       );
-      this.setViewedWorkflowId(clientId, workflowId);
     } else {
       Log.warn(
         `replayWorkflowStateTo: workflowId "${workflowId.slice(0, 8)}" not found`
@@ -1746,6 +1753,27 @@ export class WorkflowOrchestrator {
             `name="${summary.workflowName || "(empty)"}" (total: ${this.instances.size})`
         );
         this.dashboardBroadcastHub.notifyWorkflowAdded(summary);
+
+        // If the panel is currently viewing a blank placeholder (no steps, no working file)
+        // and this workflow was started outside the normal panel launch path (inRegistry=false),
+        // auto-update viewerRegistry so subsequent executeEphemeralPrompt and retireWorkflow
+        // calls resolve to this running instance instead of the blank placeholder.
+        const panelViewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+        if (panelViewedId !== instance.id) {
+          const panelViewed = panelViewedId
+            ? (this.instances.get(panelViewedId) ?? this.retiredInstances.get(panelViewedId))
+            : null;
+          const panelSummary = panelViewed?.getSummary();
+          const panelViewedIsBlank =
+            !panelViewed ||
+            (!panelSummary?.workingFilePath && (panelSummary?.totalSteps ?? 0) === 0);
+          if (panelViewedIsBlank) {
+            this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
+            Log.debug(
+              `onDidChangeState: auto-switched panel viewerRegistry to running inst:${instance.id.slice(0, 8)} (panel had blank placeholder)`
+            );
+          }
+        }
       }
 
       this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(summary);

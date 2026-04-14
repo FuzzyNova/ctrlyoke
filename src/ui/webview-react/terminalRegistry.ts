@@ -282,6 +282,19 @@ export const terminalRegistry = {
     entry.onDataDisposable = undefined;
   },
 
+  /**
+   * Unfreeze a previously frozen ai-cli session for inject-mode resume.
+   * Clears the frozen flag so TerminalInstance can re-register onData on next
+   * mount, and so future TERMINAL_OUTPUT writes render immediately.
+   * The FrozenOverlay disappears when the store's session status is set back
+   * to RUNNING by the caller.
+   */
+  unfreeze(workflowId: string, sessionId: string): void {
+    const entry = registry.get(makeKey(workflowId, sessionId));
+    if (!entry) return;
+    entry.frozen = false;
+  },
+
   get(workflowId: string, sessionId: string): RegistryEntry | undefined {
     return registry.get(makeKey(workflowId, sessionId));
   },

@@ -34,7 +34,10 @@ import type {
 } from "../types/WebviewMessageTypes";
 import type { McpServerConfig } from "../types/FlightPathTypes";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
-import { getPtyProcessManager, ptyPostMessage } from "../flightpath/harness/PtyProcessManager";
+import {
+  getPtyProcessManager,
+  ptyPostMessage,
+} from "../flightpath/harness/PtyProcessManager";
 import {
   safeDiscoverLocalMcpServers,
   safeFetchMcpRegistry,
@@ -145,7 +148,10 @@ export class WebviewMessageRouter {
       Log.debug("Received READY from React — sending INIT");
       this.settingsSync.sendInitialState(this.getCurrentPostMessage());
       // Tell the webview its own client identity so it can compute isController
-      this.emitMessage({ type: MESSAGE_TYPES.CLIENT_ID_ASSIGNED, clientId: this.clientId });
+      this.emitMessage({
+        type: MESSAGE_TYPES.CLIENT_ID_ASSIGNED,
+        clientId: this.clientId,
+      });
       const orchestrator = this.getOrchestrator();
 
       if (orchestrator) {
@@ -159,7 +165,9 @@ export class WebviewMessageRouter {
         await orchestrator.handleClientReady(
           this.clientId,
           this.scopedPostMessage,
-          this.clientId === PANEL_CLIENT_ID ? { skipTerminalReplay: true } : undefined
+          this.clientId === PANEL_CLIENT_ID
+            ? { skipTerminalReplay: true }
+            : undefined
         );
         // For browser clients: SESSION_RESTORED (sent during replay) triggers
         // applyWorkflowChange() which no longer clears workflowProperties, but
@@ -762,7 +770,10 @@ export class WebviewMessageRouter {
       if (workflowId) {
         // Register this client as the controller for the next terminal session spawned
         // for this workflow. The pending controller is consumed in PtyProcessManager.spawnPty().
-        getPtyProcessManager()?.setPendingController(workflowId as string, this.clientId);
+        getPtyProcessManager()?.setPendingController(
+          workflowId as string,
+          this.clientId
+        );
         // Fire-and-forget: executeWorkflow runs the entire workflow loop and must
         // not be awaited here — awaiting would block the routeQueue for the full
         // duration of the run, preventing stop/pause/switch-workflow/terminal-input
@@ -863,7 +874,11 @@ export class WebviewMessageRouter {
       if (!session) return;
       // Only the designated controller may send input. If no controller is set,
       // any client may send (e.g. during an unowned shell session).
-      if (session.controllerClientId !== undefined && this.clientId !== session.controllerClientId) return;
+      if (
+        session.controllerClientId !== undefined &&
+        this.clientId !== session.controllerClientId
+      )
+        return;
       ptyManager.writeToSession(msg.sessionId as string, msg.data as string);
     });
 
@@ -873,7 +888,11 @@ export class WebviewMessageRouter {
       const session = ptyManager.getSession(msg.sessionId as string);
       if (!session) return;
       // Only the controller may drive PTY dimensions.
-      if (session.controllerClientId !== undefined && this.clientId !== session.controllerClientId) return;
+      if (
+        session.controllerClientId !== undefined &&
+        this.clientId !== session.controllerClientId
+      )
+        return;
       ptyManager.resizeSession(
         msg.sessionId as string,
         msg.cols as number,
@@ -979,7 +998,10 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, async (msg) => {
       const ptyManager = getPtyProcessManager();
       if (!ptyManager || !msg.sessionId || !msg.workflowId) return;
-      const session = ptyManager.assignController(msg.sessionId as string, this.clientId);
+      const session = ptyManager.assignController(
+        msg.sessionId as string,
+        this.clientId
+      );
       if (session) {
         // Broadcast updated controller to all clients so they can update isController
         ptyPostMessage({

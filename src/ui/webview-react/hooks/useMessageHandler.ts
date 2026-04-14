@@ -589,14 +589,33 @@ function createMessageHandlers(): MessageHandlerMap {
     // Mark editor as having active queue
     editorStore.setHasActiveQueue(true);
 
-    // Clear previous ai-cli terminal sessions (shell sessions survive)
+    // Handle ai-cli terminal sessions for the new run.
     const wfId = message.workflowId;
     if (wfId) {
-      const aiCliSessionIds = (useTerminalStore.getState().sessions[wfId] ?? [])
-        .filter((s) => s.kind === SESSION_KINDS.AI_CLI)
-        .map((s) => s.id);
-      terminalRegistry.clearAiCliSessions(wfId, aiCliSessionIds);
-      useTerminalStore.getState().clearAiCliSessions(wfId);
+      if (message.isInjectMode) {
+        // Inject mode reuses the existing PTY — unfreeze and resume the existing
+        // ai-cli session(s) instead of destroying and recreating them.
+        const termStore = useTerminalStore.getState();
+        const aiCliSessions = (termStore.sessions[wfId] ?? []).filter(
+          (s) => s.kind === SESSION_KINDS.AI_CLI
+        );
+        for (const s of aiCliSessions) {
+          terminalRegistry.unfreeze(wfId, s.id);
+          termStore.resumeSession(wfId, s.id);
+        }
+        if (aiCliSessions.length > 0) {
+          useUiStore.getState().setActiveOutputTab(wfId, "terminal");
+          useUiStore.getState().setTerminalSessionActive(wfId, true);
+        }
+      } else {
+        // Normal (non-inject) run start: clear old ai-cli sessions so the new PTY
+        // gets a fresh xterm instance. Shell sessions survive run boundaries.
+        const aiCliSessionIds = (useTerminalStore.getState().sessions[wfId] ?? [])
+          .filter((s) => s.kind === SESSION_KINDS.AI_CLI)
+          .map((s) => s.id);
+        terminalRegistry.clearAiCliSessions(wfId, aiCliSessionIds);
+        useTerminalStore.getState().clearAiCliSessions(wfId);
+      }
     }
   };
 

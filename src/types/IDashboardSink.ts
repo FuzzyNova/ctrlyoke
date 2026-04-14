@@ -54,7 +54,8 @@ export interface IDashboardSink {
     fileName: string,
     totalSteps: number,
     isContinuation?: boolean,
-    preserveStepCount?: number
+    preserveStepCount?: number,
+    isInjectMode?: boolean
   ): void;
 
   notifyRunHistoryUpdated(

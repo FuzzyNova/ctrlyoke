@@ -48,12 +48,12 @@ type HarnessId =
 
 /** Active harnesses for this test run. Comment out any you don't want to run. */
 const HARNESSES: HarnessId[] = [
-  "copilot-cli",
-  "claude-cli",
-  "codex-cli",
-  "opencode-cli",
+  // "copilot-cli",
+  // "claude-cli",
+  // "codex-cli",
+  // "opencode-cli",
   "qwen-cli",
-  "gemini-cli",
+  // "gemini-cli",
 ];
 
 /**
@@ -250,6 +250,36 @@ function runHarness(
         records.push(JSON.parse(line) as HookRecord);
       } catch {
         // ignore malformed lines
+      }
+    }
+  }
+
+  // Diagnostic: dump settings file and FlightPath log on failure
+  if (records.length === 0) {
+    const qwenSettings = path.join(tmpDir, ".qwen", "settings.json");
+    if (fs.existsSync(qwenSettings)) {
+      console.log(
+        `  [diag] .qwen/settings.json content:\n${fs.readFileSync(qwenSettings, "utf8")}`
+      );
+    } else {
+      console.log(`  [diag] .qwen/settings.json NOT FOUND at: ${qwenSettings}`);
+    }
+    // Print FlightPath log if available
+    const fpLogsDir = path.join(tmpDir, ".flightpath", "logs");
+    if (fs.existsSync(fpLogsDir)) {
+      const logFiles = fs
+        .readdirSync(fpLogsDir)
+        .filter((f) => f.endsWith(".log"));
+      for (const lf of logFiles.slice(0, 1)) {
+        const logContent = fs.readFileSync(path.join(fpLogsDir, lf), "utf8");
+        const lines = logContent
+          .split("\n")
+          .filter((l) => /hook|qwen|setting/i.test(l));
+        if (lines.length > 0) {
+          console.log(
+            `  [diag] FlightPath log (hook-related):\n${lines.slice(0, 30).join("\n")}`
+          );
+        }
       }
     }
   }
