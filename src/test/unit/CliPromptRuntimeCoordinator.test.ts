@@ -55,7 +55,8 @@ suite("CliPromptRuntimeCoordinator", () => {
         },
       });
     } finally {
-      (Log as unknown as { debug(message: string): void }).debug = originalDebug;
+      (Log as unknown as { debug(message: string): void }).debug =
+        originalDebug;
     }
 
     assert.strictEqual(prompt._runtime?.startedAt, 1234);
@@ -103,7 +104,8 @@ suite("CliPromptRuntimeCoordinator", () => {
         },
       });
     } finally {
-      (Log as unknown as { debug(message: string): void }).debug = originalDebug;
+      (Log as unknown as { debug(message: string): void }).debug =
+        originalDebug;
     }
 
     assert.strictEqual(prompt._runtime?.harness, Harness.ClaudeCli);

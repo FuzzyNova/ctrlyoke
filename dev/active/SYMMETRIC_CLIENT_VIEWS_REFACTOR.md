@@ -16,15 +16,15 @@ The panel becomes **just another client** with its own per-connection viewed-wor
 
 ## Key Conceptual Changes
 
-| Before | After |
-|---|---|
-| `vsCodeViewedId: string \| null` — single global | `viewerRegistry: Map<clientId, string \| null>` — one slot per connected client |
-| `vsCodeViewedRetiredInstance` — single retired ref | `retiredInstances: Map<workflowId, WorkflowInstance>` — one per retired workflow, shared |
-| Panel clientId: implicit (the global) | Panel clientId: `"panel"` (constant) |
-| Browser clientId: `"browser:N"` scoped send | Browser clientId: `"browser:N"` scoped send (unchanged) |
-| `sendFullStateToDashboard()` → broadcasts to hub | Full state only sent via `replayWorkflowStateTo(id, send)` |
-| `hub.notifyActiveWorkflowChanged()` → panel-only special case | `ACTIVE_WORKFLOW_CHANGED` always sent via scoped per-client send |
-| `SWITCH_WORKFLOW`/`LOAD_WORKFLOW` split on `scopedPostMessage` | All clients route through same handler — panel's scoped send wraps its `postMessage` |
+| Before                                                         | After                                                                                    |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `vsCodeViewedId: string \| null` — single global               | `viewerRegistry: Map<clientId, string \| null>` — one slot per connected client          |
+| `vsCodeViewedRetiredInstance` — single retired ref             | `retiredInstances: Map<workflowId, WorkflowInstance>` — one per retired workflow, shared |
+| Panel clientId: implicit (the global)                          | Panel clientId: `"panel"` (constant)                                                     |
+| Browser clientId: `"browser:N"` scoped send                    | Browser clientId: `"browser:N"` scoped send (unchanged)                                  |
+| `sendFullStateToDashboard()` → broadcasts to hub               | Full state only sent via `replayWorkflowStateTo(id, send)`                               |
+| `hub.notifyActiveWorkflowChanged()` → panel-only special case  | `ACTIVE_WORKFLOW_CHANGED` always sent via scoped per-client send                         |
+| `SWITCH_WORKFLOW`/`LOAD_WORKFLOW` split on `scopedPostMessage` | All clients route through same handler — panel's scoped send wraps its `postMessage`     |
 
 ---
 
@@ -45,6 +45,7 @@ The panel becomes **just another client** with its own per-connection viewed-wor
    - Replaces `vsCodeViewedRetiredInstance`.
 
 4. Add helper methods:
+
    ```typescript
    getViewedWorkflowId(clientId: string): string | null
    setViewedWorkflowId(clientId: string, workflowId: string | null): void
@@ -112,17 +113,22 @@ table.set(MESSAGE_TYPES.SWITCH_WORKFLOW, (message) => {
   if (this.scopedPostMessage) {
     orchestrator.replayWorkflowStateTo(workflowId, this.scopedPostMessage);
   } else {
-    orchestrator.setActiveWorkflow(workflowId);  // panel-only path
+    orchestrator.setActiveWorkflow(workflowId); // panel-only path
   }
 });
 
 // AFTER
 table.set(MESSAGE_TYPES.SWITCH_WORKFLOW, (message) => {
-  orchestrator.replayWorkflowStateTo(workflowId, this.scopedPostMessage, this.clientId);
+  orchestrator.replayWorkflowStateTo(
+    workflowId,
+    this.scopedPostMessage,
+    this.clientId
+  );
 });
 ```
 
 Do the same for:
+
 - `LOAD_WORKFLOW`: `loadWorkflowForClient(filePath, send, clientId)` for all clients
 - `CLEAR_WORKFLOW`: `createWorkflowForClient(send, clientId)` for all clients
 
@@ -147,6 +153,7 @@ orchestrator.handleClientReady(this.clientId, this.scopedPostMessage);
 **Changes to `src/flightpath/WorkflowOrchestrator.ts`:**
 
 Add `handleClientReady(clientId, send)`:
+
 ```typescript
 async handleClientReady(clientId: string, send: (msg: unknown) => void): Promise<void> {
   this.registerClient(clientId);
@@ -177,6 +184,7 @@ The startup auto-load path in `setDashboardReady()` calls `replayWorkflowStateTo
    - `resumeRecentWorkflowSession()` (command palette): replace with `createWorkflowForClient + loadWorkingFile`
 
 3. Remove `vsCodeViewedId` field. `getActiveInstance()` is rewritten as:
+
    ```typescript
    private getActiveInstance(): WorkflowInstance {
      const id = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
@@ -231,7 +239,7 @@ The startup auto-load path in `setDashboardReady()` calls `replayWorkflowStateTo
 ```typescript
 ws.on("close", () => {
   this.connections.delete(ws);
-  orchestrator?.unregisterClient(clientTag);  // cleans up retired/idle instances with no viewers
+  orchestrator?.unregisterClient(clientTag); // cleans up retired/idle instances with no viewers
 });
 ```
 
@@ -243,16 +251,16 @@ The panel is never "disconnected" in the WebSocket sense, but when the extension
 
 ## Files Changed Summary
 
-| File | Change |
-|---|---|
+| File                                     | Change                                                                                                                                                                                |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/flightpath/WorkflowOrchestrator.ts` | Core: add `viewerRegistry`, `retiredInstances`, `handleClientReady`, collapse `setActiveWorkflow`/`createWorkflow` to private; remove `vsCodeViewedId`, `vsCodeViewedRetiredInstance` |
-| `src/flightpath/WorkflowInstance.ts` | Make `sendFullStateToDashboard` private, rename to `replayStateToSink` |
-| `src/ui/WebviewMessageRouter.ts` | Collapse all `if (scopedPostMessage) / else` branches; `scopedPostMessage` always set; pass `clientId` |
-| `src/ui/FlightPathWebviewProvider.ts` | Add `getPanelScopedSend()`; remove `updateFileSelected`, `updateSessionRestored`, `notifyActiveWorkflowChanged` |
-| `src/ui/DashboardBroadcastHub.ts` | Remove `panelClient`, `setPanelClient`, `notifyActiveWorkflowChanged`, `updateFileSelected`, `updateSessionRestored` |
-| `src/ui/IDashboardProvider.ts` | Remove `updateFileSelected`, `updateSessionRestored` from interface |
-| `src/server/FlightPathHostedServer.ts` | Remove all three no-ops; wire `unregisterClient` on WS close |
-| `src/ui/PostMessageDashboardSink.ts` | Remove `updateFileSelected`, `updateSessionRestored` (no longer on `IDashboardSink`) |
+| `src/flightpath/WorkflowInstance.ts`     | Make `sendFullStateToDashboard` private, rename to `replayStateToSink`                                                                                                                |
+| `src/ui/WebviewMessageRouter.ts`         | Collapse all `if (scopedPostMessage) / else` branches; `scopedPostMessage` always set; pass `clientId`                                                                                |
+| `src/ui/FlightPathWebviewProvider.ts`    | Add `getPanelScopedSend()`; remove `updateFileSelected`, `updateSessionRestored`, `notifyActiveWorkflowChanged`                                                                       |
+| `src/ui/DashboardBroadcastHub.ts`        | Remove `panelClient`, `setPanelClient`, `notifyActiveWorkflowChanged`, `updateFileSelected`, `updateSessionRestored`                                                                  |
+| `src/ui/IDashboardProvider.ts`           | Remove `updateFileSelected`, `updateSessionRestored` from interface                                                                                                                   |
+| `src/server/FlightPathHostedServer.ts`   | Remove all three no-ops; wire `unregisterClient` on WS close                                                                                                                          |
+| `src/ui/PostMessageDashboardSink.ts`     | Remove `updateFileSelected`, `updateSessionRestored` (no longer on `IDashboardSink`)                                                                                                  |
 
 ---
 

@@ -45,6 +45,7 @@ observation, FlightPath enters a **follow-up watch mode**:
 
 In `CliIntegration` (or `ClaudeNotificationMonitor`), after the final prompt's Stop hook
 fires and there are no more queued prompts:
+
 - Do NOT tear down the log monitor
 - Transition the log watcher to a passive "tail" state
 
@@ -59,7 +60,9 @@ function isHumanPrompt(event: ClaudeProviderEvent): boolean {
   const content = event.message?.content ?? [];
   // A real user prompt has at least one text block
   // Tool results have tool_result blocks, not text blocks
-  return content.some((block: any) => block.type === "text" && block.text?.trim());
+  return content.some(
+    (block: any) => block.type === "text" && block.text?.trim()
+  );
 }
 ```
 
@@ -69,6 +72,7 @@ ordering may interleave with tool_result events. Use the `type` field to filter 
 ### 3. Synthetic Queue Entry
 
 When a human prompt is detected in the log tail:
+
 - Extract the prompt text from the `text` block
 - Create a synthetic `PromptItem` (flagged as `source: "terminal-followup"`)
 - Add to `WorkflowInstance`'s queue as an observed (not dispatched) entry
@@ -93,6 +97,7 @@ FlightPath-dispatched prompts. Token stats are extracted from the log events as 
 ### Race: User types in terminal + FlightPath queues a new prompt simultaneously
 
 If the user types a follow-up AND queues a FlightPath prompt at roughly the same time:
+
 - FlightPath's queued prompt will kill the terminal and restart with `--resume`
 - The terminal follow-up may or may not have been submitted before the kill
 - The JSONL log is authoritative and chronologically ordered — use event timestamps
@@ -127,15 +132,16 @@ preceding turn (i.e., Claude has already finished responding and is idle).
 
 ## Relationship to Continuation Mode
 
-| | Terminal Follow-up Tracking | Continuation Mode (inject) |
-|---|---|---|
-| **Who sends the prompt** | The user, directly in the TUI | FlightPath (via PTY write) |
-| **FlightPath features** | Retroactively applied (best-effort) | Fully applied (attachments, properties) |
-| **Tracking fidelity** | Passive observation, may miss edge cases | Full — FlightPath owns the turn |
-| **Effort to use** | Zero — just type in the terminal | Must go through FlightPath UI / workflow |
-| **Best for** | Quick one-off follow-ups, debugging turns | Multi-step workflows with context needs |
+|                          | Terminal Follow-up Tracking               | Continuation Mode (inject)               |
+| ------------------------ | ----------------------------------------- | ---------------------------------------- |
+| **Who sends the prompt** | The user, directly in the TUI             | FlightPath (via PTY write)               |
+| **FlightPath features**  | Retroactively applied (best-effort)       | Fully applied (attachments, properties)  |
+| **Tracking fidelity**    | Passive observation, may miss edge cases  | Full — FlightPath owns the turn          |
+| **Effort to use**        | Zero — just type in the terminal          | Must go through FlightPath UI / workflow |
+| **Best for**             | Quick one-off follow-ups, debugging turns | Multi-step workflows with context needs  |
 
 The two features are complementary. A possible combined UX:
+
 - Type in terminal → passively tracked (this plan)
 - Send via FlightPath with `continuationMode: inject` → fully tracked, fast (continuation mode plan)
 - Send via FlightPath with `continuationMode: restart` → fully tracked, slower (current behavior)

@@ -936,10 +936,14 @@ export const CliOutput = memo<CliOutputProps>(
           )}
 
           {/* Script stdout/stderr — plain text (or live streaming chunk) */}
-          {(output.isStreaming && streamingChunk ? streamingChunk : output.response) && (
+          {(output.isStreaming && streamingChunk
+            ? streamingChunk
+            : output.response) && (
             <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}>
               <div className="whitespace-pre-wrap text-[var(--fg-primary)]">
-                {output.isStreaming && streamingChunk ? streamingChunk : output.response}
+                {output.isStreaming && streamingChunk
+                  ? streamingChunk
+                  : output.response}
               </div>
             </div>
           )}

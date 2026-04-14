@@ -17,6 +17,7 @@ WorkflowOrchestrator
 ```
 
 Constructor signature:
+
 ```typescript
 constructor(hub: DashboardBroadcastHub, webviewProvider: FlightPathWebviewProvider, port: number)
 ```
@@ -50,12 +51,13 @@ All `IDashboardProvider` methods call `this.broadcast(message)` to fan out to ev
 6. Replaces the VS Code CSP `<meta>` with a browser-compatible policy; `connect-src` explicitly allows `ws://localhost:{port}`
 7. Injects a `<style>` block with cached CSS custom properties (`:root { ... }`) so the browser is themed before React renders
 8. Injects `<script src="/standalone-shim.js"></script>` before `</head>` so `window.vscodeApi` exists before any React module runs
-</httpRoutes>
+   </httpRoutes>
 
 <websocketProtocol>
 WebSocket endpoint: `ws://localhost:{port}/ws` (path `/ws`).
 
 **On connection:**
+
 1. Client added to `this.connections` (a `Set<WebSocket>`)
 2. A scoped `send` function is created (checks `ws.readyState === WebSocket.OPEN`)
 3. `sendInitialState()` fires:
@@ -72,6 +74,7 @@ WebSocket endpoint: `ws://localhost:{port}/ws` (path `/ws`).
 `standalone-shim.js` is a self-executing browser script injected into every page served by the hosted server. It replaces the VS Code `acquireVsCodeApi()` pattern with a WebSocket bridge.
 
 **What it does:**
+
 - Opens `ws://{location.host}/ws`
 - Queues outbound messages in `pending[]` until the socket is open
 - Inbound `themeVarsUpdated` messages are applied directly to `document.documentElement.style` (bypasses React; avoids flash)
@@ -95,6 +98,7 @@ webviewProvider.postMessage({ type: MESSAGE_TYPES.CAPTURE_THEME_VARS });
 server.dispose();
 webviewProvider.setRunningServerUrl(undefined);
 webviewProvider.setThemeVarsCapturedCallback(undefined);
+
 ```
 
 `listen()` returns the URL string (`http://localhost:{port}`). The server is never started in the constructor — call `listen()` explicitly.
@@ -117,3 +121,4 @@ webviewProvider.setThemeVarsCapturedCallback(undefined);
 - `src/types/DashboardConstants.ts` — `MESSAGE_TYPES` constants used in broadcast payloads
 - `src/ui/webview-react/` — the React app being served (Vite output in `out/ui/webview-react/`)
 </relatedFiles>
+```

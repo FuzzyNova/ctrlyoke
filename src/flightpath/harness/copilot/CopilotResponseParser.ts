@@ -86,7 +86,10 @@ export class CopilotResponseParser
     for (const json of objects) {
       // Surface MCP server connection events even though they are ephemeral.
       // These have no non-ephemeral counterpart, so they must be captured here.
-      if (json.type === "session.mcp_server_status_changed" && json.data?.serverName) {
+      if (
+        json.type === "session.mcp_server_status_changed" &&
+        json.data?.serverName
+      ) {
         events.push({
           type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
           timestamp: Date.now(),

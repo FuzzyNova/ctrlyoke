@@ -95,7 +95,10 @@ suite("CliInteractiveStartupCoordinator", () => {
         },
       },
       getWorkspaceRoot: () => process.cwd(),
-      getAbortState: () => ({ kind: INTERACTIVE_ABORT_KINDS.PROCESS_EXITED, exitCode: 0 }),
+      getAbortState: () => ({
+        kind: INTERACTIVE_ABORT_KINDS.PROCESS_EXITED,
+        exitCode: 0,
+      }),
       markProcessExitDuringStage: (stage: string, exitCode: number) =>
         `CLI process exited unexpectedly while ${stage} (exit code ${exitCode})`,
       setFailureReason: (reason: string) => {

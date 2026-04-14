@@ -17,6 +17,7 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - `WorkflowOrchestrator` depends only on `IDashboardProvider`/`IDashboardSink` interfaces — never on the concrete provider
 
 **FlightPathWebviewProvider:** Coordination hub — lifecycle/HTML generation and public update API.
+
 - Implements `vscode.WebviewViewProvider`, `IDashboardProvider`, and `IDashboardSink`
 - Registered as a `DashboardBroadcastHub` client by WorkflowOrchestrator
 - Loads React app from `out/ui/webview-react/` (Vite-built)

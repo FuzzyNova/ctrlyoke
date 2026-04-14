@@ -826,8 +826,14 @@ export class WorkflowExecutor {
     };
     if (context.dashboardProvider && signedStepIndex >= 0) {
       context.dashboardProvider.updateCliOutput(signedStepIndex, initCliOutput);
-    } else if (context.dashboardProvider && target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      context.dashboardProvider.updateFinalStepOutput(target.loopIndex, initCliOutput);
+    } else if (
+      context.dashboardProvider &&
+      target.kind === FINAL_STEP_PHASES.FINAL_STEP
+    ) {
+      context.dashboardProvider.updateFinalStepOutput(
+        target.loopIndex,
+        initCliOutput
+      );
     }
 
     // Accumulate output chunks so interactive mode has output to save to history.
@@ -838,7 +844,10 @@ export class WorkflowExecutor {
       outputChunks.push(chunk);
       if (!context.dashboardProvider) return;
       if (signedStepIndex >= 0) {
-        context.dashboardProvider.updateCliStreamingChunk(signedStepIndex, chunk);
+        context.dashboardProvider.updateCliStreamingChunk(
+          signedStepIndex,
+          chunk
+        );
       }
       // Note: finalStep streaming chunks reuse the same slot; updateFinalStepStreamingChunk
       // is not exposed on IDashboardSink but finalStep script steps are uncommon, so we
@@ -865,7 +874,9 @@ export class WorkflowExecutor {
     // Always run evaluateCondition so we get the structured result (stdout/stderr,
     // passed flag, duration) needed for the final CliOutput and history entry.
     // In interactive mode we skip this since the PTY already ran the script.
-    let evalResult: Awaited<ReturnType<typeof this.endConditionEvaluator.evaluateCondition>> | undefined;
+    let evalResult:
+      | Awaited<ReturnType<typeof this.endConditionEvaluator.evaluateCondition>>
+      | undefined;
 
     if (!isInteractive || ptyExitCode === undefined) {
       evalResult = await this.endConditionEvaluator.evaluateCondition(
@@ -922,16 +933,28 @@ export class WorkflowExecutor {
     };
 
     if (context.dashboardProvider && signedStepIndex >= 0) {
-      context.dashboardProvider.updateCliOutput(signedStepIndex, finalCliOutput);
-    } else if (context.dashboardProvider && target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      context.dashboardProvider.updateFinalStepOutput(target.loopIndex, finalCliOutput);
+      context.dashboardProvider.updateCliOutput(
+        signedStepIndex,
+        finalCliOutput
+      );
+    } else if (
+      context.dashboardProvider &&
+      target.kind === FINAL_STEP_PHASES.FINAL_STEP
+    ) {
+      context.dashboardProvider.updateFinalStepOutput(
+        target.loopIndex,
+        finalCliOutput
+      );
     }
 
     // Capture for output history replay (same pattern as updateDashboardWithResponse)
     if (signedStepIndex >= 0) {
       context.captureCompletedOutput?.(signedStepIndex, finalCliOutput);
     } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      context.captureFinalStepCompletedOutput?.(target.loopIndex, finalCliOutput);
+      context.captureFinalStepCompletedOutput?.(
+        target.loopIndex,
+        finalCliOutput
+      );
     }
 
     if (context.historyFilePath && context.outputHistoryManager) {

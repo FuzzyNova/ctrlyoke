@@ -130,10 +130,17 @@ export const SaveWorkflowDialog: React.FC = () => {
       <div className="space-y-4">
         {/* Format selector */}
         <div className="form-group">
-          <p id="format-label" className="block text-sm font-medium mb-2 text-foreground">
+          <p
+            id="format-label"
+            className="block text-sm font-medium mb-2 text-foreground"
+          >
             Format
           </p>
-          <div role="group" aria-labelledby="format-label" className="inline-flex rounded border border-btn-border overflow-hidden">
+          <div
+            role="group"
+            aria-labelledby="format-label"
+            className="inline-flex rounded border border-btn-border overflow-hidden"
+          >
             {(["yaml", "json"] as const).map((fmt) => (
               <button
                 key={fmt}

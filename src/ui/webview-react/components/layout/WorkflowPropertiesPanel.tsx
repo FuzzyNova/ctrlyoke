@@ -642,7 +642,8 @@ export const WorkflowPropertiesPanel: React.FC<{
         });
       } else {
         // Initialize from global default if set, otherwise use hardcoded defaults
-        const globalDefault = useSettingsStore.getState().globalSettings.defaultEndCondition;
+        const globalDefault =
+          useSettingsStore.getState().globalSettings.defaultEndCondition;
         const defaultEndCondition = globalDefault ?? {
           script: "",
           returns: "true",
@@ -707,9 +708,13 @@ export const WorkflowPropertiesPanel: React.FC<{
         });
       } else {
         // Initialize from global default if set, otherwise use hardcoded defaults
-        const globalDefault = useSettingsStore.getState().globalSettings.defaultPreCondition;
+        const globalDefault =
+          useSettingsStore.getState().globalSettings.defaultPreCondition;
         const defaultPreCondition: import("@root/types/FlightPathTypes").PreCondition =
-          globalDefault ?? { script: "", onFail: CONDITION_ACTIONS.SKIP_PROMPT };
+          globalDefault ?? {
+            script: "",
+            onFail: CONDITION_ACTIONS.SKIP_PROMPT,
+          };
         settingsStore.updateWorkflowProperty(
           "preCondition",
           defaultPreCondition
@@ -1153,7 +1158,9 @@ export const WorkflowPropertiesPanel: React.FC<{
                       id="settings-pre-condition-enabled"
                       aria-label="Enable Pre-Condition"
                       checked={preConditionEnabled}
-                      onChange={(e) => handlePreConditionToggle(e.target.checked)}
+                      onChange={(e) =>
+                        handlePreConditionToggle(e.target.checked)
+                      }
                       className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
                     />
                     Enable Pre-Condition
@@ -1204,7 +1211,9 @@ export const WorkflowPropertiesPanel: React.FC<{
                       id="settings-end-condition-enabled"
                       aria-label="Enable End Condition"
                       checked={endConditionEnabled}
-                      onChange={(e) => handleEndConditionToggle(e.target.checked)}
+                      onChange={(e) =>
+                        handleEndConditionToggle(e.target.checked)
+                      }
                       className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
                     />
                     Enable End Condition
@@ -1354,7 +1363,9 @@ export const WorkflowPropertiesPanel: React.FC<{
                         property="toolPermissions.allowedTools"
                         show={
                           JSON.stringify(effectiveAllowedTools) !==
-                          JSON.stringify(globalSettings.toolPermissions.allowedTools ?? [])
+                          JSON.stringify(
+                            globalSettings.toolPermissions.allowedTools ?? []
+                          )
                         }
                         onSetDefault={() =>
                           handleSetAsDefault("toolPermissions", {
@@ -1401,7 +1412,9 @@ export const WorkflowPropertiesPanel: React.FC<{
                         property="toolPermissions.deniedTools"
                         show={
                           JSON.stringify(effectiveDeniedTools) !==
-                          JSON.stringify(globalSettings.toolPermissions.deniedTools ?? [])
+                          JSON.stringify(
+                            globalSettings.toolPermissions.deniedTools ?? []
+                          )
                         }
                         onSetDefault={() =>
                           handleSetAsDefault("toolPermissions", {

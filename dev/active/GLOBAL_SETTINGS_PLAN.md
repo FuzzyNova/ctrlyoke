@@ -3,12 +3,14 @@
 > **Status: Implemented (2026-04-07). Core phases 1–4 complete.**
 >
 > Pre-implementation audit completed 2026-04-07:
+>
 > - Removed dead `flightpath.qwenCliApprovalMode` setting (was never read; `QwenToolPermissionMapper` derives approval mode from `cliToolPermissions` directly)
 > - Removed deprecated `on-failure` value from `flightpath.codexApprovalPolicy` enum
 > - Fixed `getModelSettingKeyForHarness()` missing `Harness.QwenCli` case (was silently writing Qwen model to Copilot's setting key)
 > - Updated `CodexToolPermissionMapper` comment with correct flag names and values
 >
 > Implementation completed same day (commit `3888e09`):
+>
 > - `src/types/FlightPathSettings.ts` — `FlightPathGlobalSettings` interface ✅
 > - `src/config/FlightPathConfigService.ts` + `src/config/FileConfigBackend.ts` — file-based config backend ✅
 > - `ConfigurationUtils` now reads from config service instead of `vscode.workspace.getConfiguration()` ✅
@@ -176,15 +178,16 @@ Precedence (highest wins):
   CLI flags > Workspace config > User global config > Hardcoded defaults
 ```
 
-| Scope | Location | Purpose |
-|-------|----------|---------|
-| **User global** | `~/.flightpath/settings.json` | User-wide defaults that apply across all projects |
-| **Workspace** | `<workspace>/.flightpath/settings.json` | Project-specific overrides for this workspace |
-| **CLI flags** | `--harness`, `--model`, `--timeout`, etc. | Per-invocation overrides |
+| Scope           | Location                                  | Purpose                                           |
+| --------------- | ----------------------------------------- | ------------------------------------------------- |
+| **User global** | `~/.flightpath/settings.json`             | User-wide defaults that apply across all projects |
+| **Workspace**   | `<workspace>/.flightpath/settings.json`   | Project-specific overrides for this workspace     |
+| **CLI flags**   | `--harness`, `--model`, `--timeout`, etc. | Per-invocation overrides                          |
 
 > **Pre-release clean break:** FlightPath is pre-release with no backward compatibility constraints. VS Code settings (`package.json` contributions) are **not** part of the config resolution chain. The config file system is the single source of truth from day one. VS Code settings remain only as `package.json` schema declarations for IntelliSense in the VS Code settings UI, but the extension reads from config files, not `vscode.workspace.getConfiguration()`.
 
 **User global config (`~/.flightpath/settings.json`):**
+
 ```json
 {
   "harness": "copilot-cli",
@@ -230,6 +233,7 @@ Precedence (highest wins):
 ```
 
 **Workspace config (`.flightpath/settings.json`):**
+
 ```json
 {
   "harness": "claude-cli",
@@ -247,13 +251,14 @@ Precedence (highest wins):
 }
 ```
 
-**Why JSON over YAML:** Settings files are machine-edited by the UI and programmatically read/written. JSON avoids YAML parsing edge cases and aligns with how VS Code's `settings.json` already works. YAML remains the default for *workflow/prompt files* (human-authored multi-line prompts), but settings are structured data better suited to JSON.
+**Why JSON over YAML:** Settings files are machine-edited by the UI and programmatically read/written. JSON avoids YAML parsing edge cases and aligns with how VS Code's `settings.json` already works. YAML remains the default for _workflow/prompt files_ (human-authored multi-line prompts), but settings are structured data better suited to JSON.
 
 ### Decision 2: VS Code Settings — Clean Break
 
 **FlightPath is pre-release. There is no migration from VS Code settings.** The config file system (`~/.flightpath/settings.json` + `.flightpath/settings.json`) is the single source of truth from day one.
 
 What happens to VS Code settings:
+
 - `package.json` `contributes.configuration.properties` **stays** — it provides IntelliSense and documentation when users open VS Code Settings UI
 - `ConfigurationUtils.ts` **stops calling** `vscode.workspace.getConfiguration()` for reading settings — it reads from config files instead
 - `ConfigurationUtils.updateSetting()` **writes to config files**, not VS Code settings
@@ -267,7 +272,7 @@ What happens to VS Code settings:
 
 **Yes — `ConfigurationUtils.ts` keeps its class name and its entire public API.** It is called in dozens of places across the codebase; renaming it would mean a massive churn refactor for no real gain.
 
-What changes is its *implementation*: after this plan is complete, `ConfigurationUtils` delegates to `FlightPathConfigService` instead of calling `vscode.workspace.getConfiguration()`. The callers never know the difference. Think of `FlightPathConfigService` as the new *backend* that `ConfigurationUtils` wraps — not a replacement for the class itself.
+What changes is its _implementation_: after this plan is complete, `ConfigurationUtils` delegates to `FlightPathConfigService` instead of calling `vscode.workspace.getConfiguration()`. The callers never know the difference. Think of `FlightPathConfigService` as the new _backend_ that `ConfigurationUtils` wraps — not a replacement for the class itself.
 
 ```
 ConfigurationUtils (name unchanged, same public methods)
@@ -312,6 +317,7 @@ Zero call-site changes needed in the rest of the codebase. The only class that c
 ```
 
 **Config resolution algorithm:**
+
 ```
 For any setting key:
   1. CLI flags (if in CLI mode) — highest priority
@@ -325,6 +331,7 @@ For any setting key:
 **The CLI will read config files automatically, eliminating the need for repetitive flags.**
 
 Current state:
+
 ```bash
 # Today: every invocation needs all flags
 flightpath run workflow.flightpath.yaml \
@@ -336,6 +343,7 @@ flightpath run workflow.flightpath.yaml \
 ```
 
 Future state with config files:
+
 ```bash
 # User global (~/.flightpath/settings.json) has harness/model/timeout defaults
 # Workspace (.flightpath/settings.json) has project-specific tool permissions
@@ -344,6 +352,7 @@ flightpath run workflow.flightpath.yaml
 ```
 
 CLI flags still work and **always override** config file values:
+
 ```bash
 flightpath run workflow.flightpath.yaml --harness codex-cli --model gpt-5.2
 ```
@@ -357,32 +366,32 @@ flightpath run workflow.flightpath.yaml --harness codex-cli --model gpt-5.2
 export interface FlightPathGlobalSettings {
   // Core
   harness: HarnessId;
-  
+
   // Models (per-harness)
   models: Record<HarnessId, string>;
-  
+
   // Execution
   execution: {
     mode: "interactive" | "headless";
-    maxPromptTimeout: number;  // seconds, -1 = unlimited (→ maxPromptExecutionTime)
-    scriptTimeout: number;  // seconds
+    maxPromptTimeout: number; // seconds, -1 = unlimited (→ maxPromptExecutionTime)
+    scriptTimeout: number; // seconds
     closeTerminalOnComplete: boolean;
   };
-  
+
   // Tools
   tools: {
     permissionMode: "dangerouslyAllowAll" | "allowAll" | "custom";
     allowed: string[];
     denied: string[];
     // Copilot CLI-specific
-    copilotAllowedDirs: string[];   // → flightpath.copilotCliAllowedDirs
-    copilotAllowAllPaths: boolean;  // → flightpath.copilotCliAllowAllPaths
+    copilotAllowedDirs: string[]; // → flightpath.copilotCliAllowedDirs
+    copilotAllowAllPaths: boolean; // → flightpath.copilotCliAllowAllPaths
     // Codex CLI-specific
     codexSandboxMode: "read-only" | "workspace-write" | "danger-full-access";
     codexApprovalPolicy: "untrusted" | "on-request" | "never";
-    codexAllowedDirs: string[];     // → flightpath.codexAllowedDirs
+    codexAllowedDirs: string[]; // → flightpath.codexAllowedDirs
   };
-  
+
   // Workflow defaults
   workflow: {
     defaultFormat: "yaml" | "json";
@@ -395,37 +404,37 @@ export interface FlightPathGlobalSettings {
     maxRetries: number;
     retryPrompt: string;
   };
-  
+
   // Chat
   chat: {
     windowLocation: "chatPanel" | "newTab" | "newWindow";
-    inactivityTimeout: number;  // seconds
+    inactivityTimeout: number; // seconds
     treatTimeoutAsSuccess: boolean;
     forceAgentMode: boolean;
     useNativeAttachments: boolean;
     omitAgentsSkillsOnResume: boolean;
   };
-  
+
   // MCP & Hooks
   mcp: {
     defaultServers: (string | McpServerConfig)[];
   };
   hooks: UserHookConfig[];
-  
+
   // Queue (all fields come from ConfigurationUtils.getDynamicQueueConfig())
   queue: {
     maxSize: number;
-    maxWorkflowExecutionTime: number;  // seconds; -1 = unlimited
+    maxWorkflowExecutionTime: number; // seconds; -1 = unlimited
     unlimitedMode: boolean;
     notifyOnExtension: boolean;
   };
-  
+
   // History
   history: {
     saveOutput: boolean;
     maxRuns: number;
   };
-  
+
   // UI
   ui: {
     showCliOutput: boolean;
@@ -436,7 +445,7 @@ export interface FlightPathGlobalSettings {
     confirmDeleteOperations: boolean;
     confirmResetOperations: boolean;
   };
-  
+
   // Server (new)
   server: {
     enabled: boolean;
@@ -450,7 +459,7 @@ export interface FlightPathGlobalSettings {
       keyPath?: string;
     };
   };
-  
+
   // Advanced
   additionalArgs: Record<HarnessId, string>;
   enableDiagnosticLogs: boolean;
@@ -458,6 +467,7 @@ export interface FlightPathGlobalSettings {
 ```
 
 **Key design choices:**
+
 - Nested structure (not flat keys) — matches how the settings UI will group settings into sections
 - All timeouts in seconds (consistent unit, no ms confusion)
 - `models` is a single record instead of 7 separate keys
@@ -518,28 +528,28 @@ interface ConfigBackend {
 class FlightPathConfigService {
   private backends: ConfigBackend[] = [];
   private cliOverlay?: Partial<FlightPathGlobalSettings>;
-  
+
   // Register backends in precedence order
   registerBackend(backend: ConfigBackend, priority: number): void;
-  
+
   // Get a setting — walks backends in precedence order
   get<K extends keyof FlightPathGlobalSettings>(
     key: K
   ): FlightPathGlobalSettings[K];
-  
+
   // Set a setting — writes to the appropriate backend based on context
   set<K extends keyof FlightPathGlobalSettings>(
     key: K,
     value: FlightPathGlobalSettings[K],
     scope: "user" | "workspace"
   ): Promise<void>;
-  
+
   // Get all settings merged from all backends
   getAll(): FlightPathGlobalSettings;
-  
+
   // For CLI: overlay flags on top of file-based config
   setCliOverlay(overlay: Partial<FlightPathGlobalSettings>): void;
-  
+
   // Subscribe to config changes
   subscribe(listener: () => void): () => void;
 }
@@ -547,32 +557,42 @@ class FlightPathConfigService {
 
 **Backend implementations:**
 
-| Backend | File | Used By |
-|---------|------|---------|
+| Backend             | File                              | Used By              |
+| ------------------- | --------------------------------- | -------------------- |
 | `FileConfigBackend` | `src/config/FileConfigBackend.ts` | Both VS Code and CLI |
-| `CliFlagOverlay` | (built into service) | CLI only |
+| `CliFlagOverlay`    | (built into service)              | CLI only             |
 
 ### 4. Config file I/O
 
 ```ts
 // src/config/FileConfigBackend.ts
 class FileConfigBackend implements ConfigBackend {
-  private userConfigPath: string;  // ~/.flightpath/settings.json
-  private workspaceConfigPath: string;  // <workspace>/.flightpath/settings.json
+  private userConfigPath: string; // ~/.flightpath/settings.json
+  private workspaceConfigPath: string; // <workspace>/.flightpath/settings.json
   private workspaceRoot: string;
   private cache?: FlightPathGlobalSettings;
-  
+
   async get<T>(key: string): Promise<T | undefined>;
-  async set<T>(key: string, value: T, scope: "user" | "workspace"): Promise<void>;
+  async set<T>(
+    key: string,
+    value: T,
+    scope: "user" | "workspace"
+  ): Promise<void>;
   getAll(): Partial<FlightPathGlobalSettings>;
-  
+
   private loadConfig(path: string): Partial<FlightPathGlobalSettings>;
-  private saveConfig(path: string, config: Partial<FlightPathGlobalSettings>): Promise<void>;
-  private mergeConfigs(...sources: Partial<FlightPathGlobalSettings>[]): FlightPathGlobalSettings;
+  private saveConfig(
+    path: string,
+    config: Partial<FlightPathGlobalSettings>
+  ): Promise<void>;
+  private mergeConfigs(
+    ...sources: Partial<FlightPathGlobalSettings>[]
+  ): FlightPathGlobalSettings;
 }
 ```
 
 **File creation behavior:**
+
 - Config files are **optional** — if they don't exist, the backend returns empty and falls through to the next backend
 - When a user changes a setting via the Global Settings UI in VS Code, **create** `.flightpath/settings.json` if it doesn't exist
 - CLI mode creates neither file — it only reads what exists
@@ -615,6 +635,7 @@ This avoids overloading the header button while still making the feature easy to
 ### Phase 1 — Define the shared global settings model
 
 **Deliverables:**
+
 1. `src/types/FlightPathSettings.ts` — typed `FlightPathGlobalSettings` interface (see Decision 5 above)
 2. ~~Inventory every setting currently surfaced by `ConfigurationUtils.ts` and map to the new nested structure~~ **✅ Done** — audit completed 2026-04-07; dead settings removed, interface above reflects current state
 3. No backward compatibility layer needed — pre-release, clean break
@@ -625,10 +646,12 @@ This avoids overloading the header button while still making the feature easy to
 ### Phase 2 — Config file I/O and backend abstraction
 
 **Deliverables:**
+
 1. `src/config/FlightPathConfigService.ts` — platform-agnostic config service
 2. `src/config/FileConfigBackend.ts` — reads/writes `~/.flightpath/settings.json` and `.flightpath/settings.json`
 3. Unit tests for config merging, precedence, and file I/O
 4. `ConfigurationUtils` becomes a **thin wrapper** over the config service — all `vscode.workspace.getConfiguration()` calls replaced. The class name and all public method signatures stay unchanged; only the internals change:
+
    ```ts
    // Before (direct VS Code access):
    getCliModel(): string {
@@ -640,6 +663,7 @@ This avoids overloading the header button while still making the feature easy to
      return configService.get("models")["copilot-cli"] ?? "claude-sonnet-4.5";
    }
    ```
+
 5. `ConfigurationUtils.updateSetting()` writes to config files, not VS Code settings
 6. `FileConfigBackend` watches for file changes to both config paths via `chokidar` (already in dependencies) and fires `subscribe` listeners on change — live-reload without restarting the extension or the CLI process.
 7. **`additionalArgs` consolidation:** The six separate `*CliAdditionalArgs` VS Code settings (`copilotCliAdditionalArgs`, `claudeCliAdditionalArgs`, etc.) collapse into a single `additionalArgs: Record<HarnessId, string>` key in the new config format. `ConfigurationUtils.getAdditionalArgsForHarness(harness)` reads `configService.get("additionalArgs")[harnessId] ?? ""`. The six old flat keys map to this record during the Phase 7 backend migration.
@@ -647,6 +671,7 @@ This avoids overloading the header button while still making the feature easy to
 ### Phase 3 — CLI config file support
 
 **Deliverables:**
+
 1. Update `CliAdapter` to use `FlightPathConfigService` instead of its own hardcoded switch statement
 2. CLI reads `~/.flightpath/settings.json` and `.flightpath/settings.json` on startup
 3. CLI flags become an "overlay" on top of file-based config via `configService.setCliOverlay()`
@@ -707,7 +732,7 @@ The drawer slides up from the bottom edge of the viewport, fills the full width,
 
 **On open:** webview posts `MESSAGE_TYPES.GLOBAL_SETTINGS_LOAD_REQUEST` to extension. Extension responds with `MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED` carrying the full settings payload with source metadata. The drawer renders immediately with cached/default values and updates once the response arrives (no loading spinner needed for fast local reads).
 
-**Naming note:** `uiStore` already has `mobileSettingsOpen` / `toggleMobileSettings` which refers to the *workflow properties* drawer on mobile — not this Global Settings drawer. The new state should be `globalSettingsOpen` / `toggleGlobalSettings` / `closeGlobalSettings` to avoid confusion.
+**Naming note:** `uiStore` already has `mobileSettingsOpen` / `toggleMobileSettings` which refers to the _workflow properties_ drawer on mobile — not this Global Settings drawer. The new state should be `globalSettingsOpen` / `toggleGlobalSettings` / `closeGlobalSettings` to avoid confusion.
 
 ---
 
@@ -770,10 +795,10 @@ updateGlobalSetting(path: string, value: unknown, scope: "workspace" | "user"): 
 Add to `src/types/DashboardConstants.ts`:
 
 ```ts
-GLOBAL_SETTINGS_LOAD_REQUEST   // webview → extension: "send me current settings"
-GLOBAL_SETTINGS_LOADED         // extension → webview: full settings payload + sources
-UPDATE_GLOBAL_SETTING          // webview → extension: { path, value, scope }
-GLOBAL_SETTING_UPDATED         // extension → webview: { path, value, source } acknowledgment
+GLOBAL_SETTINGS_LOAD_REQUEST; // webview → extension: "send me current settings"
+GLOBAL_SETTINGS_LOADED; // extension → webview: full settings payload + sources
+UPDATE_GLOBAL_SETTING; // webview → extension: { path, value, scope }
+GLOBAL_SETTING_UPDATED; // extension → webview: { path, value, source } acknowledgment
 ```
 
 The `UPDATE_GLOBAL_SETTING` path uses dot notation matching the `FlightPathGlobalSettings` nested structure (e.g. `"execution.mode"`, `"tools.permissionMode"`, `"models.claude-cli"`).
@@ -804,6 +829,7 @@ GlobalSettingsDrawer
 `VerticalTabBar` renders identically to `DrawerTabBar` but oriented vertically — a `flex-col` list of full-width tab buttons, each with `border-l-2` accent when active instead of `border-b-2`. Reuse the same color tokens (`border-focus-border`, `text-foreground`, `text-description-fg`).
 
 Each section component receives:
+
 - `settings: FullGlobalSettings` (full snapshot)
 - `onUpdate(path, value, scope): void` (fires `UPDATE_GLOBAL_SETTING`)
 
@@ -832,115 +858,115 @@ When a value comes from `"workspace"`, a secondary affordance appears below the 
 
 ##### General
 
-| Control | Type | Setting key |
-|---|---|---|
-| Show CLI output | Toggle | `ui.showCliOutput` |
-| Show CLI command | Toggle | `ui.showCliCommand` |
-| Log raw CLI output | Toggle | `ui.logRawCliOutput` |
-| Enable diagnostic logs | Toggle | `enableDiagnosticLogs` |
-| Open prompts in second group | Toggle | `ui.openPromptsInSecondGroup` |
+| Control                            | Type   | Setting key                         |
+| ---------------------------------- | ------ | ----------------------------------- |
+| Show CLI output                    | Toggle | `ui.showCliOutput`                  |
+| Show CLI command                   | Toggle | `ui.showCliCommand`                 |
+| Log raw CLI output                 | Toggle | `ui.logRawCliOutput`                |
+| Enable diagnostic logs             | Toggle | `enableDiagnosticLogs`              |
+| Open prompts in second group       | Toggle | `ui.openPromptsInSecondGroup`       |
 | Respect .gitignore for completions | Toggle | `ui.respectGitignoreForCompletions` |
-| Confirm delete operations | Toggle | `ui.confirmDeleteOperations` |
-| Confirm reset operations | Toggle | `ui.confirmResetOperations` |
+| Confirm delete operations          | Toggle | `ui.confirmDeleteOperations`        |
+| Confirm reset operations           | Toggle | `ui.confirmResetOperations`         |
 
 ##### Workflow Defaults
 
-| Control | Type | Setting key |
-|---|---|---|
-| Default harness | `HarnessDropdown` (reuse) | `harness` |
-| Default workflow format | `CustomSelect` yaml/json | `workflow.defaultFormat` |
-| Default template | `CustomSelect` (template list) | `workflow.defaultTemplate` |
-| Default agent | Text input with file picker | `workflow.defaultAgent` |
-| Default skills | `SkillsSelect` (reuse) | `workflow.defaultSkills` |
-| Default prior context | `PriorContextSelect` (reuse) | `workflow.priorContext` |
-| Resume existing session | Toggle | `workflow.resumeExistingSession` |
-| Auto-load recent session | Toggle | `workflow.autoLoadRecentSession` |
-| Omit agents/skills on resume | Toggle | `workflow.omitAgentsSkillsOnResume` |
-| Default max retries | Number input | `workflow.maxRetries` |
-| Default retry prompt | Textarea | `workflow.retryPrompt` |
+| Control                      | Type                           | Setting key                         |
+| ---------------------------- | ------------------------------ | ----------------------------------- |
+| Default harness              | `HarnessDropdown` (reuse)      | `harness`                           |
+| Default workflow format      | `CustomSelect` yaml/json       | `workflow.defaultFormat`            |
+| Default template             | `CustomSelect` (template list) | `workflow.defaultTemplate`          |
+| Default agent                | Text input with file picker    | `workflow.defaultAgent`             |
+| Default skills               | `SkillsSelect` (reuse)         | `workflow.defaultSkills`            |
+| Default prior context        | `PriorContextSelect` (reuse)   | `workflow.priorContext`             |
+| Resume existing session      | Toggle                         | `workflow.resumeExistingSession`    |
+| Auto-load recent session     | Toggle                         | `workflow.autoLoadRecentSession`    |
+| Omit agents/skills on resume | Toggle                         | `workflow.omitAgentsSkillsOnResume` |
+| Default max retries          | Number input                   | `workflow.maxRetries`               |
+| Default retry prompt         | Textarea                       | `workflow.retryPrompt`              |
 
 ##### Harnesses & Models
 
 Flat two-column grid — one row per harness. Each row: harness icon + name on left; model dropdown + additionalArgs text input on right.
 
-| Harness | Model dropdown namespace | additionalArgs key |
-|---|---|---|
-| Copilot CLI | `copilot-cli` models | `additionalArgs["copilot-cli"]` |
-| Claude CLI | `claude-cli` models | `additionalArgs["claude-cli"]` |
-| Codex CLI | `codex-cli` models | `additionalArgs["codex-cli"]` |
+| Harness      | Model dropdown namespace          | additionalArgs key               |
+| ------------ | --------------------------------- | -------------------------------- |
+| Copilot CLI  | `copilot-cli` models              | `additionalArgs["copilot-cli"]`  |
+| Claude CLI   | `claude-cli` models               | `additionalArgs["claude-cli"]`   |
+| Codex CLI    | `codex-cli` models                | `additionalArgs["codex-cli"]`    |
 | OpenCode CLI | `opencode-cli` models (free-form) | `additionalArgs["opencode-cli"]` |
-| Qwen CLI | `qwen-cli` models | `additionalArgs["qwen-cli"]` |
-| Gemini CLI | `gemini-cli` models | `additionalArgs["gemini-cli"]` |
-| Copilot Chat | `copilot-chat` models | — (no additionalArgs for chat) |
+| Qwen CLI     | `qwen-cli` models                 | `additionalArgs["qwen-cli"]`     |
+| Gemini CLI   | `gemini-cli` models               | `additionalArgs["gemini-cli"]`   |
+| Copilot Chat | `copilot-chat` models             | — (no additionalArgs for chat)   |
 
 Model dropdowns reuse `modelNamespaceForHarness()` + existing `CustomSelect` with model namespaces. additionalArgs uses a plain `<input type="text">`.
 
 ##### Permissions
 
-| Control | Type | Setting key |
-|---|---|---|
-| Permission mode | `CustomSelect` (reuse `PERMISSION_MODE_OPTIONS`) | `tools.permissionMode` |
-| Allowed tools | Tag/multiline input *(shown in custom mode)* | `tools.allowed` |
-| Denied tools | Tag/multiline input *(shown in custom mode)* | `tools.denied` |
-| **Copilot CLI** | | |
-| Allow all paths | Toggle | `tools.copilotAllowAllPaths` |
-| Allowed dirs | String[] editor | `tools.copilotAllowedDirs` |
-| **Codex CLI** | | |
-| Sandbox mode | `CustomSelect` read-only/workspace-write/danger-full-access | `tools.codexSandboxMode` |
-| Approval policy | `CustomSelect` untrusted/on-request/never | `tools.codexApprovalPolicy` |
-| Allowed dirs | String[] editor | `tools.codexAllowedDirs` |
+| Control         | Type                                                        | Setting key                  |
+| --------------- | ----------------------------------------------------------- | ---------------------------- |
+| Permission mode | `CustomSelect` (reuse `PERMISSION_MODE_OPTIONS`)            | `tools.permissionMode`       |
+| Allowed tools   | Tag/multiline input _(shown in custom mode)_                | `tools.allowed`              |
+| Denied tools    | Tag/multiline input _(shown in custom mode)_                | `tools.denied`               |
+| **Copilot CLI** |                                                             |                              |
+| Allow all paths | Toggle                                                      | `tools.copilotAllowAllPaths` |
+| Allowed dirs    | String[] editor                                             | `tools.copilotAllowedDirs`   |
+| **Codex CLI**   |                                                             |                              |
+| Sandbox mode    | `CustomSelect` read-only/workspace-write/danger-full-access | `tools.codexSandboxMode`     |
+| Approval policy | `CustomSelect` untrusted/on-request/never                   | `tools.codexApprovalPolicy`  |
+| Allowed dirs    | String[] editor                                             | `tools.codexAllowedDirs`     |
 
 Copilot-specific and Codex-specific subsections are visually grouped under a sub-header. Codex sandbox/approval rows dim when `permissionMode !== "custom"`.
 
 ##### Execution
 
-| Control | Type | Setting key |
-|---|---|---|
-| Execution mode | `CustomSelect` interactive/headless | `execution.mode` |
-| Max prompt timeout | Number input (seconds, -1=unlimited) | `execution.maxPromptTimeout` |
-| Script timeout | Number input (seconds) | `execution.scriptTimeout` |
-| Close terminal on completion | Toggle | `execution.closeTerminalOnComplete` |
+| Control                      | Type                                 | Setting key                         |
+| ---------------------------- | ------------------------------------ | ----------------------------------- |
+| Execution mode               | `CustomSelect` interactive/headless  | `execution.mode`                    |
+| Max prompt timeout           | Number input (seconds, -1=unlimited) | `execution.maxPromptTimeout`        |
+| Script timeout               | Number input (seconds)               | `execution.scriptTimeout`           |
+| Close terminal on completion | Toggle                               | `execution.closeTerminalOnComplete` |
 
 ##### Chat
 
-| Control | Type | Setting key |
-|---|---|---|
-| Chat model | `CustomSelect` (copilot-chat models) | `chat.model` |
-| Chat window location | `CustomSelect` chatPanel/newTab/newWindow | `chat.windowLocation` |
-| Inactivity timeout | Number input (seconds) | `chat.inactivityTimeout` |
-| Treat timeout as success | Toggle | `chat.treatTimeoutAsSuccess` |
-| Force agent mode | Toggle | `chat.forceAgentMode` |
-| Use native attachments | Toggle | `chat.useNativeAttachments` |
-| Omit agents/skills on resume | *(also in Workflow Defaults)* | `chat.omitAgentsSkillsOnResume` |
+| Control                      | Type                                      | Setting key                     |
+| ---------------------------- | ----------------------------------------- | ------------------------------- |
+| Chat model                   | `CustomSelect` (copilot-chat models)      | `chat.model`                    |
+| Chat window location         | `CustomSelect` chatPanel/newTab/newWindow | `chat.windowLocation`           |
+| Inactivity timeout           | Number input (seconds)                    | `chat.inactivityTimeout`        |
+| Treat timeout as success     | Toggle                                    | `chat.treatTimeoutAsSuccess`    |
+| Force agent mode             | Toggle                                    | `chat.forceAgentMode`           |
+| Use native attachments       | Toggle                                    | `chat.useNativeAttachments`     |
+| Omit agents/skills on resume | _(also in Workflow Defaults)_             | `chat.omitAgentsSkillsOnResume` |
 
 ##### MCP & Hooks
 
 Reuse `McpServersEditor` and `HooksEditor` components directly (they already handle add/edit/remove). These are the default servers/hooks applied to all workflows that don't override them.
 
-| Control | Component | Setting key |
-|---|---|---|
+| Control             | Component                  | Setting key          |
+| ------------------- | -------------------------- | -------------------- |
 | Default MCP servers | `McpServersEditor` (reuse) | `mcp.defaultServers` |
-| Default hooks | `HooksEditor` (reuse) | `hooks` |
+| Default hooks       | `HooksEditor` (reuse)      | `hooks`              |
 
 ##### Queue
 
-| Control | Type | Setting key |
-|---|---|---|
-| Max queue size | Number input | `queue.maxSize` |
+| Control                     | Type                                 | Setting key                      |
+| --------------------------- | ------------------------------------ | -------------------------------- |
+| Max queue size              | Number input                         | `queue.maxSize`                  |
 | Max workflow execution time | Number input (seconds, -1=unlimited) | `queue.maxWorkflowExecutionTime` |
-| Unlimited mode | Toggle | `queue.unlimitedMode` |
-| Notify on queue extension | Toggle | `queue.notifyOnExtension` |
+| Unlimited mode              | Toggle                               | `queue.unlimitedMode`            |
+| Notify on queue extension   | Toggle                               | `queue.notifyOnExtension`        |
 
 ##### History & Safety
 
-| Control | Type | Setting key |
-|---|---|---|
-| Save output history | Toggle | `history.saveOutput` |
-| Max history runs | Number input (-1=unlimited) | `history.maxRuns` |
+| Control             | Type                        | Setting key          |
+| ------------------- | --------------------------- | -------------------- |
+| Save output history | Toggle                      | `history.saveOutput` |
+| Max history runs    | Number input (-1=unlimited) | `history.maxRuns`    |
 
-##### Server *(stubbed in Phase 4, fully built in Phase 6)*
+##### Server _(stubbed in Phase 4, fully built in Phase 6)_
 
-Renders a placeholder card: *"Server configuration coming soon."* with the port and enabled fields stubbed as disabled inputs. Full implementation deferred to Phase 6.
+Renders a placeholder card: _"Server configuration coming soon."_ with the port and enabled fields stubbed as disabled inputs. Full implementation deferred to Phase 6.
 
 ---
 
@@ -961,7 +987,7 @@ const toggleGlobalSettings = useUiStore((s) => s.toggleGlobalSettings);
   globalSettingsOpen
     ? "bg-btn-bg text-btn-fg"
     : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-}`
+}`;
 ```
 
 3. Update button title from `"Open VS Code settings"` to `"Global Settings"`.
@@ -984,6 +1010,7 @@ const toggleGlobalSettings = useUiStore((s) => s.toggleGlobalSettings);
 ### Phase 5 — Detangle the current footer
 
 **Deliverables:**
+
 1. Remove or relocate the global toggles from the workflow-properties footer
 2. Decide whether small global quick toggles remain anywhere outside Global Settings
 3. Keep the workflow-properties surface focused on workflow-scoped concerns only
@@ -992,6 +1019,7 @@ const toggleGlobalSettings = useUiStore((s) => s.toggleGlobalSettings);
 ### Phase 6 — Add the Server section
 
 **Deliverables:**
+
 1. Add server settings to the typed global settings model
 2. Add **Server** page/section in Global Settings
 3. Put detailed fields there:
@@ -1005,6 +1033,7 @@ const toggleGlobalSettings = useUiStore((s) => s.toggleGlobalSettings);
 ### Phase 7 — Replace VS Code settings backend
 
 **Deliverables:**
+
 1. Remove all `vscode.workspace.getConfiguration("flightpath")` reads from `ConfigurationUtils.ts`
 2. Remove `ConfigurationUtils.updateSetting()` calls to `vscode.ConfigurationTarget`
 3. `package.json` settings remain as documentation-only — add markdown description noting that settings are managed via FlightPath Global Settings UI or config files

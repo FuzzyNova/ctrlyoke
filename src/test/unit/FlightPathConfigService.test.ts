@@ -58,7 +58,10 @@ suite("FlightPathConfigService", () => {
     assert.strictEqual(all.harness, "claude-cli");
     assert.strictEqual(all.enableDiagnosticLogs, true);
     // Other defaults should still be present
-    assert.strictEqual(all.execution.mode, FLIGHTPATH_SETTINGS_DEFAULTS.execution.mode);
+    assert.strictEqual(
+      all.execution.mode,
+      FLIGHTPATH_SETTINGS_DEFAULTS.execution.mode
+    );
   });
 
   test("workspace backend overrides user backend", () => {
@@ -129,7 +132,7 @@ suite("FlightPathConfigService", () => {
     assert.strictEqual(service.getNested("execution.mode"), "headless");
   });
 
-  test('getNested returns default for unset nested key', () => {
+  test("getNested returns default for unset nested key", () => {
     const defaultMode = FLIGHTPATH_SETTINGS_DEFAULTS.execution.mode;
     assert.strictEqual(service.getNested("execution.mode"), defaultMode);
   });

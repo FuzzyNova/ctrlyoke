@@ -1300,14 +1300,8 @@ suite("CodexLogParser", () => {
       assert.strictEqual(response.metadata.usage?.contextWindowSize, 258400);
       assert.strictEqual(response.metadata.usage?.inputTokens, 5191984);
       assert.strictEqual(response.metadata.usage?.outputTokens, 14864);
-      assert.strictEqual(
-        response.metadata.usage?.cachedInputTokens,
-        5032192
-      );
-      assert.strictEqual(
-        response.metadata.usage?.reasoningOutputTokens,
-        6001
-      );
+      assert.strictEqual(response.metadata.usage?.cachedInputTokens, 5032192);
+      assert.strictEqual(response.metadata.usage?.reasoningOutputTokens, 6001);
     });
   });
 

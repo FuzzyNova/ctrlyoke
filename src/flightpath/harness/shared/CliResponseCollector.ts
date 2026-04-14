@@ -48,7 +48,9 @@ export class CliResponseCollector {
     }
 
     const responseText = extractTextFromEvents(parsedOutput);
-    const statistics = CliOutputFormatter.formatStatistics(parsedOutput.metadata);
+    const statistics = CliOutputFormatter.formatStatistics(
+      parsedOutput.metadata
+    );
 
     const cliResult: CliResult = {
       success: params.exitCode === 0,

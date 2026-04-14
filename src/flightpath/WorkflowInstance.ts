@@ -191,7 +191,10 @@ export class WorkflowInstance {
    * PTY and lastInteractiveContext from the previous run are fully intact.
    * Each entry is removed and disposed when its PTY process exits.
    */
-  private readonly liveInjectIntegrations = new Map<string, HarnessIntegration>();
+  private readonly liveInjectIntegrations = new Map<
+    string,
+    HarnessIntegration
+  >();
 
   // ─────────────────────────────────────────────────────────────────────────
   // Streaming event forwarding — aggregates events from all execution integrations
@@ -1017,11 +1020,20 @@ export class WorkflowInstance {
           );
           if (willInject) {
             this.dashboardSink.updateExecutionStarted(
-              this.id, fileName, totalSteps, true, currentIndex, true
+              this.id,
+              fileName,
+              totalSteps,
+              true,
+              currentIndex,
+              true
             );
           } else {
             this.dashboardSink.updateExecutionStarted(
-              this.id, fileName, totalSteps, true, currentIndex
+              this.id,
+              fileName,
+              totalSteps,
+              true,
+              currentIndex
             );
           }
         } else if (isAppendContinuation) {
@@ -1031,11 +1043,20 @@ export class WorkflowInstance {
           );
           if (willInject) {
             this.dashboardSink.updateExecutionStarted(
-              this.id, fileName, totalSteps, true, prevCompletedCount, true
+              this.id,
+              fileName,
+              totalSteps,
+              true,
+              prevCompletedCount,
+              true
             );
           } else {
             this.dashboardSink.updateExecutionStarted(
-              this.id, fileName, totalSteps, true, prevCompletedCount
+              this.id,
+              fileName,
+              totalSteps,
+              true,
+              prevCompletedCount
             );
           }
         } else {
@@ -1968,7 +1989,8 @@ export class WorkflowInstance {
 
               const workflowId = self.id;
               const preSessionId = `script-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-              const controllerClientId = ptyManager.getExpectedController(workflowId);
+              const controllerClientId =
+                ptyManager.getExpectedController(workflowId);
 
               // TERMINAL_STARTED must be sent before spawnPty so the webview
               // session store is populated before any TERMINAL_OUTPUT arrives.
@@ -2187,7 +2209,10 @@ export class WorkflowInstance {
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] startWorkflowExecution finally: executionIntegrations.size=${this.executionIntegrations.size}`
       );
-      for (const [harnessKey, execIntegration] of this.executionIntegrations.entries()) {
+      for (const [
+        harnessKey,
+        execIntegration,
+      ] of this.executionIntegrations.entries()) {
         if (workspaceRoot) {
           await execIntegration
             .cleanupWorkflowArtifacts(workingFilePath, workspaceRoot)
@@ -2670,15 +2695,20 @@ export class WorkflowInstance {
         }),
       ...(props.onPass !== undefined &&
         props.onPass !== null && {
-          onPass: props.onPass as typeof CONDITION_ACTIONS.CONTINUE | typeof CONDITION_ACTIONS.STOP_WORKFLOW,
+          onPass: props.onPass as
+            | typeof CONDITION_ACTIONS.CONTINUE
+            | typeof CONDITION_ACTIONS.STOP_WORKFLOW,
         }),
       ...(props.onFail !== undefined &&
         props.onFail !== null && {
-          onFail: props.onFail as typeof CONDITION_ACTIONS.CONTINUE | typeof CONDITION_ACTIONS.STOP_WORKFLOW,
+          onFail: props.onFail as
+            | typeof CONDITION_ACTIONS.CONTINUE
+            | typeof CONDITION_ACTIONS.STOP_WORKFLOW,
         }),
       ...(props.compareSource !== undefined &&
         props.compareSource !== null && {
-          compareSource: props.compareSource as typeof COMPARE_SOURCES[keyof typeof COMPARE_SOURCES],
+          compareSource:
+            props.compareSource as (typeof COMPARE_SOURCES)[keyof typeof COMPARE_SOURCES],
         }),
       ...(props.returns !== undefined &&
         props.returns !== null && { returns: props.returns as string }),

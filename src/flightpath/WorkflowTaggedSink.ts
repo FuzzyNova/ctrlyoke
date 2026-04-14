@@ -74,7 +74,10 @@ export class WorkflowTaggedSink implements IDashboardSink {
   }
 
   async loadOutputHistoryForWorkflow?(workflowFilePath: string): Promise<void> {
-    return this.inner.loadOutputHistoryForWorkflow?.(workflowFilePath, this.workflowId);
+    return this.inner.loadOutputHistoryForWorkflow?.(
+      workflowFilePath,
+      this.workflowId
+    );
   }
 
   updateExecutionStarted(
@@ -90,11 +93,20 @@ export class WorkflowTaggedSink implements IDashboardSink {
     // that breaks deepStrictEqual assertions in tests.
     if (isInjectMode) {
       this.inner.updateExecutionStarted(
-        workflowId, fileName, totalSteps, isContinuation, preserveStepCount, true
+        workflowId,
+        fileName,
+        totalSteps,
+        isContinuation,
+        preserveStepCount,
+        true
       );
     } else {
       this.inner.updateExecutionStarted(
-        workflowId, fileName, totalSteps, isContinuation, preserveStepCount
+        workflowId,
+        fileName,
+        totalSteps,
+        isContinuation,
+        preserveStepCount
       );
     }
   }

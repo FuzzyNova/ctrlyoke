@@ -385,7 +385,11 @@ export class CliIntegration extends HarnessIntegration {
     const prev = ctx.spawnedWith;
 
     // Explicit session ID pointing to a different session than the running one
-    if (currSessionId !== undefined && currSessionId !== ctx.sessionId && currSessionId !== ctx.spawnedWithSessionId) {
+    if (
+      currSessionId !== undefined &&
+      currSessionId !== ctx.sessionId &&
+      currSessionId !== ctx.spawnedWithSessionId
+    ) {
       return `explicit sessionId "${currSessionId}" differs from running session`;
     }
 
@@ -397,7 +401,10 @@ export class CliIntegration extends HarnessIntegration {
       return `model changed (${prev.model} → ${curr.model})`;
     }
 
-    if (JSON.stringify(curr.toolPermissions) !== JSON.stringify(prev.toolPermissions)) {
+    if (
+      JSON.stringify(curr.toolPermissions) !==
+      JSON.stringify(prev.toolPermissions)
+    ) {
       return "toolPermissions changed";
     }
 
@@ -676,7 +683,8 @@ export class CliIntegration extends HarnessIntegration {
     // reused via WorkflowInstance.liveInjectIntegration, lastInteractiveContext is
     // already populated and shouldUseInjectMode passes without needing promptIndex > 0.
     if (isInteractive && this.shouldUseInjectMode(session)) {
-      const injectResult = await this.executionRunner.executeInteractiveInject(session);
+      const injectResult =
+        await this.executionRunner.executeInteractiveInject(session);
       if (injectResult.injected) {
         return injectResult.success;
       }
@@ -1088,7 +1096,8 @@ export class CliIntegration extends HarnessIntegration {
    * alive for the next run instead of disposing it.
    */
   override canReuseForInject(): boolean {
-    const injectMode = ConfigurationUtils.getInteractiveContinuationMode() === "inject";
+    const injectMode =
+      ConfigurationUtils.getInteractiveContinuationMode() === "inject";
     const hasCtx = this.executionRunner.hasInteractiveContext();
     const hasPty = this.transportCoordinator.hasLivePtySession();
     Log.debug(

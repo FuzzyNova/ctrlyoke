@@ -102,7 +102,9 @@ export function GlobalSettingsDrawer() {
       <div className="flex flex-1 min-h-0">
         {/* Left: vertical tab bar */}
         <GlobalSettingsVerticalTabBar
-          tabs={TABS.map((t) => t.id === "server" ? { ...t, indicator: serverRunning } : t)}
+          tabs={TABS.map((t) =>
+            t.id === "server" ? { ...t, indicator: serverRunning } : t
+          )}
           activeTab={activeTab}
           onTabChange={setActiveTab}
           iconOnly={isNarrow}

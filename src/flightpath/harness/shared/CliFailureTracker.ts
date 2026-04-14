@@ -49,7 +49,10 @@ export class CliFailureTracker {
     }
 
     if (this.ptyExitCode !== null) {
-      return { kind: INTERACTIVE_ABORT_KINDS.PROCESS_EXITED, exitCode: this.ptyExitCode };
+      return {
+        kind: INTERACTIVE_ABORT_KINDS.PROCESS_EXITED,
+        exitCode: this.ptyExitCode,
+      };
     }
 
     return null;

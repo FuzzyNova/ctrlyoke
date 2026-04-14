@@ -261,6 +261,7 @@ completion.** No code changes needed for this scenario.
 ### 2. ~~`CliIntegration.ts` — `runExecutionSession()`~~ — **DONE**
 
 `shouldUseInjectMode(session)` guard added at the top of `runExecutionSession()`:
+
 - Checks continuation mode setting, `promptIndex > 0`, and `hasInteractiveContext()`
 - Calls `executionRunner.executeInteractiveInject(session)` when all three pass
 - Falls through to restart mode if `injected: false` (PTY unavailable)
@@ -268,12 +269,14 @@ completion.** No code changes needed for this scenario.
 ### 3. ~~`CliIntegration.ts` — inject path~~ — **DONE** (in `CliExecutionRunner`)
 
 Implemented as `CliExecutionRunner.executeInteractiveInject()`:
+
 - Writes `"\x1b[I" + session.promptArgument + "\r"` to the active PTY via `transportCoordinator.writeToCurrentPtySession()` — the focus-in VT sequence activates the TUI's input handler; `\r` submits
 - After the write, yields one event loop tick (`setTimeout(resolve, 0)`) then checks `failureTracker.getPtyTermination()`. If the PTY died (e.g. Copilot CLI exits after each prompt), the inject falls back to restart mode. This is needed because `writeToCurrentPtySession` returns `true` even when the process just exited — `currentPtySession` is still set until node-pty's `onExit` callback fires asynchronously in the next event loop iteration.
 - Calls `monitorLogFile()` with the stored log path and `startTime = new Date()` — `NotificationMonitorBase.monitorForCompletion()` uses `isFileNewerThan(stopFile, startTime)` so old stop files from prompt N are naturally filtered out
 - Propagates session ID back to `session.setExtractedSessionId()`
 
 > **Q2 resolved:** The submit sequence is `"\x1b[I" + promptText + "\r"`. Breakdown:
+>
 > - `\x1b[I` (ESC [ I) = focus-in VT sequence. Copilot CLI (and other TUIs using focus tracking) only activate their keyboard input handler after receiving this. Without it, text and Enter are silently ignored even though the PTY write succeeds. TUIs that don't use focus tracking (Claude CLI) safely ignore the sequence.
 > - `\r` (CR, 0x0D) = the submit key. Confirmed by logging the exact bytes xterm.js sends when a user presses Enter (`hex=0d`). `\n` acts as a newline in multi-line input boxes; `\r\n` adds text but inserts a newline instead of submitting.
 

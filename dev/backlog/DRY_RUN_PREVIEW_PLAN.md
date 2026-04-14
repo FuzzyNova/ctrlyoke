@@ -56,6 +56,7 @@ Agent:    .flightpath/agents/senior-dev.agent.md
 ### Full CLI Command
 
 The exact string that would be passed to `spawn()`, including:
+
 - The binary path (e.g. `claude`)
 - All flags (`--model`, `--dangerously-skip-permissions`, `--resume`, etc.)
 - The prompt argument or `--prompt-file` path
@@ -117,9 +118,9 @@ interface StepPreview {
   stepIndex: number;
   stepName: string | undefined;
   resolvedProperties: ResolvedProperties;
-  command: string;           // full CLI command string
+  command: string; // full CLI command string
   promptMode: "inline" | "tempFile";
-  promptText: string;        // resolved prompt (inline arg value or temp file content)
+  promptText: string; // resolved prompt (inline arg value or temp file content)
   tempFilePath: string | undefined;
   vars: Record<string, string>;
   endCondition: EndConditionPreview | undefined;
@@ -128,7 +129,7 @@ interface StepPreview {
 
 The temp files for a dry run should be written to a separate temp path (so content can be
 inspected) but flagged for immediate cleanup after the preview is dismissed. Alternatively,
-don't write temp files at all — just return the content that *would* be written.
+don't write temp files at all — just return the content that _would_ be written.
 
 ### Dashboard Integration
 
@@ -140,6 +141,7 @@ Clicking Preview sends a `PREVIEW_STEP` message to the extension host, which cal
 payload. The dashboard renders it in a modal or expandable drawer below the prompt card.
 
 The preview modal has:
+
 - Tabs: **Command** | **Prompt** | **Properties**
 - A **Copy command** button
 - A **Copy prompt** button
@@ -172,6 +174,7 @@ formatted summary.
 
 ~2–3 days. `CliPromptPreparer` and `ICliProvider.buildCommand` already exist and are
 testable in isolation. The main work is:
+
 1. `dryRunStep()` method wiring the two stages together without executing
 2. Dashboard message handler + preview modal component
 3. CLI `--dry-run` flag + formatted output

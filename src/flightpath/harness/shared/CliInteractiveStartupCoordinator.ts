@@ -79,9 +79,7 @@ export class CliInteractiveStartupCoordinator {
       return null;
     }
 
-    Log.info(
-      `✅ Found log file for resumed session: ${discovery.logPath}`
-    );
+    Log.info(`✅ Found log file for resumed session: ${discovery.logPath}`);
 
     this.deps.logParser.seekToEnd?.(discovery.logPath);
     return discovery;
@@ -92,15 +90,11 @@ export class CliInteractiveStartupCoordinator {
     startTime: Date;
     runId: string;
   }): Promise<InteractiveSessionDiscovery | null> {
-    Log.info(
-      "🔍 Waiting for SessionStart hook and log file creation..."
-    );
+    Log.info("🔍 Waiting for SessionStart hook and log file creation...");
 
     const workspaceRoot = this.deps.getWorkspaceRoot();
     if (!workspaceRoot) {
-      Log.error(
-        "❌ No workspace root for session start monitoring"
-      );
+      Log.error("❌ No workspace root for session start monitoring");
       return null;
     }
 
@@ -136,16 +130,12 @@ export class CliInteractiveStartupCoordinator {
     const hookSessionId = startResult.data?.sessionId || null;
 
     if (hookSessionId) {
-      Log.debug(
-        `✅ SessionStart hook provided session ID: ${hookSessionId}`
-      );
+      Log.debug(`✅ SessionStart hook provided session ID: ${hookSessionId}`);
     } else {
       Log.debug(
         "✅ SessionStart hook confirmed (session ID not provided by CLI)"
       );
-      Log.debug(
-        "🔍 Discovering session log file via prompt text matching..."
-      );
+      Log.debug("🔍 Discovering session log file via prompt text matching...");
     }
 
     const discovery = await this.discoverAndExtractSession(
@@ -186,9 +176,7 @@ export class CliInteractiveStartupCoordinator {
     promptForDiscovery: string;
     startTime: Date;
   }): Promise<InteractiveSessionDiscovery | null> {
-    Log.info(
-      "🔍 Discovering session log file (no SessionStart hook)..."
-    );
+    Log.info("🔍 Discovering session log file (no SessionStart hook)...");
 
     const discovery = await this.discoverAndExtractSession(
       params.promptForDiscovery,
@@ -202,9 +190,7 @@ export class CliInteractiveStartupCoordinator {
         return null;
       }
 
-      Log.error(
-        "❌ Could not discover session log - no matching prompt found"
-      );
+      Log.error("❌ Could not discover session log - no matching prompt found");
       return null;
     }
 
@@ -239,9 +225,7 @@ export class CliInteractiveStartupCoordinator {
       const events = await this.deps.logParser.readNewLines(discoveredLogPath);
       const extractedId = this.deps.logParser.extractSessionId(events);
       if (extractedId) {
-        Log.debug(
-          `💾 Extracted session ID from log: ${extractedId}`
-        );
+        Log.debug(`💾 Extracted session ID from log: ${extractedId}`);
       }
       return { logPath: discoveredLogPath, sessionId: extractedId };
     }
@@ -256,9 +240,7 @@ export class CliInteractiveStartupCoordinator {
     }
 
     if (abortState.kind === INTERACTIVE_ABORT_KINDS.USER_CANCELLED) {
-      Log.info(
-        `⏹️ Interactive execution cancelled while ${stage}`
-      );
+      Log.info(`⏹️ Interactive execution cancelled while ${stage}`);
       return true;
     }
 

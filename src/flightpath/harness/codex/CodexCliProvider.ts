@@ -23,7 +23,10 @@ import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { CODEX_CLI_MODELS, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
-import { PERMISSION_MODES, HARNESS_IDS } from "../../../types/DashboardConstants";
+import {
+  PERMISSION_MODES,
+  HARNESS_IDS,
+} from "../../../types/DashboardConstants";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   PromptStep,
@@ -235,7 +238,12 @@ export class CodexCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined
   ): Promise<string[]> {
     const workflowKey = workingFilePath ?? workspaceRoot;
-    await this.writeCodexHooks(extensionPath, workspaceRoot, workflowKey, userHooks);
+    await this.writeCodexHooks(
+      extensionPath,
+      workspaceRoot,
+      workflowKey,
+      userHooks
+    );
     Log.debug(
       `🔔 Configured SessionStart + Stop hooks for Codex completion detection`
     );
@@ -282,12 +290,11 @@ export class CodexCliProvider implements ICliProvider {
     const sandboxMode = ConfigurationUtils.getCodexSandboxMode();
     const approvalPolicy = ConfigurationUtils.getCodexApprovalPolicy();
     const args: string[] = [];
-    const config =
-      toolPermissions ?? {
-        mode: ConfigurationUtils.getCliToolPermissions(),
-        allowedTools: ConfigurationUtils.getCliAllowedTools(),
-        deniedTools: ConfigurationUtils.getCliDeniedTools(),
-      };
+    const config = toolPermissions ?? {
+      mode: ConfigurationUtils.getCliToolPermissions(),
+      allowedTools: ConfigurationUtils.getCliAllowedTools(),
+      deniedTools: ConfigurationUtils.getCliDeniedTools(),
+    };
     const permissionArgs = (
       this.toolPermissionMapper as CodexToolPermissionMapper
     ).buildCodexSpecificArgs(config, sandboxMode, approvalPolicy);

@@ -25,7 +25,9 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
       <span className="flex flex-col">
         <span className="text-sm text-foreground">{label}</span>
         {description && (
-          <span className="text-xs text-description-fg mt-0.5">{description}</span>
+          <span className="text-xs text-description-fg mt-0.5">
+            {description}
+          </span>
         )}
       </span>
     </label>
@@ -52,7 +54,12 @@ export function ExecutionSection({ settings, onUpdate }: Props) {
         Execution
       </h3>
       <div>
-        <label htmlFor="exec-mode" className="block text-xs text-description-fg mb-1">Execution mode</label>
+        <label
+          htmlFor="exec-mode"
+          className="block text-xs text-description-fg mb-1"
+        >
+          Execution mode
+        </label>
         <CustomSelect
           id="exec-mode"
           value={exec.mode}
@@ -61,7 +68,10 @@ export function ExecutionSection({ settings, onUpdate }: Props) {
         />
       </div>
       <div>
-        <label htmlFor="exec-continuation-mode" className="block text-xs text-description-fg mb-1">
+        <label
+          htmlFor="exec-continuation-mode"
+          className="block text-xs text-description-fg mb-1"
+        >
           Continuation mode (interactive)
         </label>
         <CustomSelect
@@ -71,11 +81,15 @@ export function ExecutionSection({ settings, onUpdate }: Props) {
           options={CONTINUATION_MODE_OPTIONS}
         />
         <p className="text-xs text-description-fg mt-1">
-          Inject keeps the TUI alive between prompts — faster and avoids the Claude Code resume cache bug.
+          Inject keeps the TUI alive between prompts — faster and avoids the
+          Claude Code resume cache bug.
         </p>
       </div>
       <div>
-        <label htmlFor="exec-max-prompt-timeout" className="block text-xs text-description-fg mb-1">
+        <label
+          htmlFor="exec-max-prompt-timeout"
+          className="block text-xs text-description-fg mb-1"
+        >
           Max prompt timeout (seconds, -1 = unlimited)
         </label>
         <input
@@ -84,13 +98,20 @@ export function ExecutionSection({ settings, onUpdate }: Props) {
           min={-1}
           value={exec.maxPromptTimeout}
           onChange={(e) =>
-            onUpdate("execution.maxPromptTimeout", parseInt(e.target.value, 10) || -1, s)
+            onUpdate(
+              "execution.maxPromptTimeout",
+              parseInt(e.target.value, 10) || -1,
+              s
+            )
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
       </div>
       <div>
-        <label htmlFor="exec-script-timeout" className="block text-xs text-description-fg mb-1">
+        <label
+          htmlFor="exec-script-timeout"
+          className="block text-xs text-description-fg mb-1"
+        >
           Script timeout (seconds)
         </label>
         <input
@@ -99,7 +120,11 @@ export function ExecutionSection({ settings, onUpdate }: Props) {
           min={1}
           value={exec.scriptTimeout}
           onChange={(e) =>
-            onUpdate("execution.scriptTimeout", parseInt(e.target.value, 10) || 30, s)
+            onUpdate(
+              "execution.scriptTimeout",
+              parseInt(e.target.value, 10) || 30,
+              s
+            )
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />

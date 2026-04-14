@@ -91,7 +91,8 @@ suite("CliResponseCollector", () => {
         debugMessages.some((message) => message.includes("session-from-output"))
       );
     } finally {
-      (Log as unknown as { debug(message: string): void }).debug = originalDebug;
+      (Log as unknown as { debug(message: string): void }).debug =
+        originalDebug;
     }
   });
 
@@ -133,7 +134,10 @@ suite("CliResponseCollector", () => {
     });
 
     assert.strictEqual(result.extractedSessionId, "augmented-session");
-    assert.strictEqual(result.parsedOutput.metadata.sessionId, "augmented-session");
+    assert.strictEqual(
+      result.parsedOutput.metadata.sessionId,
+      "augmented-session"
+    );
   });
 
   test("should fall back to log-based session extraction when output has no session ID", async () => {

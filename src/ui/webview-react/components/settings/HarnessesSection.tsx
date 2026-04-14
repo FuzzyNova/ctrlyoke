@@ -31,7 +31,9 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
         Default Harness
       </h3>
       <div className="grid grid-cols-[120px_1fr] items-center gap-2">
-        <label htmlFor="harness-active" className="text-xs text-description-fg">Active harness</label>
+        <label htmlFor="harness-active" className="text-xs text-description-fg">
+          Active harness
+        </label>
         <select
           id="harness-active"
           value={settings.settings.harness}
@@ -51,13 +53,15 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
         </h3>
       </div>
       <p className="text-xs text-description-fg -mt-2">
-        Configure the default model and additional CLI args for each harness. These are used when no workflow-level override is set.
+        Configure the default model and additional CLI args for each harness.
+        These are used when no workflow-level override is set.
       </p>
       <div className="space-y-4">
         {CLI_HARNESSES.map((harnessId) => {
           const info = HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO];
           const isChat = harnessId === HARNESS_IDS.COPILOT_CHAT;
-          const currentModel = (models as Record<string, string | undefined>)[harnessId] ?? "";
+          const currentModel =
+            (models as Record<string, string | undefined>)[harnessId] ?? "";
           const discoveredModels = getModelsForHarness(harnessId);
 
           return (
@@ -65,14 +69,23 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
               key={harnessId}
               className="border border-panel-border rounded p-3 space-y-2"
             >
-              <div className="text-sm font-medium text-foreground">{info.name}</div>
+              <div className="text-sm font-medium text-foreground">
+                {info.name}
+              </div>
               <div className="grid grid-cols-[80px_1fr] items-center gap-2">
-                <label htmlFor={`model-${harnessId}`} className="text-xs text-description-fg">Model</label>
+                <label
+                  htmlFor={`model-${harnessId}`}
+                  className="text-xs text-description-fg"
+                >
+                  Model
+                </label>
                 {discoveredModels.length > 0 ? (
                   <CustomSelect
                     id={`model-${harnessId}`}
                     value={currentModel}
-                    onChange={(v) => onUpdate(`models.${harnessId}`, v || undefined, s)}
+                    onChange={(v) =>
+                      onUpdate(`models.${harnessId}`, v || undefined, s)
+                    }
                     options={[
                       { value: "", label: "Default" },
                       ...discoveredModels,
@@ -84,7 +97,11 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
                     type="text"
                     value={currentModel}
                     onChange={(e) =>
-                      onUpdate(`models.${harnessId}`, e.target.value || undefined, s)
+                      onUpdate(
+                        `models.${harnessId}`,
+                        e.target.value || undefined,
+                        s
+                      )
                     }
                     placeholder="Default"
                     className="bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
@@ -93,11 +110,20 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
               </div>
               {!isChat && (
                 <div className="grid grid-cols-[80px_1fr] items-center gap-2">
-                  <label htmlFor={`extra-args-${harnessId}`} className="text-xs text-description-fg">Extra args</label>
+                  <label
+                    htmlFor={`extra-args-${harnessId}`}
+                    className="text-xs text-description-fg"
+                  >
+                    Extra args
+                  </label>
                   <input
                     id={`extra-args-${harnessId}`}
                     type="text"
-                    value={(additionalArgs as Record<string, string | undefined>)[harnessId] ?? ""}
+                    value={
+                      (additionalArgs as Record<string, string | undefined>)[
+                        harnessId
+                      ] ?? ""
+                    }
                     onChange={(e) =>
                       onUpdate(
                         `additionalArgs.${harnessId}`,

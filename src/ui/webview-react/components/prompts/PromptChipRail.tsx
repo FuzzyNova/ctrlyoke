@@ -74,12 +74,7 @@ type ChipContextMenuProps = ContextMenuState & { onClose: () => void };
  * Clicks *inside* the menu stop `pointerdown` propagation so the document
  * listener doesn't fire and menu-item `click` events still reach their handler.
  */
-function ChipContextMenu({
-  x,
-  y,
-  items,
-  onClose,
-}: ChipContextMenuProps) {
+function ChipContextMenu({ x, y, items, onClose }: ChipContextMenuProps) {
   // Clamp so the menu doesn't overflow the right edge of the viewport
   const menuWidth = 170;
   const adjustedX = Math.min(x, window.innerWidth - menuWidth - 4);
@@ -234,7 +229,11 @@ function FinalStepChip({
         >
           F
         </span>
-        <StatusIcon status={status} disabled={!hasFinalStep} className="text-[16px]" />
+        <StatusIcon
+          status={status}
+          disabled={!hasFinalStep}
+          className="text-[16px]"
+        />
       </div>
     </div>
   );
@@ -347,9 +346,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const [sortableIds, setSortableIds] = useState<string[]>(() =>
-    prompts
-      .slice(currentStep)
-      .map((_, i) => `chip-pending-${currentStep + i}`)
+    prompts.slice(currentStep).map((_, i) => `chip-pending-${currentStep + i}`)
   );
 
   useEffect(() => {

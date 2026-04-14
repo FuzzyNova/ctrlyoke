@@ -94,7 +94,10 @@ export function toTitleCase(str: string): string {
  * older browsers that support the Web Crypto API but not randomUUID().
  */
 export function generateId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return crypto.randomUUID();
   }
   // Fallback: build a UUID-shaped string from getRandomValues (iOS Safari 3.1+)

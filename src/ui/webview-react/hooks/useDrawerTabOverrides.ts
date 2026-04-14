@@ -37,7 +37,8 @@ export function useDrawerTabOverrides(
           ? wfPermMode
           : promptProperties.toolPermissions === null
             ? PERMISSION_MODES.NONE
-            : (promptProperties.toolPermissions.mode ?? PERMISSION_MODES.ALLOW_ALL);
+            : (promptProperties.toolPermissions.mode ??
+              PERMISSION_MODES.ALLOW_ALL);
 
     // ── Hooks ──────────────────────────────────────────────────────────────
     const wfHooks =
@@ -55,13 +56,15 @@ export function useDrawerTabOverrides(
         ? workflowProperties.mcpServers
         : globalSettings.mcpServers;
     const resolvedMcp =
-      promptProperties !== undefined && promptProperties.mcpServers !== undefined
+      promptProperties !== undefined &&
+      promptProperties.mcpServers !== undefined
         ? promptProperties.mcpServers
         : wfMcp;
 
     // ── End condition (Validation) ─────────────────────────────────────────
     const resolvedEndCondition =
-      promptProperties !== undefined && promptProperties.endCondition !== undefined
+      promptProperties !== undefined &&
+      promptProperties.endCondition !== undefined
         ? promptProperties.endCondition
         : workflowProperties.endCondition;
 
@@ -69,14 +72,16 @@ export function useDrawerTabOverrides(
     const wfResumeSession =
       workflowProperties.resumeSession ?? globalSettings.resumeSession;
     const resolvedResumeSession =
-      promptProperties !== undefined && promptProperties.resumeSession !== undefined
+      promptProperties !== undefined &&
+      promptProperties.resumeSession !== undefined
         ? promptProperties.resumeSession
         : wfResumeSession;
 
     const wfPriorContext =
       workflowProperties.priorContext ?? globalSettings.priorContext;
     const resolvedPriorContext =
-      promptProperties !== undefined && promptProperties.priorContext !== undefined
+      promptProperties !== undefined &&
+      promptProperties.priorContext !== undefined
         ? promptProperties.priorContext
         : wfPriorContext;
 
@@ -85,7 +90,10 @@ export function useDrawerTabOverrides(
       hooks: getHooksTabOverride(resolvedHooks),
       mcp: getMcpTabOverride(resolvedMcp),
       validation: getValidationTabOverride(resolvedEndCondition),
-      context: getContextTabOverride(resolvedResumeSession, resolvedPriorContext),
+      context: getContextTabOverride(
+        resolvedResumeSession,
+        resolvedPriorContext
+      ),
     };
   }, [workflowProperties, globalSettings, promptProperties]);
 }

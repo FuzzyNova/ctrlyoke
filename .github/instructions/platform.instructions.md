@@ -63,14 +63,14 @@ PlatformAdapter.ts          ← Abstract interface (the contract)
 
 > `getConfig<T>(key, default)` is defined on `CliAdapter` (not on the `PlatformAdapter` interface). It is bridged into config consumers via the vscode-shim's `workspace.getConfiguration().get()`.
 
-| Config Key                                             | Source                                                                                             |
-| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| `cliToolPermissions`                                   | Derived: `allowAllTools` → `"dangerouslyAllowAll"`, has allow/deny → `"custom"`, else `"allowAll"` |
-| `cliAllowedTools` / `cliDeniedTools`                   | Direct from `config.allowedTools` / `config.deniedTools`                                           |
-| `copilotCliAllowedDirs`                                | `config.additionalDirs` (for `--add-dir` flags)                                                    |
-| `cliExecutionMode`                                     | `config.cliExecutionMode`                                                                          |
-| `copilotCliModel` / `claudeCliModel` / `codexCliModel` | All map to `config.model` (single `--model` flag)                                                  |
-| `scriptTimeout` / `maxPromptExecutionTime`             | Stored in ms, converted to seconds (÷1000) to match `ConfigurationUtils` expectations              |
+| Config Key                                             | Source                                                                                                 |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `cliToolPermissions`                                   | Derived: `allowAllTools` → `"dangerouslyAllowAll"`, has allow/deny → `"custom"`, else `"allowAll"`     |
+| `cliAllowedTools` / `cliDeniedTools`                   | Direct from `config.allowedTools` / `config.deniedTools`                                               |
+| `copilotCliAllowedDirs`                                | `config.additionalDirs` (for `--add-dir` flags)                                                        |
+| `cliExecutionMode`                                     | `config.cliExecutionMode`                                                                              |
+| `copilotCliModel` / `claudeCliModel` / `codexCliModel` | All map to `config.model` (single `--model` flag)                                                      |
+| `scriptTimeout` / `maxPromptExecutionTime`             | Stored in ms, converted to seconds (÷1000) to match `ConfigurationUtils` expectations                  |
 | Other keys                                             | First: direct property on config object; then: `configService.getNested(key)`; finally: `defaultValue` |
 
 **Behavioral differences from VsCodeAdapter:**
@@ -93,23 +93,23 @@ PlatformAdapter.ts          ← Abstract interface (the contract)
 **Adapter registration bridge:**
 
 ```typescript
-registerCliAdapter(adapter);   // Called in cli.ts after constructing CliAdapter
-unregisterCliAdapter();        // Test/teardown only — clears the registered adapter
+registerCliAdapter(adapter); // Called in cli.ts after constructing CliAdapter
+unregisterCliAdapter(); // Test/teardown only — clears the registered adapter
 ```
 
 Once registered, `workspace.getConfiguration().get(key, default)` delegates to `adapter.getConfig(key, default)` instead of returning the default. This makes `ConfigurationUtils` calls inside CLI provider code (e.g. `getCliAllowedTools()`) transparently reflect CLI flags.
 
 **Stubbed API surfaces:**
 
-| Namespace    | Behavior                                                                                                                                                                            |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Namespace    | Behavior                                                                                                                                                                                                                                                                                     |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `window`     | `showInformationMessage/Warning/Error` return `undefined`; `createOutputChannel` returns no-op channel; `setStatusBarMessage` returns no-op disposable; `showQuickPick`/`showTextDocument`/`onDidChangeActiveTextEditor` are no-ops; `createTerminal()` throws (must never be called in CLI) |
-| `workspace`  | `getConfiguration()` delegates to registered adapter; `fs` has `stat`, `readFile`, `writeFile`, `createDirectory`, `readDirectory` (all via Node.js `fs`); `openTextDocument` reads via `fs.readFile`; `createFileSystemWatcher` is a no-op |
-| `commands`   | `executeCommand()` returns `undefined`                                                                                                                                              |
-| `Uri`        | `file()` wraps path in `{ fsPath, scheme, path }`; `joinPath()` uses `path.join`; `parse()` wraps URI string                                                                       |
-| `lm`         | `selectChatModels()` returns `[]`                                                                                                                                                   |
-| `languages`  | `createDiagnosticCollection()` returns no-op                                                                                                                                        |
-| `extensions` | `getExtension()` returns `undefined`                                                                                                                                                |
+| `workspace`  | `getConfiguration()` delegates to registered adapter; `fs` has `stat`, `readFile`, `writeFile`, `createDirectory`, `readDirectory` (all via Node.js `fs`); `openTextDocument` reads via `fs.readFile`; `createFileSystemWatcher` is a no-op                                                  |
+| `commands`   | `executeCommand()` returns `undefined`                                                                                                                                                                                                                                                       |
+| `Uri`        | `file()` wraps path in `{ fsPath, scheme, path }`; `joinPath()` uses `path.join`; `parse()` wraps URI string                                                                                                                                                                                 |
+| `lm`         | `selectChatModels()` returns `[]`                                                                                                                                                                                                                                                            |
+| `languages`  | `createDiagnosticCollection()` returns no-op                                                                                                                                                                                                                                                 |
+| `extensions` | `getExtension()` returns `undefined`                                                                                                                                                                                                                                                         |
 
 **Types and classes stubbed:** `Disposable`, `Position`, `Range`, `RelativePattern`, `EventEmitter<T>`, `FileType` enum, `ConfigurationTarget` enum — all match VS Code API signatures.
 

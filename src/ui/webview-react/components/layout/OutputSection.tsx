@@ -1036,7 +1036,9 @@ export const OutputSection: React.FC = () => {
         </div>
 
         {/* Right: controls */}
-        <div className={`ml-auto flex items-center ${isHeaderNarrow ? "gap-1" : "gap-2"}`}>
+        <div
+          className={`ml-auto flex items-center ${isHeaderNarrow ? "gap-1" : "gap-2"}`}
+        >
           {activeOutputTab === "terminal" && (
             <>
               {/* Active session icon + title — only shown when rail is collapsed */}
@@ -1053,7 +1055,8 @@ export const OutputSection: React.FC = () => {
                       className={`codicon ${
                         activeTerminalSession.shellKind === SHELL_KINDS.PWSH
                           ? "codicon-terminal"
-                          : activeTerminalSession.shellKind === SHELL_KINDS.POWERSHELL
+                          : activeTerminalSession.shellKind ===
+                              SHELL_KINDS.POWERSHELL
                             ? "codicon-terminal-powershell"
                             : "codicon-terminal-bash"
                       } text-[12px] flex-shrink-0`}
@@ -1097,8 +1100,16 @@ export const OutputSection: React.FC = () => {
                         workflowId: terminalWorkflowId,
                         sessionId: activeTerminalSession.id,
                       });
-                      terminalRegistry.clearSession(terminalWorkflowId, activeTerminalSession.id);
-                      useTerminalStore.getState().removeSession(terminalWorkflowId, activeTerminalSession.id);
+                      terminalRegistry.clearSession(
+                        terminalWorkflowId,
+                        activeTerminalSession.id
+                      );
+                      useTerminalStore
+                        .getState()
+                        .removeSession(
+                          terminalWorkflowId,
+                          activeTerminalSession.id
+                        );
                     }}
                   >
                     <i className="codicon codicon-trash text-[12px]" />

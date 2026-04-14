@@ -25,7 +25,9 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
       <span className="flex flex-col">
         <span className="text-sm text-foreground">{label}</span>
         {description && (
-          <span className="text-xs text-description-fg mt-0.5">{description}</span>
+          <span className="text-xs text-description-fg mt-0.5">
+            {description}
+          </span>
         )}
       </span>
     </label>
@@ -48,7 +50,12 @@ export function ChatSection({ settings, onUpdate }: Props) {
         Chat (Copilot Chat Harness)
       </h3>
       <div>
-        <label htmlFor="chat-window-location" className="block text-xs text-description-fg mb-1">Chat window location</label>
+        <label
+          htmlFor="chat-window-location"
+          className="block text-xs text-description-fg mb-1"
+        >
+          Chat window location
+        </label>
         <CustomSelect
           id="chat-window-location"
           value={chat.windowLocation}
@@ -57,7 +64,10 @@ export function ChatSection({ settings, onUpdate }: Props) {
         />
       </div>
       <div>
-        <label htmlFor="chat-inactivity-timeout" className="block text-xs text-description-fg mb-1">
+        <label
+          htmlFor="chat-inactivity-timeout"
+          className="block text-xs text-description-fg mb-1"
+        >
           Inactivity timeout (seconds)
         </label>
         <input
@@ -66,7 +76,11 @@ export function ChatSection({ settings, onUpdate }: Props) {
           min={0}
           value={chat.inactivityTimeout}
           onChange={(e) =>
-            onUpdate("chat.inactivityTimeout", parseInt(e.target.value, 10) || 300, s)
+            onUpdate(
+              "chat.inactivityTimeout",
+              parseInt(e.target.value, 10) || 300,
+              s
+            )
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />

@@ -17,11 +17,13 @@ The most natural VS Code-native surface. Appears as a popup in the bottom-right 
 the window. Supports action buttons ("Open Dashboard", "View Output").
 
 **When to show:**
+
 - Workflow completes successfully (all prompts done, final prompt done)
 - Workflow fails (error state or end condition max retries exceeded)
 - Workflow is stopped by timeout
 
 **Not when:**
+
 - User manually paused or cancelled — they took the action, no need to notify
 - Workflow is still running (no mid-progress toasts)
 
@@ -100,6 +102,7 @@ to `EXECUTION_STATES.COMPLETED`, `EXECUTION_STATES.ERROR`, or `EXECUTION_STATES.
 `DashboardBroadcastHub`.
 
 Add a `NotificationManager` (or thin helper) that:
+
 1. Subscribes to `DashboardBroadcastHub` as a sink
 2. Listens for `EXECUTION_COMPLETED` / `EXECUTION_STATE_CHANGED` messages
 3. Reads the `notifications.onComplete` setting

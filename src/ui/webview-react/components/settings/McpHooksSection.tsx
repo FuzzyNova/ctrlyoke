@@ -1,7 +1,10 @@
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import type { UserHookConfig } from "@root/types/FlightPathTypes";
 import { HooksEditor } from "../editor/HooksEditor";
-import { McpServersEditor, type McpServersValue } from "../shared/McpServersEditor";
+import {
+  McpServersEditor,
+  type McpServersValue,
+} from "../shared/McpServersEditor";
 
 interface Props {
   settings: FullGlobalSettings;

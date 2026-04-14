@@ -356,9 +356,7 @@ const ShellIcon: React.FC<{
   const isRunning = status === TERMINAL_SESSION_STATUS.RUNNING;
 
   if (shellKind === SHELL_KINDS.PWSH) {
-    return (
-      <i className="codicon codicon-terminal text-[11px] flex-shrink-0" />
-    );
+    return <i className="codicon codicon-terminal text-[11px] flex-shrink-0" />;
   }
   if (shellKind === SHELL_KINDS.POWERSHELL) {
     return (

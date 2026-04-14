@@ -71,7 +71,10 @@ export const ResetConfirmModal: React.FC<ResetConfirmModalProps> = ({
       {detail && <p className="mt-2 text-sm text-description-fg">{detail}</p>}
 
       {/* Don't ask again toggle */}
-      <label htmlFor="reset-dont-ask" className="mt-4 flex items-center gap-2 cursor-pointer select-none text-sm text-description-fg hover:text-foreground transition-colors">
+      <label
+        htmlFor="reset-dont-ask"
+        className="mt-4 flex items-center gap-2 cursor-pointer select-none text-sm text-description-fg hover:text-foreground transition-colors"
+      >
         <input
           id="reset-dont-ask"
           type="checkbox"

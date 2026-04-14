@@ -189,7 +189,9 @@ const copyServerPlugin = {
       const shimSrc = path.join(srcServer, "standalone-shim.js");
       if (fs.existsSync(shimSrc)) {
         fs.copyFileSync(shimSrc, path.join(outServer, "standalone-shim.js"));
-        console.log("[copy] standalone-shim.js -> out/server/standalone-shim.js");
+        console.log(
+          "[copy] standalone-shim.js -> out/server/standalone-shim.js"
+        );
       }
     });
   },

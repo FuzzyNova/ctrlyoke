@@ -33,15 +33,15 @@ import { configService } from "../config/FlightPathConfigService";
 
 **Key methods:**
 
-| Method | Purpose |
-|---|---|
-| `get(key)` | Get a top-level setting by key (type-safe, `keyof FlightPathGlobalSettings`) |
-| `getNested(path)` | Get a nested value using dot-notation (e.g. `"execution.mode"`) — returns `unknown` |
-| `resolve(key)` | Like `get()` but also returns the `SettingSource` (`"cli" \| "workspace" \| "user" \| "default"`) |
-| `getAll()` | Full merged settings object |
-| `set(path, value, scope)` | Write to workspace or user backend via dot-notation; calls `notify()` automatically |
-| `subscribe(listener)` | Subscribe to change notifications; returns an unsubscribe function |
-| `notify()` | Broadcast change to all subscribers (call after external mutations) |
+| Method                    | Purpose                                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------- |
+| `get(key)`                | Get a top-level setting by key (type-safe, `keyof FlightPathGlobalSettings`)                      |
+| `getNested(path)`         | Get a nested value using dot-notation (e.g. `"execution.mode"`) — returns `unknown`               |
+| `resolve(key)`            | Like `get()` but also returns the `SettingSource` (`"cli" \| "workspace" \| "user" \| "default"`) |
+| `getAll()`                | Full merged settings object                                                                       |
+| `set(path, value, scope)` | Write to workspace or user backend via dot-notation; calls `notify()` automatically               |
+| `subscribe(listener)`     | Subscribe to change notifications; returns an unsubscribe function                                |
+| `notify()`                | Broadcast change to all subscribers (call after external mutations)                               |
 
 **Setup methods (called once during startup):**
 
@@ -75,7 +75,7 @@ createWorkspaceConfigBackend(root, onChanged?)  // <root>/.flightpath/settings.j
 - Intended to call `configService.notify()` when the file changes externally
 - Only fires if `startWatching()` has been called
 - Programmatic changes via `configService.set()` trigger `notify()` directly (no watcher needed)
-</fileConfigBackend>
+  </fileConfigBackend>
 
 <wiring>
 **`extension.ts`** — creates backends with notify callbacks:
@@ -109,22 +109,22 @@ Only flags that were explicitly passed by the user go into the overlay — Comma
 <settingsStructure>
 **`FlightPathGlobalSettings`** top-level keys (see `src/types/FlightPathSettings.ts` for full details):
 
-| Key | Type | Purpose |
-|---|---|---|
-| `harness` | `HarnessId` | Active harness (`"copilot-cli"`, `"claude-cli"`, etc.) |
-| `models` | `Partial<Record<HarnessId, string>>` | Per-harness model selection |
-| `additionalArgs` | `Partial<Record<HarnessId, string>>` | Per-harness extra CLI args |
-| `execution` | object | `mode`, `maxPromptTimeout`, `scriptTimeout`, `closeTerminalOnComplete` |
-| `tools` | object | Permission modes, allowed/denied lists, per-harness tool settings |
-| `workflow` | object | Format, template, retries, session resume behavior |
-| `chat` | object | Window location, timeouts, agent mode |
-| `mcp` | object | Default MCP server configs |
-| `hooks` | `UserHookConfig[]` | User-defined hook configs |
-| `queue` | object | Max size, execution time limits |
-| `history` | object | Output saving, max run retention |
-| `ui` | object | Display flags, gitignore filtering, confirmation dialogs |
-| `server` | object | Embedded server port, TLS, theme |
-| `enableDiagnosticLogs` | `boolean` | Global diagnostic logging toggle |
+| Key                    | Type                                 | Purpose                                                                |
+| ---------------------- | ------------------------------------ | ---------------------------------------------------------------------- |
+| `harness`              | `HarnessId`                          | Active harness (`"copilot-cli"`, `"claude-cli"`, etc.)                 |
+| `models`               | `Partial<Record<HarnessId, string>>` | Per-harness model selection                                            |
+| `additionalArgs`       | `Partial<Record<HarnessId, string>>` | Per-harness extra CLI args                                             |
+| `execution`            | object                               | `mode`, `maxPromptTimeout`, `scriptTimeout`, `closeTerminalOnComplete` |
+| `tools`                | object                               | Permission modes, allowed/denied lists, per-harness tool settings      |
+| `workflow`             | object                               | Format, template, retries, session resume behavior                     |
+| `chat`                 | object                               | Window location, timeouts, agent mode                                  |
+| `mcp`                  | object                               | Default MCP server configs                                             |
+| `hooks`                | `UserHookConfig[]`                   | User-defined hook configs                                              |
+| `queue`                | object                               | Max size, execution time limits                                        |
+| `history`              | object                               | Output saving, max run retention                                       |
+| `ui`                   | object                               | Display flags, gitignore filtering, confirmation dialogs               |
+| `server`               | object                               | Embedded server port, TLS, theme                                       |
+| `enableDiagnosticLogs` | `boolean`                            | Global diagnostic logging toggle                                       |
 
 **`PartialFlightPathSettings`** — shallow-partial version (top-level keys optional, nested objects also partial). Used for config file contents and the CLI overlay.
 

@@ -356,15 +356,11 @@ suite("CliTransportCoordinator", () => {
         }) as any,
     });
 
-    await coordinator.startInteractiveProcess(
-      [],
-      "prompt",
-      {
-        promptIndex: 0,
-        allPrompts: [{ prompt: "one" }, { name: "second", prompt: "two" }],
-        instanceId: "workflow-1",
-      } as any
-    );
+    await coordinator.startInteractiveProcess([], "prompt", {
+      promptIndex: 0,
+      allPrompts: [{ prompt: "one" }, { name: "second", prompt: "two" }],
+      instanceId: "workflow-1",
+    } as any);
 
     postedMessages.length = 0;
     const refreshed = coordinator.updateCurrentPtySessionMetadata({

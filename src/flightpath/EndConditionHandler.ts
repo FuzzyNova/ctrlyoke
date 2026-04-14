@@ -6,7 +6,10 @@ import {
   type WorkflowAttemptTarget,
   type EndConditionAction,
 } from "../types/FlightPathTypes";
-import { STATUS_MESSAGE_SEVERITY, CONDITION_ACTIONS } from "../types/DashboardConstants";
+import {
+  STATUS_MESSAGE_SEVERITY,
+  CONDITION_ACTIONS,
+} from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
 import {
   EndConditionEvaluator,
@@ -79,8 +82,8 @@ export class EndConditionHandler {
   constructor(
     private readonly endConditionEvaluator: EndConditionEvaluator,
     private readonly promptQueue: PromptQueue,
-    private readonly getDashboard: () => IDashboardSink | undefined =
-      () => undefined,
+    private readonly getDashboard: () => IDashboardSink | undefined = () =>
+      undefined,
     private readonly platform?: PlatformAdapter,
     private readonly openFile?: (filePath: string) => Promise<void>
   ) {}
@@ -95,12 +98,15 @@ export class EndConditionHandler {
     retryContext: RetryContext,
     sendRetryPrompt: SendRetryPromptCallback
   ): Promise<EndConditionHandlerResult> {
-    const onPass: EndConditionAction = prompt.endCondition?.onPass ?? CONDITION_ACTIONS.CONTINUE;
-    const onFail: EndConditionAction = prompt.endCondition?.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
+    const onPass: EndConditionAction =
+      prompt.endCondition?.onPass ?? CONDITION_ACTIONS.CONTINUE;
+    const onFail: EndConditionAction =
+      prompt.endCondition?.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW;
 
     // Apply maxRetries default of 1 when either field is "retry" and maxRetries is unset
     if (
-      (onPass === CONDITION_ACTIONS.RETRY || onFail === CONDITION_ACTIONS.RETRY) &&
+      (onPass === CONDITION_ACTIONS.RETRY ||
+        onFail === CONDITION_ACTIONS.RETRY) &&
       prompt.endCondition &&
       prompt.endCondition.maxRetries === undefined
     ) {

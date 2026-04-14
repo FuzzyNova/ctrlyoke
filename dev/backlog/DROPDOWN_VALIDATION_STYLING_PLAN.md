@@ -220,11 +220,11 @@ The rendering is intentionally not abstracted into a wrapper component. Each dro
 
 The current FlightPath error surface has three tiers:
 
-| Tier | Mechanism | User-visible result |
-|---|---|---|
-| Schema validation | AJV at parse time in `PromptFileParser` | VS Code diagnostic (squiggly + Problems panel) |
-| Semantic validation | Business rule checks in `PromptFileParser` | `platform.error()` toast notification |
-| Runtime fallbacks | Best-effort degradation (e.g., session not found → new session) | Log warning only — **not surfaced to user** |
+| Tier                | Mechanism                                                       | User-visible result                            |
+| ------------------- | --------------------------------------------------------------- | ---------------------------------------------- |
+| Schema validation   | AJV at parse time in `PromptFileParser`                         | VS Code diagnostic (squiggly + Problems panel) |
+| Semantic validation | Business rule checks in `PromptFileParser`                      | `platform.error()` toast notification          |
+| Runtime fallbacks   | Best-effort degradation (e.g., session not found → new session) | Log warning only — **not surfaced to user**    |
 
 **The gap:** Runtime warnings are logged but never reach the dashboard or the user. A workflow
 that silently starts fresh sessions when it shouldn't, skips steps due to unmet pre-conditions,
@@ -233,6 +233,7 @@ this during or after execution.
 
 **Recommended future plan (separate backlog item):** A `WorkflowDiagnosticsService` that collects
 warnings during execution and surfaces them:
+
 - In the Output section as a `[Warning]` label on the relevant step
 - As a summary badge on the step in the Prompts Panel (yellow ⚠ icon)
 - Optionally in a dedicated "Diagnostics" tab in the workflow drawer

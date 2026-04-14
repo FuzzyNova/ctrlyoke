@@ -74,8 +74,10 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       touchStartY = e.touches[0].clientY;
       const currentEntry = terminalRegistry.get(workflowId, sessionId);
       if (!currentEntry) return;
-      const fontSize = (currentEntry.term.options.fontSize as number | undefined) ?? 14;
-      const lineHeight = (currentEntry.term.options.lineHeight as number | undefined) ?? 1.2;
+      const fontSize =
+        (currentEntry.term.options.fontSize as number | undefined) ?? 14;
+      const lineHeight =
+        (currentEntry.term.options.lineHeight as number | undefined) ?? 1.2;
       touchScrollAccum += deltaPixels / (fontSize * lineHeight);
       const lines = Math.trunc(touchScrollAccum);
       if (lines !== 0) {
@@ -87,7 +89,9 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
 
     async function mount() {
       if (!containerRef.current) {
-        console.debug(`[TerminalInstance] mount aborted — containerRef.current is null`);
+        console.debug(
+          `[TerminalInstance] mount aborted — containerRef.current is null`
+        );
         return;
       }
 
@@ -110,9 +114,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       // we flushed pendingOutput after attach() those earlier chunks would be
       // written out-of-order (after chunks that arrived during the WebGL import).
       const { sessions, clearPendingOutput } = useTerminalStore.getState();
-      const sess = (sessions[workflowId] ?? []).find(
-        (s) => s.id === sessionId
-      );
+      const sess = (sessions[workflowId] ?? []).find((s) => s.id === sessionId);
       if (sess?.pendingOutput.length) {
         for (const chunk of sess.pendingOutput) {
           entry.term.write(chunk);
@@ -145,7 +147,11 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       const currentSession = useTerminalStore
         .getState()
         .sessions[workflowId]?.find((s) => s.id === sessionId);
-      if (!entry.frozen && !entry.onDataDisposable && currentSession?.isController !== false) {
+      if (
+        !entry.frozen &&
+        !entry.onDataDisposable &&
+        currentSession?.isController !== false
+      ) {
         entry.onDataDisposable = entry.term.onData((input) => {
           sendMessage(MESSAGE_TYPES.TERMINAL_INPUT, {
             workflowId,
@@ -165,8 +171,12 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       // through the scrollback buffer on mobile.
       touchEl = containerRef.current;
       if (touchEl) {
-        touchEl.addEventListener("touchstart", handleTouchStart, { passive: true });
-        touchEl.addEventListener("touchmove", handleTouchMove, { passive: false });
+        touchEl.addEventListener("touchstart", handleTouchStart, {
+          passive: true,
+        });
+        touchEl.addEventListener("touchmove", handleTouchMove, {
+          passive: false,
+        });
       }
 
       // ResizeObserver: fit xterm to container; only the controller notifies the PTY.
@@ -282,7 +292,11 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     // Apply controller sizing if we already know it (TERMINAL_SIZE_CHANGED may have
     // arrived before this effect fired, or arrives later and triggers reapplication)
     if (entry.controllerCols != null) {
-      terminalRegistry.applyControllerSize(workflowId, sessionId, entry.controllerCols);
+      terminalRegistry.applyControllerSize(
+        workflowId,
+        sessionId,
+        entry.controllerCols
+      );
     }
   }, [isController, workflowId, sessionId]);
 
@@ -317,7 +331,9 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       {/* "Process exited" overlay for frozen ai-cli sessions */}
       <FrozenOverlay workflowId={workflowId} sessionId={sessionId} />
       {/* "View Only" badge for non-controller clients */}
-      {!isController && <ViewOnlyBadge workflowId={workflowId} sessionId={sessionId} />}
+      {!isController && (
+        <ViewOnlyBadge workflowId={workflowId} sessionId={sessionId} />
+      )}
     </div>
   );
 };
@@ -371,7 +387,10 @@ const ViewOnlyBadge: React.FC<{ workflowId: string; sessionId: string }> = ({
   if (session?.status !== TERMINAL_SESSION_STATUS.RUNNING) return null;
 
   const handleTakeControl = () => {
-    sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, { workflowId, sessionId });
+    sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, {
+      workflowId,
+      sessionId,
+    });
   };
 
   return (
@@ -379,15 +398,20 @@ const ViewOnlyBadge: React.FC<{ workflowId: string; sessionId: string }> = ({
       className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-3 py-1"
       style={{ background: "rgba(0,0,0,0.55)", zIndex: 10 }}
     >
-      <span className="text-[11px] select-none" style={{ color: "var(--vscode-descriptionForeground)" }}>
+      <span
+        className="text-[11px] select-none"
+        style={{ color: "var(--vscode-descriptionForeground)" }}
+      >
         View Only
       </span>
       <button
         onClick={handleTakeControl}
         className="text-[11px] px-2 py-0.5 rounded select-none cursor-pointer"
         style={{
-          background: "var(--vscode-button-secondaryBackground, rgba(255,255,255,0.12))",
-          color: "var(--vscode-button-secondaryForeground, var(--vscode-descriptionForeground))",
+          background:
+            "var(--vscode-button-secondaryBackground, rgba(255,255,255,0.12))",
+          color:
+            "var(--vscode-button-secondaryForeground, var(--vscode-descriptionForeground))",
           border: "1px solid var(--vscode-button-secondaryBorder, transparent)",
         }}
       >

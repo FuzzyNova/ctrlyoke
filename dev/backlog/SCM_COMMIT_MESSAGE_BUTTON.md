@@ -11,11 +11,11 @@ VS Code extensions can add buttons to the Source Control panel through **`packag
 
 ### Contribution Points
 
-| Point | Purpose |
-|-------|---------|
-| `scm/title` | Commands in the SCM title bar. Use `"group": "navigation"` to show inline (not in `…` dropdown) |
-| `scm/resourceState/context` | Commands on individual file states (context menu or inline) |
-| `scm/change/title` | Commands in the Quick Diff inline diff editor title bar |
+| Point                       | Purpose                                                                                         |
+| --------------------------- | ----------------------------------------------------------------------------------------------- |
+| `scm/title`                 | Commands in the SCM title bar. Use `"group": "navigation"` to show inline (not in `…` dropdown) |
+| `scm/resourceState/context` | Commands on individual file states (context menu or inline)                                     |
+| `scm/change/title`          | Commands in the Quick Diff inline diff editor title bar                                         |
 
 ### Accessing the SCM Input Box
 
@@ -60,6 +60,7 @@ User stages changes in VS Code SCM panel
 ### Similar Pattern to "Improve Prompt" (VSCODE_LM_API_FEATURES.md)
 
 Both features follow the same architecture:
+
 1. User clicks a button in the VS Code UI
 2. Extension reads current context (prompt text / staged diff)
 3. Extension sends to AI (vscode.lm or configured harness)
@@ -115,6 +116,7 @@ static getCommitPrompt(): string { ... }
 ### 4.1 package.json Contributions
 
 **Command:**
+
 ```json
 {
   "command": "flightpath.generateCommitMessage",
@@ -125,6 +127,7 @@ static getCommitPrompt(): string { ... }
 ```
 
 **Menu:**
+
 ```json
 {
   "command": "flightpath.generateCommitMessage",
@@ -143,13 +146,22 @@ export class CommitMessageGenerator {
   async getStagedDiff(): Promise<string | null>;
 
   // Route to vscode.lm or harness based on settings
-  async generateCommitMessage(diff: string, cancellationToken: CancellationToken): Promise<string>;
+  async generateCommitMessage(
+    diff: string,
+    cancellationToken: CancellationToken
+  ): Promise<string>;
 
   // vscode.lm path (Option A)
-  async generateWithLm(diff: string, cancellationToken: CancellationToken): Promise<string>;
+  async generateWithLm(
+    diff: string,
+    cancellationToken: CancellationToken
+  ): Promise<string>;
 
   // Harness path (Option B)
-  async generateWithHarness(diff: string, cancellationToken: CancellationToken): Promise<string>;
+  async generateWithHarness(
+    diff: string,
+    cancellationToken: CancellationToken
+  ): Promise<string>;
 
   // Write result to SCM input box
   async applyToScmInputBox(message: string): Promise<void>;
@@ -162,28 +174,32 @@ export class CommitMessageGenerator {
 // In activate()
 const commitGen = new CommitMessageGenerator();
 context.subscriptions.push(
-  vscode.commands.registerCommand('flightpath.generateCommitMessage', async () => {
-    await commitGen.generateAndApply();
-  })
+  vscode.commands.registerCommand(
+    "flightpath.generateCommitMessage",
+    async () => {
+      await commitGen.generateAndApply();
+    }
+  )
 );
 ```
 
 ### 4.4 CancellationToken Management
 
 The button should show a loading state and support cancellation:
+
 - While generating, button shows `$(sync~spin)` icon
 - Clicking while running cancels the current generation
 - Use `CancellationTokenSource` stored on the class instance
 
 ### 4.5 Error Handling
 
-| Scenario | Behavior |
-|----------|----------|
-| No staged changes | Show info notification: "No staged changes to generate a commit message for" |
+| Scenario                        | Behavior                                                                             |
+| ------------------------------- | ------------------------------------------------------------------------------------ |
+| No staged changes               | Show info notification: "No staged changes to generate a commit message for"         |
 | No models available (vscode.lm) | Show error: "No language models available. Configure a harness or activate Copilot." |
-| Harness not configured | Show error + "Configure" button that opens settings |
-| Generation fails | Show error notification, leave SCM input box unchanged |
-| User cancels | Show "Commit message generation cancelled" |
+| Harness not configured          | Show error + "Configure" button that opens settings                                  |
+| Generation fails                | Show error notification, leave SCM input box unchanged                               |
+| User cancels                    | Show "Commit message generation cancelled"                                           |
 
 ---
 
@@ -219,29 +235,29 @@ The button should show a loading state and support cancellation:
 
 ## 6. Implementation Order
 
-| Priority | Task | Complexity | Notes |
-|----------|------|------------|-------|
-| 1 | Add settings to package.json + ConfigurationUtils | Low | New `commit.*` settings |
-| 2 | Register command + menu contribution in package.json | Low | `scm/title` with `navigation` group |
-| 3 | Implement `CommitMessageGenerator` class | Medium | git diff parsing, error handling |
-| 4 | Implement vscode.lm path (Option A) | Medium | Same pattern as ImprovePrompt |
-| 5 | Implement harness path (Option B) | Medium-High | Run headless harness, parse output |
-| 6 | Wire up command in extension.ts | Low | Single registration + cancellation |
-| 7 | Add icon to UI icons directory | Low | SVG for sparkle/wand icon |
-| 8 | Manual testing | Medium | Test with various diff sizes, no staged changes, cancellation |
+| Priority | Task                                                 | Complexity  | Notes                                                         |
+| -------- | ---------------------------------------------------- | ----------- | ------------------------------------------------------------- |
+| 1        | Add settings to package.json + ConfigurationUtils    | Low         | New `commit.*` settings                                       |
+| 2        | Register command + menu contribution in package.json | Low         | `scm/title` with `navigation` group                           |
+| 3        | Implement `CommitMessageGenerator` class             | Medium      | git diff parsing, error handling                              |
+| 4        | Implement vscode.lm path (Option A)                  | Medium      | Same pattern as ImprovePrompt                                 |
+| 5        | Implement harness path (Option B)                    | Medium-High | Run headless harness, parse output                            |
+| 6        | Wire up command in extension.ts                      | Low         | Single registration + cancellation                            |
+| 7        | Add icon to UI icons directory                       | Low         | SVG for sparkle/wand icon                                     |
+| 8        | Manual testing                                       | Medium      | Test with various diff sizes, no staged changes, cancellation |
 
 ---
 
 ## 7. Files to Modify
 
-| File | Change |
-|------|--------|
-| `package.json` | Add command, menu, settings |
-| `src/utils/ConfigurationUtils.ts` | Add commit-related getters |
-| `src/extension.ts` | Register `flightpath.generateCommitMessage` command |
-| `src/types/DashboardConstants.ts` | Add any new message types if streaming to webview is needed |
-| `src/scm/CommitMessageGenerator.ts` | **NEW** — Core generation logic |
-| `src/ui/icons/` | Add sparkle/wand SVG if not present |
+| File                                | Change                                                      |
+| ----------------------------------- | ----------------------------------------------------------- |
+| `package.json`                      | Add command, menu, settings                                 |
+| `src/utils/ConfigurationUtils.ts`   | Add commit-related getters                                  |
+| `src/extension.ts`                  | Register `flightpath.generateCommitMessage` command         |
+| `src/types/DashboardConstants.ts`   | Add any new message types if streaming to webview is needed |
+| `src/scm/CommitMessageGenerator.ts` | **NEW** — Core generation logic                             |
+| `src/ui/icons/`                     | Add sparkle/wand SVG if not present                         |
 
 ---
 
@@ -255,6 +271,7 @@ This feature **reuses the same vscode.lm pipeline** established by the "Improve 
 - Same Option A (vscode.lm) / Option B (harness) duality
 
 The `CommitMessageGenerator` can **share infrastructure** with the `LmFeatureHandler` planned for Improve Prompt — both need:
+
 1. Model selection with fallback
 2. Prompt building (system + user context)
 3. Response streaming
@@ -266,10 +283,10 @@ Consider extracting a shared `LmRequestHandler` class that both features use.
 
 ## 9. Risks & Mitigations
 
-| Risk | Mitigation |
-|------|------------|
-| `vscode.lm` not available (no Copilot) | Fallback to harness mode; clear error message |
-| Large diffs exceed token limits | Truncate diff to first N hunks; warn user |
-| Git not in PATH | Use same git discovery as existing FlightPath git integration |
-| Multiple SCM providers | `when` clause limits to `git`; future: support other providers |
-| User has unsaved changes in SCM input box | Warn before overwriting, or append instead of replace |
+| Risk                                      | Mitigation                                                     |
+| ----------------------------------------- | -------------------------------------------------------------- |
+| `vscode.lm` not available (no Copilot)    | Fallback to harness mode; clear error message                  |
+| Large diffs exceed token limits           | Truncate diff to first N hunks; warn user                      |
+| Git not in PATH                           | Use same git discovery as existing FlightPath git integration  |
+| Multiple SCM providers                    | `when` clause limits to `git`; future: support other providers |
+| User has unsaved changes in SCM input box | Warn before overwriting, or append instead of replace          |

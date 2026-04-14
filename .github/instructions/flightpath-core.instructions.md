@@ -189,6 +189,7 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 Consequence: **any code path that loads a working file for a dashboard client MUST call `replayWorkflowStateTo()` after the load**, not before it, and never send a subset of messages manually. Sending only `ACTIVE_WORKFLOW_CHANGED` or `OUTPUT_HISTORY_LOADED` without SESSION_RESTORED causes the panel to receive no step state, making all step status icons display as idle/pending even for completed runs.
 
 Correct pattern (matches `loadWorkflowForClient` and `loadWorkingFile`):
+
 ```typescript
 const instance = this.buildWorkflowInstance();
 this.instances.set(instance.id, instance);
@@ -197,11 +198,13 @@ await this.replayWorkflowStateTo(instance.id, send, clientId); // always last
 ```
 
 Do NOT:
+
 ```typescript
 await this.createWorkflowForClient(send, clientId); // replays empty state too early
-await instance.loadWorkingFile(filePath);           // SESSION_RESTORED with real data never sent
+await instance.loadWorkingFile(filePath); // SESSION_RESTORED with real data never sent
 await this.dashboardBroadcastHub.loadOutputHistoryForWorkflow(filePath); // hub no-op for session
 ```
+
 </keyPatterns>
 
 <terminology>

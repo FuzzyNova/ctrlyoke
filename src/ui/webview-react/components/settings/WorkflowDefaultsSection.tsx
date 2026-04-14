@@ -2,7 +2,10 @@ import React, { useState } from "react";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import { PRIOR_CONTEXT_KEYWORDS } from "@root/types/DashboardConstants";
 import { CustomSelect } from "../shared/CustomSelect";
-import { ScriptConditionEditor, type ScriptConditionValue } from "../shared/ScriptConditionEditor";
+import {
+  ScriptConditionEditor,
+  type ScriptConditionValue,
+} from "../shared/ScriptConditionEditor";
 import { AnimatedSection } from "../shared/AnimatedSection";
 
 interface Props {
@@ -29,7 +32,9 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
       <span className="flex flex-col">
         <span className="text-sm text-foreground">{label}</span>
         {description && (
-          <span className="text-xs text-description-fg mt-0.5">{description}</span>
+          <span className="text-xs text-description-fg mt-0.5">
+            {description}
+          </span>
         )}
       </span>
     </label>
@@ -49,7 +54,9 @@ function FieldRow({ label, description, children }: FieldRowProps) {
         <span className="flex flex-col min-w-0">
           <span className="text-sm text-foreground">{label}</span>
           {description && (
-            <span className="text-xs text-description-fg mt-0.5">{description}</span>
+            <span className="text-xs text-description-fg mt-0.5">
+              {description}
+            </span>
           )}
         </span>
         <div className="shrink-0 w-40">{children}</div>
@@ -68,7 +75,10 @@ const PRIOR_CONTEXT_OPTIONS = [
   { value: PRIOR_CONTEXT_KEYWORDS.ALL, label: "All" },
   { value: PRIOR_CONTEXT_KEYWORDS.PREVIOUS, label: "Previous" },
   { value: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL, label: "Final Step (All)" },
-  { value: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS, label: "Final Step (Previous)" },
+  {
+    value: PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS,
+    label: "Final Step (Previous)",
+  },
 ];
 
 export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
@@ -87,7 +97,10 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
     if (!enabled) {
       onUpdate("workflow.defaultPreCondition", null, s);
     } else {
-      const initial = wf.defaultPreCondition ?? { script: "", onFail: "skipPrompt" };
+      const initial = wf.defaultPreCondition ?? {
+        script: "",
+        onFail: "skipPrompt",
+      };
       onUpdate("workflow.defaultPreCondition", initial, s);
     }
   }
@@ -107,22 +120,33 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
       <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
         Workflow Defaults
       </h3>
-      <FieldRow label="Default format" description="File format for new workflows.">
+      <FieldRow
+        label="Default format"
+        description="File format for new workflows."
+      >
         <CustomSelect
           value={wf.defaultFormat}
           onChange={(v) => onUpdate("workflow.defaultFormat", v, s)}
           options={FORMAT_OPTIONS}
         />
       </FieldRow>
-      <FieldRow label="Default template" description="Template ID used when creating new workflows.">
+      <FieldRow
+        label="Default template"
+        description="Template ID used when creating new workflows."
+      >
         <input
           type="text"
           value={wf.defaultTemplate}
-          onChange={(e) => onUpdate("workflow.defaultTemplate", e.target.value, s)}
+          onChange={(e) =>
+            onUpdate("workflow.defaultTemplate", e.target.value, s)
+          }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
       </FieldRow>
-      <FieldRow label="Default agent" description="Agent to use when none is specified in the workflow.">
+      <FieldRow
+        label="Default agent"
+        description="Agent to use when none is specified in the workflow."
+      >
         <input
           type="text"
           value={wf.defaultAgent}
@@ -131,7 +155,10 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
       </FieldRow>
-      <FieldRow label="Default prior context" description="How to handle prior context between prompts.">
+      <FieldRow
+        label="Default prior context"
+        description="How to handle prior context between prompts."
+      >
         <CustomSelect
           value={wf.priorContext || PRIOR_CONTEXT_KEYWORDS.NONE}
           onChange={(v) => onUpdate("workflow.priorContext", v, s)}
@@ -174,13 +201,18 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
           Default Pre-Condition
         </label>
         <p className="text-xs text-description-fg mb-2">
-          Script gate that runs before each prompt in new workflows. Prompts can override or disable it.
+          Script gate that runs before each prompt in new workflows. Prompts can
+          override or disable it.
         </p>
         <AnimatedSection visible={preConditionEnabled}>
           <ScriptConditionEditor
             variant="preCondition"
-            value={(wf.defaultPreCondition ?? null) as ScriptConditionValue | null}
-            onChange={(updated) => onUpdate("workflow.defaultPreCondition", updated, s)}
+            value={
+              (wf.defaultPreCondition ?? null) as ScriptConditionValue | null
+            }
+            onChange={(updated) =>
+              onUpdate("workflow.defaultPreCondition", updated, s)
+            }
             idPrefix="global-default-pre"
           />
         </AnimatedSection>
@@ -201,13 +233,18 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
           Default End Condition
         </label>
         <p className="text-xs text-description-fg mb-2">
-          Validation that runs after each prompt in new workflows. Prompts can override or disable it.
+          Validation that runs after each prompt in new workflows. Prompts can
+          override or disable it.
         </p>
         <AnimatedSection visible={endConditionEnabled}>
           <ScriptConditionEditor
             variant="endCondition"
-            value={(wf.defaultEndCondition ?? null) as ScriptConditionValue | null}
-            onChange={(updated) => onUpdate("workflow.defaultEndCondition", updated, s)}
+            value={
+              (wf.defaultEndCondition ?? null) as ScriptConditionValue | null
+            }
+            onChange={(updated) =>
+              onUpdate("workflow.defaultEndCondition", updated, s)
+            }
             idPrefix="global-default-end"
           />
         </AnimatedSection>

@@ -24,7 +24,9 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
       <span className="flex flex-col">
         <span className="text-sm text-foreground">{label}</span>
         {description && (
-          <span className="text-xs text-description-fg mt-0.5">{description}</span>
+          <span className="text-xs text-description-fg mt-0.5">
+            {description}
+          </span>
         )}
       </span>
     </label>
@@ -47,7 +49,10 @@ export function HistorySection({ settings, onUpdate }: Props) {
         onChange={(v) => onUpdate("history.saveOutput", v, s)}
       />
       <div>
-        <label htmlFor="history-max-runs" className="block text-xs text-description-fg mb-1">
+        <label
+          htmlFor="history-max-runs"
+          className="block text-xs text-description-fg mb-1"
+        >
           Max history runs (-1 = unlimited)
         </label>
         <input

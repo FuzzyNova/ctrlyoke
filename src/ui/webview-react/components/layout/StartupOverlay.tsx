@@ -37,7 +37,9 @@ export const StartupOverlay: React.FC = () => {
     >
       <div className="flex flex-col items-center gap-3">
         <div className="w-6 h-6 border-2 border-description-fg border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs text-description-fg select-none">Loading…</span>
+        <span className="text-xs text-description-fg select-none">
+          Loading…
+        </span>
       </div>
     </div>
   );

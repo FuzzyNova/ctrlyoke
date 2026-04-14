@@ -157,7 +157,8 @@ export class CliProcessManager {
       let settled = false;
 
       // Same DEP0190 workaround: concatenate when using shell (see spawn() above).
-      const resolvedSimpleCmd = args.length > 0 ? `${command} ${args.join(" ")}` : command;
+      const resolvedSimpleCmd =
+        args.length > 0 ? `${command} ${args.join(" ")}` : command;
       const child = spawn(resolvedSimpleCmd, [], {
         cwd: this.workspaceRoot,
         shell: true,

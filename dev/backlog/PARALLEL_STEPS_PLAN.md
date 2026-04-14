@@ -133,12 +133,12 @@ Worse than Option A: verbose (must repeat `group` and `parallel` on each step), 
      "most recent" session of the harness type, which is the same session. Emit a clear error
      naming the conflicting steps.
    - **Multiple steps with the same explicit `sessionId`** — same collision. Emit a clear error.
-3. **Dynamic queue extension (`mcpServers: ["flightpath"]`)** — if a parallel step tries to
+2. **Dynamic queue extension (`mcpServers: ["flightpath"]`)** — if a parallel step tries to
    append more steps to the queue mid-execution, the ordering semantics are undefined.
    Disallow at parse time.
-4. **Nested `parallel` groups** — do not allow `parallel` inside `parallel`. Flat groups
+3. **Nested `parallel` groups** — do not allow `parallel` inside `parallel`. Flat groups
    only for Phase 1.
-5. **`priorContext` referencing steps within the same parallel group** — those steps haven't
+4. **`priorContext` referencing steps within the same parallel group** — those steps haven't
    completed yet, so their output is unavailable. Validate at parse time.
 
 ### What IS allowed
@@ -164,15 +164,15 @@ Worse than Option A: verbose (must repeat `group` and `parallel` on each step), 
   continuing work from a prior parallel group:
   ```yaml
   - parallel:
-      - name: research-A      # → completes as step 1, session saved
-      - name: research-B      # → completes as step 2, session saved
+      - name: research-A # → completes as step 1, session saved
+      - name: research-B # → completes as step 2, session saved
   - parallel:
       - name: implement-A
         resumeSession: true
-        sessionId: 1          # resumes research-A session ✅
+        sessionId: 1 # resumes research-A session ✅
       - name: implement-B
         resumeSession: true
-        sessionId: 2          # resumes research-B session ✅ (different session)
+        sessionId: 2 # resumes research-B session ✅ (different session)
   ```
   Each `sessionId` must be unique within the group (otherwise both steps target the same
   session simultaneously — a hard error). If a referenced session is not found at runtime,
@@ -827,10 +827,10 @@ The parallel group wrapper is a natural extension of these patterns.
    The `finalStep` must be a single `PromptStep` or `ScriptStep`.
 
 8. **Session resume in parallel groups is allowed with uniqueness enforcement.** `resumeSession: true`
-   + unique `sessionId` per step is the canonical pattern. A single step with `resumeSession: true`
-   and no `sessionId` is best-effort (resumes most recent harness session). The only parse-time
-   error: multiple steps in the same group resolving to the same session (duplicate `sessionId`,
-   or multiple steps with `resumeSession: true` and no `sessionId`).
+   - unique `sessionId` per step is the canonical pattern. A single step with `resumeSession: true`
+     and no `sessionId` is best-effort (resumes most recent harness session). The only parse-time
+     error: multiple steps in the same group resolving to the same session (duplicate `sessionId`,
+     or multiple steps with `resumeSession: true` and no `sessionId`).
 
 9. **Parallel step numbering uses sequential integers, not letter suffixes or sub-indices.**
    Each step in a parallel group gets its own integer in the global step sequence (e.g.,

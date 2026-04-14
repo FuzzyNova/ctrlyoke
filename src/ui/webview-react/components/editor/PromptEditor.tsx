@@ -432,9 +432,15 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           properties: {
             type: STEP_TYPES.SCRIPT,
             ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
-            ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && { onPass: scriptOnPass }),
-            ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && { onFail: scriptOnFail }),
-            ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && { compareSource: scriptCompareSource }),
+            ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
+              onPass: scriptOnPass,
+            }),
+            ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && {
+              onFail: scriptOnFail,
+            }),
+            ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && {
+              compareSource: scriptCompareSource,
+            }),
             ...(scriptReturns && { returns: scriptReturns }),
           },
           action: finalAction,
@@ -500,7 +506,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
         ...(scriptOnPass !== "continue" && { onPass: scriptOnPass }),
         ...(scriptOnFail !== "stopWorkflow" && { onFail: scriptOnFail }),
-        ...(scriptCompareSource !== "auto" && { compareSource: scriptCompareSource }),
+        ...(scriptCompareSource !== "auto" && {
+          compareSource: scriptCompareSource,
+        }),
         ...(scriptReturns && { returns: scriptReturns }),
       };
 
@@ -526,9 +534,15 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             script: command,
             ...(promptName.trim() ? { name: promptName.trim() } : {}),
             ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
-            ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && { onPass: scriptOnPass }),
-            ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && { onFail: scriptOnFail }),
-            ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && { compareSource: scriptCompareSource }),
+            ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
+              onPass: scriptOnPass,
+            }),
+            ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && {
+              onFail: scriptOnFail,
+            }),
+            ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && {
+              compareSource: scriptCompareSource,
+            }),
             ...(scriptReturns && { returns: scriptReturns }),
           },
         });
@@ -676,7 +690,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       setScriptCompareSource(updated.compareSource ?? COMPARE_SOURCES.AUTO);
       setScriptReturns(updated.returns ?? "");
     },
-    [setScriptCommand, setScriptTimeout, setScriptOnPass, setScriptOnFail, setScriptCompareSource, setScriptReturns]
+    [
+      setScriptCommand,
+      setScriptTimeout,
+      setScriptOnPass,
+      setScriptOnFail,
+      setScriptCompareSource,
+      setScriptReturns,
+    ]
   );
 
   // Get button text based on pending prompts

@@ -1,6 +1,9 @@
 import type { IResponseParser } from "./IResponseParser";
 import type { INotificationMonitor } from "./INotificationMonitor";
-import type { IToolPermissionMapper, ToolPermissionConfig } from "./IToolPermissionMapper";
+import type {
+  IToolPermissionMapper,
+  ToolPermissionConfig,
+} from "./IToolPermissionMapper";
 import type { ILogParser } from "./ILogParser";
 import type {
   PromptStep,

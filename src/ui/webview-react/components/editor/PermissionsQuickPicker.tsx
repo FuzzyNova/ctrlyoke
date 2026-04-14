@@ -3,7 +3,10 @@ import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { PERMISSION_MODES } from "@root/types/DashboardConstants";
-import type { ToolPermissionsOverride, ToolPermissionMode } from "../../types/messages";
+import type {
+  ToolPermissionsOverride,
+  ToolPermissionMode,
+} from "../../types/messages";
 import { CustomSelect } from "../shared";
 import {
   PERMISSION_MODE_OPTIONS,
@@ -84,7 +87,9 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
             setProperty("toolPermissions", undefined);
           } else {
             const current =
-              (properties.toolPermissions as ToolPermissionsOverride | undefined) || {};
+              (properties.toolPermissions as
+                | ToolPermissionsOverride
+                | undefined) || {};
             setProperty("toolPermissions", {
               ...current,
               mode: v as ToolPermissionMode,

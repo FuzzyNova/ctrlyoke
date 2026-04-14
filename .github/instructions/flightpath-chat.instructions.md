@@ -88,16 +88,16 @@ Default uses last request (-1). Returns typed events array.
 
 **Tool call upgrades** — generic `TOOL_CALL` events are upgraded to specific typed events. Copilot Chat display IDs are first normalized to canonical names, then upgraded. Falls back to ID-based matching for unknown tools.
 
-| Copilot display ID              | Canonical name               | Upgraded event type    |
-| ------------------------------- | ---------------------------- | ---------------------- |
-| `copilot_createFile`            | `create_file`                | `FILE_WRITE`           |
-| `copilot_replaceString`         | `replace_string_in_file`     | `FILE_EDIT`            |
-| `copilot_multiReplaceString`    | `multi_replace_string_in_file` | Multiple `FILE_EDIT` |
-| `copilot_readFile`              | `read_file`                  | `FILE_READ`            |
-| `copilot_deleteFile`            | `delete_file`                | `FILE_DELETE`          |
-| `copilot_renameFile`            | `rename_file`                | _(none — stays `TOOL_CALL`)_ |
-| `copilot_moveFile`              | `move_file`                  | _(none — stays `TOOL_CALL`)_ |
-| _(no display ID mapping)_       | `run_in_terminal`            | `BASH_COMMAND`         |
+| Copilot display ID           | Canonical name                 | Upgraded event type          |
+| ---------------------------- | ------------------------------ | ---------------------------- |
+| `copilot_createFile`         | `create_file`                  | `FILE_WRITE`                 |
+| `copilot_replaceString`      | `replace_string_in_file`       | `FILE_EDIT`                  |
+| `copilot_multiReplaceString` | `multi_replace_string_in_file` | Multiple `FILE_EDIT`         |
+| `copilot_readFile`           | `read_file`                    | `FILE_READ`                  |
+| `copilot_deleteFile`         | `delete_file`                  | `FILE_DELETE`                |
+| `copilot_renameFile`         | `rename_file`                  | _(none — stays `TOOL_CALL`)_ |
+| `copilot_moveFile`           | `move_file`                    | _(none — stays `TOOL_CALL`)_ |
+| _(no display ID mapping)_    | `run_in_terminal`              | `BASH_COMMAND`               |
 
 **Static helpers (used by ChatSessionMonitor):**
 

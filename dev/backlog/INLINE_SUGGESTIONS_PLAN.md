@@ -16,13 +16,13 @@ Use the community package [`codemirror-extension-inline-suggestion`](https://git
 
 **What the package provides:**
 
-| Primitive | Role |
-|-----------|------|
-| `inlineSuggestion({ fetchFn, delay })` | Top-level extension factory |
-| `InlineSuggestionState` (`StateField`) | Stores the active suggestion string |
-| `fetchSuggestion` (`ViewPlugin`) | Listens for `docChanged`, calls `fetchFn` (debounced), dispatches effect |
-| `renderInlineSuggestionPlugin` (`ViewPlugin`) | Renders ghost text via `Decoration.widget` with `opacity: 0.4` |
-| `inlineSuggestionKeymap` | `Prec.highest` Tab binding — inserts suggestion or defers to other handlers |
+| Primitive                                     | Role                                                                        |
+| --------------------------------------------- | --------------------------------------------------------------------------- |
+| `inlineSuggestion({ fetchFn, delay })`        | Top-level extension factory                                                 |
+| `InlineSuggestionState` (`StateField`)        | Stores the active suggestion string                                         |
+| `fetchSuggestion` (`ViewPlugin`)              | Listens for `docChanged`, calls `fetchFn` (debounced), dispatches effect    |
+| `renderInlineSuggestionPlugin` (`ViewPlugin`) | Renders ghost text via `Decoration.widget` with `opacity: 0.4`              |
+| `inlineSuggestionKeymap`                      | `Prec.highest` Tab binding — inserts suggestion or defers to other handlers |
 
 **How it works:**
 
@@ -108,6 +108,7 @@ Add a new method or handler class that:
    - Otherwise, select the fastest available model (`gpt-4o-mini` preferred for speed)
    - If no model available, return empty string
 3. Builds a minimal prompt:
+
    ```
    Continue the following prompt for an AI coding assistant.
    Return ONLY the completion text to append (not the full prompt).
@@ -115,6 +116,7 @@ Add a new method or handler class that:
 
    Current prompt: <text up to cursor>
    ```
+
 4. Sends the request via `model.sendRequest()`, collects the streamed response
 5. Returns `LM_INLINE_COMPLETION_RESPONSE` with `{ text: string, seq: number }`
 6. Manages a `CancellationTokenSource` — cancels the previous request if a new one arrives before the old one completes
@@ -297,31 +299,31 @@ User types → pauses (delay ms)
 
 ## Files to Create/Modify
 
-| File | Action | What |
-|------|--------|------|
-| `package.json` | Modify | Add 3 new settings |
-| `src/utils/ConfigurationUtils.ts` | Modify | Add 3 getter methods |
-| `src/types/DashboardConstants.ts` | Modify | Add 2 new message types |
-| `src/ui/FlightPathWebviewProvider.ts` | Modify | Add `handleInlineCompletionRequest` method + message handler |
+| File                                                          | Action | What                                                                             |
+| ------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------- |
+| `package.json`                                                | Modify | Add 3 new settings                                                               |
+| `src/utils/ConfigurationUtils.ts`                             | Modify | Add 3 getter methods                                                             |
+| `src/types/DashboardConstants.ts`                             | Modify | Add 2 new message types                                                          |
+| `src/ui/FlightPathWebviewProvider.ts`                         | Modify | Add `handleInlineCompletionRequest` method + message handler                     |
 | `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Modify | Import + add `inlineSuggestion` extension, add CSS, add `inlineCompletionSeqRef` |
-| `src/ui/webview-react/types/messages.ts` | Check | May need to add types for new message payloads |
-| `package.json` | Modify | Add `codemirror-extension-inline-suggestion` dependency |
+| `src/ui/webview-react/types/messages.ts`                      | Check  | May need to add types for new message payloads                                   |
+| `package.json`                                                | Modify | Add `codemirror-extension-inline-suggestion` dependency                          |
 
 ---
 
 ## Edge Cases & Considerations
 
-| Scenario | Handling |
-|----------|----------|
-| No Copilot model available | `fetchFn` returns `''` → no ghost text renders |
-| LM request times out (>5s) | `fetchFn` resolves to `''` → suggestion dismissed |
-| User types during LM request | Package automatically dismisses old suggestion (document changed) |
-| User presses Tab with no suggestion | `Prec.highest` keymap returns `false` → falls through to default Tab behavior |
-| Rapid typing (many fetchFn calls) | Seq number ensures only the latest response is accepted; earlier ones discarded |
-| Multi-line suggestions | The package supports `\n` in suggestion text — `lineBreaks` getter reserves layout space |
-| Undo | Insertion uses `userEvent: 'input.complete'` → single Ctrl+Z restores pre-suggestion state |
-| Read-only mode (Improve Prompt streaming) | `fetchFn` returns `''` when editor is read-only → no ghost text overlaps with streaming |
-| Settings change while editor is open | `fetchFn` checks `inlineSuggestionsEnabled` ref → stops requesting immediately |
+| Scenario                                  | Handling                                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------ |
+| No Copilot model available                | `fetchFn` returns `''` → no ghost text renders                                             |
+| LM request times out (>5s)                | `fetchFn` resolves to `''` → suggestion dismissed                                          |
+| User types during LM request              | Package automatically dismisses old suggestion (document changed)                          |
+| User presses Tab with no suggestion       | `Prec.highest` keymap returns `false` → falls through to default Tab behavior              |
+| Rapid typing (many fetchFn calls)         | Seq number ensures only the latest response is accepted; earlier ones discarded            |
+| Multi-line suggestions                    | The package supports `\n` in suggestion text — `lineBreaks` getter reserves layout space   |
+| Undo                                      | Insertion uses `userEvent: 'input.complete'` → single Ctrl+Z restores pre-suggestion state |
+| Read-only mode (Improve Prompt streaming) | `fetchFn` returns `''` when editor is read-only → no ghost text overlaps with streaming    |
+| Settings change while editor is open      | `fetchFn` checks `inlineSuggestionsEnabled` ref → stops requesting immediately             |
 
 ---
 
@@ -341,13 +343,13 @@ A simple toggle in the webview footer or settings panel:
 
 ## Future Extensions (Not In Scope)
 
-| Feature | Relation to This Plan |
-|---------|----------------------|
+| Feature                          | Relation to This Plan                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `codemirror-companion-extension` | Fork of the same package with `continue_suggesting: true` for chained completions — could upgrade later |
-| `forceableInlineSuggestion` | Manual trigger (e.g., Ctrl+Space for ghost text) — same package, different API |
-| "Complete Prompt" button | Discrete action vs. continuous suggestion — builds on same `vscode.lm` handler |
-| Token counter indicator | Separate feature from `VSCODE_LM_API_FEATURES.md` — uses `model.countTokens()` |
-| "Improve Prompt" button | Separate feature — uses same `vscode.lm` plumbing but different UX |
+| `forceableInlineSuggestion`      | Manual trigger (e.g., Ctrl+Space for ghost text) — same package, different API                          |
+| "Complete Prompt" button         | Discrete action vs. continuous suggestion — builds on same `vscode.lm` handler                          |
+| Token counter indicator          | Separate feature from `VSCODE_LM_API_FEATURES.md` — uses `model.countTokens()`                          |
+| "Improve Prompt" button          | Separate feature — uses same `vscode.lm` plumbing but different UX                                      |
 
 ---
 

@@ -86,9 +86,8 @@ suite("WebviewSettingsSync", () => {
 
       const messages: any[] = [];
       const postMessage = (msg: any) => messages.push(msg);
-      const sync = new WebviewSettingsSync(
-        postMessage,
-        () => makeOrchestrator(filePath)
+      const sync = new WebviewSettingsSync(postMessage, () =>
+        makeOrchestrator(filePath)
       );
 
       await sync.sendWorkflowPropertiesToSettings(postMessage, "panel");
@@ -191,9 +190,8 @@ suite("WebviewSettingsSync", () => {
 
       const messages: any[] = [];
       const postMessage = (msg: any) => messages.push(msg);
-      const sync = new WebviewSettingsSync(
-        postMessage,
-        () => makeOrchestrator(filePath)
+      const sync = new WebviewSettingsSync(postMessage, () =>
+        makeOrchestrator(filePath)
       );
 
       await sync.sendWorkflowPropertiesToSettings(postMessage, "panel");
@@ -227,9 +225,8 @@ suite("WebviewSettingsSync", () => {
     test("should send no messages when orchestrator has no working file path", async () => {
       const messages: any[] = [];
       const postMessage = (msg: any) => messages.push(msg);
-      const sync = new WebviewSettingsSync(
-        postMessage,
-        () => makeOrchestrator(undefined)
+      const sync = new WebviewSettingsSync(postMessage, () =>
+        makeOrchestrator(undefined)
       );
 
       await sync.sendWorkflowPropertiesToSettings(postMessage, "panel");

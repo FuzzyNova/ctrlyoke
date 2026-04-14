@@ -143,7 +143,8 @@ export class CliLogMonitor {
             continue;
           }
           events.push(event);
-          const streamingEvents = parser.extractStructuredEventsFromEvent(event);
+          const streamingEvents =
+            parser.extractStructuredEventsFromEvent(event);
           if (streamingEvents.length > 0) {
             this.deps.hostCallbacks.onStreamingEvents(streamingEvents);
           }
@@ -303,9 +304,13 @@ export class CliLogMonitor {
         const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
         if (workspaceRoot) {
           const notifyDir =
-            this.deps.notificationMonitor.getNotificationDirectory(workspaceRoot);
+            this.deps.notificationMonitor.getNotificationDirectory(
+              workspaceRoot
+            );
 
-          Log.debug("🔔 Starting notification monitor for completion detection");
+          Log.debug(
+            "🔔 Starting notification monitor for completion detection"
+          );
 
           const monitoringSessionId = this.deps.notificationMonitor
             .supportsSessionIdInFilename

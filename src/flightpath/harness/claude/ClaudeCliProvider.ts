@@ -353,7 +353,8 @@ export class ClaudeCliProvider implements ICliProvider {
     userHooks: UserHookConfig[]
   ): Promise<string[]> {
     const fs = require("fs/promises");
-    const settingsJson = ClaudeNotificationMonitor.buildUserOnlyConfig(userHooks);
+    const settingsJson =
+      ClaudeNotificationMonitor.buildUserOnlyConfig(userHooks);
     const tempDir = path.join(
       workspaceRoot,
       PATH_CONSTANTS.FLIGHTPATH_DIR,
@@ -383,12 +384,11 @@ export class ClaudeCliProvider implements ICliProvider {
       // none mode — skip permission flags entirely
       return [];
     }
-    const config =
-      toolPermissions ?? {
-        mode: ConfigurationUtils.getCliToolPermissions(),
-        allowedTools: ConfigurationUtils.getCliAllowedTools(),
-        deniedTools: ConfigurationUtils.getCliDeniedTools(),
-      };
+    const config = toolPermissions ?? {
+      mode: ConfigurationUtils.getCliToolPermissions(),
+      allowedTools: ConfigurationUtils.getCliAllowedTools(),
+      deniedTools: ConfigurationUtils.getCliDeniedTools(),
+    };
     return this.toolPermissionMapper.buildArgs(config);
   }
 

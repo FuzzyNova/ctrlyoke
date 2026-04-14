@@ -161,24 +161,55 @@
               "type": "object",
               "description": "Default end condition applied to all new workflows. Individual prompts can override or disable this.",
               "properties": {
-                "script": { "type": "string", "description": "Shell command or script path to execute after each prompt." },
-                "returns": { "type": "string", "description": "Expected result. For 'true'/'false' auto-mode uses exit code; others compare stdout." },
+                "script": {
+                  "type": "string",
+                  "description": "Shell command or script path to execute after each prompt."
+                },
+                "returns": {
+                  "type": "string",
+                  "description": "Expected result. For 'true'/'false' auto-mode uses exit code; others compare stdout."
+                },
                 "compareSource": {
                   "type": "string",
                   "enum": ["auto", "stdout", "stderr", "exitCode"],
                   "description": "Which output to compare against returns."
                 },
-                "timeout": { "type": "number", "description": "Timeout in milliseconds." },
-                "maxRetries": { "type": "number", "minimum": -1, "maximum": 100, "description": "Maximum retry attempts. Use -1 for unlimited, 0 for none." },
-                "retryPrompt": { "type": "string", "description": "Retry prompt template. Supports {scriptOutput}, {errorOutput}, {expectedValue}, {actualValue}, {retryCount}, {maxRetries}." },
-                "resumeSessionOnRetry": { "type": "boolean", "description": "Resume the same session for retries (default: true)." },
-                "onPass": { "type": "string", "enum": ["continue", "retry", "stopWorkflow"], "description": "Action when end condition passes." },
-                "onFail": { "type": "string", "enum": ["continue", "retry", "stopWorkflow"], "description": "Action when end condition fails." }
+                "timeout": {
+                  "type": "number",
+                  "description": "Timeout in milliseconds."
+                },
+                "maxRetries": {
+                  "type": "number",
+                  "minimum": -1,
+                  "maximum": 100,
+                  "description": "Maximum retry attempts. Use -1 for unlimited, 0 for none."
+                },
+                "retryPrompt": {
+                  "type": "string",
+                  "description": "Retry prompt template. Supports {scriptOutput}, {errorOutput}, {expectedValue}, {actualValue}, {retryCount}, {maxRetries}."
+                },
+                "resumeSessionOnRetry": {
+                  "type": "boolean",
+                  "description": "Resume the same session for retries (default: true)."
+                },
+                "onPass": {
+                  "type": "string",
+                  "enum": ["continue", "retry", "stopWorkflow"],
+                  "description": "Action when end condition passes."
+                },
+                "onFail": {
+                  "type": "string",
+                  "enum": ["continue", "retry", "stopWorkflow"],
+                  "description": "Action when end condition fails."
+                }
               },
               "required": ["script", "returns"],
               "additionalProperties": false
             },
-            { "type": "null", "description": "Disabled (default). New workflows have no end condition." }
+            {
+              "type": "null",
+              "description": "Disabled (default). New workflows have no end condition."
+            }
           ]
         },
         "defaultPreCondition": {
@@ -187,21 +218,41 @@
               "type": "object",
               "description": "Default pre-condition gate applied to all new workflows. Individual prompts can override or disable this.",
               "properties": {
-                "script": { "type": "string", "description": "Shell command or script path to execute before each prompt." },
-                "returns": { "type": "string", "description": "Expected result. For 'true'/'false' auto-mode uses exit code; others compare stdout." },
+                "script": {
+                  "type": "string",
+                  "description": "Shell command or script path to execute before each prompt."
+                },
+                "returns": {
+                  "type": "string",
+                  "description": "Expected result. For 'true'/'false' auto-mode uses exit code; others compare stdout."
+                },
                 "compareSource": {
                   "type": "string",
                   "enum": ["auto", "stdout", "stderr", "exitCode"],
                   "description": "Which output to compare against returns."
                 },
-                "timeout": { "type": "number", "description": "Timeout in milliseconds." },
-                "onPass": { "type": "string", "enum": ["continue", "skipPrompt", "stopWorkflow"], "description": "Action when pre-condition passes." },
-                "onFail": { "type": "string", "enum": ["continue", "skipPrompt", "stopWorkflow"], "description": "Action when pre-condition fails." }
+                "timeout": {
+                  "type": "number",
+                  "description": "Timeout in milliseconds."
+                },
+                "onPass": {
+                  "type": "string",
+                  "enum": ["continue", "skipPrompt", "stopWorkflow"],
+                  "description": "Action when pre-condition passes."
+                },
+                "onFail": {
+                  "type": "string",
+                  "enum": ["continue", "skipPrompt", "stopWorkflow"],
+                  "description": "Action when pre-condition fails."
+                }
               },
               "required": ["script"],
               "additionalProperties": false
             },
-            { "type": "null", "description": "Disabled (default). New workflows have no pre-condition." }
+            {
+              "type": "null",
+              "description": "Disabled (default). New workflows have no pre-condition."
+            }
           ]
         }
       }

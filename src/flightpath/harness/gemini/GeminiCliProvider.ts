@@ -250,12 +250,11 @@ export class GeminiCliProvider implements ICliProvider {
       // none mode — skip permission flags entirely
       return [];
     }
-    const config =
-      toolPermissions ?? {
-        mode: ConfigurationUtils.getCliToolPermissions(),
-        allowedTools: ConfigurationUtils.getCliAllowedTools(),
-        deniedTools: ConfigurationUtils.getCliDeniedTools(),
-      };
+    const config = toolPermissions ?? {
+      mode: ConfigurationUtils.getCliToolPermissions(),
+      allowedTools: ConfigurationUtils.getCliAllowedTools(),
+      deniedTools: ConfigurationUtils.getCliDeniedTools(),
+    };
     return this.toolPermissionMapper.buildArgs(config);
   }
 

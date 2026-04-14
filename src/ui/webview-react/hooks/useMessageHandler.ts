@@ -610,7 +610,9 @@ function createMessageHandlers(): MessageHandlerMap {
       } else {
         // Normal (non-inject) run start: clear old ai-cli sessions so the new PTY
         // gets a fresh xterm instance. Shell sessions survive run boundaries.
-        const aiCliSessionIds = (useTerminalStore.getState().sessions[wfId] ?? [])
+        const aiCliSessionIds = (
+          useTerminalStore.getState().sessions[wfId] ?? []
+        )
           .filter((s) => s.kind === SESSION_KINDS.AI_CLI)
           .map((s) => s.id);
         terminalRegistry.clearAiCliSessions(wfId, aiCliSessionIds);

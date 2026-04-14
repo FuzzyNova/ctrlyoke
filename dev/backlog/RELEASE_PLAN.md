@@ -118,6 +118,7 @@ FlightPath has only been developed and tested on Linux/WSL. macOS is the primary
 - [ ] End condition scripts execute successfully
 
 **Test on both architectures if possible:**
+
 - [ ] Apple Silicon (arm64) — M1/M2/M3 Mac
 - [ ] Intel (x64) — or verify Rosetta compatibility
 

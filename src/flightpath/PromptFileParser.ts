@@ -293,7 +293,8 @@ export class PromptFileParser {
     const step: ScriptStep = { type: STEP_TYPES.SCRIPT, script: source.script };
     if (source.name !== undefined) step.name = source.name;
     if (source.timeout !== undefined) step.timeout = source.timeout;
-    if (source.compareSource !== undefined) step.compareSource = source.compareSource;
+    if (source.compareSource !== undefined)
+      step.compareSource = source.compareSource;
     if (source.returns !== undefined) step.returns = source.returns;
     if (source.onPass !== undefined) step.onPass = source.onPass;
     if (source.onFail !== undefined) step.onFail = source.onFail;

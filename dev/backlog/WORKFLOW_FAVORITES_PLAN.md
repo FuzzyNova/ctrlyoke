@@ -11,6 +11,7 @@ Add a per-row star (favorite) button to the **Workflows** section of the `Workfl
 Store `isFavorite?: boolean` directly on the working file (`.flightpath/.queue/*.flightpath.json`).
 
 **Rationale:**
+
 - The `WorkflowSerializer.handleGetRecentWorkflows` already reads every working file and projects a subset of fields to the webview — adding `isFavorite` is a trivial one-field addition with no extra I/O.
 - No sync issue: if the working file is deleted (via "Remove from history"), the favorite status is deleted with it automatically.
 - The working file already carries user-specific runtime state (`_runtime`, `startedAt`, etc.), so `isFavorite` fits naturally and is not semantically wrong to keep here.
@@ -31,7 +32,7 @@ export interface WorkingFile extends PromptFile {
   workflowName: string;
   startedAt: number;
   lastModifiedAt?: number;
-  isFavorite?: boolean;          // NEW
+  isFavorite?: boolean; // NEW
   _runtime?: WorkingFileRuntime;
 }
 ```
@@ -55,11 +56,12 @@ In `handleGetRecentWorkflows`, add `isFavorite` to each returned workflow object
 ```ts
 return {
   filePath,
-  workflowName: workingFile.workflowName || file.replace(".flightpath.json", ""),
+  workflowName:
+    workingFile.workflowName || file.replace(".flightpath.json", ""),
   executionState,
   startedAt: workingFile.startedAt || 0,
   lastModifiedAt: lastModified,
-  isFavorite: workingFile.isFavorite ?? false,   // NEW
+  isFavorite: workingFile.isFavorite ?? false, // NEW
 };
 ```
 
@@ -106,7 +108,7 @@ interface RecentWorkflow {
   executionState: string;
   lastModifiedAt?: number;
   startedAt?: number;
-  isFavorite?: boolean;   // NEW
+  isFavorite?: boolean; // NEW
 }
 ```
 
@@ -118,8 +120,12 @@ interface RecentWorkflow {
 if (message.type === MESSAGE_TYPES.RECENT_WORKFLOWS) {
   const workflows: RecentWorkflow[] = message.workflows || [];
   const sorted = [
-    ...workflows.filter((w) => w.isFavorite).sort((a, b) => (b.lastModifiedAt ?? 0) - (a.lastModifiedAt ?? 0)),
-    ...workflows.filter((w) => !w.isFavorite).sort((a, b) => (b.lastModifiedAt ?? 0) - (a.lastModifiedAt ?? 0)),
+    ...workflows
+      .filter((w) => w.isFavorite)
+      .sort((a, b) => (b.lastModifiedAt ?? 0) - (a.lastModifiedAt ?? 0)),
+    ...workflows
+      .filter((w) => !w.isFavorite)
+      .sort((a, b) => (b.lastModifiedAt ?? 0) - (a.lastModifiedAt ?? 0)),
   ];
   setRecentWorkflows(sorted);
 }
@@ -130,15 +136,22 @@ if (message.type === MESSAGE_TYPES.RECENT_WORKFLOWS) {
 ```ts
 const handleToggleFavorite = useCallback(
   (filePath: string) => {
-    vscode.postMessage({ type: MESSAGE_TYPES.TOGGLE_WORKFLOW_FAVORITE, filePath });
+    vscode.postMessage({
+      type: MESSAGE_TYPES.TOGGLE_WORKFLOW_FAVORITE,
+      filePath,
+    });
     // Optimistic local update — flip isFavorite and re-sort
     setRecentWorkflows((prev) => {
       const updated = prev.map((w) =>
         w.filePath === filePath ? { ...w, isFavorite: !w.isFavorite } : w
       );
       return [
-        ...updated.filter((w) => w.isFavorite).sort((a, b) => (b.lastModifiedAt ?? 0) - (a.lastModifiedAt ?? 0)),
-        ...updated.filter((w) => !w.isFavorite).sort((a, b) => (b.lastModifiedAt ?? 0) - (a.lastModifiedAt ?? 0)),
+        ...updated
+          .filter((w) => w.isFavorite)
+          .sort((a, b) => (b.lastModifiedAt ?? 0) - (a.lastModifiedAt ?? 0)),
+        ...updated
+          .filter((w) => !w.isFavorite)
+          .sort((a, b) => (b.lastModifiedAt ?? 0) - (a.lastModifiedAt ?? 0)),
       ];
     });
   },
@@ -171,24 +184,31 @@ interface RecentWorkflowsProps {
 The star sits to the left of the trash icon. Follow the same `opacity-0 group-hover:opacity-100` pattern for non-favorited items, but always show (full opacity) for favorited items so users can see their favorites at a glance without hovering.
 
 ```tsx
-{onToggleFavorite && (
-  <button
-    type="button"
-    title={workflow.isFavorite ? "Remove from favorites" : "Add to favorites"}
-    aria-label={workflow.isFavorite ? "Remove from favorites" : "Add to favorites"}
-    onClick={(e) => {
-      e.stopPropagation();
-      onToggleFavorite(workflow.filePath);
-    }}
-    className={`flex-shrink-0 p-0.5 rounded transition-colors
-      ${workflow.isFavorite
-        ? "text-yellow-400 hover:text-yellow-300 hover:bg-toolbar-hover-bg"
-        : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-yellow-400 hover:bg-toolbar-hover-bg"
+{
+  onToggleFavorite && (
+    <button
+      type="button"
+      title={workflow.isFavorite ? "Remove from favorites" : "Add to favorites"}
+      aria-label={
+        workflow.isFavorite ? "Remove from favorites" : "Add to favorites"
+      }
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggleFavorite(workflow.filePath);
+      }}
+      className={`flex-shrink-0 p-0.5 rounded transition-colors
+      ${
+        workflow.isFavorite
+          ? "text-yellow-400 hover:text-yellow-300 hover:bg-toolbar-hover-bg"
+          : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-yellow-400 hover:bg-toolbar-hover-bg"
       }`}
-  >
-    <i className={`codicon ${workflow.isFavorite ? "codicon-star-full" : "codicon-star"}`} />
-  </button>
-)}
+    >
+      <i
+        className={`codicon ${workflow.isFavorite ? "codicon-star-full" : "codicon-star"}`}
+      />
+    </button>
+  );
+}
 ```
 
 Place the star button before the delete button in the JSX so the column order is: name | state badge | time | ⭐ | 🗑
@@ -206,11 +226,11 @@ Place the star button before the delete button in the JSX so the column order is
 
 ## File Change Summary
 
-| File | Change |
-|------|--------|
-| `src/types/FlightPathTypes.ts` | Add `isFavorite?: boolean` to `WorkingFile` |
-| `src/types/DashboardConstants.ts` | Add `TOGGLE_WORKFLOW_FAVORITE` message type |
-| `src/ui/WorkflowSerializer.ts` | Add `handleToggleFavorite`; include `isFavorite` in recent workflows response |
-| `src/ui/WebviewMessageRouter.ts` | Wire `TOGGLE_WORKFLOW_FAVORITE` to `handleToggleFavorite` |
-| `src/ui/webview-react/components/workflow/WorkflowStatus.tsx` | Add sort logic + `handleToggleFavorite` callback; pass to `RecentWorkflows` |
+| File                                                           | Change                                                                                          |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `src/types/FlightPathTypes.ts`                                 | Add `isFavorite?: boolean` to `WorkingFile`                                                     |
+| `src/types/DashboardConstants.ts`                              | Add `TOGGLE_WORKFLOW_FAVORITE` message type                                                     |
+| `src/ui/WorkflowSerializer.ts`                                 | Add `handleToggleFavorite`; include `isFavorite` in recent workflows response                   |
+| `src/ui/WebviewMessageRouter.ts`                               | Wire `TOGGLE_WORKFLOW_FAVORITE` to `handleToggleFavorite`                                       |
+| `src/ui/webview-react/components/workflow/WorkflowStatus.tsx`  | Add sort logic + `handleToggleFavorite` callback; pass to `RecentWorkflows`                     |
 | `src/ui/webview-react/components/workflow/RecentWorkflows.tsx` | Add `isFavorite` to `RecentWorkflow` interface; add `onToggleFavorite` prop; render star button |

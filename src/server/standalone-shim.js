@@ -20,8 +20,18 @@
       // (e.g. CodeMirror reads document.body.classList.contains("vscode-dark")).
       const kind = msg.vars["--fp-color-theme-kind"];
       if (kind) {
-        document.body.classList.remove("vscode-dark", "vscode-light", "vscode-high-contrast");
-        document.body.classList.add(kind === "dark" ? "vscode-dark" : kind === "high-contrast" ? "vscode-high-contrast" : "vscode-light");
+        document.body.classList.remove(
+          "vscode-dark",
+          "vscode-light",
+          "vscode-high-contrast"
+        );
+        document.body.classList.add(
+          kind === "dark"
+            ? "vscode-dark"
+            : kind === "high-contrast"
+              ? "vscode-high-contrast"
+              : "vscode-light"
+        );
       }
       return;
     }
@@ -40,7 +50,9 @@
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
       else pending.push(msg);
     },
-    getState() { return _state; },
+    getState() {
+      return _state;
+    },
     setState(s) {
       _state = s;
       sessionStorage.setItem("fpState", JSON.stringify(s));

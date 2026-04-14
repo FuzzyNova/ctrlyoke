@@ -1,7 +1,9 @@
 # Developer Restart & Auto-Rebuild from Browser Dashboard
 
 ## Problem
+
 When developing FlightPath using the browser dashboard (hosted server), changes to extension source code require:
+
 1. Running `npm run compile` to rebuild
 2. Restarting the VS Code Extension Host for changes to take effect
 3. Any in-flight workflows get killed when the extension host restarts
@@ -12,19 +14,22 @@ There is no way to trigger this rebuild + restart cycle from the browser dashboa
 
 ### VS Code Extension Host Restart Mechanisms
 
-| Mechanism | Command ID | Works from Extension? | Preserves In-Flight Work? | Notes |
-|---|---|---|---|---|
-| **Reload Window** | `workbench.action.reloadWindow` | ✅ Yes | ❌ No | Full window reload; kills all extension state; simplest approach |
-| **Restart Extension Host** | `workbench.action.restartExtensionHost` | ⚠️ Limited | ❌ No | May not exist in all VS Code versions; essentially same as reload |
-| **Dynamic Config Reload** | N/A (custom) | ⚠️ Partial | ✅ Partial | Only re-reads settings; doesn't pick up code changes |
+| Mechanism                  | Command ID                              | Works from Extension? | Preserves In-Flight Work? | Notes                                                             |
+| -------------------------- | --------------------------------------- | --------------------- | ------------------------- | ----------------------------------------------------------------- |
+| **Reload Window**          | `workbench.action.reloadWindow`         | ✅ Yes                | ❌ No                     | Full window reload; kills all extension state; simplest approach  |
+| **Restart Extension Host** | `workbench.action.restartExtensionHost` | ⚠️ Limited            | ❌ No                     | May not exist in all VS Code versions; essentially same as reload |
+| **Dynamic Config Reload**  | N/A (custom)                            | ⚠️ Partial            | ✅ Partial                | Only re-reads settings; doesn't pick up code changes              |
 
 **Conclusion:** `workbench.action.reloadWindow` is the most reliable and universal mechanism. It reloads the entire VS Code window, which reinitializes all extensions. However, **it kills all in-flight state** — the extension host process is terminated.
 
 ### Build from Browser Context
+
 The browser dashboard has no direct filesystem access or Node.js runtime. To trigger `npm run compile`, the extension itself must execute the build command on behalf of the browser client via WebSocket message routing.
 
 ### In-Flight Workflow Preservation
+
 Since the extension host process is killed on reload, in-flight CLI sessions and workflow state **will be lost**. However, FlightPath already has infrastructure that can mitigate this:
+
 - **`resumeSession`** prompt property — CLI harnesses support session resumption
 - **`.flightpath/.queue/`** working files — runtime state is persisted to disk
 - **WorkflowInstance restoration** — on activation, the extension can reload workflow state from disk
@@ -82,7 +87,8 @@ function DeveloperSection({ settings, onUpdate }) {
         <h3 className="font-medium">Rebuild &amp; Restart Extension Host</h3>
         <p className="text-sm text-description-fg mt-1">
           Runs <code className="text-code-fg">npm run compile</code>, then
-          reloads the VS Code window. <strong className="text-error-fg">
+          reloads the VS Code window.{" "}
+          <strong className="text-error-fg">
             Warning: This will terminate any in-flight workflows.
           </strong>
         </p>
@@ -98,8 +104,8 @@ function DeveloperSection({ settings, onUpdate }) {
       <div className="p-4 rounded border border-panel-border bg-panel-bg">
         <h3 className="font-medium">Rebuild Only (Extension Only)</h3>
         <p className="text-sm text-description-fg mt-1">
-          Runs <code className="text-code-fg">npm run compile:extension</code>
-          {" "}(skips webview rebuild). Useful when only changing extension code.
+          Runs <code className="text-code-fg">npm run compile:extension</code>{" "}
+          (skips webview rebuild). Useful when only changing extension code.
         </p>
         <button
           className="mt-3 px-4 py-2 rounded bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover border border-btn-border"
@@ -114,7 +120,8 @@ function DeveloperSection({ settings, onUpdate }) {
         <h3 className="font-medium">Restart Extension Host</h3>
         <p className="text-sm text-description-fg mt-1">
           Reloads the VS Code window without rebuilding. Useful after manual
-          builds. <strong className="text-error-fg">
+          builds.{" "}
+          <strong className="text-error-fg">
             Warning: This will terminate any in-flight workflows.
           </strong>
         </p>
@@ -237,21 +244,22 @@ The webview stores this in a Zustand store flag (`uiStore.devMode`) and conditio
 
 ### 7. File Changes Required
 
-| File | Change |
-|---|---|
-| `src/types/DashboardConstants.ts` | Add 7 new message types |
-| `src/types/WebviewMessageTypes.ts` | Add new message type declarations |
-| `src/ui/webview-react/store/uiStore.ts` | Add `devMode` boolean state |
-| `src/ui/webview-react/components/layout/GlobalSettingsDrawer.tsx` | Add conditional Developer tab |
-| `src/ui/webview-react/components/settings/DeveloperSection.tsx` | New component (UI for dev tools) |
-| `src/ui/WebviewMessageRouter.ts` | Add 3 new message handlers |
-| `src/ui/FlightPathWebviewProvider.ts` | Add `handleDev*` methods, `saveWorkflowStateToDisk()` |
-| `src/extension.ts` | Restore workflow state on activation (if saved) |
-| `src/utils/BuildConfig.ts` | Export `IS_DEV_MODE` for use in provider |
+| File                                                              | Change                                                |
+| ----------------------------------------------------------------- | ----------------------------------------------------- |
+| `src/types/DashboardConstants.ts`                                 | Add 7 new message types                               |
+| `src/types/WebviewMessageTypes.ts`                                | Add new message type declarations                     |
+| `src/ui/webview-react/store/uiStore.ts`                           | Add `devMode` boolean state                           |
+| `src/ui/webview-react/components/layout/GlobalSettingsDrawer.tsx` | Add conditional Developer tab                         |
+| `src/ui/webview-react/components/settings/DeveloperSection.tsx`   | New component (UI for dev tools)                      |
+| `src/ui/WebviewMessageRouter.ts`                                  | Add 3 new message handlers                            |
+| `src/ui/FlightPathWebviewProvider.ts`                             | Add `handleDev*` methods, `saveWorkflowStateToDisk()` |
+| `src/extension.ts`                                                | Restore workflow state on activation (if saved)       |
+| `src/utils/BuildConfig.ts`                                        | Export `IS_DEV_MODE` for use in provider              |
 
 ### 8. Browser Client UX During Restart
 
 When `DEV_RESTARTING` is received:
+
 1. Show a full-screen overlay: "Extension host is restarting. Reconnecting…"
 2. WebSocket will disconnect (extension host dies)
 3. Browser client attempts to reconnect to `/ws` on a loop with exponential backoff

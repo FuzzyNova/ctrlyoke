@@ -12,9 +12,16 @@ interface Props {
   iconOnly?: boolean;
 }
 
-export function GlobalSettingsVerticalTabBar({ tabs, activeTab, onTabChange, iconOnly = false }: Props) {
+export function GlobalSettingsVerticalTabBar({
+  tabs,
+  activeTab,
+  onTabChange,
+  iconOnly = false,
+}: Props) {
   return (
-    <div className={`flex flex-col border-r border-panel-border bg-sidebar-bg shrink-0 overflow-y-auto py-2 ${iconOnly ? "w-10" : "w-44"}`}>
+    <div
+      className={`flex flex-col border-r border-panel-border bg-sidebar-bg shrink-0 overflow-y-auto py-2 ${iconOnly ? "w-10" : "w-44"}`}
+    >
       {tabs.map((tab) => (
         <button
           key={tab.id}
@@ -23,9 +30,10 @@ export function GlobalSettingsVerticalTabBar({ tabs, activeTab, onTabChange, ico
           className={`flex items-center gap-2 py-2 text-sm text-left w-full
             border-l-2 transition-colors
             ${iconOnly ? "justify-center px-0" : "px-3"}
-            ${activeTab === tab.id
-              ? "border-focus-border text-foreground bg-list-active-bg"
-              : "border-transparent text-description-fg hover:text-foreground hover:bg-list-hover-bg"
+            ${
+              activeTab === tab.id
+                ? "border-focus-border text-foreground bg-list-active-bg"
+                : "border-transparent text-description-fg hover:text-foreground hover:bg-list-hover-bg"
             }`}
         >
           <span className="relative shrink-0">

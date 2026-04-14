@@ -1,5 +1,8 @@
 import type { CliEvent } from "../../../types/CliOutputTypes";
-import { MESSAGE_TYPES, SESSION_KINDS } from "../../../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  SESSION_KINDS,
+} from "../../../types/DashboardConstants";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type { CliProcessManager } from "../../../utils/CliProcessManager";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
@@ -67,7 +70,8 @@ export class CliTransportCoordinator {
       });
 
       const startTime = new Date();
-      const workingDir = this.deps.runtimeState.getWorkspaceRoot() || process.cwd();
+      const workingDir =
+        this.deps.runtimeState.getWorkspaceRoot() || process.cwd();
       const interactiveEnv =
         this.deps.provider.getInteractiveSpawnEnv?.() ??
         CliProviderUtils.buildProcessEnv();
@@ -154,11 +158,10 @@ export class CliTransportCoordinator {
         workflowContext?.filePath ??
         this.deps.runtimeState.getWorkflowName?.() ??
         "unknown";
-      const stepMetadata =
-        this.getWorkflowStepMetadata(workflowContext) ?? {
-          stepName: "interactive",
-          promptNumber: undefined,
-        };
+      const stepMetadata = this.getWorkflowStepMetadata(workflowContext) ?? {
+        stepName: "interactive",
+        promptNumber: undefined,
+      };
       const { stepName, promptNumber } = stepMetadata;
       const shell =
         process.platform === "win32"
@@ -234,9 +237,7 @@ export class CliTransportCoordinator {
    * Refresh the active PTY's display metadata when inject mode submits another
    * workflow step into the same terminal instead of spawning a new session.
    */
-  updateCurrentPtySessionMetadata(
-    workflowContext?: WorkflowContext
-  ): boolean {
+  updateCurrentPtySessionMetadata(workflowContext?: WorkflowContext): boolean {
     if (!this.currentPtySession || !workflowContext) {
       return false;
     }

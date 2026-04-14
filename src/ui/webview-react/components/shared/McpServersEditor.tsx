@@ -732,7 +732,11 @@ export const McpServersEditor: React.FC<{
             <button
               type="button"
               onClick={handleFlightpathToggle}
-              aria-label={flightpathEnabled ? "Disable FlightPath MCP server" : "Enable FlightPath MCP server"}
+              aria-label={
+                flightpathEnabled
+                  ? "Disable FlightPath MCP server"
+                  : "Enable FlightPath MCP server"
+              }
               className={`flex items-start gap-2 px-2 py-1.5 rounded border text-left transition-colors ${
                 flightpathEnabled
                   ? "border-focus-border bg-editor-bg"
@@ -903,7 +907,10 @@ export const McpServersEditor: React.FC<{
                         </select>
                       </>
                     )}
-                    <label htmlFor="edit-auto-approve" className="flex items-center gap-1.5 cursor-pointer">
+                    <label
+                      htmlFor="edit-auto-approve"
+                      className="flex items-center gap-1.5 cursor-pointer"
+                    >
                       <input
                         id="edit-auto-approve"
                         type="checkbox"
@@ -960,7 +967,9 @@ export const McpServersEditor: React.FC<{
                       type="button"
                       onClick={() => handleToggleServer(server)}
                       className="flex-shrink-0 flex items-center"
-                      aria-label={enabled ? `Disable ${server.id}` : `Enable ${server.id}`}
+                      aria-label={
+                        enabled ? `Disable ${server.id}` : `Enable ${server.id}`
+                      }
                       title={
                         enabled ? `Disable ${server.id}` : `Enable ${server.id}`
                       }
@@ -969,7 +978,11 @@ export const McpServersEditor: React.FC<{
                         type="checkbox"
                         checked={enabled}
                         onChange={() => {}}
-                        aria-label={enabled ? `Disable ${server.id}` : `Enable ${server.id}`}
+                        aria-label={
+                          enabled
+                            ? `Disable ${server.id}`
+                            : `Enable ${server.id}`
+                        }
                         className="w-3 h-3 accent-focus-border pointer-events-none"
                         tabIndex={-1}
                       />
@@ -1194,7 +1207,10 @@ export const McpServersEditor: React.FC<{
                     </select>
                   </>
                 )}
-                <label htmlFor="add-auto-approve" className="flex items-center gap-1.5 cursor-pointer">
+                <label
+                  htmlFor="add-auto-approve"
+                  className="flex items-center gap-1.5 cursor-pointer"
+                >
                   <input
                     id="add-auto-approve"
                     type="checkbox"

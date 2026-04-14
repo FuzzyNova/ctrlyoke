@@ -205,18 +205,14 @@ export const ConfigurationUtils = {
   /**
    * Set the default end condition in settings
    */
-  async setDefaultEndCondition(
-    value: EndCondition | null
-  ): Promise<void> {
+  async setDefaultEndCondition(value: EndCondition | null): Promise<void> {
     await configService.set("workflow.defaultEndCondition", value, "user");
   },
 
   /**
    * Set the default pre-condition in settings
    */
-  async setDefaultPreCondition(
-    value: PreCondition | null
-  ): Promise<void> {
+  async setDefaultPreCondition(value: PreCondition | null): Promise<void> {
     await configService.set("workflow.defaultPreCondition", value, "user");
   },
 
@@ -282,8 +278,10 @@ export const ConfigurationUtils = {
    * Get CLI tool permissions mode (shared between Copilot and Claude)
    */
   getCliToolPermissions(): Exclude<PermissionMode, "none"> {
-    return configService.get("tools")
-      .permissionMode as Exclude<PermissionMode, "none">;
+    return configService.get("tools").permissionMode as Exclude<
+      PermissionMode,
+      "none"
+    >;
   },
 
   /**
@@ -402,8 +400,7 @@ export const ConfigurationUtils = {
    */
   getGeminiCliModel(): string {
     return (
-      configService.get("models")["gemini-cli"] ??
-      DEFAULT_MODELS["gemini-cli"]
+      configService.get("models")["gemini-cli"] ?? DEFAULT_MODELS["gemini-cli"]
     );
   },
 

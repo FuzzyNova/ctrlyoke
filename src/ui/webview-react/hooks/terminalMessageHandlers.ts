@@ -53,7 +53,16 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
   // TERMINAL_STARTED - New PTY session created; register in store and rail
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.TERMINAL_STARTED] = (message: any) => {
-    const { workflowId, sessionId, stepName, kind, promptNumber, harnessId, shellKind, controllerClientId } = message;
+    const {
+      workflowId,
+      sessionId,
+      stepName,
+      kind,
+      promptNumber,
+      harnessId,
+      shellKind,
+      controllerClientId,
+    } = message;
     if (!workflowId || !sessionId) return;
 
     const uiState = useUiStore.getState();
@@ -87,7 +96,8 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     // and back, or is a new viewer joining a workflow that already sent TERMINAL_STARTED),
     // just update controller state without clearing and recreating the xterm instance.
     // Clearing+recreating causes a "briefly see scrollback then blank" flicker.
-    const existingSessions = useTerminalStore.getState().sessions[workflowId] ?? [];
+    const existingSessions =
+      useTerminalStore.getState().sessions[workflowId] ?? [];
     const alreadyExists = existingSessions.some((s) => s.id === sessionId);
     WebviewLog.debug(
       `[TERMINAL_STARTED] idempotency check wf=${workflowId?.slice(0, 8)} sess=${sessionId?.slice(0, 8)} ` +
@@ -106,7 +116,10 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       });
       termStore.setSessionController(workflowId, sessionId, isController);
       if (controllerClientId === undefined) {
-        sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, { workflowId, sessionId });
+        sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, {
+          workflowId,
+          sessionId,
+        });
       }
       return;
     }
@@ -148,7 +161,10 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
 
     // Auto-claim if no controller is assigned — the first client to send wins
     if (controllerClientId === undefined) {
-      sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, { workflowId, sessionId });
+      sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, {
+        workflowId,
+        sessionId,
+      });
     }
   };
 
@@ -161,7 +177,9 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     const myClientId = useUiStore.getState().myClientId;
     const isController =
       controllerClientId === undefined || controllerClientId === myClientId;
-    useTerminalStore.getState().setSessionController(workflowId, sessionId, isController);
+    useTerminalStore
+      .getState()
+      .setSessionController(workflowId, sessionId, isController);
     WebviewLog.debug(
       `[TERMINAL_CONTROLLER_CHANGED] sessionId=${sessionId?.slice(0, 8)} controllerClientId=${controllerClientId?.slice(0, 12) ?? "none"} isController=${isController}`
     );
@@ -175,13 +193,19 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     if (!workflowId || !sessionId || !cols) return;
 
     // Always record the controller cols so ResizeObserver can maintain them
-    useTerminalStore.getState().setSessionControllerSize(workflowId, sessionId, cols as number);
+    useTerminalStore
+      .getState()
+      .setSessionControllerSize(workflowId, sessionId, cols as number);
 
     // Only apply to the local xterm if this client is a viewer (not the controller)
     const sessions = useTerminalStore.getState().sessions[workflowId] ?? [];
     const session = sessions.find((s) => s.id === sessionId);
     if (session?.isController === false) {
-      terminalRegistry.applyControllerSize(workflowId, sessionId, cols as number);
+      terminalRegistry.applyControllerSize(
+        workflowId,
+        sessionId,
+        cols as number
+      );
     }
   };
 

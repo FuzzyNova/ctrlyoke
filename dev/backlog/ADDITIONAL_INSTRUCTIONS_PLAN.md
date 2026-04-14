@@ -34,11 +34,11 @@ This is not a replacement for agent files — it is a simpler, inline alternativ
 
 Three-state semantics follow the `additionalArgs` pattern exactly:
 
-| Value       | Meaning                                                               |
-| ----------- | --------------------------------------------------------------------- |
-| `undefined` | Inherit from the next tier (workflow, then global settings)           |
+| Value       | Meaning                                                                   |
+| ----------- | ------------------------------------------------------------------------- |
+| `undefined` | Inherit from the next tier (workflow, then global settings)               |
 | `null`      | Explicitly suppress — do not inject instructions for this prompt/workflow |
-| `string`    | Use this instruction text (overrides lower tiers)                     |
+| `string`    | Use this instruction text (overrides lower tiers)                         |
 
 **Three-tier precedence:**
 
@@ -148,6 +148,7 @@ File: `src/flightpath/harness/shared/CliPromptPreparer.ts`
 ### Where it fits in the assembly order
 
 Current assembly order (conceptual):
+
 1. `<agentInstructions>` block
 2. Skill content
 3. `<priorContext>` block (if configured)
@@ -289,6 +290,7 @@ Add after the existing Prior Context `FormField`:
 ### Webview Store
 
 The workflow properties store will need `additionalInstructions` added to:
+
 - The properties type/interface used by the settings store
 - The `updateWorkflowProperty` message handler if `additionalInstructions` isn't already covered by the generic property update path
 

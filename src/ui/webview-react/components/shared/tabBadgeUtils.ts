@@ -21,11 +21,24 @@ export function getPermissionTabOverride(
 ): TabIconOverride | undefined {
   switch (mode) {
     case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
-      return { codicon: "workspace-untrusted", color: "text-error-fg", hoverColor: "hover:text-terminal-ansiBrightRed", activeColor: "text-terminal-ansiBrightRed" };
+      return {
+        codicon: "workspace-untrusted",
+        color: "text-error-fg",
+        hoverColor: "hover:text-terminal-ansiBrightRed",
+        activeColor: "text-terminal-ansiBrightRed",
+      };
     case PERMISSION_MODES.ALLOW_ALL:
-      return { color: "text-warning-fg", hoverColor: "hover:text-terminal-ansiBrightYellow", activeColor: "text-terminal-ansiBrightYellow" };
+      return {
+        color: "text-warning-fg",
+        hoverColor: "hover:text-terminal-ansiBrightYellow",
+        activeColor: "text-terminal-ansiBrightYellow",
+      };
     case PERMISSION_MODES.CUSTOM:
-      return { color: "text-terminal-ansiGreen", hoverColor: "hover:text-terminal-ansiBrightGreen", activeColor: "text-terminal-ansiBrightGreen" };
+      return {
+        color: "text-terminal-ansiGreen",
+        hoverColor: "hover:text-terminal-ansiBrightGreen",
+        activeColor: "text-terminal-ansiBrightGreen",
+      };
     case PERMISSION_MODES.NONE:
     default:
       return undefined;
@@ -37,7 +50,11 @@ export function getHooksTabOverride(
   hooks: object[] | null | undefined
 ): TabIconOverride | undefined {
   if (Array.isArray(hooks) && hooks.length > 0) {
-    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight", activeColor: "text-focus-highlight" };
+    return {
+      color: "text-focus-border",
+      hoverColor: "hover:text-focus-highlight",
+      activeColor: "text-focus-highlight",
+    };
   }
   return undefined;
 }
@@ -47,7 +64,11 @@ export function getMcpTabOverride(
   mcpServers: (string | object)[] | null | undefined
 ): TabIconOverride | undefined {
   if (Array.isArray(mcpServers) && mcpServers.length > 0) {
-    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight", activeColor: "text-focus-highlight" };
+    return {
+      color: "text-focus-border",
+      hoverColor: "hover:text-focus-highlight",
+      activeColor: "text-focus-highlight",
+    };
   }
   return undefined;
 }
@@ -57,7 +78,11 @@ export function getValidationTabOverride(
   endCondition: { script?: string } | null | undefined
 ): TabIconOverride | undefined {
   if (endCondition?.script) {
-    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight", activeColor: "text-focus-highlight" };
+    return {
+      color: "text-focus-border",
+      hoverColor: "hover:text-focus-highlight",
+      activeColor: "text-focus-highlight",
+    };
   }
   return undefined;
 }
@@ -75,7 +100,11 @@ export function getContextTabOverride(
     ? priorContext.length > 0
     : typeof priorContext === "string" && priorContext !== "none";
   if (sessionActive || contextActive) {
-    return { color: "text-focus-border", hoverColor: "hover:text-focus-highlight", activeColor: "text-focus-highlight" };
+    return {
+      color: "text-focus-border",
+      hoverColor: "hover:text-focus-highlight",
+      activeColor: "text-focus-highlight",
+    };
   }
   return undefined;
 }

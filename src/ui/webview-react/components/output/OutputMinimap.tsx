@@ -453,16 +453,12 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
               // stopPropagation prevents the document dismiss-listener from
               // immediately closing the popup we're about to open.
               e.stopPropagation();
-              setPinnedKey((prev) =>
-                prev === step.key ? null : step.key
-              );
+              setPinnedKey((prev) => (prev === step.key ? null : step.key));
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                setPinnedKey((prev) =>
-                  prev === step.key ? null : step.key
-                );
+                setPinnedKey((prev) => (prev === step.key ? null : step.key));
               } else if (e.key === "Escape") {
                 setHoveredKey(null);
                 setPinnedKey(null);

@@ -117,10 +117,7 @@ function SortableWorkflowStepWrapper({
 export const WorkflowStepsPanel: React.FC<{
   onRequestSidebar?: () => void;
   onRequestClose?: () => void;
-}> = ({
-  onRequestSidebar,
-  onRequestClose,
-}) => {
+}> = ({ onRequestSidebar, onRequestClose }) => {
   const {
     steps: prompts,
     currentStep,

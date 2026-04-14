@@ -74,7 +74,10 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
           : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg"
       }`}
       onClick={onClick}
-      onTouchEnd={(e) => { e.preventDefault(); onClick(); }}
+      onTouchEnd={(e) => {
+        e.preventDefault();
+        onClick();
+      }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
@@ -119,8 +122,15 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                 type="button"
                 title="Pause"
                 aria-label="Pause"
-                onClick={(e) => { e.stopPropagation(); onPause(); }}
-                onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); onPause(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPause();
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onPause();
+                }}
                 onKeyDown={(e) => e.stopPropagation()}
                 className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
               >
@@ -131,8 +141,15 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                 type="button"
                 title="Resume"
                 aria-label="Resume"
-                onClick={(e) => { e.stopPropagation(); onResume(); }}
-                onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); onResume(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onResume();
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onResume();
+                }}
                 onKeyDown={(e) => e.stopPropagation()}
                 className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
               >
@@ -144,8 +161,15 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
               type="button"
               title="Stop"
               aria-label="Stop"
-              onClick={(e) => { e.stopPropagation(); onStop(); }}
-              onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); onStop(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onStop();
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onStop();
+              }}
               onKeyDown={(e) => e.stopPropagation()}
               className="p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
             >

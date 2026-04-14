@@ -194,11 +194,11 @@ Five separate stores by domain (avoid mixing concerns):
 interface WorkflowState {
   fileName: string | null;
   workflowName: string | null;
-  steps: WorkflowStep[];              // union: PromptStep | ScriptStep
+  steps: WorkflowStep[]; // union: PromptStep | ScriptStep
   executionState: ExecutionState;
   currentStep: number;
   totalSteps: number;
-  finalStep: WorkflowStep | null;     // the final (repeating) step
+  finalStep: WorkflowStep | null; // the final (repeating) step
   finalStepStatus: StepStatus | null;
   finalStepLoopCount: number;
   finalStepPhase: FinalStepPhase | null;
@@ -214,7 +214,10 @@ interface WorkflowState {
     orderedEntries: OrderedHistoryEntry[];
     promptOutputs: Record<number, StepOutput>;
     finalStepOutputs?: Record<number, StepOutput>;
-    runMetadata: Pick<WorkflowOutputHistory, "runId" | "startedAt" | "completedAt" | "executionState">;
+    runMetadata: Pick<
+      WorkflowOutputHistory,
+      "runId" | "startedAt" | "completedAt" | "executionState"
+    >;
   } | null;
   workspaceSnapshots: Record<number, WorkspaceSnapshot>;
   finalStepWorkspaceSnapshots: Record<number, WorkspaceSnapshot>;
@@ -243,7 +246,7 @@ interface UiState {
   propertiesDrawerOpen: boolean;
   // Diff display toggle
   diffsCollapsed: boolean;
-  diffResetVersion: number;       // bumped on expand/collapse all
+  diffResetVersion: number; // bumped on expand/collapse all
   // Persisted panel sizes
   lastDesktopSizes: PanelSizes;
   lastMobileSizes: PanelSizes;
@@ -283,9 +286,20 @@ interface UiState {
   terminalRailCollapsed: boolean;
   terminalRailSizePx: number;
   // Notification toast (transient)
-  toast: { message: string; type: "info" | "success" | "warning" | "error"; visible: boolean } | null;
+  toast: {
+    message: string;
+    type: "info" | "success" | "warning" | "error";
+    visible: boolean;
+  } | null;
   // Footer quick picker (transient)
-  footerOpenPicker: "harness" | "model" | "agent" | "skills" | "permissions" | "context" | null;
+  footerOpenPicker:
+    | "harness"
+    | "model"
+    | "agent"
+    | "skills"
+    | "permissions"
+    | "context"
+    | null;
   // MCP Discovery state
   mcpDiscoveryTab: "local" | "registry";
   mcpLocalServers: LocalMcpServerEntry[];

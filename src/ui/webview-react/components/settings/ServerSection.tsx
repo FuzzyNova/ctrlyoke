@@ -39,14 +39,19 @@ export function ServerSection({ settings, onUpdate }: Props) {
           />
           <span className="text-sm text-foreground">Enable server</span>
           {serverRunning && (
-            <span className="ml-auto text-xs text-description-fg italic">running</span>
+            <span className="ml-auto text-xs text-description-fg italic">
+              running
+            </span>
           )}
         </label>
 
         {/* Clickable URL + copy button — visible while server is running */}
         {serverRunning && serverUrl && (
           <div className="flex items-center gap-2 p-2 bg-input-bg border border-input-border rounded">
-            <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" title="Server running" />
+            <span
+              className="w-2 h-2 rounded-full bg-green-500 shrink-0"
+              title="Server running"
+            />
             <a
               href={serverUrl}
               target="_blank"
@@ -68,7 +73,12 @@ export function ServerSection({ settings, onUpdate }: Props) {
         )}
 
         <div>
-          <label htmlFor="server-port" className="block text-xs text-description-fg mb-1">Server port</label>
+          <label
+            htmlFor="server-port"
+            className="block text-xs text-description-fg mb-1"
+          >
+            Server port
+          </label>
           <input
             id="server-port"
             type="number"
@@ -79,12 +89,19 @@ export function ServerSection({ settings, onUpdate }: Props) {
         </div>
 
         <div>
-          <label htmlFor="server-standalone-port" className="block text-xs text-description-fg mb-1">Standalone port</label>
+          <label
+            htmlFor="server-standalone-port"
+            className="block text-xs text-description-fg mb-1"
+          >
+            Standalone port
+          </label>
           <input
             id="server-standalone-port"
             type="number"
             value={server.standalonePort}
-            onChange={(e) => onUpdate("server.standalonePort", Number(e.target.value), s)}
+            onChange={(e) =>
+              onUpdate("server.standalonePort", Number(e.target.value), s)
+            }
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground"
           />
         </div>

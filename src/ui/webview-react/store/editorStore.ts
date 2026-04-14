@@ -2,9 +2,18 @@ import { create } from "zustand";
 import type { VsCodeApi } from "../types/vscode";
 import type { PromptStep } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
-import type { PriorContext, ToolPermissionsOverride, PreCondition } from "../types/messages";
+import type {
+  PriorContext,
+  ToolPermissionsOverride,
+  PreCondition,
+} from "../types/messages";
 import type { EndConditionCompareSource } from "../utils/prompt";
-import { FINAL_STEP_PHASES, EDITOR_TARGET_KINDS, CONDITION_ACTIONS, COMPARE_SOURCES } from "../types/messages";
+import {
+  FINAL_STEP_PHASES,
+  EDITOR_TARGET_KINDS,
+  CONDITION_ACTIONS,
+  COMPARE_SOURCES,
+} from "../types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { useUiStore } from "./uiStore";
@@ -341,9 +350,12 @@ export const useEditorStore = create<
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
         scriptTimeout: savedNewPromptState.scriptTimeout,
-        scriptOnPass: savedNewPromptState.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
-        scriptOnFail: savedNewPromptState.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-        scriptCompareSource: savedNewPromptState.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
+        scriptOnPass:
+          savedNewPromptState.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
+        scriptOnFail:
+          savedNewPromptState.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
+        scriptCompareSource:
+          savedNewPromptState.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
         scriptReturns: savedNewPromptState.scriptReturns ?? "",
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
@@ -519,8 +531,10 @@ export const useEditorStore = create<
         scriptCommand: pendingEdit?.scriptCommand ?? "",
         scriptTimeout: pendingEdit?.scriptTimeout,
         scriptOnPass: pendingEdit?.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
-        scriptOnFail: pendingEdit?.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-        scriptCompareSource: pendingEdit?.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
+        scriptOnFail:
+          pendingEdit?.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
+        scriptCompareSource:
+          pendingEdit?.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
         scriptReturns: pendingEdit?.scriptReturns ?? "",
         properties: pendingEdit ? pendingEdit.properties : propertiesFromData,
         isDirty: pendingEdit ? true : false,
@@ -553,9 +567,12 @@ export const useEditorStore = create<
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
         scriptTimeout: savedNewPromptState.scriptTimeout,
-        scriptOnPass: savedNewPromptState.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
-        scriptOnFail: savedNewPromptState.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-        scriptCompareSource: savedNewPromptState.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
+        scriptOnPass:
+          savedNewPromptState.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
+        scriptOnFail:
+          savedNewPromptState.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
+        scriptCompareSource:
+          savedNewPromptState.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
         scriptReturns: savedNewPromptState.scriptReturns ?? "",
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
@@ -643,9 +660,12 @@ export const useEditorStore = create<
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
         scriptTimeout: savedNewPromptState.scriptTimeout,
-        scriptOnPass: savedNewPromptState.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
-        scriptOnFail: savedNewPromptState.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
-        scriptCompareSource: savedNewPromptState.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
+        scriptOnPass:
+          savedNewPromptState.scriptOnPass ?? CONDITION_ACTIONS.CONTINUE,
+        scriptOnFail:
+          savedNewPromptState.scriptOnFail ?? CONDITION_ACTIONS.STOP_WORKFLOW,
+        scriptCompareSource:
+          savedNewPromptState.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
         scriptReturns: savedNewPromptState.scriptReturns ?? "",
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,

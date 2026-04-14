@@ -59,9 +59,7 @@ export class FileConfigBackend implements ConfigBackend {
     });
 
     const invalidate = (changedPath: string) => {
-      if (
-        path.resolve(changedPath) === path.resolve(this.configPath)
-      ) {
+      if (path.resolve(changedPath) === path.resolve(this.configPath)) {
         this.cache = undefined;
         this.onChanged?.();
       }

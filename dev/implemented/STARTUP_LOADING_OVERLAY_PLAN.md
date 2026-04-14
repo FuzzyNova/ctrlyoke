@@ -63,12 +63,12 @@ INIT received ──────────────────────
 
 ### What We Actually Need to Wait For
 
-| Condition | Signal | Notes |
-|-----------|--------|-------|
-| Global settings ready | `INIT` received | Fast (~50ms), already handled |
-| Harness status resolved | `HARNESS_STATUS_UPDATE` (×7) | Trickle updates. Don't need to block on these. |
-| Auto-load complete with session | `WORKFLOW_LOADED` | Already exists |
-| Auto-load complete, no session | **Missing — needs new signal** | `triggerAutoLoad()` exits silently |
+| Condition                       | Signal                         | Notes                                          |
+| ------------------------------- | ------------------------------ | ---------------------------------------------- |
+| Global settings ready           | `INIT` received                | Fast (~50ms), already handled                  |
+| Harness status resolved         | `HARNESS_STATUS_UPDATE` (×7)   | Trickle updates. Don't need to block on these. |
+| Auto-load complete with session | `WORKFLOW_LOADED`              | Already exists                                 |
+| Auto-load complete, no session  | **Missing — needs new signal** | `triggerAutoLoad()` exits silently             |
 
 ---
 
@@ -83,6 +83,7 @@ This is the cleanest fix: no partial gating of individual controls, no complex p
 ### Overlay Dismissal Triggers
 
 The overlay lifts when **either**:
+
 1. A new `STARTUP_COMPLETE` message is received from the extension, **or**
 2. A safety timeout fires (default: **8 seconds**) — ensures the overlay never gets permanently stuck
 
@@ -104,6 +105,7 @@ The overlay lifts when **either**:
 **File: `src/types/DashboardConstants.ts`**
 
 Add after `WORKFLOW_LOADED`:
+
 ```typescript
 STARTUP_COMPLETE: "startupComplete", // Extension -> Webview: Startup sequence done (with or without auto-load)
 ```
@@ -111,6 +113,7 @@ STARTUP_COMPLETE: "startupComplete", // Extension -> Webview: Startup sequence d
 **File: `src/types/WebviewMessageTypes.ts`**
 
 Add to the outbound union type:
+
 ```typescript
 | { type: typeof MESSAGE_TYPES.STARTUP_COMPLETE }
 ```
@@ -118,6 +121,7 @@ Add to the outbound union type:
 **File: `src/flightpath/WorkflowOrchestrator.ts`** — `triggerAutoLoad()` method
 
 Wrap the body in a `try/finally` and move both the callback cleanup and `STARTUP_COMPLETE` into `finally` so they fire regardless of whether a session was found or an exception was thrown:
+
 ```typescript
 private async triggerAutoLoad(): Promise<void> {
   try {
@@ -166,6 +170,7 @@ awaitStartupAutoLoad(): Promise<string | null> {
 ```
 
 In `triggerAutoLoad()`, resolve the promise in the `finally` block:
+
 ```typescript
 private async triggerAutoLoad(): Promise<void> {
   let loadedWorkflowId: string | null = null;
@@ -227,6 +232,7 @@ This eliminates `pendingBrowserAutoLoadCallbacks` for browser clients entirely �
 > **Note on the panel path**: The panel sends `STARTUP_COMPLETE` via the hub broadcast from `triggerAutoLoad()` — the timing is correct because `setDashboardReady()` is always called before `triggerAutoLoad()` fires for the panel. On panel reload, `triggerAutoLoad()` doesn't re-run, so the panel gets `STARTUP_COMPLETE` from the `sendStartupComplete()` call after `sendWorkflowPropertiesToSettings()` (same approach as before, since `isAutoLoadTriggered` / `_autoLoadHasSettled` is true on reload). Keep the panel fast-path: after `sendWorkflowPropertiesToSettings()`, if `orchestrator._autoLoadHasSettled`, call `sendStartupComplete()`.
 
 This covers every scenario:
+
 - **Panel reload + session**: `WORKFLOW_LOADED` lifts overlay, then `sendStartupComplete()` fast-path confirms. No `CLEAR_WORKFLOW` (fileName set).
 - **Panel reload + no session**: `sendStartupComplete()` fast-path. `fileName` null → `CLEAR_WORKFLOW` → "New Workflow".
 - **Browser tab, any timing**: awaits promise, gets definitive result, targeted replay if needed, then `STARTUP_COMPLETE`. No race possible.
@@ -258,6 +264,7 @@ setStartupReady: (ready) => set({ startupReady: ready }),
 **File: `src/ui/webview-react/hooks/useMessageHandler.ts`**
 
 `STARTUP_COMPLETE` dismisses the overlay:
+
 ```typescript
 handlers[MESSAGE_TYPES.STARTUP_COMPLETE] = () => {
   useUiStore.getState().setStartupReady(true);
@@ -265,6 +272,7 @@ handlers[MESSAGE_TYPES.STARTUP_COMPLETE] = () => {
 ```
 
 `WORKFLOW_LOADED` also dismisses the overlay as a belt-and-suspenders fallback. In the reconnect/reload path the extension sends `WORKFLOW_LOADED` (via `sendWorkflowPropertiesToSettings`) before the fast-path `STARTUP_COMPLETE` has a chance to fire, so this ensures the overlay lifts immediately from whichever arrives first:
+
 ```typescript
 // Existing WORKFLOW_LOADED handler — add one line:
 handlers[MESSAGE_TYPES.WORKFLOW_LOADED] = () => {
@@ -278,7 +286,7 @@ handlers[MESSAGE_TYPES.WORKFLOW_LOADED] = () => {
 
 ### Phase 4 — Webview: `StartupOverlay` component
 
-**File: `src/ui/webview-react/components/layout/StartupOverlay.tsx`** *(new file)*
+**File: `src/ui/webview-react/components/layout/StartupOverlay.tsx`** _(new file)_
 
 ```tsx
 import { useEffect } from "react";
@@ -309,7 +317,9 @@ export const StartupOverlay: React.FC = () => {
       {/* Spinner */}
       <div className="flex flex-col items-center gap-3">
         <div className="w-6 h-6 border-2 border-description-fg border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs text-description-fg select-none">Loading…</span>
+        <span className="text-xs text-description-fg select-none">
+          Loading…
+        </span>
       </div>
     </div>
   );
@@ -317,6 +327,7 @@ export const StartupOverlay: React.FC = () => {
 ```
 
 The overlay:
+
 - Uses `absolute inset-0` to cover the full dashboard area (sits inside the `relative overflow-hidden` wrapper in `App.tsx`)
 - `z-[9999]` ensures it's above all panels, separators, and drawers
 - `bg-editor-bg/80` is semi-transparent (80% opacity) — panels are visible but dimmed underneath
@@ -330,11 +341,13 @@ The overlay:
 Import `StartupOverlay` and add it as the last child in both the mobile and desktop layout wrappers (inside the `relative` container so `absolute inset-0` fills the full layout):
 
 **Desktop** — add inside the `<div className="flex-1 relative overflow-hidden flex flex-col min-h-0">`:
+
 ```tsx
 <StartupOverlay />
 ```
 
 **Mobile** — add inside the `<div className="flex-1 relative overflow-hidden flex">`:
+
 ```tsx
 <StartupOverlay />
 ```
@@ -346,6 +359,7 @@ Export `StartupOverlay` from `components/layout/index.ts`.
 **File: `src/ui/webview-react/components/layout/index.ts`**
 
 Add:
+
 ```typescript
 export { StartupOverlay } from "./StartupOverlay";
 ```
@@ -354,36 +368,36 @@ export { StartupOverlay } from "./StartupOverlay";
 
 ## Edge Cases
 
-| Scenario | Signal that lifts overlay | Latency |
-|----------|--------------------------|---------|
-| Fresh start, session found | `STARTUP_COMPLETE` (broadcast after `triggerAutoLoad`) | 500ms–2000ms |
-| Fresh start, no session | `STARTUP_COMPLETE` (`finally` block in `triggerAutoLoad`) | 500ms–2000ms |
-| Panel moved to new view / webview reload, session exists | `WORKFLOW_LOADED` (sent by `sendWorkflowPropertiesToSettings`) then `STARTUP_COMPLETE` (fast path) | <200ms |
-| Panel moved to new view / webview reload, no session | `STARTUP_COMPLETE` fast path (`isAutoLoadTriggered = true` in READY handler) | <50ms |
-| New browser tab, session already loaded | `WORKFLOW_LOADED` then `STARTUP_COMPLETE` (fast path) | <200ms |
-| New browser tab, no session was loaded | `STARTUP_COMPLETE` fast path | <50ms |
-| Extension crashes before any signal | 8s safety timeout | 8s |
-| CLI-managed workflow skipped by auto-load | `STARTUP_COMPLETE` (`finally` fires even when callback is skipped) | 500ms–2000ms |
-| Very fast startup (<100ms) | `STARTUP_COMPLETE` broadcast | Brief flash, imperceptible |
+| Scenario                                                 | Signal that lifts overlay                                                                          | Latency                    |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------- |
+| Fresh start, session found                               | `STARTUP_COMPLETE` (broadcast after `triggerAutoLoad`)                                             | 500ms–2000ms               |
+| Fresh start, no session                                  | `STARTUP_COMPLETE` (`finally` block in `triggerAutoLoad`)                                          | 500ms–2000ms               |
+| Panel moved to new view / webview reload, session exists | `WORKFLOW_LOADED` (sent by `sendWorkflowPropertiesToSettings`) then `STARTUP_COMPLETE` (fast path) | <200ms                     |
+| Panel moved to new view / webview reload, no session     | `STARTUP_COMPLETE` fast path (`isAutoLoadTriggered = true` in READY handler)                       | <50ms                      |
+| New browser tab, session already loaded                  | `WORKFLOW_LOADED` then `STARTUP_COMPLETE` (fast path)                                              | <200ms                     |
+| New browser tab, no session was loaded                   | `STARTUP_COMPLETE` fast path                                                                       | <50ms                      |
+| Extension crashes before any signal                      | 8s safety timeout                                                                                  | 8s                         |
+| CLI-managed workflow skipped by auto-load                | `STARTUP_COMPLETE` (`finally` fires even when callback is skipped)                                 | 500ms–2000ms               |
+| Very fast startup (<100ms)                               | `STARTUP_COMPLETE` broadcast                                                                       | Brief flash, imperceptible |
 
 ---
 
 ## Files to Change
 
-| File | Change |
-|------|--------|
-| `src/types/DashboardConstants.ts` | Add `STARTUP_COMPLETE` constant |
-| `src/types/WebviewMessageTypes.ts` | Add `STARTUP_COMPLETE` to outbound union |
-| `src/flightpath/WorkflowOrchestrator.ts` | Replace `startupAutoLoadTriggered: boolean` with settled Promise; `triggerAutoLoad()` wrapped in `try/finally`, resolves promise + broadcasts `STARTUP_COMPLETE`; remove `addBrowserAutoLoadCallback` and `pendingBrowserAutoLoadCallbacks` |
-| `src/ui/WebviewMessageRouter.ts` | Browser READY path: replace `isAutoLoadTriggered` check + pending-callback registration with `await orchestrator.awaitStartupAutoLoad()` unified path; panel READY path: add fast-path `sendStartupComplete()` after `sendWorkflowPropertiesToSettings()` when `_autoLoadHasSettled` |
-| `src/ui/DashboardBroadcastHub.ts` | Add `notifyStartupComplete()` broadcast method |
-| `src/ui/WebviewSettingsSync.ts` | Add `sendStartupComplete(postMessage)` targeted emit helper |
-| `src/ui/webview-react/store/uiStore.ts` | Add `startupReady` + `setStartupReady` (not persisted) |
-| `src/ui/webview-react/hooks/useMessageHandler.ts` | Handle `STARTUP_COMPLETE`; also call `setStartupReady(true)` in existing `WORKFLOW_LOADED` handler |
-| `src/ui/webview-react/components/layout/StartupOverlay.tsx` | New component |
-| `src/ui/webview-react/components/layout/index.ts` | Export `StartupOverlay` |
-| `src/ui/webview-react/App.tsx` | Render `<StartupOverlay />` in both mobile and desktop layouts |
-| `dev/KNOWN_ISSUES.md` | Mark Known Issue #2 as resolved by this plan |
+| File                                                        | Change                                                                                                                                                                                                                                                                               |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/types/DashboardConstants.ts`                           | Add `STARTUP_COMPLETE` constant                                                                                                                                                                                                                                                      |
+| `src/types/WebviewMessageTypes.ts`                          | Add `STARTUP_COMPLETE` to outbound union                                                                                                                                                                                                                                             |
+| `src/flightpath/WorkflowOrchestrator.ts`                    | Replace `startupAutoLoadTriggered: boolean` with settled Promise; `triggerAutoLoad()` wrapped in `try/finally`, resolves promise + broadcasts `STARTUP_COMPLETE`; remove `addBrowserAutoLoadCallback` and `pendingBrowserAutoLoadCallbacks`                                          |
+| `src/ui/WebviewMessageRouter.ts`                            | Browser READY path: replace `isAutoLoadTriggered` check + pending-callback registration with `await orchestrator.awaitStartupAutoLoad()` unified path; panel READY path: add fast-path `sendStartupComplete()` after `sendWorkflowPropertiesToSettings()` when `_autoLoadHasSettled` |
+| `src/ui/DashboardBroadcastHub.ts`                           | Add `notifyStartupComplete()` broadcast method                                                                                                                                                                                                                                       |
+| `src/ui/WebviewSettingsSync.ts`                             | Add `sendStartupComplete(postMessage)` targeted emit helper                                                                                                                                                                                                                          |
+| `src/ui/webview-react/store/uiStore.ts`                     | Add `startupReady` + `setStartupReady` (not persisted)                                                                                                                                                                                                                               |
+| `src/ui/webview-react/hooks/useMessageHandler.ts`           | Handle `STARTUP_COMPLETE`; also call `setStartupReady(true)` in existing `WORKFLOW_LOADED` handler                                                                                                                                                                                   |
+| `src/ui/webview-react/components/layout/StartupOverlay.tsx` | New component                                                                                                                                                                                                                                                                        |
+| `src/ui/webview-react/components/layout/index.ts`           | Export `StartupOverlay`                                                                                                                                                                                                                                                              |
+| `src/ui/webview-react/App.tsx`                              | Render `<StartupOverlay />` in both mobile and desktop layouts                                                                                                                                                                                                                       |
+| `dev/KNOWN_ISSUES.md`                                       | Mark Known Issue #2 as resolved by this plan                                                                                                                                                                                                                                         |
 
 ---
 
@@ -393,12 +407,12 @@ export { StartupOverlay } from "./StartupOverlay";
 
 Three separate strings are used interchangeably to mean "no file has been saved yet":
 
-| String | Where | Correct? |
-|--------|-------|----------|
-| `"New Workflow"` | `DEFAULT_WORKFLOW_NAME` constant, `WorkflowInstance` (some paths), most new-workflow flows | ✅ canonical |
-| `"Untitled"` | `WorkflowInstance.ts` (3 literal occurrences), `UndoRedoControl.tsx` (1 occurrence) | ❌ stray |
-| `"No workflow loaded"` | `WorkflowStatus.tsx` italic empty state | ❌ shown when `fileName === null` |
-| `"No workflows found"` | `RecentWorkflows.tsx` empty list state | ❌ dead-end text |
+| String                 | Where                                                                                      | Correct?                          |
+| ---------------------- | ------------------------------------------------------------------------------------------ | --------------------------------- |
+| `"New Workflow"`       | `DEFAULT_WORKFLOW_NAME` constant, `WorkflowInstance` (some paths), most new-workflow flows | ✅ canonical                      |
+| `"Untitled"`           | `WorkflowInstance.ts` (3 literal occurrences), `UndoRedoControl.tsx` (1 occurrence)        | ❌ stray                          |
+| `"No workflow loaded"` | `WorkflowStatus.tsx` italic empty state                                                    | ❌ shown when `fileName === null` |
+| `"No workflows found"` | `RecentWorkflows.tsx` empty list state                                                     | ❌ dead-end text                  |
 
 `DEFAULT_WORKFLOW_NAME = "New Workflow"` already exists in `DashboardConstants.ts` and is used correctly in most of the codebase. The `"Untitled"` literals are strays that slipped past the constant.
 
@@ -409,6 +423,7 @@ The two empty-state strings are a UX dead-end: a user opening FlightPath for the
 Replace all four with the imported `DEFAULT_WORKFLOW_NAME` constant:
 
 **`src/flightpath/WorkflowInstance.ts`** (3 occurrences):
+
 - Line ~322: `state.workflowName || "Untitled"` → `state.workflowName || DEFAULT_WORKFLOW_NAME`
 - Line ~355: same pattern in the second `sendFullStateToDashboard` variant
 - Line ~1576: bare `"Untitled"` in `updatePromptDeleted` fallback → `DEFAULT_WORKFLOW_NAME`
@@ -416,6 +431,7 @@ Replace all four with the imported `DEFAULT_WORKFLOW_NAME` constant:
 `DEFAULT_WORKFLOW_NAME` is already imported in this file.
 
 **`src/ui/webview-react/components/shared/UndoRedoControl.tsx`** (1 occurrence):
+
 - Line ~92: `next.workflowName ?? "Untitled"` → `next.workflowName ?? DEFAULT_WORKFLOW_NAME`
 
 Add import: `import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";`
@@ -425,6 +441,7 @@ Add import: `import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstan
 When `STARTUP_COMPLETE` fires and no session was loaded (`fileName` is still `null` in the workflow store), the webview should automatically trigger a blank new workflow so the user always lands on a "New Workflow" state — never the italic "no workflow loaded" empty state.
 
 **`src/ui/webview-react/hooks/useMessageHandler.ts`** — `STARTUP_COMPLETE` handler:
+
 ```typescript
 handlers[MESSAGE_TYPES.STARTUP_COMPLETE] = () => {
   useUiStore.getState().setStartupReady(true);
@@ -448,6 +465,7 @@ After Fix 2, the `fileName === null` branch in `WorkflowStatus.tsx` will only be
 **`src/ui/webview-react/components/workflow/WorkflowStatus.tsx`** (~line 268–275):
 
 Remove the `if (!fileName)` early-return entirely. The `displayName` computation already falls back to `DEFAULT_WORKFLOW_NAME` via `getWorkflowNameFromPath` when `fileName` is null:
+
 ```typescript
 const displayName = fileName
   ? workflowName || getWorkflowNameFromPath(fileName)
@@ -483,14 +501,14 @@ Add `onNewWorkflow?: () => void` to the `RecentWorkflows` props and wire it up i
 
 ### Updated Files for Part 2
 
-| File | Change |
-|------|--------|
-| `src/flightpath/WorkflowInstance.ts` | Replace 3× `"Untitled"` literals with `DEFAULT_WORKFLOW_NAME` |
-| `src/ui/webview-react/components/shared/UndoRedoControl.tsx` | Replace `"Untitled"` with `DEFAULT_WORKFLOW_NAME` |
-| `src/ui/webview-react/hooks/useMessageHandler.ts` | `STARTUP_COMPLETE` handler: auto-send `CLEAR_WORKFLOW` if `fileName` is null |
-| `src/ui/webview-react/components/workflow/WorkflowStatus.tsx` | Remove `!fileName` early-return; use `DEFAULT_WORKFLOW_NAME` as displayName fallback |
-| `src/ui/webview-react/test/components/workflow/WorkflowStatus.test.tsx` | Update test asserting "No workflow loaded" → assert "New Workflow" |
-| `src/ui/webview-react/components/workflow/RecentWorkflows.tsx` | Replace "No workflows found" text with actionable "New Workflow" button row |
+| File                                                                    | Change                                                                               |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `src/flightpath/WorkflowInstance.ts`                                    | Replace 3× `"Untitled"` literals with `DEFAULT_WORKFLOW_NAME`                        |
+| `src/ui/webview-react/components/shared/UndoRedoControl.tsx`            | Replace `"Untitled"` with `DEFAULT_WORKFLOW_NAME`                                    |
+| `src/ui/webview-react/hooks/useMessageHandler.ts`                       | `STARTUP_COMPLETE` handler: auto-send `CLEAR_WORKFLOW` if `fileName` is null         |
+| `src/ui/webview-react/components/workflow/WorkflowStatus.tsx`           | Remove `!fileName` early-return; use `DEFAULT_WORKFLOW_NAME` as displayName fallback |
+| `src/ui/webview-react/test/components/workflow/WorkflowStatus.test.tsx` | Update test asserting "No workflow loaded" → assert "New Workflow"                   |
+| `src/ui/webview-react/components/workflow/RecentWorkflows.tsx`          | Replace "No workflows found" text with actionable "New Workflow" button row          |
 
 ---
 

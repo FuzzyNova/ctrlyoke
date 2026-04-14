@@ -24,7 +24,9 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
       <span className="flex flex-col">
         <span className="text-sm text-foreground">{label}</span>
         {description && (
-          <span className="text-xs text-description-fg mt-0.5">{description}</span>
+          <span className="text-xs text-description-fg mt-0.5">
+            {description}
+          </span>
         )}
       </span>
     </label>
@@ -41,7 +43,10 @@ export function QueueSection({ settings, onUpdate }: Props) {
         Queue
       </h3>
       <div>
-        <label htmlFor="queue-max-size" className="block text-xs text-description-fg mb-1">
+        <label
+          htmlFor="queue-max-size"
+          className="block text-xs text-description-fg mb-1"
+        >
           Max queue size
         </label>
         <input
@@ -56,7 +61,10 @@ export function QueueSection({ settings, onUpdate }: Props) {
         />
       </div>
       <div>
-        <label htmlFor="queue-max-execution-time" className="block text-xs text-description-fg mb-1">
+        <label
+          htmlFor="queue-max-execution-time"
+          className="block text-xs text-description-fg mb-1"
+        >
           Max workflow execution time (seconds, -1 = unlimited)
         </label>
         <input

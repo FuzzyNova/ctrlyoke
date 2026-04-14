@@ -22,9 +22,13 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
         className="mt-0.5 w-4 h-4 accent-focus-border cursor-pointer shrink-0"
       />
       <span className="flex flex-col">
-        <span className="text-sm text-foreground group-hover:text-foreground">{label}</span>
+        <span className="text-sm text-foreground group-hover:text-foreground">
+          {label}
+        </span>
         {description && (
-          <span className="text-xs text-description-fg mt-0.5">{description}</span>
+          <span className="text-xs text-description-fg mt-0.5">
+            {description}
+          </span>
         )}
       </span>
     </label>

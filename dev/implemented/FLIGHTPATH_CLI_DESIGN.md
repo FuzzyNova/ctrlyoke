@@ -1301,6 +1301,7 @@ Work is done in order of dependency (each step does not break the prior):
 - Change constructor to accept `PlatformAdapter` instead of `vscode.ExtensionContext`
 - Replace `vscode.WorkspaceFolder` param with `string` (just the workspace path)
 - Replace `FlightPathWebviewProvider` param with `IDashboardSink | undefined`:
+
   ```typescript
   interface IDashboardSink {
     postMessage(type: string, payload: unknown): void;
@@ -1309,6 +1310,7 @@ Work is done in order of dependency (each step does not break the prior):
 
   - `VsCodeAdapter` implements `IDashboardSink` by delegating to `FlightPathWebviewProvider`
   - CLI passes `undefined`
+
 - All dashboard `postMessage` calls become `this.dashboardSink?.postMessage(...)`
 - Status bar callbacks (`onStatusBarUpdate`, `onWorkflowNameChange`) — keep as optional callbacks, CLI passes no-op functions
 

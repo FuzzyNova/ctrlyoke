@@ -133,7 +133,8 @@ export class PromptPropertyCompletionProvider
     {
       key: PROMPT_PROPERTIES.SKILLS,
       detail: "Skills to attach to this step",
-      documentation: "List of skill identifiers to make available for this step.",
+      documentation:
+        "List of skill identifiers to make available for this step.",
       insertSnippet: `${PROMPT_PROPERTIES.SKILLS}:\n  - `,
     },
     {
@@ -154,7 +155,7 @@ export class PromptPropertyCompletionProvider
       key: PROMPT_PROPERTIES.MCP_SERVERS,
       detail: "MCP servers to attach",
       documentation:
-        "List of MCP server identifiers to attach for this step (e.g., `[\"flightpath\"]`).",
+        'List of MCP server identifiers to attach for this step (e.g., `["flightpath"]`).',
       insertSnippet: `${PROMPT_PROPERTIES.MCP_SERVERS}:\n  - `,
     },
     {

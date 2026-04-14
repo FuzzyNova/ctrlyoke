@@ -92,9 +92,9 @@ export class CliAdapter implements PlatformAdapter {
       default: {
         // Prefer direct CLI config properties (explicit flag values) first,
         // then fall back to the config service (reads user/workspace config files).
-        const directValue = (
-          this.config as unknown as Record<string, unknown>
-        )[key] as T;
+        const directValue = (this.config as unknown as Record<string, unknown>)[
+          key
+        ] as T;
         if (directValue !== undefined) {
           return directValue;
         }

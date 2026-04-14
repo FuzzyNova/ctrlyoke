@@ -143,12 +143,13 @@ All scripts (except OpenCode plugin which uses it via env var directly) use the 
 - Must remain plain CommonJS — no ES modules, no TypeScript, no external `npm` dependencies
 
 **OpenCode plugin** (`flightpath-opencode-plugin.ts`):
+
 - Source: `src/scripts/flightpath-opencode-plugin.ts` (TypeScript/ESM — must stay this way; OpenCode only loads `.ts` plugins)
 - Output: `out/scripts/flightpath-opencode-plugin.ts` (also copied verbatim by the same esbuild plugin)
 - Deployed at runtime by `OpenCodeCliProvider.deployCompletionPlugin()` to `.opencode/plugin/flightpath-completion-hook.ts`
 - When user hooks are configured, `OpenCodePluginGenerator.generate(userHooks)` produces a customized plugin string instead of using the static file
 - Note: `src/scripts/flightpath-opencode-plugin.js` still exists in the repo as a legacy artifact but is no longer deployed
-</buildAndDeploy>
+  </buildAndDeploy>
 
 <debugLogging>
 Debug logging is **opt-in**: scripts check the `FLIGHTPATH_DIAGNOSTIC_LOGS` environment variable (set to `"true"` by the extension when `flightpath.enableDiagnosticLogs` is enabled and injected into the CLI process env at spawn time). When enabled, logs go to `<workspace>/.flightpath/logs/<script-name>-debug.log`. All log errors are silently swallowed so they never interfere with hook execution.

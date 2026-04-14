@@ -105,7 +105,8 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
 
   const hasRetry =
     variant === "endCondition" &&
-    (v.onPass === CONDITION_ACTIONS.RETRY || v.onFail === CONDITION_ACTIONS.RETRY);
+    (v.onPass === CONDITION_ACTIONS.RETRY ||
+      v.onFail === CONDITION_ACTIONS.RETRY);
 
   // Local string state for timeout to prevent auto-reset when clearing.
   // scriptStep: empty string means "inherit from settings" (undefined); others default to 30000.
@@ -117,9 +118,11 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   );
 
   useEffect(() => {
-    setTimeoutInput(v.timeout !== undefined ? String(v.timeout) : isScriptStep ? "" : "30000");
-  // isScriptStep is derived from the variant prop which doesn't change at runtime
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    setTimeoutInput(
+      v.timeout !== undefined ? String(v.timeout) : isScriptStep ? "" : "30000"
+    );
+    // isScriptStep is derived from the variant prop which doesn't change at runtime
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [v.timeout]);
 
   useEffect(() => {
@@ -129,7 +132,8 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const update = (patch: Partial<ScriptConditionValue>) =>
     onChange({ ...v, ...patch });
 
-  const compareSource = (v.compareSource ?? COMPARE_SOURCES.AUTO) as EndConditionCompareSource;
+  const compareSource = (v.compareSource ??
+    COMPARE_SOURCES.AUTO) as EndConditionCompareSource;
   const compareSourceHint =
     compareSource === COMPARE_SOURCES.AUTO
       ? "'true'/'false' check exit code; other values compare stdout"
@@ -142,7 +146,8 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   // Shown under Expected Return when exit code semantics apply — clarifies the
   // counterintuitive shell convention: success=0, failure=non-zero.
   const returnsExitCodeHint =
-    compareSource === COMPARE_SOURCES.AUTO || compareSource === COMPARE_SOURCES.EXIT_CODE
+    compareSource === COMPARE_SOURCES.AUTO ||
+    compareSource === COMPARE_SOURCES.EXIT_CODE
       ? "Shell exit codes: true = 0 (success)  ·  false = non-zero (failure)"
       : null;
 
@@ -244,7 +249,12 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           </label>
           <CustomSelect
             id={`${idPrefix}-on-fail`}
-            value={v.onFail ?? (variant === "preCondition" ? CONDITION_ACTIONS.SKIP_PROMPT : CONDITION_ACTIONS.STOP_WORKFLOW)}
+            value={
+              v.onFail ??
+              (variant === "preCondition"
+                ? CONDITION_ACTIONS.SKIP_PROMPT
+                : CONDITION_ACTIONS.STOP_WORKFLOW)
+            }
             onChange={(val) => update({ onFail: val })}
             options={actionOptions}
             disabled={disabled}
@@ -361,7 +371,9 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               id={`${idPrefix}-retry-prompt`}
               value={v.retryPrompt ?? ""}
               onChange={(e) => update({ retryPrompt: e.target.value })}
-              placeholder={"Validation failed: {error}\n\nPlease fix the issues."}
+              placeholder={
+                "Validation failed: {error}\n\nPlease fix the issues."
+              }
               rows={3}
               disabled={disabled}
               className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-y disabled:opacity-50"

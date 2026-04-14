@@ -64,6 +64,7 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 **VS Code-hosted server (Phase 2):**
 
 Already wired from global settings work:
+
 - `Header.tsx` has the Start/Stop Server button (`codicon-play-circle` / `codicon-debug-stop`) posting `ENABLE_SERVER` / `DISABLE_SERVER` ✅
 - `settingsStore` has `serverRunning: boolean` + `setServerRunning(running)` ✅
 - `WebviewMessageRouter` routes `ENABLE_SERVER` / `DISABLE_SERVER` → `WebviewSettingsSync.handleEnableServer/handleDisableServer` (currently persists config only) ✅
@@ -71,6 +72,7 @@ Already wired from global settings work:
 - `FlightPathWebviewProvider.routeExternalMessage(message, postMessage)` routing seam exists ✅
 
 Still missing:
+
 - `express` and `ws` npm dependencies not installed.
 - `src/server/FlightPathHostedServer.ts` — the actual Express + WS server.
 - `src/server/HostedServerRouter.ts` — per-WS-client routing wrapper.
@@ -82,6 +84,7 @@ Still missing:
 - Extension deactivation cleanup (`FlightPathHostedServer.dispose()` called from `extension.ts`).
 
 **Standalone server (Phases 5–10):**
+
 - `WorkflowOrchestrator` still hard-codes `new VsCodeAdapter(this.context)` — blocks standalone reuse.
 - `PromptFileWatcher` and `CliWatchSession` still call `vscode.workspace.createFileSystemWatcher()` directly.
 - `WebviewSettingsSync` still uses `vscode.workspace.workspaceFolders` directly for agent/skill/workspace discovery.
@@ -147,16 +150,16 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 
 ### Existing Patterns Reused
 
-| Pattern                          | Where It Exists                          | How Server Uses It                                                                                                    |
-| -------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `IDashboardProvider` interface   | `src/ui/IDashboardProvider.ts`           | Already present; both server implementations plug into this surface                                                   |
-| `IDashboardSink` interface       | `src/types/IDashboardSink.ts`            | Existing live step/output sink; needs a broadcast-capable implementation before hosted tabs can mirror the sidebar   |
-| `WorkflowOrchestrator` registry  | `src/flightpath/WorkflowOrchestrator.ts` | Already stores `IDashboardProvider[]` and `addDashboardProvider()`, but most notify paths still target the first provider |
-| `WebviewMessageRouter`           | `src/ui/WebviewMessageRouter.ts`         | Hosted server can reuse its logic only after exposing a direct callable entrypoint and preserving per-connection replies |
-| `PlatformAdapter` interface      | `src/platform/PlatformAdapter.ts`        | `StandaloneServerAdapter` is the third implementation; this seam also needs file-watcher support                     |
-| `vscode-shim` alias              | `esbuild.js` CLI bundle                  | Standalone server bundle uses the same `alias: { vscode: 'src/platform/vscode-shim.ts' }`                             |
-| Commander.js subcommands         | `src/cli.ts`                             | `server` added as `program.command('server')` (standalone only)                                                       |
-| `setRuntimeMode`                 | `src/cli.ts` line 27                     | Standalone server calls `setRuntimeMode(RUNNER_IDS.SERVER)` — `RUNNER_IDS.SERVER` already exists in `DashboardConstants.ts` |
+| Pattern                         | Where It Exists                          | How Server Uses It                                                                                                          |
+| ------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `IDashboardProvider` interface  | `src/ui/IDashboardProvider.ts`           | Already present; both server implementations plug into this surface                                                         |
+| `IDashboardSink` interface      | `src/types/IDashboardSink.ts`            | Existing live step/output sink; needs a broadcast-capable implementation before hosted tabs can mirror the sidebar          |
+| `WorkflowOrchestrator` registry | `src/flightpath/WorkflowOrchestrator.ts` | Already stores `IDashboardProvider[]` and `addDashboardProvider()`, but most notify paths still target the first provider   |
+| `WebviewMessageRouter`          | `src/ui/WebviewMessageRouter.ts`         | Hosted server can reuse its logic only after exposing a direct callable entrypoint and preserving per-connection replies    |
+| `PlatformAdapter` interface     | `src/platform/PlatformAdapter.ts`        | `StandaloneServerAdapter` is the third implementation; this seam also needs file-watcher support                            |
+| `vscode-shim` alias             | `esbuild.js` CLI bundle                  | Standalone server bundle uses the same `alias: { vscode: 'src/platform/vscode-shim.ts' }`                                   |
+| Commander.js subcommands        | `src/cli.ts`                             | `server` added as `program.command('server')` (standalone only)                                                             |
+| `setRuntimeMode`                | `src/cli.ts` line 27                     | Standalone server calls `setRuntimeMode(RUNNER_IDS.SERVER)` — `RUNNER_IDS.SERVER` already exists in `DashboardConstants.ts` |
 
 ---
 
@@ -174,16 +177,16 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 
 ### VS Code Dependencies Requiring Server Equivalents
 
-| File                                                | VS Code API Used                                                   | Server Approach                                                        |
-| --------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| `src/ui/FlightPathWebviewProvider.ts`               | `vscode.WebviewView`, `webview.postMessage()`, `notifyX()` methods | Replaced by `FlightPathServer` + WebSocket broadcast                   |
-| `src/flightpath/WorkflowOrchestrator.ts`            | `vscode.ExtensionContext`, `VsCodeAdapter`, primary-provider assumptions | Finish provider fanout, add a broadcast sink for `WorkflowInstance`, and inject adapter/context cleanly for server use |
-| `src/ui/WebviewMessageRouter.ts`                    | `vscode.commands.executeCommand()` + webview-local reply channel   | Hosted server needs a callable router wrapper; standalone needs a WebSocket router with per-connection replies |
-| `src/ui/WebviewSettingsSync.ts`                     | `vscode.workspace.workspaceFolders`, command execution, `ConfigurationUtils` | Move workspace discovery behind adapter/constructor inputs; keep settings reads routed through `ConfigurationUtils` |
-| `src/utils/ConfigurationUtils.ts`                   | `vscode.workspace.getConfiguration()`                              | **Done** — now reads from `FlightPathConfigService` (file-based config). No VS Code dependency remaining. |
-| `src/flightpath/orchestration/PromptFileWatcher.ts` | `vscode.workspace.createFileSystemWatcher()`                       | `chokidar` (already in dependencies)                                   |
-| `src/flightpath/orchestration/CliWatchSession.ts`   | `vscode.workspace.createFileSystemWatcher()` (multiple watchers)   | Same watcher abstraction; inject adapter into constructor              |
-| `src/completions/CompletionHelpers.ts`              | `vscode.workspace.findFiles()`, Git extension                      | Node.js `fs` + `fast-glob` + `ignore`                                  |
+| File                                                | VS Code API Used                                                             | Server Approach                                                                                                        |
+| --------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `src/ui/FlightPathWebviewProvider.ts`               | `vscode.WebviewView`, `webview.postMessage()`, `notifyX()` methods           | Replaced by `FlightPathServer` + WebSocket broadcast                                                                   |
+| `src/flightpath/WorkflowOrchestrator.ts`            | `vscode.ExtensionContext`, `VsCodeAdapter`, primary-provider assumptions     | Finish provider fanout, add a broadcast sink for `WorkflowInstance`, and inject adapter/context cleanly for server use |
+| `src/ui/WebviewMessageRouter.ts`                    | `vscode.commands.executeCommand()` + webview-local reply channel             | Hosted server needs a callable router wrapper; standalone needs a WebSocket router with per-connection replies         |
+| `src/ui/WebviewSettingsSync.ts`                     | `vscode.workspace.workspaceFolders`, command execution, `ConfigurationUtils` | Move workspace discovery behind adapter/constructor inputs; keep settings reads routed through `ConfigurationUtils`    |
+| `src/utils/ConfigurationUtils.ts`                   | `vscode.workspace.getConfiguration()`                                        | **Done** — now reads from `FlightPathConfigService` (file-based config). No VS Code dependency remaining.              |
+| `src/flightpath/orchestration/PromptFileWatcher.ts` | `vscode.workspace.createFileSystemWatcher()`                                 | `chokidar` (already in dependencies)                                                                                   |
+| `src/flightpath/orchestration/CliWatchSession.ts`   | `vscode.workspace.createFileSystemWatcher()` (multiple watchers)             | Same watcher abstraction; inject adapter into constructor                                                              |
+| `src/completions/CompletionHelpers.ts`              | `vscode.workspace.findFiles()`, Git extension                                | Node.js `fs` + `fast-glob` + `ignore`                                                                                  |
 
 ### Already Platform-Agnostic (zero changes)
 
@@ -235,10 +238,10 @@ Starts an Express + WebSocket server inside the running VS Code extension proces
 #### New message types (add to `DashboardConstants.ts`)
 
 ```typescript
-SERVER_STARTED: "serverStarted"   // extension → webview: { url: string }
-SERVER_STOPPED: "serverStopped"   // extension → webview
-THEME_VARS_CAPTURED: "themeVarsCaptured"  // webview → extension: { vars: Record<string, string> }
-THEME_VARS_UPDATED: "themeVarsUpdated"    // extension → hosted WS clients: { vars: Record<string, string> }
+SERVER_STARTED: "serverStarted"; // extension → webview: { url: string }
+SERVER_STOPPED: "serverStopped"; // extension → webview
+THEME_VARS_CAPTURED: "themeVarsCaptured"; // webview → extension: { vars: Record<string, string> }
+THEME_VARS_UPDATED: "themeVarsUpdated"; // extension → hosted WS clients: { vars: Record<string, string> }
 ```
 
 #### Store additions (`settingsStore`)
@@ -274,15 +277,17 @@ function captureThemeVars() {
   for (const sheet of document.styleSheets) {
     try {
       for (const rule of sheet.cssRules) {
-        if (rule instanceof CSSStyleRule && rule.selectorText === ':root') {
+        if (rule instanceof CSSStyleRule && rule.selectorText === ":root") {
           for (const prop of rule.style) {
-            if (prop.startsWith('--vscode-')) {
+            if (prop.startsWith("--vscode-")) {
               vars[prop] = style.getPropertyValue(prop).trim();
             }
           }
         }
       }
-    } catch { /* cross-origin sheet, skip */ }
+    } catch {
+      /* cross-origin sheet, skip */
+    }
   }
   vscodeApi.postMessage({ type: MESSAGE_TYPES.THEME_VARS_CAPTURED, vars });
 }
@@ -323,7 +328,7 @@ export class FlightPathHostedServer implements IDashboardProvider {
   constructor(
     private hub: DashboardBroadcastHub,
     private webviewProvider: FlightPathWebviewProvider,
-    port: number,
+    port: number
   ) {
     this.port = port;
     this.httpServer = createServer(this.app);
@@ -337,10 +342,21 @@ export class FlightPathHostedServer implements IDashboardProvider {
   postMessage(message: unknown): void {
     this.broadcast(message);
   }
-  notifyWorkflowAdded(summary) { this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary }); }
-  notifyWorkflowDismissed(id) { this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId: id }); }
-  notifyWorkflowSummaryUpdated(summary) { this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary }); }
-  notifyActiveWorkflowChanged(id) { this.broadcast({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId: id }); }
+  notifyWorkflowAdded(summary) {
+    this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary });
+  }
+  notifyWorkflowDismissed(id) {
+    this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId: id });
+  }
+  notifyWorkflowSummaryUpdated(summary) {
+    this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
+  }
+  notifyActiveWorkflowChanged(id) {
+    this.broadcast({
+      type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
+      workflowId: id,
+    });
+  }
 
   // ── Theme var snapshot (fed from VS Code webview capture) ─────────────────
   updateThemeVars(vars: Record<string, string>): void {
@@ -394,7 +410,9 @@ export class FlightPathHostedServer implements IDashboardProvider {
     // Full bootstrap: let the webview provider send its INIT payload to this client
     this.webviewProvider.routeExternalMessage(
       { type: MESSAGE_TYPES.READY },
-      (msg) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
+      (msg) => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+      }
     );
   }
 
@@ -440,7 +458,11 @@ context.subscriptions.push(
   vscode.commands.registerCommand("flightpath.enableServer", async () => {
     if (hostedServer) return; // already running
     const port = configService.get("server").port ?? 3000;
-    hostedServer = new FlightPathHostedServer(broadcastHub, webviewProvider, port);
+    hostedServer = new FlightPathHostedServer(
+      broadcastHub,
+      webviewProvider,
+      port
+    );
     const url = hostedServer.listen();
     webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STARTED, url });
   }),
@@ -448,7 +470,7 @@ context.subscriptions.push(
     hostedServer?.dispose();
     hostedServer = undefined;
     webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STOPPED });
-  }),
+  })
 );
 ```
 
@@ -529,7 +551,9 @@ Phase 2 needs this file too. Write it in Phase 2 — it is shared verbatim with 
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
       else pending.push(msg);
     },
-    getState() { return _state; },
+    getState() {
+      return _state;
+    },
     setState(s) {
       _state = s;
       sessionStorage.setItem("fpState", JSON.stringify(s));

@@ -8,7 +8,7 @@ Each entry explains the window, why it's acceptable, and what a proper fix would
 ## 1. Workflow properties undo shadow not reset during workflow switch (~16 ms window)
 
 **Symptom:** When switching workflows, there is a brief window where triggering undo
-operates against the *previous* workflow's property baseline rather than the new one.
+operates against the _previous_ workflow's property baseline rather than the new one.
 A user who managed to undo during this window could have the previous workflow's property
 values (harness, model, endCondition, etc.) applied to the new workflow.
 
@@ -61,7 +61,7 @@ no recovery replay is ever sent.
 - **Before auto-load:** `addBrowserAutoLoadCallback` registers a recovery callback that fires
   once `triggerAutoLoad` completes.
 
-The gap is the brief window *during* auto-load, after `startupAutoLoadTriggered = true` but
+The gap is the brief window _during_ auto-load, after `startupAutoLoadTriggered = true` but
 before `triggerAutoLoad`'s inner callback has fired. A browser connecting in this window
 sees `isAutoLoadTriggered === true` (skips registering a callback) but also sees the panel's
 `viewedId === null` (no replay yet). Both recovery paths are missed simultaneously.

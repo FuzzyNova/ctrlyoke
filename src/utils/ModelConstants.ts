@@ -54,7 +54,7 @@ export const COPILOT_MODELS: Record<string, string> = {
   "gpt-4.1": "GPT-4.1",
   "oswe-vscode-prime": "Raptor Mini",
   "gpt-5.2": "Gpt 5.2",
-  "auto": "Auto",
+  auto: "Auto",
 };
 
 /**

@@ -1,5 +1,9 @@
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
-import { STEP_STATUS, EXECUTION_STATES, type StepStatus } from "../types/messages";
+import {
+  STEP_STATUS,
+  EXECUTION_STATES,
+  type StepStatus,
+} from "../types/messages";
 
 /**
  * Returns a `getPromptStatus(prompt, index)` helper that derives the display
@@ -26,7 +30,10 @@ export function usePromptStatus() {
     // per-step STEP_STATUS_CHANGED message arrives. executionState flips
     // synchronously, but the step-level status update is a separate postMessage
     // that lands in a later render cycle.
-    if (executionState === EXECUTION_STATES.CANCELLING && index === currentStep) {
+    if (
+      executionState === EXECUTION_STATES.CANCELLING &&
+      index === currentStep
+    ) {
       return STEP_STATUS.CANCELLED;
     }
     if (executionState === EXECUTION_STATES.ERROR && index === currentStep) {

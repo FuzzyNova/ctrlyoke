@@ -5,6 +5,7 @@
 `npm run test:harness` currently contains one test file: `hooks.harness.test.ts`.
 
 That test is excellent because it:
+
 - Runs all harnesses against a single trivial task (run `ls`)
 - Uses a Node.js recorder script as a side-channel to verify hook delivery
 - Prefers free models (gpt-5-mini, big-pickle) or cheapest paid options (haiku)
@@ -18,12 +19,14 @@ by either the existing hooks test or the main unit test suite.
 ## What Is Already Covered (Don't Duplicate)
 
 ### Covered by hooks.harness.test.ts (real harnesses)
+
 - Single-step workflow runs to exit code 0 on all harnesses
 - `stop`, `sessionStart`, `preToolUse`, `postToolUse`, `userPromptSubmit` hooks fire
 - `--var` substitution works (used for outputFile path)
 - `--headless` and `--verbose` flags work
 
 ### Covered by main unit suite (mocked, no real harnesses)
+
 - `EndConditionHandler`: retry orchestration, retryPrompt templating, maxRetries ceiling
 - `SessionResolver`: sessionId inheritance, `resumeSession`, numeric `sessionId: N` references
 - `WorkflowExecutor`: multi-step execution loop, MCP finalStep wiring
@@ -62,6 +65,7 @@ Tests multi-step sequential execution and end conditions using `copilot-cli` and
 actually execute back-to-back, producing independent side effects from each.
 
 **Approach:**
+
 - Step 1 prompt: `"Run the bash command: echo step1 > fp-seq-test.txt"`
 - Step 2 prompt: `"Run the bash command: echo step2 >> fp-seq-test.txt"`
 - End condition script (step 2): reads `fp-seq-test.txt`, asserts both `step1` and `step2`
@@ -77,6 +81,7 @@ real CLI (script isolation, exit code interpretation, cwd resolution) has never 
 exercised with a live harness.
 
 **Approach:**
+
 - Step prompt: `"Run the bash command: echo SUCCESS > fp-end-cond.txt"`
 - End condition script: reads `fp-end-cond.txt`, returns `true` if content is `SUCCESS`,
   else `false`.
@@ -90,6 +95,7 @@ exercised with a live harness.
 `retryPrompt`, acts on it, and the end condition script eventually returns `true`.
 
 **Approach (counter-based, avoids relying on AI cooperation for the failure):**
+
 - End condition script: reads a counter file, increments it, returns `true` only when
   counter >= 2. First call always returns `false` even if the AI did the right thing.
 - `retryPrompt`: `"The validation is not satisfied yet. Run: echo RETRY_DONE > fp-retry.txt"`
@@ -112,29 +118,31 @@ that the AI can call to append new prompts. The wiring, MCP server startup, and 
 from AI tool call → new step executing have no harness-level test.
 
 **Approach:**
+
 - Single-step workflow with `mcpServers: ["flightpath"]`
 - Step prompt: `"Use the flightpath_append_queue MCP tool to add one more step with the
-  prompt: 'Run the bash command: echo MCP_STEP_DONE > fp-mcp-test.txt'. Then stop."`
+prompt: 'Run the bash command: echo MCP_STEP_DONE > fp-mcp-test.txt'. Then stop."`
 - Assert: exit code 0, `fp-mcp-test.txt` exists with content `MCP_STEP_DONE`, proving the
   MCP-appended step actually ran.
 
 **Harnesses:** `copilot-cli` only (gpt-5-mini; free, capable of MCP tool calls)
 
 **Notes:**
+
 - The MCP server must be running; the CLI starts it automatically when `mcpServers:
-  ["flightpath"]` is present. Verify exit code 3-style skip if MCP init fails.
+["flightpath"]` is present. Verify exit code 3-style skip if MCP init fails.
 - This test may be slow (two LLM calls). Set timeout to 120s.
 
 ---
 
 ## What We're Explicitly NOT Adding
 
-| Feature | Reason to skip |
-|---|---|
-| `resumeSession: true` end-to-end | The unit test fully covers session ID threading; an AI resuming session in practice is indistinguishable from any two-step workflow at the test boundary |
-| Tool permission enforcement | Would require knowing which tools the AI will try and blocking one — too AI-dependent to be deterministic |
-| Cross-harness end condition tests | Hooks test already validates all harnesses run; end condition wiring is harness-agnostic, so testing on two free harnesses is sufficient |
-| `copilot-chat` harness tests | Requires VS Code window automation; fundamentally different from CLI harnesses; out of scope |
+| Feature                           | Reason to skip                                                                                                                                           |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `resumeSession: true` end-to-end  | The unit test fully covers session ID threading; an AI resuming session in practice is indistinguishable from any two-step workflow at the test boundary |
+| Tool permission enforcement       | Would require knowing which tools the AI will try and blocking one — too AI-dependent to be deterministic                                                |
+| Cross-harness end condition tests | Hooks test already validates all harnesses run; end condition wiring is harness-agnostic, so testing on two free harnesses is sufficient                 |
+| `copilot-chat` harness tests      | Requires VS Code window automation; fundamentally different from CLI harnesses; out of scope                                                             |
 
 ---
 

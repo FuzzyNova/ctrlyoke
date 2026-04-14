@@ -226,7 +226,10 @@ export class PtyProcessManager {
    * observers from racing to claim control.
    */
   getExpectedController(workflowId: string): string | undefined {
-    return this.pendingControllers.get(workflowId) ?? this.workflowRunControllers.get(workflowId);
+    return (
+      this.pendingControllers.get(workflowId) ??
+      this.workflowRunControllers.get(workflowId)
+    );
   }
 
   /**
@@ -235,7 +238,10 @@ export class PtyProcessManager {
    * same workflow run inherit the new owner (e.g. after TERMINAL_CLAIM_CONTROL).
    * Returns the session if successfully assigned.
    */
-  assignController(sessionId: string, clientId: string): PtySession | undefined {
+  assignController(
+    sessionId: string,
+    clientId: string
+  ): PtySession | undefined {
     const session = this.sessions.get(sessionId);
     if (session) {
       session.controllerClientId = clientId;
@@ -297,7 +303,8 @@ export class PtyProcessManager {
     // an ephemeral-prompt auto-start), then fall back to the persistent run controller
     // so that steps 2+ in a multi-step workflow inherit the same owner as step 1.
     const pendingClientId = this.consumePendingController(options.workflowId);
-    const controllerClientId = pendingClientId ?? this.workflowRunControllers.get(options.workflowId);
+    const controllerClientId =
+      pendingClientId ?? this.workflowRunControllers.get(options.workflowId);
     session.controllerClientId = controllerClientId;
     if (controllerClientId) {
       this.workflowRunControllers.set(options.workflowId, controllerClientId);

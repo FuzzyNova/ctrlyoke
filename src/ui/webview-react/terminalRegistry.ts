@@ -335,7 +335,11 @@ export const terminalRegistry = {
    * Called when TERMINAL_SIZE_CHANGED arrives for a non-controller client,
    * and when isController transitions from true→false.
    */
-  applyControllerSize(workflowId: string, sessionId: string, cols: number): void {
+  applyControllerSize(
+    workflowId: string,
+    sessionId: string,
+    cols: number
+  ): void {
     const entry = registry.get(makeKey(workflowId, sessionId));
     if (!entry) return;
     entry.controllerCols = cols;

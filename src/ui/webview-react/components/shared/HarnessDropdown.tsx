@@ -133,7 +133,10 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
             e.stopPropagation();
             onUnhide?.(harness);
           }}
-          onTouchEnd={(e) => { e.preventDefault(); onUnhide?.(harness); }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            onUnhide?.(harness);
+          }}
           className="flex-shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
         >
           <i className="codicon codicon-eye text-[11px]" />
@@ -141,7 +144,10 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
         <button
           type="button"
           onClick={() => onSelect(harness)}
-          onTouchEnd={(e) => { e.preventDefault(); onSelect(harness); }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            onSelect(harness);
+          }}
           className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer flex items-center gap-1.5"
         >
           <HarnessIcon harnessId={harness} size={13} />
@@ -169,7 +175,12 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
         onClick={() =>
           isAvailable || isChecking ? onSelect(harness) : undefined
         }
-        onTouchEnd={(e) => { if (isAvailable || isChecking) { e.preventDefault(); onSelect(harness); } }}
+        onTouchEnd={(e) => {
+          if (isAvailable || isChecking) {
+            e.preventDefault();
+            onSelect(harness);
+          }
+        }}
         disabled={!isAvailable && !isChecking}
         className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent disabled:cursor-not-allowed cursor-inherit flex items-center gap-1.5"
       >
@@ -186,7 +197,10 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
             e.stopPropagation();
             onHide?.(harness);
           }}
-          onTouchEnd={(e) => { e.preventDefault(); onHide?.(harness); }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            onHide?.(harness);
+          }}
           className="flex-shrink-0 p-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
         >
           <i className="codicon codicon-eye-closed text-[11px]" />
@@ -371,7 +385,10 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
           <button
             type="button"
             onClick={() => handleSelect("default")}
-            onTouchEnd={(e) => { e.preventDefault(); handleSelect("default"); }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              handleSelect("default");
+            }}
             className="flex-1 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit"
           >
             {defaultLabel ?? "Default"}
@@ -405,7 +422,10 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         type="button"
         disabled={totalHidden === 0}
         onClick={() => setShowHidden((s) => !s)}
-        onTouchEnd={(e) => { e.preventDefault(); setShowHidden((s) => !s); }}
+        onTouchEnd={(e) => {
+          e.preventDefault();
+          setShowHidden((s) => !s);
+        }}
         className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
       >
         {showHidden

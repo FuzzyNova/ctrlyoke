@@ -201,7 +201,9 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
     resumeSession: (workflowId, sessionId) =>
       set((state) => {
         const sessions = (state.sessions[workflowId] ?? []).map((s) =>
-          s.id === sessionId ? { ...s, status: TERMINAL_SESSION_STATUS.RUNNING } : s
+          s.id === sessionId
+            ? { ...s, status: TERMINAL_SESSION_STATUS.RUNNING }
+            : s
         );
         return { sessions: { ...state.sessions, [workflowId]: sessions } };
       }),

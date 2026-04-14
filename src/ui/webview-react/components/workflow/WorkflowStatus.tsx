@@ -266,7 +266,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     : DEFAULT_WORKFLOW_NAME;
 
   return (
-    <div ref={containerRef} className={`workflow-status relative min-w-0 ${className}`}>
+    <div
+      ref={containerRef}
+      className={`workflow-status relative min-w-0 ${className}`}
+    >
       {/* Editing Mode */}
       {isEditing ? (
         <input
