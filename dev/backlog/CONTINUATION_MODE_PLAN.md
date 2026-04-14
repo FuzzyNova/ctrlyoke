@@ -268,11 +268,14 @@ completion.** No code changes needed for this scenario.
 ### 3. ~~`CliIntegration.ts` — inject path~~ — **DONE** (in `CliExecutionRunner`)
 
 Implemented as `CliExecutionRunner.executeInteractiveInject()`:
-- Writes `session.promptArgument + "\r"` to the active PTY via `transportCoordinator.writeToCurrentPtySession()`
+- Writes `"\x1b[I" + session.promptArgument + "\r"` to the active PTY via `transportCoordinator.writeToCurrentPtySession()` — the focus-in VT sequence activates the TUI's input handler; `\r` submits
+- After the write, yields one event loop tick (`setTimeout(resolve, 0)`) then checks `failureTracker.getPtyTermination()`. If the PTY died (e.g. Copilot CLI exits after each prompt), the inject falls back to restart mode. This is needed because `writeToCurrentPtySession` returns `true` even when the process just exited — `currentPtySession` is still set until node-pty's `onExit` callback fires asynchronously in the next event loop iteration.
 - Calls `monitorLogFile()` with the stored log path and `startTime = new Date()` — `NotificationMonitorBase.monitorForCompletion()` uses `isFileNewerThan(stopFile, startTime)` so old stop files from prompt N are naturally filtered out
 - Propagates session ID back to `session.setExtractedSessionId()`
 
-> **Open question (Q2):** Does `"\r"` correctly submit in the Claude TUI? Verify empirically — may need `"\r\n"` or a different sequence.
+> **Q2 resolved:** The submit sequence is `"\x1b[I" + promptText + "\r"`. Breakdown:
+> - `\x1b[I` (ESC [ I) = focus-in VT sequence. Copilot CLI (and other TUIs using focus tracking) only activate their keyboard input handler after receiving this. Without it, text and Enter are silently ignored even though the PTY write succeeds. TUIs that don't use focus tracking (Claude CLI) safely ignore the sequence.
+> - `\r` (CR, 0x0D) = the submit key. Confirmed by logging the exact bytes xterm.js sends when a user presses Enter (`hex=0d`). `\n` acts as a newline in multi-line input boxes; `\r\n` adds text but inserts a newline instead of submitting.
 
 ### 4. ~~`CliInteractiveStartupCoordinator.ts`~~ — **Not needed**
 
@@ -296,6 +299,33 @@ with active PTY sessions now works correctly.
 
 The settings UI talks to the file-based config service directly. No `contributes.configuration` entry required.
 
+### 9. ~~Inject on workflow resume~~ — **DONE**
+
+Inject mode now works when **appending a prompt to a completed (retired) workflow whose TUI is still alive** — the common "append prompt → resume" flow.
+
+**Problem:** When a workflow is resumed after completion, a new `CliIntegration` is created from scratch. Its `CliExecutionRunner.lastInteractiveContext` is `undefined`, and the first prompt has `promptIndex = 0`. The old `promptIndex === 0` guard was blocking inject entirely, but even without the guard, there was no saved context to inject into.
+
+**Fix:**
+
+- `PtySession` (`PtyProcessManager.ts`) — gained two new fields: `injectLogPath?: string` and `injectSessionId?: string | null`. These are written by `CliTransportCoordinator.updateCurrentPtyInjectContext()` after each prompt completes. They persist on the PTY object even after the `CliIntegration` that wrote them is discarded.
+
+- `CliTransportCoordinator` — two new methods:
+  - `updateCurrentPtyInjectContext(logPath, sessionId)` — saves inject context onto the current `PtySession`.
+  - `adoptExistingPtySession(session, onExit)` — wires a new integration to an already-running PTY by setting `currentPtySession` and registering an additional `onExit` listener so the new integration's `failureTracker` is notified if that PTY exits.
+
+- `CliExecutionRunner` — `updateCurrentPtyInjectContext?` added to `CliExecutionTransportCoordinator` interface; called in `executeInTerminal` and `executeInteractiveInject` whenever `lastInteractiveContext` is set or updated. `restoreInjectContext(logPath, sessionId)` public method re-hydrates `lastInteractiveContext` from saved PTY data.
+
+- `CliIntegration` — `tryRestoreInjectContext(workflowId)` private method: looks up running PTY sessions for the workflow via `getPtyProcessManager().getSessionsForWorkflow(workflowId)`, finds any with `injectLogPath` set, calls `adoptExistingPtySession` + `restoreInjectContext` on the newest one. Called at the top of `runExecutionSession` when `isInteractive`. The `promptIndex === 0` guard in `shouldUseInjectMode` is removed — the `lastInteractiveContext` null-check is now the sole gate; if context was restored, inject proceeds.
+
+**Implementation deviation from above plan — `liveInjectIntegrations` (actual):**
+
+Rather than storing inject context on `PtySession` objects and reconstructing it in a new integration, the actual implementation keeps the entire `CliIntegration` alive across runs. The `WorkflowInstance` holds a `Map<string, HarnessIntegration>` (`liveInjectIntegrations`) keyed by the same harness ID used in `executionIntegrations` (e.g. `"copilot-cli"`). One entry per harness whose PTY session is still alive at end-of-run.
+
+- **Multi-harness support**: A workflow with copilot-cli for prompt 1 and claude-cli for prompt 2 produces two entries. The next run's first prompt injects into whichever harness it targets — both live sessions are available.
+- **Key correctness**: The map key is captured from `executionIntegrations.entries()` (the full Harness enum value), not from `getIntegrationMode()` which returns the provider short name (e.g. `"copilot"` ≠ `"copilot-cli"`). Using the wrong key caused a cache miss on restore — the fix captures the key at save time.
+- **Restore**: At the top of `startWorkflowExecution`, all entries in `liveInjectIntegrations` are re-inserted into `executionIntegrations` (after `resetForNewRun()`) then cleared. `createIntegrationForMode` finds and returns the correct live instance; `shouldUseInjectMode` sees `lastInteractiveContext` and inject proceeds.
+- **Cleanup**: Each entry registers an `onPtySessionEnded` callback that deletes it from the map and disposes it when the PTY exits. `WorkflowInstance.dispose()` iterates and disposes all remaining entries.
+
 ---
 
 ## Scope & Constraints
@@ -305,8 +335,9 @@ The settings UI talks to the file-based config service directly. No `contributes
 - **Claude CLI first.** Claude is the harness with the confirmed cache bug and the
   clearest benefit. Other hook-based harnesses (Codex, Qwen, Gemini, OpenCode) could
   support inject mode later if their TUI input semantics are compatible.
-- **Copilot CLI:** Uses log file monitoring rather than Stop hooks; different completion
-  detection path. Evaluate separately.
+- **Copilot CLI:** The TUI stays alive between turns. Inject mode works once the focus-in
+  VT sequence (`\x1b[I`) is prepended — without it the TUI's input handler ignores
+  keyboard input even though the PTY write succeeds. Confirmed working after the fix.
 - **`resumeSession` on follow-up prompts:** In inject mode, the `resumeSession` field on
   prompt N+1 is effectively a no-op — the session is already live. Log a debug note if
   `resumeSession: false` is set on a follow-up prompt in inject mode (the session
