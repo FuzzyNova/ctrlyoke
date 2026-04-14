@@ -512,3 +512,4 @@ _Timeline is aspirational. Pre-release — prioritize quality over schedule._
 | [`CLINE_INTEGRATION_PLAN.md`](CLINE_INTEGRATION_PLAN.md)                     | NOT_IMPLEMENTED | —            |
 | [`VSCODE_LM_API_FEATURES.md`](VSCODE_LM_API_FEATURES.md)                     | NOT_IMPLEMENTED | —            |
 | [`VSCODE_TESTING_E2E_MCP.md`](VSCODE_TESTING_E2E_MCP.md)                     | NOT_IMPLEMENTED | —            |
+| [`SIDE_BY_SIDE_DIFF_PLAN.md`](SIDE_BY_SIDE_DIFF_PLAN.md)                     | NOT_IMPLEMENTED | —            |

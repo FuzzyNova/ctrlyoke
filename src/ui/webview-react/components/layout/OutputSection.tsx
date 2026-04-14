@@ -463,6 +463,25 @@ export const OutputSection: React.FC = () => {
     executionState === EXECUTION_STATES.RUNNING ||
     executionState === EXECUTION_STATES.CANCELLING;
 
+  useEffect(() => {
+    if (
+      activeOutputTab !== "output" ||
+      executionState !== EXECUTION_STATES.RUNNING ||
+      (!isViewingHistory && !historyOutputs)
+    ) {
+      return;
+    }
+
+    useWorkflowStore.getState().clearHistoryOutputs();
+    useUiStore.getState().clearHistoryView();
+  }, [
+    activeOutputTab,
+    activeWorkflowId,
+    executionState,
+    historyOutputs,
+    isViewingHistory,
+  ]);
+
   // Only show undo actions when execution is not active
   const allowUndoActions = !isExecutionActive;
 

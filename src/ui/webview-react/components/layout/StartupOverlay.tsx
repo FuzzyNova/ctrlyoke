@@ -17,14 +17,15 @@ const STARTUP_TIMEOUT_MS = 8000;
  */
 export const StartupOverlay: React.FC = () => {
   const startupReady = useUiStore((s) => s.startupReady);
+  const devRestarting = useUiStore((s) => s.devRestarting);
   const setStartupReady = useUiStore((s) => s.setStartupReady);
 
   // Safety timeout: dismiss overlay if STARTUP_COMPLETE never arrives.
   useEffect(() => {
-    if (startupReady) return;
+    if (startupReady || devRestarting) return;
     const id = setTimeout(() => setStartupReady(true), STARTUP_TIMEOUT_MS);
     return () => clearTimeout(id);
-  }, [startupReady, setStartupReady]);
+  }, [startupReady, devRestarting, setStartupReady]);
 
   if (startupReady) return null;
 
@@ -38,7 +39,9 @@ export const StartupOverlay: React.FC = () => {
       <div className="flex flex-col items-center gap-3">
         <div className="w-6 h-6 border-2 border-description-fg border-t-transparent rounded-full animate-spin" />
         <span className="text-xs text-description-fg select-none">
-          Loading…
+          {devRestarting
+            ? "VS Code is reloading. Active workflows have been stopped. Reconnecting..."
+            : "Loading..."}
         </span>
       </div>
     </div>

@@ -8,3 +8,4 @@ export { McpHooksSection } from "./McpHooksSection";
 export { QueueSection } from "./QueueSection";
 export { HistorySection } from "./HistorySection";
 export { ServerSection } from "./ServerSection";
+export { DeveloperSection } from "./DeveloperSection";

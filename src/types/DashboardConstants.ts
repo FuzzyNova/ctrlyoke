@@ -234,6 +234,23 @@ export const MESSAGE_TYPES = {
 
   // Startup lifecycle — Extension → Webview
   STARTUP_COMPLETE: "startupComplete", // Extension → Webview: startup sequence done (with or without auto-load)
+
+  // Developer dashboard actions — Webview → Extension (dev builds only)
+  DEV_BUILD_EXTENSION: "dev:buildExtension",
+  DEV_BUILD_ALL: "dev:buildAll",
+  DEV_RELOAD_WINDOW: "dev:reloadWindow",
+  DEV_RESTART_EXTENSION_HOST: "dev:restartExtensionHost",
+  DEV_BUILD_EXTENSION_AND_RELOAD: "dev:buildExtensionAndReload",
+  DEV_BUILD_ALL_AND_RELOAD: "dev:buildAllAndReload",
+  DEV_REQUEST_STATUS: "dev:requestStatus",
+
+  // Developer dashboard events — Extension → Webview (dev builds only)
+  DEV_STATUS: "dev:status",
+  DEV_BUILD_STARTED: "dev:buildStarted",
+  DEV_BUILD_OUTPUT: "dev:buildOutput",
+  DEV_BUILD_COMPLETED: "dev:buildCompleted",
+  DEV_RESTARTING: "dev:restarting",
+  DEV_COMMAND_UNAVAILABLE: "dev:commandUnavailable",
 } as const;
 
 // ============================================================================

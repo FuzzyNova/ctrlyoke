@@ -17,6 +17,8 @@ import {
 import type {
   CliEvent,
   CliOutput,
+  DevDashboardAction,
+  DevStatus,
   UndoExecutionTarget,
   UndoResult,
   UndoPromptResultMessage,
@@ -47,6 +49,7 @@ import type { IDashboardProvider } from "./IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { PostMessageFn } from "./WebviewSettingsSync";
 import { DashboardBroadcastHub } from "./DashboardBroadcastHub";
+import { IS_DEV_MODE } from "../utils/BuildConfig";
 
 // Re-export CliOutput for external use
 export type { CliOutput } from "../types/WebviewMessageTypes";
@@ -105,7 +108,11 @@ export class FlightPathWebviewProvider
     const getOutputHistoryManager = () => this.outputHistoryManager;
 
     // Create delegate classes
-    this.settingsSync = new WebviewSettingsSync(postMessage, getOrchestrator);
+    this.settingsSync = new WebviewSettingsSync(
+      postMessage,
+      getOrchestrator,
+      () => this.getDevStatus()
+    );
     this.serializer = new WorkflowSerializer(
       postMessage,
       templateManager,
@@ -120,6 +127,10 @@ export class FlightPathWebviewProvider
       {
         handleClearWorkflow: () => this.handleClearWorkflow(),
         updateWorkflowName: (name: string) => this.updateWorkflowName(name),
+        handleDevAction: (action, scopedPostMessage) =>
+          this.handleDevAction(action, scopedPostMessage),
+        handleDevStatusRequest: (scopedPostMessage) =>
+          this.sendDevStatus(scopedPostMessage),
         getServerUrl: () => this.runningServerUrl,
       }
     );
@@ -179,7 +190,7 @@ export class FlightPathWebviewProvider
     // webview iframe loads, but React's message listener may not be
     // attached yet. The READY handler sends INIT again as a
     // guaranteed fallback once React confirms it is listening.
-    this.settingsSync.sendInitialState();
+    void this.settingsSync.sendInitialState();
 
     if (this._pendingActiveWorkflowId !== undefined) {
       this.notifyActiveWorkflowChanged(this._pendingActiveWorkflowId);
@@ -963,6 +974,70 @@ window.vscodeApi = acquireVsCodeApi();
       nonce += possible.charAt(Math.floor(Math.random() * possible.length));
     }
     return nonce;
+  }
+
+  private async getDevStatus(): Promise<DevStatus | undefined> {
+    if (!IS_DEV_MODE) {
+      return undefined;
+    }
+
+    const commands = await vscode.commands.getCommands(false);
+    const extensionOutPath = vscode.Uri.joinPath(
+      this.context.extensionUri,
+      "out",
+      "extension.js"
+    ).fsPath;
+    let buildDate = new Date().toISOString();
+    try {
+      buildDate = fsSync.statSync(extensionOutPath).mtime.toISOString();
+    } catch {
+      // Use the current timestamp if the compiled bundle has not been created.
+    }
+
+    return {
+      enabled: true,
+      buildDate,
+      commands: {
+        reloadWindow: commands.includes("workbench.action.reloadWindow"),
+        restartExtensionHost: commands.includes(
+          "workbench.action.restartExtensionHost"
+        ),
+      },
+    };
+  }
+
+  private async sendDevStatus(postMessage: PostMessageFn): Promise<void> {
+    const dev = await this.getDevStatus();
+    if (!dev) {
+      postMessage({
+        type: MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE,
+        command: MESSAGE_TYPES.DEV_REQUEST_STATUS,
+        reason: "Developer actions are unavailable in this build.",
+      });
+      return;
+    }
+
+    postMessage({ type: MESSAGE_TYPES.DEV_STATUS, dev });
+  }
+
+  private async handleDevAction(
+    action: DevDashboardAction,
+    postMessage: PostMessageFn
+  ): Promise<void> {
+    if (!IS_DEV_MODE) {
+      postMessage({
+        type: MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE,
+        command: action,
+        reason: "Developer actions are unavailable in this build.",
+      });
+      return;
+    }
+
+    const { handleDevDashboardAction } = await import("../dev/DevCommands");
+    await handleDevDashboardAction(action, {
+      context: this.context,
+      postMessage,
+    });
   }
 
   public postMessage(message: unknown): void {

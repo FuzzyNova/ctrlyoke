@@ -44,6 +44,7 @@ import { SkillDiscovery } from "../utils/SkillDiscovery";
 import type { SkillInfo } from "../utils/SkillDiscovery";
 import { configService } from "../config/FlightPathConfigService";
 import type { FlightPathGlobalSettings } from "../types/FlightPathSettings";
+import type { DevStatus } from "../types/WebviewMessageTypes";
 
 /**
  * Harness availability status
@@ -130,7 +131,8 @@ export class WebviewSettingsSync {
 
   constructor(
     private readonly postMessage: PostMessageFn,
-    private readonly getOrchestrator: () => WorkflowOrchestrator | undefined
+    private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
+    private readonly getDevStatus?: () => Promise<DevStatus | undefined>
   ) {}
 
   private emitMessage(
@@ -192,7 +194,9 @@ export class WebviewSettingsSync {
    * Send full initial state to the webview (INIT message).
    * Called on READY and during resolveWebviewView().
    */
-  sendInitialState(postMessage: PostMessageFn = this.postMessage): void {
+  async sendInitialState(
+    postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
     const harnessStatuses = Object.entries(this.harnessStatus)
       .map(([id, s]) => `${id}=${s.status}`)
       .join(", ");
@@ -203,6 +207,7 @@ export class WebviewSettingsSync {
     const workflowState = this.getCurrentState();
     const globalSettings = this.buildGlobalSettings();
     const modelOptions = this.buildModelOptions();
+    const dev = await this.getDevStatus?.();
 
     this.emitMessage(
       {
@@ -215,6 +220,7 @@ export class WebviewSettingsSync {
           harnessStatus: this.harnessStatus,
           availableAgents: this.availableAgents,
           availableSkills: this.availableSkills,
+          ...(dev ? { dev } : {}),
         },
       },
       postMessage

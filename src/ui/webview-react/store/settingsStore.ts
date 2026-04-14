@@ -17,6 +17,7 @@ import {
   PERMISSION_MODES,
 } from "@root/types/DashboardConstants";
 import type {
+  DevStatus,
   FullGlobalSettings,
   PreCondition,
 } from "@root/types/WebviewMessageTypes";
@@ -55,6 +56,20 @@ export interface HarnessStatus {
   available: boolean;
   status: HarnessStatusString;
   message?: string;
+}
+
+export interface DevBuildState {
+  isBuilding: boolean;
+  script: "compile:extension" | "compile" | null;
+  command: string | null;
+  output: string;
+  lastResult: {
+    success: boolean;
+    exitCode: number | null;
+    signal?: string | null;
+    durationMs: number;
+    errorSummary?: string;
+  } | null;
 }
 
 /**
@@ -149,6 +164,10 @@ interface SettingsState {
 
   // Server URL (set when server starts, cleared when stopped)
   serverUrl: string | null;
+
+  // Developer dashboard controls (dev builds only)
+  dev: DevStatus | null;
+  devBuild: DevBuildState;
 }
 
 /**
@@ -197,6 +216,16 @@ interface SettingsActions {
 
   // Server URL
   setServerUrl: (url: string | null) => void;
+
+  // Developer dashboard
+  setDevStatus: (dev: DevStatus | null) => void;
+  startDevBuild: (
+    script: "compile:extension" | "compile",
+    command: string
+  ) => void;
+  appendDevBuildOutput: (stream: "stdout" | "stderr", chunk: string) => void;
+  completeDevBuild: (result: DevBuildState["lastResult"]) => void;
+  clearDevBuildOutput: () => void;
 
   // Effective value resolution (workflow > global)
   getEffectiveHarness: () => HarnessId;
@@ -294,6 +323,14 @@ const initialState: SettingsState = {
   fullGlobalSettings: null,
   serverRunning: false,
   serverUrl: null,
+  dev: null,
+  devBuild: {
+    isBuilding: false,
+    script: null,
+    command: null,
+    output: "",
+    lastResult: null,
+  },
 };
 
 export const useSettingsStore = create<SettingsState & SettingsActions>(
@@ -397,6 +434,45 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     setServerRunning: (running) => set({ serverRunning: running }),
 
     setServerUrl: (url) => set({ serverUrl: url }),
+
+    setDevStatus: (dev) => set({ dev }),
+
+    startDevBuild: (script, command) =>
+      set({
+        devBuild: {
+          isBuilding: true,
+          script,
+          command,
+          output: "",
+          lastResult: null,
+        },
+      }),
+
+    appendDevBuildOutput: (stream, chunk) =>
+      set((state) => ({
+        devBuild: {
+          ...state.devBuild,
+          output: `${state.devBuild.output}${stream === "stderr" ? "[stderr] " : ""}${chunk}`,
+        },
+      })),
+
+    completeDevBuild: (result) =>
+      set((state) => ({
+        devBuild: {
+          ...state.devBuild,
+          isBuilding: false,
+          lastResult: result,
+        },
+      })),
+
+    clearDevBuildOutput: () =>
+      set((state) => ({
+        devBuild: {
+          ...state.devBuild,
+          output: "",
+          lastResult: null,
+        },
+      })),
 
     // ============================================================================
     // EFFECTIVE VALUE RESOLUTION (Workflow > Global)

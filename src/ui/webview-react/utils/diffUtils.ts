@@ -19,6 +19,63 @@ export interface DiffLine {
 }
 
 /**
+ * A paired row for side-by-side diff rendering.
+ * Each side carries the original flat-array index so HLJS highlighted
+ * lines (indexed by that same flat array) can be looked up correctly.
+ */
+export interface SideBySideRow {
+  left: { line: DiffLine; originalIndex: number } | null;
+  right: { line: DiffLine; originalIndex: number } | null;
+}
+
+/**
+ * Convert a flat DiffLine array into SideBySideRow pairs.
+ *
+ * Within each changed block (consecutive removed/added lines) the removed
+ * lines are zipped with the added lines in order; the shorter side is padded
+ * with `null`. Context lines produce a symmetric row (both sides point to the
+ * same DiffLine).
+ */
+export function buildSideBySideRows(lines: DiffLine[]): SideBySideRow[] {
+  const rows: SideBySideRow[] = [];
+  const pendingRemoved: Array<{ line: DiffLine; originalIndex: number }> = [];
+  const pendingAdded: Array<{ line: DiffLine; originalIndex: number }> = [];
+
+  const flush = () => {
+    const len = Math.max(pendingRemoved.length, pendingAdded.length);
+    for (let i = 0; i < len; i++) {
+      rows.push({
+        left: pendingRemoved[i] ?? null,
+        right: pendingAdded[i] ?? null,
+      });
+    }
+    pendingRemoved.length = 0;
+    pendingAdded.length = 0;
+  };
+
+  lines.forEach((line, index) => {
+    if (line.type === "removed") {
+      // If we were collecting added lines before this removed line, close the
+      // current change block first (handles uncommon interleaved ordering).
+      if (pendingAdded.length > 0) flush();
+      pendingRemoved.push({ line, originalIndex: index });
+    } else if (line.type === "added") {
+      pendingAdded.push({ line, originalIndex: index });
+    } else {
+      // context — close any open change block then emit symmetric row
+      flush();
+      rows.push({
+        left: { line, originalIndex: index },
+        right: { line, originalIndex: index },
+      });
+    }
+  });
+  flush();
+
+  return rows;
+}
+
+/**
  * Parse unified diff hunks (e.g. from Claude's structured patch) into DiffLine array.
  */
 export function parseUnifiedDiff(hunks: UnifiedDiffHunk[]): DiffLine[] {

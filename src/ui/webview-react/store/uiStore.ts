@@ -239,6 +239,7 @@ interface UiState {
   // Startup overlay — true once STARTUP_COMPLETE (or WORKFLOW_LOADED) is received.
   // NOT persisted: every panel open should show the overlay until startup settles.
   startupReady: boolean;
+  devRestarting: boolean;
 
   // This client's identity assigned by the extension host on connect.
   // Used to derive isController for terminal sessions.
@@ -401,6 +402,7 @@ interface UiActions {
 
   // Startup overlay
   setStartupReady: (ready: boolean) => void;
+  setDevRestarting: (restarting: boolean) => void;
 
   // Client identity
   setMyClientId: (clientId: string) => void;
@@ -468,6 +470,7 @@ const initialState: UiState = {
   globalSettingsOpen: false,
   globalSettingsActiveTab: "general",
   startupReady: false,
+  devRestarting: false,
   myClientId: "",
 };
 
@@ -883,7 +886,13 @@ export const useUiStore = create<UiState & UiActions>()(
       // STARTUP OVERLAY
       // ============================================================================
 
-      setStartupReady: (ready) => set({ startupReady: ready }),
+      setStartupReady: (ready) =>
+        set({
+          startupReady: ready,
+          ...(ready ? { devRestarting: false } : {}),
+        }),
+      setDevRestarting: (restarting) =>
+        set({ devRestarting: restarting, startupReady: !restarting }),
       setMyClientId: (clientId) => set({ myClientId: clientId }),
 
       // ============================================================================

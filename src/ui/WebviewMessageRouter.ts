@@ -31,6 +31,7 @@ import type {
   UndoWorkflowChangesMessage,
   RedoWorkflowChangesMessage,
   UndoRecord,
+  DevDashboardAction,
 } from "../types/WebviewMessageTypes";
 import type { McpServerConfig } from "../types/FlightPathTypes";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
@@ -146,7 +147,7 @@ export class WebviewMessageRouter {
     // ── Lifecycle ──────────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.READY, async (message) => {
       Log.debug("Received READY from React — sending INIT");
-      this.settingsSync.sendInitialState(this.getCurrentPostMessage());
+      await this.settingsSync.sendInitialState(this.getCurrentPostMessage());
       // Tell the webview its own client identity so it can compute isController
       this.emitMessage({
         type: MESSAGE_TYPES.CLIENT_ID_ASSIGNED,
@@ -277,6 +278,45 @@ export class WebviewMessageRouter {
           }
         }
       }
+    });
+
+    const routeDevAction = (action: DevDashboardAction) => async () => {
+      if (!this.callbacks.handleDevAction) {
+        this.emitMessage({
+          type: MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE,
+          command: action,
+          reason: "Developer actions are unavailable in this build.",
+        });
+        return;
+      }
+      await this.callbacks.handleDevAction(
+        action,
+        this.getCurrentPostMessage()
+      );
+    };
+
+    table.set(
+      MESSAGE_TYPES.DEV_BUILD_EXTENSION,
+      routeDevAction("buildExtension")
+    );
+    table.set(MESSAGE_TYPES.DEV_BUILD_ALL, routeDevAction("buildAll"));
+    table.set(MESSAGE_TYPES.DEV_RELOAD_WINDOW, routeDevAction("reloadWindow"));
+    table.set(
+      MESSAGE_TYPES.DEV_RESTART_EXTENSION_HOST,
+      routeDevAction("restartExtensionHost")
+    );
+    table.set(
+      MESSAGE_TYPES.DEV_BUILD_EXTENSION_AND_RELOAD,
+      routeDevAction("buildExtensionAndReload")
+    );
+    table.set(
+      MESSAGE_TYPES.DEV_BUILD_ALL_AND_RELOAD,
+      routeDevAction("buildAllAndReload")
+    );
+    table.set(MESSAGE_TYPES.DEV_REQUEST_STATUS, async () => {
+      await this.callbacks.handleDevStatusRequest?.(
+        this.getCurrentPostMessage()
+      );
     });
 
     // ── Dashboard — Workflow Control ──────────────────────────────────────
@@ -1770,6 +1810,11 @@ export class WebviewMessageRouter {
 export interface WebviewRouterCallbacks {
   handleClearWorkflow: () => Promise<void>;
   updateWorkflowName: (name: string) => void;
+  handleDevAction?: (
+    action: DevDashboardAction,
+    postMessage: PostMessageFn
+  ) => Promise<void>;
+  handleDevStatusRequest?: (postMessage: PostMessageFn) => Promise<void>;
   /** Returns the hosted server URL if the server is currently running, undefined otherwise. */
   getServerUrl?: () => string | undefined;
 }

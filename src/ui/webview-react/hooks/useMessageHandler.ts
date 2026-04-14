@@ -256,6 +256,12 @@ function createMessageHandlers(): MessageHandlerMap {
       settingsStore.setAvailableSkills(data.availableSkills);
     }
 
+    if (data.dev) {
+      settingsStore.setDevStatus(data.dev);
+    } else {
+      settingsStore.setDevStatus(null);
+    }
+
     // Load workflow if data includes prompts
     if (data.steps && data.steps.length > 0) {
       workflowStore.loadWorkflow({
@@ -296,6 +302,51 @@ function createMessageHandlers(): MessageHandlerMap {
     if (message.settings) {
       settingsStore.setFullGlobalSettings(message.settings);
     }
+  };
+
+  // --------------------------------------------------------------------------
+  // Developer dashboard events
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.DEV_STATUS] = (message) => {
+    useSettingsStore.getState().setDevStatus(message.dev ?? null);
+  };
+
+  handlers[MESSAGE_TYPES.DEV_BUILD_STARTED] = (message) => {
+    useSettingsStore
+      .getState()
+      .startDevBuild(message.script, message.command);
+  };
+
+  handlers[MESSAGE_TYPES.DEV_BUILD_OUTPUT] = (message) => {
+    useSettingsStore
+      .getState()
+      .appendDevBuildOutput(message.stream, message.chunk ?? "");
+  };
+
+  handlers[MESSAGE_TYPES.DEV_BUILD_COMPLETED] = (message) => {
+    useSettingsStore.getState().completeDevBuild({
+      success: Boolean(message.success),
+      exitCode: message.exitCode ?? null,
+      signal: message.signal ?? null,
+      durationMs: message.durationMs ?? 0,
+      errorSummary: message.errorSummary,
+    });
+    useUiStore
+      .getState()
+      .showToast(
+        message.success ? "Build completed" : "Build failed",
+        message.success ? "success" : "error"
+      );
+  };
+
+  handlers[MESSAGE_TYPES.DEV_RESTARTING] = () => {
+    useUiStore.getState().setDevRestarting(true);
+  };
+
+  handlers[MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE] = (message) => {
+    useUiStore
+      .getState()
+      .showToast(message.reason ?? "Developer command unavailable", "error");
   };
 
   // --------------------------------------------------------------------------
@@ -1217,17 +1268,33 @@ function createMessageHandlers(): MessageHandlerMap {
         runStates: [],
       });
     } else {
+      const workflowStore = useWorkflowStore.getState();
+      const uiStore = useUiStore.getState();
+      const isLiveCurrentRun =
+        currentRunIndex === 0 &&
+        workflowStore.executionState === EXECUTION_STATES.RUNNING;
+
+      if (isLiveCurrentRun) {
+        // Workflow replay may send the newest run's history after SESSION_RESTORED.
+        // During an active run, index 0 represents the live run, so keep the
+        // output panel on live data and only refresh the run selector metadata.
+        workflowStore.clearHistoryOutputs();
+        uiStore.clearHistoryView();
+        uiStore.setRunTimestamps(runTimestamps ?? []);
+        uiStore.setRunStates(runStates ?? []);
+        useUiStore.setState({ availableRuns });
+        return;
+      }
+
       WebviewLog.debug(
         `[MessageHandler] OUTPUT_HISTORY_LOADED: availableRuns=${availableRuns}, runTimestamps=${JSON.stringify(runTimestamps)}`
       );
-      useWorkflowStore
-        .getState()
-        .loadHistoryRun(history, availableRuns, currentRunIndex);
+      workflowStore.loadHistoryRun(history, availableRuns, currentRunIndex);
       if (runTimestamps !== undefined) {
-        useUiStore.getState().setRunTimestamps(runTimestamps);
+        uiStore.setRunTimestamps(runTimestamps);
       }
       if (runStates !== undefined) {
-        useUiStore.getState().setRunStates(runStates);
+        uiStore.setRunStates(runStates);
       }
     }
   };

@@ -240,6 +240,45 @@ describe("EXECUTION_COMPLETED", () => {
 });
 
 // ---------------------------------------------------------------------------
+// OUTPUT_HISTORY_LOADED
+// ---------------------------------------------------------------------------
+
+describe("OUTPUT_HISTORY_LOADED", () => {
+  it("keeps the output view live when the newest run history arrives during execution", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      useWorkflowStore
+        .getState()
+        .setExecutionState(EXECUTION_STATES.RUNNING);
+      useUiStore.getState().setHistoryView(0, 1);
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.OUTPUT_HISTORY_LOADED, {
+        history: {
+          runId: "run-1",
+          startedAt: 1000,
+          completedAt: undefined,
+          executionState: EXECUTION_STATES.RUNNING,
+          orderedEntries: [],
+          promptOutputs: {},
+        },
+        availableRuns: 1,
+        currentRunIndex: 0,
+        runTimestamps: [1000],
+        runStates: [EXECUTION_STATES.RUNNING],
+      });
+    });
+
+    expect(useUiStore.getState().isViewingHistory).toBe(false);
+    expect(useUiStore.getState().availableRuns).toBe(1);
+    expect(useUiStore.getState().runTimestamps).toEqual([1000]);
+    expect(useWorkflowStore.getState().historyOutputs).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // PROGRESS_UPDATE
 // ---------------------------------------------------------------------------
 

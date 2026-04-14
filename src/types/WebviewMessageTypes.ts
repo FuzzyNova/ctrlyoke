@@ -311,6 +311,63 @@ export interface InitMessageData {
     { available: boolean; status: string; message?: string }
   >;
   availableAgents: Array<{ name: string; path: string; description?: string }>;
+  dev?: DevStatus;
+}
+
+export interface DevStatus {
+  enabled: boolean;
+  buildDate: string;
+  commands: {
+    reloadWindow: boolean;
+    restartExtensionHost: boolean;
+  };
+}
+
+export type DevDashboardAction =
+  | "buildExtension"
+  | "buildAll"
+  | "reloadWindow"
+  | "restartExtensionHost"
+  | "buildExtensionAndReload"
+  | "buildAllAndReload";
+
+export interface DevStatusMessage {
+  type: typeof MESSAGE_TYPES.DEV_STATUS;
+  dev: DevStatus;
+}
+
+export interface DevBuildStartedMessage {
+  type: typeof MESSAGE_TYPES.DEV_BUILD_STARTED;
+  script: "compile:extension" | "compile";
+  command: string;
+}
+
+export interface DevBuildOutputMessage {
+  type: typeof MESSAGE_TYPES.DEV_BUILD_OUTPUT;
+  stream: "stdout" | "stderr";
+  chunk: string;
+}
+
+export interface DevBuildCompletedMessage {
+  type: typeof MESSAGE_TYPES.DEV_BUILD_COMPLETED;
+  success: boolean;
+  exitCode: number | null;
+  signal?: string | null;
+  durationMs: number;
+  errorSummary?: string;
+}
+
+export interface DevRestartingMessage {
+  type: typeof MESSAGE_TYPES.DEV_RESTARTING;
+  command:
+    | "workbench.action.reloadWindow"
+    | "workbench.action.restartExtensionHost";
+}
+
+export interface DevCommandUnavailableMessage {
+  type: typeof MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE;
+  command: string;
+  reason?: string;
 }
 
 /**
@@ -1097,4 +1154,10 @@ export type IncomingMessage =
   | McpWorkspaceServersResultMessage
   | GlobalSettingsLoadedMessage
   | GlobalSettingUpdatedMessage
+  | DevStatusMessage
+  | DevBuildStartedMessage
+  | DevBuildOutputMessage
+  | DevBuildCompletedMessage
+  | DevRestartingMessage
+  | DevCommandUnavailableMessage
   | { type: typeof MESSAGE_TYPES.STARTUP_COMPLETE };

@@ -7,18 +7,35 @@
  * - Expanded: diff lines computed via useMemo (gated on expand), then HLJS
  *   runs in a useEffect so it never blocks the initial paint. Shows plain
  *   (un-highlighted) diff lines immediately and upgrades once HLJS finishes.
+ *
+ * Layout:
+ * - Wide panels (≥ 1024 px): side-by-side (old left, new right), detected via
+ *   ResizeObserver through useElementNarrow.
+ * - Narrow panels (< 1024 px): classic unified inline view.
  */
-import React, { useMemo, memo, useState, useEffect, useRef } from "react";
+import React, {
+  useMemo,
+  memo,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+} from "react";
 import {
   parseUnifiedDiff,
   generateDiffLines,
+  buildSideBySideRows,
   type DiffLine,
+  type SideBySideRow,
 } from "@utils/outputUtils";
 import { highlightLines, injectHljsStyles } from "@utils/hljsUtils";
 import { useUiStore } from "@store/uiStore";
+import { useElementNarrow } from "@hooks/useElementNarrow";
 
 // Ensure VS Code-themed HLJS stylesheet is in <head> (idempotent)
 injectHljsStyles();
+
+const SIDE_BY_SIDE_THRESHOLD = 1024;
 
 const DIFF_LINE_STYLES = {
   added: {
@@ -91,6 +108,26 @@ export const DiffView: React.FC<DiffViewProps> = ({
     setIsExpanded((prev) => !prev);
   };
 
+  // Width tracking for side-by-side vs inline layout.
+  // useElementNarrow returns isNarrow; we invert to get isWide.
+  const [narrowCallbackRef, isNarrow] = useElementNarrow<HTMLDivElement>(
+    SIDE_BY_SIDE_THRESHOLD
+  );
+  const isWide = !isNarrow;
+
+  // wrapperRef is needed for the data-diff-collapsed propagation effect below.
+  // We merge it with the ResizeObserver callback ref from useElementNarrow so
+  // both can point at the same DOM node.
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const setWrapperRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      (wrapperRef as React.MutableRefObject<HTMLDivElement | null>).current =
+        node;
+      narrowCallbackRef(node);
+    },
+    [narrowCallbackRef]
+  );
+
   // Compute diff lines lazily — only when expanded.
   // This avoids running Diff.diffLines() (O(N*D)) and parseUnifiedDiff() for
   // every file edit at mount time.
@@ -104,6 +141,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
     }
     return [];
   }, [isExpanded, structuredPatch, oldContent, newContent]);
+
+  // Side-by-side rows — computed only when expanded and panel is wide enough.
+  const sideBySideRows = useMemo((): SideBySideRow[] => {
+    if (!isExpanded || !isWide || diffLines.length === 0) return [];
+    return buildSideBySideRows(diffLines);
+  }, [isExpanded, isWide, diffLines]);
 
   // Derive a quick line-count estimate for the summary badge without computing
   // the full diff. For structured patches we count hunk lines; for full-file
@@ -121,10 +164,6 @@ export const DiffView: React.FC<DiffViewProps> = ({
   }, [structuredPatch, oldContent, newContent]);
 
   const hasDiff = estimatedLineCount > 0;
-
-  // Ref on the wrapper div so we can traverse up to the diff anchor and
-  // stamp data-diff-collapsed whenever expand/collapse state changes.
-  const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Propagate actual collapse state to the nearest [data-diff-anchor] wrapper
   // so OutputSection's measurement can read the true state rather than
@@ -166,7 +205,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
   return (
     <div
-      ref={wrapperRef}
+      ref={setWrapperRef}
       className={`my-2 ml-6 font-mono text-[length:var(--fp-output-font-size-sm)] ${className}`}
     >
       {/* Summary / toggle header */}
@@ -195,41 +234,148 @@ export const DiffView: React.FC<DiffViewProps> = ({
       {/* Diff lines — only mounted when expanded */}
       {isExpanded && diffLines.length > 0 && (
         <div className="rounded-[3px] overflow-x-auto overflow-y-hidden border border-vscode-border bg-vscode-bg">
-          {diffLines.map((line, index) => {
-            const styles =
-              DIFF_LINE_STYLES[line.type] || DIFF_LINE_STYLES.context;
-            const highlighted = highlightedLines[index] ?? "";
+          {isWide
+            ? /* ── Side-by-side view ── */
+              sideBySideRows.map((row, rowIndex) => (
+                <SideBySideDiffRow
+                  key={rowIndex}
+                  row={row}
+                  highlightedLines={highlightedLines}
+                />
+              ))
+            : /* ── Inline unified view ── */
+              diffLines.map((line, index) => {
+                const styles =
+                  DIFF_LINE_STYLES[line.type] || DIFF_LINE_STYLES.context;
+                const highlighted = highlightedLines[index] ?? "";
 
-            return (
-              <div
-                key={index}
-                className={`flex items-baseline whitespace-pre font-inherit leading-[1.4] py-px ${styles.bg}`}
-              >
-                <span
-                  className={`inline-block w-10 text-right px-1.5 select-none text-[length:var(--fp-output-font-size-xs)] opacity-60 shrink-0 text-diff-line-num ${styles.lineNumColor}`}
-                >
-                  {line.type !== "added" ? line.oldLineNum : ""}
-                </span>
-                <span
-                  className={`inline-block w-10 text-right px-1.5 select-none text-[length:var(--fp-output-font-size-xs)] opacity-60 shrink-0 text-diff-line-num border-r border-diff-line-num mr-2 ${styles.lineNumColor}`}
-                >
-                  {line.type !== "removed" ? line.newLineNum : ""}
-                </span>
-                <span className="flex-1 min-w-0 py-0.5 pr-2 overflow-visible whitespace-pre">
-                  <span className={`font-bold ${styles.contentColor}`}>
-                    {styles.prefix}
-                  </span>
-                  {highlighted ? (
-                    <span dangerouslySetInnerHTML={{ __html: highlighted }} />
-                  ) : (
-                    <span className={styles.contentColor}>{line.content}</span>
-                  )}
-                </span>
-              </div>
-            );
-          })}
+                return (
+                  <div
+                    key={index}
+                    className={`flex items-baseline whitespace-pre font-inherit leading-[1.4] py-px ${styles.bg}`}
+                  >
+                    <span
+                      className={`inline-block w-10 text-right px-1.5 select-none text-[length:var(--fp-output-font-size-xs)] opacity-60 shrink-0 text-diff-line-num ${styles.lineNumColor}`}
+                    >
+                      {line.type !== "added" ? line.oldLineNum : ""}
+                    </span>
+                    <span
+                      className={`inline-block w-10 text-right px-1.5 select-none text-[length:var(--fp-output-font-size-xs)] opacity-60 shrink-0 text-diff-line-num border-r border-diff-line-num mr-2 ${styles.lineNumColor}`}
+                    >
+                      {line.type !== "removed" ? line.newLineNum : ""}
+                    </span>
+                    <span className="flex-1 min-w-0 py-0.5 pr-2 overflow-visible whitespace-pre">
+                      <span className={`font-bold ${styles.contentColor}`}>
+                        {styles.prefix}
+                      </span>
+                      {highlighted ? (
+                        <span dangerouslySetInnerHTML={{ __html: highlighted }} />
+                      ) : (
+                        <span className={styles.contentColor}>
+                          {line.content}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
         </div>
       )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Side-by-side row — extracted to avoid re-creating the function in the map.
+// ---------------------------------------------------------------------------
+
+interface SideBySideDiffRowProps {
+  row: SideBySideRow;
+  highlightedLines: string[];
+}
+
+const SideBySideDiffRow: React.FC<SideBySideDiffRowProps> = ({
+  row,
+  highlightedLines,
+}) => {
+  const { left, right } = row;
+
+  const leftType = left?.line.type ?? "context";
+  const rightType = right?.line.type ?? "context";
+
+  const leftStyles = DIFF_LINE_STYLES[leftType] || DIFF_LINE_STYLES.context;
+  const rightStyles = DIFF_LINE_STYLES[rightType] || DIFF_LINE_STYLES.context;
+
+  // For null cells, use a dim background matching the opposite side's color so
+  // the "missing" lines are visually obvious without being jarring.
+  const leftBg = left === null ? "bg-diff-removed-bg opacity-30" : leftStyles.bg;
+  const rightBg =
+    right === null ? "bg-diff-added-bg opacity-30" : rightStyles.bg;
+
+  const leftHighlighted =
+    left !== null ? (highlightedLines[left.originalIndex] ?? "") : "";
+  const rightHighlighted =
+    right !== null ? (highlightedLines[right.originalIndex] ?? "") : "";
+
+  return (
+    <div className="flex whitespace-pre font-inherit leading-[1.4]">
+      {/* Left half — old / removed */}
+      <div
+        className={`flex flex-1 min-w-0 items-baseline py-px ${leftBg}`}
+      >
+        <span
+          className={`inline-block w-10 text-right px-1.5 select-none text-[length:var(--fp-output-font-size-xs)] opacity-60 shrink-0 text-diff-line-num ${leftStyles.lineNumColor}`}
+        >
+          {left !== null && left.line.type !== "added"
+            ? left.line.oldLineNum
+            : ""}
+        </span>
+        <span className="flex-1 min-w-0 py-0.5 pr-2 overflow-visible whitespace-pre border-r border-diff-line-num">
+          {left !== null && (
+            <>
+              <span className={`font-bold ${leftStyles.contentColor}`}>
+                {leftStyles.prefix}
+              </span>
+              {leftHighlighted ? (
+                <span dangerouslySetInnerHTML={{ __html: leftHighlighted }} />
+              ) : (
+                <span className={leftStyles.contentColor}>
+                  {left.line.content}
+                </span>
+              )}
+            </>
+          )}
+        </span>
+      </div>
+
+      {/* Right half — new / added */}
+      <div
+        className={`flex flex-1 min-w-0 items-baseline py-px ${rightBg}`}
+      >
+        <span
+          className={`inline-block w-10 text-right px-1.5 select-none text-[length:var(--fp-output-font-size-xs)] opacity-60 shrink-0 text-diff-line-num ${rightStyles.lineNumColor}`}
+        >
+          {right !== null && right.line.type !== "removed"
+            ? right.line.newLineNum
+            : ""}
+        </span>
+        <span className="flex-1 min-w-0 py-0.5 pr-2 overflow-visible whitespace-pre">
+          {right !== null && (
+            <>
+              <span className={`font-bold ${rightStyles.contentColor}`}>
+                {rightStyles.prefix}
+              </span>
+              {rightHighlighted ? (
+                <span dangerouslySetInnerHTML={{ __html: rightHighlighted }} />
+              ) : (
+                <span className={rightStyles.contentColor}>
+                  {right.line.content}
+                </span>
+              )}
+            </>
+          )}
+        </span>
+      </div>
     </div>
   );
 };

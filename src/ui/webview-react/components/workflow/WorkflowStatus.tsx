@@ -178,6 +178,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     (workflowId: string) => {
       const workflow = loadedWorkflows.find((w) => w.id === workflowId);
       setActiveWorkflowWorkingFilePath(workflow?.workingFilePath ?? null);
+      if (workflow?.executionState === EXECUTION_STATES.RUNNING) {
+        useWorkflowStore.getState().clearHistoryOutputs();
+        useUiStore.getState().clearHistoryView();
+      }
       vscode.postMessage({
         type: MESSAGE_TYPES.SWITCH_WORKFLOW,
         workflowId,

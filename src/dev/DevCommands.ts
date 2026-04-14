@@ -21,12 +21,256 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
+import { spawn } from "child_process";
 import {
   getAvailableModelsSync,
   getCliSupportedModelIdsSync,
 } from "../utils/ModelRegistry";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
+import { MESSAGE_TYPES } from "../types/DashboardConstants";
+
+export type DevDashboardAction =
+  | "buildExtension"
+  | "buildAll"
+  | "reloadWindow"
+  | "restartExtensionHost"
+  | "buildExtensionAndReload"
+  | "buildAllAndReload";
+
+export interface DevDashboardActionOptions {
+  context: vscode.ExtensionContext;
+  postMessage: (message: unknown) => void;
+}
+
+let isBuilding = false;
+
+const DEV_RELOAD_WINDOW_COMMAND = "workbench.action.reloadWindow";
+const DEV_RESTART_EXTENSION_HOST_COMMAND =
+  "workbench.action.restartExtensionHost";
+
+interface DevBuildResult {
+  success: boolean;
+  exitCode: number | null;
+  signal: NodeJS.Signals | null;
+  durationMs: number;
+  errorSummary?: string;
+}
+
+async function getRestartCommandAvailability(): Promise<{
+  reloadWindow: boolean;
+  restartExtensionHost: boolean;
+}> {
+  const commands = await vscode.commands.getCommands(false);
+  return {
+    reloadWindow: commands.includes(DEV_RELOAD_WINDOW_COMMAND),
+    restartExtensionHost: commands.includes(DEV_RESTART_EXTENSION_HOST_COMMAND),
+  };
+}
+
+function appendBuildLog(stream: "stdout" | "stderr", chunk: string): void {
+  const trimmed = chunk.trimEnd();
+  if (trimmed.length === 0) {
+    return;
+  }
+  const prefix = stream === "stderr" ? "[dev build stderr]" : "[dev build]";
+  Log.info(`${prefix} ${trimmed}`);
+}
+
+function summarizeBuildError(stderr: string, stdout: string): string {
+  const source = stderr.trim().length > 0 ? stderr : stdout;
+  const lines = source
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.slice(-6).join("\n") || "Build failed.";
+}
+
+async function runNpmBuild(
+  context: vscode.ExtensionContext,
+  scriptName: "compile:extension" | "compile",
+  postMessage: (message: unknown) => void
+): Promise<DevBuildResult> {
+  if (isBuilding) {
+    const result: DevBuildResult = {
+      success: false,
+      exitCode: null,
+      signal: null,
+      durationMs: 0,
+      errorSummary: "A build is already running.",
+    };
+    postMessage({
+      type: MESSAGE_TYPES.DEV_BUILD_COMPLETED,
+      ...result,
+    });
+    return result;
+  }
+
+  const startedAt = Date.now();
+  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+  const commandLabel = `npm run ${scriptName}`;
+  let stdout = "";
+  let stderr = "";
+
+  isBuilding = true;
+  postMessage({
+    type: MESSAGE_TYPES.DEV_BUILD_STARTED,
+    script: scriptName,
+    command: commandLabel,
+  });
+  Log.info(`[dev build] Starting ${commandLabel}`);
+
+  return await new Promise<DevBuildResult>((resolve) => {
+    const child = spawn(npmCommand, ["run", scriptName], {
+      cwd: context.extensionUri.fsPath,
+      shell: false,
+      env: process.env,
+    });
+    let settled = false;
+
+    child.stdout.on("data", (data: Buffer) => {
+      const chunk = data.toString();
+      stdout += chunk;
+      appendBuildLog("stdout", chunk);
+      postMessage({
+        type: MESSAGE_TYPES.DEV_BUILD_OUTPUT,
+        stream: "stdout",
+        chunk,
+      });
+    });
+
+    child.stderr.on("data", (data: Buffer) => {
+      const chunk = data.toString();
+      stderr += chunk;
+      appendBuildLog("stderr", chunk);
+      postMessage({
+        type: MESSAGE_TYPES.DEV_BUILD_OUTPUT,
+        stream: "stderr",
+        chunk,
+      });
+    });
+
+    child.on("error", (error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      stderr += error.message;
+      const durationMs = Date.now() - startedAt;
+      const result: DevBuildResult = {
+        success: false,
+        exitCode: null,
+        signal: null,
+        durationMs,
+        errorSummary: error.message,
+      };
+      isBuilding = false;
+      Log.error(`[dev build] ${commandLabel} failed to start:`, error);
+      postMessage({
+        type: MESSAGE_TYPES.DEV_BUILD_OUTPUT,
+        stream: "stderr",
+        chunk: error.message,
+      });
+      postMessage({
+        type: MESSAGE_TYPES.DEV_BUILD_COMPLETED,
+        ...result,
+      });
+      resolve(result);
+    });
+
+    child.on("close", (exitCode, signal) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      const durationMs = Date.now() - startedAt;
+      const success = exitCode === 0;
+      const result: DevBuildResult = {
+        success,
+        exitCode,
+        signal,
+        durationMs,
+        ...(success
+          ? {}
+          : { errorSummary: summarizeBuildError(stderr, stdout) }),
+      };
+      isBuilding = false;
+      if (success) {
+        Log.info(`[dev build] ${commandLabel} completed in ${durationMs}ms`);
+      } else {
+        Log.error(
+          `[dev build] ${commandLabel} failed with exit code ${exitCode}`
+        );
+      }
+      postMessage({
+        type: MESSAGE_TYPES.DEV_BUILD_COMPLETED,
+        ...result,
+      });
+      resolve(result);
+    });
+  });
+}
+
+async function executeRestartCommand(
+  command:
+    | typeof DEV_RELOAD_WINDOW_COMMAND
+    | typeof DEV_RESTART_EXTENSION_HOST_COMMAND,
+  postMessage: (message: unknown) => void
+): Promise<void> {
+  const availability = await getRestartCommandAvailability();
+  const available =
+    command === DEV_RELOAD_WINDOW_COMMAND
+      ? availability.reloadWindow
+      : availability.restartExtensionHost;
+
+  if (!available) {
+    postMessage({
+      type: MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE,
+      command,
+      reason: "The VS Code command is not available in this runtime.",
+    });
+    return;
+  }
+
+  postMessage({
+    type: MESSAGE_TYPES.DEV_RESTARTING,
+    command,
+  });
+  await vscode.commands.executeCommand(command);
+}
+
+export async function handleDevDashboardAction(
+  action: DevDashboardAction,
+  options: DevDashboardActionOptions
+): Promise<void> {
+  const { context, postMessage } = options;
+
+  if (action === "reloadWindow") {
+    await executeRestartCommand(DEV_RELOAD_WINDOW_COMMAND, postMessage);
+    return;
+  }
+
+  if (action === "restartExtensionHost") {
+    await executeRestartCommand(
+      DEV_RESTART_EXTENSION_HOST_COMMAND,
+      postMessage
+    );
+    return;
+  }
+
+  const scriptName =
+    action === "buildAll" || action === "buildAllAndReload"
+      ? "compile"
+      : "compile:extension";
+  const result = await runNpmBuild(context, scriptName, postMessage);
+  if (!result.success) {
+    return;
+  }
+
+  if (action === "buildExtensionAndReload" || action === "buildAllAndReload") {
+    await executeRestartCommand(DEV_RELOAD_WINDOW_COMMAND, postMessage);
+  }
+}
 
 // ============================================================================
 // Test Functions

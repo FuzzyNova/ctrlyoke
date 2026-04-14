@@ -12,8 +12,10 @@ export { escapeHtml, truncate } from "./string";
 export { formatTime, getTimestamp } from "./time";
 export {
   type DiffLine,
+  type SideBySideRow,
   parseUnifiedDiff,
   generateDiffLines,
+  buildSideBySideRows,
 } from "./diffUtils";
 
 /**

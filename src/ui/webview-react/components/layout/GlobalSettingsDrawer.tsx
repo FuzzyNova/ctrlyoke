@@ -16,6 +16,7 @@ import {
   QueueSection,
   HistorySection,
   ServerSection,
+  DeveloperSection,
 } from "../settings";
 
 const ALL_TABS = [
@@ -29,6 +30,7 @@ const ALL_TABS = [
   { id: "queue", label: "Queue", icon: "codicon-list-unordered" },
   { id: "history", label: "History", icon: "codicon-history" },
   { id: "server", label: "Server", icon: "codicon-server" },
+  { id: "developer", label: "Developer", icon: "codicon-tools" },
 ];
 
 const TABS = isStandalone
@@ -43,7 +45,12 @@ export function GlobalSettingsDrawer() {
   const closeGlobalSettings = useUiStore((s) => s.closeGlobalSettings);
   const fullSettings = useSettingsStore((s) => s.fullGlobalSettings);
   const serverRunning = useSettingsStore((s) => s.serverRunning);
+  const dev = useSettingsStore((s) => s.dev);
   const [drawerRef, isNarrow] = useElementNarrow(580);
+  const visibleTabs = TABS.filter((t) => t.id !== "developer" || dev?.enabled);
+  const effectiveActiveTab = visibleTabs.some((t) => t.id === activeTab)
+    ? activeTab
+    : "general";
 
   // Load settings when opened
   useEffect(() => {
@@ -102,10 +109,10 @@ export function GlobalSettingsDrawer() {
       <div className="flex flex-1 min-h-0">
         {/* Left: vertical tab bar */}
         <GlobalSettingsVerticalTabBar
-          tabs={TABS.map((t) =>
+          tabs={visibleTabs.map((t) =>
             t.id === "server" ? { ...t, indicator: serverRunning } : t
           )}
-          activeTab={activeTab}
+          activeTab={effectiveActiveTab}
           onTabChange={setActiveTab}
           iconOnly={isNarrow}
         />
@@ -113,52 +120,55 @@ export function GlobalSettingsDrawer() {
         {/* Right: section content */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-4 max-w-2xl">
-            {fullSettings && activeTab === "general" && (
+            {fullSettings && effectiveActiveTab === "general" && (
               <GeneralSection settings={fullSettings} onUpdate={handleUpdate} />
             )}
-            {fullSettings && activeTab === "workflow" && (
+            {fullSettings && effectiveActiveTab === "workflow" && (
               <WorkflowDefaultsSection
                 settings={fullSettings}
                 onUpdate={handleUpdate}
               />
             )}
-            {fullSettings && activeTab === "harnesses" && (
+            {fullSettings && effectiveActiveTab === "harnesses" && (
               <HarnessesSection
                 settings={fullSettings}
                 onUpdate={handleUpdate}
               />
             )}
-            {fullSettings && activeTab === "permissions" && (
+            {fullSettings && effectiveActiveTab === "permissions" && (
               <PermissionsSection
                 settings={fullSettings}
                 onUpdate={handleUpdate}
               />
             )}
-            {fullSettings && activeTab === "execution" && (
+            {fullSettings && effectiveActiveTab === "execution" && (
               <ExecutionSection
                 settings={fullSettings}
                 onUpdate={handleUpdate}
               />
             )}
-            {fullSettings && activeTab === "chat" && (
+            {fullSettings && effectiveActiveTab === "chat" && (
               <ChatSection settings={fullSettings} onUpdate={handleUpdate} />
             )}
-            {fullSettings && activeTab === "mcp" && (
+            {fullSettings && effectiveActiveTab === "mcp" && (
               <McpHooksSection
                 settings={fullSettings}
                 onUpdate={handleUpdate}
               />
             )}
-            {fullSettings && activeTab === "queue" && (
+            {fullSettings && effectiveActiveTab === "queue" && (
               <QueueSection settings={fullSettings} onUpdate={handleUpdate} />
             )}
-            {fullSettings && activeTab === "history" && (
+            {fullSettings && effectiveActiveTab === "history" && (
               <HistorySection settings={fullSettings} onUpdate={handleUpdate} />
             )}
-            {fullSettings && activeTab === "server" && (
+            {fullSettings && effectiveActiveTab === "server" && (
               <ServerSection settings={fullSettings} onUpdate={handleUpdate} />
             )}
-            {!fullSettings && (
+            {dev?.enabled && effectiveActiveTab === "developer" && (
+              <DeveloperSection />
+            )}
+            {!fullSettings && effectiveActiveTab !== "developer" && (
               <div className="text-description-fg text-sm">
                 Loading settings…
               </div>
