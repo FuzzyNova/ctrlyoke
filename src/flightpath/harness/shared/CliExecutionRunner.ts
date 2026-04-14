@@ -191,19 +191,37 @@ export class CliExecutionRunner {
     // "\r" (CR, 0x0D) is the submit key — same byte xterm.js sends when Enter is pressed.
     // "\n" (LF) acts as a newline in multi-line input boxes, NOT submit.
     // Send focus-in first, then wait a tick for the TUI to switch its input mode,
-    // then send the text + Enter. If they arrive in the same PTY write the TUI's
-    // focus handler may not yet be ready when the text bytes are consumed.
+    // send the text, wait another tick, then send Enter. If control/input bytes
+    // arrive in the same PTY write some TUIs treat CR as a literal newline
+    // instead of the submit key.
     const focusIn = "\x1b[I";
-    const textAndSubmit = session.promptArgument + "\r";
+    const submit = "\r";
     Log.debug(
-      `[inject] writing focus-in then text to PTY: ${JSON.stringify(focusIn + textAndSubmit)} hex=${Buffer.from(focusIn + textAndSubmit).toString("hex")}`
+      `[inject] writing focus-in, text, then submit to PTY: ${JSON.stringify([focusIn, session.promptArgument, submit])} hex=${Buffer.from(focusIn + session.promptArgument + submit).toString("hex")}`
     );
-    this.deps.transportCoordinator.writeToCurrentPtySession(focusIn);
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
-    const written =
-      this.deps.transportCoordinator.writeToCurrentPtySession(textAndSubmit);
+    const focused =
+      this.deps.transportCoordinator.writeToCurrentPtySession(focusIn);
+    if (!focused) {
+      Log.warn("⚠️ Inject mode: PTY session not active — TUI may have exited");
+      return { injected: false };
+    }
 
-    if (!written) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    const promptWritten =
+      this.deps.transportCoordinator.writeToCurrentPtySession(
+        session.promptArgument
+      );
+
+    if (!promptWritten) {
+      Log.warn("⚠️ Inject mode: PTY session not active — TUI may have exited");
+      return { injected: false };
+    }
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    const submitWritten =
+      this.deps.transportCoordinator.writeToCurrentPtySession(submit);
+
+    if (!submitWritten) {
       Log.warn("⚠️ Inject mode: PTY session not active — TUI may have exited");
       return { injected: false };
     }

@@ -1,7 +1,10 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliExecutionSession } from "../../flightpath/harness/shared/CliExecutionSession";
-import { CliExecutionRunner } from "../../flightpath/harness/shared/CliExecutionRunner";
+import {
+  CliExecutionRunner,
+  type InteractiveInjectContext,
+} from "../../flightpath/harness/shared/CliExecutionRunner";
 import { CliFailureTracker } from "../../flightpath/harness/shared/CliFailureTracker";
 import { CliInteractiveStartupCoordinator } from "../../flightpath/harness/shared/CliInteractiveStartupCoordinator";
 import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
@@ -83,6 +86,7 @@ function createRunner(options?: {
     onCancel?: () => boolean
   ) => Promise<{ completed: boolean; error?: string; data?: unknown }>;
   discoverSessionLog?: () => Promise<string | null>;
+  writeToCurrentPtySession?: (text: string) => boolean;
 }) {
   const failureTracker = new CliFailureTracker();
   let failureReason: string | undefined;
@@ -96,7 +100,8 @@ function createRunner(options?: {
         failureTracker.capturePtyExit(0, []);
       },
       executeHeadless: async () => true,
-      writeToCurrentPtySession: () => false,
+      writeToCurrentPtySession:
+        options?.writeToCurrentPtySession ?? (() => false),
     },
     failureTracker,
     factories: {
@@ -201,5 +206,36 @@ suite("CliExecutionRunner", () => {
     const failureReason = getFailureReason();
     assert.ok(failureReason);
     assert.match(failureReason, /discovering the session log/iu);
+  });
+
+  test("should send inject prompt and carriage return as separate PTY writes", async function () {
+    this.timeout(5_000);
+
+    const writes: string[] = [];
+    const { runner, failureTracker } = createRunner({
+      writeToCurrentPtySession: (text) => {
+        writes.push(text);
+        if (text === "\r") {
+          failureTracker.capturePtyExit(0, []);
+        }
+        return true;
+      },
+    });
+
+    (
+      runner as unknown as {
+        lastInteractiveContext?: InteractiveInjectContext;
+      }
+    ).lastInteractiveContext = {
+      logPath: "test.log",
+      sessionId: "test-session",
+    };
+
+    const result = await runner.executeInteractiveInject(
+      new CliExecutionSession({ prompt: { prompt: "send this" } })
+    );
+
+    assert.deepStrictEqual(writes, ["\x1b[I", "send this", "\r"]);
+    assert.deepStrictEqual(result, { injected: false });
   });
 });
