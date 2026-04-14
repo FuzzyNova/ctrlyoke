@@ -24,6 +24,7 @@ suite("SessionResolver Tests", () => {
     test("should use workflow-level sessionId when prompt-level not specified (numeric)", () => {
       const workflow: PromptFile = {
         steps: [],
+        harness: Harness.CopilotCli,
         sessionId: 1,
         resumeSession: true,
       };
@@ -72,6 +73,7 @@ suite("SessionResolver Tests", () => {
     test("should use prompt-level sessionId over workflow-level (numeric)", () => {
       const workflow: PromptFile = {
         steps: [],
+        harness: Harness.CopilotCli,
         sessionId: 2,
         resumeSession: true,
       };
@@ -154,6 +156,7 @@ suite("SessionResolver Tests", () => {
         },
         {
           prompt: "second",
+          harness: Harness.CopilotCli,
           sessionId: 1, // Reference prompt 1
         },
       ];
@@ -219,6 +222,7 @@ suite("SessionResolver Tests", () => {
     test("should auto-resume from previous prompt when resumeSession=true", () => {
       const workflow: PromptFile = {
         steps: [],
+        harness: Harness.CopilotCli,
       };
 
       const prompts: PromptStep[] = [
