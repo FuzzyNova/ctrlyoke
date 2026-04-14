@@ -495,7 +495,8 @@ export class WorkflowOrchestrator {
       if (!options?.skipTerminalReplay) {
         const ptyManager = getPtyProcessManager();
         if (ptyManager) {
-          const sessionsForWorkflow = ptyManager.getSessionsForWorkflow(workflowId);
+          const sessionsForWorkflow =
+            ptyManager.getSessionsForWorkflow(workflowId);
           Log.debug(
             `[replayWorkflowStateTo] terminal replay for inst:${workflowId.slice(0, 8)} — ` +
               `found ${sessionsForWorkflow.length} PTY session(s): ` +
@@ -1234,7 +1235,10 @@ export class WorkflowOrchestrator {
       (w) => w.getSummary().workingFilePath === filePath
     );
     if (existingRetiredForPanel) {
-      this.setViewedWorkflowId(this.PANEL_CLIENT_ID, existingRetiredForPanel.id);
+      this.setViewedWorkflowId(
+        this.PANEL_CLIENT_ID,
+        existingRetiredForPanel.id
+      );
       await this.replayWorkflowStateTo(
         existingRetiredForPanel.id,
         panelSend,
@@ -1577,7 +1581,9 @@ export class WorkflowOrchestrator {
    * stays explicit.
    */
   private findInstance(workflowId: string): WorkflowInstance | undefined {
-    return this.instances.get(workflowId) ?? this.retiredInstances.get(workflowId);
+    return (
+      this.instances.get(workflowId) ?? this.retiredInstances.get(workflowId)
+    );
   }
 
   /**
@@ -1635,7 +1641,9 @@ export class WorkflowOrchestrator {
     this.viewerRegistry.set(clientId, workflowId);
     if (prev !== workflowId) {
       const prevInRetired = prev ? this.retiredInstances.has(prev) : false;
-      const prevStillViewed = prev ? this.isWorkflowViewedByAnyClient(prev) : false;
+      const prevStillViewed = prev
+        ? this.isWorkflowViewedByAnyClient(prev)
+        : false;
       Log.debug(
         `[setViewedWorkflowId] clientId=${clientId.slice(0, 12)} ` +
           `prev=inst:${prev?.slice(0, 8) ?? "null"}(retired=${prevInRetired},stillViewed=${prevStillViewed}) ` +
@@ -1761,12 +1769,14 @@ export class WorkflowOrchestrator {
         const panelViewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
         if (panelViewedId !== instance.id) {
           const panelViewed = panelViewedId
-            ? (this.instances.get(panelViewedId) ?? this.retiredInstances.get(panelViewedId))
+            ? (this.instances.get(panelViewedId) ??
+              this.retiredInstances.get(panelViewedId))
             : null;
           const panelSummary = panelViewed?.getSummary();
           const panelViewedIsBlank =
             !panelViewed ||
-            (!panelSummary?.workingFilePath && (panelSummary?.totalSteps ?? 0) === 0);
+            (!panelSummary?.workingFilePath &&
+              (panelSummary?.totalSteps ?? 0) === 0);
           if (panelViewedIsBlank) {
             this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
             Log.debug(
@@ -1917,9 +1927,6 @@ export class WorkflowOrchestrator {
     // may deliver a "change" event instead of "create". CLI heartbeats (every 5s)
     // also use atomic rename, so this fires ~5s after CLI start at the latest.
     this.runnerJsonCreateWatcher.onDidChange(async (uri) => {
-      Log.trace(
-        `[WorkflowOrchestrator] runner.json changed: ${path.basename(uri.fsPath)}`
-      );
       await this.handleRunnerJsonEvent(uri.fsPath, workspaceFolderPath);
     });
   }

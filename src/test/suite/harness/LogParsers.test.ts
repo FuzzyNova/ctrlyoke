@@ -1260,6 +1260,55 @@ suite("CodexLogParser", () => {
       const response2 = parser.extractResponse(events2);
       assert.strictEqual(response2.metadata.sessionId, "thread_cached");
     });
+
+    test("should use last token total for context window usage", () => {
+      const events = [
+        {
+          timestamp: "2026-04-14T15:53:22.453Z",
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: {
+                input_tokens: 5191984,
+                cached_input_tokens: 5032192,
+                output_tokens: 14864,
+                reasoning_output_tokens: 6001,
+                total_tokens: 5206848,
+              },
+              last_token_usage: {
+                input_tokens: 154273,
+                cached_input_tokens: 153984,
+                output_tokens: 770,
+                reasoning_output_tokens: 309,
+                total_tokens: 155043,
+              },
+              model_context_window: 258400,
+            },
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+
+      assert.strictEqual(
+        response.metadata.usage?.contextWindowUsedTokens,
+        155043
+      );
+      assert.strictEqual(response.metadata.usage?.contextWindowSize, 258400);
+      assert.strictEqual(response.metadata.usage?.inputTokens, 5191984);
+      assert.strictEqual(response.metadata.usage?.outputTokens, 14864);
+      assert.strictEqual(
+        response.metadata.usage?.cachedInputTokens,
+        5032192
+      );
+      assert.strictEqual(
+        response.metadata.usage?.reasoningOutputTokens,
+        6001
+      );
+    });
   });
 
   suite("isComplete", () => {

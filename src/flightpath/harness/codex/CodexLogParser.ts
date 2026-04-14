@@ -237,10 +237,13 @@ export class CodexLogParser extends BaseLogParser {
           reasoningOutputTokens = total.reasoning_output_tokens || 0;
         }
         if (info?.last_token_usage) {
-          // Per-turn usage — this is what actually occupies the context window
+          // Per-turn usage — Codex reports cached tokens as a subset of input,
+          // so use total_tokens rather than adding cached input again.
           const last = info.last_token_usage;
           lastTurnContextWindowUsed =
-            (last.input_tokens || 0) + (last.cached_input_tokens || 0);
+            typeof last.total_tokens === "number"
+              ? last.total_tokens
+              : (last.input_tokens || 0) + (last.output_tokens || 0);
         }
         if (info?.model_context_window) {
           modelContextWindow = info.model_context_window;
