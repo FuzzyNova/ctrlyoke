@@ -319,12 +319,12 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get interactive continuation mode ("restart" or "inject").
-   * "restart" kills and restarts the terminal for each follow-up prompt.
-   * "inject" keeps the TUI alive and writes the next prompt directly into the PTY.
+   * Returns true when inject mode is enabled.
+   * Keeps the TUI alive and writes follow-up prompts directly into the PTY,
+   * avoiding terminal restart latency and the Claude Code resume cache bug.
    */
-  getInteractiveContinuationMode(): "restart" | "inject" {
-    return configService.get("execution").continuationMode;
+  isInjectModeEnabled(): boolean {
+    return configService.get("execution").injectMode;
   },
 
   /**

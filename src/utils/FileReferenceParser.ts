@@ -15,6 +15,11 @@
  * - HarnessIntegration base class (CLI modes)
  */
 
+import {
+  GIT_CHANGE_KINDS,
+  type GitChangeKind,
+} from "../types/DashboardConstants";
+
 export interface FileReference {
   path: string;
   startLine?: number;
@@ -196,8 +201,6 @@ export function parseDirectoryReferences(prompt: string): FileReference[] {
 // Git Change References (~diff, ~staged, ~stash:N, ~<hash>)
 // ============================================================================
 
-export type GitChangeKind = "commit" | "diff" | "staged" | "stash";
-
 export interface GitChangeReference {
   kind: GitChangeKind;
   raw: string; // the full matched token, e.g. "~c056e24...", "~diff", "~stash:2"
@@ -238,15 +241,15 @@ export function parseGitChangeReferences(text: string): GitChangeReference[] {
 
     const lowerInner = inner.toLowerCase();
 
-    if (lowerInner === "diff") {
-      kind = "diff";
-    } else if (lowerInner === "staged") {
-      kind = "staged";
+    if (lowerInner === GIT_CHANGE_KINDS.DIFF) {
+      kind = GIT_CHANGE_KINDS.DIFF;
+    } else if (lowerInner === GIT_CHANGE_KINDS.STAGED) {
+      kind = GIT_CHANGE_KINDS.STAGED;
     } else if (stashNumStr !== undefined) {
-      kind = "stash";
+      kind = GIT_CHANGE_KINDS.STASH;
       stashIndex = parseInt(stashNumStr, 10);
     } else if (hashStr !== undefined) {
-      kind = "commit";
+      kind = GIT_CHANGE_KINDS.COMMIT;
       hash = hashStr.toLowerCase();
     } else {
       continue; // shouldn't happen

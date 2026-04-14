@@ -144,7 +144,7 @@ export class WebviewMessageRouter {
     const table = new Map<string, (message: any) => void | Promise<void>>();
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
-    table.set(MESSAGE_TYPES.READY, async (_message) => {
+    table.set(MESSAGE_TYPES.READY, async (message) => {
       Log.debug("Received READY from React — sending INIT");
       this.settingsSync.sendInitialState(this.getCurrentPostMessage());
       // Tell the webview its own client identity so it can compute isController
@@ -165,9 +165,13 @@ export class WebviewMessageRouter {
         await orchestrator.handleClientReady(
           this.clientId,
           this.scopedPostMessage,
-          this.clientId === PANEL_CLIENT_ID
-            ? { skipTerminalReplay: true }
-            : undefined
+          {
+            skipTerminalReplay: this.clientId === PANEL_CLIENT_ID,
+            preferredWorkingFilePath:
+              typeof message.preferredWorkingFilePath === "string"
+                ? message.preferredWorkingFilePath
+                : undefined,
+          }
         );
         // For browser clients: SESSION_RESTORED (sent during replay) triggers
         // applyWorkflowChange() which no longer clears workflowProperties, but

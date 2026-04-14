@@ -11,7 +11,10 @@ import {
 } from "../types/FlightPathTypes";
 import { ToolPermissionConfig } from "../flightpath/harness/shared/interfaces/IToolPermissionMapper";
 import { ConfigurationUtils } from "./ConfigurationUtils";
-import { PERMISSION_MODES } from "../types/DashboardConstants";
+import {
+  PERMISSION_MODES,
+  PRIOR_CONTEXT_KEYWORDS,
+} from "../types/DashboardConstants";
 
 /**
  * Resolved execution properties with all optionals filled in.
@@ -474,7 +477,7 @@ export class PropertyResolver {
 
     // 3. VS Code setting fallback
     const globalDefault = ConfigurationUtils.getPriorContext();
-    return globalDefault !== "none"
+    return globalDefault !== PRIOR_CONTEXT_KEYWORDS.NONE
       ? (globalDefault as PriorContext)
       : undefined;
   }

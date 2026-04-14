@@ -169,6 +169,7 @@ interface UiState {
   // Multi-workflow support
   loadedWorkflows: WorkflowSummary[];
   activeWorkflowId: string | null;
+  activeWorkflowWorkingFilePath: string | null;
 
   // Loading states
   isLoading: boolean;
@@ -306,6 +307,7 @@ interface UiActions {
   removeLoadedWorkflow: (workflowId: string) => void;
   updateLoadedWorkflow: (workflow: WorkflowSummary) => void;
   setActiveWorkflowId: (id: string | null) => void;
+  setActiveWorkflowWorkingFilePath: (path: string | null) => void;
 
   // Output / editor font size
   setOutputFontSize: (size: number) => void;
@@ -432,6 +434,7 @@ const initialState: UiState = {
   recentWorkflowsDropdownOpen: false,
   loadedWorkflows: [],
   activeWorkflowId: null,
+  activeWorkflowWorkingFilePath: null,
   isLoading: false,
   loadingMessage: null,
   outputFontSize: 13,
@@ -485,6 +488,7 @@ const persistedFields = [
   "terminalRailSizePx",
   "mcpDiscoveryTab",
   "globalSettingsActiveTab",
+  "activeWorkflowWorkingFilePath",
 ] as const;
 
 export const useUiStore = create<UiState & UiActions>()(
@@ -658,6 +662,9 @@ export const useUiStore = create<UiState & UiActions>()(
         })),
 
       setActiveWorkflowId: (id) => set({ activeWorkflowId: id }),
+
+      setActiveWorkflowWorkingFilePath: (path) =>
+        set({ activeWorkflowWorkingFilePath: path }),
 
       // ============================================================================
       // OUTPUT FONT SIZE

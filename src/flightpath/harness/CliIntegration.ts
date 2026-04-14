@@ -348,7 +348,7 @@ export class CliIntegration extends HarnessIntegration {
    *    prompt-level override that changes these requires a fresh process instead.
    */
   private shouldUseInjectMode(session: CliExecutionSession): boolean {
-    if (ConfigurationUtils.getInteractiveContinuationMode() !== "inject") {
+    if (!ConfigurationUtils.isInjectModeEnabled()) {
       return false;
     }
     const ctx = this.executionRunner.getLastInteractiveContext();
@@ -1096,8 +1096,7 @@ export class CliIntegration extends HarnessIntegration {
    * alive for the next run instead of disposing it.
    */
   override canReuseForInject(): boolean {
-    const injectMode =
-      ConfigurationUtils.getInteractiveContinuationMode() === "inject";
+    const injectMode = ConfigurationUtils.isInjectModeEnabled();
     const hasCtx = this.executionRunner.hasInteractiveContext();
     const hasPty = this.transportCoordinator.hasLivePtySession();
     Log.debug(

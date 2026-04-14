@@ -9,8 +9,10 @@ import { FlightPathWebviewProvider } from "./ui/FlightPathWebviewProvider";
 import { FlightPathHostedServer } from "./server/FlightPathHostedServer";
 import {
   EXECUTION_STATES,
+  GIT_CHANGE_KINDS,
   QUEUE_POSITION,
   MESSAGE_TYPES,
+  MODEL_OPTION_VALUES,
   PANEL_CLIENT_ID,
   type QueuePosition,
 } from "./types/DashboardConstants";
@@ -191,7 +193,8 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
                 available: true,
                 models: options
                   .filter(
-                    (m: { value: string; label: string }) => m.value !== "none"
+                    (m: { value: string; label: string }) =>
+                      m.value !== MODEL_OPTION_VALUES.NONE
                   )
                   .map((m: { value: string; label: string }) => m.value),
               };
@@ -827,17 +830,17 @@ function registerCommands(context: vscode.ExtensionContext) {
         let content: string;
         const ref = args.ref.toLowerCase();
 
-        if (ref === "diff") {
+        if (ref === GIT_CHANGE_KINDS.DIFF) {
           content = await getWorkingTreeDiff(workspaceRoot);
           if (!content.trim()) {
             content = "No uncommitted changes in working tree.";
           }
-        } else if (ref === "staged") {
+        } else if (ref === GIT_CHANGE_KINDS.STAGED) {
           content = await getStagedDiff(workspaceRoot);
           if (!content.trim()) {
             content = "No staged changes.";
           }
-        } else if (ref.startsWith("stash:")) {
+        } else if (ref.startsWith(`${GIT_CHANGE_KINDS.STASH}:`)) {
           const index = parseInt(ref.slice(6), 10);
           content = await getStashDiff(workspaceRoot, index);
         } else {

@@ -56,10 +56,9 @@
           "enum": ["interactive", "headless"],
           "description": "Whether prompts run in an interactive terminal or headless mode."
         },
-        "continuationMode": {
-          "type": "string",
-          "enum": ["restart", "inject"],
-          "description": "Controls how follow-up prompts are sent in interactive mode. 'restart' kills and restarts the terminal (uses --resume). 'inject' keeps the TUI alive and writes the next prompt directly into the PTY."
+        "injectMode": {
+          "type": "boolean",
+          "description": "When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug."
         },
         "maxPromptTimeout": {
           "type": "number",

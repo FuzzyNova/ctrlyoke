@@ -16,7 +16,7 @@ import {
   buildUndoDialogInputForSpecificEvent,
 } from "@utils/promptUndo";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
-import { FINAL_STEP_PHASES } from "@/types/messages";
+import { FINAL_STEP_PHASES, UNDO_FILE_ACTIONS } from "@/types/messages";
 import type { CliOutput } from "@/types/cliEvents";
 import type {
   WorkspaceSnapshot,
@@ -199,7 +199,7 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     const c = candidates[0];
     expect(c.tier).toBe("tier1");
     expect(c.changeType).toBe("modified");
-    expect(c.instruction?.action).toBe("reverse-patch");
+    expect(c.instruction?.action).toBe(UNDO_FILE_ACTIONS.REVERSE_PATCH);
   });
 
   it("FILE_WRITE → 'created' changeType, delete instruction", () => {
@@ -210,7 +210,7 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     expect(candidates).toHaveLength(1);
     const c = candidates[0];
     expect(c.changeType).toBe("created");
-    expect(c.instruction?.action).toBe("delete");
+    expect(c.instruction?.action).toBe(UNDO_FILE_ACTIONS.DELETE);
   });
 
   it("FILE_DELETE with snapshot contentToRestore → restore-content instruction", () => {
@@ -223,7 +223,7 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     expect(candidates).toHaveLength(1);
     const c = candidates[0];
     expect(c.changeType).toBe("deleted");
-    expect(c.instruction?.action).toBe("restore-content");
+    expect(c.instruction?.action).toBe(UNDO_FILE_ACTIONS.RESTORE_CONTENT);
   });
 
   it("FILE_DELETE without snapshot contentToRestore → null instruction (non-undoable)", () => {
@@ -268,7 +268,7 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     expect(candidates).toHaveLength(1);
     expect(candidates[0].tier).toBe("tier1");
     expect(candidates[0].changeType).toBe("created");
-    expect(candidates[0].instruction?.action).toBe("delete");
+    expect(candidates[0].instruction?.action).toBe(UNDO_FILE_ACTIONS.DELETE);
   });
 
   it("multiple edits to same file: first oldContent kept, last newContent wins", () => {
@@ -371,7 +371,7 @@ describe("buildUndoCandidatesForOutputs — Tier 2", () => {
       [],
       makeSnapshot([makeCreatedSnap("src/x.ts")])
     );
-    expect(candidates[0].instruction?.action).toBe("delete");
+    expect(candidates[0].instruction?.action).toBe(UNDO_FILE_ACTIONS.DELETE);
   });
 
   it("snapshot-only deleted file with contentToRestore → restore-content instruction", () => {
@@ -379,7 +379,9 @@ describe("buildUndoCandidatesForOutputs — Tier 2", () => {
       [],
       makeSnapshot([makeDeletedSnap("src/x.ts", "restore me")])
     );
-    expect(candidates[0].instruction?.action).toBe("restore-content");
+    expect(candidates[0].instruction?.action).toBe(
+      UNDO_FILE_ACTIONS.RESTORE_CONTENT
+    );
   });
 });
 
@@ -399,7 +401,7 @@ describe("getPromptUndoSummary", () => {
     const candidates = [
       {
         tier: "tier1" as const,
-        instruction: { path: "a.ts", action: "delete" as const },
+        instruction: { path: "a.ts", action: UNDO_FILE_ACTIONS.DELETE },
         path: "a.ts",
         changeType: "created" as const,
       },
@@ -504,7 +506,7 @@ describe("buildUndoDialogInputForSpecificEvent", () => {
       "/workspace"
     );
     expect(result.eventAttributedFiles[0].instruction?.action).toBe(
-      "reverse-patch"
+      UNDO_FILE_ACTIONS.REVERSE_PATCH
     );
   });
 
@@ -531,7 +533,9 @@ describe("buildUndoDialogInputForSpecificEvent", () => {
       undefined,
       "/workspace"
     );
-    expect(result.eventAttributedFiles[0].instruction?.action).toBe("delete");
+    expect(result.eventAttributedFiles[0].instruction?.action).toBe(
+      UNDO_FILE_ACTIONS.DELETE
+    );
   });
 
   it("FILE_DELETE with snapshot contentToRestore → restore-content instruction", () => {
@@ -546,7 +550,7 @@ describe("buildUndoDialogInputForSpecificEvent", () => {
       "/workspace"
     );
     expect(result.eventAttributedFiles[0].instruction?.action).toBe(
-      "restore-content"
+      UNDO_FILE_ACTIONS.RESTORE_CONTENT
     );
   });
 

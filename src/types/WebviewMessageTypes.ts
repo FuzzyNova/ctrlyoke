@@ -24,6 +24,7 @@ import {
   STATUS_MESSAGE_SEVERITY,
   EXECUTION_MODES,
   STEP_TYPES,
+  type UndoFileAction,
 } from "./DashboardConstants";
 import type {
   WorkflowSummary,
@@ -320,6 +321,7 @@ export interface FileSelectedMessage {
   fileName: string;
   steps: WorkflowStep[];
   workflowName?: string;
+  workingFilePath?: string | null;
   finalStep?: WorkflowStep | null;
   finalStepStatus?: StepStatus | null;
   finalStepLoopCount?: number;
@@ -337,6 +339,7 @@ export interface SessionRestoredMessage {
   executionState: ExecutionState;
   currentIndex: number;
   workflowName?: string;
+  workingFilePath?: string | null;
   finalStep?: WorkflowStep | null;
   finalStepStatus?: StepStatus | null;
   finalStepLoopCount?: number;
@@ -656,6 +659,7 @@ export interface WorkflowSummaryUpdatedMessage {
 export interface ActiveWorkflowChangedMessage {
   type: typeof MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED;
   workflowId: string;
+  workingFilePath?: string | null;
 }
 
 /**
@@ -792,7 +796,7 @@ export type {
   UndoRecord,
 } from "./OutputHistoryTypes";
 
-export type UndoFileAction = "delete" | "restore-content" | "reverse-patch";
+export type { UndoFileAction } from "./DashboardConstants";
 
 export interface UndoFileInstruction {
   /** Workspace-relative POSIX path */

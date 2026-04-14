@@ -15,6 +15,11 @@ import type {
 } from "../types/WebviewMessageTypes";
 import type { UnifiedDiffHunk } from "../types/CliOutputTypes";
 import { Log } from "./Log";
+import {
+  SNAPSHOT_STRATEGIES,
+  UNDO_FILE_ACTIONS,
+  type SnapshotStrategy,
+} from "../types/DashboardConstants";
 
 const execFileAsync = promisify(execFile);
 
@@ -61,7 +66,7 @@ interface RawFileState {
 }
 
 export interface RawWorkspaceState {
-  strategy: "git" | "filesystem";
+  strategy: SnapshotStrategy;
   files: Map<string, RawFileState>;
   capturedAt: number;
 }
@@ -260,26 +265,26 @@ function buildReversePatchString(hunks: UnifiedDiffHunk[]): string {
 }
 
 export class WorkspaceSnapshotService {
-  async selectStrategy(workspacePath: string): Promise<"git" | "filesystem"> {
+  async selectStrategy(workspacePath: string): Promise<SnapshotStrategy> {
     try {
       await execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], {
         cwd: workspacePath,
       });
-      return "git";
+      return SNAPSHOT_STRATEGIES.GIT;
     } catch {
-      return "filesystem";
+      return SNAPSHOT_STRATEGIES.FILESYSTEM;
     }
   }
 
   async captureWorkspaceState(
     workspacePath: string,
-    strategy: "git" | "filesystem"
+    strategy: SnapshotStrategy
   ): Promise<RawWorkspaceState> {
     const capturedAt = Date.now();
     const files = new Map<string, RawFileState>();
 
     try {
-      if (strategy === "git") {
+      if (strategy === SNAPSHOT_STRATEGIES.GIT) {
         let stdout = "";
         try {
           const result = await execFileAsync("git", ["status", "--porcelain"], {
@@ -356,7 +361,8 @@ export class WorkspaceSnapshotService {
         // clean/at HEAD before the prompt ran. Use isAtHead on the after state to
         // distinguish: tracked file modified from HEAD (isAtHead=true) vs truly new
         // file (isAtHead=false, shown as ?? or A in git status).
-        const wasCleanAtHead = strategy === "git" && afterState.isAtHead;
+        const wasCleanAtHead =
+          strategy === SNAPSHOT_STRATEGIES.GIT && afterState.isAtHead;
         if (wasCleanAtHead) {
           // Fetch the HEAD content so we can compute a structured patch for reverse-patch undo.
           const change: SnapshotFileChange = {
@@ -494,7 +500,7 @@ export class WorkspaceSnapshotService {
           // File may not exist (e.g. was deleted by AI); redo will delete it again
         }
 
-        if (instruction.action === "delete") {
+        if (instruction.action === UNDO_FILE_ACTIONS.DELETE) {
           try {
             await fs.promises.unlink(absPath);
           } catch (err: unknown) {
@@ -507,11 +513,11 @@ export class WorkspaceSnapshotService {
           if (currentContent !== undefined) {
             redoInstructions.push({
               path: instruction.path,
-              action: "restore-content",
+              action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
               contentToRestore: currentContent,
             });
           }
-        } else if (instruction.action === "restore-content") {
+        } else if (instruction.action === UNDO_FILE_ACTIONS.RESTORE_CONTENT) {
           const content = instruction.contentToRestore ?? "";
           await fs.promises.mkdir(path.dirname(absPath), { recursive: true });
           await fs.promises.writeFile(absPath, content, "utf8");
@@ -530,15 +536,18 @@ export class WorkspaceSnapshotService {
                 : undefined;
             redoInstructions.push({
               path: instruction.path,
-              action: "restore-content",
+              action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
               contentToRestore: currentContent,
               structuredPatch,
             });
           } else {
             // File didn't exist before the AI created it — redo should delete it
-            redoInstructions.push({ path: instruction.path, action: "delete" });
+            redoInstructions.push({
+              path: instruction.path,
+              action: UNDO_FILE_ACTIONS.DELETE,
+            });
           }
-        } else if (instruction.action === "reverse-patch") {
+        } else if (instruction.action === UNDO_FILE_ACTIONS.REVERSE_PATCH) {
           if (
             !instruction.structuredPatch ||
             instruction.structuredPatch.length === 0
@@ -585,7 +594,7 @@ export class WorkspaceSnapshotService {
           // The forward structuredPatch (before→after AI change) is the original instruction patch.
           redoInstructions.push({
             path: instruction.path,
-            action: "restore-content",
+            action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
             contentToRestore: currentContent,
             structuredPatch: instruction.structuredPatch,
           });

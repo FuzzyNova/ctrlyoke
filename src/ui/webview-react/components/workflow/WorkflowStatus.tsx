@@ -41,7 +41,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 }) => {
   const vscode = useVsCodeApi();
   const { fileName, workflowName, executionState } = useWorkflowStore();
-  const { loadedWorkflows, activeWorkflowId } = useUiStore();
+  const {
+    loadedWorkflows,
+    activeWorkflowId,
+    setActiveWorkflowWorkingFilePath,
+  } = useUiStore();
   const { globalSettings } = useSettingsStore();
 
   const isCLIManaged =
@@ -172,25 +176,28 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Switch to a loaded workflow
   const handleSwitchWorkflow = useCallback(
     (workflowId: string) => {
+      const workflow = loadedWorkflows.find((w) => w.id === workflowId);
+      setActiveWorkflowWorkingFilePath(workflow?.workingFilePath ?? null);
       vscode.postMessage({
         type: MESSAGE_TYPES.SWITCH_WORKFLOW,
         workflowId,
       });
       setIsDropdownOpen(false);
     },
-    [vscode]
+    [loadedWorkflows, setActiveWorkflowWorkingFilePath, vscode]
   );
 
   // Load workflow from recent list
   const handleSelectWorkflow = useCallback(
     (filePath: string) => {
+      setActiveWorkflowWorkingFilePath(filePath);
       vscode.postMessage({
         type: MESSAGE_TYPES.LOAD_WORKFLOW,
         filePath,
       });
       setIsDropdownOpen(false);
     },
-    [vscode]
+    [setActiveWorkflowWorkingFilePath, vscode]
   );
 
   // Clear workflow history
@@ -424,6 +431,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             onClearHistory={handleClearHistory}
             onRemove={handleRemoveWorkflow}
             onNewWorkflow={() => {
+              setActiveWorkflowWorkingFilePath(null);
               vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
               setIsDropdownOpen(false);
             }}

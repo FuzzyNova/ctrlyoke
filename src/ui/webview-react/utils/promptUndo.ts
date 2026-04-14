@@ -4,6 +4,7 @@
  * Extracts file change candidates from CliOutput structured events (Tier 1) and
  * workspace snapshots (Tier 2), then builds UndoDialogInput for the undo dialog.
  */
+import { UNDO_FILE_ACTIONS } from "../types/messages";
 import type {
   CliOutput,
   UndoFileInstruction,
@@ -48,7 +49,7 @@ function resolveEventUndoInstruction(
     case CLI_EVENT_TYPES.FILE_WRITE: {
       const d = event.data as FileWriteData;
       if (!d.path) return null;
-      return { path: d.path, action: "delete" };
+      return { path: d.path, action: UNDO_FILE_ACTIONS.DELETE };
     }
     case CLI_EVENT_TYPES.FILE_DELETE: {
       const d = event.data as FileDeleteData;
@@ -58,7 +59,7 @@ function resolveEventUndoInstruction(
       if (snap.contentToRestore != null)
         return {
           path: d.path,
-          action: "restore-content",
+          action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
           contentToRestore: snap.contentToRestore,
         };
       return null;
@@ -260,7 +261,7 @@ function resolveSnapshotUndoInstruction(
       if (snap.structuredPatch && snap.structuredPatch.length > 0)
         return {
           path: snap.path,
-          action: "reverse-patch",
+          action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
           structuredPatch: snap.structuredPatch,
           lineEnding: snap.lineEnding,
         };
@@ -270,13 +271,13 @@ function resolveSnapshotUndoInstruction(
       if (snap.contentToRestore != null)
         return {
           path: snap.path,
-          action: "restore-content",
+          action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
           contentToRestore: snap.contentToRestore,
         };
       return null;
     }
     case "created":
-      return { path: snap.path, action: "delete" };
+      return { path: snap.path, action: UNDO_FILE_ACTIONS.DELETE };
     default:
       return null;
   }
@@ -395,7 +396,11 @@ export function buildUndoDialogInputForSpecificEvent(
 
     if (structuredPatch && structuredPatch.length > 0) {
       // Reverse-patch: the extension reads the current file and applies this patch in reverse.
-      instruction = { path, action: "reverse-patch", structuredPatch };
+      instruction = {
+        path,
+        action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
+        structuredPatch,
+      };
     } else {
       // No structured patch — can't undo this specific edit.
       instruction = null;

@@ -28,6 +28,7 @@ import {
   OUTPUT_HISTORY_KINDS,
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
+  RUNNER_IDS,
   TERMINAL_SESSION_STATUS,
   type QueuePosition,
   type ActionType,
@@ -476,7 +477,12 @@ export class WorkflowOrchestrator {
     const instance =
       this.instances.get(workflowId) ?? this.retiredInstances.get(workflowId);
     if (instance) {
-      send({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
+      const workingFilePath = instance.getSummary().workingFilePath ?? null;
+      send({
+        type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
+        workflowId,
+        workingFilePath,
+      });
       // Update viewerRegistry immediately — before any awaits — so that retireWorkflow
       // called from a concurrent state-change event sees isViewed=true and keeps the
       // instance in retiredInstances rather than discarding it. Moving this after the
@@ -550,7 +556,11 @@ export class WorkflowOrchestrator {
     // CLI-managed session
     const cliEntry = this.cliSessions.get(workflowId);
     if (cliEntry) {
-      send({ type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, workflowId });
+      send({
+        type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
+        workflowId,
+        workingFilePath: cliEntry.summary.workingFilePath ?? null,
+      });
       // Update viewerRegistry before the await for the same reason as above.
       this.setViewedWorkflowId(clientId, workflowId);
       await this.sendCliWorkflowFullStateToDashboard(
@@ -855,6 +865,20 @@ export class WorkflowOrchestrator {
         ConfigurationUtils.shouldAutoLoadRecentSession() &&
         this.currentWorkspaceFolder
       ) {
+        const panelViewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+        const panelViewed = panelViewedId
+          ? (this.instances.get(panelViewedId) ??
+            this.retiredInstances.get(panelViewedId))
+          : null;
+        const panelWorkingFilePath =
+          panelViewed?.getSummary().workingFilePath;
+        if (panelViewedId && panelWorkingFilePath) {
+          Log.debug(
+            `triggerAutoLoad: keeping panel's persisted workflow "${path.basename(panelWorkingFilePath)}" instead of loading most recent`
+          );
+          loadedWorkflowId = panelViewedId;
+          return;
+        }
         Log.debug("Triggering auto-load of recent session");
 
         await this.workspaceSessionManager.autoLoadRecentSession(
@@ -1121,6 +1145,7 @@ export class WorkflowOrchestrator {
   ): Promise<void> {
     const instance = this.buildWorkflowInstance();
     this.instances.set(instance.id, instance);
+    this.setViewedWorkflowId(clientId, instance.id);
     await this.replayWorkflowStateTo(instance.id, send, clientId);
   }
 
@@ -1136,9 +1161,29 @@ export class WorkflowOrchestrator {
   async handleClientReady(
     clientId: string,
     send: (msg: unknown) => void,
-    options?: { skipTerminalReplay?: boolean }
+    options?: { skipTerminalReplay?: boolean; preferredWorkingFilePath?: string }
   ): Promise<void> {
     this.registerClient(clientId);
+    if (options?.preferredWorkingFilePath) {
+      try {
+        await fs.promises.access(options.preferredWorkingFilePath);
+        await this.loadWorkflowForClient(
+          options.preferredWorkingFilePath,
+          send,
+          clientId
+        );
+        send({
+          type: MESSAGE_TYPES.WORKFLOWS_LIST,
+          workflows: this.getWorkflowSummaries(),
+        });
+        return;
+      } catch (error) {
+        Log.warn(
+          `handleClientReady: preferred working file not available, falling back: ${options.preferredWorkingFilePath}`,
+          error
+        );
+      }
+    }
     let viewedId = this.getViewedWorkflowId(clientId);
 
     // Browser clients connecting for the first time have no viewed workflow.
@@ -1198,6 +1243,7 @@ export class WorkflowOrchestrator {
       this.storedPanelSend?.({
         type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
         workflowId,
+        workingFilePath: existingCliEntry.summary.workingFilePath ?? null,
       });
       this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(
         existingCliEntry.summary
@@ -1947,7 +1993,7 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    if (lock.runner !== "cli") {
+    if (lock.runner !== RUNNER_IDS.CLI) {
       return;
     }
 
@@ -2041,7 +2087,7 @@ export class WorkflowOrchestrator {
       currentStep: currentIndex,
       totalSteps,
       startedAt: workingFile.startedAt,
-      managedBy: "cli",
+      managedBy: RUNNER_IDS.CLI,
     };
 
     const session = new CliWatchSession(
@@ -2058,7 +2104,7 @@ export class WorkflowOrchestrator {
         const updatedSummary: WorkflowSummary = {
           ...entry.summary,
           ...partialSummary,
-          managedBy: "cli",
+          managedBy: RUNNER_IDS.CLI,
         };
         entry.summary = updatedSummary;
         this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(updatedSummary);

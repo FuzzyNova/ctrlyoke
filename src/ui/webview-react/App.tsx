@@ -129,7 +129,11 @@ function App() {
 
   // Signal ready to extension
   useEffect(() => {
-    vscode.postMessage({ type: MESSAGE_TYPES.READY });
+    const { activeWorkflowWorkingFilePath } = useUiStore.getState();
+    vscode.postMessage({
+      type: MESSAGE_TYPES.READY,
+      preferredWorkingFilePath: activeWorkflowWorkingFilePath,
+    });
     // Capture VS Code theme variables on mount and send to extension for server theme forwarding
     captureAndSendThemeVars(vscode);
     // eslint-disable-next-line react-hooks/exhaustive-deps

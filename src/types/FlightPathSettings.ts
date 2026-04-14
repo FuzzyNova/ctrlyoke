@@ -19,8 +19,8 @@ export interface FlightPathGlobalSettings {
   // Execution
   execution: {
     mode: "interactive" | "headless";
-    /** Controls how follow-up prompts are delivered in interactive mode. */
-    continuationMode: "restart" | "inject";
+    /** When true, keep the TUI alive and write follow-up prompts directly into the PTY. */
+    injectMode: boolean;
     maxPromptTimeout: number; // seconds, -1 = unlimited
     scriptTimeout: number; // seconds
     closeTerminalOnComplete: boolean;
@@ -127,7 +127,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
   additionalArgs: {},
   execution: {
     mode: "interactive",
-    continuationMode: "restart",
+    injectMode: false,
     maxPromptTimeout: 10800,
     scriptTimeout: 30,
     closeTerminalOnComplete: false,

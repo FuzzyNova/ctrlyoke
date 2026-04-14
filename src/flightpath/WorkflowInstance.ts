@@ -35,6 +35,7 @@ import {
   MESSAGE_TYPES,
   OUTPUT_HISTORY_KINDS,
   QUEUE_POSITION,
+  RUNNER_IDS,
   SESSION_KINDS,
   STEP_STATUS,
   STEP_TYPES,
@@ -2127,7 +2128,7 @@ export class WorkflowInstance {
     // CliWatchSession.  Use isCli() rather than checking dashboardSink so a
     // future TUI dashboard implementation doesn't accidentally flip the value.
     if (workingFilePath) {
-      const runner = isCli() ? "cli" : "vscode";
+      const runner = isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE;
       const lock: WorkflowRunnerLock = {
         runner,
         pid: process.pid,

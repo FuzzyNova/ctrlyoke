@@ -191,6 +191,14 @@ function applyWorkflowChange(): void {
   useSettingsStore.getState().setWorkflowLoaded(true);
 }
 
+function persistViewedWorkingFilePath(path: unknown): void {
+  if (typeof path === "string" && path.trim().length > 0) {
+    useUiStore.getState().setActiveWorkflowWorkingFilePath(path);
+  } else if (path === null) {
+    useUiStore.getState().setActiveWorkflowWorkingFilePath(null);
+  }
+}
+
 // ============================================================================
 // Message Handlers
 // ============================================================================
@@ -309,6 +317,7 @@ function createMessageHandlers(): MessageHandlerMap {
       finalStepLoopCount: message.finalStepLoopCount ?? 0,
       finalStepPhase: message.finalStepPhase ?? null,
     });
+    persistViewedWorkingFilePath(message.workingFilePath);
     applyWorkflowChange();
   };
 
@@ -334,6 +343,7 @@ function createMessageHandlers(): MessageHandlerMap {
       finalStepLoopCount: message.finalStepLoopCount ?? 0,
       finalStepPhase: message.finalStepPhase ?? null,
     });
+    persistViewedWorkingFilePath(message.workingFilePath);
     applyWorkflowChange();
   };
 
@@ -1320,6 +1330,13 @@ function createMessageHandlers(): MessageHandlerMap {
           : "")
     );
     useUiStore.getState().setLoadedWorkflows(active);
+    const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+    const activeSummary = all.find((w) => w.id === activeWorkflowId);
+    if (activeSummary?.workingFilePath) {
+      useUiStore
+        .getState()
+        .setActiveWorkflowWorkingFilePath(activeSummary.workingFilePath);
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -1413,6 +1430,9 @@ function createMessageHandlers(): MessageHandlerMap {
     );
     if (message.workflowId) {
       useUiStore.getState().setActiveWorkflowId(message.workflowId);
+    }
+    if ("workingFilePath" in message) {
+      persistViewedWorkingFilePath(message.workingFilePath);
     }
     // Full state sync comes via SESSION_RESTORED which is already handled
   };

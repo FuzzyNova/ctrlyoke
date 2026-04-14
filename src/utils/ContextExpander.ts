@@ -17,7 +17,10 @@ import {
   getStashDiff,
   getStashList,
 } from "./GitUtils";
-import { ATTACHMENT_PREFIXES } from "../types/DashboardConstants";
+import {
+  ATTACHMENT_PREFIXES,
+  GIT_CHANGE_KINDS,
+} from "../types/DashboardConstants";
 
 /**
  * Result of context splitting — separates direct file references from embedded excerpts.
@@ -246,14 +249,14 @@ export class ContextExpander {
     for (const ref of refs) {
       // Compute attachment id for deduplication
       let attachmentId: string;
-      if (ref.kind === "diff") {
-        attachmentId = `${ATTACHMENT_PREFIXES.GIT}:diff`;
-      } else if (ref.kind === "staged") {
-        attachmentId = `${ATTACHMENT_PREFIXES.GIT}:staged`;
-      } else if (ref.kind === "stash") {
-        attachmentId = `${ATTACHMENT_PREFIXES.GIT}:stash:${ref.stashIndex}`;
+      if (ref.kind === GIT_CHANGE_KINDS.DIFF) {
+        attachmentId = `${ATTACHMENT_PREFIXES.GIT}:${GIT_CHANGE_KINDS.DIFF}`;
+      } else if (ref.kind === GIT_CHANGE_KINDS.STAGED) {
+        attachmentId = `${ATTACHMENT_PREFIXES.GIT}:${GIT_CHANGE_KINDS.STAGED}`;
+      } else if (ref.kind === GIT_CHANGE_KINDS.STASH) {
+        attachmentId = `${ATTACHMENT_PREFIXES.GIT}:${GIT_CHANGE_KINDS.STASH}:${ref.stashIndex}`;
       } else {
-        attachmentId = `${ATTACHMENT_PREFIXES.GIT}:commit:${ref.hash}`;
+        attachmentId = `${ATTACHMENT_PREFIXES.GIT}:${GIT_CHANGE_KINDS.COMMIT}:${ref.hash}`;
       }
 
       if (this.attachmentIds.has(attachmentId)) {
@@ -268,19 +271,19 @@ export class ContextExpander {
         let content: string;
         let title: string;
 
-        if (ref.kind === "diff") {
+        if (ref.kind === GIT_CHANGE_KINDS.DIFF) {
           content = await getWorkingTreeDiff(this.workspaceRoot);
           if (!content.trim()) {
             content = "No uncommitted changes in working tree.";
           }
           title = "Working tree changes (git diff)";
-        } else if (ref.kind === "staged") {
+        } else if (ref.kind === GIT_CHANGE_KINDS.STAGED) {
           content = await getStagedDiff(this.workspaceRoot);
           if (!content.trim()) {
             content = "No staged changes.";
           }
           title = "Staged changes (git diff --cached)";
-        } else if (ref.kind === "stash") {
+        } else if (ref.kind === GIT_CHANGE_KINDS.STASH) {
           const stashes = await getStashList(this.workspaceRoot);
           const stash = stashes[ref.stashIndex!];
           const stashLabel = stash

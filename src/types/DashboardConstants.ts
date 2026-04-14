@@ -361,10 +361,17 @@ export const DEFAULT_MODELS = {
 } as const;
 
 // ============================================================================
+// MODEL OPTION VALUES - Sentinels used by model option lists
+// ============================================================================
+export const MODEL_OPTION_VALUES = {
+  NONE: "none",
+} as const;
+
+// ============================================================================
 // CLAUDE CLI MODELS - Static options (no programmatic way to query)
 // ============================================================================
 export const CLAUDE_CLI_MODELS = [
-  { value: "none", label: "None" },
+  { value: MODEL_OPTION_VALUES.NONE, label: "None" },
   { value: "sonnet", label: "Sonnet" },
   { value: "sonnet[1m]", label: "Sonnet 1M Context" },
   { value: "opus", label: "Opus" },
@@ -376,7 +383,7 @@ export const CLAUDE_CLI_MODELS = [
 // CODEX CLI MODELS - Static options (from codex /model command)
 // ============================================================================
 export const CODEX_CLI_MODELS = [
-  { value: "none", label: "None" },
+  { value: MODEL_OPTION_VALUES.NONE, label: "None" },
   { value: "gpt-5.4", label: "GPT 5.4" },
   { value: "gpt-5.2-codex", label: "GPT 5.2 Codex" },
   { value: "gpt-5.4-mini", label: "GPT 5.4 Mini" },
@@ -390,7 +397,7 @@ export const CODEX_CLI_MODELS = [
 // QWEN CLI MODELS - Static options (from Qwen Code CLI documentation)
 // ============================================================================
 export const QWEN_CLI_MODELS = [
-  { value: "none", label: "None" },
+  { value: MODEL_OPTION_VALUES.NONE, label: "None" },
   { value: "coder-model", label: "Qwen Coder (Qwen 3.5 Plus)" },
 ] as const;
 
@@ -398,7 +405,7 @@ export const QWEN_CLI_MODELS = [
 // GEMINI CLI MODELS - Static options (from Gemini CLI documentation)
 // ============================================================================
 export const GEMINI_CLI_MODELS = [
-  { value: "none", label: "None" },
+  { value: MODEL_OPTION_VALUES.NONE, label: "None" },
   { value: "gemini-3-pro-preview", label: "Gemini 3 Pro (Preview)" },
   { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (Preview)" },
   {
@@ -560,6 +567,16 @@ export const PRIOR_CONTEXT_KEYWORDS = {
 export const PRIOR_CONTEXT_ITEM_TYPES = {
   /** Item originates from the finalStep phase (not a queue prompt). */
   FINAL_STEP: "finalStep",
+} as const;
+
+// ============================================================================
+// GIT CHANGE KINDS - Kind values for ~diff/~staged/~stash/~commit refs
+// ============================================================================
+export const GIT_CHANGE_KINDS = {
+  COMMIT: "commit",
+  DIFF: "diff",
+  STAGED: "staged",
+  STASH: "stash",
 } as const;
 
 // ============================================================================
@@ -736,6 +753,23 @@ export const OUTPUT_HISTORY_KINDS = {
 } as const;
 
 // ============================================================================
+// SNAPSHOT STRATEGIES - Workspace snapshot strategy values
+// ============================================================================
+export const SNAPSHOT_STRATEGIES = {
+  GIT: "git",
+  FILESYSTEM: "filesystem",
+} as const;
+
+// ============================================================================
+// UNDO FILE ACTIONS - File restoration action discriminants
+// ============================================================================
+export const UNDO_FILE_ACTIONS = {
+  DELETE: "delete",
+  RESTORE_CONTENT: "restore-content",
+  REVERSE_PATCH: "reverse-patch",
+} as const;
+
+// ============================================================================
 // WORKFLOW ATTEMPT COMMANDS - command values for WorkflowAttemptCommand type
 // ============================================================================
 export const WORKFLOW_ATTEMPT_COMMANDS = {
@@ -779,6 +813,8 @@ export type PriorContextKeyword =
   (typeof PRIOR_CONTEXT_KEYWORDS)[keyof typeof PRIOR_CONTEXT_KEYWORDS];
 export type PriorContextItemType =
   (typeof PRIOR_CONTEXT_ITEM_TYPES)[keyof typeof PRIOR_CONTEXT_ITEM_TYPES];
+export type GitChangeKind =
+  (typeof GIT_CHANGE_KINDS)[keyof typeof GIT_CHANGE_KINDS];
 export type EditorTargetKind =
   (typeof EDITOR_TARGET_KINDS)[keyof typeof EDITOR_TARGET_KINDS];
 export type TerminalSessionStatus =
@@ -786,6 +822,10 @@ export type TerminalSessionStatus =
 export type SessionKind = (typeof SESSION_KINDS)[keyof typeof SESSION_KINDS];
 export type OutputHistoryKind =
   (typeof OUTPUT_HISTORY_KINDS)[keyof typeof OUTPUT_HISTORY_KINDS];
+export type SnapshotStrategy =
+  (typeof SNAPSHOT_STRATEGIES)[keyof typeof SNAPSHOT_STRATEGIES];
+export type UndoFileAction =
+  (typeof UNDO_FILE_ACTIONS)[keyof typeof UNDO_FILE_ACTIONS];
 export type WorkflowAttemptCommandValue =
   (typeof WORKFLOW_ATTEMPT_COMMANDS)[keyof typeof WORKFLOW_ATTEMPT_COMMANDS];
 export type StepType = (typeof STEP_TYPES)[keyof typeof STEP_TYPES];

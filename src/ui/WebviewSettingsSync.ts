@@ -10,6 +10,7 @@ import {
   EXECUTION_MODES,
   DEFAULT_MODELS,
   PERMISSION_MODES,
+  MODEL_OPTION_VALUES,
   PANEL_CLIENT_ID,
   type HarnessStatusString,
 } from "../types/DashboardConstants";
@@ -613,7 +614,7 @@ export class WebviewSettingsSync {
       const options = modelOptions[id] ?? [];
       // Filter out the "none" sentinel value
       const models = options
-        .filter((m) => m.value !== "none")
+        .filter((m) => m.value !== MODEL_OPTION_VALUES.NONE)
         .map((m) => ({ value: m.value, label: m.label }));
       return {
         id,
@@ -770,7 +771,7 @@ export class WebviewSettingsSync {
         label: getModelDisplayName(m.id),
       }));
 
-    const noneOption = { value: "none", label: "None" };
+    const noneOption = { value: MODEL_OPTION_VALUES.NONE, label: "None" };
 
     const copilotCliOptions = [
       noneOption,
