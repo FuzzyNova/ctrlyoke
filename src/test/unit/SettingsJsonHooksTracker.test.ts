@@ -134,6 +134,48 @@ suite("SettingsJsonHooksTracker", () => {
     assert.strictEqual(settings.hooks.Stop.length, 1);
 
     await tracker.unregisterWorkflow("wf-1", tmpDir);
+
+    await assert.rejects(fs.access(settingsPath), /ENOENT/);
+  });
+
+  test("should remove codex hooks.json when FlightPath created it", async () => {
+    const codexHooksPath = path.join(tmpDir, ".codex", "hooks.json");
+    await fs.rm(codexHooksPath, { force: true });
+
+    const tracker = SettingsJsonHooksTracker.getInstance("codex");
+    await tracker.registerWorkflow(
+      "wf-1",
+      tmpDir,
+      {
+        Stop: [{ matcher: "", hooks: [{ type: "command", command: "node fp.js" }] }],
+      },
+      {}
+    );
+
+    JSON.parse(await fs.readFile(codexHooksPath, "utf-8"));
+
+    await tracker.unregisterWorkflow("wf-1", tmpDir);
+
+    await assert.rejects(fs.access(codexHooksPath), /ENOENT/);
+  });
+
+  test("should keep existing settings file when only hooks were temporary", async () => {
+    await fs.writeFile(settingsPath, JSON.stringify({ theme: "dark" }));
+
+    const tracker = SettingsJsonHooksTracker.getInstance("qwen");
+    await tracker.registerWorkflow(
+      "wf-1",
+      tmpDir,
+      {
+        Stop: [{ hooks: [{ type: "command", command: "node fp.js" }] }],
+      },
+      {}
+    );
+
+    await tracker.unregisterWorkflow("wf-1", tmpDir);
+
+    const settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
+    assert.deepStrictEqual(settings, { theme: "dark" });
   });
 
   test("should include workflow user hooks in middle layer", async () => {

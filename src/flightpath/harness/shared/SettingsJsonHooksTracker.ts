@@ -18,6 +18,9 @@ export class SettingsJsonHooksTracker {
   /** Original hooks from settings.json before any FlightPath workflow touched it. */
   private baseline: Record<string, unknown[]> | null | undefined = undefined;
 
+  /** Whether the target settings/hooks file existed before FlightPath touched it. */
+  private baselineFileExisted: boolean | undefined = undefined;
+
   /** Per-workflow FlightPath hooks + user hooks, keyed by workflowKey. */
   private workflowHooks = new Map<
     string,
@@ -76,7 +79,9 @@ export class SettingsJsonHooksTracker {
 
     // First registration captures the baseline
     if (this.workflowHooks.size === 0) {
-      this.baseline = await this.readHooksFromSettings(settingsPath);
+      const baseline = await this.readBaseline(settingsPath);
+      this.baseline = baseline.hooks;
+      this.baselineFileExisted = baseline.fileExisted;
     }
 
     // Track this workflow's hooks
@@ -113,6 +118,7 @@ export class SettingsJsonHooksTracker {
       // Last workflow — restore baseline
       await this.restoreBaseline(settingsPath);
       this.baseline = undefined;
+      this.baselineFileExisted = undefined;
     } else {
       // Other workflows still active — rebuild without this one
       await this.rebuildAndWriteSettings(settingsPath, workspaceRoot);
@@ -123,15 +129,25 @@ export class SettingsJsonHooksTracker {
     return this.workflowHooks.size;
   }
 
-  private async readHooksFromSettings(
-    settingsPath: string
-  ): Promise<Record<string, unknown[]> | null> {
+  private async readBaseline(settingsPath: string): Promise<{
+    fileExisted: boolean;
+    hooks: Record<string, unknown[]> | null;
+  }> {
+    let content: string;
     try {
-      const content = await fs.readFile(settingsPath, "utf-8");
-      const settings = JSON.parse(content);
-      return (settings.hooks as Record<string, unknown[]>) ?? null;
+      content = await fs.readFile(settingsPath, "utf-8");
     } catch {
-      return null;
+      return { fileExisted: false, hooks: null };
+    }
+
+    try {
+      const settings = JSON.parse(content);
+      return {
+        fileExisted: true,
+        hooks: (settings.hooks as Record<string, unknown[]>) ?? null,
+      };
+    } catch {
+      return { fileExisted: true, hooks: null };
     }
   }
 
@@ -207,6 +223,11 @@ export class SettingsJsonHooksTracker {
 
   private async restoreBaseline(settingsPath: string): Promise<void> {
     try {
+      if (this.baselineFileExisted === false) {
+        await fs.unlink(settingsPath).catch(() => {});
+        return;
+      }
+
       let settings: Record<string, unknown> = {};
       try {
         const content = await fs.readFile(settingsPath, "utf-8");

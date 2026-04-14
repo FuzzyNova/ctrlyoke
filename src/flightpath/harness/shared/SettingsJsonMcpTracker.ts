@@ -105,6 +105,12 @@ export class SettingsJsonMcpTracker {
   /** Whether baseline capture has completed for this workspace. */
   private baselineCapturedForWorkspace: string | undefined;
 
+  /** Whether the project settings.json existed before FlightPath touched it. */
+  private baselineProjectSettingsFileExisted = false;
+
+  /** Whether the project settings.json originally had an mcpServers property. */
+  private baselineProjectHadMcpServers = false;
+
   /** Reference count per FlightPath-managed server name. */
   private refCounts = new Map<string, number>();
 
@@ -167,11 +173,20 @@ export class SettingsJsonMcpTracker {
       "settings.json"
     );
 
+    this.baselineProjectSettingsFileExisted = false;
+    this.baselineProjectHadMcpServers = false;
+
     for (const filePath of [projectSettings, userSettings]) {
       try {
         const content = await fs.readFile(filePath, "utf-8");
+        if (filePath === projectSettings) {
+          this.baselineProjectSettingsFileExisted = true;
+        }
         const settings = JSON.parse(content);
         if (settings.mcpServers && typeof settings.mcpServers === "object") {
+          if (filePath === projectSettings) {
+            this.baselineProjectHadMcpServers = true;
+          }
           for (const name of Object.keys(settings.mcpServers)) {
             this.baselineServers.add(name);
           }
@@ -334,11 +349,27 @@ export class SettingsJsonMcpTracker {
             for (const name of toRemove) {
               delete mcpServers[name];
             }
-            await fs.writeFile(
-              settingsPath,
-              JSON.stringify(settings, null, 2),
-              "utf-8"
-            );
+            if (
+              Object.keys(mcpServers).length === 0 &&
+              !this.baselineProjectHadMcpServers
+            ) {
+              delete settings.mcpServers;
+            } else {
+              settings.mcpServers = mcpServers;
+            }
+
+            if (
+              !this.baselineProjectSettingsFileExisted &&
+              Object.keys(settings).length === 0
+            ) {
+              await fs.unlink(settingsPath).catch(() => {});
+            } else {
+              await fs.writeFile(
+                settingsPath,
+                JSON.stringify(settings, null, 2),
+                "utf-8"
+              );
+            }
             Log.debug(
               `🧹 ${this.toolName} MCP servers removed from settings.json: [${toRemove.join(", ")}]`
             );
