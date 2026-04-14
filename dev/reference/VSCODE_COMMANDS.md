@@ -1,7 +1,7 @@
 # All Available VS Code Commands
 
-**Generated:** 2026-04-12T19:52:22.618Z  
-**Total Commands:** 3873
+**Generated:** 2026-04-14T21:55:43.804Z  
+**Total Commands:** 3865
 
 ---
 
@@ -40,18 +40,6 @@
 - `agentSessionSection.collapseAll`
 - `agentSessionSection.markRead`
 - `agentSessionSection.unarchive`
-- `agentSessions.filter.resetExcludes.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExclude:claude-code.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExclude:copilot-cloud-agent.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExclude:copilotcli.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExclude:local.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExclude:openai-codex.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExcludeArchived.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExcludeRead.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExcludeState:0.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExcludeState:1.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExcludeState:2.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExcludeState:3.agentsessionsviewerfiltersubmenu`
 - `agentSessions.hideAgentSessionsSidebar`
 - `agentSessions.showAgentSessionsSidebar`
 - `agentSessions.toggleAgentSessionsSidebar`
@@ -181,7 +169,7 @@
 - `cancelLinkedEditingInput`
 - `cancelRenameInput`
 - `cancelSelection`
-- `changeEditorIndentation11`
+- `changeEditorIndentation15`
 - `chat.action.focus`
 - `chat.configureToolSets`
 - `chat.enablePremiumOverages`
@@ -2193,8 +2181,12 @@
 - `testing.viewAsTree`
 - `timeline.focus`
 - `timeline.open`
+- `timeline.refresh`
 - `timeline.removeView`
 - `timeline.resetViewLocation`
+- `timeline.toggleExcludeSource:git-history`
+- `timeline.toggleExcludeSource:timeline.localHistory`
+- `timeline.toggleFollowActiveEditor`
 - `timeline.toggleVisibility`
 - `toggle.chat.unifiedAgentsBar.enabled`
 - `toggle.diff.ignoreTrimWhitespace`
@@ -2530,7 +2522,6 @@
 - `workbench.action.chat.opentest-agent-alpha`
 - `workbench.action.chat.opentest-agent-beta`
 - `workbench.action.chat.opentest-agent-user`
-- `workbench.action.chat.pickAgentSession`
 - `workbench.action.chat.picker.customagents`
 - `workbench.action.chat.picker.customagents.disabled`
 - `workbench.action.chat.previousCodeBlock`
@@ -3642,6 +3633,7 @@
 - `workbench.scm.action.setTreeViewModeNavigation`
 - `workbench.scm.action.toggleQuickDiffVisibility.git.quickDiffProvider`
 - `workbench.scm.action.toggleQuickDiffVisibility.git.secondaryQuickDiffProvider`
+- `workbench.scm.action.toggleRepositoryVisibility.scm0`
 - `workbench.scm.focus`
 - `workbench.scm.history.focus`
 - `workbench.scm.history.open`
