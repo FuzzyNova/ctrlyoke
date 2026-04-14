@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-03-09T19:38:54.958Z",
+  "exportedAt": "2026-04-14T16:37:59.281Z",
   "source": "vscode.lm.selectChatModels({ vendor: 'copilot' })",
   "chatModels": [
     {
@@ -33,10 +33,16 @@
       "cliSupported": true
     },
     {
+      "id": "gpt-5.4-mini",
+      "family": "gpt-5.4-mini",
+      "vendor": "copilot",
+      "cliSupported": true
+    },
+    {
       "id": "gpt-5.4",
       "family": "gpt-5.4",
       "vendor": "copilot",
-      "cliSupported": false
+      "cliSupported": true
     },
     {
       "id": "gpt-5-mini",
@@ -75,24 +81,6 @@
       "cliSupported": true
     },
     {
-      "id": "gpt-5.1-codex",
-      "family": "gpt-5.1-codex",
-      "vendor": "copilot",
-      "cliSupported": true
-    },
-    {
-      "id": "gpt-5.1-codex-mini",
-      "family": "gpt-5.1-codex-mini",
-      "vendor": "copilot",
-      "cliSupported": true
-    },
-    {
-      "id": "gpt-5.1-codex-max",
-      "family": "gpt-5.1-codex-max",
-      "vendor": "copilot",
-      "cliSupported": true
-    },
-    {
       "id": "claude-sonnet-4",
       "family": "claude-sonnet-4",
       "vendor": "copilot",
@@ -113,12 +101,6 @@
     {
       "id": "claude-haiku-4.5",
       "family": "claude-haiku-4.5",
-      "vendor": "copilot",
-      "cliSupported": true
-    },
-    {
-      "id": "gemini-3-pro-preview",
-      "family": "gemini-3-pro",
       "vendor": "copilot",
       "cliSupported": true
     },
@@ -154,7 +136,7 @@
     },
     {
       "id": "auto",
-      "family": "gpt-5.3-codex",
+      "family": "claude-sonnet-4.6",
       "vendor": "copilot",
       "cliSupported": false
     }
@@ -167,15 +149,12 @@
     "claude-opus-4.6-fast",
     "claude-opus-4.5",
     "claude-sonnet-4",
-    "gemini-3-pro-preview",
     "gpt-5.4",
     "gpt-5.3-codex",
     "gpt-5.2-codex",
     "gpt-5.2",
-    "gpt-5.1-codex-max",
-    "gpt-5.1-codex",
     "gpt-5.1",
-    "gpt-5.1-codex-mini",
+    "gpt-5.4-mini",
     "gpt-5-mini",
     "gpt-4.1"
   ],
@@ -185,6 +164,7 @@
     "gemini-3.1-pro-preview",
     "gpt-5.2-codex",
     "gpt-5.3-codex",
+    "gpt-5.4-mini",
     "gpt-5.4",
     "gpt-5-mini",
     "gpt-4o-mini",
@@ -192,14 +172,10 @@
     "gpt-4o",
     "grok-code-fast-1",
     "gpt-5.1",
-    "gpt-5.1-codex",
-    "gpt-5.1-codex-mini",
-    "gpt-5.1-codex-max",
     "claude-sonnet-4",
     "claude-sonnet-4.5",
     "claude-opus-4.5",
     "claude-haiku-4.5",
-    "gemini-3-pro-preview",
     "gemini-3-flash-preview",
     "gemini-2.5-pro",
     "gpt-4.1",

@@ -351,10 +351,10 @@ export type ExecutionMode =
 // DEFAULT MODELS - Default model per harness
 // ============================================================================
 export const DEFAULT_MODELS = {
-  [HARNESS_IDS.COPILOT_CLI]: "claude-sonnet-4.5",
-  [HARNESS_IDS.COPILOT_CHAT]: "claude-sonnet-4.5",
+  [HARNESS_IDS.COPILOT_CLI]: "claude-sonnet-4.6",
+  [HARNESS_IDS.COPILOT_CHAT]: "claude-sonnet-4.6",
   [HARNESS_IDS.CLAUDE_CLI]: "sonnet",
-  [HARNESS_IDS.CODEX_CLI]: "gpt-5.2-codex",
+  [HARNESS_IDS.CODEX_CLI]: "gpt-5.4",
   [HARNESS_IDS.OPENCODE_CLI]: "anthropic/claude-sonnet-4-6",
   [HARNESS_IDS.QWEN_CLI]: "coder-model",
   [HARNESS_IDS.GEMINI_CLI]: "gemini-2.5-pro",
@@ -377,10 +377,11 @@ export const CLAUDE_CLI_MODELS = [
 // ============================================================================
 export const CODEX_CLI_MODELS = [
   { value: "none", label: "None" },
-  { value: "gpt-5.3-codex", label: "GPT 5.3 Codex" },
   { value: "gpt-5.4", label: "GPT 5.4" },
   { value: "gpt-5.2-codex", label: "GPT 5.2 Codex" },
+  { value: "gpt-5.4-mini", label: "GPT 5.4 Mini" },
   { value: "gpt-5.1-codex-max", label: "GPT 5.1 Codex Max" },
+  { value: "gpt-5.3-codex", label: "GPT 5.3 Codex" },
   { value: "gpt-5.2", label: "GPT 5.2" },
   { value: "gpt-5.1-codex-mini", label: "GPT 5.1 Codex Mini" },
 ] as const;

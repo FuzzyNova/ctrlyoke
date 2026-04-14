@@ -133,19 +133,20 @@ function parseClaudeModels(content) {
 }
 
 /**
- * Parse CODEX_CLI_MODELS (Codex CLI models) from ModelConstants.ts
+ * Parse a string array exported with `as const` from ModelConstants.ts
  */
-function parseCodexModels(content) {
-  // Find the CODEX_CLI_MODELS array literal
-  const codexBlockMatch = content.match(
-    /export\s+const\s+CODEX_CLI_MODELS\s*=\s*\[([\s\S]*?)\]\s*as\s+const/
+function parseStringArrayConstant(content, constantName) {
+  const blockMatch = content.match(
+    new RegExp(
+      `export\\s+const\\s+${constantName}\\s*=\\s*\\[([\\s\\S]*?)\\]\\s*as\\s+const`
+    )
   );
 
-  if (!codexBlockMatch) {
-    throw new Error("Could not find CODEX_CLI_MODELS in ModelConstants.ts");
+  if (!blockMatch) {
+    throw new Error(`Could not find ${constantName} in ModelConstants.ts`);
   }
 
-  const arrayContent = codexBlockMatch[1];
+  const arrayContent = blockMatch[1];
   const modelIds = [];
   const stringRegex = /["']([^"']+)["']/g;
   let match;
@@ -158,6 +159,13 @@ function parseCodexModels(content) {
 }
 
 /**
+ * Parse CODEX_CLI_MODELS (Codex CLI models) from ModelConstants.ts
+ */
+function parseCodexModels(content) {
+  return parseStringArrayConstant(content, "CODEX_CLI_MODELS");
+}
+
+/**
  * Parse all model constants from ModelConstants.ts
  */
 function parseModelConstants() {
@@ -167,6 +175,12 @@ function parseModelConstants() {
   const cliModels = parseCliModels(content);
   const claudeModels = parseClaudeModels(content);
   const codexModels = parseCodexModels(content);
+  const qwenModels = parseStringArrayConstant(content, "QWEN_CLI_MODELS");
+  const geminiModels = parseStringArrayConstant(content, "GEMINI_CLI_MODELS");
+  const opencodeFallbackModels = parseStringArrayConstant(
+    content,
+    "OPENCODE_CLI_FALLBACK_MODELS"
+  );
 
   console.log(`Found ${chatModels.length} Chat models in COPILOT_MODELS`);
   console.log(`Found ${cliModels.length} CLI models in COPILOT_CLI_MODEL_IDS`);
@@ -174,15 +188,30 @@ function parseModelConstants() {
     `Found ${claudeModels.length} Claude models in CLAUDE_CLI_MODELS`
   );
   console.log(`Found ${codexModels.length} Codex models in CODEX_CLI_MODELS`);
+  console.log(`Found ${qwenModels.length} Qwen models in QWEN_CLI_MODELS`);
+  console.log(
+    `Found ${geminiModels.length} Gemini models in GEMINI_CLI_MODELS`
+  );
+  console.log(
+    `Found ${opencodeFallbackModels.length} OpenCode fallback models in OPENCODE_CLI_FALLBACK_MODELS`
+  );
 
-  return { chatModels, cliModels, claudeModels, codexModels };
+  return {
+    chatModels,
+    cliModels,
+    claudeModels,
+    codexModels,
+    qwenModels,
+    geminiModels,
+    opencodeFallbackModels,
+  };
 }
 
 /**
- * Auto-derive CODEX_CLI_DEFAULT_MODEL and CODEX_CLI_MODEL_LABELS from CODEX_CLI_MODELS
+ * Auto-derive CODEX_CLI_MODEL_LABELS from CODEX_CLI_MODELS
  *
  * This ensures you only need to update CODEX_CLI_MODELS array, and the
- * default and labels are automatically generated.
+ * labels are automatically generated.
  */
 function updateCodexDerivedConstants(checkOnly = false) {
   console.log("\nUpdating Codex derived constants...");
@@ -196,29 +225,6 @@ function updateCodexDerivedConstants(checkOnly = false) {
   }
 
   let needsUpdate = false;
-
-  // === Update CODEX_CLI_DEFAULT_MODEL (first model in array) ===
-  const expectedDefault = codexModels[0];
-  const defaultMatch = content.match(
-    /export\s+const\s+CODEX_CLI_DEFAULT_MODEL\s*=\s*["']([^"']+)["']\s*as\s+const/
-  );
-  const currentDefault = defaultMatch ? defaultMatch[1] : null;
-
-  if (currentDefault !== expectedDefault) {
-    needsUpdate = true;
-    console.log(
-      `  CODEX_CLI_DEFAULT_MODEL: "${currentDefault}" → "${expectedDefault}"`
-    );
-
-    if (!checkOnly) {
-      content = content.replace(
-        /export\s+const\s+CODEX_CLI_DEFAULT_MODEL\s*=\s*["'][^"']+["']\s*as\s+const/,
-        `export const CODEX_CLI_DEFAULT_MODEL = "${expectedDefault}" as const`
-      );
-    }
-  } else {
-    console.log(`  CODEX_CLI_DEFAULT_MODEL: ✓ already "${expectedDefault}"`);
-  }
 
   // === Update CODEX_CLI_MODEL_LABELS (auto-generate from model IDs) ===
   const expectedLabels = {};
@@ -319,13 +325,14 @@ function updatePackageJson(
   };
 
   let needsUpdate = false;
+  let foundSettings = 0;
 
   for (const [settingKey, newEnum] of Object.entries(settingsMap)) {
     const setting = pkg.contributes?.configuration?.properties?.[settingKey];
     if (!setting) {
-      console.warn(`Warning: Setting ${settingKey} not found in package.json`);
       continue;
     }
+    foundSettings++;
 
     const currentEnum = setting.enum || [];
 
@@ -348,6 +355,13 @@ function updatePackageJson(
     }
   }
 
+  if (foundSettings === 0) {
+    console.log(
+      "  package.json: no legacy model setting enums found, skipping"
+    );
+    return;
+  }
+
   if (needsUpdate && !checkOnly) {
     // Write back with 2-space indentation (standard for package.json)
     writeFileSync(PACKAGE_JSON_PATH, JSON.stringify(pkg, null, 2) + "\n");
@@ -366,7 +380,15 @@ function updatePackageJson(
  * Combines all models from all providers for autocomplete
  */
 function updateSchema(
-  { chatModels, cliModels, claudeModels, codexModels },
+  {
+    chatModels,
+    cliModels,
+    claudeModels,
+    codexModels,
+    qwenModels = [],
+    geminiModels = [],
+    opencodeFallbackModels = [],
+  },
   checkOnly = false
 ) {
   console.log("\nUpdating prompt-schema.json...");
@@ -376,7 +398,16 @@ function updateSchema(
 
   // Combine all unique models from all providers
   const allModels = [
-    ...new Set([...chatModels, ...cliModels, ...claudeModels, ...codexModels]),
+    ...new Set([
+      "none",
+      ...chatModels,
+      ...cliModels,
+      ...claudeModels,
+      ...codexModels,
+      ...qwenModels,
+      ...geminiModels,
+      ...opencodeFallbackModels,
+    ]),
   ].sort();
 
   // Find the model property - it lives in executionProperties (shared mixin)
