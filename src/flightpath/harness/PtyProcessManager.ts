@@ -89,9 +89,9 @@ const RECONNECT_BUFFER_MAX = 50_000; // bytes
 export class PtySession {
   readonly id: string;
   readonly workflowId: string;
-  readonly stepName: string;
+  stepName: string;
   readonly kind: SessionKind;
-  readonly promptNumber?: number;
+  promptNumber?: number;
   /** HarnessId for AI CLI sessions (e.g. "claude-cli"). Undefined for shell sessions. */
   readonly harnessId?: string;
   /** Shell variant for SHELL sessions (pwsh / powershell / bash). Undefined for ai-cli sessions. */

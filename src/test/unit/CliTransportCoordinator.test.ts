@@ -2,6 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliTransportCoordinator } from "../../flightpath/harness/shared/CliTransportCoordinator";
 import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
+import { MESSAGE_TYPES, SESSION_KINDS } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 
@@ -266,6 +267,122 @@ suite("CliTransportCoordinator", () => {
     await coordinator.startInteractiveProcess([], "prompt");
 
     assert.strictEqual(postedMessages[0]?.workflowId, "named-workflow");
+  });
+
+  test("should refresh active PTY session metadata for inject reuse", async () => {
+    const postedMessages: Array<{
+      type?: string;
+      workflowId?: string;
+      sessionId?: string;
+      stepName?: string;
+      promptNumber?: number;
+      kind?: string;
+    }> = [];
+    const spawnedSession: {
+      id?: string;
+      workflowId?: string;
+      kind?: string;
+      stepName?: string;
+      promptNumber?: number;
+      reconnectBuffer: string[];
+    } = { reconnectBuffer: [] };
+
+    const coordinator = new CliTransportCoordinator({
+      provider: {
+        config: {
+          name: "test-cli",
+          displayName: "Test CLI",
+          terminalName: "Test",
+          installHint: "",
+          shouldStreamHeadlessOutput: false,
+          harnessId: "copilot-cli",
+        },
+        responseParser: {
+          parse: () => ({ events: [], metadata: {} }),
+          parseTokenCounts: () => undefined,
+        },
+        notificationMonitor: {
+          supportsSessionIdInFilename: true,
+          supportsSessionStart: false,
+          monitorForCompletion: async () => ({ completed: false }),
+          buildHookConfig: () => ({ type: "none" as const }),
+          getNotificationDirectory: () => process.cwd(),
+        },
+        toolPermissionMapper: {},
+        buildCliArgs: async () => [],
+        buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
+          ...baseArgs,
+          prompt,
+        ],
+        buildInteractiveTuiCommand: () => "test-cli --interactive",
+        checkAvailability: async () => true,
+      } as unknown as ICliProvider,
+      processManager: {} as any,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: {
+        onBeforeInteractiveStart: () => {},
+        onCommandPrepared: () => {},
+        onStreamingChunk: () => {},
+        onStreamingEvents: () => {},
+        onResponseComplete: () => {},
+        onPtyExit: () => {},
+        cleanupTempFiles: async () => {},
+      },
+      postTerminalMessage: (message: unknown) => {
+        postedMessages.push(message as (typeof postedMessages)[number]);
+      },
+      getPtyManager: () =>
+        ({
+          getExpectedController: (_workflowId: string) => undefined,
+          spawnPty: (config: {
+            sessionId: string;
+            workflowId: string;
+            kind: string;
+            stepName: string;
+            promptNumber?: number;
+          }) => {
+            Object.assign(spawnedSession, {
+              id: config.sessionId,
+              workflowId: config.workflowId,
+              kind: config.kind,
+              stepName: config.stepName,
+              promptNumber: config.promptNumber,
+            });
+            return spawnedSession;
+          },
+        }) as any,
+    });
+
+    await coordinator.startInteractiveProcess(
+      [],
+      "prompt",
+      {
+        promptIndex: 0,
+        allPrompts: [{ prompt: "one" }, { name: "second", prompt: "two" }],
+        instanceId: "workflow-1",
+      } as any
+    );
+
+    postedMessages.length = 0;
+    const refreshed = coordinator.updateCurrentPtySessionMetadata({
+      promptIndex: 1,
+      allPrompts: [{ prompt: "one" }, { name: "second", prompt: "two" }],
+      instanceId: "workflow-1",
+    } as any);
+
+    assert.strictEqual(refreshed, true);
+    assert.strictEqual(spawnedSession.stepName, "second");
+    assert.strictEqual(spawnedSession.promptNumber, 2);
+    assert.strictEqual(postedMessages.length, 1);
+    assert.strictEqual(postedMessages[0].type, MESSAGE_TYPES.TERMINAL_STARTED);
+    assert.strictEqual(postedMessages[0].workflowId, "workflow-1");
+    assert.strictEqual(postedMessages[0].sessionId, spawnedSession.id);
+    assert.strictEqual(postedMessages[0].stepName, "second");
+    assert.strictEqual(postedMessages[0].promptNumber, 2);
+    assert.strictEqual(postedMessages[0].kind, SESSION_KINDS.AI_CLI);
   });
 
   test("should run standalone interactive launch and stop-hook monitor", async () => {

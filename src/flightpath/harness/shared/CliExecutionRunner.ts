@@ -40,6 +40,8 @@ interface CliExecutionTransportCoordinator {
   ): Promise<boolean>;
   /** Write text to the currently active PTY session. Returns false if no session is active. */
   writeToCurrentPtySession(text: string): boolean;
+  /** Refresh display metadata for the current PTY session when it is reused by inject mode. */
+  updateCurrentPtySessionMetadata?(workflowContext?: WorkflowContext): boolean;
 }
 
 interface CliInteractiveStartupCoordinatorLike {
@@ -219,6 +221,10 @@ export class CliExecutionRunner {
       );
       return { injected: false };
     }
+
+    this.deps.transportCoordinator.updateCurrentPtySessionMetadata?.(
+      session.workflowContext
+    );
 
     Log.info(
       `🔤 Injected prompt into existing PTY session (${session.promptArgument.length} chars)`

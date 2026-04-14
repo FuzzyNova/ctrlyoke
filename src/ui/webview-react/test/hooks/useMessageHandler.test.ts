@@ -12,7 +12,14 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
-import { MESSAGE_TYPES, EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
+import { useTerminalStore } from "@store/terminalStore";
+import {
+  MESSAGE_TYPES,
+  EXECUTION_STATES,
+  STEP_STATUS,
+  SESSION_KINDS,
+  TERMINAL_SESSION_STATUS,
+} from "@/types/messages";
 import type { PromptStep } from "@/types/messages";
 
 // ---------------------------------------------------------------------------
@@ -42,6 +49,7 @@ beforeEach(() => {
   useSettingsStore.getState().resetSettings();
   useUiStore.getState().resetUi();
   useEditorStore.getState().resetEditor();
+  useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
 });
 
 // ---------------------------------------------------------------------------
@@ -387,6 +395,48 @@ describe("STEPS_EXTENDED", () => {
     expect((useWorkflowStore.getState().steps[0] as any).status).toBe(
       STEP_STATUS.COMPLETED
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TERMINAL_STARTED
+// ---------------------------------------------------------------------------
+
+describe("TERMINAL_STARTED", () => {
+  it("updates existing session metadata when inject mode reuses the PTY", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        stepName: "Step 1",
+        kind: SESSION_KINDS.AI_CLI,
+        promptNumber: 1,
+        controllerClientId: "controller-1",
+      });
+    });
+
+    act(() => {
+      useTerminalStore.getState().endSession("workflow-1", "session-1", 0);
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        stepName: "Step 2",
+        kind: SESSION_KINDS.AI_CLI,
+        promptNumber: 2,
+        controllerClientId: "controller-1",
+      });
+    });
+
+    const sessions = useTerminalStore.getState().sessions["workflow-1"];
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].stepName).toBe("Step 2");
+    expect(sessions[0].promptNumber).toBe(2);
+    expect(sessions[0].status).toBe(TERMINAL_SESSION_STATUS.RUNNING);
   });
 });
 

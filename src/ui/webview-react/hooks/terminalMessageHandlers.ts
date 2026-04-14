@@ -96,7 +96,15 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
         `activeWorkflowId=${activeWorkflowId?.slice(0, 8) ?? "null"}`
     );
     if (alreadyExists) {
-      useTerminalStore.getState().setSessionController(workflowId, sessionId, isController);
+      const termStore = useTerminalStore.getState();
+      termStore.updateSessionMetadata(workflowId, sessionId, {
+        ...(stepName !== undefined ? { stepName } : {}),
+        ...(promptNumber !== undefined ? { promptNumber } : {}),
+        ...(harnessId !== undefined ? { harnessId } : {}),
+        ...(shellKind !== undefined ? { shellKind } : {}),
+        status: TERMINAL_SESSION_STATUS.RUNNING,
+      });
+      termStore.setSessionController(workflowId, sessionId, isController);
       if (controllerClientId === undefined) {
         sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, { workflowId, sessionId });
       }

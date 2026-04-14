@@ -154,10 +154,12 @@ export class CliTransportCoordinator {
         workflowContext?.filePath ??
         this.deps.runtimeState.getWorkflowName?.() ??
         "unknown";
-      const stepName = workflowContext
-        ? (workflowContext.allPrompts[workflowContext.promptIndex]?.name ??
-          `Step ${workflowContext.promptIndex + 1}`)
-        : "interactive";
+      const stepMetadata =
+        this.getWorkflowStepMetadata(workflowContext) ?? {
+          stepName: "interactive",
+          promptNumber: undefined,
+        };
+      const { stepName, promptNumber } = stepMetadata;
       const shell =
         process.platform === "win32"
           ? resolveWindowsShell()
@@ -168,9 +170,6 @@ export class CliTransportCoordinator {
           : ["-c", String(tuiCommand)];
       const cwd = this.deps.runtimeState.getWorkspaceRoot() ?? process.cwd();
       const mergedEnv = env ? { ...process.env, ...env } : process.env;
-      const promptNumber = workflowContext
-        ? workflowContext.promptIndex + 1
-        : undefined;
       const preSessionId = `ai-cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const harnessId = this.deps.provider.config.harnessId;
       // Peek at the expected controller before spawning so TERMINAL_STARTED carries
@@ -229,6 +228,44 @@ export class CliTransportCoordinator {
         `🖥️ PTY session spawned: "${stepName}" (${session.id.slice(0, 8)}) workflowId=inst:${workflowId.slice(0, 8)}`
       );
     }
+  }
+
+  /**
+   * Refresh the active PTY's display metadata when inject mode submits another
+   * workflow step into the same terminal instead of spawning a new session.
+   */
+  updateCurrentPtySessionMetadata(
+    workflowContext?: WorkflowContext
+  ): boolean {
+    if (!this.currentPtySession || !workflowContext) {
+      return false;
+    }
+
+    const metadata = this.getWorkflowStepMetadata(workflowContext);
+    if (!metadata) {
+      return false;
+    }
+
+    this.currentPtySession.stepName = metadata.stepName;
+    this.currentPtySession.promptNumber = metadata.promptNumber;
+
+    const postMessage = this.deps.postTerminalMessage ?? ptyPostMessage;
+    postMessage({
+      type: MESSAGE_TYPES.TERMINAL_STARTED,
+      workflowId: this.currentPtySession.workflowId,
+      sessionId: this.currentPtySession.id,
+      stepName: metadata.stepName,
+      kind: this.currentPtySession.kind,
+      promptNumber: metadata.promptNumber,
+      harnessId: this.currentPtySession.harnessId,
+      shellKind: this.currentPtySession.shellKind,
+      controllerClientId: this.currentPtySession.controllerClientId,
+    });
+
+    Log.debug(
+      `[inject] refreshed PTY session metadata: session=${this.currentPtySession.id.slice(0, 8)} step="${metadata.stepName}"`
+    );
+    return true;
   }
 
   async executeHeadless(
@@ -387,5 +424,21 @@ export class CliTransportCoordinator {
 
     Log.info("✅ Process exited - execution complete");
     return result;
+  }
+
+  private getWorkflowStepMetadata(
+    workflowContext?: WorkflowContext
+  ): { stepName: string; promptNumber: number } | undefined {
+    if (!workflowContext) {
+      return undefined;
+    }
+
+    const promptNumber = workflowContext.promptIndex + 1;
+    return {
+      stepName:
+        workflowContext.allPrompts[workflowContext.promptIndex]?.name ??
+        `Step ${promptNumber}`,
+      promptNumber,
+    };
   }
 }

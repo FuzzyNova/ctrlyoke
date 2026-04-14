@@ -45,6 +45,16 @@ interface TerminalState {
 
 interface TerminalActions {
   addSession: (session: TerminalSession) => void;
+  updateSessionMetadata: (
+    workflowId: string,
+    sessionId: string,
+    metadata: Partial<
+      Pick<
+        TerminalSession,
+        "stepName" | "promptNumber" | "harnessId" | "shellKind" | "status"
+      >
+    >
+  ) => void;
   endSession: (workflowId: string, sessionId: string, exitCode: number) => void;
   setActiveSession: (workflowId: string, sessionId: string) => void;
   /** Explicitly close/remove a session (user × button on shell sessions) */
@@ -101,6 +111,14 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
             [session.workflowId]: session.id,
           },
         };
+      }),
+
+    updateSessionMetadata: (workflowId, sessionId, metadata) =>
+      set((state) => {
+        const sessions = (state.sessions[workflowId] ?? []).map((s) =>
+          s.id === sessionId ? { ...s, ...metadata } : s
+        );
+        return { sessions: { ...state.sessions, [workflowId]: sessions } };
       }),
 
     endSession: (workflowId, sessionId, exitCode) =>
