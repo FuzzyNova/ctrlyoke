@@ -6,6 +6,7 @@ import {
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type { CliProcessManager } from "../../../utils/CliProcessManager";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "./CliProviderUtils";
 import type { ICliProvider } from "./interfaces/ICliProvider";
@@ -192,39 +193,59 @@ export class CliTransportCoordinator {
         controllerClientId,
       });
 
-      const session = ptyManager.spawnPty({
-        workflowId,
-        stepName,
-        kind: SESSION_KINDS.AI_CLI,
-        promptNumber,
-        harnessId,
-        sessionId: preSessionId,
-        command: shell,
-        args: shellArgs,
-        cwd,
-        env: mergedEnv,
-        onData: (ptySession, chunk) => {
-          postMessage({
-            type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-            workflowId: ptySession.workflowId,
-            sessionId: ptySession.id,
-            data: chunk,
-          });
-        },
-        onExit: (ptySession, exitCode) => {
-          postMessage({
-            type: MESSAGE_TYPES.TERMINAL_ENDED,
-            workflowId: ptySession.workflowId,
-            sessionId: ptySession.id,
-            kind: ptySession.kind,
-            exitCode,
-          });
-          if (this.currentPtySession === ptySession) {
-            this.currentPtySession = undefined;
-          }
-          this.deps.hostCallbacks.onPtyExit(ptySession, exitCode);
-        },
-      });
+      let session: PtySession;
+      try {
+        session = ptyManager.spawnPty({
+          workflowId,
+          stepName,
+          kind: SESSION_KINDS.AI_CLI,
+          promptNumber,
+          harnessId,
+          sessionId: preSessionId,
+          command: shell,
+          args: shellArgs,
+          cwd,
+          env: mergedEnv,
+          onData: (ptySession, chunk) => {
+            postMessage({
+              type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+              workflowId: ptySession.workflowId,
+              sessionId: ptySession.id,
+              data: chunk,
+            });
+          },
+          onExit: (ptySession, exitCode) => {
+            postMessage({
+              type: MESSAGE_TYPES.TERMINAL_ENDED,
+              workflowId: ptySession.workflowId,
+              sessionId: ptySession.id,
+              kind: ptySession.kind,
+              exitCode,
+            });
+            if (this.currentPtySession === ptySession) {
+              this.currentPtySession = undefined;
+            }
+            this.deps.hostCallbacks.onPtyExit(ptySession, exitCode);
+          },
+        });
+      } catch (error) {
+        const message = getErrorMessage(error);
+        Log.warn(`Failed to start embedded terminal: ${message}`);
+        postMessage({
+          type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+          workflowId,
+          sessionId: preSessionId,
+          data: `${message}\r\n`,
+        });
+        postMessage({
+          type: MESSAGE_TYPES.TERMINAL_ENDED,
+          workflowId,
+          sessionId: preSessionId,
+          kind: SESSION_KINDS.AI_CLI,
+          exitCode: 1,
+        });
+        throw error;
+      }
 
       this.currentPtySession = session;
       Log.info(

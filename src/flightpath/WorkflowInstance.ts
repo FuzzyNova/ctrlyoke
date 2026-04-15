@@ -2011,35 +2011,57 @@ export class WorkflowInstance {
                 ? ["-NoProfile", "-Command", options.script]
                 : ["-c", options.script];
 
-              ptyManager.spawnPty({
-                workflowId,
-                stepName: options.stepName,
-                kind: SESSION_KINDS.AI_CLI,
-                sessionId: preSessionId,
-                command: shell,
-                args: shellArgs,
-                cwd: options.cwd,
-                onData: (ptySession, chunk) => {
-                  ptyPostMessage({
-                    type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-                    workflowId: ptySession.workflowId,
-                    sessionId: ptySession.id,
-                    data: chunk,
-                  });
-                  // Strip ANSI codes for the CliOutput panel (xterm handles them natively)
-                  options.onOutput(chunk.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, ""));
-                },
-                onExit: (ptySession, exitCode) => {
-                  ptyPostMessage({
-                    type: MESSAGE_TYPES.TERMINAL_ENDED,
-                    workflowId: ptySession.workflowId,
-                    sessionId: ptySession.id,
-                    kind: ptySession.kind,
-                    exitCode,
-                  });
-                  resolve(exitCode);
-                },
-              });
+              try {
+                ptyManager.spawnPty({
+                  workflowId,
+                  stepName: options.stepName,
+                  kind: SESSION_KINDS.AI_CLI,
+                  sessionId: preSessionId,
+                  command: shell,
+                  args: shellArgs,
+                  cwd: options.cwd,
+                  onData: (ptySession, chunk) => {
+                    ptyPostMessage({
+                      type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+                      workflowId: ptySession.workflowId,
+                      sessionId: ptySession.id,
+                      data: chunk,
+                    });
+                    // Strip ANSI codes for the CliOutput panel (xterm handles them natively)
+                    options.onOutput(
+                      chunk.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "")
+                    );
+                  },
+                  onExit: (ptySession, exitCode) => {
+                    ptyPostMessage({
+                      type: MESSAGE_TYPES.TERMINAL_ENDED,
+                      workflowId: ptySession.workflowId,
+                      sessionId: ptySession.id,
+                      kind: ptySession.kind,
+                      exitCode,
+                    });
+                    resolve(exitCode);
+                  },
+                });
+              } catch (error) {
+                const message = getErrorMessage(error);
+                Log.warn(`[spawnScriptPty] ${message}`);
+                ptyPostMessage({
+                  type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+                  workflowId,
+                  sessionId: preSessionId,
+                  data: `${message}\r\n`,
+                });
+                ptyPostMessage({
+                  type: MESSAGE_TYPES.TERMINAL_ENDED,
+                  workflowId,
+                  sessionId: preSessionId,
+                  kind: SESSION_KINDS.AI_CLI,
+                  exitCode: 1,
+                });
+                options.onOutput(message);
+                resolve(1);
+              }
             });
           },
     };

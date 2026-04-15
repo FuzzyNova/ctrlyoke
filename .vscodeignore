@@ -12,6 +12,11 @@ out/**
 
 # Dependencies and source
 node_modules/**
+!node_modules/
+!node_modules/node-pty/
+!node_modules/node-pty/**
+!node_modules/node-addon-api/
+!node_modules/node-addon-api/**
 src/**
 
 # TypeScript / build config

@@ -959,27 +959,35 @@ export class WebviewMessageRouter {
       if (!ptyManager || !msg.workflowId) return;
       const workflowId = msg.workflowId as string;
       const cwd = (msg.cwd as string | undefined) ?? process.cwd();
-      const session = ptyManager.spawnShell({
-        workflowId,
-        cwd,
-        onData: (s, chunk) => {
-          postMsg({
-            type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-            workflowId: s.workflowId,
-            sessionId: s.id,
-            data: chunk,
-          });
-        },
-        onExit: (s, exitCode) => {
-          postMsg({
-            type: MESSAGE_TYPES.TERMINAL_ENDED,
-            workflowId: s.workflowId,
-            sessionId: s.id,
-            kind: s.kind,
-            exitCode,
-          });
-        },
-      });
+      let session: ReturnType<typeof ptyManager.spawnShell>;
+      try {
+        session = ptyManager.spawnShell({
+          workflowId,
+          cwd,
+          onData: (s, chunk) => {
+            postMsg({
+              type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+              workflowId: s.workflowId,
+              sessionId: s.id,
+              data: chunk,
+            });
+          },
+          onExit: (s, exitCode) => {
+            postMsg({
+              type: MESSAGE_TYPES.TERMINAL_ENDED,
+              workflowId: s.workflowId,
+              sessionId: s.id,
+              kind: s.kind,
+              exitCode,
+            });
+          },
+        });
+      } catch (error) {
+        const message = getErrorMessage(error);
+        Log.warn(`Failed to spawn embedded shell: ${message}`);
+        void vscode.window.showWarningMessage(message);
+        return;
+      }
       // The client that spawned the shell is its controller
       session.controllerClientId = this.clientId;
       postMsg({
@@ -998,9 +1006,9 @@ export class WebviewMessageRouter {
       const postMsg = this.getCurrentPostMessage();
       if (!ptyManager || !msg.sessionId || !msg.workflowId) return;
       const workflowId = msg.workflowId as string;
-      const newSession = ptyManager.restartShellSession(
-        msg.sessionId as string,
-        {
+      let newSession: ReturnType<typeof ptyManager.restartShellSession>;
+      try {
+        newSession = ptyManager.restartShellSession(msg.sessionId as string, {
           onData: (s, chunk) => {
             postMsg({
               type: MESSAGE_TYPES.TERMINAL_OUTPUT,
@@ -1018,8 +1026,13 @@ export class WebviewMessageRouter {
               exitCode,
             });
           },
-        }
-      );
+        });
+      } catch (error) {
+        const message = getErrorMessage(error);
+        Log.warn(`Failed to restart embedded shell: ${message}`);
+        void vscode.window.showWarningMessage(message);
+        return;
+      }
       if (newSession) {
         postMsg({
           type: MESSAGE_TYPES.TERMINAL_STARTED,

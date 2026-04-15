@@ -208,7 +208,7 @@ async function main() {
     sourcesContent: false,
     platform: "node",
     outfile: "out/extension.js",
-    external: ["vscode", "node-pty", "express", "ws"],
+    external: ["vscode", "node-pty"],
     logLevel: "silent",
     define: defineConstants,
     plugins: [
@@ -231,7 +231,6 @@ async function main() {
     sourcesContent: false,
     platform: "node",
     outfile: "out/mcp-server.js",
-    external: ["@modelcontextprotocol/sdk"], // External dependency - used at runtime via node_modules
     logLevel: "silent",
   });
 

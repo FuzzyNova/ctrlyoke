@@ -11,6 +11,8 @@ import {
 } from "../../types/DashboardConstants";
 
 type NodePtyModule = typeof import("node-pty");
+export const NODE_PTY_UNAVAILABLE_MESSAGE =
+  "Embedded terminal support is unavailable because the node-pty native module could not be loaded. Reinstall FlightPath or switch CLI execution mode to headless.";
 
 // ---------------------------------------------------------------------------
 // Windows shell resolution
@@ -68,13 +70,46 @@ function resolveShellKind(shellPath: string): ShellKind {
   return SHELL_KINDS.BASH;
 }
 
+let _nodePtyModule: NodePtyModule | null | undefined;
+let _nodePtyLoadError: unknown;
+
 /** Lazy-load node-pty at spawn time; returns null if native binary is unavailable. */
 function loadNodePty(): NodePtyModule | null {
-  try {
-    return require("node-pty") as NodePtyModule;
-  } catch {
-    return null;
+  if (_nodePtyModule !== undefined) {
+    return _nodePtyModule;
   }
+
+  try {
+    _nodePtyModule = require("node-pty") as NodePtyModule;
+  } catch (error) {
+    _nodePtyLoadError = error;
+    _nodePtyModule = null;
+    Log.warn(NODE_PTY_UNAVAILABLE_MESSAGE, error);
+  }
+
+  return _nodePtyModule;
+}
+
+export function isNodePtyAvailable(): boolean {
+  return loadNodePty() !== null;
+}
+
+export function getNodePtyLoadError(): unknown {
+  return _nodePtyLoadError;
+}
+
+function createNodePtyUnavailableError(): Error {
+  const details =
+    _nodePtyLoadError instanceof Error ? ` ${_nodePtyLoadError.message}` : "";
+  return new Error(`${NODE_PTY_UNAVAILABLE_MESSAGE}${details}`);
+}
+
+function tryLoadNodePty(): NodePtyModule {
+  const nodePty = loadNodePty();
+  if (!nodePty) {
+    throw createNodePtyUnavailableError();
+  }
+  return nodePty;
 }
 
 export type { SessionKind, ShellKind };
@@ -271,12 +306,7 @@ export class PtyProcessManager {
    * corrects dimensions immediately on mount.
    */
   spawnPty(options: SpawnPtyOptions): PtySession {
-    const nodePty = loadNodePty();
-    if (!nodePty) {
-      throw new Error(
-        "node-pty native module is not available on this platform"
-      );
-    }
+    const nodePty = tryLoadNodePty();
     const sessionId =
       options.sessionId ??
       `${options.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
