@@ -617,6 +617,8 @@ export const CliOutput = memo<CliOutputProps>(
     const attemptLabel = attemptIndex > 0 ? `Retry ${attemptIndex}` : "";
     const sequenceLabel = stepLabel ?? `Step ${stepIndex + 1}`;
     const displayName = stepName?.trim();
+    const headerIconClass =
+      "codicon text-[11px] leading-none inline-flex items-center justify-center";
 
     const structuredMetadata = output.structured?.metadata;
     const sessionId = structuredMetadata?.sessionId;
@@ -912,14 +914,19 @@ export const CliOutput = memo<CliOutputProps>(
         >
           {/* Header */}
           <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex items-center gap-[var(--spacing-sm)]">
-            <span>
+            <span className="inline-flex items-center">
               {timestamp && (
                 <span className="output-timestamp">[{timestamp}]</span>
               )}
-              <i className="codicon codicon-terminal-powershell mx-1" />
-              [{sequenceLabel}]
-              {displayName && `[${displayName}]`}
-              {attemptLabel && ` ${attemptLabel}`}
+              <span className="inline-flex items-center gap-1">
+                <span>[</span>
+                <i
+                  className={`${headerIconClass} codicon-terminal-powershell`}
+                />
+                <span>{sequenceLabel}]</span>
+              </span>
+              {displayName && <span className="ml-1">{displayName}</span>}
+              {attemptLabel && <span className="ml-1">{attemptLabel}</span>}
             </span>
             {streamingIndicator}
           </div>
@@ -998,14 +1005,17 @@ export const CliOutput = memo<CliOutputProps>(
       >
         {/* Header */}
         <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex items-center gap-[var(--spacing-sm)]">
-          <span>
+          <span className="inline-flex items-center">
             {timestamp && (
               <span className="output-timestamp">[{timestamp}]</span>
             )}
-            <i className="codicon codicon-comment mx-1" />
-            [{sequenceLabel}]
-            {displayName && `[${displayName}]`}
-            {attemptLabel && ` ${attemptLabel}`}
+            <span className="inline-flex items-center gap-1">
+              <span>[</span>
+              <i className={`${headerIconClass} codicon-comment`} />
+              <span>{sequenceLabel}]</span>
+            </span>
+            {displayName && <span className="ml-1">{displayName}</span>}
+            {attemptLabel && <span className="ml-1">{attemptLabel}</span>}
           </span>
           {streamingIndicator}
           {(promptUndoActions.undo || promptUndoActions.redo) && (
