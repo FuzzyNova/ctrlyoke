@@ -1,6 +1,20 @@
 (function () {
   "use strict";
-  let _state = JSON.parse(sessionStorage.getItem("fpState") || "{}");
+
+  // Generate a stable per-tab ID so each browser tab tracks its own state.
+  // sessionStorage survives page refreshes but is unique per tab (not shared
+  // between tabs like localStorage), giving us the right scoping:
+  //   - Refresh: same tabId → same localStorage key → state restored ✓
+  //   - New tab: new tabId → new localStorage key → fresh start ✓
+  //   - 5 concurrent tabs: 5 different keys → independent per-tab state ✓
+  let tabId = sessionStorage.getItem("fpTabId");
+  if (!tabId) {
+    tabId = Math.random().toString(36).slice(2);
+    sessionStorage.setItem("fpTabId", tabId);
+  }
+  const STATE_KEY = "fpState-" + tabId;
+
+  let _state = JSON.parse(localStorage.getItem(STATE_KEY) || "{}");
   const ws = new WebSocket(`ws://${location.host}/ws`);
   const pending = [];
 
@@ -55,7 +69,7 @@
     },
     setState(s) {
       _state = s;
-      sessionStorage.setItem("fpState", JSON.stringify(s));
+      localStorage.setItem(STATE_KEY, JSON.stringify(s));
     },
   };
 })();

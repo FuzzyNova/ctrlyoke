@@ -23,6 +23,7 @@ import {
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
   RUNNER_IDS,
+  type StepStatus,
 } from "../../types/messages";
 import { sendMessage } from "../../hooks/useMessageHandler";
 import {
@@ -53,6 +54,17 @@ function isScriptStep(step: WorkflowStep): step is ScriptStep {
 /** Get the displayable text content of a step */
 function getStepText(step: WorkflowStep): string {
   return isScriptStep(step) ? step.script : step.prompt;
+}
+
+function getCompletedStepAccentClass(status: StepStatus): string {
+  switch (status) {
+    case STEP_STATUS.CANCELLED:
+      return "bg-bash-status-running";
+    case STEP_STATUS.FAILED:
+      return "bg-bash-status-error";
+    default:
+      return "bg-bash-status-success";
+  }
 }
 
 type WorkflowStepComponentProps = React.ComponentProps<typeof WorkflowStepItem>;
@@ -641,8 +653,10 @@ export const WorkflowStepsPanel: React.FC<{
                     key={`step-${index}-${step.name || ""}`}
                     className="flex items-stretch"
                   >
-                    {/* 2px green accent — compensated by narrowing number col by 2px so numbers stay aligned with pending items */}
-                    <div className="w-[2px] flex-shrink-0 self-stretch bg-bash-status-success" />
+                    {/* 2px status accent — compensated by narrowing number col by 2px so numbers stay aligned with pending items */}
+                    <div
+                      className={`w-[2px] flex-shrink-0 self-stretch ${getCompletedStepAccentClass(status)}`}
+                    />
                     <div className="flex-shrink-0 w-[26px] flex items-start justify-end pt-2 pr-1 text-[11px] text-description-fg select-none">
                       {slotNumber}
                     </div>
