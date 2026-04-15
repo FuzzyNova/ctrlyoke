@@ -48,14 +48,14 @@ export function buildPermissionsDefaultLabel(
     effective === undefined ||
     effective.mode === PERMISSION_MODES.NONE
   ) {
-    return "Default (none)";
+    return "Inherit (none)";
   }
   if (effective.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
-    return "Default (dangerouslyAllowAll)";
+    return "Inherit (dangerouslyAllowAll)";
   if (effective.mode === PERMISSION_MODES.ALLOW_ALL)
-    return "Default (allowAll)";
+    return "Inherit (allowAll)";
   const count =
     (effective.allowedTools?.length ?? 0) +
     (effective.deniedTools?.length ?? 0);
-  return `Default (custom, ${count} rule${count !== 1 ? "s" : ""})`;
+  return `Inherit (custom, ${count} rule${count !== 1 ? "s" : ""})`;
 }

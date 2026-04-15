@@ -44,7 +44,7 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
   const resolvedModelLabel =
     models.find((m) => m.value === resolvedModelValue)?.label ??
     resolvedModelValue;
-  const defaultModelLabel = `Default (${resolvedModelLabel || "None"})`;
+  const defaultModelLabel = `Inherit (${resolvedModelLabel || "None"})`;
 
   const valueLabel = properties.model
     ? (models.find((m) => m.value === properties.model)?.label ??

@@ -148,7 +148,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 
   const resolvedHarness = (workflowProperties.harness ??
     globalSettings.harness) as HarnessId;
-  const defaultHarnessLabel = `Default (${HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness})`;
+  const defaultHarnessLabel = `Inherit (${HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness})`;
 
   const resolvedModels = getModelsForHarness(resolvedHarness);
   const resolvedModelValue =
@@ -158,7 +158,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const resolvedModelLabel =
     resolvedModels.find((m) => m.value === resolvedModelValue)?.label ??
     resolvedModelValue;
-  const defaultModelLabel = `Default (${resolvedModelLabel || "None"})`;
+  const defaultModelLabel = `Inherit (${resolvedModelLabel || "None"})`;
 
   const resolvedAgent =
     workflowProperties.agent === undefined
@@ -169,7 +169,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     : (availableAgents.find(
         (a) => a.path === resolvedAgent || a.name === resolvedAgent
       )?.name ?? resolvedAgent);
-  const defaultAgentLabel = `Default (${resolvedAgentName})`;
+  const defaultAgentLabel = `Inherit (${resolvedAgentName})`;
 
   const resolvedSkills =
     workflowProperties.skills === undefined
@@ -177,18 +177,18 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       : (workflowProperties.skills ?? []);
   const defaultSkillsLabel =
     resolvedSkills.length === 0
-      ? "Default (None)"
+      ? "Inherit (None)"
       : resolvedSkills.length <= 2
-        ? `Default (${resolvedSkills.join(", ")})`
-        : `Default (${resolvedSkills.slice(0, 2).join(", ")} +${resolvedSkills.length - 2})`;
+        ? `Inherit (${resolvedSkills.join(", ")})`
+        : `Inherit (${resolvedSkills.slice(0, 2).join(", ")} +${resolvedSkills.length - 2})`;
 
   const resolvedAdditionalArgs =
     workflowProperties.additionalArgs === undefined
       ? (globalSettings.harnessDefaultAdditionalArgs[resolvedHarness] ?? "")
       : workflowProperties.additionalArgs;
   const defaultAdditionalArgsLabel = !resolvedAdditionalArgs
-    ? "Default (None)"
-    : `Default (${resolvedAdditionalArgs})`;
+    ? "Inherit (None)"
+    : `Inherit (${resolvedAdditionalArgs})`;
 
   const resolvedResumeSession =
     workflowProperties.resumeSession ?? globalSettings.resumeSession;
@@ -196,8 +196,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const defaultResumeSessionLabel =
     resolvedResumeSession &&
     resolvedSessionId === SESSION_ID_SENTINELS.FINAL_STEP
-      ? "Default (Final Step Session)"
-      : `Default (${resolvedResumeSession ? "Yes" : "No"})`;
+      ? "Inherit (Final Step Session)"
+      : `Inherit (${resolvedResumeSession ? "Yes" : "No"})`;
 
   // Session ID display in prompt-level drawer
   const isSessionIdDefault = properties.resumeSession === undefined;
@@ -283,13 +283,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     (globalSettings.priorContext as PriorContext);
   const defaultPriorContextLabel = (() => {
     if (Array.isArray(resolvedPriorContext)) {
-      return `Default (Custom: [${resolvedPriorContext.join(", ")}])`;
+      return `Inherit (Custom: [${resolvedPriorContext.join(", ")}])`;
     }
     const label =
       PRIOR_CONTEXT_KEYWORD_LABELS[
         resolvedPriorContext as keyof typeof PRIOR_CONTEXT_KEYWORD_LABELS
       ];
-    return `Default (${label ?? resolvedPriorContext})`;
+    return `Inherit (${label ?? resolvedPriorContext})`;
   })();
 
   // Get models for current harness

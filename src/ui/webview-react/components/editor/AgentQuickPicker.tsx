@@ -39,7 +39,7 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
     : (availableAgents.find(
         (a) => a.path === resolvedAgent || a.name === resolvedAgent
       )?.name ?? resolvedAgent);
-  const defaultAgentLabel = `Default (${resolvedAgentName})`;
+  const defaultAgentLabel = `Inherit (${resolvedAgentName})`;
 
   const valueLabel =
     properties.agent === undefined

@@ -33,7 +33,7 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
 
   const resolvedHarness = (workflowProperties.harness ??
     globalSettings.harness) as HarnessId;
-  const defaultHarnessLabel = `Default (${HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness})`;
+  const defaultHarnessLabel = `Inherit (${HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness})`;
 
   const valueLabel = properties.harness
     ? (HARNESS_DISPLAY_NAMES[properties.harness as HarnessId] ??

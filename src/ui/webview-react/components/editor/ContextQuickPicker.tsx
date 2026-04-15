@@ -52,8 +52,8 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
   const defaultResumeSessionLabel =
     resolvedResumeSession &&
     resolvedSessionId === SESSION_ID_SENTINELS.FINAL_STEP
-      ? "Default (Final Step Session)"
-      : `Default (${resolvedResumeSession ? "Yes" : "No"})`;
+      ? "Inherit (Final Step Session)"
+      : `Inherit (${resolvedResumeSession ? "Yes" : "No"})`;
 
   const resumeSessionValue =
     properties.resumeSession === undefined

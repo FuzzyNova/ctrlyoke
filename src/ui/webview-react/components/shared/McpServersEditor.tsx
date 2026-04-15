@@ -1572,16 +1572,17 @@ export const McpServersEditor: React.FC<{
   );
 };
 
-/** Build a human-readable default label for an mcpServers array from global settings */
+/** Build a human-readable inherit label for an mcpServers array from workflow/global settings */
 export function buildMcpDefaultLabel(
   servers: (string | McpServerConfig)[] | undefined | null
 ): string {
-  if (!Array.isArray(servers) || servers.length === 0) return "Default (None)";
+  if (!Array.isArray(servers) || servers.length === 0)
+    return "Inherit (None)";
   const hasFlightpathEntry = servers.some((s) => s === "flightpath");
   const customCount = servers.filter(
     (s) => typeof s === "object" && s !== null
   ).length;
-  if (hasFlightpathEntry && customCount === 0) return "Default (FlightPath)";
-  if (hasFlightpathEntry) return `Default (FlightPath +${customCount})`;
-  return `Default (${customCount} server${customCount !== 1 ? "s" : ""})`;
+  if (hasFlightpathEntry && customCount === 0) return "Inherit (FlightPath)";
+  if (hasFlightpathEntry) return `Inherit (FlightPath +${customCount})`;
+  return `Inherit (${customCount} server${customCount !== 1 ? "s" : ""})`;
 }

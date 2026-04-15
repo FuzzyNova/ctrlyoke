@@ -29,10 +29,10 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
       : (workflowProperties.skills ?? []);
   const defaultSkillsLabel =
     resolvedSkills.length === 0
-      ? "Default (None)"
+      ? "Inherit (None)"
       : resolvedSkills.length <= 2
-        ? `Default (${resolvedSkills.join(", ")})`
-        : `Default (${resolvedSkills.slice(0, 2).join(", ")} +${resolvedSkills.length - 2})`;
+        ? `Inherit (${resolvedSkills.join(", ")})`
+        : `Inherit (${resolvedSkills.slice(0, 2).join(", ")} +${resolvedSkills.length - 2})`;
 
   const skillsValue = properties.skills as string[] | null | undefined;
 

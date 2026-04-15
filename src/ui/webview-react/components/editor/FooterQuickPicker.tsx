@@ -8,7 +8,7 @@ interface FooterQuickPickerProps {
   showLabel: boolean;
   /** Icon to display — a codicon element or any React node (e.g. HarnessIcon) */
   icon: React.ReactNode;
-  /** Text shown next to icon in wide mode — the current override value or "Default" */
+  /** Text shown next to icon in wide mode — the current override value or "Inherit" */
   valueLabel: string;
   /** Whether the value is an override (not default) — used for active styling */
   isOverride: boolean;
