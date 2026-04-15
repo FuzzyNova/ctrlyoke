@@ -479,6 +479,7 @@ interface CliOutputProps {
   output: CliOutputType;
   stepIndex: number;
   stepLabel?: string;
+  stepName?: string;
   attemptIndex: number;
   streamingChunk?: string;
   /** When false, suppresses the streaming indicator even if output.isStreaming is true.
@@ -520,6 +521,7 @@ export const CliOutput = memo<CliOutputProps>(
     output,
     stepIndex,
     stepLabel,
+    stepName,
     attemptIndex,
     streamingChunk = "",
     isExecutionActive = true,
@@ -612,8 +614,9 @@ export const CliOutput = memo<CliOutputProps>(
       [target, output, effectiveUndoRecord, effectiveSnapshot]
     );
 
-    const attemptLabel =
-      attemptIndex === 0 ? "Initial Attempt" : `Retry ${attemptIndex}`;
+    const attemptLabel = attemptIndex > 0 ? `Retry ${attemptIndex}` : "";
+    const sequenceLabel = stepLabel ?? `Step ${stepIndex + 1}`;
+    const displayName = stepName?.trim();
 
     const structuredMetadata = output.structured?.metadata;
     const sessionId = structuredMetadata?.sessionId;
@@ -909,11 +912,16 @@ export const CliOutput = memo<CliOutputProps>(
         >
           {/* Header */}
           <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex items-center gap-[var(--spacing-sm)]">
-            {timestamp && (
-              <span className="output-timestamp">[{timestamp}] </span>
-            )}
-            <i className="codicon codicon-terminal" />[
-            {stepLabel ?? `Script ${stepIndex + 1}`}]{streamingIndicator}
+            <span>
+              {timestamp && (
+                <span className="output-timestamp">[{timestamp}]</span>
+              )}
+              <i className="codicon codicon-terminal-powershell mx-1" />
+              [{sequenceLabel}]
+              {displayName && `[${displayName}]`}
+              {attemptLabel && ` ${attemptLabel}`}
+            </span>
+            {streamingIndicator}
           </div>
 
           {/* CLI command */}
@@ -990,10 +998,15 @@ export const CliOutput = memo<CliOutputProps>(
       >
         {/* Header */}
         <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex items-center gap-[var(--spacing-sm)]">
-          {timestamp && (
-            <span className="output-timestamp">[{timestamp}] </span>
-          )}
-          [{stepLabel ?? `Prompt ${stepIndex + 1}`}] {attemptLabel}
+          <span>
+            {timestamp && (
+              <span className="output-timestamp">[{timestamp}]</span>
+            )}
+            <i className="codicon codicon-comment mx-1" />
+            [{sequenceLabel}]
+            {displayName && `[${displayName}]`}
+            {attemptLabel && ` ${attemptLabel}`}
+          </span>
           {streamingIndicator}
           {(promptUndoActions.undo || promptUndoActions.redo) && (
             <div className="ml-auto flex items-center gap-2 flex-shrink-0 font-normal">

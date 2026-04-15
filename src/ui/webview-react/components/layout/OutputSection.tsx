@@ -5,7 +5,7 @@ import React, {
   useCallback,
   useState,
 } from "react";
-import { useWorkflowStore } from "@store/workflowStore";
+import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
@@ -39,6 +39,7 @@ import {
   FINAL_STEP_PHASES,
   SESSION_KINDS,
   SHELL_KINDS,
+  STEP_TYPES,
   type HarnessId,
 } from "../../types/messages";
 import { CLI_EVENT_TYPES } from "../../types/cliEvents";
@@ -72,6 +73,23 @@ import type { UndoFileInstruction } from "../../types/messages";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
+
+function getStepName(
+  step: WorkflowStep | null | undefined,
+  fallback: string
+): string {
+  const name = step?.name?.trim();
+  return name || fallback;
+}
+
+function getQueueStepFallbackName(
+  step: WorkflowStep | null | undefined,
+  stepIndex: number
+): string {
+  return step?.type === STEP_TYPES.SCRIPT
+    ? `Script ${stepIndex + 1}`
+    : `Prompt ${stepIndex + 1}`;
+}
 
 interface MinimapDialogState {
   mode: "undo" | "redo";
@@ -115,6 +133,8 @@ export const OutputSection: React.FC = () => {
   const executionState = useWorkflowStore((s) => s.executionState);
   const currentStep = useWorkflowStore((s) => s.currentStep);
   const totalSteps = useWorkflowStore((s) => s.totalSteps);
+  const steps = useWorkflowStore((s) => s.steps);
+  const finalStep = useWorkflowStore((s) => s.finalStep);
   const cliOutputs = useWorkflowStore((s) => s.liveOrderedEntries);
   const liveOrderedEntries = cliOutputs; // alias for clarity
   // streamingChunks changes on every token — keep it isolated so the
@@ -691,9 +711,13 @@ export const OutputSection: React.FC = () => {
       const kind = msgTarget.kind;
       const stepIndex = msgTarget.index;
       const isFinalStep = kind === FINAL_STEP_PHASES.FINAL_STEP;
+      const workflowStep = isFinalStep ? finalStep : steps[stepIndex];
       const label = isFinalStep
-        ? `Final Step Loop ${stepIndex + 1}`
-        : `Prompt ${stepIndex + 1}`;
+        ? getStepName(workflowStep, `Final Step Loop ${stepIndex + 1}`)
+        : getStepName(
+            workflowStep,
+            getQueueStepFallbackName(workflowStep, stepIndex)
+          );
 
       // Real pixel fraction — falls back to index fraction until DOM is measured
       const scrollFraction =
@@ -888,6 +912,8 @@ export const OutputSection: React.FC = () => {
     workspaceSnapshots,
     finalStepWorkspaceSnapshots,
     undoRecords,
+    steps,
+    finalStep,
   ]);
 
   if (outputCollapsed) {
@@ -1373,6 +1399,11 @@ export const OutputSection: React.FC = () => {
                             ?.undoRecord
                       : undefined;
                   const stepKey = `${item.target.kind}:${item.target.index}`;
+                  const isFinalStepOutput =
+                    item.target.kind === FINAL_STEP_PHASES.FINAL_STEP;
+                  const workflowStep = isFinalStepOutput
+                    ? finalStep
+                    : steps[item.target.index];
                   return (
                     <React.Fragment key={`cli-${index}`}>
                       {isFirstForStep && (
@@ -1390,9 +1421,23 @@ export const OutputSection: React.FC = () => {
                         output={cliData}
                         stepIndex={item.target.index}
                         stepLabel={
-                          item.target.kind === FINAL_STEP_PHASES.QUEUE
-                            ? undefined
-                            : `Final Step Loop ${item.target.index + 1}`
+                          isFinalStepOutput
+                            ? `Final Step Loop ${item.target.index + 1}`
+                            : `Step ${item.target.index + 1}`
+                        }
+                        stepName={
+                          isFinalStepOutput
+                            ? getStepName(
+                                workflowStep,
+                                `Final Step Loop ${item.target.index + 1}`
+                              )
+                            : getStepName(
+                                workflowStep,
+                                getQueueStepFallbackName(
+                                  workflowStep,
+                                  item.target.index
+                                )
+                              )
                         }
                         attemptIndex={item.attemptIndex || 0}
                         streamingChunk={streamingChunk}

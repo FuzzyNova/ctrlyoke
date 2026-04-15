@@ -210,8 +210,8 @@ export const EditorSection: React.FC = () => {
               onChange={(e) => setNameEditValue(e.target.value)}
               onKeyDown={handleNameKeyDown}
               onBlur={saveNameEdit}
-              placeholder="Prompt name (optional)"
-              aria-label="Prompt name"
+              placeholder="Step name (optional)"
+              aria-label="Step name"
               className="px-1.5 py-0.5 text-xs bg-input-bg text-input-fg border border-focus-border rounded outline-none w-48"
               style={{ boxShadow: "0 0 0 1px var(--vscode-focusBorder)" }}
             />
