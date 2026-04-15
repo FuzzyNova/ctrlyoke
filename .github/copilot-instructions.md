@@ -413,3 +413,61 @@ See `dev/implemented/ADDING_NEW_CLI_HARNESS.md`. Creates files in `src/flightpat
 | Platform abstraction contract                                     | `src/platform/PlatformAdapter.ts`   |
 
 </singleSourcesOfTruth>
+
+<debugging>
+
+## Debugging FlightPath
+
+When investigating runtime issues, three locations hold all the diagnostic data:
+
+### 1. Session Logs — `.flightpath/logs/flightpath-<timestamp>.log`
+
+General runtime event log for each extension session. Format: `[ISO-timestamp] LEVEL: message`.
+
+- New file created each time the extension activates
+- Contains INFO/DEBUG events for workflow state transitions, prompt execution, session ID resolution, working file writes, and end condition evaluation
+- Start here for: unexpected state transitions, orchestration flow issues, "why did the workflow stop/not start"
+- Most recent file = current session
+
+### 2. Hook/Notify Debug Logs — `.flightpath/logs/flightpath-<harness>-hook-debug.log`
+
+One persistent log per harness capturing every hook/notify invocation and its result:
+
+| File                                   | Harness        |
+| -------------------------------------- | -------------- |
+| `flightpath-copilot-hook-debug.log`    | `copilot-cli`  |
+| `flightpath-claude-hook-debug.log`     | `claude-cli`   |
+| `flightpath-codex-notify-debug.log`    | `codex-cli`    |
+| `flightpath-opencode-plugin-debug.log` | `opencode-cli` |
+| `flightpath-qwen-hook-debug.log`       | `qwen-cli`     |
+| `flightpath-gemini-hook-debug.log`     | `gemini-cli`   |
+
+Each entry contains the raw hook payload (sessionId, stopReason, cwd) and whether the hook was handled successfully. Start here when: a workflow never completes, completion detection is firing at wrong times, or session IDs aren't matching.
+
+### 3. Working Files — `.flightpath/.queue/`
+
+Two files per active/recent workflow:
+
+- **`<name>.flightpath.json`** — Live working copy of the workflow. Contains all prompts with their `_runtime` blocks (harness, model, sessionId, startedAt, completedAt, responseText). Shows exactly which step ran, with what session, and what the AI responded.
+- **`<name>.runner.json`** — Runner lock/state: `{ runner, pid, startedAt, lastHeartbeat, instanceId, workflowId }`. Exists while a workflow is running or was interrupted. A stale runner.json (pid no longer alive) can cause "already running" false positives.
+
+### 4. History Files — `.flightpath/.history/<name>-<timestamp>/run-<timestamp>/`
+
+Each workflow run creates a subdirectory with:
+
+- **`manifest.json`** — Step metadata and run summary
+- **`events.jsonl`** — Per-step output events in JSONL format (one event per line, each is a CLI output chunk)
+
+Useful for: comparing what the AI actually output vs. what an end condition script received, replaying output in the dashboard, diagnosing why a retry loop triggered.
+
+### Common Failure Patterns
+
+| Symptom                              | Where to look                        | What to check                                                             |
+| ------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------- |
+| Workflow never completes             | Hook debug log                       | Is the Stop hook firing? Does sessionId in hook match runner?             |
+| Session not resuming                 | `.queue/<name>.flightpath.json`      | Does step 1's `_runtime.sessionId` exist? Is it populated?                |
+| End condition always fails           | History `events.jsonl` + session log | Script output, timeout setting (`flightpath.scriptTimeout`)               |
+| Workflow stuck "running" after crash | `.queue/<name>.runner.json`          | Delete stale runner.json if pid is dead                                   |
+| Wrong harness used for a step        | Session log                          | Check `PropertyResolver` output — prompt > workflow > settings precedence |
+
+</debugging>

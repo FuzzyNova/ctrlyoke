@@ -110,7 +110,7 @@ async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
     filesCacheTimestamp &&
     now - filesCacheTimestamp < CACHE_DURATION_MS
   ) {
-    Log.debug(
+    Log.trace(
       `[Completions] Returning cached files (${filesCache.length} files)`
     );
     return filesCache;

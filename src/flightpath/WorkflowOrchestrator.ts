@@ -391,7 +391,7 @@ export class WorkflowOrchestrator {
       : [];
     const hasActivePty = activePtySessions.length > 0;
     Log.debug(
-      `retireWorkflow: inst:${workflowId.slice(0, 8)} name=\"${instance.workflowName || "(empty)"}\" ` +
+      `retireWorkflow: inst:${workflowId.slice(0, 8)} name=\"${instance.getSummary().workflowName || "(empty)"}\" ` +
         `status=${instance.getQueueState().status}, isViewed=${isViewed}, hasActivePty=${hasActivePty}(${activePtySessions.length}), remaining=${this.instances.size - 1}`
     );
     this.instances.delete(workflowId);

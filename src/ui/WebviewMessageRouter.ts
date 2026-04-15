@@ -1207,7 +1207,7 @@ export class WebviewMessageRouter {
     try {
       const items = await this.getCompletionItems(trigger, prefix);
 
-      Log.debug(
+      Log.trace(
         `[Dashboard] Completion: trigger="${trigger}", prefix="${prefix}", position=${position} → ${items.length} items`
       );
 

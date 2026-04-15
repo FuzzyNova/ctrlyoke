@@ -1211,13 +1211,16 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   // COMPLETIONS_RESPONSE - Autocomplete suggestions for editor
   // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.COMPLETIONS_RESPONSE] = (message) => {
-    // Completions are handled by the editor component directly
-    // This is logged for debugging
-    WebviewLog.debug(
-      `[MessageHandler] Received COMPLETIONS_RESPONSE: ${message.items?.length} items, from=${message.from}`
-    );
-  };
+  // Completions are handled by the editor component directly — no action needed here.
+  handlers[MESSAGE_TYPES.COMPLETIONS_RESPONSE] = () => {};
+
+  // --------------------------------------------------------------------------
+  // ATTACHMENT_TOKEN_COUNTS_RESPONSE - Handled by useAttachmentTokenCount.ts
+  // --------------------------------------------------------------------------
+  // This message is consumed by a module-level window listener in
+  // useAttachmentTokenCount.ts (singleton pattern for cross-mount caching).
+  // Register a no-op here so the central router doesn't log "Unknown message type".
+  handlers[MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE] = () => {};
 
   // --------------------------------------------------------------------------
   // RUN_HISTORY_UPDATED - Available run count changed (new run initialized)
