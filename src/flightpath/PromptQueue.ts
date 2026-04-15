@@ -1324,7 +1324,7 @@ export class PromptQueue {
   /**
    * Delete a prompt from the queue
    * @param index - Prompt index (0-based)
-   * @throws Error if index is out of range or if deleting current/completed prompt
+   * @throws Error if index is out of range or if deleting the currently executing prompt
    */
   public async deletePrompt(index: number): Promise<void> {
     if (index < 0 || index >= this.state.steps.length) {
@@ -1343,17 +1343,28 @@ export class PromptQueue {
       throw new Error("Cannot delete the currently executing prompt");
     }
 
-    // Don't allow deleting completed prompts
-    if (this.state.completedIndices.has(String(index))) {
-      throw new Error("Cannot delete a completed prompt");
-    }
-
     // Remove the prompt
     this.state.steps.splice(index, 1);
 
     // Update currentIndex if deletion affects it
     if (index < this.state.currentIndex) {
       this.state.currentIndex--;
+    }
+
+    // Update completedIndices to reflect the removed slot:
+    // remove the deleted index and shift down all higher indices by 1.
+    if (this.state.completedIndices.size > 0) {
+      const updated = new Set<string>();
+      for (const entry of this.state.completedIndices) {
+        const n = parseInt(entry);
+        if (n < index) {
+          updated.add(entry);
+        } else if (n > index) {
+          updated.add(String(n - 1));
+        }
+        // n === index is dropped (the deleted prompt)
+      }
+      this.state.completedIndices = updated;
     }
 
     // Update results array to match

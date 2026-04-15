@@ -51,7 +51,7 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
     <span className={`text-xs text-description-fg ${className}`}>
       {narrow
         ? totalSteps
-        : `${totalSteps} ${totalSteps === 1 ? "prompt" : "prompts"}`}
+        : `${totalSteps} ${totalSteps === 1 ? "step" : "steps"}`}
     </span>
   );
 };

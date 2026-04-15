@@ -316,8 +316,8 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
     (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
       finalStepStatus === STEP_STATUS.RUNNING);
   const finalStepEffectiveStatus: StepStatus = hasFinalStep
-    ? (finalStepStatus ?? "pending")
-    : "pending";
+    ? (finalStepStatus ?? STEP_STATUS.PENDING)
+    : STEP_STATUS.PENDING;
 
   const handleFinalStepClick = useCallback(() => {
     if (isCLIManaged) return;

@@ -423,7 +423,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         createThemeExtension(),
         createLinterThemeExtension(),
         highlightActiveLine(),
-        highlightSelectionMatches(),
+        highlightSelectionMatches({ minSelectionLength: 2 }),
         createSpellCheckExtension(typoCheckerRef),
         // Mount autocomplete tooltips on document.body so they escape the
         // overflow:hidden ancestors (critical on iOS where CodeMirror forces

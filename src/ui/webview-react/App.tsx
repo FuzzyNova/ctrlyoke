@@ -294,7 +294,7 @@ function App() {
 
   if (isMobile) {
     return (
-      <div className="h-dvh w-full flex flex-col bg-editor-bg text-foreground border-l border-r">
+      <div className="h-dvh w-full flex flex-col bg-editor-bg text-foreground border-l border-r relative">
         <Header
           onToggleMobilePrompts={handleToggleMobilePrompts}
           onToggleMobileSettings={handleToggleMobileSettings}
@@ -473,10 +473,10 @@ function App() {
 
           {/* Global Settings Drawer — slides up from bottom, sits above all other content */}
           <GlobalSettingsDrawer />
-
-          {/* Startup overlay — covers full layout until STARTUP_COMPLETE arrives */}
-          <StartupOverlay />
         </div>
+
+        {/* Startup overlay — covers full layout (header + content) until STARTUP_COMPLETE arrives */}
+        <StartupOverlay />
 
         {/* iOS safe area spacer — lifts all content above the home indicator.
             height = env(safe-area-inset-bottom), 0px on non-iOS / desktop.
@@ -493,7 +493,7 @@ function App() {
   // ============================================================================
 
   return (
-    <div className="h-dvh w-full flex flex-col bg-editor-bg text-foreground">
+    <div className="h-dvh w-full flex flex-col bg-editor-bg text-foreground relative">
       <Header />
 
       {/* Main layout: relative container enables GlobalSettingsDrawer overlay */}
@@ -663,10 +663,10 @@ function App() {
 
         {/* Global Settings Drawer — slides up from bottom, z-40 */}
         <GlobalSettingsDrawer />
-
-        {/* Startup overlay — covers full layout until STARTUP_COMPLETE arrives */}
-        <StartupOverlay />
       </div>
+
+      {/* Startup overlay — covers full layout (header + content) until STARTUP_COMPLETE arrives */}
+      <StartupOverlay />
 
       {/* iOS safe area spacer — see mobile layout comment above */}
       <div className="safe-area-spacer" aria-hidden="true" />
