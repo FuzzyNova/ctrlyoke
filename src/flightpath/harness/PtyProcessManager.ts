@@ -19,6 +19,26 @@ export const NODE_PTY_UNAVAILABLE_MESSAGE =
 // ---------------------------------------------------------------------------
 
 let _windowsShell: string | undefined;
+let _unixShell: string | undefined;
+
+/**
+ * Return the best available shell on Unix/macOS.
+ * Prefers the $SHELL environment variable, then falls back to /bin/zsh on macOS
+ * (the system default since Catalina) or /bin/bash on other Unix systems.
+ * Using /bin/zsh on macOS avoids "posix_spawn failed: Permission denied" errors
+ * that can occur with /bin/bash under macOS's hardened runtime/SIP restrictions.
+ * Result is cached after first resolution.
+ */
+export function resolveUnixShell(): string {
+  if (_unixShell !== undefined) {
+    return _unixShell;
+  }
+  _unixShell =
+    process.env.SHELL ??
+    (process.platform === "darwin" ? "/bin/zsh" : "/bin/bash");
+  Log.debug(`🐚 Unix shell resolved: ${_unixShell}`);
+  return _unixShell;
+}
 
 /**
  * Return the best available PowerShell on Windows.
@@ -376,8 +396,7 @@ export class PtyProcessManager {
     onExit: (session: PtySession, exitCode: number) => void;
   }): PtySession {
     const shell =
-      process.env.SHELL ??
-      (process.platform === "win32" ? resolveWindowsShell() : "/bin/bash");
+      process.platform === "win32" ? resolveWindowsShell() : resolveUnixShell();
 
     return this.spawnPty({
       workflowId: opts.workflowId,

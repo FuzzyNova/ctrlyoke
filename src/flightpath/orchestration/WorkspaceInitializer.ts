@@ -9,6 +9,8 @@ const GITIGNORE_CONTENT = [
   `${PATH_CONSTANTS.QUEUE_DIR}/`,
   `${PATH_CONSTANTS.LOGS_DIR}/`,
   `${PATH_CONSTANTS.TEMP_DIR}/`,
+  PATH_CONSTANTS.CAPABILITIES_FILE,
+  ".gitignore",
   "",
 ].join("\n");
 
@@ -43,9 +45,7 @@ export class WorkspaceInitializer {
     }
 
     const gitignorePath = path.join(flightpathDir, ".gitignore");
-    if (!fs.existsSync(gitignorePath)) {
-      await fs.promises.writeFile(gitignorePath, GITIGNORE_CONTENT, "utf8");
-    }
+    await WorkspaceInitializer.ensureGitignore(gitignorePath);
 
     if (isNew) {
       Log.info(
@@ -63,5 +63,35 @@ export class WorkspaceInitializer {
   static async reinitialize(workspaceRoot: string): Promise<void> {
     await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
     Log.info("FlightPath: Workspace re-initialized");
+  }
+
+  private static async ensureGitignore(gitignorePath: string): Promise<void> {
+    if (!fs.existsSync(gitignorePath)) {
+      await fs.promises.writeFile(gitignorePath, GITIGNORE_CONTENT, "utf8");
+      return;
+    }
+
+    const currentContent = await fs.promises.readFile(gitignorePath, "utf8");
+    const currentEntries = new Set(
+      currentContent
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+    );
+    const missingEntries = GITIGNORE_CONTENT.split("\n").filter((line) => {
+      const entry = line.trim();
+      return entry.length > 0 && !currentEntries.has(entry);
+    });
+
+    if (missingEntries.length === 0) {
+      return;
+    }
+
+    const separator = currentContent.endsWith("\n") ? "" : "\n";
+    await fs.promises.appendFile(
+      gitignorePath,
+      `${separator}${missingEntries.join("\n")}\n`,
+      "utf8"
+    );
   }
 }

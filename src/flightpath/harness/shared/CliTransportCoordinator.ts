@@ -13,6 +13,7 @@ import type { ICliProvider } from "./interfaces/ICliProvider";
 import {
   getPtyProcessManager,
   ptyPostMessage,
+  resolveUnixShell,
   resolveWindowsShell,
 } from "../PtyProcessManager";
 import type { PtyProcessManager, PtySession } from "../PtyProcessManager";
@@ -167,7 +168,7 @@ export class CliTransportCoordinator {
       const shell =
         process.platform === "win32"
           ? resolveWindowsShell()
-          : (process.env.SHELL ?? "/bin/bash");
+          : resolveUnixShell();
       const shellArgs =
         process.platform === "win32"
           ? ["-NoProfile", "-Command", String(tuiCommand)]
