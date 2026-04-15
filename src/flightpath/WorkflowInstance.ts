@@ -2161,14 +2161,25 @@ export class WorkflowInstance {
       // the correct one. This keeps each PTY connection and lastInteractiveContext intact,
       // enabling immediate inject regardless of which harness the next prompt targets.
       // Any remaining liveInjectIntegrations entries that weren't consumed by
-      // createIntegrationForMode() above (e.g. harnesses not used in this run) are
-      // drained here so they don't linger. Each entry's onPtySessionEnded callback
-      // will eventually clean it up via dispose() when the PTY exits.
+      // createIntegrationForMode() above are restored here. This covers entry
+      // paths where startWorkflowExecution() is reached before a run-specific
+      // integration is chosen, plus multi-harness workflows whose first prompt
+      // is not the default harness.
       // (In the normal single-harness case this map is already empty because
       //  executeLoadedPromptFile already called createIntegrationForMode().)
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: liveInjectIntegrations.size=${this.liveInjectIntegrations.size} (should be 0 in normal flow)`
       );
+      for (const [
+        harness,
+        liveIntegration,
+      ] of this.liveInjectIntegrations.entries()) {
+        liveIntegration.resetForNewRun();
+        this.executionIntegrations.set(harness, liveIntegration);
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] Restored live inject integration (harness=${harness}) at workflow start`
+        );
+      }
       this.liveInjectIntegrations.clear();
 
       const activeIntegration = integration || this.createIntegrationForMode();

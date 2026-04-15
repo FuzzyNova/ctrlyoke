@@ -668,9 +668,17 @@ function createMessageHandlers(): MessageHandlerMap {
           useUiStore.getState().setActiveOutputTab(wfId, "terminal");
           useUiStore.getState().setTerminalSessionActive(wfId, true);
         }
-      } else {
-        // Normal (non-inject) run start: clear old ai-cli sessions so the new PTY
+      } else if (!isContinuation) {
+        // Fresh non-inject run start: clear old ai-cli sessions so the new PTY
         // gets a fresh xterm instance. Shell sessions survive run boundaries.
+        //
+        // Continuations intentionally keep the current ai-cli xterm until
+        // TERMINAL_STARTED arrives. If the continuation injects into the same
+        // PTY, TERMINAL_STARTED updates the existing session in place. If it
+        // spawns a new PTY, the terminal handler replaces the old ai-cli session
+        // at that point. Clearing here creates a visible blank flash during
+        // append-to-completed inject runs because isInjectMode can be unknown
+        // until the prompt-specific harness is selected.
         const aiCliSessionIds = (
           useTerminalStore.getState().sessions[wfId] ?? []
         )

@@ -438,6 +438,64 @@ describe("STEPS_EXTENDED", () => {
 });
 
 // ---------------------------------------------------------------------------
+// EXECUTION_STARTED
+// ---------------------------------------------------------------------------
+
+describe("EXECUTION_STARTED", () => {
+  it("preserves ai-cli sessions during append continuations until TERMINAL_STARTED reconciles them", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    useTerminalStore.getState().addSession({
+      id: "session-1",
+      workflowId: "workflow-1",
+      stepName: "Step 1",
+      kind: SESSION_KINDS.AI_CLI,
+      status: TERMINAL_SESSION_STATUS.COMPLETED,
+      pendingOutput: [],
+      isController: true,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+        workflowId: "workflow-1",
+        fileName: "wf.yaml",
+        totalSteps: 2,
+        isContinuation: true,
+        preserveStepCount: 1,
+      });
+    });
+
+    const sessions = useTerminalStore.getState().sessions["workflow-1"];
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].id).toBe("session-1");
+  });
+
+  it("clears ai-cli sessions on fresh non-inject starts", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    useTerminalStore.getState().addSession({
+      id: "session-1",
+      workflowId: "workflow-1",
+      stepName: "Step 1",
+      kind: SESSION_KINDS.AI_CLI,
+      status: TERMINAL_SESSION_STATUS.COMPLETED,
+      pendingOutput: [],
+      isController: true,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+        workflowId: "workflow-1",
+        fileName: "wf.yaml",
+        totalSteps: 2,
+      });
+    });
+
+    expect(useTerminalStore.getState().sessions["workflow-1"]).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // TERMINAL_STARTED
 // ---------------------------------------------------------------------------
 

@@ -339,7 +339,7 @@ export class CliIntegration extends HarnessIntegration {
    * Returns true when inject mode should be used for the given session.
    *
    * Conditions:
-   * 1. The global setting is "inject"
+   * 1. The global injectMode setting is enabled.
    * 2. There is a previous interactive context (PTY + log file). This is set either
    *    by a previous prompt in the same integration run, or carried over from a prior
    *    run when WorkflowInstance re-inserts the live integration into executionIntegrations.
