@@ -217,7 +217,7 @@ export class CliExecutionRunner {
       return { injected: false };
     }
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
     const submitWritten =
       this.deps.transportCoordinator.writeToCurrentPtySession(submit);
 

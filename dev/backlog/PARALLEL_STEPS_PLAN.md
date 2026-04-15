@@ -27,6 +27,11 @@ been made to align with the current architecture:
 - **Interactive terminal fully implemented**: `PtyProcessManager` + `TerminalView` +
   `TerminalInstance` support multi-tab sessions with a session rail, controller arbitration,
   and per-prompt AI CLI terminals — interactive mode for parallel steps is in scope
+- **Sequential kept-alive terminal policy clarified**: the webview now keeps multiple
+  kept-alive AI terminals accessible when a workflow switches harnesses, while same-harness
+  restart/resume replacement still reuses the harness tab. **Parallel execution must not use
+  harness ID as the terminal identity**: two same-harness parallel steps are valid concurrent
+  PTY sessions and must appear as separate rail tabs keyed by session/step identity.
 
 ---
 
@@ -160,6 +165,8 @@ Worse than Option A: verbose (must repeat `group` and `parallel` on each step), 
   concurrent PTY sessions with a session rail, controller arbitration, and per-prompt
   terminal tabs. Parallel steps each get their own terminal tab in the session rail,
   identified by their sequential step number (e.g., "2. research-auth", "3. research-db").
+  This includes same-harness parallel steps: two `claude-cli` steps in the same group are
+  two distinct PTY/xterm sessions, not one replaceable harness tab.
 - **`resumeSession: true` with a unique `sessionId` per step** — the canonical pattern for
   continuing work from a prior parallel group:
   ```yaml
@@ -451,6 +458,43 @@ Parallel steps work seamlessly with the existing terminal infrastructure:
 - Users can click between tabs to monitor or interact with any parallel step
 - Controller arbitration works independently per session
 
+#### Terminal identity and replacement rules
+
+Terminal/xterm identity is **session-first**, not harness-first:
+
+- `workflowId + sessionId` remains the hard identity for `terminalRegistry` entries and
+  xterm lifetime.
+- `promptNumber` / flat `stepIndex` is the user-facing identity for workflow execution
+  tabs. It answers "which step does this terminal belong to?"
+- `harnessId` is display metadata and a sequential cleanup hint only. It is not unique
+  enough for parallel execution because multiple same-harness steps can run at once.
+
+The webview terminal reconciliation rules should therefore be:
+
+1. **Inject-mode reuse of the same PTY**: same `sessionId` updates metadata in place
+   (`stepName`, `promptNumber`, status) and keeps the same xterm.
+2. **Sequential restart for the same harness**: a new `sessionId` for the same `harnessId`
+   outside a parallel group replaces the old same-harness AI tab. This preserves the
+   current restart/resume behavior when inject cannot be used because the model, args,
+   permissions, hooks, MCP servers, or session target changed.
+3. **Sequential harness switch with kept-alive PTYs**: a new `sessionId` for a different
+   `harnessId` keeps the old harness terminal accessible and adds a new rail tab.
+4. **Parallel group execution**: every parallel prompt step gets its own tab keyed by
+   `sessionId` and labeled by `promptNumber`/`stepName`, even if several tabs share the
+   same `harnessId`. No same-harness replacement happens while the steps are part of the
+   same parallel group.
+5. **Script PTYs**: scripts may continue to reuse a single script terminal tab unless we
+   later decide script parallelism needs per-step interactive terminals.
+
+Implementation note: today the webview receives `TERMINAL_STARTED` with `sessionId`,
+`stepName`, `kind`, `promptNumber`, and `harnessId`. To distinguish "same-harness
+sequential restart" from "same-harness parallel sibling", the terminal start payload should
+gain explicit execution identity such as `stepIndex` and either `parallelGroupId` or
+`parallelGroupRange`. The terminal handler can then skip same-harness replacement when
+`parallelGroupId` is present. If adding a group ID feels too heavy, a boolean
+`isParallelStep` is sufficient for Phase 2, but `parallelGroupId` is more useful for
+debugging and future UI grouping.
+
 ### Output streaming architecture
 
 Each parallel step's output is captured via the existing `captureOutputInit`,
@@ -484,8 +528,10 @@ The terminal infrastructure is already built and supports parallel steps out of 
 `PtyProcessManager.spawnPty()`, tagged with the step's sequential integer and name
 (e.g., `stepName: "2. research-auth"`, `promptNumber: 2`). The session rail displays
 all parallel step terminals as tabs, and the user can switch between them to monitor
-progress or interact with any step. This works identically in headless mode (no terminal
-shown) and interactive mode (terminal tabs in the rail).
+progress or interact with any step. Same-harness siblings are preserved as separate
+tabs because the registry identity is `workflowId + sessionId`, not `harnessId`.
+This works identically in headless mode (no terminal shown) and interactive mode
+(terminal tabs in the rail).
 
 ---
 
@@ -553,16 +599,17 @@ priorContext, additionalArgs, toolPermissions).
 | `src/flightpath/PromptQueue.ts`                                  | Flatten `WorkflowFileStep[]` to `WorkflowStep[]` + `groups: ParallelGroupRange[]`; add `getGroupForStep()` / `isGroupStart()` helpers        |
 | `src/flightpath/WorkflowExecutor.ts`                             | Fan-out logic using `isGroupStart()` / `getGroupForStep()`                                                                                   |
 | `src/flightpath/IntegrationFactory.ts`                           | No interface changes — `createForExecution(harness)` already creates isolated instances; called N times by the executor                      |
-| `src/flightpath/harness/PtyProcessManager.ts`                    | Tag parallel step sessions with their flat step index as `promptNumber`                                                                      |
+| `src/flightpath/harness/PtyProcessManager.ts`                    | Tag parallel step sessions with their flat step index as `promptNumber` and expose enough metadata for replay/debugging (`stepIndex`, group ID if added) |
 | `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx`  | Use `groups` from `QueueState` to render parallel group wrappers                                                                             |
 | `src/ui/webview-react/components/prompts/ParallelGroupPanel.tsx` | **New component**: parallel group wrapper with header, failFast toggle, drag-and-drop                                                        |
 | `src/ui/webview-react/components/layout/OutputSection.tsx`       | Group header dividers, parallel output routing                                                                                               |
-| `src/ui/webview-react/components/output/TerminalView.tsx`        | Already supports multi-tab — no changes needed                                                                                               |
+| `src/ui/webview-react/hooks/terminalMessageHandlers.ts`          | Update `TERMINAL_STARTED` reconciliation so same-harness parallel siblings are preserved as distinct session tabs; keep same-harness replacement only for non-parallel sequential restarts |
+| `src/ui/webview-react/components/output/TerminalView.tsx`        | Already supports multi-tab — no structural changes expected; may display group-aware labels if added                                         |
 | `src/ui/webview-react/components/output/TerminalInstance.tsx`    | Already supports multi-session — no changes needed                                                                                           |
 | `src/ui/DashboardBroadcastHub.ts`                                | Broadcast output tagged with flat step index (already works — no structural changes)                                                         |
 | `src/ui/webview-react/components/prompts/PromptsPanel.tsx`       | Indented cluster in prompt list (if used separately)                                                                                         |
 | `src/ui/webview-react/store/workflowStore.ts`                    | Consume `groups` from `QueueState`; handle step reordering across group boundaries                                                           |
-| `src/ui/webview-react/store/terminalStore.ts`                    | Already supports multi-session — no changes needed                                                                                           |
+| `src/ui/webview-react/store/terminalStore.ts`                    | Already supports multi-session; add optional `stepIndex` / `parallelGroupId` fields if terminal messages expose them                         |
 | `src/test/promptFileParser.test.ts`                              | Parallel group parsing and validation tests                                                                                                  |
 | `src/test/workflowExecutor.test.ts`                              | Parallel execution + failure handling tests                                                                                                  |
 | `src/test/parallelGroupPanel.test.tsx`                           | UI component tests for drag-and-drop, failFast toggle                                                                                        |
@@ -671,8 +718,14 @@ priorContext, additionalArgs, toolPermissions).
 
 10. **Terminal integration for parallel steps**
     - Tag PTY sessions with each step's sequential integer (`promptNumber`) and name
-    - Update `PtyProcessManager.spawnPty()` to accept `promptNumber` and `stepName`
-    - Session rail already handles multiple tabs — no UI changes needed
+    - Include explicit execution identity in terminal metadata (`stepIndex` plus
+      `parallelGroupId`/`isParallelStep`) so webview reconciliation can tell a
+      same-harness parallel sibling from a same-harness sequential restart
+    - Keep xterm registry keyed by `workflowId + sessionId`; do not key by harness
+    - Update `terminalMessageHandlers.ts` so same-harness replacement is disabled for
+      parallel steps. Two `claude-cli` or two `copilot-cli` siblings in the same group
+      must produce two rail tabs.
+    - Session rail already handles multiple tabs — no structural UI changes needed
 
 11. **Tests for concurrent execution**
     - Parallel group parsing and validation
@@ -703,7 +756,9 @@ priorContext, additionalArgs, toolPermissions).
    terminal infrastructure (`PtyProcessManager` + `TerminalView` + `TerminalInstance`)
    already handles multiple concurrent PTY sessions with a session rail, so parallel
    steps each get their own terminal tab identified by sub-step label. No additional
-   terminal work is needed for interactive mode — the existing infrastructure handles it.
+   terminal layout work is needed for interactive mode. The terminal reconciliation
+   logic does need a parallel-step signal so same-harness siblings are preserved instead
+   of treated as sequential same-harness replacement.
 
 3. **End condition interaction:** If all parallel steps share an end condition script
    (defined at workflow level), does it run once per step or once after the group? Answer:
@@ -797,7 +852,10 @@ The parallel group wrapper is a natural extension of these patterns.
 
 - Each parallel step gets its own PTY session tagged with `promptNumber` (the step's own
   sequential integer) and `stepName` (e.g., "2. research-auth")
-- Session rail shows all parallel step terminals as tabs — no UI changes needed
+- Session rail shows all parallel step terminals as tabs, including multiple tabs with the
+  same harness icon when a group runs same-harness siblings concurrently
+- The terminal tab lifecycle is keyed by `sessionId` and labeled by step identity; `harnessId`
+  is not the uniqueness key
 
 ### Key Design Decisions Made
 
@@ -812,7 +870,8 @@ The parallel group wrapper is a natural extension of these patterns.
    is per-step (harness, model, agent, endCondition, etc.).
 
 3. **Interactive mode is fully supported**. Terminal infrastructure already handles
-   multiple concurrent sessions with session rail. No restrictions needed.
+   multiple concurrent sessions with session rail. No layout restrictions needed; the
+   terminal message/reconciliation layer must preserve same-harness parallel siblings.
 
 4. **Nested parallel groups are disallowed in Phase 1**. Flat groups only to keep
    complexity manageable.
@@ -843,9 +902,17 @@ The parallel group wrapper is a natural extension of these patterns.
      Sequential integers keep the existing `priorContext: [2, 3, 4]` syntax working on the
      synthesis step with zero changes to the schema or runtime.
 
+10. **Terminal identity is session/step based, not harness based.** `harnessId` is useful
+    for icon display and sequential restart cleanup, but it is not a unique key. Parallel
+    groups can legitimately run multiple same-harness steps at the same time, so terminal
+    preservation must key off `sessionId` and execution metadata (`promptNumber`/`stepIndex`,
+    optionally `parallelGroupId`).
+
 ### Open Questions (resolved)
 
 - ✅ Headless vs interactive: **Both supported** (terminal infrastructure handles it)
+- ✅ Same-harness parallel terminals: **Separate tabs** keyed by session/step identity, not
+  merged by harness ID.
 - ✅ End condition interaction: **Per step** (matches existing semantics)
 - ✅ Session resume in/after group: `resumeSession: true` + unique `sessionId` per step is fully allowed (including cross-group resumption). Single step `resumeSession: true` + no sessionId is best-effort. Multiple steps without sessionId or with duplicate sessionId in same group → parse-time error. Runtime fallback (session not found → new session + warning) applies as for sequential steps.
 - ✅ Working file persistence: **Per-step `_runtime.completedAt`** (matches existing tracking)

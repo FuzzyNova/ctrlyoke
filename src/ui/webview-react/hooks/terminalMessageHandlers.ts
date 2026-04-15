@@ -17,6 +17,18 @@ import { terminalRegistry } from "../terminalRegistry";
 import { sendMessage } from "@hooks/useMessageHandler";
 import type { MessageHandlerMap } from "./useMessageHandler";
 
+function isScriptPtySession(session: {
+  kind?: string;
+  harnessId?: string;
+  promptNumber?: number;
+}): boolean {
+  return (
+    session.kind === SESSION_KINDS.AI_CLI &&
+    session.harnessId === undefined &&
+    session.promptNumber === undefined
+  );
+}
+
 /**
  * Register all terminal-related message handlers into the provided handler map.
  */
@@ -124,18 +136,23 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       return;
     }
 
-    // For ai-cli sessions, only one should exist at a time per workflow.
-    // Replace any previous ai-cli session so prompts within a run don't accumulate
-    // separate xterm views. (clearAiCliSessions at WORKFLOW_STARTED handles run-to-run
-    // clearing; this handles prompt-to-prompt replacement within a single run.)
+    // Keep one AI terminal per live harness PTY. Different harnesses can stay
+    // visible together for inject-mode workflows, while same-harness restarts
+    // replace the old xterm. Script PTYs do not carry a harnessId, so they reuse
+    // a single script terminal tab.
     if (kind === SESSION_KINDS.AI_CLI) {
       const termStore = useTerminalStore.getState();
-      const prevAiCliIds = (termStore.sessions[workflowId] ?? [])
-        .filter((s) => s.kind === SESSION_KINDS.AI_CLI)
+      const prevSessionIds = (termStore.sessions[workflowId] ?? [])
+        .filter((s) => {
+          if (harnessId) {
+            return s.kind === SESSION_KINDS.AI_CLI && s.harnessId === harnessId;
+          }
+          return isScriptPtySession(s);
+        })
         .map((s) => s.id);
-      if (prevAiCliIds.length > 0) {
-        terminalRegistry.clearAiCliSessions(workflowId, prevAiCliIds);
-        termStore.clearAiCliSessions(workflowId);
+      for (const prevSessionId of prevSessionIds) {
+        terminalRegistry.clearSession(workflowId, prevSessionId);
+        termStore.removeSession(workflowId, prevSessionId);
       }
     }
 

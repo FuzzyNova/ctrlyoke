@@ -535,6 +535,101 @@ describe("TERMINAL_STARTED", () => {
     expect(sessions[0].promptNumber).toBe(2);
     expect(sessions[0].status).toBe(TERMINAL_SESSION_STATUS.RUNNING);
   });
+
+  it("keeps existing AI CLI sessions when a different harness starts", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "claude-session",
+        stepName: "Claude step",
+        kind: SESSION_KINDS.AI_CLI,
+        promptNumber: 1,
+        harnessId: "claude-cli",
+        controllerClientId: "controller-1",
+      });
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "copilot-session",
+        stepName: "Copilot step",
+        kind: SESSION_KINDS.AI_CLI,
+        promptNumber: 2,
+        harnessId: "copilot-cli",
+        controllerClientId: "controller-1",
+      });
+    });
+
+    const sessions = useTerminalStore.getState().sessions["workflow-1"];
+    expect(sessions).toHaveLength(2);
+    expect(sessions.map((s) => s.id)).toEqual([
+      "claude-session",
+      "copilot-session",
+    ]);
+  });
+
+  it("replaces the previous AI CLI session for the same harness", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "old-claude-session",
+        stepName: "Claude step",
+        kind: SESSION_KINDS.AI_CLI,
+        promptNumber: 1,
+        harnessId: "claude-cli",
+        controllerClientId: "controller-1",
+      });
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "new-claude-session",
+        stepName: "Claude restart",
+        kind: SESSION_KINDS.AI_CLI,
+        promptNumber: 2,
+        harnessId: "claude-cli",
+        controllerClientId: "controller-1",
+      });
+    });
+
+    const sessions = useTerminalStore.getState().sessions["workflow-1"];
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].id).toBe("new-claude-session");
+  });
+
+  it("reuses a single script PTY terminal tab", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "script-session-1",
+        stepName: "Script 1",
+        kind: SESSION_KINDS.AI_CLI,
+        controllerClientId: "controller-1",
+      });
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "script-session-2",
+        stepName: "Script 2",
+        kind: SESSION_KINDS.AI_CLI,
+        controllerClientId: "controller-1",
+      });
+    });
+
+    const sessions = useTerminalStore.getState().sessions["workflow-1"];
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].id).toBe("script-session-2");
+  });
 });
 
 // ---------------------------------------------------------------------------
