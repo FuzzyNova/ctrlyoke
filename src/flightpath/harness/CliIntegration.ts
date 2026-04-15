@@ -343,7 +343,10 @@ export class CliIntegration extends HarnessIntegration {
    * 2. There is a previous interactive context (PTY + log file). This is set either
    *    by a previous prompt in the same integration run, or carried over from a prior
    *    run when WorkflowInstance re-inserts the live integration into executionIntegrations.
-   * 3. The spawn-time configuration is compatible — model, tool permissions, hooks,
+   * 3. The prompt has resumeSession: true. Inject mode continues the existing
+   *    conversation, which is semantically equivalent to resumeSession: true. A
+   *    prompt with resumeSession: false requires a fresh process.
+   * 4. The spawn-time configuration is compatible — model, tool permissions, hooks,
    *    MCP servers, and additional args must all match the spawned process. Any
    *    prompt-level override that changes these requires a fresh process instead.
    */
@@ -391,6 +394,13 @@ export class CliIntegration extends HarnessIntegration {
       currSessionId !== ctx.spawnedWithSessionId
     ) {
       return `explicit sessionId "${currSessionId}" differs from running session`;
+    }
+
+    // Inject mode keeps the TUI alive and continues the existing conversation,
+    // which is semantically equivalent to resumeSession: true. If the prompt
+    // requests a fresh session, we must spawn a new process instead.
+    if (!curr?.resumeSession) {
+      return "resumeSession is false — fresh session required";
     }
 
     if (!prev || !curr) {
