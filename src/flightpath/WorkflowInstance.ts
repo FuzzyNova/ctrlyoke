@@ -26,6 +26,7 @@ import {
   UserHookConfig,
   DynamicQueueConfig,
   PreCondition,
+  ToolPermissionsOverride,
 } from "../types/FlightPathTypes";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import {
@@ -2795,6 +2796,13 @@ export class WorkflowInstance {
       // file retains the "explicitly none" override and the PropertyResolver stops resolution.
       ...(props?.additionalArgs !== undefined && {
         additionalArgs: props.additionalArgs as string | null,
+      }),
+      // toolPermissions is three-state: null = explicitly none (inject no flags),
+      // object = override, undefined = inherit from workflow.
+      // Do NOT coerce null to undefined — null must be preserved so the PropertyResolver
+      // stops resolution and injects no permission flags for this prompt.
+      ...(props?.toolPermissions !== undefined && {
+        toolPermissions: props.toolPermissions as ToolPermissionsOverride | null,
       }),
     };
   }

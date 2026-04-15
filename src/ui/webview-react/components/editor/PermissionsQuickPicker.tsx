@@ -26,7 +26,7 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
   disabled = false,
 }) => {
   const { properties, setProperty } = useEditorStore();
-  const { workflowProperties } = useSettingsStore();
+  const { workflowProperties, globalSettings } = useSettingsStore();
   const { footerOpenPicker, setFooterOpenPicker } = useUiStore();
 
   const isOpen = footerOpenPicker === "permissions";
@@ -34,10 +34,13 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
 
   const resolvedModeLabel = (() => {
     const wf = workflowProperties.toolPermissions;
-    if (wf === undefined || wf === null) return "None";
+    // Fall back to global settings when no workflow-level override is set
+    const effective =
+      wf !== undefined ? wf : globalSettings.toolPermissions;
+    if (effective === undefined || effective === null) return "None";
     return (
-      PERMISSION_MODE_OPTIONS.find((o) => o.value === wf.mode)?.label ??
-      wf.mode ??
+      PERMISSION_MODE_OPTIONS.find((o) => o.value === effective.mode)?.label ??
+      effective.mode ??
       "None"
     );
   })();
@@ -53,7 +56,8 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
         )?.label ?? "Allow All");
 
   const defaultLabel = buildPermissionsDefaultLabel(
-    workflowProperties.toolPermissions
+    workflowProperties.toolPermissions,
+    globalSettings.toolPermissions as ToolPermissionsOverride
   );
 
   return (

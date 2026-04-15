@@ -204,27 +204,15 @@ export const terminalRegistry = {
       try {
         const { WebglAddon } = await import("@xterm/addon-webgl");
         const webgl = new WebglAddon();
-        // On context loss (e.g. Chromium's 16-context limit hit), fall back to
-        // Canvas 2D rather than xterm's slow DOM renderer.
+        // On context loss (e.g. Chromium's 16-context limit hit), let xterm
+        // fall back to its built-in renderer. @xterm/addon-canvas currently
+        // peers on xterm v5 and is not compatible with our xterm v6 package.
         webgl.onContextLoss(() => {
           webgl.dispose();
-          import("@xterm/addon-canvas")
-            .then(({ CanvasAddon }) => {
-              entry.term.loadAddon(new CanvasAddon());
-            })
-            .catch(() => {
-              /* Canvas addon unavailable — xterm stays on DOM renderer */
-            });
         });
         entry.term.loadAddon(webgl);
       } catch {
-        // WebGL unavailable at startup — fall back to Canvas 2D directly
-        try {
-          const { CanvasAddon } = await import("@xterm/addon-canvas");
-          entry.term.loadAddon(new CanvasAddon());
-        } catch {
-          // Canvas also unavailable — xterm uses DOM renderer
-        }
+        // WebGL unavailable at startup — xterm uses its built-in renderer.
       }
     } else {
       // Subsequent attach — move the existing DOM element back in

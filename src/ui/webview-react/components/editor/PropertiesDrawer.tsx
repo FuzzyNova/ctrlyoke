@@ -251,7 +251,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 
   // ── Permissions page derived values ──────────────────────────────────────
   const defaultPermissionsLabel = buildPermissionsDefaultLabel(
-    workflowProperties.toolPermissions
+    workflowProperties.toolPermissions,
+    globalSettings.toolPermissions as ToolPermissionsOverride
   );
   const effectivePermHarness = (properties.harness ??
     workflowProperties.harness ??

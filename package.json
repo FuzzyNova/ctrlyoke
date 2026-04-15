@@ -15,7 +15,7 @@
     "url": "https://github.com/nhickster/flightpath/issues"
   },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.104.0"
   },
   "categories": [
     "Other",
@@ -587,7 +587,6 @@
     "@types/js-yaml": "^4.0.9",
     "@types/ws": "^8.18.1",
     "@vscode/codicons": "^0.0.44",
-    "@xterm/addon-canvas": "^0.7.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",

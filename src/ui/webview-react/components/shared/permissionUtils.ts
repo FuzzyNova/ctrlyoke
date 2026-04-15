@@ -35,24 +35,27 @@ export function getPermissionHarnessSupport(
 
 /**
  * Build the "Default (X)" label for the Permissions dropdown in PropertiesDrawer.
- * Input is workflow-level toolPermissions only — no global fallback.
+ * Workflow-level value takes precedence; globalValue is the fallback when workflow
+ * has no override (undefined), reflecting the full three-tier inheritance chain.
  */
 export function buildPermissionsDefaultLabel(
-  workflowValue: ToolPermissionsOverride | null | undefined
+  workflowValue: ToolPermissionsOverride | null | undefined,
+  globalValue?: ToolPermissionsOverride | null
 ): string {
+  const effective = workflowValue !== undefined ? workflowValue : globalValue;
   if (
-    workflowValue === null ||
-    workflowValue === undefined ||
-    workflowValue.mode === PERMISSION_MODES.NONE
+    effective === null ||
+    effective === undefined ||
+    effective.mode === PERMISSION_MODES.NONE
   ) {
     return "Default (none)";
   }
-  if (workflowValue.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
+  if (effective.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
     return "Default (dangerouslyAllowAll)";
-  if (workflowValue.mode === PERMISSION_MODES.ALLOW_ALL)
+  if (effective.mode === PERMISSION_MODES.ALLOW_ALL)
     return "Default (allowAll)";
   const count =
-    (workflowValue.allowedTools?.length ?? 0) +
-    (workflowValue.deniedTools?.length ?? 0);
+    (effective.allowedTools?.length ?? 0) +
+    (effective.deniedTools?.length ?? 0);
   return `Default (custom, ${count} rule${count !== 1 ? "s" : ""})`;
 }
