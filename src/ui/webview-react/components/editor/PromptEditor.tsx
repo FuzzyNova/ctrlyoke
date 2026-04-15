@@ -376,6 +376,18 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         clearProperties.push("endCondition");
       }
 
+      // Tool Permissions — three-state:
+      //   null   → "explicitly none" (inject no permission flags for this prompt)
+      //   object → permission override (mode, allowedTools, deniedTools)
+      //   key in clearProperties → "Default / inherit" (key removed from PromptStep)
+      if (properties.toolPermissions === null) {
+        result.toolPermissions = null;
+      } else if (properties.toolPermissions !== undefined) {
+        result.toolPermissions = properties.toolPermissions;
+      } else if (includeNullsForDefaults) {
+        clearProperties.push("toolPermissions");
+      }
+
       return { properties: result, clearProperties };
     },
     [properties]
