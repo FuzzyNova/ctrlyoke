@@ -40,7 +40,6 @@ import {
   SESSION_KINDS,
   SHELL_KINDS,
   STEP_TYPES,
-  TERMINAL_SESSION_STATUS,
   type HarnessId,
 } from "../../types/messages";
 import { CLI_EVENT_TYPES } from "../../types/cliEvents";
@@ -1131,13 +1130,12 @@ export const OutputSection: React.FC = () => {
                 {!isTerminalCompact && <span>New Terminal</span>}
               </button>
 
-              {/* Trash button — compact mode: shell sessions always, AI CLI sessions when ended */}
+              {/* Trash button — compact mode: shell sessions always, AI CLI sessions when workflow is not executing */}
               {isTerminalCompact &&
                 activeTerminalSession &&
                 (activeTerminalSession.kind === SESSION_KINDS.SHELL ||
                   (activeTerminalSession.kind === SESSION_KINDS.AI_CLI &&
-                    activeTerminalSession.status !==
-                      TERMINAL_SESSION_STATUS.RUNNING)) && (
+                    !isExecutionActive)) && (
                   <button
                     className="icon-btn py-0 px-1"
                     title="Close terminal"

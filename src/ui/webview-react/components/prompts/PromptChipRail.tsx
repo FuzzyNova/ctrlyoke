@@ -9,7 +9,6 @@
  * available space — no fixed width is applied here.
  */
 import React, { useState, useEffect, useCallback } from "react";
-import { createPortal } from "react-dom";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useEditorStore } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
@@ -20,6 +19,10 @@ import {
   useStepClickHandler,
 } from "@hooks/index";
 import { StatusIcon } from "./StatusIcon";
+import {
+  StepContextMenu,
+  type StepContextMenuState,
+} from "../shared/StepContextMenu";
 import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
@@ -44,90 +47,6 @@ import {
   useSortable,
   arrayMove,
 } from "@dnd-kit/sortable";
-
-// ─── ChipContextMenu ─────────────────────────────────────────────────────────
-
-type ContextMenuItem = {
-  label: string;
-  icon: string;
-  disabled: boolean;
-  disabledTitle?: string;
-  onClick: () => void;
-};
-
-type ContextMenuState = {
-  x: number;
-  y: number;
-  items: ContextMenuItem[];
-};
-
-type ChipContextMenuProps = ContextMenuState & { onClose: () => void };
-
-/**
- * Fixed-position context menu rendered into document.body via portal.
- *
- * Close behaviour: a `pointerdown` listener on `document` closes the menu when
- * the user clicks or right-clicks anywhere outside it. `pointerdown` fires
- * before `contextmenu`, so right-clicking another chip will close this menu
- * first, then the chip's own `onContextMenu` handler opens a new one.
- *
- * Clicks *inside* the menu stop `pointerdown` propagation so the document
- * listener doesn't fire and menu-item `click` events still reach their handler.
- */
-function ChipContextMenu({ x, y, items, onClose }: ChipContextMenuProps) {
-  // Clamp so the menu doesn't overflow the right edge of the viewport
-  const menuWidth = 170;
-  const adjustedX = Math.min(x, window.innerWidth - menuWidth - 4);
-
-  useEffect(() => {
-    const close = () => onClose();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
-
-  return createPortal(
-    <div
-      style={{ position: "fixed", top: y, left: adjustedX, zIndex: 9999 }}
-      className="bg-editor-bg border border-panel-border rounded shadow-lg py-0.5 min-w-[160px]"
-      // Stop pointerdown from reaching the document listener so item clicks work
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-      }}
-    >
-      {items.map((item, i) => (
-        <button
-          key={i}
-          className={`flex items-center gap-1.5 w-full px-2.5 py-1 text-[11px] text-left transition-colors ${
-            item.disabled
-              ? "text-description-fg cursor-not-allowed opacity-50"
-              : "text-foreground hover:bg-toolbar-hover-bg cursor-pointer"
-          }`}
-          disabled={item.disabled}
-          title={item.disabled ? item.disabledTitle : undefined}
-          onClick={() => {
-            if (item.disabled) return;
-            onClose();
-            item.onClick();
-          }}
-        >
-          <i className={`codicon ${item.icon} text-[10px]`} />
-          {item.label}
-        </button>
-      ))}
-    </div>,
-    document.body
-  );
-}
 
 // ─── ChipContent ─────────────────────────────────────────────────────────────
 
@@ -343,7 +262,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   // Single shared context menu state — only one menu is ever open at a time.
   // Lifting state here (rather than per-chip) ensures right-clicking a second
   // chip replaces the first menu rather than stacking a second one.
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(null);
 
   const [sortableIds, setSortableIds] = useState<string[]>(() =>
     prompts.slice(currentStep).map((_, i) => `chip-pending-${currentStep + i}`)
@@ -532,7 +451,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
 
       {/* Single shared context menu — only one is ever rendered */}
       {contextMenu && (
-        <ChipContextMenu
+        <StepContextMenu
           {...contextMenu}
           onClose={() => setContextMenu(null)}
         />

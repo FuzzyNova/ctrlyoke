@@ -8,9 +8,11 @@ import {
 import { sendMessage } from "@hooks/useMessageHandler";
 import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import { terminalRegistry } from "../../terminalRegistry";
 import {
   MESSAGE_TYPES,
+  EXECUTION_STATES,
   TERMINAL_SESSION_STATUS,
   SESSION_KINDS,
   SHELL_KINDS,
@@ -48,6 +50,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
   );
   const setActiveSession = useTerminalStore((s) => s.setActiveSession);
   const removeSession = useTerminalStore((s) => s.removeSession);
+
+  const executionState = useWorkflowStore((s) => s.executionState);
+  const isWorkflowExecuting =
+    executionState === EXECUTION_STATES.RUNNING ||
+    executionState === EXECUTION_STATES.CANCELLING;
 
   const terminalRailCollapsed = useUiStore((s) => s.terminalRailCollapsed);
   const terminalRailSizePx = useUiStore((s) => s.terminalRailSizePx);
@@ -175,7 +182,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
                     session={session}
                     isActive={session.id === activeSessionId}
                     onClick={() => setActiveSession(workflowId, session.id)}
-                    onClose={() => handleCloseAiCliSession(session)}
+                    onClose={
+                      !isWorkflowExecuting
+                        ? () => handleCloseAiCliSession(session)
+                        : undefined
+                    }
                   />
                 )
               )}
@@ -252,7 +263,7 @@ const RailEntry: React.FC<RailEntryProps> = ({
     >
       <SessionIcon session={session} />
       <span className="truncate flex-1">{session.stepName}</span>
-      {!isRunning && onClose && (
+      {onClose && (
         <button
           className="icon-btn py-0 px-0.5 opacity-70 hover:opacity-100 flex-shrink-0"
           title="Close terminal"

@@ -76,6 +76,8 @@ interface WorkflowStepProps {
     listeners: SyntheticListenerMap | undefined;
     attributes: DraggableAttributes;
   };
+  /** Right-click context menu handler */
+  onContextMenu?: (x: number, y: number) => void;
 }
 
 /**
@@ -119,6 +121,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
   dimmed = false,
   dragHandleProps,
   isScript = false,
+  onContextMenu,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -148,6 +151,15 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
       onClick={onClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onContextMenu={
+        onContextMenu
+          ? (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onContextMenu(e.clientX, e.clientY);
+            }
+          : undefined
+      }
       title="Click to edit"
       role="button"
       tabIndex={0}

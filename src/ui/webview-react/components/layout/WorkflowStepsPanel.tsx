@@ -44,6 +44,10 @@ import {
 } from "@dnd-kit/sortable";
 import { BoundaryBar } from "../prompts/BoundaryBar";
 import { ResetConfirmModal } from "../shared/ResetConfirmModal";
+import {
+  StepContextMenu,
+  type StepContextMenuState,
+} from "../shared/StepContextMenu";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 
 /** Local type guard for script steps */
@@ -165,6 +169,7 @@ export const WorkflowStepsPanel: React.FC<{
   const { workflowProperties, globalSettings } = useSettingsStore();
   const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
   const [setPositionIndex, setSetPositionIndex] = useState<number | null>(null);
+  const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(null);
 
   // Compute the harness/model to display for a step.
   //
@@ -462,6 +467,39 @@ export const WorkflowStepsPanel: React.FC<{
     [globalSettings.confirmResetOperations]
   );
 
+  const buildStepContextMenuItems = useCallback(
+    (
+      absoluteIndex: number,
+      isCurrentStep: boolean,
+      direction: "rewind" | "forward",
+      stepStatus: StepStatus
+    ) => [
+      {
+        label: "Set start position",
+        icon:
+          direction === "rewind"
+            ? "codicon-debug-reverse-continue"
+            : "codicon-debug-step-over",
+        disabled: !canChangeStartPosition || isCurrentStep,
+        disabledTitle: isCurrentStep
+          ? "Already the current start position"
+          : "Cannot change start position while workflow is running",
+        onClick: () => handleSetPositionClick(absoluteIndex),
+      },
+      {
+        label: "Delete",
+        icon: "codicon-trash",
+        disabled: isCLIManaged || stepStatus === STEP_STATUS.RUNNING,
+        disabledTitle: isCLIManaged
+          ? "Read-only — workflow is running via FlightPath CLI"
+          : "Cannot delete a prompt that is currently running",
+        onClick: () =>
+          sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { index: absoluteIndex }),
+      },
+    ],
+    [canChangeStartPosition, handleSetPositionClick, isCLIManaged]
+  );
+
   const handleSetPositionConfirm = useCallback(() => {
     if (setPositionIndex === null) return;
     sendMessage(MESSAGE_TYPES.SET_START_POSITION, {
@@ -681,6 +719,13 @@ export const WorkflowStepsPanel: React.FC<{
                         canSetStartPosition={canChangeStartPosition}
                         startPositionDirection="rewind"
                         onSetStartPosition={() => handleSetPositionClick(index)}
+                        onContextMenu={(x, y) =>
+                          setContextMenu({
+                            x,
+                            y,
+                            items: buildStepContextMenuItems(index, false, "rewind", status),
+                          })
+                        }
                         hideBorderBottom={
                           sliceIdx === doneStepCount - 1 &&
                           doneStepCount < steps.length
@@ -763,6 +808,18 @@ export const WorkflowStepsPanel: React.FC<{
                           ? () => handleSetPositionClick(setPositionTarget)
                           : undefined
                       }
+                      onContextMenu={(x, y) =>
+                        setContextMenu({
+                          x,
+                          y,
+                          items: buildStepContextMenuItems(
+                            setPositionTarget,
+                            isCurrentStep,
+                            "forward",
+                            status
+                          ),
+                        })
+                      }
                       isScript={isScriptStep(step)}
                     />
                   );
@@ -792,6 +849,12 @@ export const WorkflowStepsPanel: React.FC<{
         latestOutput={finalStepLatestOutput}
         overrides={finalStepOverrides}
       />
+      {contextMenu && (
+        <StepContextMenu
+          {...contextMenu}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
       {setPositionIndex !== null &&
         (() => {
           const isRewind = setPositionIndex < currentStep;
