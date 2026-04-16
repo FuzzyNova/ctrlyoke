@@ -238,6 +238,67 @@ suite("CliIntegration", () => {
     );
   });
 
+  test("should retire a retained interactive PTY before headless resume of the same session", async () => {
+    const integration = createHeadlessIntegration();
+    const prompt: PromptStep = { prompt: "continue" };
+    let retiredReason: string | undefined;
+    let clearedInteractiveContext = false;
+    let headlessCalled = false;
+
+    (integration as any).sessionResolverAdapter.resolve = () => ({
+      resolvedProperties: { resumeSession: true },
+      resolvedSessionId: "session-existing",
+    });
+
+    (integration as any).executionRunner.getLastInteractiveContext = () => ({
+      logPath: "session.log",
+      sessionId: "session-existing",
+      spawnedWithSessionId: "session-existing",
+    });
+    (integration as any).executionRunner.clearInteractiveContext = () => {
+      clearedInteractiveContext = true;
+    };
+    (integration as any).transportCoordinator.terminateCurrentPtySession = (
+      reason: string
+    ) => {
+      retiredReason = reason;
+      return "pty-existing";
+    };
+    (integration as any).executionRunner.executeHeadless = async (session: {
+      recordHeadlessResponse(response: {
+        success: boolean;
+        parsedOutput: UniversalCliOutput;
+        cliResult: {
+          success: boolean;
+          response: string;
+          statistics: string;
+        };
+      }): void;
+    }) => {
+      headlessCalled = true;
+      session.recordHeadlessResponse({
+        success: true,
+        parsedOutput: {
+          events: [],
+          metadata: {},
+        },
+        cliResult: {
+          success: true,
+          response: "headless response",
+          statistics: "",
+        },
+      });
+      return true;
+    };
+
+    const success = await integration.sendPrompt(prompt);
+
+    assert.strictEqual(success, true);
+    assert.strictEqual(headlessCalled, true);
+    assert.strictEqual(clearedInteractiveContext, true);
+    assert.match(retiredReason ?? "", /headless resume of AI session/u);
+  });
+
   test("should persist cancelled prompt runtime when a sendPrompt attempt is cancelled", async () => {
     const integration = createHeadlessIntegration();
     const prompt: PromptStep = { prompt: "say hi" };

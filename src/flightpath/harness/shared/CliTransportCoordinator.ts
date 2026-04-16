@@ -398,6 +398,30 @@ export class CliTransportCoordinator {
     return this.currentPtySession !== undefined;
   }
 
+  /**
+   * Kill the active embedded AI CLI PTY without treating it as a user cancel.
+   * Used when a later prompt resumes the same AI session in headless mode; the
+   * headless process must be the only live owner of that session.
+   */
+  terminateCurrentPtySession(reason: string): string | undefined {
+    if (!this.currentPtySession) {
+      return undefined;
+    }
+
+    const sessionId = this.currentPtySession.id;
+    Log.info(
+      `🛑 Terminating PTY session ${sessionId.slice(0, 8)} before ${reason}`
+    );
+    const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
+    if (ptyManager) {
+      ptyManager.killSession(sessionId);
+    } else {
+      this.currentPtySession.pty.kill();
+    }
+    this.currentPtySession = undefined;
+    return sessionId;
+  }
+
   closeTerminal(): void {}
 
   async cancel(): Promise<boolean> {

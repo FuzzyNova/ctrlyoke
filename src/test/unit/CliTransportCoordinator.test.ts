@@ -381,6 +381,87 @@ suite("CliTransportCoordinator", () => {
     assert.strictEqual(postedMessages[0].kind, SESSION_KINDS.AI_CLI);
   });
 
+  test("should terminate the active PTY session through the PTY manager", async () => {
+    let killedSessionId: string | undefined;
+
+    const coordinator = new CliTransportCoordinator({
+      provider: {
+        config: {
+          name: "test-cli",
+          displayName: "Test CLI",
+          terminalName: "Test",
+          installHint: "",
+          shouldStreamHeadlessOutput: false,
+          harnessId: "copilot-cli",
+        },
+        responseParser: {
+          parse: () => ({ events: [], metadata: {} }),
+          parseTokenCounts: () => undefined,
+        },
+        notificationMonitor: {
+          supportsSessionIdInFilename: true,
+          supportsSessionStart: false,
+          monitorForCompletion: async () => ({ completed: false }),
+          buildHookConfig: () => ({ type: "none" as const }),
+          getNotificationDirectory: () => process.cwd(),
+        },
+        toolPermissionMapper: {},
+        buildCliArgs: async () => [],
+        buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
+          ...baseArgs,
+          prompt,
+        ],
+        buildInteractiveTuiCommand: () => "test-cli --interactive",
+        checkAvailability: async () => true,
+      } as unknown as ICliProvider,
+      processManager: {} as any,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: {
+        onBeforeInteractiveStart: () => {},
+        onCommandPrepared: () => {},
+        onStreamingChunk: () => {},
+        onStreamingEvents: () => {},
+        onResponseComplete: () => {},
+        onPtyExit: () => {},
+        cleanupTempFiles: async () => {},
+      },
+      postTerminalMessage: () => {},
+      getPtyManager: () =>
+        ({
+          getExpectedController: () => undefined,
+          killSession: (sessionId: string) => {
+            killedSessionId = sessionId;
+          },
+          spawnPty: (config: { sessionId: string; workflowId: string }) => ({
+            id: config.sessionId,
+            workflowId: config.workflowId,
+            kind: SESSION_KINDS.AI_CLI,
+            reconnectBuffer: [],
+          }),
+        }) as any,
+    });
+
+    await coordinator.startInteractiveProcess([], "prompt", {
+      promptIndex: 0,
+      allPrompts: [{ prompt: "one" }],
+      instanceId: "workflow-1",
+    } as any);
+
+    const terminatedSessionId = coordinator.terminateCurrentPtySession(
+      "headless resume"
+    );
+
+    assert.ok(terminatedSessionId);
+    assert.strictEqual(killedSessionId, terminatedSessionId);
+    assert.strictEqual(
+      coordinator.terminateCurrentPtySession("second call"),
+      undefined
+    );
+  });
+
   test("should run standalone interactive launch and stop-hook monitor", async () => {
     let disposedProcess = false;
     let responseCompleted: string | undefined;

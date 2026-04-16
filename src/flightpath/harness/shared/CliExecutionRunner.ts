@@ -42,6 +42,11 @@ interface CliExecutionTransportCoordinator {
   writeToCurrentPtySession(text: string): boolean;
   /** Refresh display metadata for the current PTY session when it is reused by inject mode. */
   updateCurrentPtySessionMetadata?(workflowContext?: WorkflowContext): boolean;
+  /**
+   * Terminate the current PTY when another execution mode needs exclusive
+   * ownership of the same AI session.
+   */
+  terminateCurrentPtySession?(reason: string): string | undefined;
 }
 
 interface CliInteractiveStartupCoordinatorLike {
@@ -155,6 +160,15 @@ export class CliExecutionRunner {
    */
   getLastInteractiveContext(): InteractiveInjectContext | undefined {
     return this.lastInteractiveContext;
+  }
+
+  /**
+   * Clear the retained interactive context after its PTY has been intentionally
+   * retired. Without this, a later run can incorrectly believe inject mode is
+   * still available.
+   */
+  clearInteractiveContext(): void {
+    this.lastInteractiveContext = undefined;
   }
 
   /**

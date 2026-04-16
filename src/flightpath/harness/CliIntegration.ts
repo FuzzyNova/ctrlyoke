@@ -124,6 +124,9 @@ export class CliIntegration extends HarnessIntegration {
   /** One-shot callback registered by WorkflowInstance to dispose this integration when the PTY exits. */
   private ptySessionEndedCallback?: () => void;
 
+  /** PTY session intentionally killed for a mode handoff; its exit is not a step failure. */
+  private suppressPtyExitSessionId?: string;
+
   /** Prompt/file assembly helper extracted from CliIntegration. */
   private readonly promptPreparer: CliPromptPreparer;
 
@@ -471,6 +474,14 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   private handlePtyExit(session: PtySession, exitCode: number): void {
+    if (this.suppressPtyExitSessionId === session.id) {
+      this.suppressPtyExitSessionId = undefined;
+      Log.info(
+        `🛑 AI CLI PTY session ${session.id} exited after intentional mode handoff`
+      );
+      return;
+    }
+
     this.failureTracker.capturePtyExit(exitCode, session.reconnectBuffer);
 
     // Notify WorkflowInstance that the PTY session is gone so it can clean up
@@ -702,6 +713,10 @@ export class CliIntegration extends HarnessIntegration {
       Log.info("↩️ Inject mode unavailable — falling back to restart mode");
     }
 
+    if (!isInteractive) {
+      this.retireInteractivePtyBeforeHeadlessResume(session);
+    }
+
     const workspaceRoot = this.getWorkspaceRoot();
     const extensionPath = this.platform.getExtensionPath();
 
@@ -774,6 +789,41 @@ export class CliIntegration extends HarnessIntegration {
     }
 
     return success;
+  }
+
+  /**
+   * Inject mode intentionally leaves the interactive TUI alive between prompts.
+   * If the user switches to headless before a resume prompt, that headless
+   * process must become the only owner of the resumed AI session; otherwise
+   * some harnesses reject or corrupt concurrent access to the same session.
+   */
+  private retireInteractivePtyBeforeHeadlessResume(
+    session: CliExecutionSession
+  ): void {
+    const ctx = this.executionRunner.getLastInteractiveContext();
+    const resolvedSessionId = session.resolvedSessionId;
+    if (!ctx || !resolvedSessionId) {
+      return;
+    }
+
+    const activeSessionIds = [ctx.sessionId, ctx.spawnedWithSessionId].filter(
+      (id): id is string => typeof id === "string" && id.length > 0
+    );
+    if (!activeSessionIds.includes(resolvedSessionId)) {
+      return;
+    }
+
+    const ptySessionId = this.transportCoordinator.terminateCurrentPtySession(
+      `headless resume of AI session ${resolvedSessionId}`
+    );
+    this.executionRunner.clearInteractiveContext();
+
+    if (ptySessionId) {
+      this.suppressPtyExitSessionId = ptySessionId;
+      Log.info(
+        `🛑 Retired interactive PTY ${ptySessionId.slice(0, 8)} before headless resume of ${resolvedSessionId}`
+      );
+    }
   }
 
   private async persistExecutionOutcome(
