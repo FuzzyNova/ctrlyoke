@@ -248,15 +248,8 @@ async function filterGitIgnoredFiles(
         const batch = repoFiles.slice(i, i + BATCH_SIZE);
         const filePaths = batch.map((uri) => uri.fsPath);
 
-        Log.debug(
-          `[Completions] Checking batch ${i}-${Math.min(i + BATCH_SIZE, repoFiles.length)} (${batch.length} files)`
-        );
-
         try {
           const ignoredSet = await repo.checkIgnore(filePaths);
-          Log.debug(
-            `[Completions] checkIgnore returned ${ignoredSet.size} ignored files`
-          );
 
           // Keep only non-ignored files
           const kept = batch.filter((uri) => !ignoredSet.has(uri.fsPath));

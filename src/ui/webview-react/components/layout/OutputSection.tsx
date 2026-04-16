@@ -40,6 +40,7 @@ import {
   SESSION_KINDS,
   SHELL_KINDS,
   STEP_TYPES,
+  TERMINAL_SESSION_STATUS,
   type HarnessId,
 } from "../../types/messages";
 import { CLI_EVENT_TYPES } from "../../types/cliEvents";
@@ -1130,9 +1131,13 @@ export const OutputSection: React.FC = () => {
                 {!isTerminalCompact && <span>New Terminal</span>}
               </button>
 
-              {/* Trash button — only in compact mode for deletable (shell) sessions */}
+              {/* Trash button — compact mode: shell sessions always, AI CLI sessions when ended */}
               {isTerminalCompact &&
-                activeTerminalSession?.kind === SESSION_KINDS.SHELL && (
+                activeTerminalSession &&
+                (activeTerminalSession.kind === SESSION_KINDS.SHELL ||
+                  (activeTerminalSession.kind === SESSION_KINDS.AI_CLI &&
+                    activeTerminalSession.status !==
+                      TERMINAL_SESSION_STATUS.RUNNING)) && (
                   <button
                     className="icon-btn py-0 px-1"
                     title="Close terminal"
@@ -1140,11 +1145,21 @@ export const OutputSection: React.FC = () => {
                     onClick={() => {
                       if (!activeTerminalSession) return;
                       const vscode = getVsCodeApi();
-                      vscode?.postMessage({
-                        type: MESSAGE_TYPES.TERMINAL_CLOSE_SHELL,
-                        workflowId: terminalWorkflowId,
-                        sessionId: activeTerminalSession.id,
-                      });
+                      if (
+                        activeTerminalSession.kind === SESSION_KINDS.SHELL
+                      ) {
+                        vscode?.postMessage({
+                          type: MESSAGE_TYPES.TERMINAL_CLOSE_SHELL,
+                          workflowId: terminalWorkflowId,
+                          sessionId: activeTerminalSession.id,
+                        });
+                      } else {
+                        vscode?.postMessage({
+                          type: MESSAGE_TYPES.TERMINAL_CLOSE_AI_CLI,
+                          workflowId: terminalWorkflowId,
+                          sessionId: activeTerminalSession.id,
+                        });
+                      }
                       terminalRegistry.clearSession(
                         terminalWorkflowId,
                         activeTerminalSession.id

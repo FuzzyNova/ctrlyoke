@@ -95,11 +95,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
     removeSession(workflowId, session.id);
   }
 
-  function handleRestartShell(session: TerminalSession) {
-    sendMessage(MESSAGE_TYPES.TERMINAL_RESTART_SHELL, {
+  function handleCloseAiCliSession(session: TerminalSession) {
+    sendMessage(MESSAGE_TYPES.TERMINAL_CLOSE_AI_CLI, {
       workflowId,
       sessionId: session.id,
     });
+    terminalRegistry.clearSession(workflowId, session.id);
+    removeSession(workflowId, session.id);
   }
 
   return (
@@ -173,6 +175,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
                     session={session}
                     isActive={session.id === activeSessionId}
                     onClick={() => setActiveSession(workflowId, session.id)}
+                    onClose={() => handleCloseAiCliSession(session)}
                   />
                 )
               )}
@@ -198,7 +201,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
                     session={session}
                     isActive={session.id === activeSessionId}
                     onClick={() => setActiveSession(workflowId, session.id)}
-                    onRestart={() => handleRestartShell(session)}
                     onClose={() => handleCloseShell(session)}
                   />
                 )
@@ -221,31 +223,53 @@ interface RailEntryProps {
   session: TerminalSession;
   isActive: boolean;
   onClick: () => void;
+  onClose?: () => void;
 }
 
 const RailEntry: React.FC<RailEntryProps> = ({
   session,
   isActive,
   onClick,
+  onClose,
 }) => {
   const isRunning = session.status === TERMINAL_SESSION_STATUS.RUNNING;
 
   return (
-    <button
-      className={`flex items-center gap-1.5 px-2 py-1.5 text-left w-full transition-colors text-[11px] flex-shrink-0
+    <div
+      role="tab"
+      tabIndex={0}
+      className={`flex items-center gap-1 px-2 py-1.5 text-[11px] flex-shrink-0 cursor-pointer transition-colors
         ${isActive ? "bg-list-active-bg text-foreground" : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"}
         ${!isRunning ? "opacity-60" : ""}`}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       title={session.stepName}
     >
       <SessionIcon session={session} />
       <span className="truncate flex-1">{session.stepName}</span>
-    </button>
+      {!isRunning && onClose && (
+        <button
+          className="icon-btn py-0 px-0.5 opacity-70 hover:opacity-100 flex-shrink-0"
+          title="Close terminal"
+          aria-label="Close terminal"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+        >
+          <i className="codicon codicon-trash text-[11px]" />
+        </button>
+      )}
+    </div>
   );
 };
 
 interface ShellRailEntryProps extends RailEntryProps {
-  onRestart: () => void;
   onClose: () => void;
 }
 
@@ -253,7 +277,6 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
   session,
   isActive,
   onClick,
-  onRestart,
   onClose,
 }) => {
   const isEnded = session.status !== TERMINAL_SESSION_STATUS.RUNNING;
@@ -276,19 +299,6 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
     >
       <SessionIcon session={session} />
       <span className="truncate flex-1">{session.stepName}</span>
-      {isEnded && (
-        <button
-          className="icon-btn py-0 px-0.5 opacity-70 hover:opacity-100 flex-shrink-0"
-          title="Restart"
-          aria-label="Restart"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRestart();
-          }}
-        >
-          <i className="codicon codicon-refresh text-[11px]" />
-        </button>
-      )}
       <button
         className="icon-btn py-0 px-0.5 opacity-70 hover:opacity-100 flex-shrink-0"
         title="Close terminal"

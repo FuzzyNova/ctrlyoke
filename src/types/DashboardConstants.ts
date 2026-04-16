@@ -225,6 +225,7 @@ export const MESSAGE_TYPES = {
   TERMINAL_SPAWN_SHELL: "terminalSpawnShell", // webview → extension: { workflowId, cwd }
   TERMINAL_RESTART_SHELL: "terminalRestartShell", // webview → extension: { workflowId, sessionId }
   TERMINAL_CLOSE_SHELL: "terminalCloseShell", // webview → extension: { workflowId, sessionId }
+  TERMINAL_CLOSE_AI_CLI: "terminalCloseAiCli", // webview → extension: { workflowId, sessionId } — kills the still-running PTY when user dismisses a completed AI session
   TERMINAL_CONTROLLER_CHANGED: "terminalControllerChanged", // broadcast: { workflowId, sessionId, controllerClientId: string | undefined }
   TERMINAL_CLAIM_CONTROL: "terminalClaimControl", // webview → extension: { workflowId, sessionId }
   TERMINAL_SIZE_CHANGED: "terminalSizeChanged", // extension → all: { workflowId, sessionId, cols, rows } — controller's PTY dimensions for viewer sync

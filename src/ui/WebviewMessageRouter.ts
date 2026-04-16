@@ -1056,6 +1056,21 @@ export class WebviewMessageRouter {
       }
     });
 
+    table.set(MESSAGE_TYPES.TERMINAL_CLOSE_AI_CLI, async (msg) => {
+      const ptyManager = getPtyProcessManager();
+      if (!ptyManager || !msg.sessionId) return;
+      const sessionId = msg.sessionId as string;
+      const session = ptyManager.getSession(sessionId);
+      if (session) {
+        // Send Ctrl+C twice so the TUI can shut down cleanly before we kill.
+        // Without this, AI CLIs warn about improper shutdown or block on next launch.
+        session.pty.write("\x03");
+        session.pty.write("\x03");
+        await new Promise<void>((resolve) => setTimeout(resolve, 500));
+      }
+      ptyManager.killSession(sessionId);
+    });
+
     table.set(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, async (msg) => {
       const ptyManager = getPtyProcessManager();
       if (!ptyManager || !msg.sessionId || !msg.workflowId) return;
