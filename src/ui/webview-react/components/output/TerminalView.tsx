@@ -61,6 +61,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
   const setTerminalRailCollapsed = useUiStore(
     (s) => s.setTerminalRailCollapsed
   );
+  const setActiveOutputTab = useUiStore((s) => s.setActiveOutputTab);
   const setTerminalRailSizePx = useUiStore((s) => s.setTerminalRailSizePx);
 
   const [railCollapsed, setRailCollapsed] = useState(terminalRailCollapsed);
@@ -109,6 +110,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
     });
     terminalRegistry.clearSession(workflowId, session.id);
     removeSession(workflowId, session.id);
+    // If this was the last session, switch back to output tab immediately
+    const remaining =
+      useTerminalStore.getState().sessions[workflowId] ?? [];
+    if (remaining.length === 0) {
+      setActiveOutputTab(workflowId, "output");
+    }
   }
 
   return (

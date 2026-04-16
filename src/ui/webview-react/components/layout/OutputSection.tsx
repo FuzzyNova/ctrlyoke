@@ -1168,6 +1168,14 @@ export const OutputSection: React.FC = () => {
                           terminalWorkflowId,
                           activeTerminalSession.id
                         );
+                      // If this was the last session, switch back to output tab
+                      const remaining =
+                        useTerminalStore.getState().sessions[
+                          terminalWorkflowId
+                        ] ?? [];
+                      if (remaining.length === 0) {
+                        setActiveOutputTab(terminalWorkflowId, "output");
+                      }
                     }}
                   >
                     <i className="codicon codicon-trash text-[12px]" />

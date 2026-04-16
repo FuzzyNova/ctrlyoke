@@ -31,8 +31,12 @@ export const StartupOverlay: React.FC = () => {
 
   return (
     <div
-      className="absolute inset-0 z-[9999] bg-editor-bg/90 flex items-center justify-center"
-      style={{ pointerEvents: "all" }}
+      className="absolute inset-0 z-[9999] flex items-center justify-center"
+      style={{
+        pointerEvents: "all",
+        backgroundColor:
+          "color-mix(in srgb, var(--vscode-editor-background) 90%, transparent)",
+      }}
       aria-live="polite"
       aria-label="Loading FlightPath…"
     >
