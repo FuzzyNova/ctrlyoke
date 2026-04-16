@@ -550,7 +550,9 @@ function createThemeExtension() {
           "var(--vscode-editor-selectionBackground, rgba(57, 148, 188, 0.55)) !important",
       },
       ".cm-activeLine": {
-        backgroundColor: "var(--vscode-editor-lineHighlightBackground)",
+        outline:
+          "1px solid var(--vscode-editor-lineHighlightBorder, rgba(255, 255, 255, 0.08))",
+        outlineOffset: "-1px",
       },
       ".cm-gutters": {
         backgroundColor: "var(--vscode-editorGutter-background)",
