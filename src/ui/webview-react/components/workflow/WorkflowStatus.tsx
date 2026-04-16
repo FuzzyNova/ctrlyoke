@@ -46,6 +46,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const {
     loadedWorkflows,
     activeWorkflowId,
+    activeWorkflowWorkingFilePath,
     setActiveWorkflowWorkingFilePath,
   } = useUiStore();
   const { globalSettings } = useSettingsStore();
@@ -65,8 +66,26 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const currentWorkflowHasActiveTerminal =
     workflowHasActiveTerminal(activeWorkflowId);
 
+  // Accumulates filePath/workingFilePath → workflowId for every workflow that has
+  // ever been in loadedWorkflows this session. Used by recentWorkflowHasActiveTerminal
+  // to find terminal sessions for completed workflows (which are removed from
+  // loadedWorkflows on completion but may still have active shell terminals).
+  const seenWorkflowIdsRef = useRef<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    for (const workflow of loadedWorkflows) {
+      if (workflow.filePath) {
+        seenWorkflowIdsRef.current.set(workflow.filePath, workflow.id);
+      }
+      if (workflow.workingFilePath) {
+        seenWorkflowIdsRef.current.set(workflow.workingFilePath, workflow.id);
+      }
+    }
+  }, [loadedWorkflows]);
+
   const recentWorkflowHasActiveTerminal = useCallback(
     (workflow: RecentWorkflow) => {
+      // Case 1: workflow is still in loadedWorkflows (RUNNING/PAUSED)
       const loadedWorkflow = loadedWorkflows.find(
         (w) =>
           w.filePath === workflow.filePath ||
@@ -76,13 +95,33 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         return workflowHasActiveTerminal(loadedWorkflow.id);
       }
 
-      if (workflow.filePath === fileName) {
+      // Case 2: workflow completed/stopped and was previously in loadedWorkflows.
+      // Its workflowId was recorded in seenWorkflowIdsRef while active — use it
+      // to check for still-running terminal sessions (e.g. an open shell).
+      const knownWorkflowId = seenWorkflowIdsRef.current.get(workflow.filePath);
+      if (knownWorkflowId) {
+        return workflowHasActiveTerminal(knownWorkflowId);
+      }
+
+      // Case 3: workflow is the currently active workflow (retired/completed on load,
+      // so it never entered loadedWorkflows). Match by full working file path —
+      // fileName from workflowStore is the basename only and won't match.
+      if (
+        workflow.filePath === activeWorkflowWorkingFilePath ||
+        workflow.filePath === fileName
+      ) {
         return workflowHasActiveTerminal(activeWorkflowId);
       }
 
       return false;
     },
-    [activeWorkflowId, fileName, loadedWorkflows, workflowHasActiveTerminal]
+    [
+      activeWorkflowId,
+      activeWorkflowWorkingFilePath,
+      fileName,
+      loadedWorkflows,
+      workflowHasActiveTerminal,
+    ]
   );
 
   // Local state
