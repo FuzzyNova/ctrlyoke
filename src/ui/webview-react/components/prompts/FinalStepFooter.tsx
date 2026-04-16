@@ -42,6 +42,8 @@ interface FinalStepFooterProps {
   latestOutput?: CliOutput | null;
   /** Prompt-level property overrides to display as compact chips */
   overrides?: PromptOverride[];
+  /** Right-click context menu handler */
+  onContextMenu?: (x: number, y: number) => void;
 }
 
 const truncate = (text: string, maxLength: number = 72): string => {
@@ -69,6 +71,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
   modelIsDefault,
   latestOutput,
   overrides,
+  onContextMenu,
 }) => {
   const hasFinalStep = !!finalStep;
   const effectiveStatus: StepStatus = hasFinalStep
@@ -97,6 +100,15 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
               onSelect();
             }
           }}
+          onContextMenu={
+            onContextMenu
+              ? (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onContextMenu(e.clientX, e.clientY);
+                }
+              : undefined
+          }
         >
           {/* Prompt name / text — pl-5 matches PromptStepDetails indent */}
           <div className="text-[11px] leading-relaxed">
@@ -147,6 +159,15 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
             onSelect();
           }
         }}
+        onContextMenu={
+          onContextMenu
+            ? (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onContextMenu(e.clientX, e.clientY);
+              }
+            : undefined
+        }
       >
         <StatusIcon status={effectiveStatus} disabled={!hasFinalStep} />
         <span className="text-[11px] font-semibold uppercase tracking-wide">

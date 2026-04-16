@@ -139,6 +139,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Request recent workflows once on mount so the count badge is visible immediately
+  useEffect(() => {
+    vscode.postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Handle message from extension with recent workflows
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {

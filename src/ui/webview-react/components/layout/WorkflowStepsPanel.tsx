@@ -6,7 +6,12 @@ import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
-import { usePromptStatus, useStepClickHandler } from "@hooks/index";
+import {
+  usePromptStatus,
+  useStepClickHandler,
+  useStepContextMenu,
+  useFinalStepContextMenu,
+} from "@hooks/index";
 import { HARNESS_INFO } from "../../types/messages";
 import {
   WorkflowStepItem,
@@ -43,11 +48,6 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { BoundaryBar } from "../prompts/BoundaryBar";
-import { ResetConfirmModal } from "../shared/ResetConfirmModal";
-import {
-  StepContextMenu,
-  type StepContextMenuState,
-} from "../shared/StepContextMenu";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 
 /** Local type guard for script steps */
@@ -168,8 +168,18 @@ export const WorkflowStepsPanel: React.FC<{
     useEditorStore();
   const { workflowProperties, globalSettings } = useSettingsStore();
   const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
-  const [setPositionIndex, setSetPositionIndex] = useState<number | null>(null);
-  const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(null);
+  // Determine if workflow is running
+  const isRunning = executionState === EXECUTION_STATES.RUNNING;
+  const canChangeStartPosition =
+    !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
+  const { openContextMenu, handleSetStartPosition, contextMenuPortal, setPositionModal } =
+    useStepContextMenu({
+      isCLIManaged,
+      canChangeStartPosition,
+      confirmResetOperations: globalSettings.confirmResetOperations,
+      totalSteps: steps.length,
+      currentStep,
+    });
 
   // Compute the harness/model to display for a step.
   //
@@ -360,6 +370,18 @@ export const WorkflowStepsPanel: React.FC<{
     sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, { finalStep: null });
   }, [isCLIManaged, finalStep]);
 
+  const finalStepIsReadOnly =
+    isCLIManaged ||
+    (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
+      finalStepStatus === STEP_STATUS.RUNNING);
+
+  const { openFinalStepContextMenu, finalStepContextMenuPortal } =
+    useFinalStepContextMenu({
+      hasFinalStep: !!finalStep,
+      isReadOnly: finalStepIsReadOnly,
+      onDisable: handleDisableFinalStep,
+    });
+
   // Compute resolved harness/model for the final step using the same
   // three-tier logic as regular steps, so defaults are shown correctly.
   const getFinalStepHarnessModel = () => {
@@ -410,11 +432,6 @@ export const WorkflowStepsPanel: React.FC<{
     ? getStepOverrides(finalStep)
     : undefined;
 
-  // Determine if workflow is running
-  const isRunning = executionState === EXECUTION_STATES.RUNNING;
-  const canChangeStartPosition =
-    !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
-
   // Get latest output for a step (history-aware)
   const getLatestOutput = (index: number) => {
     const cliEntries =
@@ -456,57 +473,6 @@ export const WorkflowStepsPanel: React.FC<{
     return details;
   };
 
-  const handleSetPositionClick = useCallback(
-    (index: number) => {
-      if (!globalSettings.confirmResetOperations) {
-        sendMessage(MESSAGE_TYPES.SET_START_POSITION, { toIndex: index });
-      } else {
-        setSetPositionIndex(index);
-      }
-    },
-    [globalSettings.confirmResetOperations]
-  );
-
-  const buildStepContextMenuItems = useCallback(
-    (
-      absoluteIndex: number,
-      isCurrentStep: boolean,
-      direction: "rewind" | "forward",
-      stepStatus: StepStatus
-    ) => [
-      {
-        label: "Set start position",
-        icon:
-          direction === "rewind"
-            ? "codicon-debug-reverse-continue"
-            : "codicon-debug-step-over",
-        disabled: !canChangeStartPosition || isCurrentStep,
-        disabledTitle: isCurrentStep
-          ? "Already the current start position"
-          : "Cannot change start position while workflow is running",
-        onClick: () => handleSetPositionClick(absoluteIndex),
-      },
-      {
-        label: "Delete",
-        icon: "codicon-trash",
-        disabled: isCLIManaged || stepStatus === STEP_STATUS.RUNNING,
-        disabledTitle: isCLIManaged
-          ? "Read-only — workflow is running via FlightPath CLI"
-          : "Cannot delete a prompt that is currently running",
-        onClick: () =>
-          sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { index: absoluteIndex }),
-      },
-    ],
-    [canChangeStartPosition, handleSetPositionClick, isCLIManaged]
-  );
-
-  const handleSetPositionConfirm = useCallback(() => {
-    if (setPositionIndex === null) return;
-    sendMessage(MESSAGE_TYPES.SET_START_POSITION, {
-      toIndex: setPositionIndex,
-    });
-    setSetPositionIndex(null);
-  }, [setPositionIndex]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -718,12 +684,14 @@ export const WorkflowStepsPanel: React.FC<{
                         overrides={overrides}
                         canSetStartPosition={canChangeStartPosition}
                         startPositionDirection="rewind"
-                        onSetStartPosition={() => handleSetPositionClick(index)}
+                        onSetStartPosition={() => handleSetStartPosition(index)}
                         onContextMenu={(x, y) =>
-                          setContextMenu({
-                            x,
-                            y,
-                            items: buildStepContextMenuItems(index, false, "rewind", status),
+                          openContextMenu(x, y, {
+                            setPositionTarget: index,
+                            deleteIndex: index,
+                            isCurrentStep: false,
+                            direction: "rewind",
+                            status,
                           })
                         }
                         hideBorderBottom={
@@ -805,19 +773,16 @@ export const WorkflowStepsPanel: React.FC<{
                       startPositionDirection="forward"
                       onSetStartPosition={
                         !isCurrentStep
-                          ? () => handleSetPositionClick(setPositionTarget)
+                          ? () => handleSetStartPosition(setPositionTarget)
                           : undefined
                       }
                       onContextMenu={(x, y) =>
-                        setContextMenu({
-                          x,
-                          y,
-                          items: buildStepContextMenuItems(
-                            setPositionTarget,
-                            isCurrentStep,
-                            "forward",
-                            status
-                          ),
+                        openContextMenu(x, y, {
+                          setPositionTarget,
+                          deleteIndex: index,
+                          isCurrentStep,
+                          direction: "forward",
+                          status,
                         })
                       }
                       isScript={isScriptStep(step)}
@@ -837,46 +802,18 @@ export const WorkflowStepsPanel: React.FC<{
         phase={finalStepPhase}
         isExpanded={finalStepFooterExpanded}
         isSelected={selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP}
-        isReadOnly={
-          isCLIManaged ||
-          (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
-            finalStepStatus === STEP_STATUS.RUNNING)
-        }
+        isReadOnly={finalStepIsReadOnly}
         onSelect={handleFinalStepSelect}
         onToggleExpanded={toggleFinalStepFooterExpanded}
         onDisable={handleDisableFinalStep}
+        onContextMenu={openFinalStepContextMenu}
         {...getFinalStepHarnessModel()}
         latestOutput={finalStepLatestOutput}
         overrides={finalStepOverrides}
       />
-      {contextMenu && (
-        <StepContextMenu
-          {...contextMenu}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
-      {setPositionIndex !== null &&
-        (() => {
-          const isRewind = setPositionIndex < currentStep;
-          const stepN = setPositionIndex + 1;
-          const total = steps.length;
-          const detail = isRewind
-            ? stepN > 1
-              ? `Steps ${stepN}–${total} will reset to pending. Steps 1–${stepN - 1} remain completed.`
-              : `All ${total} steps will reset to pending.`
-            : `Steps ${currentStep + 1}–${stepN - 1} will be marked as skipped. Steps ${stepN}–${total} remain pending.`;
-          return (
-            <ResetConfirmModal
-              isOpen={true}
-              title="Set Start Position"
-              message={`Start workflow from step ${stepN}?`}
-              detail={detail}
-              confirmLabel="Set Position"
-              onConfirm={handleSetPositionConfirm}
-              onCancel={() => setSetPositionIndex(null)}
-            />
-          );
-        })()}
+      {contextMenuPortal}
+      {setPositionModal}
+      {finalStepContextMenuPortal}
     </div>
   );
 };

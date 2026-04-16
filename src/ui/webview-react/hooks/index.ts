@@ -15,3 +15,5 @@ export { useDrawerTabOverrides } from "./useDrawerTabOverrides";
 export { usePromptStatus } from "./usePromptStatus";
 export { useContextPct } from "./useContextPct";
 export { useStepClickHandler } from "./useStepClickHandler";
+export { useStepContextMenu } from "./useStepContextMenu";
+export { useFinalStepContextMenu } from "./useFinalStepContextMenu";

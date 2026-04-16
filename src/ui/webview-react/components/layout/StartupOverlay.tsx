@@ -35,7 +35,7 @@ export const StartupOverlay: React.FC = () => {
       style={{
         pointerEvents: "all",
         backgroundColor:
-          "color-mix(in srgb, var(--vscode-editor-background) 90%, transparent)",
+          "color-mix(in srgb, var(--vscode-editor-background) 70%, transparent)",
       }}
       aria-live="polite"
       aria-label="Loading FlightPath…"

@@ -12,17 +12,16 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useEditorStore } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { sendMessage } from "@hooks/useMessageHandler";
 import {
   usePromptStatus,
   useContextPct,
   useStepClickHandler,
+  useStepContextMenu,
+  useFinalStepContextMenu,
 } from "@hooks/index";
 import { StatusIcon } from "./StatusIcon";
-import {
-  StepContextMenu,
-  type StepContextMenuState,
-} from "../shared/StepContextMenu";
 import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
@@ -214,6 +213,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   const { loadedWorkflows, activeWorkflowId, setFinalStepFooterExpanded } =
     useUiStore();
   const { selectFinalStep, selectPrompt } = useEditorStore();
+  const { globalSettings } = useSettingsStore();
 
   const isCLIManaged =
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
@@ -227,6 +227,15 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   const getPromptStatus = usePromptStatus();
   const getContextPct = useContextPct();
   const handleStepClick = useStepClickHandler();
+
+  const { openContextMenu, contextMenuPortal, setPositionModal } =
+    useStepContextMenu({
+      isCLIManaged,
+      canChangeStartPosition,
+      confirmResetOperations: globalSettings.confirmResetOperations,
+      totalSteps: prompts.length,
+      currentStep,
+    });
 
   // Final step derived state
   const hasFinalStep = !!finalStep;
@@ -259,10 +268,12 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
     sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, { finalStep: null });
   }, [isCLIManaged, finalStep]);
 
-  // Single shared context menu state — only one menu is ever open at a time.
-  // Lifting state here (rather than per-chip) ensures right-clicking a second
-  // chip replaces the first menu rather than stacking a second one.
-  const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(null);
+  const { openFinalStepContextMenu, finalStepContextMenuPortal } =
+    useFinalStepContextMenu({
+      hasFinalStep: !!finalStep,
+      isReadOnly: finalStepIsReadOnly,
+      onDisable: handleDisableFinalStep,
+    });
 
   const [sortableIds, setSortableIds] = useState<string[]>(() =>
     prompts.slice(currentStep).map((_, i) => `chip-pending-${currentStep + i}`)
@@ -345,22 +356,12 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                   canReorder={false}
                   onChipClick={() => handleStepClick(i)}
                   onOpenContextMenu={(x, y) =>
-                    setContextMenu({
-                      x,
-                      y,
-                      items: [
-                        {
-                          label: "Set start position",
-                          icon: "codicon-debug-reverse-continue",
-                          disabled: !canChangeStartPosition,
-                          disabledTitle:
-                            "Cannot change start position while workflow is running",
-                          onClick: () =>
-                            sendMessage(MESSAGE_TYPES.SET_START_POSITION, {
-                              toIndex: i,
-                            }),
-                        },
-                      ],
+                    openContextMenu(x, y, {
+                      setPositionTarget: i,
+                      deleteIndex: i,
+                      isCurrentStep: false,
+                      direction: "rewind",
+                      status,
                     })
                   }
                 />
@@ -396,24 +397,12 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                       canReorder={canReorder && !isCurrentStep}
                       onChipClick={() => handleStepClick(index)}
                       onOpenContextMenu={(x, y) =>
-                        setContextMenu({
-                          x,
-                          y,
-                          items: [
-                            {
-                              label: "Set start position",
-                              icon: "codicon-debug-step-over",
-                              disabled:
-                                !canChangeStartPosition || isCurrentStep,
-                              disabledTitle: isCurrentStep
-                                ? "Already the current start position"
-                                : "Cannot change start position while workflow is running",
-                              onClick: () =>
-                                sendMessage(MESSAGE_TYPES.SET_START_POSITION, {
-                                  toIndex: currentStep + visualIdx,
-                                }),
-                            },
-                          ],
+                        openContextMenu(x, y, {
+                          setPositionTarget: currentStep + visualIdx,
+                          deleteIndex: index,
+                          isCurrentStep,
+                          direction: "forward",
+                          status,
                         })
                       }
                     />
@@ -430,32 +419,12 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
         status={finalStepEffectiveStatus}
         hasFinalStep={hasFinalStep}
         onChipClick={handleFinalStepClick}
-        onOpenContextMenu={(x, y) =>
-          setContextMenu({
-            x,
-            y,
-            items: [
-              {
-                label: "Disable final step",
-                icon: "codicon-trash",
-                disabled: !hasFinalStep || finalStepIsReadOnly,
-                disabledTitle: !hasFinalStep
-                  ? "No final step configured"
-                  : "Cannot disable while final step is running",
-                onClick: handleDisableFinalStep,
-              },
-            ],
-          })
-        }
+        onOpenContextMenu={openFinalStepContextMenu}
       />
 
-      {/* Single shared context menu — only one is ever rendered */}
-      {contextMenu && (
-        <StepContextMenu
-          {...contextMenu}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
+      {contextMenuPortal}
+      {setPositionModal}
+      {finalStepContextMenuPortal}
     </div>
   );
 };

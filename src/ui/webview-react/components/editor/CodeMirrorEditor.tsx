@@ -542,10 +542,12 @@ function createThemeExtension() {
         borderLeftColor: "var(--vscode-editorCursor-foreground)",
       },
       ".cm-selectionBackground": {
-        backgroundColor: "var(--vscode-editor-selectionBackground) !important",
+        backgroundColor:
+          "var(--vscode-editor-selectionBackground, rgba(57, 148, 188, 0.55)) !important",
       },
       "&.cm-focused .cm-selectionBackground": {
-        backgroundColor: "var(--vscode-editor-selectionBackground) !important",
+        backgroundColor:
+          "var(--vscode-editor-selectionBackground, rgba(57, 148, 188, 0.55)) !important",
       },
       ".cm-activeLine": {
         backgroundColor: "var(--vscode-editor-lineHighlightBackground)",
