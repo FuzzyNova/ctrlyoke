@@ -1441,6 +1441,7 @@ export const OutputSection: React.FC = () => {
                       <CliOutput
                         output={cliData}
                         stepIndex={item.target.index}
+                        isFinalStep={isFinalStepOutput}
                         stepLabel={
                           isFinalStepOutput
                             ? `Final Step Loop ${item.target.index + 1}`

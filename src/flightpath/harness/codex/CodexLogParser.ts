@@ -141,10 +141,13 @@ export class CodexLogParser extends BaseLogParser {
    * Tool call tracking map
    *
    * Maps call_id to tool metadata for correlating INITIATED and COMPLETED events.
-   * Key: call_id, Value: { type: CLI_EVENT_TYPES, toolName: string }
+   * Key: call_id, Value: tool metadata plus the initiated event so completion
+   * events can preserve path and diff data that Codex omits from tool output.
    */
-  private toolCallMap: Map<string, { type: string; toolName: string }> =
-    new Map();
+  private toolCallMap: Map<
+    string,
+    { type: string; toolName: string; initiatedEvent?: CliEvent }
+  > = new Map();
 
   /**
    * Streaming-path tool call tracking map
@@ -154,7 +157,7 @@ export class CodexLogParser extends BaseLogParser {
    */
   private pendingStreamingCalls: Map<
     string,
-    { type: string; toolName: string }
+    { type: string; toolName: string; initiatedEvent?: CliEvent }
   > = new Map();
 
   /**
@@ -306,7 +309,11 @@ export class CodexLogParser extends BaseLogParser {
                 callId &&
                 CodexToolBuilder.needsCompletionTracking(event.type)
               ) {
-                this.toolCallMap.set(callId, { type: event.type, toolName });
+                this.toolCallMap.set(callId, {
+                  type: event.type,
+                  toolName,
+                  initiatedEvent: event,
+                });
               }
               outputEvents.push(event);
             }
@@ -376,6 +383,7 @@ export class CodexLogParser extends BaseLogParser {
           this.toolCallMap.set(callId, {
             type: event2.type,
             toolName: functionName,
+            initiatedEvent: event2,
           });
         }
         outputEvents.push(event2);
@@ -431,7 +439,11 @@ export class CodexLogParser extends BaseLogParser {
           timestamp
         );
         if (callId && CodexToolBuilder.needsCompletionTracking(event3.type)) {
-          this.toolCallMap.set(callId, { type: event3.type, toolName });
+          this.toolCallMap.set(callId, {
+            type: event3.type,
+            toolName,
+            initiatedEvent: event3,
+          });
         }
         outputEvents.push(event3);
       }
@@ -469,7 +481,8 @@ export class CodexLogParser extends BaseLogParser {
               success,
               outputText,
               callId,
-              timestamp
+              timestamp,
+              toolInfo.initiatedEvent
             )
           );
           this.toolCallMap.delete(callId!);
@@ -954,6 +967,7 @@ export class CodexLogParser extends BaseLogParser {
               this.pendingStreamingCalls.set(callId, {
                 type: toolEvent.type,
                 toolName,
+                initiatedEvent: toolEvent,
               });
             }
             results.push(toolEvent);
@@ -1009,6 +1023,7 @@ export class CodexLogParser extends BaseLogParser {
         this.pendingStreamingCalls.set(callId, {
           type: toolEvent.type,
           toolName: functionName,
+          initiatedEvent: toolEvent,
         });
       }
       results.push(toolEvent);
@@ -1065,6 +1080,7 @@ export class CodexLogParser extends BaseLogParser {
         this.pendingStreamingCalls.set(callId, {
           type: toolEvent.type,
           toolName,
+          initiatedEvent: toolEvent,
         });
       }
       results.push(toolEvent);
@@ -1102,7 +1118,8 @@ export class CodexLogParser extends BaseLogParser {
             success,
             outputText,
             callId,
-            timestamp
+            timestamp,
+            toolInfo.initiatedEvent
           )
         );
         this.pendingStreamingCalls.delete(callId!);

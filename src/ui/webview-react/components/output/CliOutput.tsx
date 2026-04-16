@@ -479,6 +479,8 @@ interface CliOutputProps {
   output: CliOutputType;
   stepIndex: number;
   stepLabel?: string;
+  /** True when this output belongs to the final-step loop rather than a queue step. */
+  isFinalStep?: boolean;
   stepName?: string;
   attemptIndex: number;
   streamingChunk?: string;
@@ -521,6 +523,7 @@ export const CliOutput = memo<CliOutputProps>(
     output,
     stepIndex,
     stepLabel,
+    isFinalStep = false,
     stepName,
     attemptIndex,
     streamingChunk = "",
@@ -549,7 +552,6 @@ export const CliOutput = memo<CliOutputProps>(
     );
     const undoRecordsFromStore = useWorkflowStore((s) => s.undoRecords);
 
-    const isFinalStep = stepLabel !== undefined;
     const target: UndoExecutionTarget = useMemo(
       () =>
         isFinalStep

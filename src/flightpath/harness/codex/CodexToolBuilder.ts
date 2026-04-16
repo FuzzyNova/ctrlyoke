@@ -242,11 +242,13 @@ export class CodexToolBuilder {
     success: boolean,
     outputText: string,
     callId: string | undefined,
-    timestamp: number
+    timestamp: number,
+    initiatedEvent?: CliEvent
   ): CliEvent {
     const status = success
       ? OPERATION_STATUS.COMPLETED
       : OPERATION_STATUS.FAILED;
+    const initiatedData = initiatedEvent?.data;
 
     switch (toolInfo.type) {
       case CLI_EVENT_TYPES.BASH_COMMAND:
@@ -254,7 +256,8 @@ export class CodexToolBuilder {
           type: CLI_EVENT_TYPES.BASH_COMMAND,
           timestamp,
           data: {
-            command: "",
+            command:
+              (initiatedData as BashCommandData | undefined)?.command ?? "",
             exitCode: exitCode ?? 0,
             output: outputText,
             error: success ? undefined : outputText,
@@ -267,7 +270,7 @@ export class CodexToolBuilder {
           type: CLI_EVENT_TYPES.FILE_READ,
           timestamp,
           data: {
-            path: "",
+            path: (initiatedData as FileReadData | undefined)?.path ?? "",
             content: outputText,
             status,
             success,
@@ -279,8 +282,8 @@ export class CodexToolBuilder {
           type: CLI_EVENT_TYPES.FILE_WRITE,
           timestamp,
           data: {
-            path: "",
-            content: "",
+            path: (initiatedData as FileWriteData | undefined)?.path ?? "",
+            content: (initiatedData as FileWriteData | undefined)?.content ?? "",
             status,
             success,
           } as FileWriteData,
@@ -291,7 +294,13 @@ export class CodexToolBuilder {
           type: CLI_EVENT_TYPES.FILE_EDIT,
           timestamp,
           data: {
-            path: "",
+            path: (initiatedData as FileEditData | undefined)?.path ?? "",
+            oldContent: (initiatedData as FileEditData | undefined)
+              ?.oldContent,
+            newContent: (initiatedData as FileEditData | undefined)
+              ?.newContent,
+            structuredPatch: (initiatedData as FileEditData | undefined)
+              ?.structuredPatch,
             status,
             success,
           } as FileEditData,
@@ -302,7 +311,7 @@ export class CodexToolBuilder {
           type: CLI_EVENT_TYPES.FILE_DELETE,
           timestamp,
           data: {
-            path: "",
+            path: (initiatedData as FileDeleteData | undefined)?.path ?? "",
             status,
             success,
           } as FileDeleteData,
