@@ -24,6 +24,24 @@ import { CODEX_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
 // ============================================================================
 
 /**
+ * Token usage data extracted from a Codex session log file.
+ * Returned by CodexLogParser.extractTokenUsageFromLogFile() and consumed
+ * by CodexCliProvider.augmentParsedOutput() to supply accurate per-session
+ * context window data (headless mode only shows cumulative totals via stdout).
+ */
+export interface CodexLogTokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cachedInputTokens: number;
+  reasoningOutputTokens: number;
+  /** Tokens used in the last turn's context window (undefined if not reported) */
+  contextWindowUsedTokens?: number;
+  /** Model context window size */
+  contextWindowSize?: number;
+}
+
+/**
  * Session metadata (session_meta event)
  */
 interface CodexSessionMetaPayload {
@@ -1123,6 +1141,115 @@ export class CodexLogParser extends BaseLogParser {
    */
   formatStatistics(metadata: BaseCliEvent): string {
     return this.buildCommonStatisticsParts(metadata, 12).join(" | ");
+  }
+
+  /**
+   * Find the Codex session log file for the given session ID.
+   *
+   * Public entry point for external callers (e.g. CodexCliProvider.augmentParsedOutput)
+   * that need to locate the log without a start-time constraint. Delegates to the
+   * recursive search which scans the full `~/.codex/sessions/` tree.
+   *
+   * @param sessionId - Session ID (used as filename suffix: `rollout-*-<sessionId>.jsonl`)
+   * @returns Absolute path to log file, or null if not found
+   */
+  findLogFileBySessionId(sessionId: string): string | null {
+    const basePath = path.join(os.homedir(), ".codex", "sessions");
+    return this.findSessionFileRecursive(basePath, sessionId);
+  }
+
+  /**
+   * Extract token usage from a Codex session log file.
+   *
+   * Reads the complete log file and returns token stats from the most recent
+   * `event_msg:token_count` event. Intended for use in
+   * `CodexCliProvider.augmentParsedOutput()` to supply accurate per-session
+   * context window data when running in headless mode — the JSONL stdout only
+   * reports cumulative usage totals (see openai/codex#5276), whereas the log
+   * file contains per-turn `last_token_usage` which reflects the actual context
+   * window consumed by the current session.
+   *
+   * @param logPath - Absolute path to the Codex session log file
+   * @returns Structured token usage, or undefined if no token event found
+   */
+  static extractTokenUsageFromLogFile(
+    logPath: string
+  ): CodexLogTokenUsage | undefined {
+    try {
+      if (!fs.existsSync(logPath)) {
+        return undefined;
+      }
+
+      const content = fs.readFileSync(logPath, "utf-8");
+      const lines = content.split("\n");
+
+      let result: CodexLogTokenUsage | undefined;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          continue;
+        }
+
+        try {
+          const event = JSON.parse(trimmed) as CodexProviderEvent;
+          if (
+            event.type === "event_msg" &&
+            event.payload?.type === "token_count"
+          ) {
+            const info = event.payload.info;
+            if (!info) {
+              continue;
+            }
+
+            let inputTokens = 0;
+            let outputTokens = 0;
+            let cachedInputTokens = 0;
+            let reasoningOutputTokens = 0;
+            let contextWindowUsedTokens: number | undefined;
+
+            if (info.total_token_usage) {
+              const total = info.total_token_usage;
+              inputTokens = total.input_tokens || 0;
+              outputTokens = total.output_tokens || 0;
+              cachedInputTokens = total.cached_input_tokens || 0;
+              reasoningOutputTokens = total.reasoning_output_tokens || 0;
+            }
+
+            if (info.last_token_usage) {
+              // Codex reports cached tokens as a subset of input, so use
+              // total_tokens rather than adding cached input again.
+              const last = info.last_token_usage;
+              contextWindowUsedTokens =
+                typeof last.total_tokens === "number"
+                  ? last.total_tokens
+                  : (last.input_tokens || 0) + (last.output_tokens || 0);
+            }
+
+            // Keep processing — later events overwrite with cumulative totals
+            result = {
+              inputTokens,
+              outputTokens,
+              totalTokens: inputTokens + outputTokens,
+              cachedInputTokens,
+              reasoningOutputTokens,
+              contextWindowUsedTokens,
+              contextWindowSize:
+                info.model_context_window ?? CODEX_CLI_CONTEXT_WINDOW_SIZE,
+            };
+          }
+        } catch {
+          // Skip invalid JSON lines
+        }
+      }
+
+      return result;
+    } catch (error) {
+      Log.debug(
+        `[CodexLogParser] Failed to extract token usage from log: ${error}`
+      );
+      return undefined;
+    }
   }
 
   /**

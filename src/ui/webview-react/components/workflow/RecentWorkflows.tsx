@@ -13,6 +13,7 @@ interface RecentWorkflow {
 interface RecentWorkflowsProps {
   workflows: RecentWorkflow[];
   currentFilePath: string | null;
+  hasActiveTerminal?: (workflow: RecentWorkflow) => boolean;
   onSelect: (filePath: string) => void;
   onClearHistory: () => void;
   onRemove?: (filePath: string) => void;
@@ -32,6 +33,7 @@ interface RecentWorkflowsProps {
 export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
   workflows,
   currentFilePath,
+  hasActiveTerminal,
   onSelect,
   onClearHistory,
   onRemove,
@@ -63,6 +65,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
         ) : (
           workflows.map((workflow) => {
             const isCurrent = workflow.filePath === currentFilePath;
+            const showTerminalIcon = hasActiveTerminal?.(workflow) ?? false;
             const timeAgo = formatRelativeTimeVerbose(
               workflow.lastModifiedAt || workflow.startedAt
             );
@@ -91,6 +94,16 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                 <span className="workflow-menu-item-name flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
                   {workflow.workflowName}
                 </span>
+
+                {showTerminalIcon && (
+                  <span
+                    className="flex-shrink-0 w-4 flex items-center justify-center text-description-fg"
+                    title="Terminal session is still running"
+                    aria-label="Terminal session is still running"
+                  >
+                    <i className="codicon codicon-terminal" />
+                  </span>
+                )}
 
                 {/* Execution State Badge — fixed-width column so badges align across rows */}
                 <span className="flex-shrink-0 w-[76px] flex justify-center">

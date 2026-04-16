@@ -16,6 +16,7 @@ import { CodexResponseParser } from "./CodexResponseParser";
 import { CodexNotificationMonitor } from "./CodexNotificationMonitor";
 import { CodexToolPermissionMapper } from "./CodexToolPermissionMapper";
 import { CodexLogParser } from "./CodexLogParser";
+import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
@@ -353,6 +354,63 @@ export class CodexCliProvider implements ICliProvider {
         workflowUserHooks
       );
     });
+  }
+
+  /**
+   * Augment headless parsed output with accurate token usage from the session log.
+   *
+   * The Codex JSONL stdout (`turn.completed` usage) only reports cumulative totals
+   * across all sessions — it does not reflect context window usage for the current
+   * session alone (see openai/codex#5276). The session log (`event_msg:token_count`)
+   * contains per-turn `last_token_usage` that accurately represents what the model
+   * consumed in this session's context window.
+   *
+   * This method locates the session log by the session ID already extracted from
+   * stdout, reads the token data from it, and replaces the metadata.usage block
+   * with the more accurate log-sourced values.
+   */
+  async augmentParsedOutput(
+    output: UniversalCliOutput
+  ): Promise<UniversalCliOutput> {
+    const sessionId = output.metadata?.sessionId as string | undefined;
+    if (!sessionId) {
+      return output;
+    }
+
+    const logPath = this.logParser.findLogFileBySessionId(sessionId);
+    if (!logPath) {
+      Log.debug(
+        `[CodexCliProvider] No session log found for token augmentation (session: ${sessionId})`
+      );
+      return output;
+    }
+
+    const tokenUsage = CodexLogParser.extractTokenUsageFromLogFile(logPath);
+    if (!tokenUsage) {
+      return output;
+    }
+
+    Log.debug(
+      `[CodexCliProvider] Token usage from log: ` +
+        `${tokenUsage.inputTokens} in / ${tokenUsage.outputTokens} out, ` +
+        `context window used: ${tokenUsage.contextWindowUsedTokens ?? "unknown"}`
+    );
+
+    return {
+      ...output,
+      metadata: {
+        ...output.metadata,
+        usage: {
+          inputTokens: tokenUsage.inputTokens,
+          outputTokens: tokenUsage.outputTokens,
+          totalTokens: tokenUsage.totalTokens,
+          cachedInputTokens: tokenUsage.cachedInputTokens,
+          reasoningOutputTokens: tokenUsage.reasoningOutputTokens,
+          contextWindowUsedTokens: tokenUsage.contextWindowUsedTokens,
+          contextWindowSize: tokenUsage.contextWindowSize,
+        },
+      },
+    };
   }
 
   /**

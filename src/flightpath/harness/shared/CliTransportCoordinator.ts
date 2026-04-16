@@ -422,7 +422,20 @@ export class CliTransportCoordinator {
     return sessionId;
   }
 
-  closeTerminal(): void {}
+  closeTerminal(): void {
+    if (!this.currentPtySession) {
+      return;
+    }
+
+    const sessionId = this.currentPtySession.id;
+    const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
+    if (ptyManager) {
+      ptyManager.killSession(sessionId);
+    } else {
+      this.currentPtySession.pty.kill();
+    }
+    this.currentPtySession = undefined;
+  }
 
   async cancel(): Promise<boolean> {
     if (this.currentPtySession) {
@@ -443,11 +456,11 @@ export class CliTransportCoordinator {
 
   dispose(closeTerminalWhenPromptCompletes: boolean): void {
     if (closeTerminalWhenPromptCompletes) {
+      this.closeTerminal();
       this.deps.processManager.dispose();
     } else {
       this.deps.processManager.disposeProcess();
     }
-    this.currentPtySession = undefined;
   }
 
   private async spawnProcess(

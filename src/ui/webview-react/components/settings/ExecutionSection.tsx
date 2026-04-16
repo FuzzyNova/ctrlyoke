@@ -11,16 +11,18 @@ interface ToggleRowProps {
   description?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  disabled?: boolean;
 }
 
-function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
+function ToggleRow({ label, description, checked, onChange, disabled }: ToggleRowProps) {
   return (
-    <label className="flex items-start gap-3 py-2 cursor-pointer group">
+    <label className={`flex items-start gap-3 py-2 group ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 w-4 h-4 accent-focus-border cursor-pointer shrink-0"
+        disabled={disabled}
+        className={`mt-0.5 w-4 h-4 accent-focus-border shrink-0 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
       />
       <span className="flex flex-col">
         <span className="text-sm text-foreground">{label}</span>
@@ -62,12 +64,6 @@ export function ExecutionSection({ settings, onUpdate }: Props) {
           options={MODE_OPTIONS}
         />
       </div>
-      <ToggleRow
-        label="Inject mode (interactive)"
-        description="Keep the TUI alive between prompts — faster and avoids the Claude Code resume cache bug."
-        checked={exec.injectMode ?? false}
-        onChange={(v) => onUpdate("execution.injectMode", v, s)}
-      />
       <div>
         <label
           htmlFor="exec-max-prompt-timeout"
@@ -117,6 +113,17 @@ export function ExecutionSection({ settings, onUpdate }: Props) {
         description="Automatically close the terminal when a workflow completes."
         checked={exec.closeTerminalOnComplete}
         onChange={(v) => onUpdate("execution.closeTerminalOnComplete", v, s)}
+      />
+      <ToggleRow
+        label="Inject mode (interactive)"
+        description={
+          exec.closeTerminalOnComplete
+            ? "Unavailable — inject mode requires keeping the terminal open. Disable 'Close terminal on completion' to enable this."
+            : "Keep the TUI alive between prompts — faster and avoids the Claude Code resume cache bug."
+        }
+        checked={exec.injectMode ?? false}
+        onChange={(v) => onUpdate("execution.injectMode", v, s)}
+        disabled={exec.closeTerminalOnComplete}
       />
     </div>
   );

@@ -5,6 +5,7 @@ import type { WorkflowSummary } from "../../types/messages";
 interface RunningWorkflowItemProps {
   workflow: WorkflowSummary;
   isCurrent: boolean;
+  hasActiveTerminal: boolean;
   onClick: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -37,6 +38,7 @@ function formatElapsed(startedAt: number | undefined): string {
 export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   workflow,
   isCurrent,
+  hasActiveTerminal,
   onClick,
   onPause,
   onResume,
@@ -98,6 +100,16 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-sm">
         {workflow.workflowName}
       </span>
+
+      {hasActiveTerminal && (
+        <span
+          className="flex-shrink-0 w-4 flex items-center justify-center text-description-fg"
+          title="Terminal session is still running"
+          aria-label="Terminal session is still running"
+        >
+          <i className="codicon codicon-terminal" />
+        </span>
+      )}
 
       {/* Status badge — fixed-width column so "RUNNING"/"PAUSED" align across rows */}
       <span className="text-[11px] text-description-fg flex-shrink-0 uppercase font-semibold w-[52px] text-center">

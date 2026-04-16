@@ -2,10 +2,12 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useTerminalStore } from "../../store/terminalStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
+  TERMINAL_SESSION_STATUS,
   RUNNER_IDS,
 } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
@@ -47,10 +49,41 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     setActiveWorkflowWorkingFilePath,
   } = useUiStore();
   const { globalSettings } = useSettingsStore();
+  const terminalSessionsByWorkflow = useTerminalStore((s) => s.sessions);
 
   const isCLIManaged =
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
     RUNNER_IDS.CLI;
+  const workflowHasActiveTerminal = useCallback(
+    (workflowId: string | null | undefined) =>
+      !!workflowId &&
+      (terminalSessionsByWorkflow[workflowId] ?? []).some(
+        (session) => session.status === TERMINAL_SESSION_STATUS.RUNNING
+      ),
+    [terminalSessionsByWorkflow]
+  );
+  const currentWorkflowHasActiveTerminal =
+    workflowHasActiveTerminal(activeWorkflowId);
+
+  const recentWorkflowHasActiveTerminal = useCallback(
+    (workflow: RecentWorkflow) => {
+      const loadedWorkflow = loadedWorkflows.find(
+        (w) =>
+          w.filePath === workflow.filePath ||
+          w.workingFilePath === workflow.filePath
+      );
+      if (loadedWorkflow) {
+        return workflowHasActiveTerminal(loadedWorkflow.id);
+      }
+
+      if (workflow.filePath === fileName) {
+        return workflowHasActiveTerminal(activeWorkflowId);
+      }
+
+      return false;
+    },
+    [activeWorkflowId, fileName, loadedWorkflows, workflowHasActiveTerminal]
+  );
 
   // Local state
   const [isEditing, setIsEditing] = useState(false);
@@ -324,6 +357,16 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                 </span>
               )}
 
+              {currentWorkflowHasActiveTerminal && (
+                <span
+                  className="flex-shrink-0 w-4 flex items-center justify-center text-description-fg"
+                  title="Terminal session is still running"
+                  aria-label="Terminal session is still running"
+                >
+                  <i className="codicon codicon-terminal text-[13px]" />
+                </span>
+              )}
+
               {/* Execution State */}
               {executionState && executionState !== EXECUTION_STATES.IDLE && (
                 <span
@@ -410,6 +453,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                   key={workflow.id}
                   workflow={workflow}
                   isCurrent={workflow.id === activeWorkflowId}
+                  hasActiveTerminal={workflowHasActiveTerminal(workflow.id)}
                   onClick={() => handleSwitchWorkflow(workflow.id)}
                   onPause={() => handlePauseWorkflow(workflow.id)}
                   onResume={() => handleResumeWorkflow(workflow.id)}
@@ -431,6 +475,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                 )
             )}
             currentFilePath={fileName}
+            hasActiveTerminal={recentWorkflowHasActiveTerminal}
             onSelect={handleSelectWorkflow}
             onClearHistory={handleClearHistory}
             onRemove={handleRemoveWorkflow}

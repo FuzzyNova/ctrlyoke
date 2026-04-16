@@ -11,7 +11,13 @@ import { WorkflowStatus } from "@components/workflow/WorkflowStatus";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { MESSAGE_TYPES, EXECUTION_STATES } from "@/types/messages";
+import { useTerminalStore } from "@store/terminalStore";
+import {
+  MESSAGE_TYPES,
+  EXECUTION_STATES,
+  SESSION_KINDS,
+  TERMINAL_SESSION_STATUS,
+} from "@/types/messages";
 
 const postMessageSpy = vi.fn();
 
@@ -20,6 +26,7 @@ beforeEach(() => {
   useWorkflowStore.temporal.getState().clear();
   useUiStore.getState().resetUi();
   useSettingsStore.getState().resetSettings();
+  useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
   (
     window.vscodeApi as unknown as { postMessage: ReturnType<typeof vi.fn> }
   ).postMessage = postMessageSpy;
@@ -153,5 +160,97 @@ describe("WorkflowStatus — loaded state", () => {
       // Count badge or workflow name should appear
       expect(screen.getByText("1")).toBeInTheDocument();
     });
+  });
+
+  it("marks loaded workflow rows with a terminal icon when a PTY session is running", async () => {
+    const user = userEvent.setup();
+    useUiStore.setState({
+      activeWorkflowId: "workflow-1",
+      loadedWorkflows: [
+        {
+          id: "workflow-1",
+          workflowName: "Running Workflow",
+          filePath: "/workspace/running.flightpath.yaml",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 0,
+          totalSteps: 1,
+          startedAt: Date.now(),
+        },
+      ],
+    });
+    useTerminalStore.setState({
+      sessions: {
+        "workflow-1": [
+          {
+            id: "term-1",
+            workflowId: "workflow-1",
+            stepName: "Step 1",
+            kind: SESSION_KINDS.AI_CLI,
+            status: TERMINAL_SESSION_STATUS.RUNNING,
+            pendingOutput: [],
+            isController: true,
+          },
+        ],
+      },
+      activeSessionIds: { "workflow-1": "term-1" },
+    });
+
+    render(<WorkflowStatus />);
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+
+    expect(
+      screen.getAllByLabelText("Terminal session is still running").length
+    ).toBeGreaterThan(0);
+  });
+
+  it("marks the current completed workflow row when its terminal is still running", async () => {
+    const user = userEvent.setup();
+    useUiStore.setState({
+      activeWorkflowId: "workflow-1",
+    });
+    useTerminalStore.setState({
+      sessions: {
+        "workflow-1": [
+          {
+            id: "term-1",
+            workflowId: "workflow-1",
+            stepName: "Shell",
+            kind: SESSION_KINDS.SHELL,
+            status: TERMINAL_SESSION_STATUS.RUNNING,
+            pendingOutput: [],
+            isController: true,
+          },
+        ],
+      },
+      activeSessionIds: { "workflow-1": "term-1" },
+    });
+
+    render(<WorkflowStatus />);
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.RECENT_WORKFLOWS,
+            workflows: [
+              {
+                workflowName: "Completed Workflow",
+                filePath: "/workspace/my-workflow.flightpath.yaml",
+                executionState: EXECUTION_STATES.COMPLETED,
+              },
+            ],
+          },
+        })
+      );
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+
+    expect(
+      screen.getAllByLabelText("Terminal session is still running").length
+    ).toBeGreaterThan(0);
   });
 });

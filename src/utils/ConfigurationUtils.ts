@@ -322,9 +322,16 @@ export const ConfigurationUtils = {
    * Returns true when inject mode is enabled.
    * Keeps the TUI alive and writes follow-up prompts directly into the PTY,
    * avoiding terminal restart latency and the Claude Code resume cache bug.
+   *
+   * closeTerminalOnComplete takes precedence: if terminals are closed on
+   * completion, injection is impossible regardless of the injectMode setting.
    */
   isInjectModeEnabled(): boolean {
-    return configService.get("execution").injectMode;
+    const exec = configService.get("execution");
+    if (exec.closeTerminalOnComplete) {
+      return false;
+    }
+    return exec.injectMode;
   },
 
   /**
