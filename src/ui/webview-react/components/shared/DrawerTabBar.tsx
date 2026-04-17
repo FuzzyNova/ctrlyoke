@@ -28,7 +28,7 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
     <div
       className={
         className ??
-        "flex items-center border-t border-panel-border bg-sidebar-bg"
+        "flex items-center border-t border-panel-border bg-sidebar-bg overflow-x-hidden"
       }
     >
       {DRAWER_TABS.map((tab) => {

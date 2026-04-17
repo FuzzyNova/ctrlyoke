@@ -807,7 +807,7 @@ export const WorkflowPropertiesPanel: React.FC<{
   );
 
   return (
-    <div ref={drawerRef} className="flex flex-col h-full bg-sidebar-bg">
+    <div ref={drawerRef} className="flex flex-col h-full bg-sidebar-bg overflow-x-hidden">
       {/* Section Header — clickable to collapse in desktop mode; non-interactive in mobile */}
       <div
         className={`flex items-center justify-between h-[30px] px-2 border-b border-panel-border${isMobileMode ? "" : " cursor-pointer select-none"}`}
