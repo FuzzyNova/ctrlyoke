@@ -50,6 +50,8 @@ export interface CliTransportCoordinatorDeps {
 
 export class CliTransportCoordinator {
   private currentPtySession?: PtySession;
+  /** ID of the last PTY spawned — persists after currentPtySession is cleared so inject-fallback suppression can find it. */
+  private lastPtySessionId?: string;
 
   constructor(private readonly deps: CliTransportCoordinatorDeps) {}
 
@@ -248,6 +250,7 @@ export class CliTransportCoordinator {
         throw error;
       }
 
+      this.lastPtySessionId = session.id;
       this.currentPtySession = session;
       Log.info(
         `🖥️ PTY session spawned: "${stepName}" (${session.id.slice(0, 8)}) workflowId=inst:${workflowId.slice(0, 8)}`
@@ -399,26 +402,39 @@ export class CliTransportCoordinator {
   }
 
   /**
+   * Returns the ID of the last PTY session that was spawned, even if it has since
+   * exited and currentPtySession was cleared. Used by inject-fallback logic to
+   * suppress the stale exit event from the abandoned PTY.
+   */
+  getLastPtySessionId(): string | undefined {
+    return this.currentPtySession?.id ?? this.lastPtySessionId;
+  }
+
+  /**
    * Kill the active embedded AI CLI PTY without treating it as a user cancel.
    * Used when a later prompt resumes the same AI session in headless mode; the
    * headless process must be the only live owner of that session.
    */
-  terminateCurrentPtySession(reason: string): string | undefined {
+  async terminateCurrentPtySession(reason: string): Promise<string | undefined> {
     if (!this.currentPtySession) {
       return undefined;
     }
 
     const sessionId = this.currentPtySession.id;
+    const ptySession = this.currentPtySession;
+    this.currentPtySession = undefined; // clear immediately so no other code touches it during the wait
     Log.info(
       `🛑 Terminating PTY session ${sessionId.slice(0, 8)} before ${reason}`
     );
     const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
     if (ptyManager) {
-      ptyManager.killSession(sessionId);
+      await ptyManager.gracefulKillAiCliSession(sessionId);
     } else {
-      this.currentPtySession.pty.kill();
+      ptySession.pty.write("\x03");
+      ptySession.pty.write("\x03");
+      await new Promise<void>((resolve) => setTimeout(resolve, 500));
+      ptySession.pty.kill();
     }
-    this.currentPtySession = undefined;
     return sessionId;
   }
 
@@ -428,13 +444,17 @@ export class CliTransportCoordinator {
     }
 
     const sessionId = this.currentPtySession.id;
+    const ptySession = this.currentPtySession;
+    this.currentPtySession = undefined; // clear immediately so inject mode won't see a stale session
     const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
+    // Fire-and-forget: send Ctrl+C and schedule the kill — callers are sync so we can't await here.
     if (ptyManager) {
-      ptyManager.killSession(sessionId);
+      void ptyManager.gracefulKillAiCliSession(sessionId);
     } else {
-      this.currentPtySession.pty.kill();
+      ptySession.pty.write("\x03");
+      ptySession.pty.write("\x03");
+      setTimeout(() => ptySession.pty.kill(), 500);
     }
-    this.currentPtySession = undefined;
   }
 
   async cancel(): Promise<boolean> {

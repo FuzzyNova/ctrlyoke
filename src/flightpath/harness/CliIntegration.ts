@@ -228,7 +228,7 @@ export class CliIntegration extends HarnessIntegration {
    * Get the CLI-specific integration mode string (e.g., "copilot-cli", "claude-cli")
    */
   public getIntegrationMode(): string {
-    return this.provider.config.name;
+    return this.provider.config.harnessId;
   }
 
   /**
@@ -711,10 +711,11 @@ export class CliIntegration extends HarnessIntegration {
       }
       // Fall through to restart mode if the PTY is no longer available.
       Log.info("↩️ Inject mode unavailable — falling back to restart mode");
+      await this.retireInteractivePtyForRestartFallback();
     }
 
     if (!isInteractive) {
-      this.retireInteractivePtyBeforeHeadlessResume(session);
+      await this.retireInteractivePtyBeforeHeadlessResume(session);
     }
 
     const workspaceRoot = this.getWorkspaceRoot();
@@ -792,14 +793,40 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
+   * Inject mode failed (PTY unavailable) so we are doing a full interactive restart
+   * for this prompt. The old PTY session may still be alive or may exit soon; either
+   * way its exit must not be treated as a failure for the new step.
+   *
+   * - Terminates it immediately if still active.
+   * - Sets suppressPtyExitSessionId so a late exit event is silently ignored.
+   * - Resets the failure tracker in case capturePtyExit was already called for
+   *   the old PTY before we got here (e.g. exit fired during a prior await).
+   * - Clears lastInteractiveContext so shouldUseInjectMode won't retry inject
+   *   on the dead session.
+   */
+  private async retireInteractivePtyForRestartFallback(): Promise<void> {
+    const activePtyId =
+      await this.transportCoordinator.terminateCurrentPtySession("inject fallback restart");
+    const lastId = activePtyId ?? this.transportCoordinator.getLastPtySessionId();
+    if (lastId) {
+      this.suppressPtyExitSessionId = lastId;
+      Log.info(
+        `🛑 Suppressing exit for abandoned PTY ${lastId.slice(0, 8)} after inject fallback`
+      );
+    }
+    this.executionRunner.clearInteractiveContext();
+    this.failureTracker.reset();
+  }
+
+  /**
    * Inject mode intentionally leaves the interactive TUI alive between prompts.
    * If the user switches to headless before a resume prompt, that headless
    * process must become the only owner of the resumed AI session; otherwise
    * some harnesses reject or corrupt concurrent access to the same session.
    */
-  private retireInteractivePtyBeforeHeadlessResume(
+  private async retireInteractivePtyBeforeHeadlessResume(
     session: CliExecutionSession
-  ): void {
+  ): Promise<void> {
     const ctx = this.executionRunner.getLastInteractiveContext();
     const resolvedSessionId = session.resolvedSessionId;
     if (!ctx || !resolvedSessionId) {
@@ -813,7 +840,7 @@ export class CliIntegration extends HarnessIntegration {
       return;
     }
 
-    const ptySessionId = this.transportCoordinator.terminateCurrentPtySession(
+    const ptySessionId = await this.transportCoordinator.terminateCurrentPtySession(
       `headless resume of AI session ${resolvedSessionId}`
     );
     this.executionRunner.clearInteractiveContext();

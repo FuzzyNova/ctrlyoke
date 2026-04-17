@@ -46,7 +46,7 @@ interface CliExecutionTransportCoordinator {
    * Terminate the current PTY when another execution mode needs exclusive
    * ownership of the same AI session.
    */
-  terminateCurrentPtySession?(reason: string): string | undefined;
+  terminateCurrentPtySession?(reason: string): Promise<string | undefined>;
 }
 
 interface CliInteractiveStartupCoordinatorLike {
@@ -307,7 +307,7 @@ export class CliExecutionRunner {
         ) {
           const currentHarness =
             session.resolvedProperties?.harness ??
-            (this.deps.provider.config.name as Harness);
+            (this.deps.provider.config.harnessId as Harness);
 
           if (currentHarness === Harness.ClaudeCli) {
             Log.warn(

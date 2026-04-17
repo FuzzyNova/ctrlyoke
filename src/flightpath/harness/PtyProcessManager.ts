@@ -444,6 +444,21 @@ export class PtyProcessManager {
   }
 
   /**
+   * Gracefully shut down an AI CLI PTY session.
+   * Sends Ctrl+C twice to let the TUI clean up, waits 500ms, then hard-kills.
+   * Without the signal, AI CLIs warn about improper shutdown or block on next launch.
+   */
+  async gracefulKillAiCliSession(sessionId: string): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.pty.write("\x03");
+      session.pty.write("\x03");
+      await new Promise<void>((resolve) => setTimeout(resolve, 500));
+    }
+    this.killSession(sessionId);
+  }
+
+  /**
    * Restart a shell session: kill the existing PTY and spawn a new one at the same cwd.
    * Returns the new PtySession.
    */
