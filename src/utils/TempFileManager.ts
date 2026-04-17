@@ -2,6 +2,10 @@ import * as path from "path";
 import * as fs from "fs";
 import { Log } from "./Log";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
+import {
+  TEMP_FILE_CATEGORIES,
+  TempFileCategory,
+} from "../types/DashboardConstants";
 
 /**
  * TempFileManager - Manages temporary prompt files in .flightpath/temp/
@@ -185,7 +189,7 @@ export class TempFileManager {
    */
   async createCategoryFile(
     content: string,
-    category: "agent" | "skills" | "context" | "excerpts" | "prompt",
+    category: TempFileCategory,
     originalFilePath?: string,
     stepNumber?: number,
     partNumber?: number
@@ -196,9 +200,8 @@ export class TempFileManager {
       ? this.sanitizeBasename(originalFilePath)
       : "prompt";
     const stepSuffix = stepNumber ? `-${stepNumber}` : "";
-    const categorySuffix = category === "prompt" ? "" : `.${category}`;
     const partSuffix = partNumber !== undefined ? `.${partNumber}` : "";
-    const filename = `${timestamp}-${basename}${stepSuffix}${categorySuffix}${partSuffix}${this.PROMPT_EXTENSION}`;
+    const filename = `${timestamp}-${basename}${stepSuffix}.${category}${partSuffix}.md`;
     const filePath = path.join(this.tempDir, filename);
     try {
       await fs.promises.writeFile(filePath, content, "utf-8");
@@ -214,8 +217,8 @@ export class TempFileManager {
    * Returns array of absolute paths in order.
    *
    * File naming for split files uses 1-based part numbers:
-   *   "1234-my-flow-1.agent.1.prompt.md"
-   *   "1234-my-flow-1.agent.2.prompt.md"
+   *   "1234-my-flow-1.agent.1.md"
+   *   "1234-my-flow-1.agent.2.md"
    *
    * @param chunks Array of content chunks
    * @param category Content category ('agent' | 'excerpts')
@@ -225,7 +228,7 @@ export class TempFileManager {
    */
   async createCategorySplitFiles(
     chunks: string[],
-    category: "agent" | "skills" | "context" | "excerpts",
+    category: TempFileCategory,
     originalFilePath?: string,
     stepNumber?: number
   ): Promise<string[]> {
@@ -327,7 +330,7 @@ export class TempFileManager {
           // Only process known top-level temp file types
           const file = entry.name;
           const isTempFile =
-            file.endsWith(this.PROMPT_EXTENSION) ||
+            file.endsWith(".md") ||
             file.startsWith(this.MCP_CONFIG_PREFIX);
           if (!isTempFile) {
             continue;
@@ -458,7 +461,7 @@ export class TempFileManager {
       const now = Date.now();
 
       for (const file of files) {
-        if (!file.endsWith(this.PROMPT_EXTENSION)) {
+        if (!file.endsWith(".md")) {
           continue;
         }
 

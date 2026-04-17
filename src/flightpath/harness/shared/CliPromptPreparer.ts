@@ -8,6 +8,7 @@ import {
   PromptFileSplitter,
   type SplitConfig,
 } from "../../../utils/PromptFileSplitter";
+import { TEMP_FILE_CATEGORIES } from "../../../types/DashboardConstants";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { TempFileManager } from "../../../utils/TempFileManager";
 import { Log } from "../../../utils/Log";
@@ -176,7 +177,7 @@ export class CliPromptPreparer {
       const agentText = `<agentInstructions>\n${sections.agentContent}\n</agentInstructions>`;
       const agentPaths = await tempMgr.createCategorySplitFiles(
         splitter.split(agentText).chunks,
-        "agent",
+        TEMP_FILE_CATEGORIES.AGENT,
         filePath,
         stepNumber
       );
@@ -188,7 +189,7 @@ export class CliPromptPreparer {
     if (sections.skillContent) {
       const skillPaths = await tempMgr.createCategorySplitFiles(
         splitter.split(sections.skillContent).chunks,
-        "skills",
+        TEMP_FILE_CATEGORIES.SKILLS,
         filePath,
         stepNumber
       );
@@ -204,7 +205,7 @@ export class CliPromptPreparer {
     if (contextContent) {
       const contextPaths = await tempMgr.createCategorySplitFiles(
         splitter.splitContextContent(contextContent).chunks,
-        "context",
+        TEMP_FILE_CATEGORIES.CONTEXT,
         filePath,
         stepNumber
       );
@@ -216,7 +217,7 @@ export class CliPromptPreparer {
     if (sections.excerptContent) {
       const excerptPaths = await tempMgr.createCategorySplitFiles(
         splitter.split(sections.excerptContent).chunks,
-        "excerpts",
+        TEMP_FILE_CATEGORIES.EXCERPTS,
         filePath,
         stepNumber
       );
@@ -230,7 +231,7 @@ export class CliPromptPreparer {
       const partNumber = promptSplit.chunks.length > 1 ? i + 1 : undefined;
       const promptPath = await tempMgr.createCategoryFile(
         promptSplit.chunks[i],
-        "prompt",
+        TEMP_FILE_CATEGORIES.PROMPT,
         filePath,
         stepNumber,
         partNumber

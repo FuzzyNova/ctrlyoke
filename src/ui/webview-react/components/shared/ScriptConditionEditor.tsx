@@ -375,7 +375,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               value={v.retryPrompt ?? ""}
               onChange={(retryPrompt) => update({ retryPrompt })}
               placeholder={
-                "Validation failed: {stderr}\n\nPlease fix the issues."
+                "Validation failed: expected {expected} but got {actual} from {compareSource}\n\nPlease fix the issues."
               }
               affUri={affUri}
               dicUri={dicUri}

@@ -801,6 +801,20 @@ export const UNDO_FILE_ACTIONS = {
 } as const;
 
 // ============================================================================
+// TEMP FILE CATEGORIES - Category discriminants for categorized prompt temp files
+// ============================================================================
+export const TEMP_FILE_CATEGORIES = {
+  AGENT: "agent",
+  SKILLS: "skills",
+  CONTEXT: "context",
+  EXCERPTS: "excerpts",
+  PROMPT: "prompt",
+} as const;
+
+export type TempFileCategory =
+  (typeof TEMP_FILE_CATEGORIES)[keyof typeof TEMP_FILE_CATEGORIES];
+
+// ============================================================================
 // WORKFLOW ATTEMPT COMMANDS - command values for WorkflowAttemptCommand type
 // ============================================================================
 export const WORKFLOW_ATTEMPT_COMMANDS = {

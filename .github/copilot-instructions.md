@@ -289,7 +289,7 @@ prompts:
       returns: "true"
       maxRetries: 2
       retryPrompt: |
-        Validation failed: {error}
+        Validation failed: {stderr}
         Please fix the issues.
 ```
 

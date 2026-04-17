@@ -6,6 +6,7 @@ import {
   Harness,
   type UserHookConfig,
 } from "../../../types/FlightPathTypes";
+import { TEMP_FILE_CATEGORIES } from "../../../types/DashboardConstants";
 import { HarnessIntegration, HarnessStatus } from "../../HarnessIntegration";
 import { isModelAvailable } from "../../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
@@ -899,7 +900,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       return;
     }
     const tempMgr = new TempFileManager(workspaceRoot);
-    const filePath = await tempMgr.createCategoryFile(skillContent, "skills");
+    const filePath = await tempMgr.createCategoryFile(skillContent, TEMP_FILE_CATEGORIES.SKILLS);
     this.pendingTempFiles.push(filePath);
     await this.attachFileToChat(filePath);
   }
@@ -970,7 +971,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       const { chunks } = splitter.split(wrapped);
       const agentPaths = await tempMgr.createCategorySplitFiles(
         chunks,
-        "agent",
+        TEMP_FILE_CATEGORIES.AGENT,
         workflowFilePath,
         stepNumber
       );
@@ -982,7 +983,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
     if (sections.skillContent) {
       const skillPaths = await tempMgr.createCategorySplitFiles(
         splitter.split(sections.skillContent).chunks,
-        "skills",
+        TEMP_FILE_CATEGORIES.SKILLS,
         workflowFilePath,
         stepNumber
       );
@@ -999,7 +1000,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
     if (workflowContextText) {
       const contextPaths = await tempMgr.createCategorySplitFiles(
         splitter.splitContextContent(workflowContextText).chunks,
-        "context",
+        TEMP_FILE_CATEGORIES.CONTEXT,
         workflowFilePath,
         stepNumber
       );
@@ -1012,7 +1013,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       const { chunks } = splitter.split(sections.excerptContent);
       const excerptPaths = await tempMgr.createCategorySplitFiles(
         chunks,
-        "excerpts",
+        TEMP_FILE_CATEGORIES.EXCERPTS,
         workflowFilePath,
         stepNumber
       );
@@ -1026,7 +1027,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       const partNumber = promptChunks.length > 1 ? i + 1 : undefined;
       const promptPath = await tempMgr.createCategoryFile(
         promptChunks[i],
-        "prompt",
+        TEMP_FILE_CATEGORIES.PROMPT,
         workflowFilePath,
         stepNumber,
         partNumber
