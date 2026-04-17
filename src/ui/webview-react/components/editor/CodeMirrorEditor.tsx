@@ -685,7 +685,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   }, [value]);
 
   const editorClassName = [
-    "h-full w-full codemirror-editor",
+    surface === "input"
+      ? "w-full codemirror-editor"
+      : "h-full w-full codemirror-editor",
     minHeightClassName,
     maxHeightClassName,
     className,
@@ -712,8 +714,19 @@ function createThemeExtension(surface: CodeMirrorEditorSurface) {
       "&": {
         color: foregroundColor,
         backgroundColor,
-        height: "100%",
+        height: surface === "input" ? "auto" : "100%",
+        ...(surface === "input"
+          ? { minHeight: "inherit", maxHeight: "inherit" }
+          : {}),
       },
+      ".cm-scroller":
+        surface === "input"
+          ? {
+              minHeight: "inherit",
+              maxHeight: "inherit",
+              overflow: "auto",
+            }
+          : {},
       ".cm-content": {
         caretColor: "var(--vscode-editorCursor-foreground)",
         fontFamily: "var(--vscode-editor-font-family, 'Consolas, monospace')",
@@ -734,12 +747,15 @@ function createThemeExtension(surface: CodeMirrorEditorSurface) {
         backgroundColor:
           "var(--vscode-editor-selectionBackground, rgba(57, 148, 188, 0.55)) !important",
       },
-      ".cm-activeLine": {
-        outline: "1px solid var(--vscode-editor-lineHighlightBorder)",
-        outlineOffset: "-1px",
-        backgroundColor:
-          "color-mix(in srgb, var(--vscode-editor-lineHighlightBackground) 40%, transparent)",
-      },
+      ".cm-activeLine":
+        surface === "input"
+          ? { backgroundColor: "transparent" }
+          : {
+              outline: "1px solid var(--vscode-editor-lineHighlightBorder)",
+              outlineOffset: "-1px",
+              backgroundColor:
+                "color-mix(in srgb, var(--vscode-editor-lineHighlightBackground) 40%, transparent)",
+            },
       ".cm-gutters": {
         backgroundColor: "var(--vscode-editorGutter-background)",
         color: "var(--vscode-editorLineNumber-foreground)",
@@ -749,7 +765,12 @@ function createThemeExtension(surface: CodeMirrorEditorSurface) {
         backgroundColor: "var(--vscode-editor-lineHighlightBackground)",
       },
       "&.cm-focused": {
-        outline: "1px solid var(--vscode-focusBorder)",
+        // Input-surface editors use a wrapper focus border so the inner
+        // CodeMirror outline is not clipped by bounded form-control layouts.
+        outline:
+          surface === "input"
+            ? "none"
+            : "1px solid var(--vscode-focusBorder)",
       },
       ".cm-placeholder": {
         color: "var(--vscode-input-placeholderForeground)",

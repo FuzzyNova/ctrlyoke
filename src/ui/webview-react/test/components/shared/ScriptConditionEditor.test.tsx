@@ -11,6 +11,8 @@ vi.mock("@components/editor/CodeMirrorEditor", () => ({
     placeholder,
     readOnly,
     mode,
+    surface,
+    className,
   }: {
     id?: string;
     value: string;
@@ -18,6 +20,8 @@ vi.mock("@components/editor/CodeMirrorEditor", () => ({
     placeholder?: string;
     readOnly?: boolean;
     mode?: string;
+    surface?: string;
+    className?: string;
   }) => (
     <textarea
       id={id}
@@ -26,6 +30,8 @@ vi.mock("@components/editor/CodeMirrorEditor", () => ({
       placeholder={placeholder}
       disabled={readOnly}
       data-mode={mode}
+      data-surface={surface}
+      className={className}
       data-testid="retry-prompt-editor"
     />
   ),
@@ -51,6 +57,11 @@ describe("ScriptConditionEditor", () => {
 
     const editor = screen.getByLabelText("Retry Prompt");
     expect(editor).toHaveAttribute("data-mode", "endCondition");
+    expect(editor).toHaveAttribute("data-surface", "input");
+    expect(editor).toHaveClass("border-input-border");
+    expect(editor).toHaveClass("focus-within:border-focus-border");
+    expect(editor).toHaveClass("overflow-hidden");
+    expect(editor).not.toHaveClass("overflow-auto");
     expect(editor).toHaveAttribute(
       "placeholder",
       "Validation failed: {stderr}\n\nPlease fix the issues."

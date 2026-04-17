@@ -384,7 +384,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               surface="input"
               minHeightClassName="min-h-[96px]"
               maxHeightClassName="max-h-[220px]"
-              className={`overflow-auto rounded bg-input-bg focus-within:border-focus-border ${disabled ? "opacity-50" : ""}`}
+              className={`overflow-hidden rounded border border-input-border bg-input-bg focus-within:border-focus-border ${disabled ? "opacity-50" : ""}`}
             />
             <span className="text-[10px] text-description-fg">
               Type {"{"} for retry placeholders like {"{stderr}"} and{" "}
