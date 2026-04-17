@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export type StepContextMenuItem = {
@@ -27,6 +27,10 @@ type StepContextMenuProps = StepContextMenuState & { onClose: () => void };
  *
  * Clicks *inside* the menu stop `pointerdown` propagation so the document
  * listener doesn't fire and menu-item `click` events still reach their handler.
+ *
+ * Positioning: the menu is rendered hidden on the first paint so its actual
+ * dimensions can be measured, then clamped within the viewport before becoming
+ * visible — preventing overflow at the bottom or right edges.
  */
 export function StepContextMenu({
   x,
@@ -34,8 +38,16 @@ export function StepContextMenu({
   items,
   onClose,
 }: StepContextMenuProps) {
-  const menuWidth = 170;
-  const adjustedX = Math.min(x, window.innerWidth - menuWidth - 4);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!menuRef.current) return;
+    const { width, height } = menuRef.current.getBoundingClientRect();
+    const clampedX = Math.max(4, Math.min(x, window.innerWidth - width - 4));
+    const clampedY = Math.max(4, Math.min(y, window.innerHeight - height - 4));
+    setPos({ x: clampedX, y: clampedY });
+  }, [x, y]);
 
   useEffect(() => {
     const close = () => onClose();
@@ -52,7 +64,15 @@ export function StepContextMenu({
 
   return createPortal(
     <div
-      style={{ position: "fixed", top: y, left: adjustedX, zIndex: 9999 }}
+      ref={menuRef}
+      style={{
+        position: "fixed",
+        top: pos?.y ?? y,
+        left: pos?.x ?? x,
+        zIndex: 9999,
+        visibility: pos ? "visible" : "hidden",
+      }}
+      role="presentation"
       className="bg-editor-bg border border-panel-border rounded shadow-lg py-0.5 min-w-[160px]"
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
