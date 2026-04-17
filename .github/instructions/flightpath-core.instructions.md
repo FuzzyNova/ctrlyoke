@@ -9,8 +9,9 @@ Orchestration, parsing, queue, state machine, validation, and template managemen
 <harnessIntegration>
 **`HarnessIntegration.ts`** is the abstract base class for all harness integrations.
 **HarnessStatus enum:** `Initializing | Waiting | Ready | Unavailable` — used for status bar and UI feedback
-**Event emitters:** `onDidChangeStatus`, `onResponseComplete`, `onStreamingChunk` (plain text, Copilot CLI compat), `onStreamingEvents` (structured, Claude/Codex), `onPromptReady`
+**Event emitters:** `onDidChangeStatus`, `onResponseComplete`, `onStreamingChunk` (plain text, Copilot CLI compat), `onStreamingEvents` (structured, Claude/Codex), `onPromptReady`, `onContextWindowUpdate` (live context window used/size during streaming)
 **`rawTextOutput` getter:** Override in subclasses to signal pre-formatted text output (skips Streamdown pipeline)
+**Inject mode methods:** `canReuseForInject()` — returns true when an underlying PTY session is still alive and the integration can be reused across runs; `resetForNewRun()` — clears per-run mutable state before handing a live integration to a new execution; `onPtySessionEnded(callback)` — registers a one-shot callback for when the PTY exits (no-op for non-PTY harnesses, overridden by `CliIntegration`)
 **Two integration lifecycles:**
   - *Detector singletons* — created once at startup, registered with `context.subscriptions`, disposed by VS Code
   - *Execution integrations* — created per-run via `IntegrationFactory.createForExecution()`, skip context registration, disposed manually in the `finally` block after each workflow run
@@ -36,7 +37,7 @@ Orchestration, parsing, queue, state machine, validation, and template managemen
 **Registry role:** Manages the map of `WorkflowInstance` objects; owns cross-cutting resources.
 **Seven detector integrations** created once at startup (shared): `copilotCli`, `copilotChat`, `claudeCli`, `codexCli`, `openCodeCli`, `qwenCli`, `geminiCli`
 **Harness selection:** Supports copilot-cli (default), copilot-chat, claude-cli, codex-cli, opencode-cli, qwen-cli, gemini-cli
-**WorkflowInstance registry:** `instances` Map (running/paused instances), `vsCodeViewedId` string (ID of instance displayed in dashboard)
+**WorkflowInstance registry:** `instances` Map (running/paused instances), `retiredInstances` Map (disposed instances kept until no client views them), `viewerRegistry` Map<clientId, workflowId|null> (per-client viewer tracking)
 **CLI session tracking:** `cliSessions` Map for `CliWatchSession` objects that watch CLI-managed workflows
 **Orchestrator-scoped helpers:** `TemplateImporter`, `WorkflowCommandHandler`, `WorkspaceSessionManager`, `PromptFileParser`
 **`DashboardBroadcastHub`:** `WorkflowOrchestrator` owns a single `dashboardBroadcastHub` instance (from `src/ui/DashboardBroadcastHub`). It fans out dashboard notifications to all registered dashboard providers and passes itself as `IDashboardSink` to each `WorkflowInstance`.
@@ -48,6 +49,7 @@ Orchestration, parsing, queue, state machine, validation, and template managemen
 **Owns:** `PromptQueue`, `WorkflowStateMachine` (as `workflowRuntime`), `WorkflowExecutor`, `EndConditionHandler`, `EndConditionEvaluator`, `PromptFileLoader`, `PromptFileWatcher`, `OutputHistoryManager`, `OutputCaptureBuffer`, `activeIntegration`
 **`executionIntegrations` map:** Caches per-run integrations keyed by harness ID; reuses the same integration across prompts when harness doesn't change (avoids allocation per prompt in long-running workflows)
 **`lastRunIntegrations`:** Previous run's integrations kept for terminal cleanup (closed at start of next run)
+**`liveInjectIntegrations` map:** Integrations whose PTY sessions are intentionally kept alive across runs (inject mode). On the next run, entries are re-inserted into `executionIntegrations` so the existing PTY and session context are reused. Each entry is removed when its PTY exits.
 **Dependencies injected by WorkflowOrchestrator:** `integrationFactory` (for per-run execution integrations), `getDetectorIntegration(harness?)` callback, `onWorkflowNameChange`, `onStatusBarUpdate`, `dashboardSink` (the `DashboardBroadcastHub` passed in, then wrapped as a `WorkflowTaggedSink` in the constructor to auto-inject `workflowId`)
 **Events:** `onPromptStart`, `onPromptComplete`, `onStreamingEvents`, `onStreamingChunk`, `onWorkflowStatusMessage` — carry typed payloads
 **Background buffering:** `OutputCaptureBuffer` stores per-step output for replay when switching between multiple parallel workflows; `bufferedEvents` array (max 500) for dashboard event replay
@@ -96,7 +98,9 @@ AJV validation, normalizes single/multi formats, loads schema from `out/schemas/
 **Never edit schemas in `out/`** — source is `/schemas/`, auto-copied during build
 **Supported formats:** .flightpath.yaml/.yml, .flightpath.json, .prompt.md
 **Prompt path resolution:** If a prompt value looks like a file path, resolves relative to: prompt file dir → workspace root → `.flightpath/` dir
-**Workflow-level properties** (`harness`, `model`, `agent`, `skills`, `resumeSession`, `sessionId`, `mcpServers`, `hooks`, `endCondition`, `priorContext`, `additionalArgs`) are copied to `PromptFile` and also applied per-`PromptItem`
+**Workflow-level properties** (`harness`, `model`, `agent`, `skills`, `resumeSession`, `sessionId`, `mcpServers`, `hooks`, `endCondition`, `preCondition`, `priorContext`, `additionalArgs`) are copied to `PromptFile` and also applied per-`PromptItem`
+**ScriptStep support:** Steps with `type: "script"` are built via `buildScriptStep()` instead of `buildPromptStep()`. Applies to both `steps[]` array and the top-level `finalStep` property
+**`finalStep` property:** Optional workflow gate — can be a `PromptStep` or a `ScriptStep`; evaluated in a loop after the queue drains
 **`PlatformAdapter` dependency:** Optional; used for user-facing error messages
 </promptFileParser>
 
@@ -112,9 +116,14 @@ Orchestrates retry logic with `WorkflowExecutor` callback pattern.
 Sequential prompt execution with pause/resume support.
 **`WorkflowExecutionContext`** bundle pattern (replaces old `WorkflowContext`) — carries `dashboardProvider`, `getIntegrationForPrompt`, capture callbacks, `snapshotService`, etc.
 **Two-phase outer loop:**
-  1. **Queue phase** — drains normal prompts via `promptQueue.hasNext()`
+  1. **Queue phase** — drains steps via `promptQueue.hasNext()`
   2. **`finalStep` phase** — runs the orchestrator gate once the queue is empty; if new prompts were appended (via MCP queue extension), the outer loop repeats
+**Per-step execution routing:**
+  - `ScriptStep` (`type: "script"`) — routed directly to `executeScriptStep()`; no AI harness interaction. `onPass`/`onFail` actions control flow (continue, skip, stop).
+  - `PromptStep` with `preCondition` — evaluates the pre-condition script first; `onPass`/`onFail` determine whether to run the prompt or skip it
+  - `PromptStep` without `preCondition` — normal AI harness execution
 **Harness resolution:** Uses `PropertyResolver` to determine harness per prompt (prompt > workflow > global settings)
+**Workspace snapshots:** `WorkspaceSnapshotService` captures workspace state before/after each step; stored in history for undo support
 **Delegation:** Defers to `EndConditionHandler` for retry logic
 **Status transitions:** All status changes go through `WorkflowStateMachine` (no local status fields in executor)
 </workflowExecutor>

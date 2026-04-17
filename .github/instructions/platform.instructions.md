@@ -39,12 +39,15 @@ PlatformAdapter.ts          ← Abstract interface (the contract)
 
 > **Note:** `getConfig<T>(key, default)` is **not** part of the `PlatformAdapter` interface. In VS Code, config is read via `vscode.workspace.getConfiguration()` directly. In CLI, the vscode-shim intercepts that same call and delegates to `CliAdapter.getConfig()` (see `<vscodeShim>` and `<cliAdapter>`).
 
-**Optional methods** (implemented by VsCodeAdapter only):
+**Optional methods** (declared in the interface, implemented by VsCodeAdapter only):
 
 - `openTextFile(path)` — opens editor tab
 - `focusDashboard()` — executes `flightpath.dashboard.focus` command
 - `isVsCode()` — returns `true`; used by `CliIntegration` to decide between VS Code terminal and `spawn` with `stdio: "inherit"`
-- `getExtensionContext()` — returns the underlying `vscode.ExtensionContext`; used by VS Code-only code (WorkflowOrchestrator, terminal creation, etc.)
+
+**VsCodeAdapter-only extras** (not declared in the interface):
+
+- `getExtensionContext()` — returns the underlying `vscode.ExtensionContext`; used by VS Code-only code (WorkflowOrchestrator, terminal creation, etc.) via a cast to `VsCodeAdapter`
   </platformAdapter>
 
 <cliAdapter>

@@ -15,6 +15,9 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - `WorkflowOrchestrator` creates the hub and registers `FlightPathWebviewProvider` as the first client
 - Future clients (e.g. hosted browser) can be added without touching orchestrator or workflow-instance call sites
 - `WorkflowOrchestrator` depends only on `IDashboardProvider`/`IDashboardSink` interfaces — never on the concrete provider
+- `notifyActiveWorkflowChanged` is a no-op — full state is delivered per-client via `replayWorkflowStateTo()`, never broadcast
+- `updateFileSelected` and `updateSessionRestored` are also no-ops in the hub for the same reason
+- `notifyStartupComplete()` broadcasts `STARTUP_COMPLETE` to all currently-registered clients
 
 **FlightPathWebviewProvider:** Coordination hub — lifecycle/HTML generation and public update API.
 
@@ -25,6 +28,8 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - `localResourceRoots`: webview-react dir + images dir
 - Constructs and holds three delegate classes; harness availability driven by WorkflowOrchestrator via `notifyHarnessAvailability()` (not polled in constructor)
 - Listens for model registry updates (`onModelsLoaded`) and config changes to forward to webview
+- Uses `PANEL_CLIENT_ID` (from `DashboardConstants`) to scope per-panel operations (e.g. `getQueueState`, workflow serialization) to the VS Code sidebar client
+- `setRunningServerUrl(url)` — stores the URL of the running hosted server; exposed to the message router for the `GET_SERVER_URL` message type
 
 **WebviewSettingsSync:** Settings/config management and broadcast.
 

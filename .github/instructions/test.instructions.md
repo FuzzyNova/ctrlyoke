@@ -42,7 +42,8 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - `OutputHistoryManager.test.ts` (506 lines) - Timeline-backed workflow output history (manifest + events.jsonl), projection into WorkflowOutputHistory shape
 - `PriorContext.test.ts` (420 lines) - HarnessIntegration prior-context building (buildPriorContextSection and helpers)
 - `PromptFileLoader.test.ts` (100 lines) - PromptFileLoader.populateSettingsDefaults, settings seeding from VS Code config
-- `SettingsJsonHooksTracker.test.ts` (188 lines) - Hook baseline capture, FlightPath hook injection/restoration tracking
+- `SettingsJsonHooksTracker.test.ts` (230 lines) - Hook baseline capture, FlightPath hook injection/restoration tracking
+- `SettingsJsonMcpTracker.test.ts` (51 lines) - `SettingsJsonMcpTracker` register/unregister MCP servers in harness config files, file cleanup on deactivation
 - `OpenCodeResponseParser.test.ts` (140 lines) - OpenCode JSON stream parsing (text, tool events, session ID, token usage)
 - `OpenCodeNotificationMonitor.test.ts` (37 lines) - OpenCode hook config (returns none; OpenCode uses plugin file)
 - `WorkflowExecutor.test.ts` (592 lines) - WorkflowExecutor execution context, prompt cycling, state transitions, finalStep phase handling
@@ -50,17 +51,18 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - `WorkflowOrchestrator.test.ts` (68 lines) - Startup auto-load gating (dashboard-ready + init coordination)
 - `WorkflowStateMachine.test.ts` (227 lines) - State machine transitions with ordered event emission (previous/current snapshots)
 - `WorkingFileManager.test.ts` (236 lines) - WorkingFile state (startWork, completeWork, reset)
+- `WorkspaceInitializer.test.ts` (74 lines) - `WorkspaceInitializer.initializeIfNeeded`, directory creation and `.gitignore` generation
 - `CliArgParser.test.ts` (86 lines) - `parseArgString` CLI arg string tokenization (quoted args, edge cases)
-- `CliExecutionRunner.test.ts` (204 lines) - CliExecutionRunner orchestrates headless/interactive execution lifecycle
+- `CliExecutionRunner.test.ts` (241 lines) - CliExecutionRunner orchestrates headless/interactive execution lifecycle
 - `CliExecutionSession.test.ts` (92 lines) - CliExecutionSession result/state container
 - `CliFailureTracker.test.ts` (69 lines) - PTY exit classification, startup-stage failures, interactive abort state
-- `CliIntegration.test.ts` (397 lines) - CliIntegration full integration with mock ICliProvider and PlatformAdapter
+- `CliIntegration.test.ts` (458 lines) - CliIntegration full integration with mock ICliProvider and PlatformAdapter
 - `CliInteractiveStartupCoordinator.test.ts` (159 lines) - Session resume log seeking, startup coordination with log parsers
 - `CliPromptPreparer.test.ts` (276 lines) - Fast-path/full-path prompt preparation, agent/skills content, slash commands
 - `CliPromptRuntimeCoordinator.test.ts` (159 lines) - Runtime metadata (timing, harness) tracking during prompt execution
 - `CliResponseCollector.test.ts` (211 lines) - CLI result building, session ID preference (parsed output over log discovery)
 - `CliSessionResolverAdapter.test.ts` (120 lines) - Workflow properties and auto-resumed session ID resolution
-- `CliTransportCoordinator.test.ts` (344 lines) - Headless/interactive prompt dispatch, PTY coordination, temp file cleanup
+- `CliTransportCoordinator.test.ts` (639 lines) - Headless/interactive prompt dispatch, PTY coordination, temp file cleanup
 - `CliWatchSession.test.ts` (61 lines) - Run timestamp extraction and ordering helpers (`getHistoryRunTimestamp`, `isNewerHistoryRunPath`)
 - `CopilotChatIntegration.test.ts` (57 lines) - Prior context building for the Chat harness
 - `EndConditionHandler.test.ts` (341 lines) - EndConditionHandler integrating EndConditionEvaluator, PromptQueue, WorkflowStateMachine
@@ -71,6 +73,7 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - `TimelineRecorder.test.ts` (126 lines) - Timeline event recording and manifest file writing
 - `TtlCache.test.ts` (246 lines) - TTL-based caching, expiry, refresh, and concurrent request deduplication
 - `VarSubstitutor.test.ts` (235 lines) - `{{placeholder}}` substitution in prompt strings and end condition scripts
+- `WebviewSettingsSync.test.ts` (337 lines) - `WebviewSettingsSync` settings sync from working file to webview via `WebviewMessageRouter`
 - `promptPathUtils.test.ts` (90 lines) - `looksLikeFilePath`, `PROMPT_FILE_EXTENSIONS` constant validation
 
 **Integration Tests** (`src/test/integration/*.test.ts`):
@@ -89,11 +92,13 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 
 **Harness Hook Integration Tests** (`src/test/harness/*.test.ts`):
 
-- `hooks.harness.test.ts` (354 lines) - Real CLI harness integration tests for hook event delivery:
+- `hooks.harness.test.ts` (381 lines) - Real CLI harness integration tests for hook event delivery:
   - Verifies stop, sessionStart, preToolUse, postToolUse, userPromptSubmit hooks fire correctly
   - Runs with `npm run test:harness` (not part of `npm test`)
   - Exit code 3 from CLI = harness not installed → test skipped
   - Requires compiled CLI (`npm run compile`) and authenticated harness
+- `mcp.harness.test.ts` (120 lines) - MCP dynamic queue extension: verifies `flightpath_append_queue` tool appends steps that execute with verifiable side effects
+- `workflow.harness.test.ts` (273 lines) - Multi-step sequential execution, end conditions, and retry loops using real CLI harnesses
 
 **Test Infrastructure:**
 
@@ -107,7 +112,7 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - Nested `suite()` blocks for logical grouping
 - Descriptive test names: "should [expected behavior] when [condition]"
 - TDD style (Mocha UI: `'tdd'`)
-- Total: ~20,400 lines across 65 test files
+- Total: ~21,800 lines across 70 test files
   </testStructure>
 
 <testCoverage>
@@ -116,13 +121,13 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - Validation: ValidationUtils, SessionValidator
 - State management: PromptQueue, PromptIdentity, WorkflowInstance, WorkingFileManager, WorkflowStateMachine
 - Execution: EndConditionEvaluator, EndConditionHandler, RetryUtils, WorkflowExecutor
-- Orchestration: WorkflowOrchestrator (startup auto-load gating), PromptFileLoader (settings defaults), TimelineRecorder, CliWatchSession helpers
+- Orchestration: WorkflowOrchestrator (startup auto-load gating), PromptFileLoader (settings defaults), TimelineRecorder, CliWatchSession helpers, WorkspaceInitializer
 - CLI harness shared: CliEventMapper, CliMcpConfigGenerator, CliResponseParser, CliToolPermissionMapper, CliExecutionRunner, CliExecutionSession, CliFailureTracker, CliInteractiveStartupCoordinator, CliPromptPreparer, CliPromptRuntimeCoordinator, CliResponseCollector, CliSessionResolverAdapter, CliTransportCoordinator, CliIntegration (full integration)
 - Tool permissions: Copilot/Claude/Codex/OpenCode/Qwen/Gemini mappers (ToolPermissionMappers + HarnessToolPermissionMappers)
-- Hooks: SettingsJsonHooksTracker (baseline capture, injection tracking), PropertyResolver hooks resolution
+- Hooks: SettingsJsonHooksTracker (baseline capture, injection tracking), SettingsJsonMcpTracker (MCP config register/unregister), PropertyResolver hooks resolution
 - OpenCode: OpenCodeResponseParser, OpenCodeNotificationMonitor
 - Log parsers: ClaudeLogParser, CopilotLogParser, CodexLogParser
-- Utilities: PropertyResolver, SessionResolver, CliOutputFormatter, DiscoveryUtils, FileLockUtils, TempFileManager, TypedEmitter, ErrorUtils, RuntimeMode, TtlCache, VarSubstitutor, ModelConstants, FlightPathConfigService
+- Utilities: PropertyResolver, SessionResolver, CliOutputFormatter, DiscoveryUtils, FileLockUtils, TempFileManager, TypedEmitter, ErrorUtils, RuntimeMode, TtlCache, VarSubstitutor, ModelConstants, FlightPathConfigService, WebviewSettingsSync
 - Context: ContextExpander (@-reference resolution, file/directory expansion)
 - Queue helpers: QueueOperations, OutputHistoryManager
 - HarnessIntegration: prior-context building, OutputCaptureBuffer event routing

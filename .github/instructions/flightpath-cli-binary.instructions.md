@@ -29,8 +29,8 @@ The FlightPath CLI adds only: argument parsing (Commander.js), TTY detection, `C
 1. Parses CLI flags into `ResolvedCliConfig`
 2. Initialises `configService` with file-based backends: `setUserBackend(createUserConfigBackend())`, `setWorkspaceBackend(createWorkspaceConfigBackend(cwd))`, then `setCliOverlay(overlay)` for any explicitly-provided flags
 3. Instantiates `CliAdapter` + registers it via `registerCliAdapter()`
-4. Creates `IntegrationFactory(platform)` + `WorkflowInstance`
-5. In headless mode, subscribes: `onPromptStart`, `onStreamingEvents`, `onStreamingChunk`, `onWorkflowStatusMessage`, `onPromptComplete`
+4. Creates `IntegrationFactory(platform)` + `WorkflowInstance`. Harness is resolved via `resolveHarness()` which only handles `copilot-cli`, `claude-cli`, and `codex-cli` — any other value defaults to `copilot-cli`.
+5. In headless mode, subscribes: `onPromptStart`, `onStreamingEvents`, `onStreamingChunk`, `onWorkflowStatusMessage`, `onPromptComplete`. `onStreamingChunk` writes raw text chunks directly to `process.stdout`; the others render via `CliTerminalFormatter`.
 6. Calls `instance.loadPromptFile()` or `instance.loadPromptString()` (for `--prompt`), acquires `WorkflowLockManager` lock with 5s heartbeat
 7. Merges `--var` flags into `workflowFile.vars` (CLI vars override workflow-level defaults)
 8. Applies `--resume` / `--new-session` overrides to the first prompt's `sessionId`
@@ -85,7 +85,7 @@ Execution mode is determined by `getExecutionMode()`:
 
 **Interactive**: Opens a terminal window for the AI CLI TUI. The AI CLI's stdout passes through directly to the user's terminal. No streaming subscription needed.
 
-**Headless**: Spawns the AI CLI as a background process. `onPromptStart`, `onStreamingEvents`, `onStreamingChunk`, `onWorkflowStatusMessage`, and `onPromptComplete` callbacks render output to the terminal in real time via `CliTerminalFormatter`.
+**Headless**: Spawns the AI CLI as a background process. `onPromptStart`, `onStreamingEvents`, `onWorkflowStatusMessage`, and `onPromptComplete` callbacks render output to the terminal in real time via `CliTerminalFormatter`. `onStreamingChunk` writes raw text chunks directly to `process.stdout` (typewriter effect for non-event-based streaming).
 
 In headless mode, `allowAllTools` is automatically set to `true` unless the user specified custom allow/deny lists — this prevents interactive tool approval prompts from blocking automation.
 

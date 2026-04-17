@@ -52,8 +52,8 @@ src/ui/webview-react/
 │   │   ├── GlobalSettingsDrawer.tsx  # Full-screen global settings drawer
 │   │   ├── GlobalSettingsVerticalTabBar.tsx # Vertical tab bar inside GlobalSettingsDrawer
 │   │   ├── Header.tsx            # Workflow controls, execution badge
-│   │   ├── MobilePromptsSidebar.tsx  # Mobile overlay/sidebar for steps navigation
 │   │   ├── OutputSection.tsx     # CLI output rendering
+│   │   ├── StartupOverlay.tsx    # Full-screen overlay shown during extension startup
 │   │   ├── WorkflowPropertiesPanel.tsx    # Harness/model settings
 │   │   └── WorkflowStepsPanel.tsx # Workflow steps list with drag-and-drop
 │   ├── editor/              # Editor components
@@ -72,6 +72,7 @@ src/ui/webview-react/
 │   ├── prompts/             # Prompt list components
 │   │   ├── BoundaryBar.tsx       # Visual separator between queue and final prompt
 │   │   ├── FinalStepFooter.tsx # Footer for the final prompt section
+│   │   ├── PromptChipRail.tsx    # Compact chip navigation for collapsed/narrow step panel
 │   │   ├── PromptCounter.tsx     # Step count badge
 │   │   ├── PromptStepDetails.tsx # Expanded step detail view
 │   │   ├── StatusIcon.tsx        # Execution status icon
@@ -96,9 +97,11 @@ src/ui/webview-react/
 │   │   ├── SaveWorkflowDialog.tsx # Save-as dialog with path/format
 │   │   ├── TemplateModal.tsx     # New workflow from template
 │   │   ├── WorkflowControls.tsx  # Run/Pause/Stop/Load buttons
+│   │   ├── WorkflowFilePickerModal.tsx # File picker modal for workflow file selection
 │   │   └── WorkflowStatus.tsx    # Execution state badge
 │   ├── settings/            # Global settings tab sections (used in GlobalSettingsDrawer)
 │   │   ├── ChatSection.tsx           # Chat / Copilot chat settings
+│   │   ├── DeveloperSection.tsx      # Developer tools (only visible in dev builds)
 │   │   ├── ExecutionSection.tsx      # Execution behavior settings
 │   │   ├── GeneralSection.tsx        # General extension settings
 │   │   ├── HarnessesSection.tsx      # Per-harness configuration
@@ -130,6 +133,7 @@ src/ui/webview-react/
 │       ├── ScriptConditionEditor.tsx # Script step condition editor (compare source, returns)
 │       ├── SkillsSelect.tsx      # Hybrid skills dropdown with portal popup
 │       ├── SplitButton.tsx       # Button with dropdown arrow
+│       ├── StepContextMenu.tsx   # Right-click context menu for workflow steps
 │       ├── UndoRedoControl.tsx   # Undo/redo button control with zundo history
 │       ├── permissionUtils.ts    # Tool permission mode logic per harness
 │       └── tabBadgeUtils.ts      # Tab icon/color override helpers for DrawerTabBar
@@ -140,11 +144,13 @@ src/ui/webview-react/
 │   ├── useDesktopLayout.ts      # Desktop 3-panel layout refs and resize logic
 │   ├── useDrawerTabOverrides.ts # Computes tab icon/color overrides for DrawerTabBar
 │   ├── useElementNarrow.ts      # ResizeObserver-based width threshold
+│   ├── useFinalStepContextMenu.tsx # Context menu hook for the final step
 │   ├── useMediaQuery.ts         # Responsive layout detection
 │   ├── useMessageHandler.ts     # Message routing from extension
 │   ├── useMobileLayout.ts       # Mobile single-column layout refs
 │   ├── usePromptStatus.ts       # Step status derived state (icon, color, label)
 │   ├── useStepClickHandler.ts   # Step click → editor navigation + selection
+│   ├── useStepContextMenu.tsx   # Context menu hook for queue step rows
 │   ├── useUndoRedoKeyHandler.ts # Ctrl+Z/Y undo/redo with running guard
 │   └── useVsCodeApi.ts          # VS Code API singleton
 ├── store/                   # Zustand state stores
@@ -163,6 +169,7 @@ src/ui/webview-react/
 ├── utils/                   # Utility functions
 │   ├── diff.ts              # Diff/patch utilities
 │   ├── diffUtils.ts         # Diff display helpers
+│   ├── dictionaryUris.ts    # Dictionary URI constants for CodeMirror spellcheck
 │   ├── endCondition.ts      # End condition helpers
 │   ├── hljsUtils.ts         # Highlight.js integration (language detection, styles)
 │   ├── logger.ts            # Webview logging utilities
@@ -742,7 +749,7 @@ Full-screen overlay opened via `uiStore.globalSettingsOpen`. Contains a `GlobalS
 
 ### Mobile Layout
 
-On narrow viewports, `MobilePromptsSidebar` provides chip-based navigation to workflow steps. Controlled by `uiStore.mobilePromptsOpen` and `uiStore.mobilePromptsMode` (`"sidebar"` or `"fullwidth"`). The `useMediaQuery` hook detects mobile breakpoints; `App.tsx` switches between `useDesktopLayout` and `useMobileLayout` refs accordingly.
+On narrow viewports, `PromptChipRail` provides compact chip-based navigation for collapsed/narrow step panel navigation. Controlled by `uiStore.mobilePromptsOpen` and `uiStore.mobilePromptsMode` (`"sidebar"` or `"fullwidth"`). The `useMediaQuery` hook detects mobile breakpoints; `App.tsx` switches between `useDesktopLayout` and `useMobileLayout` refs accordingly.
 
 ### ScriptConditionEditor
 

@@ -97,15 +97,12 @@ Adding a new harness requires changes across multiple layers (harness directory,
 - **SettingsJsonMcpTracker** — Parallel-safe MCP server config management in VS Code settings; workspace `.vscode/mcp.json` support
 - **McpDiscoveryUtils** — Discovers local MCP servers from `.vscode/mcp.json`, `.mcp.json`, VS Code config, `~/.claude.json`; registry pagination
 - **MCP Server** (`src/mcp-server.ts`) — Standalone stdio server for queue management from CLI harnesses
-- **LM Tools** — `flightpath_queue_status` and `flightpath_append_queue` for VS Code Chat integration
+- **LM Tools** — `flightpath_queue_status`, `flightpath_append_queue`, `flightpath_capabilities`, and `flightpath_read_output` for VS Code Chat integration
 - **React Webview** — Dashboard with 5 Zustand stores, prompt editor (CodeMirror), output viewer, embedded terminal (xterm.js), settings panel; includes ContextQuickPicker and PermissionsQuickPicker footer controls
 
 </architecture>
 
 <navigationGuide>
-
-## How to Navigate This Codebase
-
 ### Key Source Files (Quick Reference)
 
 | File                                      | Role                                                                           |
@@ -213,6 +210,7 @@ src/
 │   └── orchestration/            # PromptFileLoader, PromptFileWatcher,
 │                                 # TemplateImporter, WorkflowCommandHandler,
 │                                 # WorkspaceSessionManager, OutputHistoryManager,
+│                                 # TimelineRecorder, OutputHistoryTimelineAdapter,
 │                                 # CliWatchSession, WorkspaceInitializer
 ├── scripts/                      # Hook/notify scripts (6 JS scripts + 1 TypeScript OpenCode plugin)
 ├── server/                       # Express/WebSocket server for hosted dashboard

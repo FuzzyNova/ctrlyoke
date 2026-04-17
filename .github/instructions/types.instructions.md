@@ -22,13 +22,15 @@ Core data structures and constants for FlightPath extension. TypeScript strict m
 
 **`Harness` enum:** `CopilotCli` | `CopilotChat` | `ClaudeCli` | `CodexCli` | `OpenCodeCli` | `QwenCli` | `GeminiCli` — values: `"copilot-cli"` | `"copilot-chat"` | `"claude-cli"` | `"codex-cli"` | `"opencode-cli"` | `"qwen-cli"` | `"gemini-cli"`
 
+**`McpServerConfig` interface:** `id` required. Two transport modes — stdio (`command`, `args?`, `env?`, `autoApprove?: boolean | string[]`) or remote (`url`, `transport?: "streamable-http" | "sse"`, `headers?`). Exactly one of `command`/`url` must be set.
+
 **`HookEvent` type:** `"stop" | "sessionStart" | "preToolUse" | "postToolUse" | "userPromptSubmit"` — logical hook event names mapped to CLI-specific event names at inject time. Unsupported events for the active harness are silently skipped.
 
 **`UserHookConfig` interface:** `event: HookEvent`, `command: string`, `timeoutSec?: number` — user-defined hook to run alongside FlightPath's built-in hooks.
 
 **`ToolPermissionsOverride` interface:** `mode?: ToolPermissionMode`, `allowedTools?: string[]`, `deniedTools?: string[]` — per-workflow/prompt tool permission overrides. Uses Copilot CLI format; auto-converted for Claude/Qwen.
 
-**`EndConditionCompareSource` type:** `"auto" | "stdout" | "stderr" | "exitCode"` — controls which output source is compared against `returns`.
+**`EndConditionCompareSource` type:** type alias for `CompareSource` (from `DashboardConstants`/`COMPARE_SOURCES`) — `"auto" | "stdout" | "stderr" | "exitCode"`.
 
 **Re-export:** `ToolPermissionMode` from `IToolPermissionMapper` — `"dangerouslyAllowAll" | "allowAll" | "custom"`
 
@@ -41,13 +43,13 @@ Fields: `harness?`, `model?`, `agent?: string | null` (null = explicitly disable
 - `ScriptProperties` — `script`, `compareSource?: EndConditionCompareSource`, `returns?`, `timeout?` — shared base for EndCondition, PreCondition, and ScriptStep
 - `EndCondition extends ScriptProperties` — `returns` (required), `maxRetries?`, `retryPrompt?`, `resumeSessionOnRetry?`, `onPass?: EndConditionAction`, `onFail?: EndConditionAction`
 - `PreCondition extends ScriptProperties` — `onPass?: PreConditionAction`, `onFail?: PreConditionAction`
-- `EndConditionAction` — `"continue" | "retry" | "stopWorkflow"`
-- `PreConditionAction` — `"continue" | "skipPrompt" | "stopWorkflow"`
-- `ScriptStepAction` — `"continue" | "stopWorkflow"`
+- `EndConditionAction` — `Exclude<ConditionAction, "skipPrompt">`: `"continue" | "retry" | "stopWorkflow"`
+- `PreConditionAction` — `Exclude<ConditionAction, "retry">`: `"continue" | "skipPrompt" | "stopWorkflow"`
+- `ScriptStepAction` — `Exclude<ConditionAction, "retry" | "skipPrompt">`: `"continue" | "stopWorkflow"`
 
 **Core workflow step interfaces:**
 
-- `PromptFile extends ExecutionProperties` — `prompt?`, `steps?: WorkflowStep[]`, `finalStep?: WorkflowStep`, `vars?: Record<string, string>` (workflow-level variable defaults for `{{varName}}` substitution)
+- `PromptFile extends ExecutionProperties` — `prompt?`, `steps?: WorkflowStep[]`, `finalStep?: WorkflowStep`, `vars?: Record<string, string>` (workflow-level variable defaults for `{{varName}}` substitution; CLI `--var key=value` flags take precedence; substituted in prompt text, model, additionalArgs, hook commands, and endCondition script paths)
 - `PromptStep extends ExecutionProperties` — `type?: "prompt"`, `name?`, `prompt`, `sessionId?`, `_runtime?: PromptRuntimeMetadata`
 - `ScriptStep extends ScriptProperties` — `type: "script"`, `name?`, `onPass?: ScriptStepAction`, `onFail?: ScriptStepAction`, `_runtime?: PromptRuntimeMetadata`
 - `WorkflowStep = PromptStep | ScriptStep` — discriminated union; use `isScriptStep()` type guard
@@ -87,19 +89,26 @@ Minimal interface for posting state updates to the webview dashboard. `WorkflowI
 
 **Message shapes are single-sourced in `PostMessageDashboardSink` (src/ui/PostMessageDashboardSink.ts).** Both `FlightPathWebviewProvider` and `FlightPathHostedServer` delegate all `IDashboardSink` calls to a `PostMessageDashboardSink` instance — never duplicate message payload construction. See `ui.instructions.md` for the step-by-step process for adding a new method.
 
+**Most methods accept an optional `workflowId?` trailing parameter** for multi-workflow targeting in the dashboard.
+
 **Key methods:**
 
-- `updateFileSelected(fileName, prompts, workflowName?, finalStep?, finalStepRuntime?)` — initial load
-- `updateSessionRestored(fileName, prompts, results, executionState, currentIndex, ...)` — restore paused/stopped session
-- `updateExecutionStarted(workflowId, fileName, totalSteps, isContinuation?, preserveStepCount?)` — run begins
-- `updateProgress(current, total)` / `updateExecutionState(state)`
-- `updateStepStatus(stepIndex, status, details?)` / `updateRetryAttempt(stepIndex, currentRetry, maxRetries)`
-- `updateCliOutput(stepIndex, output)` / `updateCliStreamingChunk(stepIndex, chunk)` / `updateCliStreamingEvents(stepIndex, events)`
-- `updatePromptsExtended(prompts, finalStep?, executionState?)` / `updatePromptDeleted(...)`
-- `updateFinalStep(finalStep)` / `updateFinalStepStatus(status, loopCount, phase)` / `updateFinalStepOutput(loopIndex, output)`
-- `updateFinalStepStreamingChunk(loopIndex, chunk)` / `updateFinalStepStreamingEvents(loopIndex, events)`
-- `updateWorkflowName(name)`
-- `notifyRunHistoryUpdated(runCount, runTimestamps?, runStates?)` / `notifyWorkflowStateReset(prompts)` / `notifyStartPositionSet(prompts, currentIndex)` / `notifyPromptsReordered(prompts)` / `notifyUndoRedoSynced()`
+- `updateFileSelected(fileName, steps, workflowName?, finalStep?, finalStepRuntime?, workflowId?)` — initial load
+- `updateSessionRestored(fileName, steps, results, executionState, currentIndex, workflowName?, finalStep?, finalStepRuntime?, workflowId?)` — restore paused/stopped session
+- `loadOutputHistoryForWorkflow?(workflowFilePath, workflowInstanceId?)` — optional; load output history on restore
+- `updateExecutionStarted(workflowId, fileName, totalSteps, isContinuation?, preserveStepCount?, isInjectMode?)` — run begins
+- `updateExecutionCompleted?(workflowId?)` — optional; run ended normally
+- `updateProgress(current, total, workflowId?)` / `updateExecutionState(state, workflowId?)`
+- `updateStepStatus(stepIndex, status, details?, workflowId?)` / `updateRetryAttempt(stepIndex, currentRetry, maxRetries, workflowId?)`
+- `updateCliOutput(stepIndex, output, workflowId?)` / `updateCliStreamingChunk(stepIndex, chunk, workflowId?)` / `updateCliStreamingEvents(stepIndex, events, workflowId?)`
+- `updateContextWindow(stepIndex, used, size, workflowId?)` — live context window usage update
+- `updateStatusMessage(stepIndex, message, severity?, workflowId?)`
+- `updateStepsExtended(steps, finalStep?, executionState?, workflowId?)` / `updatePromptDeleted(fileName, steps, finalStep?)`
+- `updateFinalStep(finalStep, workflowId?)` / `updateFinalStepStatus(status, loopCount, phase, workflowId?)` / `updateFinalStepOutput(loopIndex, output, workflowId?)`
+- `updateFinalStepStreamingChunk(loopIndex, chunk, workflowId?)` / `updateFinalStepStreamingEvents(loopIndex, events, workflowId?)`
+- `updateWorkflowName(name, workflowId?)`
+- `notifyRunHistoryUpdated(runCount, runTimestamps?, runStates?, workflowId?)` / `notifyWorkflowStateReset(steps, workflowId?)` / `notifyStartPositionSet(steps, currentIndex, workflowId?)` / `notifyPromptsReordered(steps, workflowId?)` / `notifyUndoRedoSynced()`
+- `sendStepUndoDataUpdated(target, workspaceSnapshot?)` — push live snapshot metadata after a prompt completes
   </iDashboardSink>
 
 <cliOutputTypes>
@@ -212,12 +221,13 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 - `MESSAGE_TYPES` — 100+ extension↔webview message type strings (includes Terminal I/O, MCP Discovery, Workflow Undo/Redo)
 - `EXECUTION_STATES` — `idle | running | paused | stopped | cancelling | completed | error`
 - `STEP_STATUS` — `pending | sent | running | completed | failed | cancelled | skipped`
-- `FINAL_PROMPT_PHASES` — `queue | finalStep`
+- `FINAL_STEP_PHASES` — `queue | finalStep`
 - `ACTION_TYPES` — `run | queue | runNext | queueNext | runBeforeCurrent`
 - `HARNESS_IDS` — `copilot-cli | copilot-chat | claude-cli | codex-cli | opencode-cli | qwen-cli | gemini-cli`
 - `HARNESS_INFO` — display names per harness (name, shortName)
 - `EXECUTION_MODES` — `interactive | headless`
-- `DEFAULT_MODELS` — default model per harness
+- `MODEL_OPTION_VALUES` — `{ NONE: "none" }` (sentinel for "no model selected" in option lists)
+- `DEFAULT_MODELS` — default model per harness (`copilot-cli: "claude-sonnet-4.6"`, `copilot-chat: "claude-sonnet-4.6"`, `claude-cli: "sonnet"`, `codex-cli: "gpt-5.4"`, `opencode-cli: "anthropic/claude-sonnet-4-6"`, `qwen-cli: "coder-model"`, `gemini-cli: "gemini-2.5-pro"`)
 - `CLAUDE_CLI_MODELS`, `CODEX_CLI_MODELS`, `QWEN_CLI_MODELS`, `GEMINI_CLI_MODELS` — static model option arrays
 - `HARNESS_STATUS_STRINGS` — `checking | available | unavailable`
 - `UI_STRINGS` — loading/checking text
@@ -229,10 +239,15 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 - `INTERACTIVE_ABORT_KINDS` — `user-cancelled | process-exited`
 - `TERMINAL_SESSION_STATUS` — `running | completed | failed`
 - `SESSION_KINDS` — `ai-cli | shell`
+- `SHELL_KINDS` — `pwsh | powershell | bash` (specific shell variant for SHELL sessions)
 - `SESSION_ID_SENTINELS` — `{ FINAL_STEP: "finalStep" }` (resume session from prior finalStep loop)
 - `PRIOR_CONTEXT_KEYWORDS` — `all | previous | none | finalStepAll | finalStepPrevious`
 - `PRIOR_CONTEXT_ITEM_TYPES` — `finalStep` (discriminant for PriorContextItem.type)
+- `GIT_CHANGE_KINDS` — `commit | diff | staged | stash` (kind values for ~diff/~staged/~stash/~commit refs)
 - `STEP_TYPES` — `prompt | script` (discriminant for WorkflowStep union)
+- `CONDITION_ACTIONS` — `continue | stopWorkflow | retry | skipPrompt` (source for EndConditionAction/PreConditionAction/ScriptStepAction via `Exclude<>`)
+- `COMPARE_SOURCES` — `auto | stdout | stderr | exitCode` (source for `EndConditionCompareSource` type alias)
+- `RETRY_PROMPT_PLACEHOLDERS` — `stdout | stderr | expected | actual | exitCode | compareSource`
 - `PROMPT_PROPERTIES` — property name constants: `PROMPT`, `ID`, `NAME`, `STEPS`, `FINAL_STEP`, `VARS`, `STEP_TYPE`, `SCRIPT`, `TIMEOUT`, `COMPARE_SOURCE`, `RETURNS`, `ON_PASS`, `ON_FAIL`, `HARNESS`, `MODEL`, `AGENT`, `SKILLS`, `RESUME_SESSION`, `SESSION_ID`, `MCP_SERVERS`, `HOOKS`, `END_CONDITION`, `PRE_CONDITION`, `PRIOR_CONTEXT`, `ADDITIONAL_ARGS`, `TOOL_PERMISSIONS`
 - `END_CONDITION_PROPERTIES` — `SCRIPT`, `RETURNS`, `TIMEOUT`, `MAX_RETRIES`, `RETRY_PROMPT`, `RESUME_SESSION_ON_RETRY`
 - `CLI_EVENT_TYPES` — `text | thinking | bashCommand | fileRead | fileWrite | fileEdit | fileDelete | mcpToolCall | webSearch | toolCall | toolResult`
@@ -244,10 +259,15 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 - `LOG_LEVELS` — `debug | info | warn | error` (webview → extension LOG_MESSAGE payload)
 - `ATTACHMENT_PREFIXES` — `file | symbol | directory | selection | git` (id namespace for `<attachment>` XML elements)
 - `OUTPUT_HISTORY_KINDS` — `cli | status | runtime` (discriminant for OrderedHistoryEntry union)
+- `SNAPSHOT_STRATEGIES` — `git | filesystem` (workspace snapshot strategy values)
+- `UNDO_FILE_ACTIONS` — `delete | restore-content | reverse-patch` (file restoration action discriminants)
+- `TEMP_FILE_CATEGORIES` — `agent | skills | context | excerpts | prompt` (category discriminants for prompt temp files)
 - `WORKFLOW_ATTEMPT_COMMANDS` — `beginAttempt | scheduleRetry | completeAttempt | failAttempt | cancelAttempt`
 - `DEFAULT_WORKFLOW_NAME` — `"New Workflow"`
+- `PANEL_CLIENT_ID` — `"panel"` (well-known VS Code sidebar client)
+- `BROWSER_CLIENT_PREFIX` — `"browser:"` (prefix for all browser WebSocket client IDs)
 
-**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `FinalStepPhase`, `HarnessId`, `StatusMessageSeverity`, `ActionType`, `QueuePosition`, `FileOperationStatus`, `CliEventType`, `HarnessStatusString`, `WebviewLogLevel`, `RunnerId`, `LockStatus`, `ExecutionMode`, `EditorTargetKind`, `TerminalSessionStatus`, `SessionKind`, `WorkflowAttemptStatus`, `PromptTerminalStatus`, `InteractiveAbortKind`, `PermissionMode`, `StepType`, `PriorContextKeyword`, `PriorContextItemType`, `OutputHistoryKind`, `WorkflowAttemptCommandValue`
+**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `FinalStepPhase`, `HarnessId`, `StatusMessageSeverity`, `ActionType`, `QueuePosition`, `FileOperationStatus`, `CliEventType`, `HarnessStatusString`, `WebviewLogLevel`, `RunnerId`, `LockStatus`, `ExecutionMode`, `EditorTargetKind`, `TerminalSessionStatus`, `SessionKind`, `ShellKind`, `WorkflowAttemptStatus`, `PromptTerminalStatus`, `InteractiveAbortKind`, `PermissionMode`, `StepType`, `PriorContextKeyword`, `PriorContextItemType`, `GitChangeKind`, `OutputHistoryKind`, `SnapshotStrategy`, `UndoFileAction`, `TempFileCategory`, `ConditionAction`, `CompareSource`, `RetryPromptPlaceholder`, `WorkflowAttemptCommandValue`
 </dashboardConstants>
 
 <flightPathSettings>
@@ -258,9 +278,9 @@ Structured global settings interface replacing per-key VS Code settings. Single 
 **`FlightPathGlobalSettings` interface** — grouped by concern:
 
 - **Core:** `harness: HarnessId`, `models: Partial<Record<HarnessId, string>>`, `additionalArgs: Partial<Record<HarnessId, string>>`
-- **Execution:** `execution: { mode, maxPromptTimeout, scriptTimeout, closeTerminalOnComplete }`
-- **Tools:** `tools: { permissionMode, allowed, denied, copilotAllowedDirs, copilotAllowAllPaths, codexSandboxMode, codexApprovalPolicy, codexAllowedDirs }`
-- **Workflow:** `workflow: { defaultFormat, defaultTemplate, defaultAgent, defaultSkills, resumeExistingSession, priorContext, autoLoadRecentSession, maxRetries, retryPrompt, omitAgentsSkillsOnResume }`
+- **Execution:** `execution: { mode, injectMode: boolean, maxPromptTimeout, scriptTimeout, closeTerminalOnComplete }`
+- **Tools:** `tools: { permissionMode, allowed, denied, allowedDirs: string[] (shared across copilot-cli/claude-cli/codex-cli/qwen-cli), copilotAllowAllPaths, codexSandboxMode, codexApprovalPolicy }`
+- **Workflow:** `workflow: { defaultFormat, defaultTemplate, defaultAgent, defaultSkills, resumeExistingSession, priorContext, autoLoadRecentSession, omitAgentsSkillsOnResume, defaultEndCondition?: EndCondition | null, defaultPreCondition?: PreCondition | null }`
 - **Chat:** `chat: { windowLocation, inactivityTimeout, treatTimeoutAsSuccess, forceAgentMode, useNativeAttachments }`
 - **MCP & Hooks:** `mcp: { defaultServers }`, `hooks: UserHookConfig[]`
 - **Queue:** `queue: { maxSize, maxWorkflowExecutionTime, unlimitedMode, notifyOnExtension }`

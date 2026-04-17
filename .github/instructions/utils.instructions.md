@@ -76,6 +76,8 @@ Shared utilities for file system operations, logging, validation, CLI process ma
 **ErrorUtils:** `getErrorMessage(error: unknown): string` — centralizes the `error instanceof Error ? error.message : String(error)` pattern to eliminate duplication across the codebase.
 
 **VarSubstitutor:** Handles `{{varName}}` substitution for CLI variable injection. Variables flow from CLI `--var key=value` flags (merged into `PromptFile.vars`) and workflow-level `vars:` defaults. Applies substitution to: prompt text, resolved model, resolved additionalArgs, hook commands, and endCondition script path + retryPrompt. `substitute(text, vars)` throws a clear error for unresolved placeholders. `hasPlaceholders(text)` detects if text contains any `{{key}}`. `applyToPromptText()` and `applyToResolvedProperties()` are the primary call sites.
+
+**WorkflowFileDiscovery:** Synchronous workspace scan for workflow files. `findWorkflowFilesInWorkspace(root)` recursively walks the workspace, skipping `.git`, `node_modules`, `out`, `dist`, `coverage`, and returns sorted `WorkflowFileEntry[]` (absolute + relative paths). `isWorkflowFileName(name)` checks a filename against workflow suffixes/names. Exports `WORKFLOW_FILE_GLOB` and `WORKFLOW_FILE_EXCLUDE_GLOB` for VS Code watchers.
 </keyUtilities>
 
 <terminology>

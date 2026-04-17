@@ -24,6 +24,7 @@ FlightPath uses **composition over inheritance** for harness integrations:
 - Generic integration class that works with ANY provider
 - Delegates all provider-specific behavior to `ICliProvider` instance
 - Internally composes 5 coordinator services: `CliPromptPreparer`, `CliSessionResolverAdapter`, `CliPromptRuntimeCoordinator`, `CliTransportCoordinator`, `CliExecutionRunner`
+- Per-prompt state tracked in `CliExecutionSession` (prompt text, temp files, command, parsed output, result); abnormal exit tracking in `CliFailureTracker`
 - Handles execution lifecycle (interactive/headless modes, VS Code terminal or CLI spawn)
 - Manages session continuity, cancellation, temp file creation/cleanup, and status updates
 - Terminal tab name: `FP: {Harness}` or `FP: {Harness} · {name} [n/total]`
@@ -68,7 +69,7 @@ FlightPath uses **composition over inheritance** for harness integrations:
 - `buildPermissionArgs?(toolPermissions)` — builds tool permission CLI args; called by CliIntegration for both interactive and headless modes (replaces permission block that was previously embedded in `buildCliArgs()`)
 - `buildNotificationHookArgs?(extensionPath, workspaceRoot, promptIndex, workingFilePath, userHooks)` — sets up FlightPath notification hooks for interactive mode; returns additional CLI args (e.g., `["--settings", path]`); replaces interactive hook block that was previously inside `buildCliArgs()`
 - `buildHeadlessUserHookArgs?(workspaceRoot, promptIndex, workingFilePath, userHooks)` — sets up user-defined hooks for headless execution; returns additional CLI args; replaces headless user-hook block that was previously inside `buildCliArgs()`
-- `HarnessConfig` fields: `name`, `displayName`, `terminalName`, `installHint`, `shouldStreamHeadlessOutput`, `usesInteractiveNotificationMonitor`, `rawTextOutput`
+- `HarnessConfig` fields: `name`, `harnessId`, `displayName`, `terminalName`, `installHint`, `shouldStreamHeadlessOutput`, `usesInteractiveNotificationMonitor`, `rawTextOutput`
   </coreComponents>
 
 <providerStructure>
@@ -82,6 +83,18 @@ src/flightpath/harness/copilot/
 ├── CopilotToolPermissionMapper.ts # Implements IToolPermissionMapper (permission args)
 ├── CopilotToolBuilder.ts          # Converts tool call payloads into CliEvent objects
 └── CopilotLogParser.ts            # Implements ILogParser (log file monitoring/session ID)
+```
+
+OpenCode is the exception — it has `OpenCodeEventMapper.ts` instead of a ToolBuilder:
+
+```
+src/flightpath/harness/opencode/
+├── OpenCodeCliProvider.ts
+├── OpenCodeResponseParser.ts
+├── OpenCodeNotificationMonitor.ts
+├── OpenCodeToolPermissionMapper.ts
+├── OpenCodeEventMapper.ts         # Shared JSON event-mapping utilities (used by both parser and log parser)
+└── OpenCodeLogParser.ts
 ```
 
 **CopilotCliProvider.ts** (main provider class):
@@ -124,6 +137,24 @@ src/flightpath/harness/copilot/
 - `buildCompletedEvents()` — called on tool.execution_complete (carries `structuredPatch` with accurate line numbers)
 - Uses `CliEventMapper` for semantic tool classification
 - Enables code reuse between LogParser and ResponseParser (both call ToolBuilder)
+- OpenCode uses `OpenCodeEventMapper.ts` (not a ToolBuilder) — shared event-mapping utilities used by both `OpenCodeResponseParser` and `OpenCodeLogParser` for OpenCode's JSON event format
+
+**CliEventMapper** (src/flightpath/harness/shared/CliEventMapper.ts):
+
+- Single source of truth for tool name → semantic event type classification (`CLI_EVENT_TYPES`)
+- Handles harness-specific tool name variations (bash/shell, read/view, write/create, edit, delete, web_search, MCP formats)
+- Used by all ToolBuilder classes; eliminates duplicated switch/if-else chains across harness parsers
+
+**CliExecutionSession** (src/flightpath/harness/shared/CliExecutionSession.ts):
+
+- Value object holding all per-prompt execution state (prompt, workflow context, resolved session ID, temp files, command, parsed output, result)
+- Created by CliIntegration at the start of each `sendPrompt` call; passed through coordinator chain
+
+**CliFailureTracker** (src/flightpath/harness/shared/CliFailureTracker.ts):
+
+- Tracks abnormal PTY process exits for a single prompt attempt
+- Separates: raw PTY exit observation, failure classification, and last visible output tail for diagnostics
+- `capturePtyExit()` / `getInteractiveAbortState()` / `getPtyTermination()` used by CliLogMonitor
 
 **CopilotLogParser.ts** (extends BaseLogParser):
 

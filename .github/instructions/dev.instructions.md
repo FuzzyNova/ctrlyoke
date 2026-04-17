@@ -3,7 +3,7 @@ applyTo: "src/dev/**"
 ---
 
 <purpose>
-Development-only commands and diagnostics registered exclusively when `IS_DEV_MODE = true`. The `src/dev/` directory contains a single module (`DevCommands.ts`) that provides tooling for investigating VS Code APIs, discovering Copilot models, debugging chat/CLI integrations, and generating reference artifacts. In production builds, esbuild's dead code elimination strips this code entirely — it is never shipped.
+Development-only commands and diagnostics registered exclusively when `IS_DEV_MODE = true`. The `src/dev/` directory contains a single module (`DevCommands.ts`) that provides tooling for investigating VS Code APIs, discovering Copilot models, debugging chat/CLI integrations, generating reference artifacts, and dashboard-triggered builds. In production builds, esbuild's dead code elimination strips this code entirely — it is never shipped.
 </purpose>
 
 <architecture>
@@ -29,6 +29,8 @@ if (IS_DEV_MODE) {
 **`flightpath.devMode` context key** is set via `setContext` inside `registerDevCommands`, which makes the `devMenu` command visible in the palette.
 
 **All commands** are registered with `context.subscriptions.push(...)` so they are properly disposed when the extension deactivates.
+
+**Dashboard build integration**: `DevCommands.ts` also exports `handleDevDashboardAction` (and the types `DevDashboardAction`, `DevDashboardActionOptions`, `DevBuildResult`) for use by the webview dashboard. This function handles in-process builds (`compile:extension` or `compile`) and VS Code reload/restart commands triggered from the dashboard dev panel. It streams build stdout/stderr back to the webview via `postMessage` using `MESSAGE_TYPES.DEV_BUILD_STARTED`, `DEV_BUILD_OUTPUT`, `DEV_BUILD_COMPLETED`, and `DEV_RESTARTING` message types.
 </architecture>
 
 <devCommands>
@@ -39,11 +41,11 @@ if (IS_DEV_MODE) {
 | `flightpath.test.fileAttachment` | via devMenu | Tests `github.copilot.chat.attachFile` and `github.copilot.chat.attachSelection` commands step-by-step, logging results to the Output channel. |
 | `flightpath.test.chatModelSelection` | via devMenu | Iterates over known model IDs and calls `workbench.action.chat.changeModel` for each, logging success/failure to confirm which models can be switched programmatically. |
 | `flightpath.test.chatAgentSelection` | via devMenu | Tests various agent-selection commands (`workbench.action.chat.openagent`, `workbench.action.chat.assignSelectedAgent`, etc.) with different parameter formats to determine programmability. |
-| `flightpath.listChatCommands` | via devMenu | Filters all registered VS Code commands to those containing `copilot`, `copilot-chat`, `workbench.action.chat`, or `github.copilot`; saves the result to `docs/reference/CHAT_COMMANDS.md`. |
-| `flightpath.listAllCommands` | via devMenu | Dumps all registered VS Code commands to `docs/reference/VSCODE_COMMANDS.md`. |
+| `flightpath.listChatCommands` | via devMenu | Filters all registered VS Code commands to those containing `copilot`, `copilot-chat`, `workbench.action.chat`, or `github.copilot`; saves the result to `dev/reference/CHAT_COMMANDS.md`. |
+| `flightpath.listAllCommands` | via devMenu | Dumps all registered VS Code commands to `dev/reference/VSCODE_COMMANDS.md`. |
 | `flightpath.showLanguageId` | via devMenu | Displays the language ID and file name of the active editor document in a modal — useful for debugging language detection in completions. |
 | `flightpath.exportDiscoveredModels` | via devMenu | Queries `ModelRegistry` for all discovered Copilot models and writes `scripts/discovered-models.json`. Used in the model-update workflow before running `npm run sync-models`. |
-| `flightpath.dumpCssVars` | via devMenu | Opens a temporary WebviewPanel, reads all `--vscode-*` CSS custom properties from `getComputedStyle`, and writes them to `docs/reference/vscode-css-vars.json` — useful for theming and webview styling work. |
+| `flightpath.dumpCssVars` | via devMenu | Opens a temporary WebviewPanel, reads all `--vscode-*` CSS custom properties from `getComputedStyle`, and writes them to `dev/reference/vscode-css-vars.json` — useful for theming and webview styling work. |
 </devCommands>
 
 <modelUpdateWorkflow>
@@ -51,7 +53,7 @@ The `flightpath.exportDiscoveredModels` command is part of a repeatable workflow
 
 1. Run extension (`F5`)
 2. Run command: **FlightPath: Export Discovered Models** → writes `scripts/discovered-models.json`
-3. `npm run sync-models:import` → updates `src/utils/ModelConstants.ts`
+3. `npm run sync-models -- --import` → updates `src/utils/ModelConstants.ts`
 4. `npm run sync-models` → syncs `package.json` enums AND `schemas/prompt-schema.json` examples
 5. `npm run generate-schema` → regenerates YAML schema from JSON
 6. Commit all updated files
@@ -66,4 +68,5 @@ This flow ensures `ModelConstants.ts`, `package.json`, and `prompt-schema.json` 
 - **context.subscriptions**: Always push disposables to `context.subscriptions` in `registerDevCommands`.
 - **Dynamic imports for test utilities**: Test-only modules are imported dynamically inside command handlers to avoid pulling them into the main bundle even when `IS_DEV_MODE = true`.
 - **Self-contained file**: All dev command logic lives in `DevCommands.ts`. Do not split dev commands across multiple files or import dev utilities from production code paths.
+- **Dashboard build actions**: `handleDevDashboardAction` is exported (not registered as a VS Code command) and called directly by the webview message handler. `buildExtension` uses `compile:extension`; `buildAll` uses `compile`. Build results are streamed to the webview via `postMessage`.
 </conventions>

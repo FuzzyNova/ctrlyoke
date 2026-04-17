@@ -43,7 +43,7 @@ Note: "Provider" in class names follows VS Code API naming (CompletionItemProvid
 - Searches backwards up to 50 lines for `prompt:` key
 - Supports inline values: `prompt: "text"`, `prompt: 'text'`, `prompt: text`
 - Supports block scalars: `prompt: |` and `prompt: >` with proper indentation checking
-- Stops at empty lines or dedented content (out of block)
+- Empty lines stay in block; stops only at dedented non-empty content (out of block)
 - Handles list items: `- prompt:` syntax
 
 **Trigger character detection:**
@@ -272,7 +272,7 @@ const promptFilePatterns = [
 
 - When cursor is after `type: `, offers `prompt` (sorted first) and `script` (sorted second) as enum members
 
-**Key property constants** sourced from `PROMPT_PROPERTIES` and `STEP_TYPES` in `src/types/DashboardConstants.ts` — never hardcoded.
+**Key property constants** mostly sourced from `PROMPT_PROPERTIES` and `STEP_TYPES` in `src/types/DashboardConstants.ts`. Exception: `"name"`, `"timeout"`, and `"allowDynamicExtension"` are inline strings (constants exist in `PROMPT_PROPERTIES` but aren't used there).
 </promptPropertyCompletionProvider>
 
 <knownIssues>

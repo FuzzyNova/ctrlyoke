@@ -102,13 +102,19 @@ Most scripts are plain CommonJS Node.js (`.js`). The **OpenCode plugin is the ex
 
 - **Not a hook script** — an OpenCode plugin (`export const FlightPathHook`) deployed to `.opencode/plugin/flightpath-completion-hook.ts`
 - OpenCode only loads `.ts` plugins; this file uses ESM `import`/`export` syntax (not CommonJS)
-- Uses env vars (not CLI args): `FLIGHTPATH_NOTIFY_DIR` (notification directory), `FLIGHTPATH_RUN_ID` (per-run UUID)
-- Filters child sessions (`parentID`) to avoid subagent false positives (only on `session.created`)
-- Listens for two event types via the plugin `event` callback:
-  - `session.created` (no parentID) → writes `{runId|sessionId}-start.json` with `{ hookEvent: "SessionStart", status: "started" }` ⚠️ known OpenCode bug #14808 — may not fire
-  - `session.idle` → writes `{sessionId}-stop.json` with `{ hookEvent: "Stop", status: "completed" }` (no session tracking Set needed)
-- Self-contained diagnostic logging (derives logs dir from `FLIGHTPATH_NOTIFY_DIR`, does not use `initializeLogger`)
-- **Deployment**: `OpenCodeCliProvider.deployCompletionPlugin()` reads `out/scripts/flightpath-opencode-plugin.ts` and copies it verbatim to `.opencode/plugin/flightpath-completion-hook.ts` when no user hooks are configured. When user hooks are present, `OpenCodePluginGenerator.generate(userHooks)` produces a customized plugin string with hook commands embedded (supports `stop`→`session.idle`, `sessionStart`→`session.created`, `preToolUse`→`tool.execute.before`, `postToolUse`→`tool.execute.after`)
+- Uses env vars (not CLI args): `FLIGHTPATH_NOTIFY_DIR` (notification directory), `FLIGHTPATH_RUN_ID` (per-run UUID), `FLIGHTPATH_WORKSPACE_ROOT` (workspace root for headless mode)
+- Tracks **child sessions** (`childSessions` Set) to invert completion detection — stop events fire for any session NOT in `childSessions` (avoids subagent false positives even when `session.created` is missed)
+- Three Sets: `childSessions`, `mainSessions`, `startFilesWritten`
+- Event handlers:
+  - `session.created` with `parentID` → adds to `childSessions`; without `parentID` → adds to `mainSessions`, calls `_writeStartFile()`, fires `sessionStart` user hooks
+  - `session.updated` — fallback for main session when `session.created` was missed (OpenCode bug #14808); adds to `mainSessions` and calls `_writeStartFile()` (no duplicate hook fire)
+  - `session.deleted` → removes from both Sets
+  - `session.status busy` (non-child) → fires `userPromptSubmit` user hooks
+  - `session.status idle` (non-child) → writes `{sessionId}-stop.json`, fires `stop` user hooks
+- `tool.execute.before` / `tool.execute.after` — OpenCode trigger hooks returned as top-level keys on the plugin object (NOT inside the `event` callback); fire `preToolUse` / `postToolUse` user hooks
+- User hooks loaded at startup from sidecar file `{workspaceRoot}/.opencode/plugin/flightpath-hooks.json` (format: `[{ event, command }]`); executed via `execSync`
+- Self-contained diagnostic logging (derives logs dir from `FLIGHTPATH_NOTIFY_DIR`, falls back to `FLIGHTPATH_WORKSPACE_ROOT`; does not use `initializeLogger`)
+- **Deployment**: `OpenCodeCliProvider.deployCompletionPlugin()` always copies the static `out/scripts/flightpath-opencode-plugin.ts` verbatim to `.opencode/plugin/flightpath-completion-hook.ts`, then writes/removes `flightpath-hooks.json` alongside it based on configured user hooks
   </scripts>
 
 <notificationMechanism>
@@ -123,7 +129,7 @@ All scripts write JSON notification files that FlightPath's `*NotificationMonito
 - Start events: `{runId|sessionId}-start.json` — uses `FLIGHTPATH_RUN_ID` env var when set (prevents parallel-workflow collision), falls back to sessionId
 - Stop events: `{sessionId}-stop.json`
 - Copilot fallback: `${hookType}-${Date.now()}.json` when no session ID available
-- OpenCode stop: `session.idle` event (no session tracking needed, unlike the older JS version)
+- OpenCode stop: written on `session.status idle` for any non-child session (using inverted childSessions tracking)
 
 **Notify directory source:**
 
@@ -146,8 +152,8 @@ All scripts (except OpenCode plugin which uses it via env var directly) use the 
 
 - Source: `src/scripts/flightpath-opencode-plugin.ts` (TypeScript/ESM — must stay this way; OpenCode only loads `.ts` plugins)
 - Output: `out/scripts/flightpath-opencode-plugin.ts` (also copied verbatim by the same esbuild plugin)
-- Deployed at runtime by `OpenCodeCliProvider.deployCompletionPlugin()` to `.opencode/plugin/flightpath-completion-hook.ts`
-- When user hooks are configured, `OpenCodePluginGenerator.generate(userHooks)` produces a customized plugin string instead of using the static file
+- Deployed at runtime by `OpenCodeCliProvider.deployCompletionPlugin()` to `.opencode/plugin/flightpath-completion-hook.ts`; always uses the static file — no code generation
+- User hooks are passed via a `flightpath-hooks.json` sidecar file written alongside the plugin (not embedded in the plugin source)
 - Note: `src/scripts/flightpath-opencode-plugin.js` still exists in the repo as a legacy artifact but is no longer deployed
   </buildAndDeploy>
 
@@ -156,7 +162,7 @@ Debug logging is **opt-in**: scripts check the `FLIGHTPATH_DIAGNOSTIC_LOGS` envi
 
 - Stdin-based hooks (Copilot, Claude, Gemini, Qwen) use `initializeLogger()` from utils
 - Codex uses `initializeLogger()` from utils; also derives the logs directory from `argv[2]` notifyDir for the unconditional invocation log
-- OpenCode derives the logs directory from `FLIGHTPATH_NOTIFY_DIR`; logging is gated on `notifyDir` being set
+- OpenCode derives the logs directory from `FLIGHTPATH_NOTIFY_DIR`; falls back to `FLIGHTPATH_WORKSPACE_ROOT`; logging is gated on `FLIGHTPATH_DIAGNOSTIC_LOGS=true`
 - Qwen and Codex additionally write an unconditional invocation log entry before any flag checks (for troubleshooting hook registration)
   </debugLogging>
 

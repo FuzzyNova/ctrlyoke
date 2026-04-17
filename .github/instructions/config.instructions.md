@@ -109,22 +109,22 @@ Only flags that were explicitly passed by the user go into the overlay — Comma
 <settingsStructure>
 **`FlightPathGlobalSettings`** top-level keys (see `src/types/FlightPathSettings.ts` for full details):
 
-| Key                    | Type                                 | Purpose                                                                |
-| ---------------------- | ------------------------------------ | ---------------------------------------------------------------------- |
-| `harness`              | `HarnessId`                          | Active harness (`"copilot-cli"`, `"claude-cli"`, etc.)                 |
-| `models`               | `Partial<Record<HarnessId, string>>` | Per-harness model selection                                            |
-| `additionalArgs`       | `Partial<Record<HarnessId, string>>` | Per-harness extra CLI args                                             |
-| `execution`            | object                               | `mode`, `maxPromptTimeout`, `scriptTimeout`, `closeTerminalOnComplete` |
-| `tools`                | object                               | Permission modes, allowed/denied lists, per-harness tool settings      |
-| `workflow`             | object                               | Format, template, retries, session resume behavior                     |
-| `chat`                 | object                               | Window location, timeouts, agent mode                                  |
-| `mcp`                  | object                               | Default MCP server configs                                             |
-| `hooks`                | `UserHookConfig[]`                   | User-defined hook configs                                              |
-| `queue`                | object                               | Max size, execution time limits                                        |
-| `history`              | object                               | Output saving, max run retention                                       |
-| `ui`                   | object                               | Display flags, gitignore filtering, confirmation dialogs               |
-| `server`               | object                               | Embedded server port, TLS, theme                                       |
-| `enableDiagnosticLogs` | `boolean`                            | Global diagnostic logging toggle                                       |
+| Key                    | Type                                 | Purpose                                                                              |
+| ---------------------- | ------------------------------------ | ------------------------------------------------------------------------------------ |
+| `harness`              | `HarnessId`                          | Active harness (`"copilot-cli"`, `"claude-cli"`, etc.)                               |
+| `models`               | `Partial<Record<HarnessId, string>>` | Per-harness model selection                                                          |
+| `additionalArgs`       | `Partial<Record<HarnessId, string>>` | Per-harness extra CLI args                                                           |
+| `execution`            | object                               | `mode`, `injectMode`, `maxPromptTimeout`, `scriptTimeout`, `closeTerminalOnComplete` |
+| `tools`                | object                               | Permission modes, allowed/denied lists, per-harness tool settings                    |
+| `workflow`             | object                               | Format, template, retries, session resume behavior                                   |
+| `chat`                 | object                               | Window location, timeouts, agent mode                                                |
+| `mcp`                  | object                               | Default MCP server configs                                                           |
+| `hooks`                | `UserHookConfig[]`                   | User-defined hook configs                                                            |
+| `queue`                | object                               | Max size, execution time limits                                                      |
+| `history`              | object                               | Output saving, max run retention                                                     |
+| `ui`                   | object                               | Display flags, gitignore filtering, confirmation dialogs                             |
+| `server`               | object                               | Embedded server port, TLS, theme                                                     |
+| `enableDiagnosticLogs` | `boolean`                            | Global diagnostic logging toggle                                                     |
 
 **`PartialFlightPathSettings`** — shallow-partial version (top-level keys optional, nested objects also partial). Used for config file contents and the CLI overlay.
 
@@ -134,7 +134,7 @@ Only flags that were explicitly passed by the user go into the overlay — Comma
 <conventions>
 - **Global settings are always editable** — never disable or hide global settings controls based on the current value of another global setting. Global settings are workflow-level defaults; a workflow can override any setting (e.g., `permissionMode: custom`), so a user must be able to pre-configure all related settings regardless of what the global default is set to. Conditional disabling belongs only in the workflow properties panel, where the active workflow's actual values are known.
 - **Always read settings via `configService`** — never read config files directly or call `vscode.workspace.getConfiguration` in core code.
-- **`ConfigurationUtils` is the canonical accessor** — it wraps `configService.get()` calls in named helper functions (e.g. `getScriptTimeout()`, `getCliModel()`). Prefer adding a new helper there rather than calling `configService.get()` inline.
+- **`ConfigurationUtils` is the canonical accessor** — it wraps `configService.get()` calls in named helper functions (e.g. `getScriptTimeoutMs()`, `getCliModel()`). Prefer adding a new helper there rather than calling `configService.get()` inline.
 - **`set()` at the right scope** — workspace settings affect the current project; user settings are global across all workspaces. Use workspace scope by default for project-specific settings.
 - **`notify()` after external mutations** — if you mutate the backend outside `configService.set()`, call `configService.notify()` to propagate the change to subscribers.
 - **CLI overlay only for explicit flags** — never add Commander default values to the overlay; they would silently override user/workspace config.

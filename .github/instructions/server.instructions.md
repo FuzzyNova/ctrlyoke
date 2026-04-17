@@ -7,7 +7,7 @@ Express/WebSocket server that hosts the FlightPath dashboard in a plain browser 
 </purpose>
 
 <architecture>
-**FlightPathHostedServer** implements `IDashboardProvider` and self-registers with `DashboardBroadcastHub` in its constructor, receiving every orchestrator event alongside the VS Code webview.
+**FlightPathHostedServer** implements both `IDashboardProvider` and `IDashboardSink`, and self-registers with `DashboardBroadcastHub` in its constructor, receiving every orchestrator event alongside the VS Code webview.
 
 ```
 WorkflowOrchestrator
@@ -19,7 +19,7 @@ WorkflowOrchestrator
 Constructor signature:
 
 ```typescript
-constructor(hub: DashboardBroadcastHub, webviewProvider: FlightPathWebviewProvider, port: number)
+constructor(hub: DashboardBroadcastHub, webviewProvider: FlightPathWebviewProvider, port: number, workspaceRoot: string)
 ```
 
 `dispose()` calls `hub.removeClient(this)` and tears down all WebSocket connections, the WSS, and the HTTP server.
@@ -28,7 +28,9 @@ constructor(hub: DashboardBroadcastHub, webviewProvider: FlightPathWebviewProvid
 <dashboardProviderImpl>
 All `IDashboardProvider` methods call `this.broadcast(message)` to fan out to every open WebSocket connection.
 
-**Exceptions — methods that must never broadcast to browser clients:** `notifyActiveWorkflowChanged`, `updateFileSelected`, and `updateSessionRestored` are all deliberate no-ops. Each browser client's active-workflow view is driven exclusively by `replayWorkflowStateTo()` scoped to that connection. Broadcasting any of these would cause every open browser tab to jump to whatever workflow the VS Code sidebar just loaded. The hub already routes `ACTIVE_WORKFLOW_CHANGED` only to the panel client, but the no-ops guard against future hub changes and prevent the same class of bug in the file-selected/session-restored paths.
+**Exception — method that must never broadcast to browser clients:** `notifyActiveWorkflowChanged` is a deliberate no-op. Each browser client's active-workflow view is driven exclusively by `replayWorkflowStateTo()` scoped to that connection. Broadcasting this would cause every open browser tab to jump to whatever workflow the VS Code sidebar just loaded.
+
+**IDashboardSink delegation:** All `IDashboardSink` methods delegate to an internal `PostMessageDashboardSink` instance constructed with `(msg) => this.broadcast(msg)`. Message shapes are single-sourced in `PostMessageDashboardSink` — add new methods there first, then add a one-liner delegate in `FlightPathHostedServer`.
 
 **Theme vars:** `updateThemeVars(vars)` caches the latest snapshot and broadcasts `THEME_VARS_UPDATED`. Called from `extension.ts` via `setThemeVarsCapturedCallback` after VS Code captures CSS custom properties from its own webview.
 </dashboardProviderImpl>
@@ -38,16 +40,17 @@ All `IDashboardProvider` methods call `this.broadcast(message)` to fan out to ev
 |---|---|
 | `GET /` and `GET /index.html` | `buildHtml()` — patched index.html |
 | `GET /standalone-shim.js` | Serves `standalone-shim.js` from `__dirname/server/` |
+| `GET /api/workflow-files` | Returns `{ workspaceRoot, files }` from `findWorkflowFilesInWorkspace` |
 | Static assets | `express.static` over `out/ui/webview-react/` (`index: false`) |
 | Any other path | SPA fallback → `buildHtml()` |
 
 **`buildHtml()` transformations on `out/ui/webview-react/index.html`:**
 
-1. Removes `{{typoUri}}` script tag (VS Code-only spellchecker)
+1. Replaces `{{typoUri}}` with `/typo.js` (copied to webview-react/ by Vite, served as a static asset)
 2. Replaces `{{codiconsUri}}`, `{{customIconsUri}}` with server-relative paths (`/codicons/codicon.css`, `/custom-icons.css`)
-3. Replaces `{{logoUri}}` with empty string
+3. Replaces `{{logoUri}}` with `/flightpath-icon.svg`
 4. Strips `crossorigin` attribute from Vite module `<script>` tags
-5. Adds `data-aff-uri`/`data-dic-uri` attributes to `<body>` for spell-check dictionaries
+5. Adds `data-aff-uri`, `data-dic-uri`, and `data-logo-uri` attributes to `<body>` for spell-check dictionaries and logo
 6. Replaces the VS Code CSP `<meta>` with a browser-compatible policy; `connect-src` explicitly allows `ws://localhost:{port}`
 7. Injects a `<style>` block with cached CSS custom properties (`:root { ... }`) so the browser is themed before React renders
 8. Injects `<script src="/standalone-shim.js"></script>` before `</head>` so `window.vscodeApi` exists before any React module runs
@@ -67,7 +70,7 @@ WebSocket endpoint: `ws://localhost:{port}/ws` (path `/ws`).
 
 **Inbound messages:** routed via `webviewProvider.routeExternalMessage(msg, send, clientTag)` where `clientTag` is `"browser:N"`. This is the same `WebviewMessageRouter` used by the VS Code panel — no duplicate routing logic.
 
-**On close:** connection removed from `this.connections`.
+**On close:** connection removed from `this.connections` and `webviewProvider.unregisterBrowserClient(clientTag)` is called.
 </websocketProtocol>
 
 <standaloneShim>
@@ -75,12 +78,15 @@ WebSocket endpoint: `ws://localhost:{port}/ws` (path `/ws`).
 
 **What it does:**
 
+- Generates a stable per-tab ID (`fpTabId`) stored in `sessionStorage` — survives page refresh but is unique per tab
+- State is persisted to `localStorage` under the key `fpState-{tabId}` so tabs are independent
 - Opens `ws://{location.host}/ws`
 - Queues outbound messages in `pending[]` until the socket is open
-- Inbound `themeVarsUpdated` messages are applied directly to `document.documentElement.style` (bypasses React; avoids flash)
+- Inbound `themeVarsUpdated` messages are applied directly to `document.documentElement.style` (bypasses React; avoids flash) and also update `document.body.classList` (`vscode-dark`, `vscode-light`, `vscode-high-contrast`) so CodeMirror and other dark-mode checks work correctly
 - All other inbound messages are dispatched as `window.dispatchEvent(new MessageEvent("message", { data: msg }))` — consumed by `useMessageHandler` in the React app
 - On socket close: `setTimeout(() => location.reload(), 1500)` for development convenience (server restart)
-- Exposes `window.vscodeApi` with `postMessage`, `getState`, and `setState` matching the VS Code webview API shape; `getState`/`setState` persist to `sessionStorage` under key `"fpState"`
+- Sets `window.__flightpathStandalone = true` so React components can detect they're running in the browser
+- Exposes `window.vscodeApi` with `postMessage`, `getState`, and `setState` matching the VS Code webview API shape
 
 **Must be injected before React modules.** `buildHtml()` inserts the `<script>` tag immediately before `</head>`.
 </standaloneShim>
@@ -88,7 +94,7 @@ WebSocket endpoint: `ws://localhost:{port}/ws` (path `/ws`).
 <lifecycle>
 ```typescript
 // Start
-const server = new FlightPathHostedServer(hub, webviewProvider, port);
+const server = new FlightPathHostedServer(hub, webviewProvider, port, workspaceRoot);
 const url = server.listen(); // binds 0.0.0.0:{port}
 webviewProvider.setRunningServerUrl(url);
 webviewProvider.setThemeVarsCapturedCallback((vars) => server.updateThemeVars(vars));

@@ -137,13 +137,23 @@ Default uses last request (-1). Returns typed events array.
 
 **Temp file wrapping (`false`, default):**
 
-- Fully expanded prompt (agent instructions + skills + context + user prompt) written to temp `.prompt.md` file(s) in workspace
-- Each file attached via `workbench.action.chat.attachFile`
-- Short instruction typed into chat: `"Follow instructions in prompt1.md"` (or multiple files)
-- Context and prompt written to separate files to prevent Copilot's auto-summarizer from stripping the prompt text (which always appears at the end of context)
-- Simple prompts (short, no special chars) bypass temp file I/O — sent inline as fast path
+- Prompt sections written to typed categorized temp files in workspace, each attached via `workbench.action.chat.attachFile`
+- Short instruction typed into chat referencing the attached files
+- Simple prompts (short, no special chars, no file refs) bypass temp file I/O — sent inline as fast path
 - Temp files cleaned up after each execution (success or failure)
 - Split limits: 8000 tokens / 600 lines per file with attachment-boundary awareness
+
+**Categorized temp file types (non-native path):**
+
+| File suffix           | Content                                                         |
+| --------------------- | --------------------------------------------------------------- |
+| `.agent.prompt.md`    | Agent instructions (wrapped in `<agentInstructions>`)           |
+| `.skills.prompt.md`   | Skill block                                                     |
+| `.context.prompt.md`  | Prior context (`<priorContext>`) — split on `<step>` boundaries |
+| `.excerpts.prompt.md` | Inline excerpt content (line-numbered)                          |
+| `.prompt.md`          | User prompt text                                                |
+
+- Direct file refs (`@path` full-file references) are attached as actual workspace files — no temp copy
   </promptBuilding>
 
 <nativeAttachments>
@@ -169,18 +179,18 @@ Background polling: 5s intervals, 6 attempts max (30s total). First poll passive
 <differenceFromCli>
 **Chat vs. CLI key differences:**
 
-| Aspect              | Chat Mode                           | CLI Mode                                     |
-| ------------------- | ----------------------------------- | -------------------------------------------- |
-| Completion detect   | Session file monitoring (100%)      | Process exit / streaming                     |
-| Response extraction | Session file parsing                | Direct output capture                        |
-| Output format       | UniversalCliOutput (structured)     | UniversalCliOutput (structured)              |
-| Initialization      | Background polling (5s × 6)         | Sync availability check                      |
-| Model switching     | VS Code command                     | Command-line flag                            |
-| File attachments    | Native commands or temp file attach | Always inline expansion                      |
-| Session management  | UI-based (new chat commands)        | Process lifecycle                            |
-| Cancellation        | `isCancelling` flag + session check | Kill process                                 |
-| UI visibility       | Always visible in chat UI           | Optional terminal (interactive vs. headless) |
-| Harness identifier  | `copilot-chat`                      | `copilot-cli`, `claude-cli`, `codex-cli`     |
+| Aspect              | Chat Mode                           | CLI Mode                                                                           |
+| ------------------- | ----------------------------------- | ---------------------------------------------------------------------------------- |
+| Completion detect   | Session file monitoring (100%)      | Process exit / streaming                                                           |
+| Response extraction | Session file parsing                | Direct output capture                                                              |
+| Output format       | UniversalCliOutput (structured)     | UniversalCliOutput (structured)                                                    |
+| Initialization      | Background polling (5s × 6)         | Sync availability check                                                            |
+| Model switching     | VS Code command                     | Command-line flag                                                                  |
+| File attachments    | Native commands or temp file attach | Always inline expansion                                                            |
+| Session management  | UI-based (new chat commands)        | Process lifecycle                                                                  |
+| Cancellation        | `isCancelling` flag + session check | Kill process                                                                       |
+| UI visibility       | Always visible in chat UI           | Optional terminal (interactive vs. headless)                                       |
+| Harness identifier  | `copilot-chat`                      | `copilot-cli`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `gemini-cli` |
 
 </differenceFromCli>
 
