@@ -17,7 +17,7 @@ import {
 } from "@codemirror/autocomplete";
 import { history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
-import { linter, lintKeymap } from "@codemirror/lint";
+import { linter, lintKeymap, type Diagnostic } from "@codemirror/lint";
 import { RangeSetBuilder } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { MESSAGE_TYPES, EDITOR_PLACEHOLDER_TEXT } from "../../types/messages";
@@ -55,6 +55,31 @@ interface CodeMirrorEditorProps {
   onQueue?: () => void;
 }
 
+type ContextReferenceType =
+  | "file"
+  | "directory"
+  | "lineRange"
+  | "symbol"
+  | "git";
+
+interface ContextReferenceMatch {
+  from: number;
+  to: number;
+  type: ContextReferenceType;
+  path?: string;
+  gitRef?: string;
+  lineStart?: string;
+  lineEnd?: string;
+  line?: string;
+  symbolName?: string;
+}
+
+interface ContextReferenceValidationResult {
+  id: string;
+  exists: boolean;
+  message?: string;
+}
+
 /**
  * CodeMirrorEditor - CodeMirror 6 integration for prompt editing
  *
@@ -90,6 +115,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   );
   const pendingCompletionTriggerRef = useRef<string | null>(null);
   const completionSeqRef = useRef(0);
+  const validationSeqRef = useRef(0);
+  const pendingValidationRequestsRef = useRef<
+    Map<number, (value: ContextReferenceValidationResult[]) => void>
+  >(new Map());
 
   const vscode = getVsCodeApi();
 
@@ -248,7 +277,28 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     []
   );
 
-  // Listen for completion responses from extension
+  const validateContextReferences = useCallback(
+    (
+      references: Array<ContextReferenceMatch & { id: string }>
+    ): Promise<ContextReferenceValidationResult[]> => {
+      if (references.length === 0) {
+        return Promise.resolve([]);
+      }
+
+      const seq = ++validationSeqRef.current;
+      return new Promise<ContextReferenceValidationResult[]>((resolve) => {
+        pendingValidationRequestsRef.current.set(seq, resolve);
+        vscode.postMessage({
+          type: MESSAGE_TYPES.VALIDATE_CONTEXT_REFS,
+          references,
+          seq,
+        });
+      });
+    },
+    [vscode]
+  );
+
+  // Listen for completion and context-reference validation responses from extension
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
@@ -258,6 +308,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           message.from,
           message.seq
         );
+      } else if (message.type === MESSAGE_TYPES.CONTEXT_REFS_VALIDATION) {
+        const resolve = pendingValidationRequestsRef.current.get(message.seq);
+        if (resolve) {
+          pendingValidationRequestsRef.current.delete(message.seq);
+          resolve(message.results || []);
+        }
       }
     };
 
@@ -425,6 +481,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         highlightActiveLine(),
         highlightSelectionMatches({ minSelectionLength: 2 }),
         createSpellCheckExtension(typoCheckerRef),
+        createContextReferenceLintExtension(validateContextReferences),
         // Mount autocomplete tooltips on document.body so they escape the
         // overflow:hidden ancestors (critical on iOS where CodeMirror forces
         // position:absolute for tooltips, which causes them to be clipped and
@@ -496,7 +553,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeholderText, customCompletions, pathCompletions]);
+  }, [
+    placeholderText,
+    customCompletions,
+    pathCompletions,
+    validateContextReferences,
+  ]);
   // `value` is intentionally omitted — the setup effect initializes the editor
   // once; value changes are handled by the separate effect below.
   // `vscode` is a stable singleton — never changes.
@@ -809,6 +871,56 @@ function createSpellCheckExtension(
   );
 }
 
+function createContextReferenceLintExtension(
+  validateReferences: (
+    references: Array<ContextReferenceMatch & { id: string }>
+  ) => Promise<ContextReferenceValidationResult[]>
+) {
+  return linter(
+    async (view): Promise<Diagnostic[]> => {
+      const references: Array<ContextReferenceMatch & { id: string }> = [];
+
+      for (const { from, to } of view.visibleRanges) {
+        const text = view.state.doc.sliceString(from, to);
+        const matches = findContextReferenceMatches(text, from);
+        matches.forEach((match, index) => {
+          references.push({
+            ...match,
+            id: `${match.from}:${match.to}:${match.type}:${index}`,
+          });
+        });
+      }
+
+      if (references.length === 0) {
+        return [];
+      }
+
+      const results = await validateReferences(references);
+      const resultById = new Map(results.map((result) => [result.id, result]));
+
+      return references.flatMap((reference): Diagnostic[] => {
+        const result = resultById.get(reference.id);
+        if (!result || result.exists) {
+          return [];
+        }
+
+        return [
+          {
+            from: reference.from,
+            to: reference.to,
+            severity: "warning",
+            message: result.message || "context not found",
+          },
+        ];
+      });
+    },
+    {
+      delay: 400,
+      needsRefresh: (update) => update.docChanged || update.viewportChanged,
+    }
+  );
+}
+
 // Get ranges of @ and # completions to exclude from spell checking
 function getCompletionRanges(
   text: string
@@ -883,6 +995,122 @@ function splitCamelCaseWord(
   return parts.length > 0 ? parts : [{ text: word, offset: 0 }];
 }
 
+function findContextReferenceMatches(
+  text: string,
+  offset = 0
+): ContextReferenceMatch[] {
+  const patterns = {
+    fullFileQuoted: /@"([^"]+\.[a-zA-Z0-9]+)"(?!\/)/g,
+    directoryQuoted: /@"([^"]+\/)"(?![\w])/g,
+    fullFile: /@([^\s@#"]+\.[a-zA-Z0-9]+)(?!\/)/g,
+    directory: /@([^\s@#"]+\/)/g,
+    lineRangeQuoted: /#selection:"([^"]+)":(\d+)-(\d+)/g,
+    lineRange: /#selection:([^\s:]+):(\d+)-(\d+)/g,
+    symbolQuoted: /#sym:"([^"]+)":([^:]+):(\d+)/g,
+    symbol: /#sym:([^\s:]+):([^:]+):(\d+)/g,
+  };
+
+  const fileMatches: ContextReferenceMatch[] = [];
+  const directoryMatches: ContextReferenceMatch[] = [];
+  const lineRangeMatches: ContextReferenceMatch[] = [];
+  const symbolMatches: ContextReferenceMatch[] = [];
+  const gitMatches: ContextReferenceMatch[] = [];
+
+  let match: RegExpExecArray | null;
+
+  const collectPathMatches = (
+    pattern: RegExp,
+    type: "file" | "directory",
+    target: ContextReferenceMatch[]
+  ) => {
+    const regex = new RegExp(pattern.source, "g");
+    while ((match = regex.exec(text)) !== null) {
+      target.push({
+        from: offset + match.index,
+        to: offset + match.index + match[0].length,
+        type,
+        path: match[1],
+      });
+    }
+  };
+
+  collectPathMatches(patterns.fullFileQuoted, "file", fileMatches);
+  collectPathMatches(patterns.fullFile, "file", fileMatches);
+  collectPathMatches(patterns.directoryQuoted, "directory", directoryMatches);
+  collectPathMatches(patterns.directory, "directory", directoryMatches);
+
+  const collectLineRangeMatches = (pattern: RegExp) => {
+    const regex = new RegExp(pattern.source, "g");
+    while ((match = regex.exec(text)) !== null) {
+      lineRangeMatches.push({
+        from: offset + match.index,
+        to: offset + match.index + match[0].length,
+        type: "lineRange",
+        path: match[1],
+        lineStart: match[2],
+        lineEnd: match[3],
+      });
+    }
+  };
+
+  collectLineRangeMatches(patterns.lineRangeQuoted);
+  collectLineRangeMatches(patterns.lineRange);
+
+  const collectSymbolMatches = (pattern: RegExp) => {
+    const regex = new RegExp(pattern.source, "g");
+    while ((match = regex.exec(text)) !== null) {
+      symbolMatches.push({
+        from: offset + match.index,
+        to: offset + match.index + match[0].length,
+        type: "symbol",
+        path: match[1],
+        symbolName: match[2],
+        line: match[3],
+      });
+    }
+  };
+
+  collectSymbolMatches(patterns.symbolQuoted);
+  collectSymbolMatches(patterns.symbol);
+
+  const filteredDirectoryMatches = directoryMatches.filter((dirMatch) => {
+    return !fileMatches.some(
+      (fileMatch) =>
+        dirMatch.from >= fileMatch.from && dirMatch.to <= fileMatch.to
+    );
+  });
+
+  const collectGitMatches = (
+    pattern: RegExp,
+    normalize: (match: RegExpExecArray) => string
+  ) => {
+    const regex = new RegExp(pattern.source, pattern.flags);
+    while ((match = regex.exec(text)) !== null) {
+      const matchFrom = offset + match.index;
+      if (!gitMatches.some((existing) => existing.from === matchFrom)) {
+        gitMatches.push({
+          from: matchFrom,
+          to: offset + match.index + match[0].length,
+          type: "git",
+          gitRef: normalize(match),
+        });
+      }
+    }
+  };
+
+  collectGitMatches(/~(diff|staged)/g, (m) => m[1]);
+  collectGitMatches(/~(stash:\d+)/g, (m) => m[1]);
+  collectGitMatches(/~([0-9a-f]{7,40})/gi, (m) => m[1].toLowerCase());
+
+  return [
+    ...fileMatches,
+    ...filteredDirectoryMatches,
+    ...lineRangeMatches,
+    ...symbolMatches,
+    ...gitMatches,
+  ].sort((a, b) => a.from - b.from);
+}
+
 // Decorate links (@file, @dir/, #file:, #sym:)
 function createLinkDecorationExtension() {
   const linkPlugin = ViewPlugin.fromClass(
@@ -902,220 +1130,9 @@ function createLinkDecorationExtension() {
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
 
-        // Regex patterns matching PromptLinkProvider.
-        // Each reference type supports both plain paths and quoted paths
-        // (quoted form used when the path contains spaces).
-        const patterns = {
-          // @"path with spaces/file.ext" (quoted path, full file)
-          fullFileQuoted: /@"([^"]+\.[a-zA-Z0-9]+)"(?!\/)/g,
-
-          // @"path with spaces/dir/" (quoted path, directory)
-          directoryQuoted: /@"([^"]+\/)"(?![\w])/g,
-
-          // @file.ext (unquoted, no trailing slash, has extension)
-          // Negative lookahead (?!\/) ensures we don't match if followed by /
-          fullFile: /@([^\s@#"]+\.[a-zA-Z0-9]+)(?!\/)/g,
-
-          // @dir/ (unquoted, trailing slash)
-          directory: /@([^\s@#"]+\/)/g,
-
-          // #selection:"path with spaces/file":10-20 (quoted path, line range)
-          lineRangeQuoted: /#selection:"([^"]+)":(\d+)-(\d+)/g,
-
-          // #selection:path:10-20 (unquoted, line range)
-          lineRange: /#selection:([^\s:]+):(\d+)-(\d+)/g,
-
-          // #sym:"path with spaces/file":symbol:42 (quoted path, symbol reference)
-          symbolQuoted: /#sym:"([^"]+)":([^:]+):(\d+)/g,
-
-          // #sym:path:symbol:42 (unquoted, symbol reference)
-          symbol: /#sym:([^\s:]+):([^:]+):(\d+)/g,
-        };
-
         for (const { from, to } of view.visibleRanges) {
           const text = view.state.doc.sliceString(from, to);
-
-          // Collect all matches with their positions
-          const fileMatches: any[] = [];
-          const directoryMatches: any[] = [];
-          const lineRangeMatches: any[] = [];
-          const symbolMatches: any[] = [];
-
-          let match;
-
-          // 1a. Quoted full file references (@"path with spaces/file.ext")
-          const fullFileQuotedRegex = new RegExp(
-            patterns.fullFileQuoted.source,
-            "g"
-          );
-          while ((match = fullFileQuotedRegex.exec(text)) !== null) {
-            fileMatches.push({
-              from: from + match.index,
-              to: from + match.index + match[0].length,
-              type: "file",
-              path: match[1],
-            });
-          }
-
-          // 1b. Plain full file references (@file.ext)
-          const fullFileRegex = new RegExp(patterns.fullFile.source, "g");
-          while ((match = fullFileRegex.exec(text)) !== null) {
-            fileMatches.push({
-              from: from + match.index,
-              to: from + match.index + match[0].length,
-              type: "file",
-              path: match[1],
-            });
-          }
-
-          // 2a. Quoted directory references (@"path with spaces/dir/")
-          const directoryQuotedRegex = new RegExp(
-            patterns.directoryQuoted.source,
-            "g"
-          );
-          while ((match = directoryQuotedRegex.exec(text)) !== null) {
-            directoryMatches.push({
-              from: from + match.index,
-              to: from + match.index + match[0].length,
-              type: "directory",
-              path: match[1],
-            });
-          }
-
-          // 2b. Plain directory references (@dir/)
-          const directoryRegex = new RegExp(patterns.directory.source, "g");
-          while ((match = directoryRegex.exec(text)) !== null) {
-            directoryMatches.push({
-              from: from + match.index,
-              to: from + match.index + match[0].length,
-              type: "directory",
-              path: match[1],
-            });
-          }
-
-          // 3a. Quoted line range references (#selection:"path with spaces/file":10-20)
-          const lineRangeQuotedRegex = new RegExp(
-            patterns.lineRangeQuoted.source,
-            "g"
-          );
-          while ((match = lineRangeQuotedRegex.exec(text)) !== null) {
-            lineRangeMatches.push({
-              from: from + match.index,
-              to: from + match.index + match[0].length,
-              type: "lineRange",
-              path: match[1],
-              lineStart: match[2],
-              lineEnd: match[3],
-            });
-          }
-
-          // 3b. Plain line range references (#selection:path:10-20)
-          const lineRangeRegex = new RegExp(patterns.lineRange.source, "g");
-          while ((match = lineRangeRegex.exec(text)) !== null) {
-            lineRangeMatches.push({
-              from: from + match.index,
-              to: from + match.index + match[0].length,
-              type: "lineRange",
-              path: match[1],
-              lineStart: match[2],
-              lineEnd: match[3],
-            });
-          }
-
-          // 4a. Quoted symbol references (#sym:"path with spaces/file":symbol:42)
-          const symbolQuotedRegex = new RegExp(
-            patterns.symbolQuoted.source,
-            "g"
-          );
-          while ((match = symbolQuotedRegex.exec(text)) !== null) {
-            symbolMatches.push({
-              from: from + match.index,
-              to: from + match.index + match[0].length,
-              type: "symbol",
-              path: match[1],
-              symbolName: match[2],
-              line: match[3],
-            });
-          }
-
-          // 4b. Plain symbol references (#sym:path:symbol:42)
-          const symbolRegex = new RegExp(patterns.symbol.source, "g");
-          while ((match = symbolRegex.exec(text)) !== null) {
-            symbolMatches.push({
-              from: from + match.index,
-              to: from + match.index + match[0].length,
-              type: "symbol",
-              path: match[1],
-              symbolName: match[2],
-              line: match[3],
-            });
-          }
-
-          // Filter out directory matches that are contained within file matches
-          // This prevents @path/ from being a separate link when @path/to/file.ts exists
-          const filteredDirectoryMatches = directoryMatches.filter(
-            (dirMatch) => {
-              return !fileMatches.some(
-                (fileMatch) =>
-                  dirMatch.from >= fileMatch.from && dirMatch.to <= fileMatch.to
-              );
-            }
-          );
-
-          // 5. Git change references (~diff, ~staged, ~stash:N, ~<hash>)
-          const gitMatches: any[] = [];
-
-          const gitPatterns = {
-            gitFixed: /~(diff|staged)/g,
-            gitStash: /~(stash:\d+)/g,
-            gitCommit: /~([0-9a-f]{7,40})/gi,
-          };
-
-          const gitFixedRegex = new RegExp(gitPatterns.gitFixed.source, "g");
-          while ((match = gitFixedRegex.exec(text)) !== null) {
-            gitMatches.push({
-              from: from + match.index,
-              to: from + match.index + match[0].length,
-              type: "git",
-              gitRef: match[1],
-            });
-          }
-
-          const gitStashRegex = new RegExp(gitPatterns.gitStash.source, "g");
-          while ((match = gitStashRegex.exec(text)) !== null) {
-            gitMatches.push({
-              from: from + match.index,
-              to: from + match.index + match[0].length,
-              type: "git",
-              gitRef: match[1],
-            });
-          }
-
-          const gitCommitRegex = new RegExp(gitPatterns.gitCommit.source, "gi");
-          while ((match = gitCommitRegex.exec(text)) !== null) {
-            // Ensure this wasn't already matched as gitFixed or gitStash
-            const matchFrom = from + match.index;
-            if (!gitMatches.some((m) => m.from === matchFrom)) {
-              gitMatches.push({
-                from: matchFrom,
-                to: from + match.index + match[0].length,
-                type: "git",
-                gitRef: match[1].toLowerCase(),
-              });
-            }
-          }
-
-          // Combine all matches (with filtered directories)
-          const matches = [
-            ...fileMatches,
-            ...filteredDirectoryMatches,
-            ...lineRangeMatches,
-            ...symbolMatches,
-            ...gitMatches,
-          ];
-
-          // Sort matches by position and add decorations
-          matches.sort((a, b) => a.from - b.from);
+          const matches = findContextReferenceMatches(text, from);
 
           for (const linkMatch of matches) {
             const attrs: Record<string, string> = {

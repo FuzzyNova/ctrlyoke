@@ -124,6 +124,8 @@ export const MESSAGE_TYPES = {
   OPEN_GIT_CHANGE: "openGitChange", // Webview -> Extension: open a git diff in a new editor
   VALIDATE_FILE_REF: "validateFileRef", // Webview -> Extension: Check if a file-ref path resolves
   FILE_REF_VALIDATION: "fileRefValidation", // Extension -> Webview: { exists: boolean, filePath: string }
+  VALIDATE_CONTEXT_REFS: "validateContextRefs", // Webview -> Extension: Validate inline @/#/~ context references
+  CONTEXT_REFS_VALIDATION: "contextRefsValidation", // Extension -> Webview: Inline context reference validation results
 
   // Token counting - Webview -> Extension: Request token counts for attachment references
   REQUEST_ATTACHMENT_TOKEN_COUNTS: "requestAttachmentTokenCounts",

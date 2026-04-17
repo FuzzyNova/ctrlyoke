@@ -18,6 +18,10 @@ import {
   getGitChangeCompletions,
   getPromptFileCompletions,
 } from "../completions/CompletionHelpers";
+import { resolveSymbol } from "../utils/AttachmentBuilders";
+import { getStashList } from "../utils/GitUtils";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import * as fs from "fs";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { ContextExpander } from "../utils/ContextExpander";
@@ -44,6 +48,9 @@ import {
   safeDiscoverLocalMcpServers,
   safeFetchMcpRegistry,
 } from "../utils/McpDiscoveryUtils";
+
+const execFileAsync = promisify(execFile);
+const GIT_VALIDATION_TIMEOUT_MS = 5000;
 
 /**
  * WebviewMessageRouter
@@ -484,6 +491,13 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.VALIDATE_FILE_REF, async (message) => {
       await this.handleFileRefValidation(message.filePath);
+    });
+
+    table.set(MESSAGE_TYPES.VALIDATE_CONTEXT_REFS, async (message) => {
+      await this.handleContextRefsValidation(
+        message.references ?? [],
+        message.seq
+      );
     });
 
     table.set(
@@ -1334,6 +1348,214 @@ export class WebviewMessageRouter {
       exists,
       filePath,
     });
+  }
+
+  private async handleContextRefsValidation(
+    references: Array<{
+      id: string;
+      type: "file" | "directory" | "lineRange" | "symbol" | "git";
+      path?: string;
+      gitRef?: string;
+      lineStart?: string;
+      lineEnd?: string;
+      line?: string;
+      symbolName?: string;
+    }>,
+    seq?: number
+  ): Promise<void> {
+    const workspaceRoot =
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
+
+    const results = await Promise.all(
+      references.map(async (reference) => {
+        const validation = await this.validateContextReference(
+          reference,
+          workspaceRoot
+        );
+        return {
+          id: reference.id,
+          ...validation,
+        };
+      })
+    );
+
+    this.emitMessage({
+      type: MESSAGE_TYPES.CONTEXT_REFS_VALIDATION,
+      results,
+      seq,
+    });
+  }
+
+  private async validateContextReference(
+    reference: {
+      type: "file" | "directory" | "lineRange" | "symbol" | "git";
+      path?: string;
+      gitRef?: string;
+      lineStart?: string;
+      lineEnd?: string;
+      line?: string;
+      symbolName?: string;
+    },
+    workspaceRoot: string | null
+  ): Promise<{ exists: boolean; message?: string }> {
+    if (reference.type === "git") {
+      return this.validateGitContextReference(reference.gitRef, workspaceRoot);
+    }
+
+    if (!reference.path) {
+      return { exists: false, message: "context not found" };
+    }
+
+    const pathValidation = await this.resolveContextReferencePath(
+      reference.path,
+      workspaceRoot
+    );
+
+    if (!pathValidation.exists || !pathValidation.resolvedPath) {
+      return { exists: false, message: "file not found" };
+    }
+
+    if (reference.type === "directory") {
+      return pathValidation.isDirectory
+        ? { exists: true }
+        : { exists: false, message: "directory not found" };
+    }
+
+    if (!pathValidation.isFile) {
+      return { exists: false, message: "file not found" };
+    }
+
+    if (reference.type === "lineRange") {
+      const startLine = Number.parseInt(reference.lineStart ?? "", 10);
+      const endLine = Number.parseInt(reference.lineEnd ?? "", 10);
+      if (
+        !Number.isInteger(startLine) ||
+        !Number.isInteger(endLine) ||
+        startLine < 1 ||
+        endLine < startLine
+      ) {
+        return { exists: false, message: "selection not found" };
+      }
+
+      try {
+        const document = await vscode.workspace.openTextDocument(
+          vscode.Uri.file(pathValidation.resolvedPath)
+        );
+        return endLine <= document.lineCount
+          ? { exists: true }
+          : { exists: false, message: "selection not found" };
+      } catch {
+        return { exists: false, message: "selection not found" };
+      }
+    }
+
+    if (reference.type === "symbol") {
+      if (!reference.symbolName || !reference.line) {
+        return { exists: false, message: "symbol not found" };
+      }
+
+      const symbolRef = `${reference.path}:${reference.symbolName}:${reference.line}`;
+      const resolved = await resolveSymbol(symbolRef);
+      return resolved
+        ? { exists: true }
+        : { exists: false, message: "symbol not found" };
+    }
+
+    return { exists: true };
+  }
+
+  private async resolveContextReferencePath(
+    filePath: string,
+    workspaceRoot: string | null
+  ): Promise<{
+    exists: boolean;
+    resolvedPath?: string;
+    isFile?: boolean;
+    isDirectory?: boolean;
+  }> {
+    const candidates = path.isAbsolute(filePath)
+      ? [filePath]
+      : workspaceRoot
+        ? [
+            path.resolve(workspaceRoot, filePath),
+            path.resolve(
+              workspaceRoot,
+              PATH_CONSTANTS.FLIGHTPATH_DIR,
+              filePath.replace(/^\.\.?\//, "")
+            ),
+          ]
+        : [];
+
+    for (const candidate of candidates) {
+      try {
+        const stat = await fs.promises.stat(candidate);
+        return {
+          exists: true,
+          resolvedPath: candidate,
+          isFile: stat.isFile(),
+          isDirectory: stat.isDirectory(),
+        };
+      } catch {
+        // try next candidate
+      }
+    }
+
+    return { exists: false };
+  }
+
+  private async validateGitContextReference(
+    gitRef: string | undefined,
+    workspaceRoot: string | null
+  ): Promise<{ exists: boolean; message?: string }> {
+    if (!gitRef || !workspaceRoot) {
+      return { exists: false, message: "git context not found" };
+    }
+
+    try {
+      if (gitRef === "diff") {
+        const { stdout } = await execFileAsync(
+          "git",
+          ["-C", workspaceRoot, "status", "--short"],
+          { timeout: GIT_VALIDATION_TIMEOUT_MS }
+        );
+        return stdout.trim()
+          ? { exists: true }
+          : { exists: false, message: "git diff not found" };
+      }
+
+      if (gitRef === "staged") {
+        const { stdout } = await execFileAsync(
+          "git",
+          ["-C", workspaceRoot, "diff", "--cached", "--name-only"],
+          { timeout: GIT_VALIDATION_TIMEOUT_MS }
+        );
+        return stdout.trim()
+          ? { exists: true }
+          : { exists: false, message: "staged changes not found" };
+      }
+
+      const stashMatch = gitRef.match(/^stash:(\d+)$/);
+      if (stashMatch) {
+        const stashes = await getStashList(workspaceRoot);
+        const stashIndex = Number.parseInt(stashMatch[1], 10);
+        return stashes.some((stash) => stash.index === stashIndex)
+          ? { exists: true }
+          : { exists: false, message: "stash not found" };
+      }
+
+      if (/^[0-9a-f]{7,40}$/i.test(gitRef)) {
+        await execFileAsync(
+          "git",
+          ["-C", workspaceRoot, "cat-file", "-e", `${gitRef}^{commit}`],
+          { timeout: GIT_VALIDATION_TIMEOUT_MS }
+        );
+        return { exists: true };
+      }
+    } catch {
+      return { exists: false, message: "git context not found" };
+    }
+
+    return { exists: false, message: "git context not found" };
   }
 
   private async handleOpenFile(

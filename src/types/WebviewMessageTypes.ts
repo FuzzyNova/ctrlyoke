@@ -1141,6 +1141,11 @@ export type IncomingMessage =
       trigger: string;
     }
   | {
+      type: typeof MESSAGE_TYPES.CONTEXT_REFS_VALIDATION;
+      results: Array<{ id: string; exists: boolean; message?: string }>;
+      seq?: number;
+    }
+  | {
       type: typeof MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE;
       /** Map from reference key (e.g. "file:src/foo.ts") to token count */
       counts: Record<string, number>;
