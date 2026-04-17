@@ -2,10 +2,7 @@ import * as path from "path";
 import * as fs from "fs";
 import { Log } from "./Log";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
-import {
-  TEMP_FILE_CATEGORIES,
-  TempFileCategory,
-} from "../types/DashboardConstants";
+import { TempFileCategory } from "../types/DashboardConstants";
 
 /**
  * TempFileManager - Manages temporary prompt files in .flightpath/temp/
@@ -330,8 +327,7 @@ export class TempFileManager {
           // Only process known top-level temp file types
           const file = entry.name;
           const isTempFile =
-            file.endsWith(".md") ||
-            file.startsWith(this.MCP_CONFIG_PREFIX);
+            file.endsWith(".md") || file.startsWith(this.MCP_CONFIG_PREFIX);
           if (!isTempFile) {
             continue;
           }
