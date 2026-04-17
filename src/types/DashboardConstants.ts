@@ -693,10 +693,10 @@ export const END_CONDITION_PROPERTIES = {
 export const RETRY_PROMPT_PLACEHOLDERS = {
   STDOUT: "stdout",
   STDERR: "stderr",
-  EXPECTED_VALUE: "expectedValue",
-  ACTUAL_VALUE: "actualValue",
-  RETRY_COUNT: "retryCount",
-  MAX_RETRIES: "maxRetries",
+  EXPECTED_VALUE: "expected",
+  ACTUAL_VALUE: "actual",
+  EXIT_CODE: "exitCode",
+  COMPARE_SOURCE: "compareSource",
 } as const;
 
 // ============================================================================

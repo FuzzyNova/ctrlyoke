@@ -23,7 +23,7 @@ export interface EvaluationResult {
   passed: boolean;
   stdout: string; // Separate stdout from script
   stderr: string; // Separate stderr from script
-  result: string; // Same as stdout; used in retry prompt interpolation ({actualValue})
+  result: string; // Same as stdout; used in retry prompt interpolation ({actual})
   error?: string;
   timeout?: boolean;
   duration: number;
@@ -543,48 +543,25 @@ export class EndConditionEvaluator {
   buildRetryPrompt(
     template: string,
     evaluationResult: EvaluationResult,
-    expectedValue: string,
-    retryCount: number,
-    maxRetries: number
+    expected: string,
+    compareSource?: EndConditionCompareSource
   ): string {
     const replacements: Record<string, string> = {
       [RETRY_PROMPT_PLACEHOLDERS.STDOUT]: evaluationResult.stdout.trim(),
       [RETRY_PROMPT_PLACEHOLDERS.STDERR]: evaluationResult.stderr.trim(),
-      [RETRY_PROMPT_PLACEHOLDERS.EXPECTED_VALUE]: expectedValue,
-      [RETRY_PROMPT_PLACEHOLDERS.ACTUAL_VALUE]:
-        evaluationResult.result.trim(),
-      [RETRY_PROMPT_PLACEHOLDERS.RETRY_COUNT]: String(retryCount),
-      [RETRY_PROMPT_PLACEHOLDERS.MAX_RETRIES]: String(maxRetries),
+      [RETRY_PROMPT_PLACEHOLDERS.EXPECTED_VALUE]: expected,
+      [RETRY_PROMPT_PLACEHOLDERS.ACTUAL_VALUE]: evaluationResult.result.trim(),
+      [RETRY_PROMPT_PLACEHOLDERS.EXIT_CODE]: String(
+        evaluationResult.exitCode ?? ""
+      ),
+      [RETRY_PROMPT_PLACEHOLDERS.COMPARE_SOURCE]: compareSource ?? "auto",
     };
 
-    return template
-      .replace(
-        new RegExp(`\\{${RETRY_PROMPT_PLACEHOLDERS.STDOUT}\\}`, "g"),
-        replacements[RETRY_PROMPT_PLACEHOLDERS.STDOUT]
-      )
-      .replace(
-        new RegExp(`\\{${RETRY_PROMPT_PLACEHOLDERS.STDERR}\\}`, "g"),
-        replacements[RETRY_PROMPT_PLACEHOLDERS.STDERR]
-      )
-      .replace(
-        new RegExp(
-          `\\{${RETRY_PROMPT_PLACEHOLDERS.EXPECTED_VALUE}\\}`,
-          "g"
-        ),
-        replacements[RETRY_PROMPT_PLACEHOLDERS.EXPECTED_VALUE]
-      )
-      .replace(
-        new RegExp(`\\{${RETRY_PROMPT_PLACEHOLDERS.ACTUAL_VALUE}\\}`, "g"),
-        replacements[RETRY_PROMPT_PLACEHOLDERS.ACTUAL_VALUE]
-      )
-      .replace(
-        new RegExp(`\\{${RETRY_PROMPT_PLACEHOLDERS.RETRY_COUNT}\\}`, "g"),
-        replacements[RETRY_PROMPT_PLACEHOLDERS.RETRY_COUNT]
-      )
-      .replace(
-        new RegExp(`\\{${RETRY_PROMPT_PLACEHOLDERS.MAX_RETRIES}\\}`, "g"),
-        replacements[RETRY_PROMPT_PLACEHOLDERS.MAX_RETRIES]
-      );
+    return Object.entries(replacements).reduce(
+      (result, [key, value]) =>
+        result.replace(new RegExp(`\\{${key}\\}`, "g"), value),
+      template
+    );
   }
 
   /**

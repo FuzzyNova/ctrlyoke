@@ -185,7 +185,7 @@
                 },
                 "retryPrompt": {
                   "type": "string",
-                  "description": "Retry prompt template. Supports {stdout}, {stderr}, {expectedValue}, {actualValue}, {retryCount}, {maxRetries}."
+                  "description": "Retry prompt template. Supports {stdout}, {stderr}, {exitCode}, {actual}, {expected}, {compareSource}."
                 },
                 "resumeSessionOnRetry": {
                   "type": "boolean",

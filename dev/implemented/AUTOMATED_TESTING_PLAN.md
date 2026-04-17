@@ -406,15 +406,18 @@ suite("EndConditionEvaluator Tests", () => {
   });
 
   suite("buildRetryPrompt - Template Substitution", () => {
-    test("should replace {scriptOutput} placeholder");
-    test("should replace {errorOutput} placeholder");
-    test("should replace {expectedValue} placeholder");
-    test("should replace {actualValue} placeholder");
-    test("should replace {retryCount} placeholder");
-    test("should replace {maxRetries} placeholder");
+    test("should replace {stdout} placeholder");
+    test("should replace {stderr} placeholder");
+    test("should replace {expected} placeholder");
+    test("should replace {actual} placeholder");
+    test("should replace {exitCode} placeholder");
+    test("should replace {compareSource} placeholder — explicit");
+    test("should replace {compareSource} placeholder — defaults to auto");
+    test("should handle undefined exitCode");
     test("should handle multiple occurrences of same placeholder");
     test("should preserve text without placeholders");
     test("should handle empty template");
+    test("should leave legacy placeholders unchanged");
   });
 });
 ```

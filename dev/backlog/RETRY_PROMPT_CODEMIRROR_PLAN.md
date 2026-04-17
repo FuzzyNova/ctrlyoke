@@ -15,14 +15,14 @@ It also needs one end-condition-specific feature: autocomplete after `{` for ret
 
 Recommended runtime placeholders are:
 
-| Placeholder | Runtime value |
-| ----------- | ------------- |
-| `{stdout}` | trimmed stdout from the validation script |
-| `{stderr}` | trimmed stderr from the validation script |
-| `{expectedValue}` | configured expected value |
-| `{actualValue}` | actual comparison value |
-| `{retryCount}` | current retry attempt number |
-| `{maxRetries}` | configured retry limit |
+| Placeholder       | Runtime value                                          |
+| ----------------- | ------------------------------------------------------ |
+| `{stdout}`        | trimmed stdout from the validation script              |
+| `{stderr}`        | trimmed stderr from the validation script              |
+| `{expected}`      | configured expected value                              |
+| `{actual}`        | actual comparison value (resolved from compareSource)  |
+| `{exitCode}`      | numeric exit code from the validation script           |
+| `{compareSource}` | comparison source: `stdout`, `stderr`, `exitCode`, `auto` |
 
 Note: the current UI hint says `Use {error} placeholder`, but `EndConditionEvaluator.buildRetryPrompt()` does not replace `{error}`. The evaluator currently supports `{scriptOutput}` and `{errorOutput}`; because FlightPath is still pre-release, this plan intentionally renames those two placeholders to `{stdout}` and `{stderr}` instead of preserving the older names.
 
@@ -111,28 +111,28 @@ const RETRY_PROMPT_PLACEHOLDERS = [
     info: "Validation script stderr",
   },
   {
-    label: "expectedValue",
-    apply: "expectedValue}",
+    label: "expected",
+    apply: "expected}",
     detail: "expected",
     info: "Configured expected value",
   },
   {
-    label: "actualValue",
-    apply: "actualValue}",
+    label: "actual",
+    apply: "actual}",
     detail: "actual",
-    info: "Actual comparison value",
+    info: "Actual comparison value (resolved from compareSource)",
   },
   {
-    label: "retryCount",
-    apply: "retryCount}",
-    detail: "retry",
-    info: "Current retry attempt number",
+    label: "exitCode",
+    apply: "exitCode}",
+    detail: "exitCode",
+    info: "Numeric exit code from the validation script",
   },
   {
-    label: "maxRetries",
-    apply: "maxRetries}",
-    detail: "retry",
-    info: "Configured retry limit",
+    label: "compareSource",
+    apply: "compareSource}",
+    detail: "compareSource",
+    info: "Comparison source used: stdout, stderr, exitCode, or auto",
   },
 ] as const;
 ```
@@ -149,34 +149,37 @@ Completion behavior:
 Pseudo-source:
 
 ```typescript
-const retryPlaceholderCompletions = useCallback((context) => {
-  if (mode !== "endCondition") return null;
+const retryPlaceholderCompletions = useCallback(
+  (context) => {
+    if (mode !== "endCondition") return null;
 
-  const line = context.state.doc.lineAt(context.pos);
-  const textBefore = line.text.slice(0, context.pos - line.from);
-  const openBraceIndex = textBefore.lastIndexOf("{");
-  if (openBraceIndex === -1) return null;
+    const line = context.state.doc.lineAt(context.pos);
+    const textBefore = line.text.slice(0, context.pos - line.from);
+    const openBraceIndex = textBefore.lastIndexOf("{");
+    if (openBraceIndex === -1) return null;
 
-  const afterBrace = textBefore.slice(openBraceIndex + 1);
-  if (/[\s}]/.test(afterBrace)) return null;
+    const afterBrace = textBefore.slice(openBraceIndex + 1);
+    if (/[\s}]/.test(afterBrace)) return null;
 
-  const from = line.from + openBraceIndex + 1;
-  if (from === context.pos && !context.explicit) {
-    // This still allows activateOnTyping after "{" because the trigger caused it.
-  }
+    const from = line.from + openBraceIndex + 1;
+    if (from === context.pos && !context.explicit) {
+      // This still allows activateOnTyping after "{" because the trigger caused it.
+    }
 
-  return {
-    from,
-    options: RETRY_PROMPT_PLACEHOLDERS.map((item) => ({
-      label: item.label,
-      apply: item.apply,
-      type: "variable",
-      detail: item.detail,
-      info: item.info,
-      boost: 1000,
-    })),
-  };
-}, [mode]);
+    return {
+      from,
+      options: RETRY_PROMPT_PLACEHOLDERS.map((item) => ({
+        label: item.label,
+        apply: item.apply,
+        type: "variable",
+        detail: item.detail,
+        info: item.info,
+        boost: 1000,
+      })),
+    };
+  },
+  [mode]
+);
 ```
 
 The implementation should be tested against the actual CodeMirror behavior because `activateOnTyping` can differ slightly between typed trigger characters and explicit Ctrl+Space.
@@ -300,10 +303,10 @@ Recommended cleanup:
 export const RETRY_PROMPT_PLACEHOLDERS = {
   STDOUT: "stdout",
   STDERR: "stderr",
-  EXPECTED_VALUE: "expectedValue",
-  ACTUAL_VALUE: "actualValue",
-  RETRY_COUNT: "retryCount",
-  MAX_RETRIES: "maxRetries",
+  EXPECTED_VALUE: "expected",
+  ACTUAL_VALUE: "actual",
+  EXIT_CODE: "exitCode",
+  COMPARE_SOURCE: "compareSource",
 } as const;
 ```
 
@@ -347,7 +350,7 @@ This follows the repository rule that shared strings across files belong in `Das
    - update the placeholder example to use `{stderr}` rather than `{error}` or `{errorOutput}`
 
 6. Add focused tests:
-   - Placeholder constant usage or evaluator interpolation replaces `{stdout}`, `{stderr}`, `{expectedValue}`, `{actualValue}`, `{retryCount}`, and `{maxRetries}`.
+   - Placeholder constant usage or evaluator interpolation replaces `{stdout}`, `{stderr}`, `{expected}`, `{actual}`, `{exitCode}`, and `{compareSource}`.
    - Legacy `{scriptOutput}`, `{errorOutput}`, and `{error}` are not promised unless explicit compatibility aliases are added.
    - `CodeMirrorEditor` in `endCondition` mode offers placeholder completions when `{` is typed.
    - `CodeMirrorEditor` in default mode does not offer `{` completions.
@@ -366,33 +369,33 @@ Run `npm run compile` as the final integration check because this touches both e
 
 ## Files to Create or Modify
 
-| File | Action | Purpose |
-| ---- | ------ | ------- |
-| `src/types/DashboardConstants.ts` | Modify | Add `RETRY_PROMPT_PLACEHOLDERS` single source of truth |
-| `src/flightpath/EndConditionEvaluator.ts` | Modify | Use shared placeholder constants in `buildRetryPrompt()` |
-| `src/ui/webview-react/utils/dictionaryUris.ts` | Create | Share dictionary URI lookup across editor contexts |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Modify | Add `endCondition` mode and `{}` placeholder completions |
-| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx` | Modify | Replace retry prompt textarea with `CodeMirrorEditor` |
-| `src/ui/webview-react/test/components/editor/CodeMirrorEditor.test.tsx` | Create/Modify | Cover mode-specific completion behavior |
-| `src/ui/webview-react/test/components/shared/ScriptConditionEditor.test.tsx` | Create/Modify | Cover retry prompt update behavior |
-| `src/test/flightpath/EndConditionEvaluator.test.ts` | Modify | Ensure placeholder interpolation remains covered |
+| File                                                                         | Action        | Purpose                                                  |
+| ---------------------------------------------------------------------------- | ------------- | -------------------------------------------------------- |
+| `src/types/DashboardConstants.ts`                                            | Modify        | Add `RETRY_PROMPT_PLACEHOLDERS` single source of truth   |
+| `src/flightpath/EndConditionEvaluator.ts`                                    | Modify        | Use shared placeholder constants in `buildRetryPrompt()` |
+| `src/ui/webview-react/utils/dictionaryUris.ts`                               | Create        | Share dictionary URI lookup across editor contexts       |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`                | Modify        | Add `endCondition` mode and `{}` placeholder completions |
+| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`           | Modify        | Replace retry prompt textarea with `CodeMirrorEditor`    |
+| `src/ui/webview-react/test/components/editor/CodeMirrorEditor.test.tsx`      | Create/Modify | Cover mode-specific completion behavior                  |
+| `src/ui/webview-react/test/components/shared/ScriptConditionEditor.test.tsx` | Create/Modify | Cover retry prompt update behavior                       |
+| `src/test/flightpath/EndConditionEvaluator.test.ts`                          | Modify        | Ensure placeholder interpolation remains covered         |
 
 ---
 
 ## Edge Cases
 
-| Scenario | Expected behavior |
-| -------- | ----------------- |
-| User types `{` | Placeholder completion opens |
-| User types `{std` | Completion filters to `stdout` and `stderr` |
-| User accepts `stdout` | Editor contains `{stdout}` |
-| User types `{unknown}` | Text remains valid as literal text; no blocking validation |
-| User types `{` in normal prompt editor | No retry placeholder completions |
-| User types `@`, `#`, or `~` in retry prompt | Existing prompt completions still work |
-| Retry prompt editor is disabled | Editor is read-only and sends no edits |
-| Very long retry prompt | Editor scrolls inside its bounded area |
-| Tooltip near drawer bottom | Autocomplete tooltip renders via `document.body` like the main editor |
-| Spell checker dictionaries fail to load | Editor still works, matching current `CodeMirrorEditor` behavior |
+| Scenario                                    | Expected behavior                                                     |
+| ------------------------------------------- | --------------------------------------------------------------------- |
+| User types `{`                              | Placeholder completion opens                                          |
+| User types `{std`                           | Completion filters to `stdout` and `stderr`                           |
+| User accepts `stdout`                       | Editor contains `{stdout}`                                            |
+| User types `{unknown}`                      | Text remains valid as literal text; no blocking validation            |
+| User types `{` in normal prompt editor      | No retry placeholder completions                                      |
+| User types `@`, `#`, or `~` in retry prompt | Existing prompt completions still work                                |
+| Retry prompt editor is disabled             | Editor is read-only and sends no edits                                |
+| Very long retry prompt                      | Editor scrolls inside its bounded area                                |
+| Tooltip near drawer bottom                  | Autocomplete tooltip renders via `document.body` like the main editor |
+| Spell checker dictionaries fail to load     | Editor still works, matching current `CodeMirrorEditor` behavior      |
 
 ---
 

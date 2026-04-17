@@ -518,9 +518,9 @@
       "flightpath.defaultRetryPrompt": {
         "order": 501,
         "type": "string",
-        "default": "**Validation Failed** (Attempt {retryCount}/{maxRetries})\n\n**Expected:** `{expectedValue}`\n**Actual:** `{actualValue}`\n\n**Output:**\n```\n{scriptOutput}\n```\n\nPlease fix the issues above and try again.",
+        "default": "**Validation Failed**\n\n**Expected:** `{expected}`\n**Actual:** `{actual}`\n\n**Output:**\n```\n{stdout}\n```\n\nPlease fix the issues above and try again.",
         "description": "Default retry prompt template when maxRetries is specified but retryPrompt is not",
-        "markdownDescription": "Default template for retry prompts when `maxRetries` is specified in an end condition but `retryPrompt` is not. Supports placeholders: `{scriptOutput}`, `{errorOutput}`, `{expectedValue}`, `{actualValue}`, `{retryCount}`, `{maxRetries}`. Leave empty to require explicit retry prompts."
+        "markdownDescription": "Default template for retry prompts when `maxRetries` is specified in an end condition but `retryPrompt` is not. Supports placeholders: `{stdout}`, `{stderr}`, `{expected}`, `{actual}`, `{exitCode}`, `{compareSource}`. Leave empty to require explicit retry prompts."
       },
       "flightpath.priorContext": {
         "order": 545,

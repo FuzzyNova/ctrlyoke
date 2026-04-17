@@ -18,7 +18,7 @@ End conditions are **optional validation checks** that determine whether a workf
     "returns": "all_passed",
     "timeout": 60000,
     "maxRetries": 3,
-    "retryPrompt": "Tests failing (attempt {retryCount}/{maxRetries}):\n\n{scriptOutput}\n\nPlease fix the issues."
+    "retryPrompt": "Tests failing:\n\n{stdout}\n\nPlease fix the issues."
   }
 }
 ```
@@ -62,14 +62,14 @@ End conditions are **optional validation checks** that determine whether a workf
 
 ### Retry Prompt Placeholders
 
-| Placeholder       | Description                       | Example              |
-| ----------------- | --------------------------------- | -------------------- |
-| `{scriptOutput}`  | stdout from the script            | `"3 tests failed"`   |
-| `{errorOutput}`   | stderr from the script            | `"SyntaxError: ..."` |
-| `{expectedValue}` | The expected value                | `"true"`             |
-| `{actualValue}`   | The actual output                 | `"false"`            |
-| `{retryCount}`    | Current retry attempt (1-indexed) | `"2"`                |
-| `{maxRetries}`    | Maximum retries configured        | `"3"`                |
+| Placeholder       | Description                                            | Example        |
+| ----------------- | ------------------------------------------------------ | -------------- |
+| `{stdout}`        | stdout from the validation script                      | `"3 tests failed"` |
+| `{stderr}`        | stderr from the validation script                      | `"SyntaxError: ..."` |
+| `{expected}`      | The configured expected value                          | `"true"`       |
+| `{actual}`        | The actual comparison value (resolved from compareSource) | `"false"` |
+| `{exitCode}`      | Numeric exit code from the validation script           | `"1"`          |
+| `{compareSource}` | Comparison source: `stdout`, `stderr`, `exitCode`, `auto` | `"stdout"` |
 
 ---
 
@@ -175,7 +175,7 @@ Wait for response
     "script": "npm test",
     "returns": "all_passed",
     "maxRetries": 3,
-    "retryPrompt": "Tests failing:\n{scriptOutput}\n\nFix these issues."
+    "retryPrompt": "Tests failing:\n{stdout}\n\nFix these issues."
   }
 }
 ```
@@ -189,7 +189,7 @@ Wait for response
     "script": "npm run build",
     "returns": "success",
     "maxRetries": 2,
-    "retryPrompt": "Compilation errors:\n\n{scriptOutput}\n\nFix the errors above."
+    "retryPrompt": "Compilation errors:\n\n{stdout}\n\nFix the errors above."
   }
 }
 ```
@@ -203,7 +203,7 @@ Wait for response
     "script": "check_coverage.py",
     "returns": "pass",
     "maxRetries": 2,
-    "retryPrompt": "Coverage at {actualValue}%, need {expectedValue}%.\n\n{scriptOutput}"
+    "retryPrompt": "Coverage at {actual}%, need {expected}%.\n\n{stdout}\n\nCompare source: {compareSource}"
   }
 }
 ```

@@ -116,15 +116,15 @@ const RETRY_PROMPT_PLACEHOLDER_METADATA: Record<
   },
   [RETRY_PROMPT_PLACEHOLDERS.ACTUAL_VALUE]: {
     detail: "actual",
-    info: "Actual comparison value",
+    info: "Actual comparison value (resolved from compareSource)",
   },
-  [RETRY_PROMPT_PLACEHOLDERS.RETRY_COUNT]: {
-    detail: "retry",
-    info: "Current retry attempt number",
+  [RETRY_PROMPT_PLACEHOLDERS.EXIT_CODE]: {
+    detail: "exitCode",
+    info: "Numeric exit code from the validation script",
   },
-  [RETRY_PROMPT_PLACEHOLDERS.MAX_RETRIES]: {
-    detail: "retry",
-    info: "Configured retry limit",
+  [RETRY_PROMPT_PLACEHOLDERS.COMPARE_SOURCE]: {
+    detail: "compareSource",
+    info: "Comparison source: stdout, stderr, exitCode, or auto",
   },
 };
 

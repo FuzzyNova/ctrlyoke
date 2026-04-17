@@ -29,7 +29,6 @@ suite("EndConditionEvaluator Tests", () => {
   });
 
   suite("buildRetryPrompt - Template Substitution", () => {
-    // Create a mock evaluation result for testing
     const mockResult: EvaluationResult = {
       passed: false,
       stdout: "Test stdout output",
@@ -40,85 +39,84 @@ suite("EndConditionEvaluator Tests", () => {
     };
 
     test("should replace {stdout} placeholder", () => {
-      const template = "Script output was: {stdout}";
       const result = evaluator.buildRetryPrompt(
-        template,
+        "Script output was: {stdout}",
         mockResult,
-        "true",
-        1,
-        3
+        "true"
       );
       assert.strictEqual(result, "Script output was: Test stdout output");
     });
 
     test("should replace {stderr} placeholder", () => {
-      const template = "Error was: {stderr}";
       const result = evaluator.buildRetryPrompt(
-        template,
+        "Error was: {stderr}",
         mockResult,
-        "true",
-        1,
-        3
+        "true"
       );
       assert.strictEqual(result, "Error was: Test stderr error");
     });
 
-    test("should replace {expectedValue} placeholder", () => {
-      const template = "Expected: {expectedValue}";
+    test("should replace {expected} placeholder", () => {
       const result = evaluator.buildRetryPrompt(
-        template,
+        "Expected: {expected}",
         mockResult,
-        "true",
-        1,
-        3
+        "true"
       );
       assert.strictEqual(result, "Expected: true");
     });
 
-    test("should replace {actualValue} placeholder", () => {
-      const template = "Actual: {actualValue}";
+    test("should replace {actual} placeholder", () => {
       const result = evaluator.buildRetryPrompt(
-        template,
+        "Actual: {actual}",
         mockResult,
-        "true",
-        1,
-        3
+        "true"
       );
       assert.strictEqual(result, "Actual: Test stdout output");
     });
 
-    test("should replace {retryCount} placeholder", () => {
-      const template = "Retry attempt: {retryCount}";
+    test("should replace {exitCode} placeholder", () => {
       const result = evaluator.buildRetryPrompt(
-        template,
+        "Exit code: {exitCode}",
         mockResult,
-        "true",
-        2,
-        5
+        "true"
       );
-      assert.strictEqual(result, "Retry attempt: 2");
+      assert.strictEqual(result, "Exit code: 1");
     });
 
-    test("should replace {maxRetries} placeholder", () => {
-      const template = "Max retries: {maxRetries}";
+    test("should replace {compareSource} placeholder — explicit", () => {
       const result = evaluator.buildRetryPrompt(
-        template,
+        "Source: {compareSource}",
         mockResult,
         "true",
-        1,
-        5
+        "stderr"
       );
-      assert.strictEqual(result, "Max retries: 5");
+      assert.strictEqual(result, "Source: stderr");
+    });
+
+    test("should replace {compareSource} placeholder — defaults to auto", () => {
+      const result = evaluator.buildRetryPrompt(
+        "Source: {compareSource}",
+        mockResult,
+        "true"
+      );
+      assert.strictEqual(result, "Source: auto");
+    });
+
+    test("should handle undefined exitCode", () => {
+      const noExit: EvaluationResult = { ...mockResult, exitCode: undefined };
+      const result = evaluator.buildRetryPrompt(
+        "Code: {exitCode}",
+        noExit,
+        "true"
+      );
+      assert.strictEqual(result, "Code: ");
     });
 
     test("should replace multiple occurrences of same placeholder", () => {
-      const template = "Output: {stdout}, again: {stdout}";
       const result = evaluator.buildRetryPrompt(
-        template,
+        "Output: {stdout}, again: {stdout}",
         mockResult,
-        "true",
-        1,
-        3
+        "true"
       );
       assert.strictEqual(
         result,
@@ -127,36 +125,32 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("should preserve text without placeholders", () => {
-      const template = "No placeholders here";
       const result = evaluator.buildRetryPrompt(
-        template,
+        "No placeholders here",
         mockResult,
-        "true",
-        1,
-        3
+        "true"
       );
       assert.strictEqual(result, "No placeholders here");
     });
 
     test("should handle empty template", () => {
-      const result = evaluator.buildRetryPrompt("", mockResult, "true", 1, 3);
+      const result = evaluator.buildRetryPrompt("", mockResult, "true");
       assert.strictEqual(result, "");
     });
 
     test("should handle all placeholders in one template", () => {
-      const template =
-        "Retry {retryCount}/{maxRetries}: Expected {expectedValue}, got {actualValue}. " +
-        "Output: {stdout}. Error: {stderr}";
       const result = evaluator.buildRetryPrompt(
-        template,
+        "Expected {expected}, got {actual}. Stdout: {stdout}. Stderr: {stderr}. Code: {exitCode}. Source: {compareSource}",
         mockResult,
         "true",
-        2,
-        5
+        "stdout"
       );
-      assert.ok(result.includes("Retry 2/5"));
       assert.ok(result.includes("Expected true"));
       assert.ok(result.includes("got Test stdout output"));
+      assert.ok(result.includes("Stdout: Test stdout output"));
+      assert.ok(result.includes("Stderr: Test stderr error"));
+      assert.ok(result.includes("Code: 1"));
+      assert.ok(result.includes("Source: stdout"));
     });
 
     test("should handle whitespace in output", () => {
@@ -165,26 +159,19 @@ suite("EndConditionEvaluator Tests", () => {
         stdout: "  spaced output  ",
         result: "  spaced output  ",
       };
-      const template = "{stdout}";
       const result = evaluator.buildRetryPrompt(
-        template,
+        "{stdout}",
         resultWithWhitespace,
-        "true",
-        1,
-        3
+        "true"
       );
-      // buildRetryPrompt trims the output
       assert.strictEqual(result, "spaced output");
     });
 
     test("should leave legacy placeholders unchanged", () => {
-      const template = "{scriptOutput} {errorOutput} {error}";
       const result = evaluator.buildRetryPrompt(
-        template,
+        "{scriptOutput} {errorOutput} {error}",
         mockResult,
-        "true",
-        1,
-        3
+        "true"
       );
       assert.strictEqual(result, "{scriptOutput} {errorOutput} {error}");
     });

@@ -92,11 +92,9 @@ class TestEndConditionEvaluator extends EndConditionEvaluator {
   override buildRetryPrompt(
     retryPromptTemplate: string,
     _evaluationResult: EvaluationResult,
-    _expectedResult: string,
-    retryCount: number,
-    maxRetries: number
+    _expectedResult: string
   ): string {
-    return `${retryPromptTemplate} [${retryCount}/${maxRetries}]`;
+    return `${retryPromptTemplate} [retry]`;
   }
 }
 

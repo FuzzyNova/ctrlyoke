@@ -285,19 +285,19 @@ Located in `.flightpath/scripts/`:
     "script": "validate.py",
     "returns": "success",
     "maxRetries": 5,
-    "retryPrompt": "Retry {retryCount}/{maxRetries}: {scriptOutput}"
+    "retryPrompt": "Validation failed (exit {exitCode}): {stdout}"
   }
 }
 ```
 
 ### Retry Prompt Placeholders
 
-- `{scriptOutput}` - stdout from the script
-- `{errorOutput}` - stderr from the script
-- `{expectedValue}` - what we're looking for
-- `{actualValue}` - what we got
-- `{retryCount}` - current attempt (1, 2, 3...)
-- `{maxRetries}` - maximum attempts configured
+- `{stdout}` - stdout from the script
+- `{stderr}` - stderr from the script
+- `{expected}` - what we're looking for
+- `{actual}` - what we got
+- `{exitCode}` - numeric exit code from the script
+- `{compareSource}` - comparison source: stdout, stderr, exitCode, or auto
 
 ---
 

@@ -420,8 +420,8 @@ definitions:
       retryPrompt:
         type: string
         description: >-
-          Template for retry prompt with placeholders: {stdout}, {stderr}, {expectedValue},
-          {actualValue}, {retryCount}, {maxRetries}
+          Template for retry prompt with placeholders: {stdout}, {stderr}, {exitCode}, {actual},
+          {expected}, {compareSource}
       resumeSessionOnRetry:
         type: boolean
         description: >-

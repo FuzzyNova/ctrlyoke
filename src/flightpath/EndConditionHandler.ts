@@ -508,7 +508,6 @@ export class EndConditionHandler {
     // Get effective retry prompt (including defaults from settings)
     const retryPromptTemplate =
       this.promptQueue.getEffectiveRetryPrompt(prompt);
-    const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
 
     if (!retryPromptTemplate) {
       // Fallback retry prompt if none configured (should rarely happen due to smart defaults)
@@ -520,8 +519,7 @@ export class EndConditionHandler {
       retryPromptTemplate,
       evaluationResult,
       prompt.endCondition!.returns,
-      this.promptQueue.getCurrentRetryCount(),
-      maxRetries
+      prompt.endCondition?.compareSource
     );
   }
 

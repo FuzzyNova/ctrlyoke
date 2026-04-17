@@ -21,11 +21,13 @@ prompts:
       timeout: 45000
       maxRetries: 3
       retryPrompt: |
-        Validation failed: {errorOutput}
+        Validation failed (exit {exitCode}, source: {compareSource})
 
-        Expected: {expectedValue}
-        Actual: {actualValue}
-        Retry {retryCount} of {maxRetries}
+        Expected: {expected}
+        Actual: {actual}
+
+        Stdout: {stdout}
+        Stderr: {stderr}
 
         Please fix the issues and try again.
 
