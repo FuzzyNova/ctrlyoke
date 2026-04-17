@@ -111,6 +111,13 @@ export interface IDashboardSink {
     workflowId?: string
   ): void;
 
+  updateContextWindow(
+    stepIndex: number,
+    used: number,
+    size: number,
+    workflowId?: string
+  ): void;
+
   updateStatusMessage(
     stepIndex: number,
     message: string,

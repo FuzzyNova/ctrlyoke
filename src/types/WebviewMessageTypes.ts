@@ -495,6 +495,17 @@ export interface CliStreamingEventsMessage {
 }
 
 /**
+ * Live context window update message (extension → webview).
+ * Fired per-event during prompt execution; used to animate the context bar.
+ */
+export interface ContextWindowUpdateMessage {
+  type: typeof MESSAGE_TYPES.CONTEXT_WINDOW_UPDATE;
+  stepIndex: number;
+  used: number;
+  size: number;
+}
+
+/**
  * Status message (extension -> webview)
  */
 export interface StatusMessageMessage {
@@ -1101,6 +1112,7 @@ export type IncomingMessage =
   | CliOutputMessage
   | CliStreamingChunkMessage
   | CliStreamingEventsMessage
+  | ContextWindowUpdateMessage
   | StatusMessageMessage
   | UpdateFinalStepMessage
   | FinalStepStatusChangedMessage

@@ -312,9 +312,7 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   handlers[MESSAGE_TYPES.DEV_BUILD_STARTED] = (message) => {
-    useSettingsStore
-      .getState()
-      .startDevBuild(message.script, message.command);
+    useSettingsStore.getState().startDevBuild(message.script, message.command);
   };
 
   handlers[MESSAGE_TYPES.DEV_BUILD_OUTPUT] = (message) => {
@@ -748,6 +746,18 @@ function createMessageHandlers(): MessageHandlerMap {
       });
       useWorkflowStore.temporal.getState().resume();
     }
+
+    // Clear live context window when a step reaches a terminal status so the
+    // context bar falls back to the completed step's tokens from latestOutput.
+    const terminalStatuses = [
+      STEP_STATUS.COMPLETED,
+      STEP_STATUS.FAILED,
+      STEP_STATUS.CANCELLED,
+    ];
+    const resolvedStatus = status?.state || status;
+    if (terminalStatuses.includes(resolvedStatus)) {
+      workflowStore.clearLiveContextWindow(stepIndex);
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -915,6 +925,21 @@ function createMessageHandlers(): MessageHandlerMap {
     // Append events to streaming buffer (creates buffer if needed)
     // Events are accumulated and displayed in real-time as formatted structured output
     workflowStore.appendStreamingEvents(message.stepIndex, events);
+  };
+
+  // --------------------------------------------------------------------------
+  // CONTEXT_WINDOW_UPDATE - Live context window usage update for a running step
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.CONTEXT_WINDOW_UPDATE] = (message) => {
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        return;
+      }
+    }
+    useWorkflowStore
+      .getState()
+      .updateLiveContextWindow(message.stepIndex, message.used, message.size);
   };
 
   // --------------------------------------------------------------------------

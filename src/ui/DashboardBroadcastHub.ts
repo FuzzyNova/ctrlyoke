@@ -232,6 +232,17 @@ export class DashboardBroadcastHub
     }
   }
 
+  updateContextWindow(
+    stepIndex: number,
+    used: number,
+    size: number,
+    workflowId?: string
+  ): void {
+    for (const client of this.clients) {
+      client.updateContextWindow?.(stepIndex, used, size, workflowId);
+    }
+  }
+
   updateStatusMessage(
     stepIndex: number,
     message: string,

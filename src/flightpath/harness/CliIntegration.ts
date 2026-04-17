@@ -454,6 +454,10 @@ export class CliIntegration extends HarnessIntegration {
     this.streamingEventsEmitter.fire(events);
   }
 
+  private emitContextWindowUpdate(used: number, size: number): void {
+    this.contextWindowUpdateEmitter.fire({ used, size });
+  }
+
   private emitResponseComplete(response: string): void {
     this.responseCompleteEmitter.fire(response);
   }
@@ -647,6 +651,8 @@ export class CliIntegration extends HarnessIntegration {
         onResponseComplete: (response) => this.emitResponseComplete(response),
         logResponse: (response, statistics) =>
           this.logResponse(response, statistics),
+        onContextWindowUpdate: (used, size) =>
+          this.emitContextWindowUpdate(used, size),
       },
     });
 
@@ -806,8 +812,11 @@ export class CliIntegration extends HarnessIntegration {
    */
   private async retireInteractivePtyForRestartFallback(): Promise<void> {
     const activePtyId =
-      await this.transportCoordinator.terminateCurrentPtySession("inject fallback restart");
-    const lastId = activePtyId ?? this.transportCoordinator.getLastPtySessionId();
+      await this.transportCoordinator.terminateCurrentPtySession(
+        "inject fallback restart"
+      );
+    const lastId =
+      activePtyId ?? this.transportCoordinator.getLastPtySessionId();
     if (lastId) {
       this.suppressPtyExitSessionId = lastId;
       Log.info(
@@ -840,9 +849,10 @@ export class CliIntegration extends HarnessIntegration {
       return;
     }
 
-    const ptySessionId = await this.transportCoordinator.terminateCurrentPtySession(
-      `headless resume of AI session ${resolvedSessionId}`
-    );
+    const ptySessionId =
+      await this.transportCoordinator.terminateCurrentPtySession(
+        `headless resume of AI session ${resolvedSessionId}`
+      );
     this.executionRunner.clearInteractiveContext();
 
     if (ptySessionId) {

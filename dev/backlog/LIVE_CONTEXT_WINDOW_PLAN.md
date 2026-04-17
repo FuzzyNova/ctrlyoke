@@ -23,9 +23,13 @@ Every harness already emits usage-bearing events during streaming; it's just tha
 
 ### Current UI
 
-- `PromptItemDetails.tsx:54-57` — computes `contextPct` from `latestOutput.tokens` after completion
-- `PromptItemDetails.tsx:128-130` — renders `{contextPct}%` as a plain text chip in the stats row
-- `PromptItem.tsx` — no context bar; just delegates to `PromptItemDetails`
+- `PromptStepDetails.tsx:55-58` — computes `contextPct` from `latestOutput.tokens` after completion via `calcContextPct()`
+- `PromptStepDetails.tsx:128-132` — renders `{contextPct}%` as a plain text chip in the stats row (only for `COMPLETED` steps)
+- `WorkflowStep.tsx` (`WorkflowStepItem`) — no context bar; delegates to `PromptStepDetails`
+- `hooks/useContextPct.ts` — existing hook returning `getContextPct(index)` from completed step data; already used by `PromptChipRail`
+- `PromptChipRail.tsx` — already shows `contextPct` as text per chip (Row 2); no bar yet
+
+> **File name note:** The plan was originally drafted with `PromptItem.tsx` / `PromptItemDetails.tsx`. The actual files are `WorkflowStep.tsx` (component `WorkflowStepItem`) and `PromptStepDetails.tsx`.
 
 ### Current streaming pipeline
 
@@ -196,19 +200,34 @@ if (this.deps.onContextWindowUpdate && parser.extractLiveContextWindow) {
 
 This piggybacks on the existing event loop — zero additional file I/O.
 
-### Layer 4 — `CliIntegration` → Webview bridge
+### Layer 4 — Threading `onContextWindowUpdate` to the webview
 
-`CliIntegration` already wires `onStreamingEvents` through to the webview provider. The same pattern applies:
+`LogMonitorDependencies` is assembled inside **`CliExecutionRunner`**, not `CliIntegration` directly. The callback must flow through the existing `hostCallbacks` chain:
 
-In `CliIntegration` (wherever `LogMonitorDependencies` is assembled):
-
+**`CliExecutionRunner` `hostCallbacks`** (add one field):
 ```typescript
-onContextWindowUpdate: (used, size) => {
-  this.onContextWindowUpdate?.(stepIndex, used, size);
+hostCallbacks: {
+  onStreamingEvents: (events) => ...;   // existing
+  onResponseComplete: (response) => ...; // existing
+  logResponse: (...) => ...;             // existing
+  onContextWindowUpdate?: (used: number, size: number) => void;  // NEW
+}
+```
+
+**`CliExecutionRunner`** passes it into `LogMonitorDependencies` when constructing `CliLogMonitor`.
+
+**`CliIntegration`** wires the callback when constructing `CliExecutionRunner` (lines ~646–650):
+```typescript
+hostCallbacks: {
+  onStreamingEvents: (events) => this.emitStreamingEvents(events),
+  onResponseComplete: (response) => this.emitResponseComplete(response),
+  logResponse: (response, statistics) => this.logResponse(response, statistics),
+  onContextWindowUpdate: (used, size) =>
+    this.onContextWindowUpdate?.(stepIndex, used, size),  // NEW
 },
 ```
 
-`CliIntegration` exposes a callback that callers (WorkflowExecutor → FlightPathWebviewProvider) wire up.
+`CliIntegration` exposes `onContextWindowUpdate` as a callback field (same pattern as `onStreamingEvents`), wired by `WorkflowExecutor → FlightPathWebviewProvider`.
 
 ### Layer 5 — New webview message type
 
@@ -252,76 +271,192 @@ case MESSAGE_TYPES.CONTEXT_WINDOW_UPDATE:
   break;
 ```
 
-Clear `liveContextWindow[stepIndex]` when `clearRuntimeStateFromStep` fires.
+Clear `liveContextWindow[stepIndex]` in two places:
+- When `clearRuntimeStateFromStep` fires (set-start-position / workflow reset)
+- When `PROGRESS_UPDATE` fires for that stepIndex with a terminal status (`COMPLETED`, `FAILED`, `CANCELLED`) — so the bar transitions cleanly to showing data from `latestOutput.tokens` once the step is done
+
+Without the second clear, the live value (last mid-run reading) would shadow `latestOutput.tokens` permanently for completed steps.
+
+### Layer 6b — Update `useContextPct` hook
+
+`hooks/useContextPct.ts` already provides `getContextPct(index)` from completed step data and is used by `PromptChipRail`. Update it to also check `liveContextWindow` from `workflowStore` as a higher-priority source so `PromptChipRail` automatically gets live updates for the running step without additional prop threading:
+
+```typescript
+export function useContextPct() {
+  const { liveOrderedEntries, historyOutputs, liveContextWindow } = useWorkflowStore();
+  const { isViewingHistory } = useUiStore();
+
+  return function getContextPct(index: number): number | undefined {
+    // Live data takes priority (running step)
+    const live = liveContextWindow?.[index];
+    if (live?.size) {
+      return calcContextPct(live.used, live.size);
+    }
+    // Fall back to completed step data
+    const entries = isViewingHistory && historyOutputs
+      ? historyOutputs.orderedEntries
+      : liveOrderedEntries;
+    // ... existing logic unchanged ...
+  };
+}
+```
+
+This means `PromptChipRail` requires zero additional changes to receive live context data.
 
 ### Layer 7 — UI changes
 
-#### `PromptItem.tsx` — Add vertical context bar
+#### `WorkflowStep.tsx` (`WorkflowStepItem`) — Add vertical context bar
 
-The context bar is a narrow column on the right edge of the prompt item. It:
+> **File note:** The plan refers to `PromptItem.tsx` — the actual file is `WorkflowStep.tsx`, component `WorkflowStepItem`.
 
-- Is always the same height as the item's content area
+The context bar is a narrow column on the right edge of the step item. It:
+
+- Is always the same height as the item's content area (`self-stretch`)
 - Fills from the bottom upward proportional to `pct`
-- Shows the percentage number above the bar (or below — consider below to avoid overlap with drag handle area)
-- Uses a subdued accent color (e.g., the existing VS Code token color variable) that intensifies as it fills
+- Shows the percentage number above the fill
+- Uses existing VS Code semantic color tokens — intensifies as it fills
 - Is hidden when `contextPct === undefined`
 
 **Data flow:**
 
 ```typescript
-// PromptItem receives:
+// WorkflowStepItem receives:
 liveContextWindow?: { used: number; size: number };  // from store for running step
-// latestOutput.tokens already carries final context for completed step
 
-// Derive pct:
-const ctx = liveContextWindow ?? (latestOutput?.tokens
+// Derive pct (inside WorkflowStepItem):
+const ctx = liveContextWindow ?? (latestOutput?.tokens?.contextWindowSize
   ? { used: latestOutput.tokens.contextWindowUsed ?? 0,
-      size: latestOutput.tokens.contextWindowSize ?? 0 }
+      size: latestOutput.tokens.contextWindowSize }
   : undefined);
 const contextPct = ctx?.size ? Math.round((ctx.used / ctx.size) * 100) : undefined;
 ```
 
-**Render — right-side vertical bar:**
+**Render — right-side vertical bar (added inside the `flex items-start gap-2` div, after the content column):**
 
 ```tsx
-{
-  contextPct !== undefined && (
-    <div className="flex-shrink-0 flex flex-col items-center w-3 self-stretch ml-1">
-      {/* Percentage label */}
-      <span className="text-[8px] leading-none text-description-fg opacity-75 mb-0.5">
-        {contextPct}
-      </span>
-      {/* Track */}
-      <div className="flex-1 w-1.5 rounded-full bg-panel-border overflow-hidden relative">
-        {/* Fill */}
-        <div
-          className="absolute bottom-0 left-0 right-0 rounded-full bg-description-fg opacity-50 transition-all duration-300"
-          style={{ height: `${contextPct}%` }}
-        />
-      </div>
+{contextPct !== undefined && (
+  <div className="flex-shrink-0 flex flex-col items-center w-3 self-stretch ml-0.5">
+    {/* Track */}
+    <div className="flex-1 w-1.5 rounded-full bg-panel-border overflow-hidden relative">
+      {/* Fill — color class derived from contextPct thresholds */}
+      <div
+        key={contextPct}
+        className={`absolute bottom-0 left-0 right-0 rounded-full animate-ctx-update ${
+          contextPct >= 85
+            ? "bg-error-fg opacity-90"
+            : contextPct >= 70
+            ? "bg-warning-fg opacity-70"
+            : "bg-description-fg opacity-50"
+        }`}
+        style={{ height: `${contextPct}%` }}
+      />
     </div>
-  );
-}
+    {/* Percentage label — below the bar */}
+    <span className="text-[8px] leading-none text-description-fg opacity-75 mt-0.5">
+      {contextPct}
+    </span>
+  </div>
+)}
 ```
 
-Color cues:
+Color cues use existing Tailwind tokens (`bg-error-fg`, `bg-warning-fg`, `bg-description-fg`):
+- 0–70%: `bg-description-fg opacity-50` (neutral)
+- 70–85%: `bg-warning-fg opacity-70` (warning)
+- 85–100%: `bg-error-fg opacity-90` (danger)
 
-- 0–70%: `opacity-50` (neutral)
-- 70–85%: `opacity-70` + amber hue (warning)
-- 85–100%: `opacity-90` + red hue (danger)
+**Update animation — brightness flash on each value change:**
 
-These thresholds map to CSS classes based on `contextPct`, no inline styles needed.
+Add `key={contextPct}` to the fill div. React unmounts and remounts the element whenever the value changes, automatically restarting the CSS animation. Pair with a new one-shot `animate-ctx-update` class:
 
-**Prop addition to `PromptItemProps`:**
+```tsx
+<div
+  key={contextPct}   // ← remount on update → restarts animation
+  className={`absolute bottom-0 left-0 right-0 rounded-full animate-ctx-update ${colorClass}`}
+  style={{ height: `${contextPct}%` }}
+/>
+```
+
+`animate-ctx-update` is defined in `tailwind.config.js` (add alongside existing keyframes):
+
+```js
+// keyframes:
+"ctx-update": {
+  "0%":   { filter: "brightness(2)" },
+  "100%": { filter: "brightness(1)" },
+},
+// animation:
+"ctx-update": "ctx-update 0.4s ease-out",
+```
+
+A `brightness(2)` flash fading to normal in 0.4 s. Plays once per value change, then stops — not continuous. The `key` remount also snaps the bar to the new height instantly (so `transition-all duration-300` is **removed** from the fill div; the flash is the update signal).
+
+**Prop addition to `WorkflowStepProps`:**
 
 ```typescript
 /** Live context window usage (updated during running step; falls back to latestOutput for completed) */
 liveContextWindow?: { used: number; size: number };
 ```
 
-#### `PromptItemDetails.tsx` — Remove context % chip
+**Wiring in `WorkflowStepsPanel`:**
 
-Remove the `{contextPct}%` span from the stats row (lines 128–130). The rest of the stats row (sessionId, duration) stays as-is. The condition guarding the row already has `|| sessionId || durationSeconds !== undefined`, so the row still renders correctly when context chip is absent.
+`WorkflowStepsPanel` reads `liveContextWindow` from `workflowStore` and passes it for the current running step:
+
+```typescript
+// In WorkflowStepsPanel, when rendering the current pending step:
+const liveCtx = liveContextWindow?.[index];
+// Pass as prop to SortableWorkflowStepWrapper → WorkflowStepItem
+```
+
+For done (completed) steps, `liveContextWindow[index]` is cleared on step completion, so `latestOutput.tokens` data is used via the fallback path.
+
+#### `PromptStepDetails.tsx` — Reorder stats row + remove context % chip ✅ Done
+
+> **File note:** The plan refers to `PromptItemDetails.tsx` — the actual file is `PromptStepDetails.tsx`.
+
+**Already implemented.** Stats row is now `[duration] · [sessionId {copy}]` — context % removed (moves to bar), duration moved first. The `calcContextPct` import and `contextPct` local variable were also removed. Row guard is now `sessionId || durationSeconds !== undefined`.
+
+#### `PromptChipRail.tsx` — Add thin bar to each chip
+
+Each `ChipContent` already receives `contextPct: number | undefined`. Add a 1–2px wide bar on the right edge of the chip that fills from the bottom upward, using the same color thresholds as the wide view.
+
+**Render — add inside `ChipContent` as a right-edge absolute bar:**
+
+The chip `<div>` needs `relative` added to its className, then the bar is absolutely positioned on the right edge:
+
+```tsx
+function ChipContent({ slotNumber, status, contextPct, canReorder, onChipClick, onOpenContextMenu }: ChipProps) {
+  return (
+    <div
+      className={`relative flex flex-col px-1 py-1 border-b border-panel-border hover:bg-toolbar-hover-bg transition-colors${...}`}
+      ...
+    >
+      {/* existing Row 1: slot number + status icon */}
+      {/* existing Row 2: context % text */}
+
+      {/* Right-edge context bar */}
+      {contextPct !== undefined && (
+        <div className="absolute right-0 top-0 bottom-0 w-[2px] overflow-hidden">
+          <div
+            key={contextPct}
+            className={`absolute bottom-0 left-0 right-0 animate-ctx-update ${
+              contextPct >= 85
+                ? "bg-error-fg opacity-90"
+                : contextPct >= 70
+                ? "bg-warning-fg opacity-70"
+                : "bg-description-fg opacity-50"
+            }`}
+            style={{ height: `${contextPct}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+Since `useContextPct` (Layer 6b) is updated to check `liveContextWindow` first, **no other changes are needed in `PromptChipRail.tsx`** — live updates flow through automatically.
+
+> **Note on chip text row:** The existing Row 2 (`{contextPct}%` text) is kept in the chip for now since the chip is very narrow and the text provides the numeric value the bar can't show at 2px wide. If desired it can be removed later — but the text is not shown in the wide view (that's the bar only), so the chip and wide view serve complementary roles. Revisit during implementation.
 
 ---
 
@@ -378,13 +513,16 @@ Lives on `CliIntegration` (or extracted to a helper class). It:
 
 5. **Returns a `{ stop() }` handle** — `stop()` closes the `fs.FSWatcher` and cancels any pending discovery timer.
 
+> **Implementation note:** `actualPromptSent` lives on `CliExecutionSession` (accessible via `session.getActualPromptText()`), not on `CliIntegration`. The sidecar is best started inside `CliExecutionRunner.executeHeadless()` after `CliTransportCoordinator.executeHeadless()` spawns the process, with the prompt text passed down as a parameter. Alternatively, add a `startContextWindowSidecar()` method on `CliIntegration` that receives `(session, onContextWindowUpdate)` so it can read `session.getActualPromptText()`.
+
 ```typescript
 private startContextWindowSidecar(
+  promptText: string,
   startTime: Date,
   onContextWindowUpdate: (used: number, size: number) => void
 ): { stop: () => void } {
   const parser = this.provider.logParser;
-  if (!parser.extractLiveContextWindow || !parser.discoverSessionLog) {
+  if (!parser?.extractLiveContextWindow) {
     return { stop: () => {} };  // parser doesn't support live context
   }
 
@@ -396,7 +534,7 @@ private startContextWindowSidecar(
     let attempts = 0;
     while (!stopped && attempts < 30) {  // ~15s max
       const logPath = await parser.discoverSessionLog(
-        this.actualPromptSent ?? "",
+        promptText,
         startTime
       );
       if (logPath) {
@@ -458,27 +596,30 @@ Process exits → sidecar.stop() → watcher.close()
 
 ## Files to Modify
 
-| File                                                            | Change                                                                       |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `src/flightpath/harness/shared/interfaces/ILogParser.ts`        | Add optional `extractLiveContextWindow?` method                              |
-| `src/flightpath/harness/shared/BaseLogParser.ts`                | Add default no-op implementation                                             |
-| `src/flightpath/harness/claude/ClaudeLogParser.ts`              | Implement `extractLiveContextWindow`                                         |
-| `src/flightpath/harness/copilot/CopilotLogParser.ts`            | Implement `extractLiveContextWindow`                                         |
-| `src/flightpath/harness/codex/CodexLogParser.ts`                | Implement `extractLiveContextWindow`                                         |
-| `src/flightpath/harness/gemini/GeminiLogParser.ts`              | Implement `extractLiveContextWindow`                                         |
-| `src/flightpath/harness/qwen/QwenLogParser.ts`                  | Implement `extractLiveContextWindow`                                         |
-| `src/flightpath/harness/opencode/OpenCodeLogParser.ts`          | Implement `extractLiveContextWindow`                                         |
-| `src/flightpath/harness/CliLogMonitor.ts`                       | Add `onContextWindowUpdate` to deps; call in `processEvent`                  |
-| `src/flightpath/harness/CliIntegration.ts`                      | Add `startContextWindowSidecar()`; wire into `executeHeadlessWithPromptFile` |
-| `src/flightpath/harness/CliIntegration.ts`                      | Wire `onContextWindowUpdate` from `CliLogMonitor` to caller (interactive)    |
-| `src/types/DashboardConstants.ts`                               | Add `CONTEXT_WINDOW_UPDATE` to `MESSAGE_TYPES`                               |
-| `src/types/WebviewMessageTypes.ts`                              | Add `ContextWindowUpdateMessage` type + union                                |
-| `src/ui/FlightPathWebviewProvider.ts`                           | Add `updateLiveContextWindow()` method + call from CliIntegration            |
-| `src/ui/webview-react/store/workflowStore.ts`                   | Add `liveContextWindow` state + `updateLiveContextWindow` action             |
-| `src/ui/webview-react/store/workflowStore.ts`                   | Handle `CONTEXT_WINDOW_UPDATE` message                                       |
-| `src/ui/webview-react/components/prompts/PromptItem.tsx`        | Add vertical bar + `liveContextWindow` prop                                  |
-| `src/ui/webview-react/components/prompts/PromptItemDetails.tsx` | Remove `{contextPct}%` chip from stats row                                   |
-| Caller of `PromptItem` (PromptsList or similar)                 | Pass `liveContextWindow` from store                                          |
+| File                                                                 | Change                                                                            |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `src/flightpath/harness/shared/interfaces/ILogParser.ts`             | Add optional `extractLiveContextWindow?` method                                   |
+| `src/flightpath/harness/shared/BaseLogParser.ts`                     | Add default no-op implementation                                                  |
+| `src/flightpath/harness/claude/ClaudeLogParser.ts`                   | Implement `extractLiveContextWindow`                                              |
+| `src/flightpath/harness/copilot/CopilotLogParser.ts`                 | Implement `extractLiveContextWindow`                                              |
+| `src/flightpath/harness/codex/CodexLogParser.ts`                     | Implement `extractLiveContextWindow`                                              |
+| `src/flightpath/harness/gemini/GeminiLogParser.ts`                   | Implement `extractLiveContextWindow`                                              |
+| `src/flightpath/harness/qwen/QwenLogParser.ts`                       | Implement `extractLiveContextWindow`                                              |
+| `src/flightpath/harness/opencode/OpenCodeLogParser.ts`               | Implement `extractLiveContextWindow`                                              |
+| `src/flightpath/harness/CliLogMonitor.ts`                            | Add `onContextWindowUpdate?` to `LogMonitorDependencies`; call in `processEvent`  |
+| `src/flightpath/harness/CliIntegration.ts`                           | Add `startContextWindowSidecar()`; wire into headless execution path              |
+| `src/flightpath/harness/CliIntegration.ts`                           | Wire `onContextWindowUpdate` from `CliLogMonitor` to caller (interactive)         |
+| `src/types/DashboardConstants.ts`                                    | Add `CONTEXT_WINDOW_UPDATE` to `MESSAGE_TYPES`                                    |
+| `src/types/WebviewMessageTypes.ts`                                   | Add `ContextWindowUpdateMessage` type + union                                     |
+| `src/ui/FlightPathWebviewProvider.ts`                                | Add `updateLiveContextWindow()` method + call from CliIntegration                 |
+| `src/ui/webview-react/store/workflowStore.ts`                        | Add `liveContextWindow` state + `updateLiveContextWindow` + `clearLiveContextWindow` actions |
+| `src/ui/webview-react/store/workflowStore.ts`                        | Handle `CONTEXT_WINDOW_UPDATE` message; clear on `clearRuntimeStateFromStep`      |
+| `src/ui/webview-react/hooks/useContextPct.ts`                        | Check `liveContextWindow[index]` first before falling back to completed data      |
+| `src/ui/webview-react/components/prompts/WorkflowStep.tsx`           | Add vertical bar + `liveContextWindow` prop to `WorkflowStepItem`                 |
+| `src/ui/webview-react/components/prompts/PromptStepDetails.tsx`      | Remove `{contextPct}%` chip from stats row; remove unused `calcContextPct` call   |
+| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx`      | Read `liveContextWindow` from store; pass to `WorkflowStepItem` for current step  |
+| `src/ui/webview-react/components/prompts/PromptChipRail.tsx`         | Add 2px right-edge bar to `ChipContent`; add `relative` to chip container        |
+| `src/ui/webview-react/tailwind.config.js`                            | Add `ctx-update` keyframe + animation for the brightness flash                    |
 
 ---
 
@@ -486,10 +627,12 @@ Process exits → sidecar.stop() → watcher.close()
 
 1. **Bar position:** Right side of item or left side (alongside the status icon column)? Right is less disruptive to the existing layout. Left could feel more natural as a "progress stripe". The current plan puts it on the right.
 
-2. **Label position:** Above the bar keeps it visible when the bar is short; below the bar is less likely to crowd the percentage number against the drag handle. Current plan: above.
+2. **Label position:** ✅ Decided — label below the bar track. Bar fills up from the bottom; number sits beneath it.
 
 3. **Show bar for pending steps?** Could show an empty track for all steps as a visual affordance, or only show it once context data exists. Current plan: only render when `contextPct !== undefined`.
 
-4. **Final prompt items (`FinalStepFooter`):** `PromptItemDetails` is shared with `FinalStepFooter` — the chip removal there is automatic. But `FinalStepFooter` likely uses its own layout. Verify it doesn't need a bar added separately.
+4. **Final prompt items (`FinalStepFooter`):** `PromptStepDetails` is shared with `FinalStepFooter` — the chip removal there is automatic. `FinalStepFooter` does NOT get a bar since it has its own layout and doesn't use `WorkflowStepItem`. Live context for the final step is a separate concern; skip for now.
 
-5. **Color semantics:** Using opacity of `description-fg` keeps the bar theme-consistent without adding new CSS variables. Alternatively, map to existing semantic tokens: warning, error. Worth a quick look at what the VS Code theme exposes.
+5. **Color semantics:** Use existing Tailwind tokens `bg-error-fg` / `bg-warning-fg` / `bg-description-fg` — these map to `--vscode-errorForeground`, `--vscode-editorWarning-foreground`, `--vscode-descriptionForeground`. No new CSS variables needed.
+
+6. **Chip text row in PromptChipRail:** The existing Row 2 (`{contextPct}%` text) is kept since the 2px bar alone can't show the numeric value in a narrow chip. Wide view shows bar only (no text chip in `PromptStepDetails`). This is intentional — the two views are complementary. Revisit if the text feels redundant after seeing it in action.

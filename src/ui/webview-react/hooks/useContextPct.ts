@@ -10,10 +10,17 @@ import { OUTPUT_HISTORY_KINDS, FINAL_STEP_PHASES } from "../types/messages";
  * Single source of truth shared by WorkflowStepsPanel and PromptChipRail.
  */
 export function useContextPct() {
-  const { liveOrderedEntries, historyOutputs } = useWorkflowStore();
+  const { liveOrderedEntries, historyOutputs, liveContextWindow } =
+    useWorkflowStore();
   const { isViewingHistory } = useUiStore();
 
   return function getContextPct(index: number): number | undefined {
+    // Live data takes priority (running step)
+    const live = liveContextWindow?.[index];
+    if (live?.size) {
+      return calcContextPct(live.used, live.size);
+    }
+    // Fall back to completed step data
     const entries =
       isViewingHistory && historyOutputs
         ? historyOutputs.orderedEntries

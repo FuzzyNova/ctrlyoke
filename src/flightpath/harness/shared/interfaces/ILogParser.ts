@@ -310,4 +310,18 @@ export interface ILogParser {
    * @param filePath Absolute path to the log file
    */
   seekToEnd?(filePath: string): void;
+
+  /**
+   * Extract live context window utilization from a single log event.
+   *
+   * Called by CliLogMonitor on every event as they stream in, so harnesses
+   * can surface context usage incrementally without waiting for completion.
+   * Returns null for events that carry no context window information.
+   *
+   * @param event - Single parsed log event
+   * @returns { used, size } token counts, or null if event has no context info
+   */
+  extractLiveContextWindow?(
+    event: BaseCliEvent
+  ): { used: number; size: number } | null;
 }

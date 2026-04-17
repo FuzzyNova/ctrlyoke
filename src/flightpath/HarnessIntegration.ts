@@ -116,6 +116,13 @@ export abstract class HarnessIntegration {
   protected streamingEventsEmitter = new TypedEmitter<CliEvent[]>();
   public readonly onStreamingEvents = this.streamingEventsEmitter.event;
 
+  // Event emitter for live context window updates (fires during streaming as events arrive)
+  protected contextWindowUpdateEmitter = new TypedEmitter<{
+    used: number;
+    size: number;
+  }>();
+  public readonly onContextWindowUpdate = this.contextWindowUpdateEmitter.event;
+
   // Event emitter for prompt ready (fires when prompt is built but before execution)
   protected promptReadyEmitter = new TypedEmitter<{
     fullPrompt: string;
@@ -137,6 +144,7 @@ export abstract class HarnessIntegration {
       context.subscriptions.push(this.responseCompleteEmitter);
       context.subscriptions.push(this.streamingChunkEmitter);
       context.subscriptions.push(this.streamingEventsEmitter);
+      context.subscriptions.push(this.contextWindowUpdateEmitter);
       context.subscriptions.push(this.promptReadyEmitter);
     }
   }
@@ -151,6 +159,7 @@ export abstract class HarnessIntegration {
     this.responseCompleteEmitter.dispose();
     this.streamingChunkEmitter.dispose();
     this.streamingEventsEmitter.dispose();
+    this.contextWindowUpdateEmitter.dispose();
     this.promptReadyEmitter.dispose();
   }
 

@@ -1525,9 +1525,25 @@ export class WorkflowExecutor {
       }
     });
 
+    const contextWindowDisposable = integration.onContextWindowUpdate(
+      ({ used, size }) => {
+        if (
+          target.kind === FINAL_STEP_PHASES.QUEUE &&
+          signedStepIndex !== undefined
+        ) {
+          context.dashboardProvider?.updateContextWindow(
+            signedStepIndex,
+            used,
+            size
+          );
+        }
+      }
+    );
+
     const disposeListeners = () => {
       streamingDisposable?.dispose();
       structuredStreamingDisposable?.dispose();
+      contextWindowDisposable?.dispose();
       promptReadyDisposable?.dispose();
     };
 

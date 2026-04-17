@@ -370,6 +370,24 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     return true;
   }
 
+  override extractLiveContextWindow(
+    event: BaseCliEvent
+  ): { used: number; size: number } | null {
+    if (event.type === "assistant") {
+      const assistantEvent = event as ClaudeProviderEvent;
+      const usage = assistantEvent.message?.usage;
+      if (!usage) return null;
+      const used =
+        (usage.input_tokens ?? 0) +
+        (usage.cache_creation_input_tokens ?? 0) +
+        (usage.cache_read_input_tokens ?? 0);
+      const model = assistantEvent.message?.model as string | undefined;
+      const size = getClaudeContextWindowSize(model ?? "");
+      return used > 0 && size ? { used, size } : null;
+    }
+    return null;
+  }
+
   /**
    * Discover session log file for a prompt
    *

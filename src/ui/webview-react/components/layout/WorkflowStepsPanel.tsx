@@ -145,6 +145,7 @@ export const WorkflowStepsPanel: React.FC<{
     finalStepStatus,
     finalStepLoopCount,
     finalStepPhase,
+    liveContextWindow,
   } = useWorkflowStore();
   const {
     stepsCollapsed,
@@ -172,14 +173,18 @@ export const WorkflowStepsPanel: React.FC<{
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
-  const { openContextMenu, handleSetStartPosition, contextMenuPortal, setPositionModal } =
-    useStepContextMenu({
-      isCLIManaged,
-      canChangeStartPosition,
-      confirmResetOperations: globalSettings.confirmResetOperations,
-      totalSteps: steps.length,
-      currentStep,
-    });
+  const {
+    openContextMenu,
+    handleSetStartPosition,
+    contextMenuPortal,
+    setPositionModal,
+  } = useStepContextMenu({
+    isCLIManaged,
+    canChangeStartPosition,
+    confirmResetOperations: globalSettings.confirmResetOperations,
+    totalSteps: steps.length,
+    currentStep,
+  });
 
   // Compute the harness/model to display for a step.
   //
@@ -233,9 +238,7 @@ export const WorkflowStepsPanel: React.FC<{
   // it meaningfully differs from (or adds to) the inherited workflow/global
   // default. Redundant chips — e.g. "ec: disabled" when the workflow is
   // already disabled — are suppressed so overrides reflect actual differences.
-  const getStepOverrides = (
-    step: (typeof steps)[0]
-  ): PromptOverride[] => {
+  const getStepOverrides = (step: (typeof steps)[0]): PromptOverride[] => {
     const result: PromptOverride[] = [];
     if (isScriptStep(step)) return result;
 
@@ -473,7 +476,6 @@ export const WorkflowStepsPanel: React.FC<{
     return details;
   };
 
-
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -489,18 +491,14 @@ export const WorkflowStepsPanel: React.FC<{
   // IDs are stable absolute indices ("step-pending-N") so dnd-kit can track
   // items by identity across re-renders.
   const [sortableIds, setSortableIds] = useState<string[]>(() =>
-    steps
-      .slice(currentStep)
-      .map((_, i) => `step-pending-${currentStep + i}`)
+    steps.slice(currentStep).map((_, i) => `step-pending-${currentStep + i}`)
   );
 
   // Sync local IDs when steps/currentStep change due to external events
   // (session load, set-position confirmed, etc.).
   useEffect(() => {
     setSortableIds(
-      steps
-        .slice(currentStep)
-        .map((_, i) => `step-pending-${currentStep + i}`)
+      steps.slice(currentStep).map((_, i) => `step-pending-${currentStep + i}`)
     );
   }, [steps, currentStep]);
 
@@ -674,6 +672,7 @@ export const WorkflowStepsPanel: React.FC<{
                         retryState={retryState}
                         details={details}
                         latestOutput={latestOutput}
+                        liveContextWindow={liveContextWindow?.[index]}
                         isCurrent={false}
                         isSelected={isSelected}
                         onClick={() => handleStepClick(index)}
@@ -759,6 +758,7 @@ export const WorkflowStepsPanel: React.FC<{
                       retryState={retryState}
                       details={details}
                       latestOutput={latestOutput}
+                      liveContextWindow={liveContextWindow?.[index]}
                       isCurrent={isCurrent}
                       isSelected={isSelected}
                       onClick={() => handleStepClick(index)}

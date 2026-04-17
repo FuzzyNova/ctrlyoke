@@ -174,6 +174,10 @@ export class WorkflowTaggedSink implements IDashboardSink {
     this.inner.updateCliStreamingEvents(stepIndex, events, this.workflowId);
   }
 
+  updateContextWindow(stepIndex: number, used: number, size: number): void {
+    this.inner.updateContextWindow(stepIndex, used, size, this.workflowId);
+  }
+
   updateStatusMessage(
     stepIndex: number,
     message: string,

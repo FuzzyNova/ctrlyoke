@@ -458,6 +458,14 @@ window.vscodeApi = acquireVsCodeApi();
   ): void {
     this.sink.updateCliStreamingEvents(stepIndex, events, workflowId);
   }
+  public updateContextWindow(
+    stepIndex: number,
+    used: number,
+    size: number,
+    workflowId?: string
+  ): void {
+    this.sink.updateContextWindow(stepIndex, used, size, workflowId);
+  }
   public updateStatusMessage(
     stepIndex: number,
     message: string,

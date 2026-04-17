@@ -90,6 +90,7 @@ export interface CliExecutionRunnerDeps {
     onStreamingEvents: (events: CliEvent[]) => void;
     onResponseComplete: (response: string) => void;
     logResponse: (response: string, statistics?: string) => void;
+    onContextWindowUpdate?: (used: number, size: number) => void;
   };
 }
 

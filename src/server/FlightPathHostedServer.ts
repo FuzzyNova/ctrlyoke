@@ -237,6 +237,14 @@ export class FlightPathHostedServer
   ): void {
     this.sink.updateCliStreamingEvents(stepIndex, events, workflowId);
   }
+  updateContextWindow(
+    stepIndex: number,
+    used: number,
+    size: number,
+    workflowId?: string
+  ): void {
+    this.sink.updateContextWindow(stepIndex, used, size, workflowId);
+  }
   updateStatusMessage(
     stepIndex: number,
     message: string,

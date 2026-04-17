@@ -214,6 +214,21 @@ export class PostMessageDashboardSink implements IDashboardSink {
     });
   }
 
+  updateContextWindow(
+    stepIndex: number,
+    used: number,
+    size: number,
+    workflowId?: string
+  ): void {
+    this.send({
+      type: MESSAGE_TYPES.CONTEXT_WINDOW_UPDATE,
+      stepIndex,
+      used,
+      size,
+      ...(workflowId !== undefined ? { workflowId } : {}),
+    });
+  }
+
   updateStatusMessage(
     stepIndex: number,
     message: string,

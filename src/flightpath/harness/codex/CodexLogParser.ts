@@ -574,6 +574,24 @@ export class CodexLogParser extends BaseLogParser {
     return false;
   }
 
+  override extractLiveContextWindow(
+    event: BaseCliEvent
+  ): { used: number; size: number } | null {
+    const e = event as any;
+    if (e.type === "event_msg" && e.payload?.type === "token_count") {
+      const last = e.payload.info?.last_token_usage;
+      if (!last) return null;
+      const used =
+        typeof last.total_tokens === "number"
+          ? last.total_tokens
+          : (last.input_tokens ?? 0) + (last.output_tokens ?? 0);
+      const size =
+        e.payload.info?.model_context_window ?? CODEX_CLI_CONTEXT_WINDOW_SIZE;
+      return used > 0 && size ? { used, size } : null;
+    }
+    return null;
+  }
+
   /**
    * Discover session log file for a prompt
    *

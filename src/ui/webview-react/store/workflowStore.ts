@@ -126,6 +126,8 @@ interface WorkflowState {
   /** Shadow copy of settingsStore.workflowProperties for undo tracking. Kept in sync
    *  with settingsStore but stored here so zundo can snapshot it alongside prompts. */
   undoWorkflowProperties: WorkflowProperties;
+  /** Live context window usage per step index, updated during prompt execution */
+  liveContextWindow: Record<number, { used: number; size: number }>;
 }
 
 /**
@@ -224,6 +226,12 @@ interface WorkflowActions {
   setUndoWorkflowProperties: (props: WorkflowProperties) => void;
   /** Silently syncs the shadow copy without creating an undo snapshot (for incoming extension messages). */
   syncIncomingWorkflowProperties: (props: WorkflowProperties) => void;
+  updateLiveContextWindow: (
+    stepIndex: number,
+    used: number,
+    size: number
+  ) => void;
+  clearLiveContextWindow: (stepIndex: number) => void;
 }
 
 /**
@@ -278,6 +286,7 @@ const initialState: WorkflowState = {
   undoResults: {},
   undoRecords: {},
   undoWorkflowProperties: {},
+  liveContextWindow: {},
 };
 
 function targetsEqual(
@@ -724,6 +733,7 @@ export const useWorkflowStore = create<
           set((state) => {
             const newRetryStates = { ...state.retryStates };
             const newStreamingChunks = { ...state.streamingChunks };
+            const newLiveContextWindow = { ...state.liveContextWindow };
 
             Object.keys(newRetryStates).forEach((key) => {
               if (Number(key) >= startStep) {
@@ -733,6 +743,11 @@ export const useWorkflowStore = create<
             Object.keys(newStreamingChunks).forEach((key) => {
               if (Number(key) >= startStep) {
                 delete newStreamingChunks[Number(key)];
+              }
+            });
+            Object.keys(newLiveContextWindow).forEach((key) => {
+              if (Number(key) >= startStep) {
+                delete newLiveContextWindow[Number(key)];
               }
             });
 
@@ -753,6 +768,7 @@ export const useWorkflowStore = create<
               ),
               retryStates: newRetryStates,
               streamingChunks: newStreamingChunks,
+              liveContextWindow: newLiveContextWindow,
               finalStepStreamingChunks: {},
               finalStepStatus: null,
               finalStepLoopCount: 0,
@@ -926,6 +942,25 @@ export const useWorkflowStore = create<
 
       syncIncomingWorkflowProperties: (props) =>
         withUndoPause(() => set({ undoWorkflowProperties: props })),
+
+      updateLiveContextWindow: (stepIndex, used, size) =>
+        withUndoPause(() =>
+          set((state) => ({
+            liveContextWindow: {
+              ...state.liveContextWindow,
+              [stepIndex]: { used, size },
+            },
+          }))
+        ),
+
+      clearLiveContextWindow: (stepIndex) =>
+        withUndoPause(() =>
+          set((state) => {
+            const next = { ...state.liveContextWindow };
+            delete next[stepIndex];
+            return { liveContextWindow: next };
+          })
+        ),
 
       // ============================================================================
       // COMPUTED SELECTORS

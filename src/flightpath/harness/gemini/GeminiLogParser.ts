@@ -362,6 +362,19 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
     return !msg.toolCalls || msg.toolCalls.length === 0;
   }
 
+  override extractLiveContextWindow(
+    event: BaseCliEvent
+  ): { used: number; size: number } | null {
+    if (event.type === "gemini") {
+      const msg = event as unknown as GeminiLogMessage;
+      if (msg.tokens?.input == null) return null;
+      const used = msg.tokens.input;
+      const size = getGeminiContextWindowSize(msg.model ?? "");
+      return used > 0 && size ? { used, size } : null;
+    }
+    return null;
+  }
+
   /**
    * Discover the session log file for a given prompt.
    *

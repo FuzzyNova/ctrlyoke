@@ -3,7 +3,6 @@ import { STEP_STATUS } from "../../types/messages";
 import type { StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
 import type { StepDetails } from "./WorkflowStep";
-import { calcContextPct } from "@utils/tokenUtils";
 
 /**
  * A single prompt-level property override to display in the overrides row.
@@ -51,12 +50,6 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
 }) => {
   const durationSeconds = details?.duration ?? latestOutput?.elapsed;
   const sessionId = latestOutput?.structured?.metadata?.sessionId;
-  const tokens = latestOutput?.tokens;
-  const contextPct = calcContextPct(
-    tokens?.contextWindowUsed,
-    tokens?.contextWindowSize
-  );
-
   const [copied, setCopied] = useState(false);
   const handleCopySessionId = useCallback(async () => {
     if (!sessionId) return;
@@ -117,17 +110,15 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
         </div>
       )}
 
-      {/* Compact stats — for completed prompts */}
+      {/* Compact stats — for completed prompts: [duration] [sessionId {copy}] */}
       {status === STEP_STATUS.COMPLETED &&
-        (contextPct !== undefined ||
-          sessionId ||
-          durationSeconds !== undefined) && (
+        (sessionId || durationSeconds !== undefined) && (
           <div
             className={`mt-0.5 flex items-center gap-1 text-[10px] opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
           >
             {[
-              contextPct !== undefined ? (
-                <span key="ctx">{contextPct}%</span>
+              durationSeconds !== undefined ? (
+                <span key="dur">{durationSeconds.toFixed(1)}s</span>
               ) : null,
               sessionId ? (
                 <span
@@ -150,9 +141,6 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
                     />
                   </button>
                 </span>
-              ) : null,
-              durationSeconds !== undefined ? (
-                <span key="dur">{durationSeconds.toFixed(1)}s</span>
               ) : null,
             ]
               .filter(Boolean)

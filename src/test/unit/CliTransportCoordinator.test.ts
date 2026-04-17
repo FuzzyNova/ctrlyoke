@@ -432,7 +432,7 @@ suite("CliTransportCoordinator", () => {
       getPtyManager: () =>
         ({
           getExpectedController: () => undefined,
-          killSession: (sessionId: string) => {
+          gracefulKillAiCliSession: async (sessionId: string) => {
             killedSessionId = sessionId;
           },
           spawnPty: (config: { sessionId: string; workflowId: string }) => ({
@@ -450,14 +450,13 @@ suite("CliTransportCoordinator", () => {
       instanceId: "workflow-1",
     } as any);
 
-    const terminatedSessionId = coordinator.terminateCurrentPtySession(
-      "headless resume"
-    );
+    const terminatedSessionId =
+      await coordinator.terminateCurrentPtySession("headless resume");
 
     assert.ok(terminatedSessionId);
     assert.strictEqual(killedSessionId, terminatedSessionId);
     assert.strictEqual(
-      coordinator.terminateCurrentPtySession("second call"),
+      await coordinator.terminateCurrentPtySession("second call"),
       undefined
     );
   });
@@ -522,7 +521,7 @@ suite("CliTransportCoordinator", () => {
       getPtyManager: () =>
         ({
           getExpectedController: () => undefined,
-          killSession: (sessionId: string) => {
+          gracefulKillAiCliSession: async (sessionId: string) => {
             killedSessionIds.push(sessionId);
           },
           spawnPty: (config: { sessionId: string; workflowId: string }) => ({

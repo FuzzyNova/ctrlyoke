@@ -188,6 +188,16 @@ export abstract class BaseLogParser implements ILogParser {
   }
 
   /**
+   * Default no-op implementation — returns null for all events.
+   * Harnesses that carry per-event context window data should override this.
+   */
+  extractLiveContextWindow(
+    _event: BaseCliEvent
+  ): { used: number; size: number } | null {
+    return null;
+  }
+
+  /**
    * Seek the internal read position to the current end of the file.
    *
    * Called before monitoring a resumed session to skip historical events that

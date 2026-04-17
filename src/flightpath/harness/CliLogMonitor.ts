@@ -55,6 +55,8 @@ export interface LogMonitorDependencies {
     onResponseComplete: (message: string) => void;
     /** Callback to log the response (respects showCliOutput setting) */
     logResponse: (response: string, statistics?: string) => void;
+    /** Called when a streaming event reveals updated context window utilization */
+    onContextWindowUpdate?: (used: number, size: number) => void;
   };
 }
 
@@ -231,6 +233,17 @@ export class CliLogMonitor {
         const streamingEvents = parser.extractStructuredEventsFromEvent(event);
         if (streamingEvents.length > 0) {
           this.deps.hostCallbacks.onStreamingEvents(streamingEvents);
+        }
+
+        // Extract live context window data if available
+        if (
+          this.deps.hostCallbacks.onContextWindowUpdate &&
+          parser.extractLiveContextWindow
+        ) {
+          const ctx = parser.extractLiveContextWindow(event);
+          if (ctx) {
+            this.deps.hostCallbacks.onContextWindowUpdate(ctx.used, ctx.size);
+          }
         }
 
         // Check completion via log file — only for harnesses without a notification monitor.

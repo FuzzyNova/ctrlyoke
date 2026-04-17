@@ -372,6 +372,18 @@ export class QwenLogParser extends BaseLogParser {
     return !parts.some((p) => p.functionCall !== undefined);
   }
 
+  override extractLiveContextWindow(
+    event: BaseCliEvent
+  ): { used: number; size: number } | null {
+    const e = event as QwenProviderEvent;
+    if (e.type === "assistant" && e.usageMetadata?.promptTokenCount != null) {
+      const used = e.usageMetadata.promptTokenCount;
+      const size = getQwenContextWindowSize(e.model ?? "");
+      return used > 0 && size ? { used, size } : null;
+    }
+    return null;
+  }
+
   /**
    * Discover session log file for a prompt
    *

@@ -262,6 +262,10 @@ module.exports = {
             transform: "translateY(-4px)",
           },
         },
+        "ctx-update": {
+          "0%": { filter: "brightness(2)" },
+          "100%": { filter: "brightness(1)" },
+        },
       },
 
       animation: {
@@ -274,6 +278,7 @@ module.exports = {
         "slide-out-right": "slide-out-right 0.22s ease-in forwards",
         "slide-down-in": "slide-down-fade-in 300ms ease-out forwards",
         "slide-down-out": "slide-down-fade-out 300ms ease-in forwards",
+        "ctx-update": "ctx-update 0.4s ease-out",
       },
 
       fontFamily: {

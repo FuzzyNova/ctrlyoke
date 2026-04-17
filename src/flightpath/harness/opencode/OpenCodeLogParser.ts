@@ -170,6 +170,9 @@ export class OpenCodeLogParser extends BaseLogParser {
     return new PollingWatcher(() => clearInterval(interval));
   }
 
+  /** Running total from the most recent step_finish token event — updated in extractLiveContextWindow. */
+  private liveLastStepTotal: number | undefined;
+
   /**
    * A session is complete when a step_finish event carries reason === "stop".
    * This mirrors the final event emitted by `opencode run --format json`.
@@ -179,6 +182,32 @@ export class OpenCodeLogParser extends BaseLogParser {
       event.type === "step_finish" &&
       (event as Record<string, any>).part?.reason === "stop"
     );
+  }
+
+  override extractLiveContextWindow(
+    event: BaseCliEvent
+  ): { used: number; size: number } | null {
+    if (event.type === "step_finish") {
+      const tokens = (event as Record<string, any>).part?.tokens as
+        | Record<string, any>
+        | undefined;
+      if (tokens !== undefined) {
+        const total =
+          typeof tokens.total === "number" ? tokens.total : undefined;
+        if (total !== undefined) {
+          this.liveLastStepTotal = total;
+        }
+      }
+    }
+    const size = this.contextWindowSizeFn();
+    if (
+      this.liveLastStepTotal !== undefined &&
+      this.liveLastStepTotal > 0 &&
+      size
+    ) {
+      return { used: this.liveLastStepTotal, size };
+    }
+    return null;
   }
 
   extractSessionId(events: BaseCliEvent[]): string | null {

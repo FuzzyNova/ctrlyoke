@@ -374,6 +374,18 @@ export class CopilotLogParser extends BaseLogParser {
     return false;
   }
 
+  override extractLiveContextWindow(
+    event: BaseCliEvent
+  ): { used: number; size: number } | null {
+    if (event.type === "session.truncation") {
+      const data = (event as any).data;
+      const used = data?.postTruncationTokensInMessages;
+      const size = data?.tokenLimit ?? COPILOT_CLI_CONTEXT_WINDOW_SIZE;
+      return used != null && used > 0 ? { used, size } : null;
+    }
+    return null;
+  }
+
   /**
    * Discover session log file for a prompt
    *

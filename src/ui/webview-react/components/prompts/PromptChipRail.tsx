@@ -69,7 +69,7 @@ function ChipContent({
 }: ChipProps) {
   return (
     <div
-      className={`flex flex-col px-1 py-1 border-b border-panel-border hover:bg-toolbar-hover-bg transition-colors${canReorder ? " cursor-grab active:cursor-grabbing" : " cursor-pointer"}`}
+      className={`relative flex flex-col px-1 py-1 border-b border-panel-border hover:bg-toolbar-hover-bg transition-colors${canReorder ? " cursor-grab active:cursor-grabbing" : " cursor-pointer"}`}
       role="button"
       tabIndex={0}
       onClick={onChipClick}
@@ -100,6 +100,22 @@ function ChipContent({
           <span className="text-[9px] text-description-fg leading-none">
             {contextPct}%
           </span>
+        </div>
+      )}
+      {/* 2px right-edge context fill bar */}
+      {contextPct !== undefined && (
+        <div className="absolute right-0 top-0 bottom-0 w-[2px] overflow-hidden">
+          <div
+            key={contextPct}
+            className={`absolute bottom-0 left-0 right-0 animate-ctx-update ${
+              contextPct >= 85
+                ? "bg-error-fg opacity-90"
+                : contextPct >= 70
+                  ? "bg-warning-fg opacity-70"
+                  : "bg-description-fg opacity-50"
+            }`}
+            style={{ height: `${contextPct}%` }}
+          />
         </div>
       )}
     </div>

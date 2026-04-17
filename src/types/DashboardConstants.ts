@@ -20,6 +20,7 @@ export const MESSAGE_TYPES = {
   CLI_OUTPUT: "cliOutput",
   CLI_STREAMING_CHUNK: "cliStreamingChunk",
   CLI_STREAMING_EVENTS: "cliStreamingEvents", // Structured events for Claude/Codex CLI
+  CONTEXT_WINDOW_UPDATE: "contextWindowUpdate", // Live context window usage update (extension -> webview)
   STATUS_MESSAGE: "statusMessage",
   EXECUTION_COMPLETED: "executionCompleted",
   QUEUE_EXTENDED: "queueExtended",

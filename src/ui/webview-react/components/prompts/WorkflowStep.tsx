@@ -71,6 +71,8 @@ interface WorkflowStepProps {
    * accent to visually distinguish locked/done prompts from pending ones.
    */
   dimmed?: boolean;
+  /** Live context window usage (updated during running step; falls back to latestOutput for completed) */
+  liveContextWindow?: { used: number; size: number };
   /** Drag handle props from dnd-kit sortable */
   dragHandleProps?: {
     listeners: SyntheticListenerMap | undefined;
@@ -119,11 +121,25 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
   displayNumber,
   hideBorderBottom = false,
   dimmed = false,
+  liveContextWindow,
   dragHandleProps,
   isScript = false,
   onContextMenu,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+
+  // Derive context window percentage from live data (running step) or completed output
+  const ctx =
+    liveContextWindow ??
+    (latestOutput?.tokens?.contextWindowSize
+      ? {
+          used: latestOutput.tokens.contextWindowUsed ?? 0,
+          size: latestOutput.tokens.contextWindowSize,
+        }
+      : undefined);
+  const contextPct = ctx?.size
+    ? Math.round((ctx.used / ctx.size) * 100)
+    : undefined;
 
   // Build class names for the container
   const containerClasses = [
@@ -260,6 +276,29 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
             </>
           )}
         </div>
+        {contextPct !== undefined && (
+          <div className="flex-shrink-0 flex flex-col items-center w-3 self-stretch ml-0.5">
+            {/* Track */}
+            <div className="flex-1 w-1.5 rounded-full bg-panel-border overflow-hidden relative">
+              {/* Fill */}
+              <div
+                key={contextPct}
+                className={`absolute bottom-0 left-0 right-0 rounded-full animate-ctx-update ${
+                  contextPct >= 85
+                    ? "bg-error-fg opacity-90"
+                    : contextPct >= 70
+                      ? "bg-warning-fg opacity-70"
+                      : "bg-description-fg opacity-50"
+                }`}
+                style={{ height: `${contextPct}%` }}
+              />
+            </div>
+            {/* Percentage label */}
+            <span className="text-[8px] leading-none text-description-fg opacity-75 mt-0.5">
+              {contextPct}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
