@@ -13,6 +13,8 @@ import { minimalSetup } from "codemirror";
 import {
   autocompletion,
   completionKeymap,
+  type Completion,
+  type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete";
 import { history, historyKeymap } from "@codemirror/commands";
@@ -20,7 +22,12 @@ import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { linter, lintKeymap, type Diagnostic } from "@codemirror/lint";
 import { RangeSetBuilder } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
-import { MESSAGE_TYPES, EDITOR_PLACEHOLDER_TEXT } from "../../types/messages";
+import {
+  MESSAGE_TYPES,
+  EDITOR_PLACEHOLDER_TEXT,
+  RETRY_PROMPT_PLACEHOLDERS,
+  type RetryPromptPlaceholder,
+} from "../../types/messages";
 import { WebviewLog } from "../../utils/logger";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 
@@ -41,7 +48,11 @@ interface TypoChecker {
   suggest: (word: string) => string[];
 }
 
+export type CodeMirrorEditorMode = "prompt" | "endCondition";
+type CodeMirrorEditorSurface = "editor" | "input";
+
 interface CodeMirrorEditorProps {
+  id?: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
@@ -49,6 +60,13 @@ interface CodeMirrorEditorProps {
   dicUri: string;
   /** When true, the editor is read-only (no edits allowed). */
   readOnly?: boolean;
+  /** Prompt mode keeps standard completions; endCondition adds retry placeholders. */
+  mode?: CodeMirrorEditorMode;
+  /** Visual surface used by the editor theme. */
+  surface?: CodeMirrorEditorSurface;
+  className?: string;
+  minHeightClassName?: string;
+  maxHeightClassName?: string;
   /** Called when Alt+Enter is pressed. */
   onRun?: () => void;
   /** Called when Alt+Shift+Enter is pressed. */
@@ -80,6 +98,68 @@ interface ContextReferenceValidationResult {
   message?: string;
 }
 
+const RETRY_PROMPT_PLACEHOLDER_METADATA: Record<
+  RetryPromptPlaceholder,
+  { detail: string; info: string }
+> = {
+  [RETRY_PROMPT_PLACEHOLDERS.STDOUT]: {
+    detail: "stdout",
+    info: "Validation script stdout",
+  },
+  [RETRY_PROMPT_PLACEHOLDERS.STDERR]: {
+    detail: "stderr",
+    info: "Validation script stderr",
+  },
+  [RETRY_PROMPT_PLACEHOLDERS.EXPECTED_VALUE]: {
+    detail: "expected",
+    info: "Configured expected value",
+  },
+  [RETRY_PROMPT_PLACEHOLDERS.ACTUAL_VALUE]: {
+    detail: "actual",
+    info: "Actual comparison value",
+  },
+  [RETRY_PROMPT_PLACEHOLDERS.RETRY_COUNT]: {
+    detail: "retry",
+    info: "Current retry attempt number",
+  },
+  [RETRY_PROMPT_PLACEHOLDERS.MAX_RETRIES]: {
+    detail: "retry",
+    info: "Configured retry limit",
+  },
+};
+
+export function getRetryPlaceholderCompletions(
+  context: Pick<CompletionContext, "state" | "pos" | "explicit">,
+  mode: CodeMirrorEditorMode = "endCondition"
+): CompletionResult | null {
+  if (mode !== "endCondition") return null;
+
+  const line = context.state.doc.lineAt(context.pos);
+  const textBefore = line.text.slice(0, context.pos - line.from);
+  const openBraceIndex = textBefore.lastIndexOf("{");
+  if (openBraceIndex === -1) return null;
+
+  const afterBrace = textBefore.slice(openBraceIndex + 1);
+  if (/[\s}]/.test(afterBrace)) return null;
+
+  const from = line.from + openBraceIndex + 1;
+  const options: Completion[] = Object.values(RETRY_PROMPT_PLACEHOLDERS).map(
+    (placeholder) => ({
+      label: placeholder,
+      apply: `${placeholder}}`,
+      type: "variable",
+      detail: RETRY_PROMPT_PLACEHOLDER_METADATA[placeholder].detail,
+      info: RETRY_PROMPT_PLACEHOLDER_METADATA[placeholder].info,
+      boost: 1000,
+    })
+  );
+
+  return {
+    from,
+    options,
+  };
+}
+
 /**
  * CodeMirrorEditor - CodeMirror 6 integration for prompt editing
  *
@@ -93,11 +173,17 @@ interface ContextReferenceValidationResult {
  */
 export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const {
+    id,
     value,
     onChange,
     affUri,
     dicUri,
     readOnly = false,
+    mode = "prompt",
+    surface = "editor",
+    className,
+    minHeightClassName,
+    maxHeightClassName,
     onRun,
     onQueue,
   } = props;
@@ -443,6 +529,13 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     [vscode]
   );
 
+  const retryPlaceholderCompletions = useCallback(
+    (context: CompletionContext): CompletionResult | null => {
+      return getRetryPlaceholderCompletions(context, mode);
+    },
+    [mode]
+  );
+
   // Initialize CodeMirror editor
   useEffect(() => {
     if (!editorRef.current) return;
@@ -463,20 +556,22 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           {
             key: "Alt-Shift-Enter",
             run: () => {
-              onQueueRef.current?.();
+              if (!onQueueRef.current) return false;
+              onQueueRef.current();
               return true;
             },
           },
           {
             key: "Alt-Enter",
             run: () => {
-              onRunRef.current?.();
+              if (!onRunRef.current) return false;
+              onRunRef.current();
               return true;
             },
           },
         ]),
         placeholder(placeholderText),
-        createThemeExtension(),
+        createThemeExtension(surface),
         createLinterThemeExtension(),
         highlightActiveLine(),
         highlightSelectionMatches({ minSelectionLength: 2 }),
@@ -493,7 +588,14 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         // when vv.offsetTop is non-zero (iOS browser chrome height).
         tooltips({ parent: document.body }),
         autocompletion({
-          override: [customCompletions, pathCompletions],
+          override:
+            mode === "endCondition"
+              ? [
+                  retryPlaceholderCompletions,
+                  customCompletions,
+                  pathCompletions,
+                ]
+              : [customCompletions, pathCompletions],
           activateOnTyping: true,
           closeOnBlur: true,
           optionClass: (completion) =>
@@ -557,7 +659,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     placeholderText,
     customCompletions,
     pathCompletions,
+    retryPlaceholderCompletions,
     validateContextReferences,
+    mode,
+    surface,
   ]);
   // `value` is intentionally omitted — the setup effect initializes the editor
   // once; value changes are handled by the separate effect below.
@@ -579,16 +684,34 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     }
   }, [value]);
 
-  return <div ref={editorRef} className="h-full w-full codemirror-editor" />;
+  const editorClassName = [
+    "h-full w-full codemirror-editor",
+    minHeightClassName,
+    maxHeightClassName,
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return <div id={id} ref={editorRef} className={editorClassName} />;
 };
 
 // VS Code theme integration
-function createThemeExtension() {
+function createThemeExtension(surface: CodeMirrorEditorSurface) {
+  const backgroundColor =
+    surface === "input"
+      ? "var(--vscode-input-background)"
+      : "var(--vscode-editor-background)";
+  const foregroundColor =
+    surface === "input"
+      ? "var(--vscode-input-foreground)"
+      : "var(--vscode-editor-foreground)";
+
   return EditorView.theme(
     {
       "&": {
-        color: "var(--vscode-editor-foreground)",
-        backgroundColor: "var(--vscode-editor-background)",
+        color: foregroundColor,
+        backgroundColor,
         height: "100%",
       },
       ".cm-content": {

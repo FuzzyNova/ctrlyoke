@@ -234,7 +234,7 @@ suite("ValidationUtils Extended Tests", () => {
       const result = ValidationUtils.validateEndCondition({
         script: "test.py",
         returns: "true",
-        retryPrompt: "Try again: {scriptOutput}",
+        retryPrompt: "Try again: {stdout}",
       });
       assert.strictEqual(result.valid, true);
     });

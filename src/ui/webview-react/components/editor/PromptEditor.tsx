@@ -26,6 +26,7 @@ import {
 } from "../../types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
+import { getDictionaryUris } from "@utils/dictionaryUris";
 
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
@@ -138,9 +139,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   // Delete button: disabled only when prompt is actively running
   const isPromptActivelyRunning = selectedPromptStatus === STEP_STATUS.RUNNING;
 
-  // Dictionary URIs from document attributes
-  const affUri = document.body.getAttribute("data-aff-uri") || "./en_US.aff";
-  const dicUri = document.body.getAttribute("data-dic-uri") || "./en_US.dic";
+  const { affUri, dicUri } = getDictionaryUris();
 
   // Restore editor state from VS Code persistent storage on mount
   useEffect(() => {

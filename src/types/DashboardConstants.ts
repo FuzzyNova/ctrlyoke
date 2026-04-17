@@ -689,6 +689,16 @@ export const END_CONDITION_PROPERTIES = {
   RESUME_SESSION_ON_RETRY: "resumeSessionOnRetry",
 } as const;
 
+// Retry prompt placeholder names for EndConditionEvaluator.buildRetryPrompt().
+export const RETRY_PROMPT_PLACEHOLDERS = {
+  STDOUT: "stdout",
+  STDERR: "stderr",
+  EXPECTED_VALUE: "expectedValue",
+  ACTUAL_VALUE: "actualValue",
+  RETRY_COUNT: "retryCount",
+  MAX_RETRIES: "maxRetries",
+} as const;
+
 // ============================================================================
 // CLI EVENT TYPES - CLI output event types for structured output rendering
 // ============================================================================
@@ -854,3 +864,5 @@ export type ConditionAction =
   (typeof CONDITION_ACTIONS)[keyof typeof CONDITION_ACTIONS];
 export type CompareSource =
   (typeof COMPARE_SOURCES)[keyof typeof COMPARE_SOURCES];
+export type RetryPromptPlaceholder =
+  (typeof RETRY_PROMPT_PLACEHOLDERS)[keyof typeof RETRY_PROMPT_PLACEHOLDERS];

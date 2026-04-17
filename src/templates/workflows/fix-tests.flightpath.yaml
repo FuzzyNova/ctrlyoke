@@ -13,4 +13,4 @@ steps:
       maxRetries: 5
       retryPrompt: |
         Tests are still failing. Please fix the remaining issues:
-        {scriptOutput}
+        {stdout}

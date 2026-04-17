@@ -7,6 +7,8 @@ import {
 } from "../../utils/endCondition";
 import { CONDITION_ACTIONS, COMPARE_SOURCES } from "../../types/messages";
 import type { SelectOption } from "./CustomSelect";
+import { CodeMirrorEditor } from "@components/editor/CodeMirrorEditor";
+import { getDictionaryUris } from "@utils/dictionaryUris";
 
 const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
   Object.values(COMPARE_SOURCES) as EndConditionCompareSource[]
@@ -134,6 +136,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
 
   const compareSource = (v.compareSource ??
     COMPARE_SOURCES.AUTO) as EndConditionCompareSource;
+  const { affUri, dicUri } = getDictionaryUris();
   const compareSourceHint =
     compareSource === COMPARE_SOURCES.AUTO
       ? "'true'/'false' check exit code; other values compare stdout"
@@ -367,19 +370,25 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             >
               Retry Prompt
             </label>
-            <textarea
+            <CodeMirrorEditor
               id={`${idPrefix}-retry-prompt`}
               value={v.retryPrompt ?? ""}
-              onChange={(e) => update({ retryPrompt: e.target.value })}
+              onChange={(retryPrompt) => update({ retryPrompt })}
               placeholder={
-                "Validation failed: {error}\n\nPlease fix the issues."
+                "Validation failed: {stderr}\n\nPlease fix the issues."
               }
-              rows={3}
-              disabled={disabled}
-              className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-y disabled:opacity-50"
+              affUri={affUri}
+              dicUri={dicUri}
+              readOnly={disabled}
+              mode="endCondition"
+              surface="input"
+              minHeightClassName="min-h-[96px]"
+              maxHeightClassName="max-h-[220px]"
+              className={`overflow-auto rounded bg-input-bg focus-within:border-focus-border ${disabled ? "opacity-50" : ""}`}
             />
             <span className="text-[10px] text-description-fg">
-              Use {"{error}"} placeholder for validation error message
+              Type {"{"} for retry placeholders like {"{stderr}"} and{" "}
+              {"{stdout}"}.
             </span>
           </div>
 

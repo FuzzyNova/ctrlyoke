@@ -7,7 +7,10 @@ import {
   type ScriptProperties,
   type EndConditionCompareSource,
 } from "../types/FlightPathTypes";
-import { COMPARE_SOURCES } from "../types/DashboardConstants";
+import {
+  COMPARE_SOURCES,
+  RETRY_PROMPT_PLACEHOLDERS,
+} from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
   PATH_CONSTANTS,
@@ -544,13 +547,44 @@ export class EndConditionEvaluator {
     retryCount: number,
     maxRetries: number
   ): string {
+    const replacements: Record<string, string> = {
+      [RETRY_PROMPT_PLACEHOLDERS.STDOUT]: evaluationResult.stdout.trim(),
+      [RETRY_PROMPT_PLACEHOLDERS.STDERR]: evaluationResult.stderr.trim(),
+      [RETRY_PROMPT_PLACEHOLDERS.EXPECTED_VALUE]: expectedValue,
+      [RETRY_PROMPT_PLACEHOLDERS.ACTUAL_VALUE]:
+        evaluationResult.result.trim(),
+      [RETRY_PROMPT_PLACEHOLDERS.RETRY_COUNT]: String(retryCount),
+      [RETRY_PROMPT_PLACEHOLDERS.MAX_RETRIES]: String(maxRetries),
+    };
+
     return template
-      .replace(/{scriptOutput}/g, evaluationResult.stdout.trim())
-      .replace(/{errorOutput}/g, evaluationResult.stderr.trim())
-      .replace(/{expectedValue}/g, expectedValue)
-      .replace(/{actualValue}/g, evaluationResult.result.trim())
-      .replace(/{retryCount}/g, String(retryCount))
-      .replace(/{maxRetries}/g, String(maxRetries));
+      .replace(
+        new RegExp(`\\{${RETRY_PROMPT_PLACEHOLDERS.STDOUT}\\}`, "g"),
+        replacements[RETRY_PROMPT_PLACEHOLDERS.STDOUT]
+      )
+      .replace(
+        new RegExp(`\\{${RETRY_PROMPT_PLACEHOLDERS.STDERR}\\}`, "g"),
+        replacements[RETRY_PROMPT_PLACEHOLDERS.STDERR]
+      )
+      .replace(
+        new RegExp(
+          `\\{${RETRY_PROMPT_PLACEHOLDERS.EXPECTED_VALUE}\\}`,
+          "g"
+        ),
+        replacements[RETRY_PROMPT_PLACEHOLDERS.EXPECTED_VALUE]
+      )
+      .replace(
+        new RegExp(`\\{${RETRY_PROMPT_PLACEHOLDERS.ACTUAL_VALUE}\\}`, "g"),
+        replacements[RETRY_PROMPT_PLACEHOLDERS.ACTUAL_VALUE]
+      )
+      .replace(
+        new RegExp(`\\{${RETRY_PROMPT_PLACEHOLDERS.RETRY_COUNT}\\}`, "g"),
+        replacements[RETRY_PROMPT_PLACEHOLDERS.RETRY_COUNT]
+      )
+      .replace(
+        new RegExp(`\\{${RETRY_PROMPT_PLACEHOLDERS.MAX_RETRIES}\\}`, "g"),
+        replacements[RETRY_PROMPT_PLACEHOLDERS.MAX_RETRIES]
+      );
   }
 
   /**

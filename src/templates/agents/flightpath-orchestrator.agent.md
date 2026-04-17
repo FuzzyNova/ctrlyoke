@@ -90,7 +90,7 @@ Every workflow you create follows this pattern:
         "script": "npm test",
         "returns": "true",
         "maxRetries": 2,
-        "retryPrompt": "Tests failed. Fix the issues:\n{scriptOutput}"
+        "retryPrompt": "Tests failed. Fix the issues:\n{stdout}"
       }
     }
   ]
@@ -200,7 +200,7 @@ User: "Add user authentication with JWT tokens"
         "script": "npm test",
         "returns": "true",
         "maxRetries": 2,
-        "retryPrompt": "Tests failed. Please fix the issues:\n{scriptOutput}"
+        "retryPrompt": "Tests failed. Please fix the issues:\n{stdout}"
       }
     },
     {

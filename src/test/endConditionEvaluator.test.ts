@@ -39,8 +39,8 @@ suite("EndConditionEvaluator Tests", () => {
       exitCode: 1,
     };
 
-    test("should replace {scriptOutput} placeholder", () => {
-      const template = "Script output was: {scriptOutput}";
+    test("should replace {stdout} placeholder", () => {
+      const template = "Script output was: {stdout}";
       const result = evaluator.buildRetryPrompt(
         template,
         mockResult,
@@ -51,8 +51,8 @@ suite("EndConditionEvaluator Tests", () => {
       assert.strictEqual(result, "Script output was: Test stdout output");
     });
 
-    test("should replace {errorOutput} placeholder", () => {
-      const template = "Error was: {errorOutput}";
+    test("should replace {stderr} placeholder", () => {
+      const template = "Error was: {stderr}";
       const result = evaluator.buildRetryPrompt(
         template,
         mockResult,
@@ -112,7 +112,7 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("should replace multiple occurrences of same placeholder", () => {
-      const template = "Output: {scriptOutput}, again: {scriptOutput}";
+      const template = "Output: {stdout}, again: {stdout}";
       const result = evaluator.buildRetryPrompt(
         template,
         mockResult,
@@ -146,7 +146,7 @@ suite("EndConditionEvaluator Tests", () => {
     test("should handle all placeholders in one template", () => {
       const template =
         "Retry {retryCount}/{maxRetries}: Expected {expectedValue}, got {actualValue}. " +
-        "Output: {scriptOutput}. Error: {errorOutput}";
+        "Output: {stdout}. Error: {stderr}";
       const result = evaluator.buildRetryPrompt(
         template,
         mockResult,
@@ -165,7 +165,7 @@ suite("EndConditionEvaluator Tests", () => {
         stdout: "  spaced output  ",
         result: "  spaced output  ",
       };
-      const template = "{scriptOutput}";
+      const template = "{stdout}";
       const result = evaluator.buildRetryPrompt(
         template,
         resultWithWhitespace,
@@ -175,6 +175,18 @@ suite("EndConditionEvaluator Tests", () => {
       );
       // buildRetryPrompt trims the output
       assert.strictEqual(result, "spaced output");
+    });
+
+    test("should leave legacy placeholders unchanged", () => {
+      const template = "{scriptOutput} {errorOutput} {error}";
+      const result = evaluator.buildRetryPrompt(
+        template,
+        mockResult,
+        "true",
+        1,
+        3
+      );
+      assert.strictEqual(result, "{scriptOutput} {errorOutput} {error}");
     });
   });
 

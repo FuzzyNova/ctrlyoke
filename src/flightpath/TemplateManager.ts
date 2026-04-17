@@ -7,6 +7,7 @@ import {
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
+import { RETRY_PROMPT_PLACEHOLDERS } from "../types/DashboardConstants";
 
 /**
  * A single template variable — name plus optional UI metadata.
@@ -324,20 +325,20 @@ export class TemplateManager {
    *   {text:varName}  → TemplateVariable with type = 'text'
    *   {varName}       → TemplateVariable with no explicit type (defaults to text in UI)
    *
-   * Reserved names (scriptOutput, retryCount, maxRetries) are filtered out.
+   * Retry prompt placeholders are filtered out.
    * Duplicate names are deduplicated; first occurrence wins.
    */
   extractVariables(content: string): TemplateVariable[] {
     // Matches optional type prefix: {file:name}, {text:name}, or plain {name}
     const pattern = /\{(?:(file|text):)?([a-z][a-zA-Z0-9]*)\}/g;
-    const reserved = ["scriptOutput", "retryCount", "maxRetries"];
+    const reserved = new Set<string>(Object.values(RETRY_PROMPT_PLACEHOLDERS));
     const seen = new Set<string>();
     const variables: TemplateVariable[] = [];
 
     let match;
     while ((match = pattern.exec(content)) !== null) {
       const [, typePrefix, name] = match;
-      if (!reserved.includes(name) && !seen.has(name)) {
+      if (!reserved.has(name) && !seen.has(name)) {
         seen.add(name);
         const variable: TemplateVariable = { name };
         if (typePrefix === "file" || typePrefix === "text") {
