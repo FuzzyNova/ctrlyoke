@@ -295,7 +295,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
             </div>
             {/* Percentage label */}
             <span className="text-[8px] leading-none text-description-fg opacity-75 mt-0.5">
-              {contextPct}
+              {contextPct}%
             </span>
           </div>
         )}
