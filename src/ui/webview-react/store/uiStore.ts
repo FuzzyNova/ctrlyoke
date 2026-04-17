@@ -100,7 +100,9 @@ export interface RecentWorkflow {
   lastUsed: number;
 }
 
-/** Panel size snapshot (percentage values) for desktop or mobile layout */
+/** Panel size snapshot for desktop or mobile layout.
+ *  Desktop: steps/settings are in pixels; output/editor are percentages.
+ *  Mobile: output/editor are percentages. */
 export interface PanelSizes {
   steps: number;
   output: number;

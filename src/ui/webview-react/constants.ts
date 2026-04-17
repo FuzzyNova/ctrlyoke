@@ -20,15 +20,19 @@ export const PANEL_MIN_SIZE_SIDEBAR = "192px";
 /** Minimum panel size as percentage for vertical center panels (output/editor) */
 export const PANEL_MIN_SIZE_CENTER = "15";
 
-/** Maximum panel size as percentage for sidebar panels (prompts/settings) */
-export const PANEL_MAX_SIZE_SIDEBAR = "40";
+/** Minimum width in pixels for the desktop center column (output/editor) */
+export const PANEL_MIN_SIZE_CENTER_COLUMN = "360px";
 
-/** Default panel sizes (percentage) for desktop layout — single source of truth for initial layout */
+/** Maximum panel size in pixels for sidebar panels (prompts/settings) */
+export const PANEL_MAX_SIZE_SIDEBAR = "480px";
+
+/** Default panel sizes for desktop layout — single source of truth for initial layout.
+ *  steps/settings are in pixels; output/editor are percentages. */
 export const DEFAULT_DESKTOP_SIZES = {
-  steps: 20,
+  steps: 240,
   output: 60,
   editor: 40,
-  settings: 20,
+  settings: 240,
 };
 
 /** Default panel sizes (percentage) for mobile layout */

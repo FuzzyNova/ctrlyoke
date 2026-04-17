@@ -65,9 +65,10 @@ export function useDesktopLayout({
   // Stable mount defaults — only recomputed by App.tsx on Group remount
   // transitions; keeping them constant while the Group is alive prevents the
   // library from re-initialising and clobbering imperative calls.
+  // steps/settings use pixel strings; output/editor use percentage strings.
   const desktopMountDefaults = useRef({
-    steps: String(lastDesktopSizes.current.steps),
-    settings: String(lastDesktopSizes.current.settings),
+    steps: `${lastDesktopSizes.current.steps}px`,
+    settings: `${lastDesktopSizes.current.settings}px`,
   });
   const mountDefaultOutput = useRef(
     outputCollapsed

@@ -19,6 +19,7 @@ import {
   PANEL_COLLAPSED_SIZE_SIDEBAR,
   PANEL_EXPANDED_SIZE_SINGLE,
   PANEL_MIN_SIZE_CENTER,
+  PANEL_MIN_SIZE_CENTER_COLUMN,
   PANEL_MIN_SIZE_SIDEBAR,
   PANEL_MAX_SIZE_SIDEBAR,
   SEPARATOR_HORIZONTAL,
@@ -251,10 +252,10 @@ function App() {
       // without needing to resize from a large percentage.
       desktop.desktopMountDefaults.current.steps = promptsCollapsed
         ? PANEL_COLLAPSED_SIZE_SIDEBAR
-        : String(desktop.lastDesktopSizes.current.steps);
+        : `${desktop.lastDesktopSizes.current.steps}px`;
       desktop.desktopMountDefaults.current.settings = settingsCollapsed
         ? PANEL_COLLAPSED_SIZE_SIDEBAR
-        : String(desktop.lastDesktopSizes.current.settings);
+        : `${desktop.lastDesktopSizes.current.settings}px`;
 
       // Center vertical group panels
       desktop.mountDefaultOutput.current = outputCollapsed
@@ -559,6 +560,7 @@ function App() {
           <Panel
             panelRef={desktop.stepsRef}
             defaultSize={desktop.desktopMountDefaults.current.steps}
+            groupResizeBehavior="preserve-pixel-size"
             collapsible
             collapsedSize={PANEL_COLLAPSED_SIZE_SIDEBAR}
             minSize={PANEL_MIN_SIZE_SIDEBAR}
@@ -570,10 +572,11 @@ function App() {
               const isCollapsed =
                 desktop.stepsRef.current?.isCollapsed() ?? false;
               if (!isCollapsed) {
-                const size = desktop.stepsRef.current?.getSize().asPercentage;
+                const size = desktop.stepsRef.current?.getSize().inPixels;
                 if (size != null) {
-                  desktop.lastDesktopSizes.current.steps = size;
-                  useUiStore.getState().setLastDesktopSizes({ steps: size });
+                  const px = Math.round(size);
+                  desktop.lastDesktopSizes.current.steps = px;
+                  useUiStore.getState().setLastDesktopSizes({ steps: px });
                 }
               }
               if (isCollapsed !== promptsCollapsed) {
@@ -593,7 +596,7 @@ function App() {
             panel or maxSize tricks, both of which break imperative expand().
             When at least one panel is open the Group is active and the user can
             drag the separator freely. */}
-          <Panel id="center-content">
+          <Panel id="center-content" minSize={PANEL_MIN_SIZE_CENTER_COLUMN}>
             {outputCollapsed && editorCollapsed ? (
               <CenterContentArea />
             ) : (
@@ -684,6 +687,7 @@ function App() {
           <Panel
             panelRef={desktop.settingsRef}
             defaultSize={desktop.desktopMountDefaults.current.settings}
+            groupResizeBehavior="preserve-pixel-size"
             collapsible
             collapsedSize={PANEL_COLLAPSED_SIZE_SIDEBAR}
             minSize={PANEL_MIN_SIZE_SIDEBAR}
@@ -695,11 +699,11 @@ function App() {
               const isCollapsed =
                 desktop.settingsRef.current?.isCollapsed() ?? false;
               if (!isCollapsed) {
-                const size =
-                  desktop.settingsRef.current?.getSize().asPercentage;
+                const size = desktop.settingsRef.current?.getSize().inPixels;
                 if (size != null) {
-                  desktop.lastDesktopSizes.current.settings = size;
-                  useUiStore.getState().setLastDesktopSizes({ settings: size });
+                  const px = Math.round(size);
+                  desktop.lastDesktopSizes.current.settings = px;
+                  useUiStore.getState().setLastDesktopSizes({ settings: px });
                 }
               }
               if (isCollapsed !== settingsCollapsed) {
