@@ -870,8 +870,7 @@ export class WorkflowOrchestrator {
           ? (this.instances.get(panelViewedId) ??
             this.retiredInstances.get(panelViewedId))
           : null;
-        const panelWorkingFilePath =
-          panelViewed?.getSummary().workingFilePath;
+        const panelWorkingFilePath = panelViewed?.getSummary().workingFilePath;
         if (panelViewedId && panelWorkingFilePath) {
           Log.debug(
             `triggerAutoLoad: keeping panel's persisted workflow "${path.basename(panelWorkingFilePath)}" instead of loading most recent`
@@ -1028,6 +1027,17 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().appendFromFile(filePath, position);
   }
 
+  async appendFromFileForClient(
+    filePath: string,
+    clientId: string,
+    position?: QueuePosition
+  ): Promise<void> {
+    return this.getInstanceForClient(clientId).appendFromFile(
+      filePath,
+      position
+    );
+  }
+
   async pause(): Promise<void> {
     return this.getActiveInstance().pause();
   }
@@ -1161,7 +1171,10 @@ export class WorkflowOrchestrator {
   async handleClientReady(
     clientId: string,
     send: (msg: unknown) => void,
-    options?: { skipTerminalReplay?: boolean; preferredWorkingFilePath?: string }
+    options?: {
+      skipTerminalReplay?: boolean;
+      preferredWorkingFilePath?: string;
+    }
   ): Promise<void> {
     this.registerClient(clientId);
     if (options?.preferredWorkingFilePath) {

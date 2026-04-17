@@ -7,6 +7,7 @@ import {
   FINAL_STEP_PHASES,
   SESSION_KINDS,
   PANEL_CLIENT_ID,
+  QUEUE_POSITION,
   type WebviewLogLevel,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -328,7 +329,15 @@ export class WebviewMessageRouter {
       vscode.commands.executeCommand("flightpath.selectPromptFile");
     });
 
-    table.set(MESSAGE_TYPES.APPEND_FILE, () => {
+    table.set(MESSAGE_TYPES.APPEND_FILE, async (message) => {
+      if (message.filePath) {
+        await this.getOrchestrator()?.appendFromFileForClient(
+          message.filePath,
+          this.clientId,
+          QUEUE_POSITION.END
+        );
+        return;
+      }
       vscode.commands.executeCommand("flightpath.appendFromDashboard");
     });
 

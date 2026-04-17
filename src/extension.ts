@@ -33,6 +33,7 @@ import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
 import { Log } from "./utils/Log";
 import { saveIfDirty } from "./utils/FileSystemUtils";
 import { getErrorMessage } from "./utils/ErrorUtils";
+import { findWorkflowFilesInWorkspace } from "./utils/WorkflowFileDiscovery";
 import { WorkspaceInitializer } from "./flightpath/orchestration/WorkspaceInitializer";
 import { PATH_CONSTANTS } from "./utils/ConfigurationUtils";
 import {
@@ -660,40 +661,45 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
+  const pickWorkflowFile = async (
+    placeHolder: string
+  ): Promise<string | undefined> => {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+      vscode.window.showErrorMessage("No workspace folder open");
+      return undefined;
+    }
+
+    const promptFiles = findWorkflowFilesInWorkspace(
+      workspaceFolders[0].uri.fsPath
+    );
+
+    if (promptFiles.length === 0) {
+      vscode.window.showWarningMessage("No prompt files found in workspace");
+      return undefined;
+    }
+
+    const selected = await vscode.window.showQuickPick(
+      promptFiles.map((file) => ({
+        label: file.relativePath,
+        filePath: file.path,
+      })),
+      { placeHolder }
+    );
+
+    return selected?.filePath;
+  };
+
   // Select Prompt File command (for dashboard)
   const selectPromptFileCommand = vscode.commands.registerCommand(
     "flightpath.selectPromptFile",
     async () => {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders) {
-        vscode.window.showErrorMessage("No workspace folder open");
-        return;
-      }
-
-      // Find all prompt files in the workspace
-      const promptFiles = await vscode.workspace.findFiles(
-        "**/*.{flightpath.json,flightpath.yaml,flightpath.yml,prompt.md}",
-        "**/node_modules/**"
+      const selectedPath = await pickWorkflowFile(
+        "Select a prompt file to load"
       );
 
-      if (promptFiles.length === 0) {
-        vscode.window.showWarningMessage("No prompt files found in workspace");
-        return;
-      }
-
-      // Show quick pick
-      const items = promptFiles.map((uri) => ({
-        label: vscode.workspace.asRelativePath(uri),
-        uri: uri,
-      }));
-
-      const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: "Select a prompt file to load",
-      });
-
-      if (selected) {
-        // Load the file into the dashboard (don't execute)
-        await workflowOrchestrator.loadPromptFile(selected.uri.fsPath);
+      if (selectedPath) {
+        await workflowOrchestrator.loadPromptFile(selectedPath);
       }
     }
   );
@@ -702,36 +708,13 @@ function registerCommands(context: vscode.ExtensionContext) {
   const appendFromDashboardCommand = vscode.commands.registerCommand(
     "flightpath.appendFromDashboard",
     async () => {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders) {
-        vscode.window.showErrorMessage("No workspace folder open");
-        return;
-      }
-
-      // Find all prompt files in the workspace
-      const promptFiles = await vscode.workspace.findFiles(
-        "**/*.{flightpath.json,flightpath.yaml,flightpath.yml,prompt.md}",
-        "**/node_modules/**"
+      const selectedPath = await pickWorkflowFile(
+        "Select a prompt file to append to queue"
       );
 
-      if (promptFiles.length === 0) {
-        vscode.window.showWarningMessage("No prompt files found in workspace");
-        return;
-      }
-
-      // Show quick pick
-      const items = promptFiles.map((uri) => ({
-        label: vscode.workspace.asRelativePath(uri),
-        uri: uri,
-      }));
-
-      const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: "Select a prompt file to append to queue",
-      });
-
-      if (selected) {
+      if (selectedPath) {
         // Append to end of queue (dashboard button always uses "end" position)
-        await workflowOrchestrator.appendFromFile(selected.uri.fsPath, "end");
+        await workflowOrchestrator.appendFromFile(selectedPath, "end");
       }
     }
   );
@@ -892,7 +875,14 @@ function registerCommands(context: vscode.ExtensionContext) {
       if (hostedServer) return;
       const hub = workflowOrchestrator.getDashboardBroadcastHub();
       const port = configService.get("server")?.port ?? 3000;
-      hostedServer = new FlightPathHostedServer(hub, webviewProvider, port);
+      const workspaceRoot =
+        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+      hostedServer = new FlightPathHostedServer(
+        hub,
+        webviewProvider,
+        port,
+        workspaceRoot
+      );
       const url = hostedServer.listen();
       webviewProvider.setRunningServerUrl(url);
       webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STARTED, url });

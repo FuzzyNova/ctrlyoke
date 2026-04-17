@@ -22,6 +22,7 @@ import {
 } from "../types/DashboardConstants";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
+import { findWorkflowFilesInWorkspace } from "../utils/WorkflowFileDiscovery";
 
 export class FlightPathHostedServer
   implements IDashboardProvider, IDashboardSink
@@ -37,7 +38,8 @@ export class FlightPathHostedServer
   constructor(
     private hub: DashboardBroadcastHub,
     private webviewProvider: FlightPathWebviewProvider,
-    private port: number
+    private port: number,
+    private workspaceRoot: string
   ) {
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
     this.httpServer = createServer(this.app);
@@ -336,6 +338,12 @@ export class FlightPathHostedServer
     this.app.get("/standalone-shim.js", (_req, res) =>
       res.sendFile(path.join(__dirname, "server", "standalone-shim.js"))
     );
+    this.app.get("/api/workflow-files", (_req, res) => {
+      res.json({
+        workspaceRoot: this.workspaceRoot,
+        files: findWorkflowFilesInWorkspace(this.workspaceRoot),
+      });
+    });
     // SPA fallback: any unmatched route gets the patched index.html.
     this.app.use((_req, res) => res.send(this.buildHtml(webviewDist)));
   }

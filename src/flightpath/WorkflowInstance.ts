@@ -1349,11 +1349,14 @@ export class WorkflowInstance {
         const updatedState = this.promptQueue.getState();
         this.dashboardSink.updateStepsExtended(
           updatedState.steps,
-          this.promptQueue.getWorkflowFile().finalStep ?? null
+          this.promptQueue.getWorkflowFile().finalStep ?? null,
+          undefined,
+          this.id
         );
         this.dashboardSink.updateProgress(
           updatedState.currentIndex,
-          updatedState.steps.length
+          updatedState.steps.length,
+          this.id
         );
       }
 
@@ -2802,7 +2805,8 @@ export class WorkflowInstance {
       // Do NOT coerce null to undefined — null must be preserved so the PropertyResolver
       // stops resolution and injects no permission flags for this prompt.
       ...(props?.toolPermissions !== undefined && {
-        toolPermissions: props.toolPermissions as ToolPermissionsOverride | null,
+        toolPermissions:
+          props.toolPermissions as ToolPermissionsOverride | null,
       }),
     };
   }
