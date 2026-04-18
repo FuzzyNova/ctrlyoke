@@ -2,6 +2,18 @@ import "@testing-library/jest-dom";
 import { vi } from "vitest";
 
 // ---------------------------------------------------------------------------
+// ResizeObserver mock — jsdom does not implement ResizeObserver
+// ---------------------------------------------------------------------------
+vi.stubGlobal(
+  "ResizeObserver",
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
+
+// ---------------------------------------------------------------------------
 // VS Code API mock
 //
 // uiStore uses `persist` middleware backed by vscode.getState/setState, and

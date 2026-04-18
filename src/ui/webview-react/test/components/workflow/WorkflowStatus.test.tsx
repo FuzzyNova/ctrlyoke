@@ -72,7 +72,9 @@ describe("WorkflowStatus — loaded state", () => {
       executionState: EXECUTION_STATES.RUNNING,
     });
     render(<WorkflowStatus />);
-    expect(screen.getByText(EXECUTION_STATES.RUNNING)).toBeInTheDocument();
+    // jsdom always reports 0-width elements, so isNarrow=true and the badge
+    // renders an icon with the state as a title rather than visible text.
+    expect(screen.getByTitle(EXECUTION_STATES.RUNNING)).toBeInTheDocument();
   });
 
   it("does not show state badge when idle", () => {
