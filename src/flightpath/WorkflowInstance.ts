@@ -795,82 +795,61 @@ export class WorkflowInstance {
     try {
       Log.info(`FlightPath: Executing loaded prompt file: ${filePath}`);
 
-      if (this.dashboardSink && !this.isDashboardReady()) {
-        const action = await this.platform.showChoice(
-          `FlightPath dashboard is still initializing. Please wait a moment and try again.`,
-          "Retry",
-          "Cancel"
+      // Pre-flight: use the DETECTOR singleton (already initialized at startup).
+      // If the harness is still initializing or polling, wait until it settles
+      // (up to 35 s — enough to cover CopilotChat's 6 × 5 s polling window).
+      // If it ends up unavailable, surface the error in the webview and bail.
+      const detectedIntegration = this.getDetectorIntegration(modeOverride);
+      let detailedStatus = detectedIntegration.getDetailedStatus();
+
+      if (
+        detailedStatus.initializationStatus === HarnessStatus.Initializing ||
+        detailedStatus.initializationStatus === HarnessStatus.Waiting
+      ) {
+        Log.info(
+          `FlightPath: Harness not ready (${detailedStatus.initializationStatus}), waiting for status change…`
         );
-        if (action === "Retry") {
-          setTimeout(
-            () =>
-              this.executeLoadedPromptFile(modeOverride, continueFromCurrent),
-            500
+        await new Promise<void>((resolve) => {
+          let settled = false;
+          const settle = () => {
+            if (!settled) {
+              settled = true;
+              subscription.dispose();
+              clearTimeout(timer);
+              resolve();
+            }
+          };
+          const subscription = detectedIntegration.onDidChangeStatus(settle);
+          const timer = setTimeout(settle, 35_000);
+        });
+        detailedStatus = detectedIntegration.getDetailedStatus();
+      }
+
+      if (detailedStatus.initializationStatus !== HarnessStatus.Ready) {
+        const errorMessage =
+          detailedStatus.message || "Harness is unavailable";
+        Log.error(`FlightPath: Harness not ready: ${errorMessage}`);
+        const preflightStepCount = this.promptQueue.getState().steps.length;
+        if (this.dashboardSink && preflightStepCount > 0) {
+          this.dashboardSink.updateExecutionStarted(
+            this.id,
+            fileName,
+            preflightStepCount
           );
+          this.dashboardSink.updateCliOutput(0, {
+            prompt: "",
+            response: "",
+            elapsed: 0,
+            errorMessage,
+          });
         }
+        this.workflowRuntime.fail();
+        await this.promptQueue.commitRuntimeTransition();
         return;
       }
 
-      // Pre-flight check uses the DETECTOR singleton (already initialized at startup).
-      // The execution integration created later will have markAsReady() called and
-      // should not be used for this check.
-      const detailedStatus =
-        this.getDetectorIntegration(modeOverride).getDetailedStatus();
-
-      // Create the execution integration only after passing all pre-flight checks.
+      // Create the execution integration only after passing pre-flight checks.
       const integration = this.createIntegrationForMode(modeOverride);
-
-      if (detailedStatus.initializationStatus === HarnessStatus.Initializing) {
-        const action = await this.platform.showChoice(
-          `FlightPath is still initializing Copilot integration. Please wait a moment and try again.`,
-          "Retry",
-          "Cancel"
-        );
-        if (action === "Retry") {
-          setTimeout(
-            () =>
-              this.executeLoadedPromptFile(modeOverride, continueFromCurrent),
-            1000
-          );
-        }
-        return;
-      }
-
-      if (detailedStatus.initializationStatus === HarnessStatus.Waiting) {
-        const action = await this.platform.showChoice(
-          `FlightPath is waiting for Copilot to activate (attempt ${detailedStatus.pollingAttempts}/${detailedStatus.maxPollingAttempts}). Please wait...`,
-          "Retry",
-          "Cancel"
-        );
-        if (action === "Retry") {
-          setTimeout(
-            () =>
-              this.executeLoadedPromptFile(modeOverride, continueFromCurrent),
-            2000
-          );
-        }
-        return;
-      }
-
-      if (detailedStatus.initializationStatus === HarnessStatus.Unavailable) {
-        const action = await this.platform.showChoice(
-          `FlightPath: Copilot automation is unavailable. Please ensure GitHub Copilot Chat is installed and active.`,
-          "Retry Detection",
-          "View Requirements",
-          "Cancel"
-        );
-        if (action === "Retry Detection") {
-          await this.getDetectorIntegration(modeOverride).retryDetection();
-          setTimeout(
-            () =>
-              this.executeLoadedPromptFile(modeOverride, continueFromCurrent),
-            2000
-          );
-        } else if (action === "View Requirements") {
-          await this.getDetectorIntegration(modeOverride).testAutomation();
-        }
-        return;
-      }
 
       const executionState = this.getAuthoritativeExecutionState();
       if (!continueFromCurrent && !isAppendContinuation) {
@@ -1718,6 +1697,7 @@ export class WorkflowInstance {
             ...(promptName?.trim() ? { name: promptName.trim() } : {}),
             ...this.buildPromptStepProperties(properties),
           };
+    const stepHarness = isScriptStep(step) ? undefined : step.harness;
     if (forceNewWorkflow) {
       Log.info("Force new workflow requested...");
       this.clearWorkflow();
@@ -1764,7 +1744,7 @@ export class WorkflowInstance {
       await this.initializeNewWorkflow([step], workflowName);
 
       if (shouldRun) {
-        await this.executeLoadedPromptFile();
+        await this.executeLoadedPromptFile(stepHarness);
         Log.debug(
           `Send prompt (run, position=${position}): ${text.substring(0, 50)}...`
         );
@@ -1817,7 +1797,7 @@ export class WorkflowInstance {
             `queueStatusNow=${statusNow}`
         );
         if (isIdleNow || isCompleted || isStopped || isError) {
-          await this.executeLoadedPromptFile();
+          await this.executeLoadedPromptFile(stepHarness);
         }
         Log.debug(
           `Send prompt (run, position=${position}): ${text.substring(0, 50)}...`
@@ -1833,16 +1813,6 @@ export class WorkflowInstance {
   // ─────────────────────────────────────────────────────────────────────────
   // Private helpers
   // ─────────────────────────────────────────────────────────────────────────
-
-  /**
-   * Guard: returns true when the dashboard webview is ready to receive messages.
-   * TODO: In Phase 2 (multi-workflow), this should check actual dashboard readiness
-   * state. For Phase 1, the orchestrator's dashboardReady flag is already checked
-   * upstream before this method is reached via executeLoadedPromptFile.
-   */
-  private isDashboardReady(): boolean {
-    return true;
-  }
 
   /** Clear all output capture buffers — called at the start of a fresh (non-continuation) run. */
   private clearOutputBuffers(): void {
