@@ -52,6 +52,7 @@ import type { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { PropertyResolver } from "../utils/PropertyResolver";
 import { isCli } from "../utils/RuntimeMode";
 import { PlatformAdapter } from "../platform/PlatformAdapter";
 import { TypedEmitter } from "../utils/TypedEmitter";
@@ -799,7 +800,11 @@ export class WorkflowInstance {
       // If the harness is still initializing or polling, wait until it settles
       // (up to 35 s — enough to cover CopilotChat's 6 × 5 s polling window).
       // If it ends up unavailable, surface the error in the webview and bail.
-      const detectedIntegration = this.getDetectorIntegration(modeOverride);
+      const preflightHarness = PropertyResolver.resolveHarnessValue(
+        modeOverride,
+        this.currentPromptFile?.promptFile?.harness
+      );
+      const detectedIntegration = this.getDetectorIntegration(preflightHarness);
       let detailedStatus = detectedIntegration.getDetailedStatus();
 
       if (

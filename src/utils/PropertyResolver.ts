@@ -116,6 +116,25 @@ export class PropertyResolver {
   }
 
   /**
+   * Resolve harness from raw optional values with three-tier precedence.
+   * Use this when you have harness values but not full PromptStep/PromptFile objects
+   * (e.g. pre-flight checks before a step is selected).
+   *
+   * Precedence order:
+   * 1. promptHarness — prompt-level or explicit override
+   * 2. workflowHarness — workflow-level default
+   * 3. VS Code setting (flightpath.harness)
+   */
+  static resolveHarnessValue(
+    promptHarness?: Harness,
+    workflowHarness?: Harness
+  ): Harness {
+    return (
+      promptHarness ?? workflowHarness ?? ConfigurationUtils.getIntegrationMode()
+    );
+  }
+
+  /**
    * Resolve harness with three-tier precedence.
    *
    * Precedence order:
@@ -131,18 +150,7 @@ export class PropertyResolver {
     prompt: PromptStep,
     workflow: PromptFile
   ): Harness {
-    // 1. Prompt-level override (highest priority)
-    if (prompt.harness !== undefined) {
-      return prompt.harness;
-    }
-
-    // 2. Workflow-level default
-    if (workflow.harness !== undefined) {
-      return workflow.harness;
-    }
-
-    // 3. VS Code setting fallback (lowest priority)
-    return ConfigurationUtils.getIntegrationMode();
+    return this.resolveHarnessValue(prompt.harness, workflow.harness);
   }
 
   /**
