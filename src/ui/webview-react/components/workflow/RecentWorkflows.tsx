@@ -1,5 +1,5 @@
 import React from "react";
-import { getExecutionStateBadgeClass } from "../../utils/status";
+import { getExecutionStateBadgeClass, getExecutionStateBadgeIcon } from "../../utils/status";
 import { formatRelativeTimeVerbose } from "../../utils/time";
 
 interface RecentWorkflow {
@@ -18,6 +18,7 @@ interface RecentWorkflowsProps {
   onClearHistory: () => void;
   onRemove?: (filePath: string) => void;
   onNewWorkflow?: () => void;
+  isNarrow?: boolean;
   className?: string;
 }
 
@@ -38,6 +39,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
   onClearHistory,
   onRemove,
   onNewWorkflow,
+  isNarrow = false,
   className = "",
 }) => {
   return (
@@ -106,11 +108,16 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                 )}
 
                 {/* Execution State Badge — fixed-width column so badges align across rows */}
-                <span className="flex-shrink-0 w-[76px] flex justify-center">
+                <span className={`flex-shrink-0 flex justify-center ${isNarrow ? "w-[28px]" : "w-[76px]"}`}>
                   <span
-                    className={`workflow-menu-item-state text-[11px] px-1.5 py-[1px] rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
+                    className={`workflow-menu-item-state inline-flex items-center text-[11px] px-1.5 py-[1px] rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
+                    title={isNarrow ? workflow.executionState : undefined}
                   >
-                    {workflow.executionState}
+                    {isNarrow ? (
+                      <i className={`codicon ${getExecutionStateBadgeIcon(workflow.executionState)}`} />
+                    ) : (
+                      workflow.executionState
+                    )}
                   </span>
                 </span>
 

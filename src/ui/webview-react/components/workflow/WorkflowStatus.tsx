@@ -14,7 +14,11 @@ import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
 import { RecentWorkflows } from "./RecentWorkflows";
 import { RunningWorkflowItem } from "./RunningWorkflowItem";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
-import { getExecutionStateBadgeClass } from "../../utils/status";
+import {
+  getExecutionStateBadgeClass,
+  getExecutionStateBadgeIcon,
+} from "../../utils/status";
+import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { WebviewLog } from "@utils/logger";
 
 interface WorkflowStatusProps {
@@ -134,10 +138,20 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     null
   );
 
+  const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(300);
+
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const mergedContainerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      containerRef.current = node;
+      narrowRef(node);
+    },
+    [narrowRef]
+  );
 
   // Request recent workflows once on mount so the count badge is visible immediately
   useEffect(() => {
@@ -355,7 +369,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
   return (
     <div
-      ref={containerRef}
+      ref={mergedContainerRef}
       className={`workflow-status relative min-w-0 ${className}`}
     >
       {/* Editing Mode */}
@@ -415,8 +429,15 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               {executionState && executionState !== EXECUTION_STATES.IDLE && (
                 <span
                   className={`text-[11px] px-1.5 py-[1px] rounded uppercase font-semibold flex-shrink-0 ${getExecutionStateBadgeClass(executionState)}`}
+                  title={isNarrow ? executionState : undefined}
                 >
-                  {executionState}
+                  {isNarrow ? (
+                    <i
+                      className={`codicon ${getExecutionStateBadgeIcon(executionState)}`}
+                    />
+                  ) : (
+                    executionState
+                  )}
                 </span>
               )}
             </div>
@@ -498,6 +519,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                   workflow={workflow}
                   isCurrent={workflow.id === activeWorkflowId}
                   hasActiveTerminal={workflowHasActiveTerminal(workflow.id)}
+                  isNarrow={isNarrow}
                   onClick={() => handleSwitchWorkflow(workflow.id)}
                   onPause={() => handlePauseWorkflow(workflow.id)}
                   onResume={() => handleResumeWorkflow(workflow.id)}
@@ -523,6 +545,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             onSelect={handleSelectWorkflow}
             onClearHistory={handleClearHistory}
             onRemove={handleRemoveWorkflow}
+            isNarrow={isNarrow}
             onNewWorkflow={() => {
               setActiveWorkflowWorkingFilePath(null);
               vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });

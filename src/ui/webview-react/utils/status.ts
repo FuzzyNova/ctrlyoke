@@ -235,3 +235,27 @@ export function getExecutionStateBadgeClass(state: string): string {
     EXECUTION_STATE_BADGE_CLASSES[EXECUTION_STATES.IDLE]
   );
 }
+
+/**
+ * Codicon classes for execution state badges (icon-only mode for narrow layouts)
+ */
+export const EXECUTION_STATE_BADGE_ICONS: Record<ExecutionState, string> = {
+  [EXECUTION_STATES.IDLE]: "codicon-circle-large",
+  [EXECUTION_STATES.RUNNING]: "codicon-play",
+  [EXECUTION_STATES.PAUSED]: "codicon-debug-pause",
+  [EXECUTION_STATES.STOPPED]: "codicon-debug-stop",
+  [EXECUTION_STATES.CANCELLING]: "codicon-circle-slash",
+  [EXECUTION_STATES.COMPLETED]: "codicon-pass",
+  [EXECUTION_STATES.ERROR]: "codicon-error",
+};
+
+/**
+ * Get codicon class for execution state badge (icon-only narrow mode)
+ */
+export function getExecutionStateBadgeIcon(state: string): string {
+  const normalizedState = state.toLowerCase() as ExecutionState;
+  return (
+    EXECUTION_STATE_BADGE_ICONS[normalizedState] ||
+    EXECUTION_STATE_BADGE_ICONS[EXECUTION_STATES.IDLE]
+  );
+}

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { EXECUTION_STATES, RUNNER_IDS } from "../../types/messages";
 import type { WorkflowSummary } from "../../types/messages";
+import { getExecutionStateBadgeClass, getExecutionStateBadgeIcon } from "../../utils/status";
 
 interface RunningWorkflowItemProps {
   workflow: WorkflowSummary;
   isCurrent: boolean;
   hasActiveTerminal: boolean;
+  isNarrow?: boolean;
   onClick: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -39,6 +41,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   workflow,
   isCurrent,
   hasActiveTerminal,
+  isNarrow = false,
   onClick,
   onPause,
   onResume,
@@ -112,8 +115,19 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       )}
 
       {/* Status badge — fixed-width column so "RUNNING"/"PAUSED" align across rows */}
-      <span className="text-[11px] text-description-fg flex-shrink-0 uppercase font-semibold w-[52px] text-center">
-        {workflow.executionState}
+      <span
+        className={`flex-shrink-0 flex justify-center ${isNarrow ? "w-[28px]" : "w-[52px]"}`}
+      >
+        <span
+          className={`inline-flex items-center text-[11px] px-1.5 py-[1px] rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
+          title={isNarrow ? workflow.executionState : undefined}
+        >
+          {isNarrow ? (
+            <i className={`codicon ${getExecutionStateBadgeIcon(workflow.executionState)}`} />
+          ) : (
+            workflow.executionState
+          )}
+        </span>
       </span>
 
       {/* Elapsed time — fixed-width column for consistent m:ss alignment */}
