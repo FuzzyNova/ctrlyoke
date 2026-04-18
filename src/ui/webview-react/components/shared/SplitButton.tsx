@@ -222,7 +222,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         onClick={mainAction}
         disabled={disabled || mainDisabled}
         title={mainTitle}
-        className={`${baseButtonClass} ${variantClass} px-3 py-1 text-sm font-medium rounded-l rounded-r-none ${
+        className={`${baseButtonClass} ${variantClass} px-2 sm:px-3 py-1 text-sm font-medium rounded-l rounded-r-none ${
           disabled || mainDisabled ? disabledClass : ""
         }`}
       >

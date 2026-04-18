@@ -223,9 +223,9 @@ export const Header: React.FC<{
 
   return (
     <>
-      <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_1fr] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center px-1 sm:px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
+      <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_1fr] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center sm:px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
         {/* Left Section: Workflow Controls + Save + Undo/Redo buttons */}
-        <div className="header-left flex items-center gap-0.5 sm:gap-2">
+        <div className="header-left flex items-center gap-0.5 sm:gap-2 pl-1 sm:pl-0">
           <WorkflowControls />
           {/* Save button */}
           <button
@@ -281,7 +281,7 @@ export const Header: React.FC<{
         <div className="header-center order-last sm:order-none col-span-2 sm:col-span-1 justify-self-center w-full sm:w-auto flex items-center justify-center min-w-0 gap-1">
           {isMobile && (
             <button
-              className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
+              className={`control-button flex items-center justify-center mr-2 gap-0.5 pl-3.5 pr-2 py-1.5 text-sm rounded-r border-y border-r border-btn-border transition-colors ${
                 mobilePromptsOpen
                   ? "bg-btn-bg text-btn-fg"
                   : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
@@ -291,12 +291,15 @@ export const Header: React.FC<{
               aria-label="Toggle prompts panel"
             >
               <i className="codicon codicon-list-unordered" />
+              <i
+                className={`codicon ${mobilePromptsOpen ? "codicon-chevron-left" : "codicon-chevron-right"} text-[10px]`}
+              />
             </button>
           )}
           <WorkflowStatus className="flex-1 sm:max-w-[500px]" />
           {isMobile && (
             <button
-              className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
+              className={`control-button flex items-center justify-center ml-2 gap-0.5 pl-2 pr-3.5 py-1.5 text-sm rounded-l border-y border-l border-btn-border transition-colors ${
                 mobileSettingsOpen
                   ? "bg-btn-bg text-btn-fg"
                   : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
@@ -305,13 +308,16 @@ export const Header: React.FC<{
               title="Workflow Properties"
               aria-label="Toggle workflow properties"
             >
+              <i
+                className={`codicon ${mobileSettingsOpen ? "codicon-chevron-right" : "codicon-chevron-left"} text-[10px]`}
+              />
               <i className="codicon codicon-settings" />
             </button>
           )}
         </div>
 
         {/* Right Section: Control Buttons */}
-        <div className="header-right justify-self-end flex items-center gap-0.5 sm:gap-1">
+        <div className="header-right justify-self-end flex items-center gap-0.5 sm:gap-1 pr-1 sm:pr-0">
           {/* Run/Restart Button (icon-only) */}
           <button
             className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
