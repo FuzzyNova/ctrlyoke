@@ -104,6 +104,7 @@ export const Header: React.FC<{
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const isPaused = executionState === EXECUTION_STATES.PAUSED;
   const isCompleted = executionState === EXECUTION_STATES.COMPLETED;
+  const isError = executionState === EXECUTION_STATES.ERROR;
   const isStopped = executionState === EXECUTION_STATES.STOPPED;
   const isCancelling = executionState === EXECUTION_STATES.CANCELLING;
   const hasFile = fileName !== null;
@@ -128,8 +129,8 @@ export const Header: React.FC<{
   // Disable when stopped (already stopped)
   const canStop = isRunning || isPaused || isCancelling;
 
-  // Run button shows restart icon when paused, stopped, or completed
-  const isRerun = isCompleted || isPaused || isStopped;
+  // Run button shows restart icon when paused, stopped, completed, or errored
+  const isRerun = isCompleted || isError || isPaused || isStopped;
 
   const handleStopCliRun = useCallback(() => {
     if (activeWorkflowId) {

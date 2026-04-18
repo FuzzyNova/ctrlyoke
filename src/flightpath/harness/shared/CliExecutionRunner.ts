@@ -555,6 +555,11 @@ export class CliExecutionRunner {
       });
 
       session.recordHeadlessResponse(collected);
+      if (!collected.success) {
+        this.deps.runtimeState.setFailureReason(
+          collected.cliResult.error || "Headless CLI execution failed"
+        );
+      }
       return collected.success;
     };
   }

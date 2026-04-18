@@ -51,13 +51,16 @@ export class CliResponseCollector {
     const statistics = CliOutputFormatter.formatStatistics(
       parsedOutput.metadata
     );
+    const failureReason = this.getHeadlessFailureReason(params, parsedOutput);
+    const succeeded = failureReason === undefined;
+    const resultResponse = responseText || failureReason || "";
 
     const cliResult: CliResult = {
-      success: params.exitCode === 0,
-      response: responseText,
+      success: succeeded,
+      response: resultResponse,
       statistics,
       exitCode: params.exitCode,
-      error: params.exitCode !== 0 ? params.stderr : undefined,
+      error: failureReason,
     };
 
     let extractedSessionId = parsedOutput.metadata.sessionId;
@@ -66,6 +69,7 @@ export class CliResponseCollector {
         `📝 Session ID from output${params.label || ""}: ${extractedSessionId}`
       );
     } else if (
+      succeeded &&
       !params.resolvedSessionId &&
       this.deps.provider.extractSessionIdFromLogs
     ) {
@@ -81,14 +85,51 @@ export class CliResponseCollector {
       }
     }
 
-    this.deps.hostCallbacks.logResponse(responseText, statistics);
-    this.deps.hostCallbacks.onResponseComplete(responseText);
+    this.deps.hostCallbacks.logResponse(resultResponse, statistics);
+    this.deps.hostCallbacks.onResponseComplete(resultResponse);
 
     return {
-      success: params.exitCode === 0,
+      success: succeeded,
       parsedOutput,
       cliResult,
       extractedSessionId,
     };
+  }
+
+  private getHeadlessFailureReason(
+    params: { stdout: string; stderr: string; exitCode: number },
+    parsedOutput: UniversalCliOutput
+  ): string | undefined {
+    const stderr = this.stripAnsiCodes(params.stderr).trim();
+
+    if (params.exitCode !== 0) {
+      return stderr || `Process exited with code ${params.exitCode}`;
+    }
+
+    if (!stderr) {
+      return undefined;
+    }
+
+    if (params.stdout.trim() || parsedOutput.events.length > 0) {
+      return undefined;
+    }
+
+    return this.looksLikeCliInvocationError(stderr) ? stderr : undefined;
+  }
+
+  private looksLikeCliInvocationError(stderr: string): boolean {
+    return [
+      /^error:/imu,
+      /\bunknown (?:option|argument|parameter)\b/iu,
+      /\bunrecognized (?:option|argument|parameter)\b/iu,
+      /\binvalid (?:option|argument|parameter)\b/iu,
+      /\bDid you mean\b/iu,
+      /\bTry ['"].*--help['"] for more information\./iu,
+      /^Usage:/imu,
+    ].some((pattern) => pattern.test(stderr));
+  }
+
+  private stripAnsiCodes(text: string): string {
+    return text.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
   }
 }

@@ -177,6 +177,62 @@ suite("CliResponseCollector", () => {
     assert.strictEqual(extractedPrompt, "discover me");
   });
 
+  test("should treat stderr-only CLI invocation errors as failure without log fallback", async () => {
+    let logExtractionCalled = false;
+    const loggedResponses: Array<{ response: string; statistics?: string }> =
+      [];
+    const completedResponses: string[] = [];
+    const stderr = [
+      "error: unknown option '--poop'",
+      "(Did you mean --prompt?)",
+      "",
+      "Try 'copilot --help' for more information.",
+    ].join("\n");
+
+    const collector = new CliResponseCollector({
+      provider: {
+        responseParser: {
+          parse: () => ({ events: [], metadata: {} }),
+          parseTokenCounts: () => undefined,
+        },
+        extractSessionIdFromLogs: async () => {
+          logExtractionCalled = true;
+          return "session-from-log";
+        },
+      } as Pick<
+        ICliProvider,
+        "responseParser" | "augmentParsedOutput" | "extractSessionIdFromLogs"
+      >,
+      hostCallbacks: {
+        logResponse: (response: string, statistics?: string) => {
+          loggedResponses.push({ response, statistics });
+        },
+        onResponseComplete: (response: string) => {
+          completedResponses.push(response);
+        },
+      },
+    });
+
+    const result = await collector.collectHeadlessResponse({
+      stdout: "",
+      stderr,
+      exitCode: 0,
+      promptForSessionLog: "just say hi",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.cliResult.success, false);
+    assert.strictEqual(result.cliResult.response, stderr);
+    assert.strictEqual(result.cliResult.error, stderr);
+    assert.strictEqual(result.extractedSessionId, undefined);
+    assert.strictEqual(logExtractionCalled, false);
+    assert.deepStrictEqual(loggedResponses, [
+      { response: stderr, statistics: "" },
+    ]);
+    assert.deepStrictEqual(completedResponses, [stderr]);
+  });
+
   test("should skip log-based session extraction when resuming an existing session", async () => {
     let logExtractionCalled = false;
 

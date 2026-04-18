@@ -87,6 +87,10 @@ function createRunner(options?: {
   ) => Promise<{ completed: boolean; error?: string; data?: unknown }>;
   discoverSessionLog?: () => Promise<string | null>;
   writeToCurrentPtySession?: (text: string) => boolean;
+  collectedHeadlessResponse?: {
+    success: boolean;
+    error?: string;
+  };
 }) {
   const failureTracker = new CliFailureTracker();
   let failureReason: string | undefined;
@@ -99,7 +103,14 @@ function createRunner(options?: {
       startInteractiveProcess: async () => {
         failureTracker.capturePtyExit(0, []);
       },
-      executeHeadless: async () => true,
+      executeHeadless: async (_args, _prompt, _tempFiles, callback) => {
+        return callback({
+          stdout: "",
+          stderr: options?.collectedHeadlessResponse?.error ?? "",
+          exitCode:
+            options?.collectedHeadlessResponse?.success === false ? 1 : 0,
+        });
+      },
       writeToCurrentPtySession:
         options?.writeToCurrentPtySession ?? (() => false),
     },
@@ -119,12 +130,13 @@ function createRunner(options?: {
         }),
       createResponseCollector: () => ({
         collectHeadlessResponse: async () => ({
-          success: true,
+          success: options?.collectedHeadlessResponse?.success ?? true,
           parsedOutput: { events: [], metadata: {} },
           cliResult: {
-            success: true,
+            success: options?.collectedHeadlessResponse?.success ?? true,
             response: "",
             statistics: "",
+            error: options?.collectedHeadlessResponse?.error,
           },
         }),
       }),
@@ -237,5 +249,22 @@ suite("CliExecutionRunner", () => {
 
     assert.deepStrictEqual(writes, ["\x1b[I", "send this", "\r"]);
     assert.deepStrictEqual(result, { injected: false });
+  });
+
+  test("should expose collector failure reason for headless execution failures", async () => {
+    const { runner, getFailureReason } = createRunner({
+      collectedHeadlessResponse: {
+        success: false,
+        error: "error: unknown option '--poop'",
+      },
+    });
+
+    const success = await runner.executeHeadless(
+      new CliExecutionSession({ prompt: { prompt: "just say hi" } }),
+      []
+    );
+
+    assert.strictEqual(success, false);
+    assert.strictEqual(getFailureReason(), "error: unknown option '--poop'");
   });
 });
