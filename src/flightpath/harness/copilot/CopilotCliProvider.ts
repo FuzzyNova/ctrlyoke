@@ -1,12 +1,6 @@
-import { exec } from "child_process";
-import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs/promises";
-import {
-  ICliProvider,
-  HarnessConfig,
-  CLI_VERSION_CHECK_TIMEOUT_MS,
-} from "../shared/interfaces/ICliProvider";
+import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
@@ -28,7 +22,6 @@ import {
 } from "../../../utils/ModelRegistry";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
-import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
@@ -38,8 +31,6 @@ import type {
   UserHookConfig,
 } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
-
-const execAsync = promisify(exec);
 
 /**
  * Copilot CLI Harness
@@ -567,24 +558,9 @@ export class CopilotCliProvider implements ICliProvider {
    * @returns True if CLI executable found
    */
   async checkAvailability(): Promise<boolean> {
-    const result = await retryWithBackoff(
-      async () => {
-        try {
-          await execAsync("copilot --version", {
-            timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
-          });
-          return true;
-        } catch (error) {
-          // Retry Windows file-lock errors; treat other errors as permanent
-          if (String(error).includes("being used by another process")) {
-            return null; // trigger retry
-          }
-          throw error;
-        }
-      },
-      { maxAttempts: 4, delays: [200, 500, 1000] }
-    );
-    return result === true;
+    return CliProviderUtils.checkCliAvailability("copilot --version", {
+      retryWindowsFileLockErrors: true,
+    });
   }
 
   /**
@@ -593,23 +569,9 @@ export class CopilotCliProvider implements ICliProvider {
    * @returns Version string if available, undefined if error
    */
   async getVersion(): Promise<string | undefined> {
-    const result = await retryWithBackoff(
-      async () => {
-        try {
-          const { stdout } = await execAsync("copilot --version", {
-            timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
-          });
-          return stdout.trim() || null;
-        } catch (error) {
-          if (String(error).includes("being used by another process")) {
-            return null; // trigger retry
-          }
-          throw error;
-        }
-      },
-      { maxAttempts: 4, delays: [200, 500, 1000] }
-    );
-    return result;
+    return CliProviderUtils.getCliVersion("copilot --version", {
+      retryWindowsFileLockErrors: true,
+    });
   }
 
   /**

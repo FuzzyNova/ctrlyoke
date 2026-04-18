@@ -1,8 +1,26 @@
+import { execFile } from "child_process";
 import * as path from "path";
+import { promisify } from "util";
 import type { McpServerConfig } from "../../../types/FlightPathTypes";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { Log } from "../../../utils/Log";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import { retryWithBackoff } from "../../../utils/RetryUtils";
+import { resolveUnixShell, resolveWindowsShell } from "../PtyProcessManager";
+import { CLI_VERSION_CHECK_TIMEOUT_MS } from "./interfaces/ICliProvider";
+
+const execFileAsync = promisify(execFile);
+
+const WINDOWS_FILE_LOCK_ERROR = "being used by another process";
+
+interface CliVersionCommandOptions {
+  timeoutMs?: number;
+  retryWindowsFileLockErrors?: boolean;
+}
+
+interface GetCliVersionOptions extends CliVersionCommandOptions {
+  parseVersion?: (stdout: string) => string | undefined;
+}
 
 /**
  * Shared CLI provider utilities
@@ -15,8 +33,95 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
  * - MCP configuration injection (`buildMcpConfigBlock`)
  * - Session resume decision (`shouldResumeSession`)
  * - Process environment construction (`buildProcessEnv`)
+ * - Shell-aware CLI version checks (`checkCliAvailability`, `getCliVersion`)
  */
 export class CliProviderUtils {
+  /**
+   * Execute a CLI version command through the same resolved shell used for interactive PTYs.
+   *
+   * On Windows this matters because CLI shims may be PowerShell/cmd shims that are not
+   * directly executable via CreateProcess. Using execFile for the shell itself avoids
+   * Node's default shell selection while still letting the user's shell resolve the CLI.
+   */
+  static async runVersionCommand(
+    versionCommand: string,
+    options: CliVersionCommandOptions = {}
+  ): Promise<string> {
+    const execute = async (): Promise<string> => {
+      const shell =
+        process.platform === "win32"
+          ? resolveWindowsShell()
+          : resolveUnixShell();
+      const shellArgs =
+        process.platform === "win32"
+          ? ["-NoProfile", "-Command", versionCommand]
+          : ["-c", versionCommand];
+
+      const { stdout } = await execFileAsync(shell, shellArgs, {
+        encoding: "utf8",
+        timeout: options.timeoutMs ?? CLI_VERSION_CHECK_TIMEOUT_MS,
+      });
+      return typeof stdout === "string" ? stdout.trim() : String(stdout).trim();
+    };
+
+    if (!options.retryWindowsFileLockErrors) {
+      return execute();
+    }
+
+    const result = await retryWithBackoff(
+      async () => {
+        try {
+          return await execute();
+        } catch (error) {
+          if (String(error).includes(WINDOWS_FILE_LOCK_ERROR)) {
+            return null;
+          }
+          throw error;
+        }
+      },
+      { maxAttempts: 4, delays: [200, 500, 1000] }
+    );
+
+    if (result === undefined) {
+      throw new Error(`Version command failed: ${versionCommand}`);
+    }
+    return result;
+  }
+
+  /**
+   * Check whether a CLI is available by running its version command.
+   */
+  static async checkCliAvailability(
+    versionCommand: string,
+    options: CliVersionCommandOptions = {}
+  ): Promise<boolean> {
+    try {
+      await CliProviderUtils.runVersionCommand(versionCommand, options);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Get a CLI version string, with optional provider-specific parsing.
+   */
+  static async getCliVersion(
+    versionCommand: string,
+    options: GetCliVersionOptions = {}
+  ): Promise<string | undefined> {
+    try {
+      const stdout = await CliProviderUtils.runVersionCommand(
+        versionCommand,
+        options
+      );
+      const parsed = options.parseVersion?.(stdout) ?? stdout;
+      return parsed || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   /**
    * Determine whether to resume a session for this prompt execution.
    *

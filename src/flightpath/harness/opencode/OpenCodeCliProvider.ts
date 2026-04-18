@@ -1,12 +1,6 @@
-import { exec } from "child_process";
-import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs";
-import {
-  ICliProvider,
-  HarnessConfig,
-  CLI_VERSION_CHECK_TIMEOUT_MS,
-} from "../shared/interfaces/ICliProvider";
+import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
@@ -28,8 +22,6 @@ import type {
   UserHookConfig,
 } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
-
-const execAsync = promisify(exec);
 
 /**
  * OpenCode CLI Harness
@@ -403,28 +395,16 @@ export class OpenCodeCliProvider implements ICliProvider {
    * Check if OpenCode CLI is available on the system
    */
   async checkAvailability(): Promise<boolean> {
-    try {
-      await execAsync("opencode --version", {
-        timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
-      });
-      return true;
-    } catch {
-      return false;
-    }
+    return CliProviderUtils.checkCliAvailability("opencode --version");
   }
 
   /**
    * Get OpenCode CLI version string
    */
   async getVersion(): Promise<string | undefined> {
-    try {
-      const { stdout } = await execAsync("opencode --version", {
-        timeout: 5000,
-      });
-      return stdout.trim();
-    } catch {
-      return undefined;
-    }
+    return CliProviderUtils.getCliVersion("opencode --version", {
+      timeoutMs: 5000,
+    });
   }
 
   // ============================================================
