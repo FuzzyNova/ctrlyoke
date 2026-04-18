@@ -88,6 +88,12 @@ function App() {
   const promptsAfterClose = useRef<(() => void) | null>(null);
   const settingsAfterClose = useRef<(() => void) | null>(null);
 
+  // Sidebar chip rail closing animation state — same pattern as the fullwidth overlay.
+  // sidebarAfterClose fires after the collapse animation completes (width 32→0).
+  const sidebarShouldShow = mobilePromptsOpen && mobilePromptsMode === "sidebar";
+  const [sidebarChipClosing, setSidebarChipClosing] = useState(false);
+  const sidebarAfterClose = useRef<(() => void) | null>(null);
+
   const handlePromptsRequestSidebar = () => {
     promptsAfterClose.current = () => setMobilePromptsMode("sidebar");
     setPromptsOverlayClosing(true);
@@ -101,12 +107,20 @@ function App() {
     setSettingsOverlayClosing(true);
   };
 
+  const handleSidebarExpand = () => {
+    sidebarAfterClose.current = () => setMobilePromptsMode("fullwidth");
+    setSidebarChipClosing(true);
+  };
+
   // Header toggle handlers — route through close animation when panels are already open.
   // Calling toggleMobilePrompts/toggleMobileSettings directly skips the animation path.
   const handleToggleMobilePrompts = () => {
     if (mobilePromptsOpen && mobilePromptsMode === "fullwidth") {
       promptsAfterClose.current = () => closeMobilePrompts();
       setPromptsOverlayClosing(true);
+    } else if (mobilePromptsOpen && mobilePromptsMode === "sidebar") {
+      sidebarAfterClose.current = () => closeMobilePrompts();
+      setSidebarChipClosing(true);
     } else {
       toggleMobilePrompts();
     }
@@ -403,13 +417,25 @@ function App() {
                 {/* Flex row so the sidebar PUSHES the output right rather than
                     overlaying it. Fullwidth overlay is absolute inside the
                     output area — scoped to the output panel, never the editor. */}
-                <div className="flex h-full">
-                  {/* Sidebar chip rail — 32px flex sibling, pushes output right */}
-                  {mobilePromptsOpen && mobilePromptsMode === "sidebar" && (
-                    <div className="w-[32px] flex-shrink-0 h-full border-r border-panel-border bg-sidebar-bg">
-                      <PromptChipRail
-                        onExpand={() => setMobilePromptsMode("fullwidth")}
-                      />
+                <div className="flex h-full overflow-hidden">
+                  {/* Sidebar chip rail — width-animated flex sibling so the output
+                      panel is pushed/pulled by the layout, not a transform. */}
+                  {(sidebarShouldShow || sidebarChipClosing) && (
+                    <div
+                      className={`flex-shrink-0 h-full border-r border-panel-border bg-sidebar-bg overflow-hidden ${sidebarChipClosing ? "animate-slide-out-sidebar" : "animate-slide-in-sidebar"}`}
+                      onAnimationEnd={
+                        sidebarChipClosing
+                          ? () => {
+                              setSidebarChipClosing(false);
+                              sidebarAfterClose.current?.();
+                              sidebarAfterClose.current = null;
+                            }
+                          : undefined
+                      }
+                    >
+                      <div className="w-[32px] h-full">
+                        <PromptChipRail onExpand={handleSidebarExpand} />
+                      </div>
                     </div>
                   )}
 

@@ -102,11 +102,15 @@ function SortableWorkflowStepWrapper({
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
+  const borderBgClass = stepItemProps.isCurrent
+    ? "bg-status-idle animate-pulse-custom"
+    : "bg-transparent";
   return (
     // Number column sits outside setNodeRef so it stays anchored to the DOM
     // slot position while the content transforms during drag.
     <div className="flex items-stretch">
-      <div className="flex-shrink-0 w-7 flex items-start justify-end pt-2 pr-1 text-[11px] text-description-fg select-none">
+      <div className={`w-[2px] flex-shrink-0 self-stretch ${borderBgClass}`} />
+      <div className="flex-shrink-0 w-[26px] flex items-start justify-end pt-2 pr-1 text-[11px] text-description-fg select-none">
         {slotNumber}
       </div>
       <div ref={setNodeRef} style={style} className="flex-1 min-w-0">

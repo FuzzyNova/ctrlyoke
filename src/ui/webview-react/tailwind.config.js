@@ -266,6 +266,18 @@ module.exports = {
           "0%": { filter: "brightness(2)" },
           "100%": { filter: "brightness(1)" },
         },
+        // Width-based animations for the mobile sidebar chip rail.
+        // Unlike translateX animations, these affect flex layout so the
+        // adjacent output panel is pushed/pulled smoothly rather than
+        // jumping when the rail mounts or unmounts.
+        "slide-in-sidebar": {
+          from: { width: "0px" },
+          to: { width: "32px" },
+        },
+        "slide-out-sidebar": {
+          from: { width: "32px" },
+          to: { width: "0px" },
+        },
       },
 
       animation: {
@@ -279,6 +291,8 @@ module.exports = {
         "slide-down-in": "slide-down-fade-in 300ms ease-out forwards",
         "slide-down-out": "slide-down-fade-out 300ms ease-in forwards",
         "ctx-update": "ctx-update 0.4s ease-out",
+        "slide-in-sidebar": "slide-in-sidebar 0.25s ease-out both",
+        "slide-out-sidebar": "slide-out-sidebar 0.22s ease-in both",
       },
 
       fontFamily: {

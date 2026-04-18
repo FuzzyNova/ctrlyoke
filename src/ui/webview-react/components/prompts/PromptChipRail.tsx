@@ -30,6 +30,7 @@ import {
   RUNNER_IDS,
   type StepStatus,
 } from "../../types/messages";
+import { STEP_TYPES } from "@root/types/DashboardConstants";
 import {
   DndContext,
   closestCenter,
@@ -47,6 +48,27 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function isScriptStep(step: { type?: string }): boolean {
+  return step.type === STEP_TYPES.SCRIPT;
+}
+
+function getChipBorderClass(status: StepStatus): string {
+  switch (status) {
+    case STEP_STATUS.RUNNING:
+      return "bg-status-idle animate-pulse-custom";
+    case STEP_STATUS.FAILED:
+      return "bg-bash-status-error";
+    case STEP_STATUS.CANCELLED:
+      return "bg-bash-status-running";
+    case STEP_STATUS.PENDING:
+      return "bg-transparent";
+    default:
+      return "bg-bash-status-success";
+  }
+}
+
 // ─── ChipContent ─────────────────────────────────────────────────────────────
 
 type ChipProps = {
@@ -55,6 +77,7 @@ type ChipProps = {
   status: ReturnType<ReturnType<typeof usePromptStatus>>;
   contextPct: number | undefined;
   canReorder: boolean;
+  isScript: boolean;
   onChipClick: () => void;
   onOpenContextMenu: (x: number, y: number) => void;
 };
@@ -64,9 +87,11 @@ function ChipContent({
   status,
   contextPct,
   canReorder,
+  isScript,
   onChipClick,
   onOpenContextMenu,
 }: ChipProps) {
+  const borderBarClass = getChipBorderClass(status);
   return (
     <div
       className={`relative flex flex-col px-1 py-1 border-b border-panel-border hover:bg-toolbar-hover-bg transition-colors${canReorder ? " cursor-grab active:cursor-grabbing" : " cursor-pointer"}`}
@@ -84,14 +109,16 @@ function ChipContent({
         e.stopPropagation();
         onOpenContextMenu(e.clientX, e.clientY);
       }}
-      title={`Prompt ${slotNumber} — right-click for options`}
+      title={`${isScript ? "Script" : "Prompt"} ${slotNumber} — right-click for options`}
     >
-      {/* Row 1: slot number + status icon */}
+      {/* Left status border bar */}
+      <div className={`absolute left-0 top-0 bottom-0 w-[2px] ${borderBarClass}`} />
+      {/* Row 1: slot number + type icon */}
       <div className="flex items-center justify-between w-full">
         <span className="text-[10px] text-description-fg leading-none select-none">
           {slotNumber}
         </span>
-        <StatusIcon status={status} className="text-[16px]" />
+        <i className={`codicon ${isScript ? "codicon-terminal-powershell" : "codicon-comment"} text-[12px] text-description-fg`} />
       </div>
 
       {/* Row 2: context % on its own row */}
@@ -137,9 +164,10 @@ function FinalStepChip({
   onChipClick,
   onOpenContextMenu,
 }: FinalStepChipProps) {
+  const borderBarClass = getChipBorderClass(status);
   return (
     <div
-      className="flex flex-col px-1 py-1 border-t-2 border-panel-border hover:bg-toolbar-hover-bg transition-colors cursor-pointer"
+      className="relative flex flex-col px-1 py-1 border-t-2 border-panel-border hover:bg-toolbar-hover-bg transition-colors cursor-pointer"
       role="button"
       tabIndex={0}
       onClick={onChipClick}
@@ -156,6 +184,8 @@ function FinalStepChip({
       }}
       title="Final Step — right-click for options"
     >
+      {/* Left status border bar */}
+      <div className={`absolute left-0 top-0 bottom-0 w-[2px] ${borderBarClass}`} />
       {/* Row 1: "F" label + status icon */}
       <div className="flex items-center justify-between w-full">
         <span
@@ -370,6 +400,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                   status={status}
                   contextPct={contextPct}
                   canReorder={false}
+                  isScript={isScriptStep(prompt)}
                   onChipClick={() => handleStepClick(i)}
                   onOpenContextMenu={(x, y) =>
                     openContextMenu(x, y, {
@@ -411,6 +442,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                       status={status}
                       contextPct={contextPct}
                       canReorder={canReorder && !isCurrentStep}
+                      isScript={isScriptStep(prompt)}
                       onChipClick={() => handleStepClick(index)}
                       onOpenContextMenu={(x, y) =>
                         openContextMenu(x, y, {
