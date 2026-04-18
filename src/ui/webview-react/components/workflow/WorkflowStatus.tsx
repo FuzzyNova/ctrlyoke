@@ -376,13 +376,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       ) : (
         /* Display Mode - Split Button Style */
         <div
-          className={`workflow-split-button flex border rounded overflow-hidden max-w-full sm:max-w-[500px] w-full sm:w-auto min-w-0 transition-colors ${isDropdownOpen ? "border-cmd-active-border" : "border-cmd-border"}`}
+          className={`workflow-split-button flex border rounded overflow-hidden max-w-full sm:max-w-[500px] w-full min-w-0 transition-colors ${isDropdownOpen ? "border-cmd-active-border" : "border-cmd-border"}`}
         >
           {/* Main Button - Workflow Name */}
           <button
             type="button"
             onClick={startEditing}
-            className="workflow-button-main flex-1 min-w-0 sm:min-w-[250px] text-left overflow-hidden cursor-pointer transition-colors px-3 py-1 bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg"
+            className="workflow-button-main flex-1 min-w-0 text-left overflow-hidden cursor-pointer transition-colors px-3 py-1 bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg"
             title="Click to edit workflow name"
           >
             <div className="flex items-center justify-between gap-2 overflow-hidden">
