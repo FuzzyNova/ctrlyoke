@@ -12,9 +12,11 @@ import {
   CliEvent,
   TextData,
   ToolResultData,
+  CompactionData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
+  COMPACTION_TRIGGERS,
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
@@ -254,13 +256,33 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         }
       }
 
-      // Process system events for turn duration
-      if (
-        event.type === "system" &&
-        event.subtype === "turn_duration" &&
-        typeof event.durationMs === "number"
-      ) {
-        elapsed = event.durationMs;
+      // Process system events
+      if (event.type === "system") {
+        // Turn duration → elapsed time metadata
+        if (
+          event.subtype === "turn_duration" &&
+          typeof event.durationMs === "number"
+        ) {
+          elapsed = event.durationMs;
+        }
+
+        // Compact boundary → visible compaction event
+        if (event.subtype === "compact_boundary") {
+          const meta =
+            (event as any).compactMetadata ??
+            (event as any).compact_metadata ??
+            {};
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.COMPACTION,
+            timestamp,
+            data: {
+              trigger: meta.trigger ?? COMPACTION_TRIGGERS.AUTO,
+              preTokens: meta.preTokens ?? meta.pre_tokens,
+              postTokens: meta.postTokens ?? meta.post_tokens,
+              durationMs: meta.durationMs ?? meta.duration_ms,
+            } as CompactionData,
+          });
+        }
       }
     }
 
@@ -671,12 +693,14 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         }
 
         if (block.type === "tool_use") {
+          const callerType = block.caller?.type as string | undefined;
           events.push(
             ClaudeToolBuilder.buildInitiatedEvent(
               block.name,
               block.input || {},
               block.id,
-              timestamp
+              timestamp,
+              callerType
             )
           );
           if (block.id && block.name) {
@@ -720,6 +744,22 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           data: { text } as TextData,
         });
       }
+    }
+
+    // Compact boundary → emit visible compaction event during live log monitoring
+    if (e.type === "system" && e.subtype === "compact_boundary") {
+      const meta =
+        (e as any).compactMetadata ?? (e as any).compact_metadata ?? {};
+      events.push({
+        type: CLI_EVENT_TYPES.COMPACTION,
+        timestamp,
+        data: {
+          trigger: meta.trigger ?? COMPACTION_TRIGGERS.AUTO,
+          preTokens: meta.preTokens ?? meta.pre_tokens,
+          postTokens: meta.postTokens ?? meta.post_tokens,
+          durationMs: meta.durationMs ?? meta.duration_ms,
+        } as CompactionData,
+      });
     }
 
     return events;

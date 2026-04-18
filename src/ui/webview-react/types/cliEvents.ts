@@ -12,8 +12,12 @@
 export {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
+  COMPACTION_TRIGGERS,
+  CALLER_TYPES,
   type CliEventType,
   type FileOperationStatus,
+  type CompactionTrigger,
+  type CallerType,
 } from "@root/types/DashboardConstants";
 
 // Re-export all CLI event data interfaces and structures
@@ -33,6 +37,7 @@ export {
   type ToolResultData,
   type McpToolCallData,
   type WebSearchData,
+  type CompactionData,
   type UnifiedDiffHunk,
   type UniversalCliOutput,
 

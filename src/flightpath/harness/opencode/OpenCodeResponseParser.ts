@@ -6,8 +6,12 @@ import {
   UniversalCliOutput,
   CliEvent,
   TokenUsage,
+  CompactionData,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  COMPACTION_TRIGGERS,
+} from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import {
   mapOpenCodeToolPartToCliEvent,
@@ -224,6 +228,30 @@ export class OpenCodeResponseParser
         const part = event.part;
         if (!part) return undefined;
         return mapOpenCodeToolPartToCliEvent(event.timestamp, part);
+      }
+      case "error": {
+        // Session-level errors — surface as text so the user sees what went wrong
+        const msg = event.part?.error ?? event.part?.message ?? "Unknown error";
+        return {
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp: event.timestamp,
+          data: { text: `\u26a0\ufe0f OpenCode error: ${msg}` },
+        };
+      }
+      case "compaction": {
+        // Context compaction can appear in the stream on some versions
+        const part = event.part ?? event;
+        return {
+          type: CLI_EVENT_TYPES.COMPACTION,
+          timestamp: event.timestamp,
+          data: {
+            trigger:
+              part.auto === false
+                ? COMPACTION_TRIGGERS.MANUAL
+                : COMPACTION_TRIGGERS.AUTO,
+            overflow: part.overflow,
+          } as CompactionData,
+        };
       }
       // step_start, step_finish are structural — not displayed as events
       default:

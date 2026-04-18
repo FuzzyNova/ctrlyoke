@@ -719,7 +719,33 @@ export const CLI_EVENT_TYPES = {
   TOOL_CALL: "toolCall",
 
   TOOL_RESULT: "toolResult",
+
+  /** Conversation compaction checkpoint — shown when the AI auto-compacts the context window */
+  COMPACTION: "compaction",
 } as const;
+
+/**
+ * What triggered a context compaction event.
+ * Used by CompactionData.trigger across all harnesses (Claude, OpenCode, etc.)
+ */
+export const COMPACTION_TRIGGERS = {
+  AUTO: "auto",
+  MANUAL: "manual",
+} as const;
+
+export type CompactionTrigger =
+  (typeof COMPACTION_TRIGGERS)[keyof typeof COMPACTION_TRIGGERS];
+
+/**
+ * Who invoked a tool call — top-level agent or a spawned subagent.
+ * Used by CliEvent.callerType across harnesses that support subagent spawning.
+ */
+export const CALLER_TYPES = {
+  DIRECT: "direct",
+  SUBAGENT: "subagent",
+} as const;
+
+export type CallerType = (typeof CALLER_TYPES)[keyof typeof CALLER_TYPES];
 
 // ============================================================================
 // RUNNER IDS - Process runner identifiers written into workflow lock files

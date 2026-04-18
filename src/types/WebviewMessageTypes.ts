@@ -184,6 +184,7 @@ export type {
   ThinkingBlock,
   ToolCall,
   ToolResultData,
+  CompactionData,
   UniversalCliOutput,
   UnifiedDiffHunk,
 } from "./CliOutputTypes";

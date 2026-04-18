@@ -43,22 +43,28 @@ export class ClaudeToolBuilder {
    * @param input - Tool input parameters from tool_use block
    * @param toolId - Tool call ID (used in generic TOOL_CALL fallback)
    * @param timestamp - Event timestamp in milliseconds
+   * @param callerType - 'direct' for top-level calls, 'subagent' for sub-agent calls
    * @returns A single CliEvent to push onto the event stream
    */
   static buildInitiatedEvent(
     toolName: string,
     input: Record<string, unknown>,
     toolId: string | undefined,
-    timestamp: number
+    timestamp: number,
+    callerType?: string
   ): CliEvent {
     const classification = CliEventMapper.classifyTool(toolName);
     const path = (input.path ?? input.file_path) as string | undefined;
+
+    // Build the base event then apply callerType if present
+    const ct = callerType ? { callerType } : {};
 
     switch (classification.type) {
       case CLI_EVENT_TYPES.BASH_COMMAND:
         return {
           type: CLI_EVENT_TYPES.BASH_COMMAND,
           timestamp,
+          ...ct,
           data: {
             command:
               ((input.command ?? input.cmd) as string | undefined) || "unknown",
@@ -73,6 +79,7 @@ export class ClaudeToolBuilder {
         return {
           type: CLI_EVENT_TYPES.FILE_READ,
           timestamp,
+          ...ct,
           data: {
             path: path || "unknown",
             status: OPERATION_STATUS.INITIATED,
@@ -83,6 +90,7 @@ export class ClaudeToolBuilder {
         return {
           type: CLI_EVENT_TYPES.FILE_WRITE,
           timestamp,
+          ...ct,
           data: {
             path: path || "unknown",
             content:
@@ -105,6 +113,7 @@ export class ClaudeToolBuilder {
         return {
           type: CLI_EVENT_TYPES.FILE_EDIT,
           timestamp,
+          ...ct,
           data: {
             path: path || "unknown",
             oldContent,
@@ -118,6 +127,7 @@ export class ClaudeToolBuilder {
         return {
           type: CLI_EVENT_TYPES.FILE_DELETE,
           timestamp,
+          ...ct,
           data: {
             path: path || "unknown",
           } as FileDeleteData,
@@ -127,6 +137,7 @@ export class ClaudeToolBuilder {
         return {
           type: CLI_EVENT_TYPES.WEB_SEARCH,
           timestamp,
+          ...ct,
           data: {
             query: (input.query as string) || "",
           } as WebSearchData,
@@ -141,6 +152,7 @@ export class ClaudeToolBuilder {
         return {
           type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
           timestamp,
+          ...ct,
           data: {
             server: mcp.server,
             tool: mcp.tool,
@@ -153,6 +165,7 @@ export class ClaudeToolBuilder {
         return {
           type: CLI_EVENT_TYPES.TOOL_CALL,
           timestamp,
+          ...ct,
           data: {
             name: toolName,
             parameters: input,

@@ -39,6 +39,7 @@ import type {
   WebSearchData,
   ToolCall,
   ToolResultData,
+  CompactionData,
 } from "../../types/cliEvents";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../../types/cliEvents";
 import {
@@ -322,6 +323,32 @@ const SingleEvent = memo<SingleEventProps>(
         const data = event.data as ToolResultData;
         if (!data.result) return null;
         return <ToolResultOutput key={eventKey} result={data.result} />;
+      }
+
+      case CLI_EVENT_TYPES.COMPACTION: {
+        const data = event.data as CompactionData;
+        const trigger = data.trigger;
+        const tokenInfo =
+          data.preTokens != null && data.postTokens != null
+            ? ` — ${data.preTokens.toLocaleString()} → ${data.postTokens.toLocaleString()} tokens`
+            : data.preTokens != null
+              ? ` — ${data.preTokens.toLocaleString()} tokens compacted`
+              : "";
+        return (
+          <div
+            key={eventKey}
+            className="my-3 flex items-center gap-2 text-description-fg text-[length:var(--fp-output-font-size-sm)]"
+          >
+            <div className="flex-1 h-px bg-panel-border" />
+            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-panel-border bg-editor-bg whitespace-nowrap">
+              <i className="codicon codicon-fold text-[10px]" />
+              <span>
+                Conversation compacted ({trigger}){tokenInfo}
+              </span>
+            </span>
+            <div className="flex-1 h-px bg-panel-border" />
+          </div>
+        );
       }
 
       default:

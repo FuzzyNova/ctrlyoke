@@ -6,9 +6,11 @@ import {
   UniversalCliOutput,
   CliEvent,
   TokenUsage,
+  CompactionData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
+  COMPACTION_TRIGGERS,
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
@@ -91,9 +93,20 @@ export class ClaudeResponseParser
           model = json.model;
           cliVersion = json.claude_code_version;
         } else if (json.subtype === "compact_boundary") {
-          // Log compact boundary for debugging (conversation was compacted)
+          // Emit a visible compaction event so users know context was summarized
+          const meta = json.compact_metadata ?? {};
+          events.push({
+            type: CLI_EVENT_TYPES.COMPACTION,
+            timestamp: Date.now(),
+            data: {
+              trigger: meta.trigger ?? COMPACTION_TRIGGERS.AUTO,
+              preTokens: meta.pre_tokens,
+              postTokens: meta.post_tokens,
+              durationMs: meta.duration_ms,
+            } as CompactionData,
+          });
           Log.debug(
-            `[ClaudeParser] Compact boundary: trigger=${json.compact_metadata?.trigger}, pre_tokens=${json.compact_metadata?.pre_tokens}`
+            `[ClaudeParser] Compact boundary: trigger=${meta.trigger}, pre_tokens=${meta.pre_tokens}`
           );
         }
       }
@@ -312,12 +325,14 @@ export class ClaudeResponseParser
 
       // Handle tool_use blocks - map to semantic event types
       if (contentBlock.type === "tool_use") {
+        const callerType = contentBlock.caller?.type as string | undefined;
         events.push(
           ClaudeToolBuilder.buildInitiatedEvent(
             contentBlock.name,
             contentBlock.input || {},
             contentBlock.id,
-            Date.now()
+            Date.now(),
+            callerType
           )
         );
       }
@@ -403,12 +418,13 @@ export class ClaudeResponseParser
 
         switch (event.type) {
           case "content_block_start":
-            // Initialize block tracking
+            // Initialize block tracking, capturing caller context for subagent detection
             if (event.content_block) {
               blocks.set(event.index, {
                 type: event.content_block.type,
                 id: event.content_block.id,
                 name: event.content_block.name,
+                callerType: event.content_block.caller?.type,
                 accumulatedJson: "",
                 accumulatedText: "",
               });
@@ -456,13 +472,14 @@ export class ClaudeResponseParser
             if (block && block.type === "tool_use" && block.accumulatedJson) {
               try {
                 const input = JSON.parse(block.accumulatedJson);
-                // Map to semantic event type
+                // Map to semantic event type, preserving caller context
                 events.push(
                   ClaudeToolBuilder.buildInitiatedEvent(
                     block.name,
                     input,
                     block.id,
-                    Date.now()
+                    Date.now(),
+                    block.callerType
                   )
                 );
               } catch (e) {

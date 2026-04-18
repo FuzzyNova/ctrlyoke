@@ -10,8 +10,13 @@ import {
   UniversalCliOutput,
   CliEvent,
   TokenUsage,
+  CompactionData,
 } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  COMPACTION_TRIGGERS,
+  CALLER_TYPES,
+} from "../../../types/DashboardConstants";
 import {
   mapOpenCodeToolPartToCliEvent,
   accumulateOpenCodeStepTokens,
@@ -276,6 +281,54 @@ export class OpenCodeLogParser extends BaseLogParser {
         }
         break;
       }
+      case "compaction": {
+        // Context was compacted to free up the context window
+        cliEvents.push({
+          type: CLI_EVENT_TYPES.COMPACTION,
+          timestamp,
+          data: {
+            trigger:
+              e.part?.auto === false
+                ? COMPACTION_TRIGGERS.MANUAL
+                : COMPACTION_TRIGGERS.AUTO,
+            overflow: e.part?.overflow,
+          } as CompactionData,
+        });
+        break;
+      }
+      case "subtask": {
+        // A subagent was spawned via the task tool — show as a generic tool call
+        const desc = e.part?.description as string | undefined;
+        const agent = e.part?.agent as string | undefined;
+        cliEvents.push({
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp,
+          callerType: CALLER_TYPES.DIRECT,
+          data: {
+            name: "task",
+            parameters: {
+              description: desc,
+              agent,
+              model: e.part?.model,
+            },
+          },
+        });
+        break;
+      }
+      case "retry": {
+        // Retry attempt — surface as text so the user sees it
+        const attempt = e.part?.attempt as number | undefined;
+        const errMsg = e.part?.error as string | undefined;
+        const text = errMsg
+          ? `\u26a0\ufe0f Retry attempt ${attempt ?? ""}: ${errMsg}`
+          : `\u26a0\ufe0f Retry attempt ${attempt ?? ""}`;
+        cliEvents.push({
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp,
+          data: { text },
+        });
+        break;
+      }
     }
 
     return cliEvents;
@@ -332,6 +385,49 @@ export class OpenCodeLogParser extends BaseLogParser {
               cliEvents.push(toolEvent);
             }
           }
+          break;
+        }
+        case "compaction": {
+          cliEvents.push({
+            type: CLI_EVENT_TYPES.COMPACTION,
+            timestamp: e.timestamp as number | undefined,
+            data: {
+              trigger:
+                e.part?.auto === false
+                  ? COMPACTION_TRIGGERS.MANUAL
+                  : COMPACTION_TRIGGERS.AUTO,
+              overflow: e.part?.overflow,
+            } as CompactionData,
+          });
+          break;
+        }
+        case "subtask": {
+          cliEvents.push({
+            type: CLI_EVENT_TYPES.TOOL_CALL,
+            timestamp: e.timestamp as number | undefined,
+            callerType: CALLER_TYPES.DIRECT,
+            data: {
+              name: "task",
+              parameters: {
+                description: e.part?.description,
+                agent: e.part?.agent,
+                model: e.part?.model,
+              },
+            },
+          });
+          break;
+        }
+        case "retry": {
+          const attempt = e.part?.attempt as number | undefined;
+          const errMsg = e.part?.error as string | undefined;
+          const text = errMsg
+            ? `\u26a0\ufe0f Retry attempt ${attempt ?? ""}: ${errMsg}`
+            : `\u26a0\ufe0f Retry attempt ${attempt ?? ""}`;
+          cliEvents.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp: e.timestamp as number | undefined,
+            data: { text },
+          });
           break;
         }
         case "step_finish": {
@@ -467,12 +563,18 @@ export class OpenCodeLogParser extends BaseLogParser {
    * for both headless (streaming) and interactive (export-polled) modes.
    *
    * Part type mapping:
-   *   step-start  → step_start
-   *   step-finish → step_finish  (carries reason + tokens)
-   *   text        → text         (carries part.text)
-   *   tool        → tool_use     (carries part.tool + part.state)
-   *   reasoning   → thinking     (carries part.text — extended thinking content)
-   *   patch       → (skipped)
+   *   step-start   → step_start
+   *   step-finish  → step_finish  (carries reason + tokens)
+   *   text         → text         (carries part.text)
+   *   tool         → tool_use     (carries part.tool + part.state)
+   *   reasoning    → thinking     (carries part.text — extended thinking content)
+   *   compaction   → compaction   (carries auto + overflow flags)
+   *   subtask      → subtask      (carries description + agent + model)
+   *   retry        → retry        (carries attempt + error message)
+   *   patch        → (skipped)
+   *   snapshot     → (skipped)
+   *   file         → (skipped — user file attachments, not AI output)
+   *   agent        → (skipped — internal routing metadata)
    */
   private convertPartToEvent(
     part: OpenCodeExportPart,
@@ -525,6 +627,44 @@ export class OpenCodeLogParser extends BaseLogParser {
             tool: (part as any).tool,
             callID: (part as any).callID,
             state: (part as any).state,
+          },
+        };
+
+      case "compaction":
+        // Context was compacted to free up the context window
+        return {
+          type: "compaction",
+          sessionID,
+          timestamp: messageTimestamp,
+          part: {
+            auto: (part as any).auto,
+            overflow: (part as any).overflow,
+          },
+        };
+
+      case "subtask":
+        // A subagent was spawned via the task tool
+        return {
+          type: "subtask",
+          sessionID,
+          timestamp: messageTimestamp,
+          part: {
+            description: (part as any).description,
+            agent: (part as any).agent,
+            model: (part as any).model,
+            prompt: (part as any).prompt,
+          },
+        };
+
+      case "retry":
+        // Retry attempt — surface as a visible event
+        return {
+          type: "retry",
+          sessionID,
+          timestamp: (part as any).time?.created ?? messageTimestamp,
+          part: {
+            attempt: (part as any).attempt,
+            error: (part as any).error,
           },
         };
 

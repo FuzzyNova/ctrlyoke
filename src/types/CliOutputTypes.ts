@@ -4,7 +4,12 @@
  * Claude CLI, Codex CLI, and any future CLI integrations.
  */
 
-import type { FileOperationStatus, CliEventType } from "./DashboardConstants";
+import type {
+  FileOperationStatus,
+  CliEventType,
+  CompactionTrigger,
+  CallerType,
+} from "./DashboardConstants";
 
 export type { CliEventType };
 
@@ -19,6 +24,11 @@ export interface CliEvent {
   timestamp?: number;
   /** Event-specific data based on type */
   data: CliEventData;
+  /**
+   * Who invoked this event: 'direct' for top-level Claude, 'subagent' when
+   * produced inside a spawned sub-agent (Task tool). Omitted for non-tool events.
+   */
+  callerType?: CallerType | string;
 }
 
 /**
@@ -36,7 +46,8 @@ export type CliEventData =
   | FileEditData
   | FileDeleteData
   | McpToolCallData
-  | WebSearchData;
+  | WebSearchData
+  | CompactionData;
 
 /**
  * Data for a text event (AI response text).
@@ -89,6 +100,30 @@ export interface ToolCall {
   id?: string;
   /** Result of the tool execution, if available */
   result?: ToolResult;
+  /**
+   * Caller context — 'direct' for top-level calls, 'subagent' when invoked
+   * within a spawned sub-agent (Claude task tool). undefined = unknown.
+   */
+  callerType?: CallerType | string;
+}
+
+/**
+ * Data for a conversation compaction event.
+ * Emitted when Claude auto-compacts the context window to free up token capacity.
+ */
+export interface CompactionData {
+  /** What triggered the compaction: automatic threshold or user-initiated */
+  trigger: CompactionTrigger;
+  /** Token count before compaction */
+  preTokens?: number;
+  /** Token count after compaction */
+  postTokens?: number;
+  /** How long the compaction took (ms) */
+  durationMs?: number;
+  /** Human-readable summary written by Claude about the compacted content */
+  summary?: string;
+  /** Whether compaction was triggered by context overflow (OpenCode-specific) */
+  overflow?: boolean;
 }
 
 /**
