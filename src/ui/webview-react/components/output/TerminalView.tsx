@@ -6,6 +6,7 @@ import {
   PanelImperativeHandle,
 } from "react-resizable-panels";
 import { sendMessage } from "@hooks/useMessageHandler";
+import { useMobileTerminalBar } from "@hooks/useMobileTerminalBar";
 import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -18,6 +19,7 @@ import {
   SHELL_KINDS,
 } from "../../types/messages";
 import { TerminalInstance } from "./TerminalInstance";
+import { TerminalControlBar } from "./TerminalControlBar";
 import type { TerminalSession } from "@store/terminalStore";
 import { SEPARATOR_VERTICAL } from "../../constants";
 import { HarnessIcon } from "../shared/HarnessIcon";
@@ -93,6 +95,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
   const aiCliSessions = sessions.filter((s) => s.kind === SESSION_KINDS.AI_CLI);
   const shellSessions = sessions.filter((s) => s.kind === SESSION_KINDS.SHELL);
   const hasBothKinds = aiCliSessions.length > 0 && shellSessions.length > 0;
+  const activeSession = sessions.find((s) => s.id === activeSessionId);
+  const { shouldShow: shouldShowMobileTerminalBar } = useMobileTerminalBar();
+  const showControlBar =
+    shouldShowMobileTerminalBar &&
+    activeSessionId !== null &&
+    activeSession?.isController !== false &&
+    activeSession?.status === TERMINAL_SESSION_STATUS.RUNNING;
 
   function handleCloseShell(session: TerminalSession) {
     sendMessage(MESSAGE_TYPES.TERMINAL_CLOSE_SHELL, {
@@ -111,8 +120,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
     terminalRegistry.clearSession(workflowId, session.id);
     removeSession(workflowId, session.id);
     // If this was the last session, switch back to output tab immediately
-    const remaining =
-      useTerminalStore.getState().sessions[workflowId] ?? [];
+    const remaining = useTerminalStore.getState().sessions[workflowId] ?? [];
     if (remaining.length === 0) {
       setActiveOutputTab(workflowId, "output");
     }
@@ -127,20 +135,28 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
     >
       {/* Terminal canvas */}
       <Panel id="terminal-canvas">
-        <div className="h-full bg-[var(--vscode-terminal-background,var(--vscode-editor-background))]">
-          {sessions.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-description-fg text-[12px] select-none">
-              Starting shell…
-            </div>
-          ) : (
-            sessions.map((session) => (
-              <TerminalInstance
-                key={session.id}
-                workflowId={workflowId}
-                sessionId={session.id}
-                isVisible={session.id === activeSessionId}
-              />
-            ))
+        <div className="h-full flex flex-col bg-[var(--vscode-terminal-background,var(--vscode-editor-background))]">
+          <div className="flex-1 min-h-0 relative">
+            {sessions.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-description-fg text-[12px] select-none">
+                Starting shell…
+              </div>
+            ) : (
+              sessions.map((session) => (
+                <TerminalInstance
+                  key={session.id}
+                  workflowId={workflowId}
+                  sessionId={session.id}
+                  isVisible={session.id === activeSessionId}
+                />
+              ))
+            )}
+          </div>
+          {showControlBar && activeSessionId && (
+            <TerminalControlBar
+              workflowId={workflowId}
+              sessionId={activeSessionId}
+            />
           )}
         </div>
       </Panel>

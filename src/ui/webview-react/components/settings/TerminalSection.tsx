@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   TERMINAL_CURSOR_STYLES,
+  TERMINAL_MOBILE_CONTROL_BAR,
   type TerminalCursorStyle,
+  type TerminalMobileControlBar,
 } from "@root/types/DashboardConstants";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type { TerminalShortcut } from "@root/types/FlightPathSettings";
 import { CustomSelect } from "../shared/CustomSelect";
 
 interface Props {
@@ -22,6 +25,12 @@ const CURSOR_STYLE_OPTIONS = [
   { value: TERMINAL_CURSOR_STYLES.BLOCK, label: "Block" },
   { value: TERMINAL_CURSOR_STYLES.UNDERLINE, label: "Underline" },
   { value: TERMINAL_CURSOR_STYLES.BAR, label: "Bar" },
+];
+
+const CONTROL_BAR_OPTIONS = [
+  { value: TERMINAL_MOBILE_CONTROL_BAR.AUTO, label: "Auto" },
+  { value: TERMINAL_MOBILE_CONTROL_BAR.ALWAYS, label: "Always show" },
+  { value: TERMINAL_MOBILE_CONTROL_BAR.NEVER, label: "Never show" },
 ];
 
 const WINDOWS_SHELL_OPTIONS = [
@@ -176,6 +185,16 @@ function FontStepper({
   );
 }
 
+function updateShortcut(
+  shortcuts: TerminalShortcut[],
+  index: number,
+  patch: Partial<TerminalShortcut>
+): TerminalShortcut[] {
+  return shortcuts.map((shortcut, shortcutIndex) =>
+    shortcutIndex === index ? { ...shortcut, ...patch } : shortcut
+  );
+}
+
 export function TerminalSection({ settings, onUpdate }: Props) {
   const terminal = settings.settings.terminal;
   const s = "user" as const;
@@ -312,7 +331,9 @@ export function TerminalSection({ settings, onUpdate }: Props) {
               </label>
               <CustomSelect
                 id="terminal-shell"
-                value={showCustomShell ? "__custom__" : terminal.shellExecutable}
+                value={
+                  showCustomShell ? "__custom__" : terminal.shellExecutable
+                }
                 onChange={(v) => {
                   if (v === "__custom__") {
                     setShowCustomShell(true);
@@ -387,6 +408,128 @@ export function TerminalSection({ settings, onUpdate }: Props) {
             )}
           </>
         )}
+      </section>
+
+      <section className="space-y-4 pt-3 border-t border-panel-border">
+        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+          Mobile Control Bar
+        </h3>
+
+        <div>
+          <label
+            htmlFor="terminal-mobile-control-bar"
+            className="block text-xs text-description-fg mb-1"
+          >
+            Control bar visibility
+          </label>
+          <CustomSelect
+            id="terminal-mobile-control-bar"
+            value={terminal.mobileControlBar}
+            onChange={(v) =>
+              onUpdate(
+                "terminal.mobileControlBar",
+                v as TerminalMobileControlBar,
+                s
+              )
+            }
+            options={CONTROL_BAR_OPTIONS}
+          />
+          <p className="text-xs text-description-fg mt-1">
+            Auto shows the bar for touch browsers connected to the FlightPath
+            server.
+          </p>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-xs text-description-fg">
+              Custom shortcuts
+            </span>
+            <button
+              type="button"
+              className="text-xs text-link-fg hover:text-link-active-fg"
+              onClick={() =>
+                onUpdate(
+                  "terminal.mobileCustomShortcuts",
+                  [
+                    ...terminal.mobileCustomShortcuts,
+                    { label: "", sequence: "" },
+                  ],
+                  s
+                )
+              }
+            >
+              + Add shortcut
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {terminal.mobileCustomShortcuts.length === 0 ? (
+              <p className="text-xs text-description-fg">
+                Add shortcuts for commands that need escape sequences, such as
+                \x1b[1;5A.
+              </p>
+            ) : (
+              terminal.mobileCustomShortcuts.map((shortcut, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={shortcut.label}
+                    placeholder="Label"
+                    aria-label={`Shortcut ${index + 1} label`}
+                    onChange={(e) =>
+                      onUpdate(
+                        "terminal.mobileCustomShortcuts",
+                        updateShortcut(terminal.mobileCustomShortcuts, index, {
+                          label: e.target.value,
+                        }),
+                        s
+                      )
+                    }
+                    className="min-w-0 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                  />
+                  <input
+                    type="text"
+                    value={shortcut.sequence}
+                    placeholder="\\x1b[1;5A"
+                    aria-label={`Shortcut ${index + 1} sequence`}
+                    title="Use literal escape notation such as \\x1b[A, \\t, or \\r."
+                    onChange={(e) =>
+                      onUpdate(
+                        "terminal.mobileCustomShortcuts",
+                        updateShortcut(terminal.mobileCustomShortcuts, index, {
+                          sequence: e.target.value,
+                        }),
+                        s
+                      )
+                    }
+                    className="min-w-0 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                  />
+                  <button
+                    type="button"
+                    className="icon-btn w-7 h-7 shrink-0"
+                    title="Remove shortcut"
+                    aria-label={`Remove shortcut ${index + 1}`}
+                    onClick={() =>
+                      onUpdate(
+                        "terminal.mobileCustomShortcuts",
+                        terminal.mobileCustomShortcuts.filter(
+                          (_item, shortcutIndex) => shortcutIndex !== index
+                        ),
+                        s
+                      )
+                    }
+                  >
+                    <i className="codicon codicon-close" />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+          <p className="text-xs text-description-fg mt-2">
+            Sequences accept literal escapes like \x1b, \t, and \r.
+          </p>
+        </div>
       </section>
     </div>
   );
