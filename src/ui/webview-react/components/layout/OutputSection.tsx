@@ -164,6 +164,19 @@ export const OutputSection: React.FC = () => {
   const setOutputFontSize = useUiStore((s) => s.setOutputFontSize);
   const terminalFontSize = useUiStore((s) => s.terminalFontSize);
   const setTerminalFontSize = useUiStore((s) => s.setTerminalFontSize);
+  const updateTerminalFontSize = useCallback(
+    (size: number) => {
+      const next = Math.min(24, Math.max(8, size));
+      setTerminalFontSize(next);
+      getVsCodeApi()?.postMessage({
+        type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+        path: "terminal.fontSize",
+        value: next,
+        scope: "user",
+      });
+    },
+    [setTerminalFontSize]
+  );
 
   // Execution mode toggle
   const executionMode = useSettingsStore((s) => s.globalSettings.executionMode);
@@ -1057,8 +1070,8 @@ export const OutputSection: React.FC = () => {
                 className="icon-btn py-0 px-0.5"
                 title="Decrease terminal font size"
                 aria-label="Decrease terminal font size"
-                onClick={() => setTerminalFontSize(terminalFontSize - 1)}
-                disabled={terminalFontSize <= 10}
+                onClick={() => updateTerminalFontSize(terminalFontSize - 1)}
+                disabled={terminalFontSize <= 8}
               >
                 <i className="codicon codicon-sm codicon-remove" />
               </button>
@@ -1071,7 +1084,7 @@ export const OutputSection: React.FC = () => {
                 className="icon-btn py-0 px-0.5"
                 title="Increase terminal font size"
                 aria-label="Increase terminal font size"
-                onClick={() => setTerminalFontSize(terminalFontSize + 1)}
+                onClick={() => updateTerminalFontSize(terminalFontSize + 1)}
                 disabled={terminalFontSize >= 24}
               >
                 <i className="codicon codicon-sm codicon-add" />

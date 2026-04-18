@@ -13,6 +13,11 @@
  */
 import type { Terminal, ITheme } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
+import {
+  TERMINAL_CURSOR_STYLES,
+  TERMINAL_MOBILE_CONTROL_BAR,
+} from "@root/types/DashboardConstants";
+import type { TerminalSettings } from "@root/types/WebviewMessageTypes";
 
 export type { Terminal, ITheme };
 
@@ -82,8 +87,19 @@ export interface RegistryEntry {
 // key: `${workflowId}:${sessionId}`
 const registry = new Map<string, RegistryEntry>();
 
-// Current terminal font size — set by App.tsx via updateFontSize(), used by create()
-let currentFontSize = 14;
+let currentTerminalSettings: TerminalSettings = {
+  fontSize: 14,
+  lineHeight: 1.2,
+  scrollback: 5000,
+  cursorStyle: TERMINAL_CURSOR_STYLES.BLOCK,
+  cursorBlink: true,
+  macOptionIsMeta: false,
+  wordSeparators: " ()[]{}',\"`",
+  replayBufferKb: 50,
+  shellExecutable: "",
+  mobileControlBar: TERMINAL_MOBILE_CONTROL_BAR.AUTO,
+  mobileCustomShortcuts: [],
+};
 
 function makeKey(workflowId: string, sessionId: string): string {
   return `${workflowId}:${sessionId}`;
@@ -144,6 +160,7 @@ export const terminalRegistry = {
     ]);
 
     const theme = readVsCodeTheme();
+    const settings = this.getTerminalSettings();
     // Read the resolved font family from VS Code CSS variables — xterm passes fontFamily
     // directly to the canvas 2D context, which cannot resolve CSS var() expressions.
     const fontFamily =
@@ -152,13 +169,16 @@ export const terminalRegistry = {
         .trim() || '"Cascadia Code", "Courier New", monospace';
     const term = new Terminal({
       theme,
-      scrollback: 5000,
+      scrollback: settings.scrollback,
       fontFamily,
-      fontSize: currentFontSize,
-      lineHeight: 1.2,
+      fontSize: settings.fontSize,
+      lineHeight: settings.lineHeight,
       letterSpacing: 0,
       allowTransparency: false,
-      cursorBlink: true,
+      cursorStyle: settings.cursorStyle,
+      cursorBlink: settings.cursorBlink,
+      macOptionIsMeta: settings.macOptionIsMeta,
+      wordSeparator: settings.wordSeparators,
     });
 
     const fitAddon = new FitAddon();
@@ -297,12 +317,37 @@ export const terminalRegistry = {
     }
   },
 
+  getTerminalSettings(): TerminalSettings {
+    return currentTerminalSettings;
+  },
+
+  updateTerminalOptions(settings: TerminalSettings): void {
+    currentTerminalSettings = { ...settings };
+    for (const entry of registry.values()) {
+      entry.term.options.scrollback = settings.scrollback;
+      entry.term.options.lineHeight = settings.lineHeight;
+      entry.term.options.cursorStyle = settings.cursorStyle;
+      entry.term.options.cursorBlink = settings.cursorBlink;
+      entry.term.options.macOptionIsMeta = settings.macOptionIsMeta;
+      entry.term.options.wordSeparator = settings.wordSeparators;
+      entry.term.options.fontSize = settings.fontSize;
+      try {
+        entry.fitAddon.fit();
+      } catch {
+        // Ignore — terminal may not be attached
+      }
+    }
+  },
+
   /**
    * Update font size for all live registry entries and future creates.
    * Called when the user adjusts the terminal font size stepper.
    */
   updateFontSize(size: number): void {
-    currentFontSize = size;
+    currentTerminalSettings = {
+      ...currentTerminalSettings,
+      fontSize: size,
+    };
     for (const entry of registry.values()) {
       entry.term.options.fontSize = size;
       try {

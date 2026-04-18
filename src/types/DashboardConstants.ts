@@ -557,6 +557,26 @@ export const SHELL_KINDS = {
 export type ShellKind = (typeof SHELL_KINDS)[keyof typeof SHELL_KINDS];
 
 // ============================================================================
+// TERMINAL SETTINGS - xterm.js option values
+// ============================================================================
+export const TERMINAL_CURSOR_STYLES = {
+  BLOCK: "block",
+  UNDERLINE: "underline",
+  BAR: "bar",
+} as const;
+
+export const TERMINAL_MOBILE_CONTROL_BAR = {
+  AUTO: "auto",
+  ALWAYS: "always",
+  NEVER: "never",
+} as const;
+
+export type TerminalCursorStyle =
+  (typeof TERMINAL_CURSOR_STYLES)[keyof typeof TERMINAL_CURSOR_STYLES];
+export type TerminalMobileControlBar =
+  (typeof TERMINAL_MOBILE_CONTROL_BAR)[keyof typeof TERMINAL_MOBILE_CONTROL_BAR];
+
+// ============================================================================
 // SESSION ID SENTINELS - Special sessionId values with reserved meanings
 // ============================================================================
 export const SESSION_ID_SENTINELS = {

@@ -3,6 +3,7 @@ export { WorkflowDefaultsSection } from "./WorkflowDefaultsSection";
 export { HarnessesSection } from "./HarnessesSection";
 export { PermissionsSection } from "./PermissionsSection";
 export { ExecutionSection } from "./ExecutionSection";
+export { TerminalSection } from "./TerminalSection";
 export { ChatSection } from "./ChatSection";
 export { McpHooksSection } from "./McpHooksSection";
 export { QueueSection } from "./QueueSection";

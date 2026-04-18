@@ -6,6 +6,7 @@ import {
   PreCondition,
   UserHookConfig,
 } from "../types/FlightPathTypes";
+import type { TerminalSettings } from "../types/FlightPathSettings";
 import {
   HARNESS_IDS,
   DEFAULT_MODELS,
@@ -164,6 +165,13 @@ export const ConfigurationUtils = {
       unlimitedMode: queue.unlimitedMode,
       notifyOnExtension: queue.notifyOnExtension,
     };
+  },
+
+  /**
+   * Get embedded terminal settings.
+   */
+  getTerminalSettings(): TerminalSettings {
+    return configService.get("terminal");
   },
 
   /**

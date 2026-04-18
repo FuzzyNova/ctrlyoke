@@ -679,7 +679,7 @@ export const useUiStore = create<UiState & UiActions>()(
         set({ outputFontSize: Math.min(24, Math.max(10, size)) }),
 
       setTerminalFontSize: (size) =>
-        set({ terminalFontSize: Math.min(24, Math.max(10, size)) }),
+        set({ terminalFontSize: Math.min(24, Math.max(8, size)) }),
 
       // ============================================================================
       // LOADING STATE

@@ -706,6 +706,7 @@ export class WebviewSettingsSync {
       resumeSession: resumeExistingSession,
       mcpServers: defaultMcpServers,
       hooks: ConfigurationUtils.getDefaultHooks(),
+      terminal: ConfigurationUtils.getTerminalSettings(),
       toolPermissions: {
         mode: ConfigurationUtils.getCliToolPermissions(),
         allowedTools: ConfigurationUtils.getCliAllowedTools(),
@@ -871,6 +872,7 @@ export class WebviewSettingsSync {
       "hooks",
       "queue",
       "history",
+      "terminal",
       "ui",
       "server",
       "enableDiagnosticLogs",
@@ -896,6 +898,15 @@ export class WebviewSettingsSync {
   ): Promise<void> {
     await configService.set(path, value, scope);
     await this.handleGlobalSettingsLoadRequest(postMessage);
+    this.emitMessage(
+      {
+        type: MESSAGE_TYPES.GLOBAL_SETTING_UPDATED,
+        path,
+        value,
+        source: scope,
+      },
+      postMessage
+    );
   }
 
   async handleEnableServer(_postMessage: PostMessageFn): Promise<void> {

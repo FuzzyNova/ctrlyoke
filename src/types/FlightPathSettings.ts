@@ -1,4 +1,10 @@
-import type { HarnessId } from "./DashboardConstants";
+import {
+  TERMINAL_CURSOR_STYLES,
+  TERMINAL_MOBILE_CONTROL_BAR,
+  type HarnessId,
+  type TerminalCursorStyle,
+  type TerminalMobileControlBar,
+} from "./DashboardConstants";
 import type {
   EndCondition,
   McpServerConfig,
@@ -85,6 +91,9 @@ export interface FlightPathGlobalSettings {
     maxRuns: number;
   };
 
+  // Terminal
+  terminal: TerminalSettings;
+
   // UI
   ui: {
     showCliOutput: boolean;
@@ -111,6 +120,25 @@ export interface FlightPathGlobalSettings {
 
   // Advanced
   enableDiagnosticLogs: boolean;
+}
+
+export interface TerminalSettings {
+  fontSize: number;
+  lineHeight: number;
+  scrollback: number;
+  cursorStyle: TerminalCursorStyle;
+  cursorBlink: boolean;
+  macOptionIsMeta: boolean;
+  wordSeparators: string;
+  replayBufferKb: number;
+  shellExecutable: string;
+  mobileControlBar: TerminalMobileControlBar;
+  mobileCustomShortcuts: TerminalShortcut[];
+}
+
+export interface TerminalShortcut {
+  label: string;
+  sequence: string;
 }
 
 /** Partial version of FlightPathGlobalSettings for config file contents */
@@ -201,6 +229,19 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
   history: {
     saveOutput: true,
     maxRuns: -1,
+  },
+  terminal: {
+    fontSize: 14,
+    lineHeight: 1.2,
+    scrollback: 5000,
+    cursorStyle: TERMINAL_CURSOR_STYLES.BLOCK,
+    cursorBlink: true,
+    macOptionIsMeta: false,
+    wordSeparators: " ()[]{}',\"`",
+    replayBufferKb: 50,
+    shellExecutable: "",
+    mobileControlBar: TERMINAL_MOBILE_CONTROL_BAR.AUTO,
+    mobileCustomShortcuts: [],
   },
   ui: {
     showCliOutput: true,

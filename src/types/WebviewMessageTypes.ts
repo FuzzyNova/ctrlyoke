@@ -35,7 +35,10 @@ import type {
   UserHookConfig,
   WorkflowStep,
 } from "./FlightPathTypes";
-import type { FlightPathGlobalSettings } from "./FlightPathSettings";
+import type {
+  FlightPathGlobalSettings,
+  TerminalSettings,
+} from "./FlightPathSettings";
 import type {
   CliEvent as CliOutputEvent,
   UniversalCliOutput,
@@ -304,6 +307,7 @@ export interface InitMessageData {
     resumeSession: boolean;
     mcpServers: (string | McpServerConfig)[];
     hooks: UserHookConfig[];
+    terminal?: TerminalSettings;
   };
   workflowProperties: Record<string, any>;
   modelOptions: Record<HarnessId, Array<{ value: string; label: string }>>;
@@ -750,6 +754,7 @@ export interface GlobalSettingsUpdatedMessage {
     respectGitignore?: boolean;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
+    terminal?: TerminalSettings;
   };
 }
 
@@ -763,6 +768,8 @@ export interface FullGlobalSettings {
   settings: FlightPathGlobalSettings;
   sources: Partial<Record<keyof FlightPathGlobalSettings, SettingSource>>;
 }
+
+export type { TerminalSettings } from "./FlightPathSettings";
 
 /** Webview → Extension: request full settings payload */
 export interface GlobalSettingsLoadRequestMessage {

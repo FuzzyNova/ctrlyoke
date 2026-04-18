@@ -1,6 +1,7 @@
 import { execSync } from "child_process";
 import type { IPty } from "node-pty";
 import { Log } from "../../utils/Log";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   SESSION_KINDS,
   SHELL_KINDS,
@@ -136,7 +137,6 @@ export type { SessionKind, ShellKind };
 
 const DEFAULT_COLS = 220;
 const DEFAULT_ROWS = 50;
-const RECONNECT_BUFFER_MAX = 50_000; // bytes
 
 /**
  * A single node-pty session (AI CLI or user shell).
@@ -159,6 +159,7 @@ export class PtySession {
   // Ring buffer for webview reconnection: recent output replayed when webview JS context is recreated
   readonly reconnectBuffer: string[] = [];
   private reconnectBufferSize = 0;
+  private readonly reconnectBufferMaxBytes: number;
 
   constructor(
     id: string,
@@ -168,7 +169,8 @@ export class PtySession {
     ptyInstance: IPty,
     promptNumber?: number,
     harnessId?: string,
-    shellKind?: ShellKind
+    shellKind?: ShellKind,
+    reconnectBufferMaxBytes = 50_000
   ) {
     this.id = id;
     this.workflowId = workflowId;
@@ -179,16 +181,17 @@ export class PtySession {
     this.shellKind = shellKind;
     this.pty = ptyInstance;
     this.status = TERMINAL_SESSION_STATUS.RUNNING;
+    this.reconnectBufferMaxBytes = reconnectBufferMaxBytes;
   }
 
   /**
    * Buffer a chunk for webview reconnection.
-   * Drops oldest chunks when buffer exceeds RECONNECT_BUFFER_MAX bytes.
+   * Drops oldest chunks when buffer exceeds the configured replay size.
    */
   bufferChunk(chunk: string): void {
     this.reconnectBuffer.push(chunk);
     this.reconnectBufferSize += chunk.length;
-    while (this.reconnectBufferSize > RECONNECT_BUFFER_MAX) {
+    while (this.reconnectBufferSize > this.reconnectBufferMaxBytes) {
       const dropped = this.reconnectBuffer.shift()!;
       this.reconnectBufferSize -= dropped.length;
     }
@@ -339,6 +342,12 @@ export class PtyProcessManager {
       env: (options.env ?? process.env) as Record<string, string>,
     });
 
+    const terminalSettings = ConfigurationUtils.getTerminalSettings();
+    const reconnectBufferMaxBytes = Math.max(
+      0,
+      terminalSettings.replayBufferKb * 1024
+    );
+
     const session = new PtySession(
       sessionId,
       options.workflowId,
@@ -347,7 +356,8 @@ export class PtyProcessManager {
       ptyInstance,
       options.promptNumber,
       options.harnessId,
-      options.shellKind
+      options.shellKind,
+      reconnectBufferMaxBytes
     );
     // Resolve controller: consume any one-shot pending override (set by RUN_WORKFLOW or
     // an ephemeral-prompt auto-start), then fall back to the persistent run controller
@@ -387,7 +397,7 @@ export class PtyProcessManager {
 
   /**
    * Spawn a user shell session.
-   * Uses $SHELL on Unix, cmd.exe on Windows.
+   * Uses the configured shell override when set, otherwise auto-detects.
    */
   spawnShell(opts: {
     workflowId: string;
@@ -395,8 +405,11 @@ export class PtyProcessManager {
     onData: (session: PtySession, chunk: string) => void;
     onExit: (session: PtySession, exitCode: number) => void;
   }): PtySession {
+    const terminalSettings = ConfigurationUtils.getTerminalSettings();
+    const shellOverride = terminalSettings.shellExecutable.trim();
     const shell =
-      process.platform === "win32" ? resolveWindowsShell() : resolveUnixShell();
+      shellOverride ||
+      (process.platform === "win32" ? resolveWindowsShell() : resolveUnixShell());
 
     return this.spawnPty({
       workflowId: opts.workflowId,

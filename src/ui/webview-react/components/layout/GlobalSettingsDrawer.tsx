@@ -11,6 +11,7 @@ import {
   HarnessesSection,
   PermissionsSection,
   ExecutionSection,
+  TerminalSection,
   ChatSection,
   McpHooksSection,
   QueueSection,
@@ -25,6 +26,7 @@ const ALL_TABS = [
   { id: "harnesses", label: "Harnesses & Models", icon: "codicon-robot" },
   { id: "permissions", label: "Permissions", icon: "codicon-shield" },
   { id: "execution", label: "Execution", icon: "codicon-play" },
+  { id: "terminal", label: "Terminal", icon: "codicon-terminal" },
   { id: "chat", label: "Chat", icon: "codicon-comment-discussion" },
   { id: "mcp", label: "MCP & Hooks", icon: "codicon-plug" },
   { id: "queue", label: "Queue", icon: "codicon-list-ordered" },
@@ -143,6 +145,12 @@ export function GlobalSettingsDrawer() {
             )}
             {fullSettings && effectiveActiveTab === "execution" && (
               <ExecutionSection
+                settings={fullSettings}
+                onUpdate={handleUpdate}
+              />
+            )}
+            {fullSettings && effectiveActiveTab === "terminal" && (
+              <TerminalSection
                 settings={fullSettings}
                 onUpdate={handleUpdate}
               />

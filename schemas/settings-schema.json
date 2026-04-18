@@ -362,6 +362,76 @@
         }
       }
     },
+    "terminal": {
+      "type": "object",
+      "description": "Embedded terminal settings.",
+      "additionalProperties": false,
+      "properties": {
+        "fontSize": {
+          "type": "number",
+          "minimum": 8,
+          "maximum": 24,
+          "description": "Terminal font size in pixels."
+        },
+        "lineHeight": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 2,
+          "description": "Terminal line height multiplier."
+        },
+        "scrollback": {
+          "type": "number",
+          "minimum": 1000,
+          "maximum": 50000,
+          "description": "Maximum scrollback lines retained in memory."
+        },
+        "cursorStyle": {
+          "type": "string",
+          "enum": ["block", "underline", "bar"],
+          "description": "Terminal cursor shape."
+        },
+        "cursorBlink": {
+          "type": "boolean",
+          "description": "Blink the terminal cursor."
+        },
+        "macOptionIsMeta": {
+          "type": "boolean",
+          "description": "Treat the macOS Option key as Meta."
+        },
+        "wordSeparators": {
+          "type": "string",
+          "description": "Characters treated as word boundaries on double-click selection."
+        },
+        "replayBufferKb": {
+          "type": "number",
+          "minimum": 10,
+          "maximum": 500,
+          "description": "Output replayed on webview reconnect, in KB."
+        },
+        "shellExecutable": {
+          "type": "string",
+          "description": "Override the shell spawned for user terminal sessions. Empty means auto-detect."
+        },
+        "mobileControlBar": {
+          "type": "string",
+          "enum": ["auto", "always", "never"],
+          "description": "When to show the mobile terminal control bar."
+        },
+        "mobileCustomShortcuts": {
+          "type": "array",
+          "description": "Custom shortcuts in the mobile terminal control bar More menu.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "label": { "type": "string" },
+              "sequence": { "type": "string" }
+            },
+            "required": ["label", "sequence"]
+          }
+        }
+      }
+    },
     "ui": {
       "type": "object",
       "description": "UI display settings.",

@@ -37,6 +37,7 @@ import type {
   OrderedStatusHistoryEntry,
   OutputExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
+import type { TerminalSettings } from "@root/types/WebviewMessageTypes";
 import { WebviewLog } from "@utils/logger";
 import { useTerminalStore } from "../store/terminalStore";
 import { terminalRegistry } from "../terminalRegistry";
@@ -199,6 +200,22 @@ function persistViewedWorkingFilePath(path: unknown): void {
   }
 }
 
+function applyTerminalSettings(settings: TerminalSettings): void {
+  terminalRegistry.updateTerminalOptions(settings);
+  useUiStore.getState().setTerminalFontSize(settings.fontSize);
+}
+
+function applyTerminalSetting(path: string, value: unknown): void {
+  if (!path.startsWith("terminal.")) return;
+
+  const key = path.slice("terminal.".length) as keyof TerminalSettings;
+  const nextSettings = {
+    ...terminalRegistry.getTerminalSettings(),
+    [key]: value,
+  } as TerminalSettings;
+  applyTerminalSettings(nextSettings);
+}
+
 // ============================================================================
 // Message Handlers
 // ============================================================================
@@ -227,6 +244,9 @@ function createMessageHandlers(): MessageHandlerMap {
     // Update global settings
     if (data.globalSettings) {
       settingsStore.setGlobalSettings(data.globalSettings);
+      if (data.globalSettings.terminal) {
+        applyTerminalSettings(data.globalSettings.terminal);
+      }
     }
 
     // Update workflow properties only if non-empty — sendInitialState() sends
@@ -288,6 +308,9 @@ function createMessageHandlers(): MessageHandlerMap {
     const settingsStore = useSettingsStore.getState();
     if (message.globalSettings) {
       settingsStore.setGlobalSettings(message.globalSettings);
+      if (message.globalSettings.terminal) {
+        applyTerminalSettings(message.globalSettings.terminal);
+      }
     }
     if (message.modelOptions) {
       settingsStore.setModelOptions(message.modelOptions);
@@ -301,7 +324,14 @@ function createMessageHandlers(): MessageHandlerMap {
     const settingsStore = useSettingsStore.getState();
     if (message.settings) {
       settingsStore.setFullGlobalSettings(message.settings);
+      if (message.settings.settings?.terminal) {
+        applyTerminalSettings(message.settings.settings.terminal);
+      }
     }
+  };
+
+  handlers[MESSAGE_TYPES.GLOBAL_SETTING_UPDATED] = (message) => {
+    applyTerminalSetting(message.path, message.value);
   };
 
   // --------------------------------------------------------------------------

@@ -15,11 +15,14 @@ import {
   QWEN_CLI_MODELS as QWEN_CLI_MODEL_LIST,
   GEMINI_CLI_MODELS as GEMINI_CLI_MODEL_LIST,
   PERMISSION_MODES,
+  TERMINAL_CURSOR_STYLES,
+  TERMINAL_MOBILE_CONTROL_BAR,
 } from "@root/types/DashboardConstants";
 import type {
   DevStatus,
   FullGlobalSettings,
   PreCondition,
+  TerminalSettings,
 } from "@root/types/WebviewMessageTypes";
 import type { EndCondition } from "@root/types/FlightPathTypes";
 
@@ -98,6 +101,7 @@ export interface GlobalSettings {
   workspaceRoot: string;
   defaultEndCondition: EndCondition | null;
   defaultPreCondition: PreCondition | null;
+  terminal?: TerminalSettings;
 }
 
 /**
@@ -271,6 +275,19 @@ const initialGlobalSettings: GlobalSettings = {
   workspaceRoot: "",
   defaultEndCondition: null,
   defaultPreCondition: null,
+  terminal: {
+    fontSize: 14,
+    lineHeight: 1.2,
+    scrollback: 5000,
+    cursorStyle: TERMINAL_CURSOR_STYLES.BLOCK,
+    cursorBlink: true,
+    macOptionIsMeta: false,
+    wordSeparators: " ()[]{}',\"`",
+    replayBufferKb: 50,
+    shellExecutable: "",
+    mobileControlBar: TERMINAL_MOBILE_CONTROL_BAR.AUTO,
+    mobileCustomShortcuts: [],
+  },
 };
 
 const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {
