@@ -348,7 +348,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
         }}
       >
         <i className="codicon codicon-chevron-right text-[12px] text-description-fg" />
-        <i className="codicon codicon-list-unordered text-[12px] text-description-fg mt-1" />
+        <i className="codicon codicon-list-ordered text-[12px] text-description-fg mt-1" />
       </div>
 
       {/* Prompt chips — scrollable, scrollbars hidden */}

@@ -27,7 +27,7 @@ const ALL_TABS = [
   { id: "execution", label: "Execution", icon: "codicon-play" },
   { id: "chat", label: "Chat", icon: "codicon-comment-discussion" },
   { id: "mcp", label: "MCP & Hooks", icon: "codicon-plug" },
-  { id: "queue", label: "Queue", icon: "codicon-list-unordered" },
+  { id: "queue", label: "Queue", icon: "codicon-list-ordered" },
   { id: "history", label: "History", icon: "codicon-history" },
   { id: "server", label: "Server", icon: "codicon-server" },
   { id: "developer", label: "Developer", icon: "codicon-tools" },

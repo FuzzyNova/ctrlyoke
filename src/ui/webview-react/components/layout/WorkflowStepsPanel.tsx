@@ -580,7 +580,7 @@ export const WorkflowStepsPanel: React.FC<{
             <i className="codicon codicon-chevron-left text-[12px]" />
           </button>
         )}
-        <i className="codicon codicon-list-unordered text-[14px] ml-1" />
+        <i className="codicon codicon-list-ordered text-[14px] ml-1" />
         <span className="text-[11px] font-semibold uppercase tracking-wide ml-1.5">
           Steps
         </span>

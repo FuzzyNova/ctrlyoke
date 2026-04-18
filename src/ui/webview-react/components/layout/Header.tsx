@@ -290,10 +290,7 @@ export const Header: React.FC<{
               title="Prompts"
               aria-label="Toggle prompts panel"
             >
-              <i className="codicon codicon-list-unordered" />
-              <i
-                className={`codicon ${mobilePromptsOpen ? "codicon-chevron-left" : "codicon-chevron-right"} text-[10px]`}
-              />
+              <i className="codicon codicon-list-ordered" />
             </button>
           )}
           <WorkflowStatus className="flex-1 sm:max-w-[500px]" />
@@ -308,9 +305,6 @@ export const Header: React.FC<{
               title="Workflow Properties"
               aria-label="Toggle workflow properties"
             >
-              <i
-                className={`codicon ${mobileSettingsOpen ? "codicon-chevron-right" : "codicon-chevron-left"} text-[10px]`}
-              />
               <i className="codicon codicon-settings" />
             </button>
           )}
