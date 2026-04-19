@@ -38,8 +38,8 @@ All `IDashboardProvider` methods call `this.broadcast(message)` to fan out to ev
 <httpRoutes>
 | Route | Handler |
 |---|---|
-| `GET /` and `GET /index.html` | `buildHtml()` — patched index.html |
-| `GET /standalone-shim.js` | Serves `standalone-shim.js` from `__dirname/server/` |
+| `GET /` and `GET /index.html` | `buildHtml()` — patched index.html with `Cache-Control: no-store, max-age=0` |
+| `GET /standalone-shim.js` | Serves `standalone-shim.js` from `__dirname/server/` with `Cache-Control: no-store, max-age=0` |
 | `GET /api/workflow-files` | Returns `{ workspaceRoot, files }` from `findWorkflowFilesInWorkspace` |
 | Static assets | `express.static` over `out/ui/webview-react/` (`index: false`) |
 | Any other path | SPA fallback → `buildHtml()` |
@@ -51,7 +51,7 @@ All `IDashboardProvider` methods call `this.broadcast(message)` to fan out to ev
 3. Replaces `{{logoUri}}` with `/flightpath-icon.svg`
 4. Strips `crossorigin` attribute from Vite module `<script>` tags
 5. Adds `data-aff-uri`, `data-dic-uri`, and `data-logo-uri` attributes to `<body>` for spell-check dictionaries and logo
-6. Replaces the VS Code CSP `<meta>` with a browser-compatible policy; `connect-src` explicitly allows `ws://localhost:{port}`
+6. Replaces the VS Code CSP `<meta>` with a browser-compatible policy; `connect-src` explicitly allows the request host's WebSocket URL plus localhost loopback forms for the configured port
 7. Injects a `<style>` block with cached CSS custom properties (`:root { ... }`) so the browser is themed before React renders
 8. Injects `<script src="/standalone-shim.js"></script>` before `</head>` so `window.vscodeApi` exists before any React module runs
    </httpRoutes>
@@ -64,9 +64,9 @@ WebSocket endpoint: `ws://localhost:{port}/ws` (path `/ws`).
 1. Client added to `this.connections` (a `Set<WebSocket>`)
 2. A scoped `send` function is created (checks `ws.readyState === WebSocket.OPEN`)
 3. `sendInitialState()` fires:
-   - Sends a synthetic `READY` message through `webviewProvider.routeExternalMessage()` — this triggers the same initial-state flow used by the VS Code webview
-   - Immediately pushes `THEME_VARS_UPDATED` with cached vars (client can style itself without a round-trip)
+   - Immediately pushes `THEME_VARS_UPDATED` with cached vars (the shim applies this to `:root` before React mounts — no React involvement needed)
    - Posts `CAPTURE_THEME_VARS` to the VS Code webview to refresh the theme snapshot
+   - **Does NOT inject a server-side synthetic `READY`** — the standalone shim owns browser-client registration. It sends `READY` as soon as the WebSocket opens, then buffers any replay until React sends its own `READY` after mounting.
 
 **Inbound messages:** routed via `webviewProvider.routeExternalMessage(msg, send, clientTag)` where `clientTag` is `"browser:N"`. This is the same `WebviewMessageRouter` used by the VS Code panel — no duplicate routing logic.
 
@@ -81,10 +81,14 @@ WebSocket endpoint: `ws://localhost:{port}/ws` (path `/ws`).
 - Generates a stable per-tab ID (`fpTabId`) stored in `sessionStorage` — survives page refresh but is unique per tab
 - State is persisted to `localStorage` under the key `fpState-{tabId}` so tabs are independent
 - Opens `ws://{location.host}/ws`
-- Queues outbound messages in `pending[]` until the socket is open
+- Queues outbound messages until the socket is open, reconnects without reloading when the socket closes, and flushes queued messages after reconnect
+- Sends `READY` as soon as the WebSocket opens so the server registers the browser client even if React has not mounted yet
+- Re-sends the latest `READY` message after reconnect so the new WebSocket client ID is registered and receives a targeted workflow replay
+- Suppresses reconnects while the document is hidden or entering Safari's page cache via `pagehide`; reconnect resumes on `pageshow` or when the document becomes visible again
+- Detects a socket stuck in `CONNECTING` (iOS Safari bug) via a 1800ms watchdog — abandons the stale socket and retries so queued `READY` can reach the server
+- Buffers non-theme inbound messages until React sends `READY`, so no state replay can be dropped before `useMessageHandler` installs its `message` listener
 - Inbound `themeVarsUpdated` messages are applied directly to `document.documentElement.style` (bypasses React; avoids flash) and also update `document.body.classList` (`vscode-dark`, `vscode-light`, `vscode-high-contrast`) so CodeMirror and other dark-mode checks work correctly
 - All other inbound messages are dispatched as `window.dispatchEvent(new MessageEvent("message", { data: msg }))` — consumed by `useMessageHandler` in the React app
-- On socket close: `setTimeout(() => location.reload(), 1500)` for development convenience (server restart)
 - Sets `window.__flightpathStandalone = true` so React components can detect they're running in the browser
 - Exposes `window.vscodeApi` with `postMessage`, `getState`, and `setState` matching the VS Code webview API shape
 

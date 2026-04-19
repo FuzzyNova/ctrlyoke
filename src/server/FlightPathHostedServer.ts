@@ -23,6 +23,7 @@ import {
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import { findWorkflowFilesInWorkspace } from "../utils/WorkflowFileDiscovery";
+import { Log } from "../utils/Log";
 
 export class FlightPathHostedServer
   implements IDashboardProvider, IDashboardSink
@@ -338,14 +339,16 @@ export class FlightPathHostedServer
   private setupRoutes(): void {
     const webviewDist = this.resolveWebviewDist();
     // Serve index.html through buildHtml so all placeholders are patched first.
-    this.app.get(["/", "/index.html"], (_req, res) =>
-      res.send(this.buildHtml(webviewDist))
-    );
+    this.app.get(["/", "/index.html"], (req, res) => {
+      this.setNoStore(res);
+      res.send(this.buildHtml(webviewDist, req.get("host")));
+    });
+    this.app.get("/standalone-shim.js", (_req, res) => {
+      this.setNoStore(res);
+      res.sendFile(path.join(__dirname, "server", "standalone-shim.js"));
+    });
     // Serve static assets (disable automatic index.html fallback).
     this.app.use(express.static(webviewDist, { index: false }));
-    this.app.get("/standalone-shim.js", (_req, res) =>
-      res.sendFile(path.join(__dirname, "server", "standalone-shim.js"))
-    );
     this.app.get("/api/workflow-files", (_req, res) => {
       res.json({
         workspaceRoot: this.workspaceRoot,
@@ -353,10 +356,18 @@ export class FlightPathHostedServer
       });
     });
     // SPA fallback: any unmatched route gets the patched index.html.
-    this.app.use((_req, res) => res.send(this.buildHtml(webviewDist)));
+    this.app.use((req, res) => {
+      this.setNoStore(res);
+      res.send(this.buildHtml(webviewDist, req.get("host")));
+    });
   }
 
-  private buildHtml(webviewDist: string): string {
+  private setNoStore(res: express.Response): void {
+    res.set("Cache-Control", "no-store, max-age=0");
+    res.set("Pragma", "no-cache");
+  }
+
+  private buildHtml(webviewDist: string, requestHost?: string): string {
     const indexPath = path.join(webviewDist, "index.html");
     let html = fs.readFileSync(indexPath, "utf8");
 
@@ -380,13 +391,26 @@ export class FlightPathHostedServer
 
     // Replace the VS Code-specific CSP with a browser-compatible policy.
     // connect-src must explicitly allow the WebSocket endpoint.
+    const normalizedHost = requestHost?.trim();
+    const host =
+      normalizedHost && this.isSafeRequestHost(normalizedHost)
+        ? normalizedHost
+        : `localhost:${this.port}`;
+    const websocketSources = [
+      `ws://${host}`,
+      `wss://${host}`,
+      `ws://localhost:${this.port}`,
+      `ws://127.0.0.1:${this.port}`,
+      `ws://[::1]:${this.port}`,
+    ];
+    const connectSources = Array.from(new Set(["'self'", ...websocketSources]));
     const csp = [
       "default-src 'self'",
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self'",
       "img-src 'self' data: https:",
       "script-src 'self' 'unsafe-inline'",
-      `connect-src 'self' ws://localhost:${this.port}`,
+      `connect-src ${connectSources.join(" ")}`,
     ].join("; ");
     html = html.replace(
       /<meta\s+http-equiv="Content-Security-Policy"[^>]*>/,
@@ -408,42 +432,66 @@ export class FlightPathHostedServer
     return vars ? `<style>:root {\n${vars}\n}</style>\n` : "";
   }
 
+  private isSafeRequestHost(host: string): boolean {
+    return /^(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?$/.test(host);
+  }
+
   // ── WebSocket ─────────────────────────────────────────────────────────────
 
   private setupWebSocket(): void {
-    this.wss.on("connection", (ws) => {
+    this.wss.on("connection", (ws, req) => {
       this.connections.add(ws);
       const clientTag = `${BROWSER_CLIENT_PREFIX}${this.nextConnectionId++}`;
+      let sawReady = false;
+      const connectedAt = Date.now();
+      Log.debug(
+        `[hosted-server] WebSocket connected clientId=${clientTag} ip=${req.socket.remoteAddress ?? ""} ua=${req.headers["user-agent"] ?? ""} origin=${req.headers.origin ?? ""}`
+      );
       const send = (reply: unknown): void => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(reply));
       };
-      this.sendInitialState(ws, clientTag);
+      this.sendInitialState(ws);
       ws.on("message", (raw) => {
         try {
           const msg = JSON.parse(raw.toString());
-          this.webviewProvider.routeExternalMessage(msg, send, clientTag);
-        } catch (_e) {
-          /* ignore malformed messages */
+          if (msg?.type === MESSAGE_TYPES.READY) {
+            sawReady = true;
+            Log.debug(
+              `[hosted-server] WebSocket READY clientId=${clientTag} afterMs=${Date.now() - connectedAt} preferredWorkingFilePath=${typeof msg.preferredWorkingFilePath === "string" ? msg.preferredWorkingFilePath : ""}`
+            );
+          }
+          void this.webviewProvider
+            .routeExternalMessage(msg, send, clientTag)
+            .catch((error) => {
+              Log.warn(
+                `[hosted-server] routeExternalMessage failed for ${clientTag}: ${error}`
+              );
+            });
+        } catch (error) {
+          Log.warn(
+            `[hosted-server] ignored malformed WebSocket message from ${clientTag}: ${error}`
+          );
         }
       });
-      ws.on("close", () => {
+      ws.on("close", (code, reason) => {
+        Log.debug(
+          `[hosted-server] WebSocket closed clientId=${clientTag} ready=${sawReady} lifetimeMs=${Date.now() - connectedAt} code=${code} reason=${reason.toString()}`
+        );
         this.connections.delete(ws);
         this.webviewProvider.unregisterBrowserClient(clientTag);
+      });
+      ws.on("error", (error) => {
+        Log.warn(
+          `[hosted-server] WebSocket error clientId=${clientTag}: ${error}`
+        );
       });
     });
   }
 
-  private sendInitialState(ws: WebSocket, clientTag: string): void {
-    const send = (msg: unknown): void => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
-    };
-    this.webviewProvider.routeExternalMessage(
-      { type: MESSAGE_TYPES.READY },
-      send,
-      clientTag
-    );
+  private sendInitialState(ws: WebSocket): void {
     // Push cached theme vars immediately so the client can style itself without waiting
-    // for a CAPTURE_THEME_VARS round-trip.
+    // for a CAPTURE_THEME_VARS round-trip. The shim applies themeVarsUpdated directly
+    // to :root before React mounts, so this is safe to send at connection time.
     if (
       Object.keys(this.cachedThemeVars).length > 0 &&
       ws.readyState === WebSocket.OPEN
@@ -455,10 +503,14 @@ export class FlightPathHostedServer
         })
       );
     }
-    // Also request a fresh capture so any theme-change since last capture is picked up.
+    // Request a fresh capture so any theme-change since last capture is picked up.
     this.webviewProvider.postMessage({
       type: MESSAGE_TYPES.CAPTURE_THEME_VARS,
     });
+    // NOTE: We intentionally do NOT inject a server-side synthetic READY here.
+    // Browser-client registration belongs to standalone-shim.js: it sends READY
+    // when the socket opens, buffers replay messages, then flushes them only
+    // after React posts its own READY and useMessageHandler is listening.
   }
 
   private broadcast(message: unknown): void {
