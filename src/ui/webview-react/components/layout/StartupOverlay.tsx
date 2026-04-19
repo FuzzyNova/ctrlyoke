@@ -21,11 +21,14 @@ export const StartupOverlay: React.FC = () => {
   const setStartupReady = useUiStore((s) => s.setStartupReady);
 
   // Safety timeout: dismiss overlay if STARTUP_COMPLETE never arrives.
+  // devRestarting must NOT bypass this — if the DEV panel triggered a reload
+  // but the extension host restart left the webview stuck, the timeout is
+  // the only recovery path until RECONNECT arrives and clears devRestarting.
   useEffect(() => {
-    if (startupReady || devRestarting) return;
+    if (startupReady) return;
     const id = setTimeout(() => setStartupReady(true), STARTUP_TIMEOUT_MS);
     return () => clearTimeout(id);
-  }, [startupReady, devRestarting, setStartupReady]);
+  }, [startupReady, setStartupReady]);
 
   if (startupReady) return null;
 

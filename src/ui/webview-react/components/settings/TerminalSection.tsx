@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
@@ -192,6 +192,293 @@ function updateShortcut(
 ): TerminalShortcut[] {
   return shortcuts.map((shortcut, shortcutIndex) =>
     shortcutIndex === index ? { ...shortcut, ...patch } : shortcut
+  );
+}
+
+// xterm modifier number: shift=1, alt=2, ctrl=4 → sum + 1
+function xtermModNum(e: KeyboardEvent): number {
+  return (e.shiftKey ? 1 : 0) + (e.altKey ? 2 : 0) + (e.ctrlKey ? 4 : 0) + 1;
+}
+
+function keyEventToCapture(
+  e: KeyboardEvent
+): { sequence: string; humanLabel: string } | null {
+  if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return null;
+
+  const ctrl = e.ctrlKey;
+  const alt = e.altKey;
+  const shift = e.shiftKey;
+
+  const modParts: string[] = [];
+  if (ctrl) modParts.push("Ctrl");
+  if (alt) modParts.push("Alt");
+  if (shift) modParts.push("Shift");
+
+  const label = (...extra: string[]) =>
+    [...modParts, ...extra].join("+") || extra.join("+");
+
+  // Arrow keys (any modifier combination)
+  const ARROWS: Record<string, [string, string]> = {
+    ArrowUp: ["A", "↑"],
+    ArrowDown: ["B", "↓"],
+    ArrowRight: ["C", "→"],
+    ArrowLeft: ["D", "←"],
+  };
+  if (e.key in ARROWS) {
+    const [code, glyph] = ARROWS[e.key];
+    const mod = xtermModNum(e);
+    const seq = mod > 1 ? `\\x1b[1;${mod}${code}` : `\\x1b[${code}`;
+    return { sequence: seq, humanLabel: label(glyph) };
+  }
+
+  // Special keys
+  if (e.key === "Escape" && !ctrl && !alt && !shift)
+    return { sequence: "\\x1b", humanLabel: "Esc" };
+  if (e.key === "Tab" && !ctrl && !alt)
+    return shift
+      ? { sequence: "\\x1b[Z", humanLabel: "Shift+Tab" }
+      : { sequence: "\\t", humanLabel: "Tab" };
+  if (e.key === "Enter" && !ctrl && !alt && !shift)
+    return { sequence: "\\r", humanLabel: "Enter" };
+  if (e.key === "Backspace" && !ctrl && !alt && !shift)
+    return { sequence: "\\x7f", humanLabel: "Backspace" };
+  if (e.key === "Delete") {
+    const mod = xtermModNum(e);
+    return {
+      sequence: mod > 1 ? `\\x1b[3;${mod}~` : "\\x1b[3~",
+      humanLabel: label("Del"),
+    };
+  }
+  if (e.key === "Insert")
+    return { sequence: "\\x1b[2~", humanLabel: label("Ins") };
+  if (e.key === "Home")
+    return { sequence: "\\x1b[H", humanLabel: label("Home") };
+  if (e.key === "End")
+    return { sequence: "\\x1b[F", humanLabel: label("End") };
+  if (e.key === "PageUp")
+    return { sequence: "\\x1b[5~", humanLabel: label("PgUp") };
+  if (e.key === "PageDown")
+    return { sequence: "\\x1b[6~", humanLabel: label("PgDn") };
+
+  // Single printable character with modifiers
+  if (e.key.length === 1) {
+    const upper = e.key.toUpperCase();
+    const charCode = upper.charCodeAt(0) - 64;
+
+    if (ctrl && alt && charCode >= 1 && charCode <= 26) {
+      return {
+        sequence: `\\x1b\\x${charCode.toString(16).padStart(2, "0")}`,
+        humanLabel: `Ctrl+Alt+${upper}`,
+      };
+    }
+    if (ctrl && !alt && charCode >= 1 && charCode <= 26) {
+      return {
+        sequence: `\\x${charCode.toString(16).padStart(2, "0")}`,
+        humanLabel: `Ctrl+${upper}`,
+      };
+    }
+    if (alt && !ctrl) {
+      return {
+        sequence: `\\x1b${e.key}`,
+        humanLabel: `Alt+${upper}`,
+      };
+    }
+    if (!ctrl && !alt) {
+      return { sequence: e.key, humanLabel: e.key };
+    }
+  }
+
+  return null;
+}
+
+function sequenceToHumanLabel(seq: string): string | null {
+  if (!seq) return null;
+  if (seq === "\\t") return "Tab";
+  if (seq === "\\r") return "Enter";
+  if (seq === "\\x1b") return "Esc";
+  if (seq === "\\x7f") return "Backspace";
+  if (seq === "\\x1b[3~") return "Del";
+  if (seq === "\\x1b[2~") return "Ins";
+  if (seq === "\\x1b[H") return "Home";
+  if (seq === "\\x1b[F") return "End";
+  if (seq === "\\x1b[5~") return "PgUp";
+  if (seq === "\\x1b[6~") return "PgDn";
+  if (seq === "\\x1b[Z") return "Shift+Tab";
+
+  // Ctrl+letter: \x01..\x1a
+  const ctrlMatch = seq.match(/^\\x([01][0-9a-fA-F])$/);
+  if (ctrlMatch) {
+    const code = parseInt(ctrlMatch[1], 16);
+    if (code >= 1 && code <= 26)
+      return "Ctrl+" + String.fromCharCode(code + 64);
+  }
+
+  // Ctrl+Alt+letter: \x1b\xNN
+  const ctrlAlt = seq.match(/^\\x1b\\x([01][0-9a-fA-F])$/);
+  if (ctrlAlt) {
+    const code = parseInt(ctrlAlt[1], 16);
+    if (code >= 1 && code <= 26)
+      return "Ctrl+Alt+" + String.fromCharCode(code + 64);
+  }
+
+  const ARROW_GLYPHS: Record<string, string> = {
+    A: "↑",
+    B: "↓",
+    C: "→",
+    D: "←",
+  };
+
+  // Arrow without modifier: \x1b[A..D
+  const arrow = seq.match(/^\\x1b\[([ABCD])$/);
+  if (arrow) return ARROW_GLYPHS[arrow[1]] ?? null;
+
+  // Arrow with modifier: \x1b[1;<mod><dir>
+  const arrowMod = seq.match(/^\\x1b\[1;(\d+)([ABCD])$/);
+  if (arrowMod) {
+    const mod = parseInt(arrowMod[1]) - 1;
+    const glyph = ARROW_GLYPHS[arrowMod[2]];
+    if (glyph) {
+      const parts: string[] = [];
+      if (mod & 4) parts.push("Ctrl");
+      if (mod & 2) parts.push("Alt");
+      if (mod & 1) parts.push("Shift");
+      parts.push(glyph);
+      return parts.join("+");
+    }
+  }
+
+  // Delete with modifier: \x1b[3;<mod>~
+  const delMod = seq.match(/^\\x1b\[3;(\d+)~$/);
+  if (delMod) {
+    const mod = parseInt(delMod[1]) - 1;
+    const parts: string[] = [];
+    if (mod & 4) parts.push("Ctrl");
+    if (mod & 2) parts.push("Alt");
+    if (mod & 1) parts.push("Shift");
+    parts.push("Del");
+    return parts.join("+");
+  }
+
+  // Alt+char: \x1b followed by single printable ASCII
+  const altChar = seq.match(/^\\x1b([!-~])$/);
+  if (altChar) return `Alt+${altChar[1].toUpperCase()}`;
+
+  return null;
+}
+
+function KeyCaptureInput({
+  sequence,
+  ariaLabel,
+  onSequenceChange,
+  onCapture,
+}: {
+  sequence: string;
+  ariaLabel?: string;
+  onSequenceChange: (sequence: string) => void;
+  onCapture: (sequence: string, humanLabel: string) => void;
+}) {
+  const [capturing, setCapturing] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const humanLabel = sequenceToHumanLabel(sequence);
+
+  const startCapture = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (capturing) {
+      setCapturing(false);
+      return;
+    }
+    setEditing(false);
+    setCapturing(true);
+    setTimeout(() => containerRef.current?.focus(), 0);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!capturing) return;
+    if (e.key === "Escape") {
+      setCapturing(false);
+      return;
+    }
+    e.preventDefault();
+    const result = keyEventToCapture(e.nativeEvent);
+    if (result) {
+      onCapture(result.sequence, result.humanLabel);
+      setCapturing(false);
+    }
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+      setCapturing(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <input
+        // eslint-disable-next-line jsx-a11y/no-autofocus
+        autoFocus
+        type="text"
+        value={sequence}
+        placeholder="\\x1b[1;5A"
+        aria-label={ariaLabel}
+        title="Literal escape notation: \\x1b[A, \\t, \\r"
+        onChange={(e) => onSequenceChange(e.target.value)}
+        onBlur={() => setEditing(false)}
+        className="min-w-0 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
+      />
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      tabIndex={0}
+      aria-label={ariaLabel}
+      onKeyDown={handleKeyDown}
+      onBlur={handleBlur}
+      className="min-w-0 flex-1 focus:outline-none"
+    >
+      <div
+        className={`flex items-center gap-1 bg-input-bg border rounded px-2 py-1 text-sm h-[30px] ${
+          capturing ? "border-focus-border" : "border-input-border"
+        }`}
+      >
+        {capturing ? (
+          <span className="flex-1 text-description-fg italic text-xs">
+            Press a key combination…
+          </span>
+        ) : (
+          <span
+            className={`flex-1 truncate cursor-text ${
+              sequence
+                ? humanLabel
+                  ? "text-foreground"
+                  : "text-description-fg font-mono text-xs"
+                : "text-input-placeholder italic text-xs"
+            }`}
+            title={humanLabel && sequence ? `Sequence: ${sequence}` : undefined}
+            onClick={() => setEditing(true)}
+          >
+            {sequence ? (humanLabel ?? sequence) : "\\x1b[1;5A"}
+          </span>
+        )}
+        <button
+          type="button"
+          className={`icon-btn w-5 h-5 shrink-0 p-0 ${capturing ? "text-focus-border" : ""}`}
+          title={
+            capturing
+              ? "Press Esc to cancel"
+              : "Click then press a key combination to capture"
+          }
+          aria-label="Capture key combination"
+          onClick={startCapture}
+        >
+          <i className="codicon codicon-sm codicon-keyboard" />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -488,22 +775,28 @@ export function TerminalSection({ settings, onUpdate }: Props) {
                     }
                     className="min-w-0 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
                   />
-                  <input
-                    type="text"
-                    value={shortcut.sequence}
-                    placeholder="\\x1b[1;5A"
-                    aria-label={`Shortcut ${index + 1} sequence`}
-                    title="Use literal escape notation such as \\x1b[A, \\t, or \\r."
-                    onChange={(e) =>
+                  <KeyCaptureInput
+                    sequence={shortcut.sequence}
+                    ariaLabel={`Shortcut ${index + 1} sequence`}
+                    onSequenceChange={(seq) =>
                       onUpdate(
                         "terminal.mobileCustomShortcuts",
                         updateShortcut(terminal.mobileCustomShortcuts, index, {
-                          sequence: e.target.value,
+                          sequence: seq,
                         }),
                         s
                       )
                     }
-                    className="min-w-0 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                    onCapture={(seq, humanLabel) =>
+                      onUpdate(
+                        "terminal.mobileCustomShortcuts",
+                        updateShortcut(terminal.mobileCustomShortcuts, index, {
+                          sequence: seq,
+                          ...(shortcut.label === "" ? { label: humanLabel } : {}),
+                        }),
+                        s
+                      )
+                    }
                   />
                   <button
                     type="button"
@@ -527,7 +820,9 @@ export function TerminalSection({ settings, onUpdate }: Props) {
             )}
           </div>
           <p className="text-xs text-description-fg mt-2">
-            Sequences accept literal escapes like \x1b, \t, and \r.
+            Click the keyboard icon then press a key combination to capture it.
+            Click the sequence display to edit the raw escape notation manually
+            (e.g. \x1b[A, \t, \r).
           </p>
         </div>
       </section>

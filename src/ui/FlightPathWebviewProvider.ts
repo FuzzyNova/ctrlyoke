@@ -186,6 +186,12 @@ export class FlightPathWebviewProvider
 
     Log.debug("resolveWebviewView() complete — view is now set");
 
+    // If VS Code retained the old React context instead of reloading the
+    // iframe (common on extension host restart), React will never re-send
+    // READY on its own. This RECONNECT nudges the retained React to re-send
+    // READY so the new extension host can complete initialization.
+    this.postMessage({ type: MESSAGE_TYPES.RECONNECT });
+
     // Best-effort early INIT: VS Code buffers postMessage until the
     // webview iframe loads, but React's message listener may not be
     // attached yet. The READY handler sends INIT again as a

@@ -371,6 +371,17 @@ function createMessageHandlers(): MessageHandlerMap {
     useUiStore.getState().setDevRestarting(true);
   };
 
+  handlers[MESSAGE_TYPES.RECONNECT] = () => {
+    // Extension host restarted but VS Code retained the old webview context.
+    // Reset startup state and re-send READY so the new host can initialize.
+    useUiStore.setState({ devRestarting: false, startupReady: false });
+    const { activeWorkflowWorkingFilePath } = useUiStore.getState();
+    getVsCodeApi().postMessage({
+      type: MESSAGE_TYPES.READY,
+      preferredWorkingFilePath: activeWorkflowWorkingFilePath,
+    });
+  };
+
   handlers[MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE] = (message) => {
     useUiStore
       .getState()

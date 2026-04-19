@@ -79,10 +79,6 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
           : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg"
       }`}
       onClick={onClick}
-      onTouchEnd={(e) => {
-        e.preventDefault();
-        onClick();
-      }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
@@ -152,11 +148,6 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                   e.stopPropagation();
                   onPause();
                 }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onPause();
-                }}
                 onKeyDown={(e) => e.stopPropagation()}
                 className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
               >
@@ -168,11 +159,6 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                 title="Resume"
                 aria-label="Resume"
                 onClick={(e) => {
-                  e.stopPropagation();
-                  onResume();
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
                   e.stopPropagation();
                   onResume();
                 }}
@@ -188,11 +174,6 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
               title="Stop"
               aria-label="Stop"
               onClick={(e) => {
-                e.stopPropagation();
-                onStop();
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
                 e.stopPropagation();
                 onStop();
               }}

@@ -55,10 +55,6 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
           <button
             type="button"
             onClick={() => onNewWorkflow?.()}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              onNewWorkflow?.();
-            }}
             className="w-full px-3 py-2 text-left text-sm text-description-fg hover:bg-list-hover-bg hover:text-list-highlight-fg flex items-center gap-2"
           >
             <i className="codicon codicon-add text-[11px]" />
@@ -78,10 +74,6 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                 role="button"
                 tabIndex={0}
                 onClick={() => onSelect(workflow.filePath)}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  onSelect(workflow.filePath);
-                }}
                 onKeyDown={(e) =>
                   e.key === "Enter" && onSelect(workflow.filePath)
                 }
@@ -136,10 +128,6 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                       e.stopPropagation();
                       onRemove(workflow.filePath);
                     }}
-                    onTouchEnd={(e) => {
-                      e.preventDefault();
-                      onRemove(workflow.filePath);
-                    }}
                     className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex-shrink-0 p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
                   >
                     <i className="codicon codicon-trash" />
@@ -157,10 +145,6 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
           <button
             type="button"
             onClick={onClearHistory}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              onClearHistory();
-            }}
             className="workflow-menu-action w-full px-3 py-1.5 border-none bg-transparent text-link-fg text-center cursor-pointer text-xs rounded transition-colors hover:bg-list-hover-bg"
           >
             Clear History

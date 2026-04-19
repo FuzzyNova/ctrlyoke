@@ -255,6 +255,10 @@ export const MESSAGE_TYPES = {
   DEV_BUILD_COMPLETED: "dev:buildCompleted",
   DEV_RESTARTING: "dev:restarting",
   DEV_COMMAND_UNAVAILABLE: "dev:commandUnavailable",
+
+  // Extension -> Webview: sent by resolveWebviewView() so a retained webview
+  // re-sends READY after an extension host restart
+  RECONNECT: "reconnect",
 } as const;
 
 // ============================================================================
