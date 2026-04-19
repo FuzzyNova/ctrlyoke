@@ -12,9 +12,11 @@ import {
   CliEvent,
   TextData,
   ToolResultData,
+  CompactionData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
+  COMPACTION_TRIGGERS,
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 import { CODEX_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
@@ -497,6 +499,17 @@ export class CodexLogParser extends BaseLogParser {
             } as ToolResultData,
           });
         }
+      }
+
+      // compacted → context window compaction event
+      if (event.type === "compacted") {
+        outputEvents.push({
+          type: CLI_EVENT_TYPES.COMPACTION,
+          timestamp,
+          data: {
+            trigger: COMPACTION_TRIGGERS.AUTO,
+          } as CompactionData,
+        });
       }
     }
 
@@ -1151,6 +1164,18 @@ export class CodexLogParser extends BaseLogParser {
           } as ToolResultData,
         });
       }
+      return results;
+    }
+
+    // compacted → context window compaction event (streaming path)
+    if (e.type === "compacted") {
+      results.push({
+        type: CLI_EVENT_TYPES.COMPACTION,
+        timestamp,
+        data: {
+          trigger: COMPACTION_TRIGGERS.AUTO,
+        } as CompactionData,
+      });
       return results;
     }
 

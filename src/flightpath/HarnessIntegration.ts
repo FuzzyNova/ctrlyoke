@@ -81,7 +81,7 @@ export enum HarnessStatus {
  */
 export abstract class HarnessIntegration {
   /** Maximum character length for prompts passed directly on the command line. */
-  private static readonly MAX_SIMPLE_PROMPT_LENGTH = 300;
+  private static readonly MAX_SIMPLE_PROMPT_LENGTH = 3000;
   /** Characters safe to pass directly on the command line without temp-file escaping. */
   private static readonly SAFE_CHARS_PATTERN = /^[a-zA-Z0-9\s.,!?:;\-_()@#/]*$/;
 
@@ -652,12 +652,12 @@ export abstract class HarnessIntegration {
    *
    * Simple prompts must be:
    * - Short length (≤300 characters)
-   * - No dynamic queue XML instructions
    * - No shell-dangerous characters (quotes, backslashes, newlines, metacharacters, etc.)
    *
-   * **Security-critical for CLI:** We're conservative because the prompt gets embedded
-   * directly in the shell command line. Even with escaping, complex prompts could
-   * break parsing or introduce security issues.
+   * **Security-critical for CLI:** We're conservative because on Windows, node-pty
+   * spawns via `pwsh -NoProfile -Command <tuiCommand>`, embedding the prompt in
+   * the command line passed to CreateProcess (32767-char OS limit). Even well under
+   * that limit, special characters can break shell parsing or introduce injection risks.
    *
    * For chat harnesses the same check applies as a fast-path gate: if it passes,
    * the prompt is short and clean enough to type inline, skipping temp file I/O.

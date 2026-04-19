@@ -93,11 +93,13 @@ export function GlobalSettingsDrawer() {
       aria-hidden={!globalSettingsOpen}
     >
       {/* Title bar — always visible, never scrolls */}
-      <div className="flex items-center justify-between px-3 py-0.5 border-b border-panel-border shrink-0">
-        <div className="w-7" />
-        <span className="text-sm uppercase font-medium text-description-fg">
-          Settings
-        </span>
+      <div className="flex items-center justify-between px-2 h-[30px] border-b border-panel-border shrink-0">
+        <div className="flex items-center gap-1 text-description-fg">
+          <i className="codicon codicon-settings-gear text-[14px]" />
+          <span className="text-[11px] font-semibold uppercase tracking-wide ml-0.5">
+            Settings
+          </span>
+        </div>
         <button
           className="control-button flex items-center justify-center w-5 h-5 rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
           onClick={closeGlobalSettings}
