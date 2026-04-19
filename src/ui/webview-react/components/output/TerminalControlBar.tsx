@@ -21,12 +21,6 @@ interface Shortcut {
   sequence: string;
 }
 
-interface NavigatorWithVirtualKeyboard extends Navigator {
-  virtualKeyboard?: {
-    overlaysContent: boolean;
-  };
-}
-
 const BUILT_IN_SHORTCUTS: Shortcut[] = [
   { label: "Shift+Tab", sequence: "\x1b[Z" },
   { label: "Ctrl+C", sequence: "\x03" },
@@ -84,50 +78,6 @@ function ctrlSequenceFromKey(key: string): string | null {
   return String.fromCharCode(code - 64);
 }
 
-function useKeyboardInset(): string {
-  const [visualViewportInset, setVisualViewportInset] = useState(0);
-
-  useEffect(() => {
-    const virtualKeyboard = (navigator as NavigatorWithVirtualKeyboard)
-      .virtualKeyboard;
-    if (virtualKeyboard) {
-      const previous = virtualKeyboard.overlaysContent;
-      virtualKeyboard.overlaysContent = true;
-      return () => {
-        virtualKeyboard.overlaysContent = previous;
-      };
-    }
-    return undefined;
-  }, []);
-
-  useEffect(() => {
-    const virtualKeyboard = (navigator as NavigatorWithVirtualKeyboard)
-      .virtualKeyboard;
-    if (virtualKeyboard) return;
-    const visualViewport = window.visualViewport;
-    if (!visualViewport) return;
-
-    const updateInset = () => {
-      setVisualViewportInset(
-        Math.max(
-          0,
-          window.innerHeight - visualViewport.offsetTop - visualViewport.height
-        )
-      );
-    };
-
-    updateInset();
-    visualViewport.addEventListener("resize", updateInset);
-    visualViewport.addEventListener("scroll", updateInset);
-    return () => {
-      visualViewport.removeEventListener("resize", updateInset);
-      visualViewport.removeEventListener("scroll", updateInset);
-    };
-  }, []);
-
-  return `calc(env(keyboard-inset-height, 0px) + ${visualViewportInset}px)`;
-}
-
 export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
   workflowId,
   sessionId,
@@ -135,7 +85,6 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
   const [ctrlActive, setCtrlActive] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
-  const keyboardInset = useKeyboardInset();
   const customShortcuts = useSettingsStore(
     (s) =>
       s.fullGlobalSettings?.settings.terminal.mobileCustomShortcuts ??
@@ -214,9 +163,8 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
   return (
     <div
       ref={moreRef}
-      className="sticky bottom-0 z-20 w-full border-t border-panel-border"
+      className="relative z-20 w-full flex-shrink-0 border-t border-panel-border"
       style={{
-        paddingBottom: keyboardInset,
         background:
           "color-mix(in srgb, var(--vscode-terminal-background, var(--vscode-editor-background)) 92%, transparent)",
       }}

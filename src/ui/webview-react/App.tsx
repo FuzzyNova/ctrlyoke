@@ -179,45 +179,6 @@ function App() {
     terminalRegistry.updateFontSize(terminalFontSize);
   }, [terminalFontSize]);
 
-  // Mobile keyboard awareness for the terminal view.
-  //
-  // xterm.js uses a hidden textarea for input, so the browser does not automatically
-  // scroll/shift content to keep the cursor above the virtual keyboard the way it does
-  // for native text inputs and contenteditable elements (the PromptEditor).  When the
-  // terminal has focus and the visual viewport shrinks (keyboard opened), we insert a
-  // flex spacer at the bottom of the root layout equal to the keyboard height.  This
-  // pushes the entire panel stack upward — keeping the terminal canvas visible above
-  // the keyboard — without altering xterm's canvas dimensions.
-  //
-  // Detection: xterm's hidden helper textarea always carries the class
-  // "xterm-helper-textarea", which lets us distinguish terminal focus from
-  // PromptEditor focus (CodeMirror already handles its own keyboard awareness).
-  const [terminalKeyboardInset, setTerminalKeyboardInset] = useState(0);
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    const handleViewportChange = () => {
-      const isTerminalFocused =
-        (document.activeElement as Element | null)?.classList.contains(
-          "xterm-helper-textarea"
-        ) ?? false;
-      if (!isTerminalFocused) {
-        setTerminalKeyboardInset(0);
-        return;
-      }
-      const inset = Math.max(0, window.innerHeight - vv.offsetTop - vv.height);
-      setTerminalKeyboardInset(inset);
-    };
-
-    vv.addEventListener("resize", handleViewportChange);
-    vv.addEventListener("scroll", handleViewportChange);
-    return () => {
-      vv.removeEventListener("resize", handleViewportChange);
-      vv.removeEventListener("scroll", handleViewportChange);
-    };
-  }, []);
-
   // ============================================================================
   // LAYOUT TRANSITION LOGIC (runs synchronously during render)
   //
@@ -544,17 +505,6 @@ function App() {
         {/* Startup overlay — covers full layout (header + content) until STARTUP_COMPLETE arrives */}
         <StartupOverlay />
 
-        {/* Terminal keyboard inset spacer — pushes panel stack above the virtual
-            keyboard when an xterm terminal has focus on mobile. Height equals the
-            gap between the visual viewport bottom and the layout viewport bottom.
-            Zero on desktop or when a non-terminal input (PromptEditor) is focused. */}
-        {terminalKeyboardInset > 0 && (
-          <div
-            style={{ height: terminalKeyboardInset, flexShrink: 0 }}
-            aria-hidden="true"
-          />
-        )}
-
         {/* iOS safe area spacer — lifts all content above the home indicator.
             height = env(safe-area-inset-bottom), 0px on non-iOS / desktop.
             Placing it here (flex sibling of the main content area) means every
@@ -747,14 +697,6 @@ function App() {
 
       {/* Startup overlay — covers full layout (header + content) until STARTUP_COMPLETE arrives */}
       <StartupOverlay />
-
-      {/* Terminal keyboard inset spacer — see mobile layout comment above */}
-      {terminalKeyboardInset > 0 && (
-        <div
-          style={{ height: terminalKeyboardInset, flexShrink: 0 }}
-          aria-hidden="true"
-        />
-      )}
 
       {/* iOS safe area spacer — see mobile layout comment above */}
       <div className="safe-area-spacer" aria-hidden="true" />
