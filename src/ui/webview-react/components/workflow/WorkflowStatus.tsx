@@ -13,6 +13,7 @@ import {
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
 import { RecentWorkflows } from "./RecentWorkflows";
 import { RunningWorkflowItem } from "./RunningWorkflowItem";
+import { WorkflowDropdownHeader } from "./WorkflowDropdownHeader";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import {
   getExecutionStateBadgeClass,
@@ -132,6 +133,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [dropdownTop, setDropdownTop] = useState(0);
+  const [workflowSearch, setWorkflowSearch] = useState("");
   const [recentWorkflows, setRecentWorkflows] = useState<RecentWorkflow[]>([]);
   // Pending workflow path waiting for delete confirmation
   const [pendingDeletePath, setPendingDeletePath] = useState<string | null>(
@@ -152,6 +155,23 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     },
     [narrowRef]
   );
+
+  const updateDropdownTop = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) {
+      setDropdownTop(0);
+      return;
+    }
+
+    const header = container.closest("header");
+    const anchor = header ?? container;
+    setDropdownTop(anchor.getBoundingClientRect().bottom);
+  }, []);
+
+  const closeDropdown = useCallback(() => {
+    setIsDropdownOpen(false);
+    setWorkflowSearch("");
+  }, []);
 
   // Request recent workflows once on mount so the count badge is visible immediately
   useEffect(() => {
@@ -182,7 +202,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         containerRef.current &&
         !containerRef.current.contains(event.target as Node)
       ) {
-        setIsDropdownOpen(false);
+        closeDropdown();
       }
     };
 
@@ -191,7 +211,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       return () =>
         document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [isDropdownOpen]);
+  }, [closeDropdown, isDropdownOpen]);
 
   // Focus input when editing starts
   useEffect(() => {
@@ -200,6 +220,14 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       inputRef.current.select();
     }
   }, [isEditing]);
+
+  useEffect(() => {
+    if (!isDropdownOpen) return;
+
+    updateDropdownTop();
+    window.addEventListener("resize", updateDropdownTop);
+    return () => window.removeEventListener("resize", updateDropdownTop);
+  }, [isDropdownOpen, updateDropdownTop]);
 
   // Start editing workflow name
   const startEditing = useCallback(() => {
@@ -244,6 +272,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Toggle dropdown
   const toggleDropdown = useCallback(() => {
     if (!isDropdownOpen) {
+      updateDropdownTop();
+      setWorkflowSearch("");
       WebviewLog.debug(
         `[WorkflowStatus:toggleDropdown] opening dropdown — requesting workflows list. ` +
           `Current loadedWorkflows: [${loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState})`).join(", ") || "(none)"}], ` +
@@ -253,8 +283,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       // Request recent workflows and full loaded-workflows list from extension
       vscode.postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
       vscode.postMessage({ type: MESSAGE_TYPES.GET_WORKFLOWS_LIST });
+      setIsDropdownOpen(true);
+      return;
     }
-    setIsDropdownOpen(!isDropdownOpen);
+    closeDropdown();
   }, [
     isDropdownOpen,
     vscode,
@@ -262,6 +294,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     activeWorkflowId,
     fileName,
     workflowName,
+    updateDropdownTop,
+    closeDropdown,
   ]);
 
   // Switch to a loaded workflow
@@ -277,9 +311,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         type: MESSAGE_TYPES.SWITCH_WORKFLOW,
         workflowId,
       });
-      setIsDropdownOpen(false);
+      closeDropdown();
     },
-    [loadedWorkflows, setActiveWorkflowWorkingFilePath, vscode]
+    [closeDropdown, loadedWorkflows, setActiveWorkflowWorkingFilePath, vscode]
   );
 
   // Load workflow from recent list
@@ -290,17 +324,17 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         type: MESSAGE_TYPES.LOAD_WORKFLOW,
         filePath,
       });
-      setIsDropdownOpen(false);
+      closeDropdown();
     },
-    [setActiveWorkflowWorkingFilePath, vscode]
+    [closeDropdown, setActiveWorkflowWorkingFilePath, vscode]
   );
 
   // Clear workflow history
   const handleClearHistory = useCallback(() => {
     vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY });
     setRecentWorkflows([]);
-    setIsDropdownOpen(false);
-  }, [vscode]);
+    closeDropdown();
+  }, [closeDropdown, vscode]);
 
   // Remove a single entry from recent workflow history — shows confirm modal or deletes directly
   const handleRemoveWorkflow = useCallback(
@@ -366,6 +400,36 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const displayName = fileName
     ? workflowName || getWorkflowNameFromPath(fileName)
     : DEFAULT_WORKFLOW_NAME;
+
+  const normalizedWorkflowSearch = workflowSearch.trim().toLowerCase();
+  const isFilteringWorkflows = normalizedWorkflowSearch.length > 0;
+  const workflowMatchesSearch = (
+    workflow: Pick<
+      RecentWorkflow,
+      "workflowName" | "filePath" | "executionState"
+    > & { workingFilePath?: string }
+  ) => {
+    if (!isFilteringWorkflows) return true;
+
+    return [
+      workflow.workflowName,
+      workflow.filePath,
+      workflow.workingFilePath,
+      workflow.executionState,
+    ].some((value) => value?.toLowerCase().includes(normalizedWorkflowSearch));
+  };
+
+  const filteredLoadedWorkflows =
+    loadedWorkflows.filter(workflowMatchesSearch);
+  const filteredRecentWorkflows = recentWorkflows.filter(
+    (recentWorkflow) =>
+      workflowMatchesSearch(recentWorkflow) &&
+      !loadedWorkflows.some(
+        (loadedWorkflow) =>
+          loadedWorkflow.workingFilePath === recentWorkflow.filePath
+      )
+  );
+  const showRunningWorkflowsSection = loadedWorkflows.length > 0;
 
   return (
     <div
@@ -494,38 +558,47 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       {/* Dropdown Menu */}
       <div
         ref={dropdownRef}
-        className={`workflow-dropdown-menu fixed min-w-[300px] max-w-[min(500px,90vw)] bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[100] overflow-hidden flex flex-col transition-all duration-150 ${isDropdownOpen && !isEditing ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"}`}
+        className={`workflow-dropdown-menu fixed left-0 right-0 w-screen sm:left-1/2 sm:right-auto sm:w-[min(500px,90vw)] sm:-translate-x-1/2 bg-dropdown-bg border-x-0 sm:border-x border-t-0 border-b border-dropdown-border sm:rounded-b shadow-lg z-[100] overflow-hidden flex flex-col transition-all duration-200 ease-out ${isDropdownOpen && !isEditing ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"}`}
         style={{
-          top: containerRef.current
-            ? containerRef.current.getBoundingClientRect().bottom + 4
-            : "auto",
-          left: "50%",
-          transform: `translateX(-50%) translateY(${isDropdownOpen && !isEditing ? "0" : "-4px"})`,
-          // allow dropdown to grow with the overall view; use viewport height
-          maxHeight: "75vh",
-          height: "75vh",
+          top: dropdownTop,
+          bottom: 0,
+          clipPath:
+            isDropdownOpen && !isEditing
+              ? "inset(0 0 0 0)"
+              : "inset(0 0 100% 0)",
         }}
       >
         {/* Section 1: Running Workflows — only shown when any workflow is RUNNING or PAUSED */}
-        {loadedWorkflows.length > 0 && (
+        {showRunningWorkflowsSection && (
           <div className="running-workflows-section flex-shrink-0">
-            <div className="workflow-menu-header px-3 py-2 text-[11px] font-semibold text-description-fg uppercase tracking-wider border-b border-dropdown-border bg-editor-bg">
-              Running Workflows
-            </div>
+            <WorkflowDropdownHeader
+              icon="codicon-debug-line-by-line"
+              title="Running Workflows"
+              onClose={closeDropdown}
+              searchValue={workflowSearch}
+              onSearchChange={setWorkflowSearch}
+              showSearch
+            />
             <div className="py-1">
-              {loadedWorkflows.map((workflow) => (
-                <RunningWorkflowItem
-                  key={workflow.id}
-                  workflow={workflow}
-                  isCurrent={workflow.id === activeWorkflowId}
-                  hasActiveTerminal={workflowHasActiveTerminal(workflow.id)}
-                  isNarrow={isNarrow}
-                  onClick={() => handleSwitchWorkflow(workflow.id)}
-                  onPause={() => handlePauseWorkflow(workflow.id)}
-                  onResume={() => handleResumeWorkflow(workflow.id)}
-                  onStop={() => handleStopWorkflow(workflow.id)}
-                />
-              ))}
+              {filteredLoadedWorkflows.length === 0 && isFilteringWorkflows ? (
+                <div className="w-full px-3 py-2 text-left text-sm text-description-fg">
+                  No running workflows match your search.
+                </div>
+              ) : (
+                filteredLoadedWorkflows.map((workflow) => (
+                  <RunningWorkflowItem
+                    key={workflow.id}
+                    workflow={workflow}
+                    isCurrent={workflow.id === activeWorkflowId}
+                    hasActiveTerminal={workflowHasActiveTerminal(workflow.id)}
+                    isNarrow={isNarrow}
+                    onClick={() => handleSwitchWorkflow(workflow.id)}
+                    onPause={() => handlePauseWorkflow(workflow.id)}
+                    onResume={() => handleResumeWorkflow(workflow.id)}
+                    onStop={() => handleStopWorkflow(workflow.id)}
+                  />
+                ))
+              )}
             </div>
             <div className="border-t border-dropdown-border" />
           </div>
@@ -534,22 +607,23 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         {/* Recent workflows list — exclude any already shown in Running Workflows */}
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           <RecentWorkflows
-            workflows={recentWorkflows.filter(
-              (rw) =>
-                !loadedWorkflows.some(
-                  (lw) => lw.workingFilePath === rw.filePath
-                )
-            )}
+            workflows={filteredRecentWorkflows}
             currentFilePath={fileName}
             hasActiveTerminal={recentWorkflowHasActiveTerminal}
             onSelect={handleSelectWorkflow}
             onClearHistory={handleClearHistory}
             onRemove={handleRemoveWorkflow}
             isNarrow={isNarrow}
+            onClose={closeDropdown}
+            showCloseButton={!showRunningWorkflowsSection}
+            searchValue={workflowSearch}
+            onSearchChange={setWorkflowSearch}
+            showSearch={!showRunningWorkflowsSection}
+            isFiltering={isFilteringWorkflows}
             onNewWorkflow={() => {
               setActiveWorkflowWorkingFilePath(null);
               vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
-              setIsDropdownOpen(false);
+              closeDropdown();
             }}
           />
         </div>

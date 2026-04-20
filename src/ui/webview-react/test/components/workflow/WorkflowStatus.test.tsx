@@ -255,4 +255,39 @@ describe("WorkflowStatus — loaded state", () => {
       screen.getAllByLabelText("Terminal session is still running").length
     ).toBeGreaterThan(0);
   });
+
+  it("filters recent workflows from the header search", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowStatus />);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.RECENT_WORKFLOWS,
+            workflows: [
+              {
+                workflowName: "Alpha Workflow",
+                filePath: "/path/alpha.yaml",
+                executionState: EXECUTION_STATES.IDLE,
+              },
+              {
+                workflowName: "Beta Workflow",
+                filePath: "/path/beta.yaml",
+                executionState: EXECUTION_STATES.IDLE,
+              },
+            ],
+          },
+        })
+      );
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    await user.type(screen.getByRole("searchbox"), "alpha");
+
+    expect(screen.getByText("Alpha Workflow")).toBeInTheDocument();
+    expect(screen.queryByText("Beta Workflow")).not.toBeInTheDocument();
+  });
 });

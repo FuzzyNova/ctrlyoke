@@ -1,6 +1,7 @@
 import React from "react";
 import { getExecutionStateBadgeClass, getExecutionStateBadgeIcon } from "../../utils/status";
 import { formatRelativeTimeVerbose } from "../../utils/time";
+import { WorkflowDropdownHeader } from "./WorkflowDropdownHeader";
 
 interface RecentWorkflow {
   workflowName: string;
@@ -18,6 +19,12 @@ interface RecentWorkflowsProps {
   onClearHistory: () => void;
   onRemove?: (filePath: string) => void;
   onNewWorkflow?: () => void;
+  onClose?: () => void;
+  showCloseButton?: boolean;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  showSearch?: boolean;
+  isFiltering?: boolean;
   isNarrow?: boolean;
   className?: string;
 }
@@ -39,27 +46,44 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
   onClearHistory,
   onRemove,
   onNewWorkflow,
+  onClose,
+  showCloseButton = false,
+  searchValue = "",
+  onSearchChange,
+  showSearch = false,
+  isFiltering = false,
   isNarrow = false,
   className = "",
 }) => {
   return (
     <div className={`recent-workflows flex flex-col h-full ${className}`}>
       {/* Header */}
-      <div className="workflow-menu-header px-3 py-2 text-[11px] font-semibold text-description-fg uppercase tracking-wider border-b border-dropdown-border bg-editor-bg flex-shrink-0">
-        Workflows
-      </div>
+      <WorkflowDropdownHeader
+        icon="codicon-checklist"
+        title="Workflows"
+        onClose={showCloseButton ? onClose : undefined}
+        searchValue={searchValue}
+        onSearchChange={onSearchChange}
+        showSearch={showSearch}
+      />
 
       {/* Scrollable Items */}
       <div className="workflow-menu-items overflow-y-auto overflow-x-hidden flex-1 min-h-0 py-1">
         {workflows.length === 0 ? (
-          <button
-            type="button"
-            onClick={() => onNewWorkflow?.()}
-            className="w-full px-3 py-2 text-left text-sm text-description-fg hover:bg-list-hover-bg hover:text-list-highlight-fg flex items-center gap-2"
-          >
-            <i className="codicon codicon-add text-[11px]" />
-            New Workflow
-          </button>
+          isFiltering ? (
+            <div className="w-full px-3 py-2 text-left text-sm text-description-fg">
+              No recent workflows match your search.
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onNewWorkflow?.()}
+              className="w-full px-3 py-2 text-left text-sm text-description-fg hover:bg-list-hover-bg hover:text-list-highlight-fg flex items-center gap-2"
+            >
+              <i className="codicon codicon-add text-[11px]" />
+              New Workflow
+            </button>
+          )
         ) : (
           workflows.map((workflow) => {
             const isCurrent = workflow.filePath === currentFilePath;
