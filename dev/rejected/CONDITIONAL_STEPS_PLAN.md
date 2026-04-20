@@ -1,5 +1,7 @@
 # Conditional Steps Plan
 
+NOTE: We now have Pre-condition which give the option to skip prompts, so this may not be needed anymore.
+
 ## Problem
 
 A user running the same workflow against different targets often needs to skip certain

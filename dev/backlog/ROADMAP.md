@@ -14,7 +14,7 @@ FlightPath is a VS Code extension that automates AI coding assistants (GitHub Co
 
 ## Current Version & Completed Milestones
 
-### Core Engine (Shipped)
+### Core Engine (implemented)
 
 - **Multi-harness execution**: Copilot CLI, Claude Code CLI, Codex CLI, OpenCode CLI, and Copilot Chat UI automation
 - **Composition-based CLI architecture**: Single `CliIntegration` class + `ICliProvider` interface; zero core changes needed to add new harnesses
@@ -200,25 +200,6 @@ Two distinct subsystems that work together to make FlightPath project-context-aw
 
 ---
 
-#### 2.3 Output History UI Completion
-
-**Priority: MEDIUM** | **Effort: 1 week**
-
-`OutputHistoryManager` and run history persistence are implemented but the UI (`RunSelector` component) may not be fully wired into the dashboard.
-
-**What to complete:**
-
-- Verify `RunSelector` component renders run history with timestamps and harness labels
-- Add diff view: compare current run output against a previous run
-- Export run history to markdown (useful for sharing AI session summaries)
-- Search/filter within output history
-
-**Why it matters:** Run history is a differentiating feature — most AI tools don't persist session outputs. Completing the UI makes it discoverable and useful.
-
-**Dependencies:** `OutputHistoryManager` (already built).
-
----
-
 #### 2.4 Improved End Condition Developer Experience
 
 **Priority: MEDIUM** | **Effort: 3–5 days**
@@ -236,88 +217,6 @@ End conditions are powerful but have a steep learning curve. Several improvement
 **Why it matters:** The most common use case ("did the tests pass?") shouldn't require users to write a script. Built-in conditions lower the barrier and make workflows more portable.
 
 **Dependencies:** None — additive changes to `EndConditionEvaluator`.
-
----
-
-#### ~~2.5 Custom CLI Args (`extraArgs`)~~ ✅ DONE
-
-Implemented. See `dev/implemented/CUSTOM_CLI_ARGS_PLAN.md`.
-
----
-
-#### 2.6 Prior Context Passing (`priorContext`)
-
-**Priority: MEDIUM** | **Effort: 1–2 weeks** | **Doc: [`PROMPT_CONTEXT_PASSING_PLAN.md`](PROMPT_CONTEXT_PASSING_PLAN.md)**
-
-Allow a prompt to automatically receive the AI output from a previous prompt step as part of its input context. Useful for chains where step N summarizes what step N-1 produced.
-
-**What to build:**
-
-- Add `priorContext?: number | string` to `PromptItem` (reference prior prompt by index or id)
-- `ContextExpander` captures the raw AI output of each completed step
-- Inject referenced output as `<priorContext>` XML tags before sending the current prompt
-- Schema update
-
-**Why it matters:** Currently users must manually copy-paste output between steps or write the workflow in one monolithic prompt. Structured prior context passing enables true multi-step reasoning chains.
-
-**Dependencies:** None. Works with all harnesses since it's pre-prompt-build injection.
-
----
-
-#### 2.7 Prompt Queue Reorder & Reset From Step
-
-**Priority: MEDIUM** | **Effort: 1–2 weeks** | **Doc: [`PROMPT_QUEUE_POSITION_AND_REORDER_PLAN.md`](PROMPT_QUEUE_POSITION_AND_REORDER_PLAN.md)**
-
-Allow users to drag-and-drop reorder prompt steps in the dashboard, and reset execution back to a specific step without editing the queue file.
-
-**What to build:**
-
-- Drag-and-drop reorder in the `PromptList` dashboard component
-- "Reset from here" action per prompt card (sets queue index, clears downstream state)
-- Persist reorder changes back to the workflow file
-- `PromptQueue` method for `resetToStep(index)`
-
-**Why it matters:** When a mid-workflow prompt fails, users currently have to manually edit the YAML and restart. Reset-from-step makes error recovery fast and reduces friction for iterative workflow development.
-
-**Dependencies:** None — additive UI + queue operation.
-
----
-
-#### 2.8 Prompt Undo Changes (Git Snapshot Service)
-
-**Priority: LOW** | **Effort: 2–3 weeks** | **Doc: [`PROMPT_UNDO_CHANGES_PLAN.md`](PROMPT_UNDO_CHANGES_PLAN.md)**
-
-Before AI executes a prompt step, take a Git snapshot of the workspace. If the step produces unsatisfactory results, allow one-click revert to the pre-step state.
-
-**What to build:**
-
-- `GitSnapshotService.ts`: `git stash`-based or branch-based snapshot before each prompt
-- "Undo this step" action in the dashboard (revert workspace to snapshot)
-- Configurable: off by default, opt-in per workflow or globally
-- Cleanup: purge old snapshots after successful workflow completion
-
-**Why it matters:** AI coding mistakes in the middle of a workflow currently require manual `git diff` and selective revert. Automated snapshots give users a safety net for exploring bolder AI prompts.
-
-**Dependencies:** Git must be initialized in the workspace. No harness changes needed.
-
----
-
-#### 2.9 Thinking Level / Effort Configuration
-
-**Priority: MEDIUM** | **Effort: 3–5 days** | **Doc: [`THINKING_LEVEL_PLAN.md`](THINKING_LEVEL_PLAN.md)**
-
-Expose AI effort/thinking budget controls per-prompt or per-workflow. Claude supports `thinking` budget tokens; other models have analogous effort parameters.
-
-**What to build:**
-
-- Add `thinkingLevel?: "auto" | "low" | "medium" | "high" | number` to `PromptItem`
-- Map per-harness: Claude → `thinking.budget_tokens`, Codex → `reasoning.effort`, others → best approximation
-- Dashboard slider or dropdown in the prompt card
-- Schema update
-
-**Why it matters:** For complex architectural prompts, higher thinking budgets produce dramatically better results at higher cost. For simple tasks, lower budgets save time and quota. Per-prompt tuning is a meaningful productivity lever.
-
-**Dependencies:** None. Each provider maps the abstract level to their native API.
 
 ---
 
