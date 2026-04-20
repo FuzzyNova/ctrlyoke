@@ -1,4 +1,7 @@
-import { PermissionMode } from "../../../../types/DashboardConstants";
+import {
+  PERMISSION_MODES,
+  PermissionMode,
+} from "../../../../types/DashboardConstants";
 
 /** Tool permission mode */
 export type ToolPermissionMode = PermissionMode;
@@ -37,9 +40,12 @@ export interface IToolPermissionMapper {
   buildArgs(config: ToolPermissionConfig): string[];
 
   /**
-   * Check if full permissions are granted (no prompts will occur)
+   * Check if headless execution can proceed without interactive approval prompts.
+   *
+   * This can still include deny lists or sandbox restrictions. Those restrictions
+   * auto-block matching operations, but they do not require a user approval UI.
    * @param config Tool permission configuration
-   * @returns True if all permissions auto-granted
+   * @returns True if the harness will not wait for interactive tool approval
    */
   hasFullPermissions(config: ToolPermissionConfig): boolean;
 }
@@ -52,7 +58,20 @@ export interface IToolPermissionMapper {
  */
 export abstract class ToolPermissionMapperBase implements IToolPermissionMapper {
   abstract buildArgs(config: ToolPermissionConfig): string[];
-  abstract hasFullPermissions(config: ToolPermissionConfig): boolean;
+
+  /**
+   * Default headless-safety check shared by permission-aware CLI harnesses.
+   *
+   * In allowAll/dangerouslyAllowAll modes, tool approval prompts are avoided.
+   * Custom and none modes may require interactive approval or auto-deny tools
+   * that are not explicitly allowed.
+   */
+  hasFullPermissions(config: ToolPermissionConfig): boolean {
+    return (
+      config.mode === PERMISSION_MODES.ALLOW_ALL ||
+      config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL
+    );
+  }
 
   /**
    * Parse a tool pattern into name and arguments

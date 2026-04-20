@@ -89,24 +89,6 @@ export class ClaudeToolPermissionMapper
     return args;
   }
 
-  /**
-   * Check if full permissions are granted (no prompts will occur)
-   *
-   * Claude CLI auto-grants permissions in all modes via --permission-mode bypassPermissions.
-   * However, denied tools still restrict access, so hasFullPermissions returns false
-   * when deny patterns are present (unless dangerouslyAllowAll which ignores deny list).
-   *
-   * @param config Tool permission configuration
-   * @returns True if all permissions auto-granted with no restrictions
-   */
-  hasFullPermissions(config: ToolPermissionConfig): boolean {
-    if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
-      return true; // Bypasses ALL checks including deny list
-    }
-    // Other modes respect deny list — if any denied tools, not truly "full"
-    return config.deniedTools.length === 0;
-  }
-
   // ============================================================
   // PRIVATE HELPER METHODS
   // ============================================================

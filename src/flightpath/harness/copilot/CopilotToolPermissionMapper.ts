@@ -111,25 +111,6 @@ export class CopilotToolPermissionMapper
   }
 
   /**
-   * Check if full permissions are granted (no interactive prompts will occur)
-   *
-   * Full permissions require:
-   * - allowAll mode (or dangerouslyAllowAll)
-   * - No deny patterns
-   *
-   * @param config Tool permission configuration
-   * @returns True if all permissions auto-granted
-   */
-  hasFullPermissions(config: ToolPermissionConfig): boolean {
-    // Full permissions only if allowAll mode and no deny patterns
-    return (
-      (config.mode === PERMISSION_MODES.ALLOW_ALL ||
-        config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) &&
-      config.deniedTools.length === 0
-    );
-  }
-
-  /**
    * Convert tool pattern to Copilot CLI format
    *
    * Filters out read-only tools (always allowed, no args needed).

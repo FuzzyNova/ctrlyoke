@@ -449,6 +449,10 @@
           "type": "boolean",
           "description": "Log raw CLI output to the extension output channel."
         },
+        "showHeadlessPermissionWarning": {
+          "type": "boolean",
+          "description": "Show a warning when headless execution uses limited tool permissions."
+        },
         "openPromptsInSecondGroup": {
           "type": "boolean",
           "description": "Open prompt files in a second editor group."

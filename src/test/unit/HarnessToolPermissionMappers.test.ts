@@ -173,12 +173,12 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
-      test("dangerouslyAllowAll with deny list → false", () => {
+      test("dangerouslyAllowAll with deny list → true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, [], ["write"])
           ),
-          false
+          true
         );
       });
 
@@ -189,12 +189,12 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
-      test("allowAll with deny list → false", () => {
+      test("allowAll with deny list → true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell"])
           ),
-          false
+          true
         );
       });
 
@@ -344,21 +344,21 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
-      test("allowAll with deny list → false", () => {
+      test("allowAll with deny list → true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.ALLOW_ALL, [], ["write"])
           ),
-          false
+          true
         );
       });
 
-      test("custom with empty deny list → true", () => {
+      test("custom with empty deny list → false", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.CUSTOM, ["write"], [])
           ),
-          true
+          false
         );
       });
 
@@ -371,10 +371,10 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
-      test("none with empty deny list → true", () => {
+      test("none with empty deny list → false", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(cfg(PERMISSION_MODES.NONE)),
-          true
+          false
         );
       });
     });
@@ -495,10 +495,10 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
-      test("allowAll → false", () => {
+      test("allowAll → true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)),
-          false
+          true
         );
       });
 
@@ -589,10 +589,10 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
-      test("allowAll → false", () => {
+      test("allowAll → true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)),
-          false
+          true
         );
       });
 
@@ -833,26 +833,26 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
-      test("custom → false", () => {
+      test("custom → true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(cfg(PERMISSION_MODES.CUSTOM)),
-          false
+          true
         );
       });
 
-      test("custom with tools → false", () => {
+      test("custom with tools → true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.CUSTOM, ["write"], [])
           ),
-          false
+          true
         );
       });
 
-      test("none → false", () => {
+      test("none → true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(cfg(PERMISSION_MODES.NONE)),
-          false
+          true
         );
       });
     });
@@ -913,14 +913,14 @@ suite("HarnessToolPermissionMappers", () => {
       }
     });
 
-    test("custom mode with deny list never grants full permissions", () => {
+    test("custom mode with deny list only grants full permissions for OpenCode", () => {
       for (const [name, mapper] of Object.entries(mappers)) {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.CUSTOM, [], ["write"])
           ),
-          false,
-          `${name}: custom with deny list should not grant full permissions`
+          name === "opencode",
+          `${name}: custom with deny list should match harness-specific approval behavior`
         );
       }
     });

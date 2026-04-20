@@ -116,6 +116,13 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Check if the headless limited-permissions warning should be shown.
+   */
+  shouldShowHeadlessPermissionWarning(): boolean {
+    return configService.get("ui").showHeadlessPermissionWarning;
+  },
+
+  /**
    * Check if diagnostic file logging is enabled.
    * When true, FlightPath writes log files to .flightpath/logs/ in production builds.
    * Dev builds always write log files regardless of this setting.
@@ -754,5 +761,13 @@ export const ConfigurationUtils = {
 
   async setConfirmResetOperations(enabled: boolean): Promise<void> {
     await configService.set("ui.confirmResetOperations", enabled, "user");
+  },
+
+  async setShowHeadlessPermissionWarning(enabled: boolean): Promise<void> {
+    await configService.set(
+      "ui.showHeadlessPermissionWarning",
+      enabled,
+      "user"
+    );
   },
 };

@@ -88,31 +88,6 @@ export class QwenToolPermissionMapper
   }
 
   /**
-   * Check if full permissions are granted (no prompts will occur)
-   *
-   * Full permissions in Qwen means:
-   * - dangerouslyAllowAll mode (-y flag), OR
-   * - allowAll mode (--approval-mode auto-edit)
-   *
-   * @param config Tool permission configuration
-   * @returns True if all permissions auto-granted
-   */
-  hasFullPermissions(config: ToolPermissionConfig): boolean {
-    // YOLO mode bypasses all prompts
-    if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
-      return true;
-    }
-
-    // Auto-edit mode auto-approves most operations
-    if (config.mode === PERMISSION_MODES.ALLOW_ALL) {
-      return true;
-    }
-
-    // Custom mode may still prompt for approval
-    return false;
-  }
-
-  /**
    * Convert FlightPath tool patterns to Qwen tool names
    *
    * FlightPath uses patterns like "shell(git:*)" which need to be

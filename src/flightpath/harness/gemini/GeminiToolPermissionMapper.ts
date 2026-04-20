@@ -25,7 +25,4 @@ export class GeminiToolPermissionMapper
     return ["--approval-mode", "default"];
   }
 
-  hasFullPermissions(config: ToolPermissionConfig): boolean {
-    return config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL;
-  }
 }

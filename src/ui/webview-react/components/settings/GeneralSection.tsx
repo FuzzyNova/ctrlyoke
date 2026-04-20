@@ -63,6 +63,12 @@ export function GeneralSection({ settings, onUpdate }: Props) {
         onChange={(v) => onUpdate("ui.logRawCliOutput", v, s)}
       />
       <ToggleRow
+        label="Headless permission warning"
+        description="Warn when headless execution uses limited tool permissions."
+        checked={ui.showHeadlessPermissionWarning}
+        onChange={(v) => onUpdate("ui.showHeadlessPermissionWarning", v, s)}
+      />
+      <ToggleRow
         label="Open prompts in second group"
         description="Open prompt files in the second editor group."
         checked={ui.openPromptsInSecondGroup}

@@ -49,19 +49,6 @@ export class CodexToolPermissionMapper
   }
 
   /**
-   * Check if full permissions are granted (no prompts will occur)
-   *
-   * Full permissions only with dangerouslyAllowAll mode.
-   * allowAll mode still respects deny list (if Codex supported it).
-   *
-   * @param config Tool permission configuration
-   * @returns True if all permissions auto-granted
-   */
-  hasFullPermissions(config: ToolPermissionConfig): boolean {
-    return config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL;
-  }
-
-  /**
    * Build Codex-specific permission arguments with sandbox/approval settings
    *
    * This is a Codex-specific method for advanced permission control.

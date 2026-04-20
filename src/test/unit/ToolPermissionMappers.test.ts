@@ -112,13 +112,12 @@ suite("ToolPermissionMappers", () => {
         );
       });
 
-      test("dangerouslyAllowAll with deny list → false (Copilot still checks deny list)", () => {
-        // Copilot's hasFullPermissions requires deniedTools.length === 0 for all modes
+      test("dangerouslyAllowAll with deny list → true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, [], ["write"])
           ),
-          false
+          true
         );
       });
 
@@ -129,12 +128,12 @@ suite("ToolPermissionMappers", () => {
         );
       });
 
-      test("allowAll with deny list → false", () => {
+      test("allowAll with deny list → true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.ALLOW_ALL, [], ["write"])
           ),
-          false
+          true
         );
       });
 
@@ -235,21 +234,21 @@ suite("ToolPermissionMappers", () => {
         );
       });
 
-      test("allowAll with deny list → false", () => {
+      test("allowAll with deny list → true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.ALLOW_ALL, [], ["write"])
           ),
-          false
+          true
         );
       });
 
-      test("custom with no deny list → true", () => {
+      test("custom with no deny list → false", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.CUSTOM, ["write"], [])
           ),
-          true
+          false
         );
       });
 
@@ -344,10 +343,10 @@ suite("ToolPermissionMappers", () => {
         );
       });
 
-      test("allowAll → false", () => {
+      test("allowAll → true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)),
-          false
+          true
         );
       });
 
@@ -404,12 +403,12 @@ suite("ToolPermissionMappers", () => {
         );
       });
 
-      test("custom → false", () => {
+      test("custom → true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.CUSTOM, ["write"], [])
           ),
-          false
+          true
         );
       });
     });
@@ -528,10 +527,10 @@ suite("ToolPermissionMappers", () => {
         );
       });
 
-      test("allowAll → false", () => {
+      test("allowAll → true", () => {
         assert.strictEqual(
           mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)),
-          false
+          true
         );
       });
 

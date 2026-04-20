@@ -51,7 +51,8 @@ export const CLI_EXECUTION_MODE = EXECUTION_MODES;
  */
 export const CLI_WARNING_MESSAGES = {
   HEADLESS_WITHOUT_PERMISSIONS:
-    "Headless mode without full permissions: CLI will auto-deny tool/file access. Workflow may not make progress.",
+    "Headless mode with limited tool permissions: there is no interactive approval prompt, so tools that are not explicitly allowed will be auto-denied. Workflow may not make progress.",
+  DONT_SHOW_AGAIN: "Don't Show Again",
 } as const;
 
 interface CliIntegrationServices {
@@ -145,6 +146,9 @@ export class CliIntegration extends HarnessIntegration {
   /** Workflow display name used for logging */
   private workflowName?: string;
 
+  /** Prevents repeating the same headless permission warning in one run. */
+  private headlessPermissionWarningShown = false;
+
   /**
    * Create a new CLI integration with the specified CLI provider.
    *
@@ -232,8 +236,8 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
-   * Check if full permissions are granted (no interactive prompts will occur)
-   * Used to warn users when running headless without full permissions.
+   * Check if configured permissions can run headless without approval prompts.
+   * Used to warn users when headless execution may auto-deny needed tools.
    *
    * @param toolPermissions Resolved permissions from workflow context.
    *   - undefined: no workflow context — falls back to ConfigurationUtils global settings
@@ -1084,7 +1088,7 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
-   * Show warning when running in headless mode without full permissions
+   * Show warning when running in headless mode with limited permissions.
    *
    * @param toolPermissions Resolved permissions from workflow context (passed through to hasFullPermissions)
    */
@@ -1093,11 +1097,33 @@ export class CliIntegration extends HarnessIntegration {
   ): void {
     const mode = this.getExecutionMode();
     if (
-      mode === CLI_EXECUTION_MODE.HEADLESS &&
-      !this.hasFullPermissions(toolPermissions)
+      mode !== CLI_EXECUTION_MODE.HEADLESS ||
+      this.hasFullPermissions(toolPermissions) ||
+      !ConfigurationUtils.shouldShowHeadlessPermissionWarning() ||
+      this.headlessPermissionWarningShown
     ) {
-      this.platform.warn(CLI_WARNING_MESSAGES.HEADLESS_WITHOUT_PERMISSIONS);
+      return;
     }
+
+    this.headlessPermissionWarningShown = true;
+    const message = CLI_WARNING_MESSAGES.HEADLESS_WITHOUT_PERMISSIONS;
+
+    if (this.platform.isVsCode?.()) {
+      void this.platform
+        .showChoice(message, CLI_WARNING_MESSAGES.DONT_SHOW_AGAIN)
+        .then((choice) => {
+          if (choice === CLI_WARNING_MESSAGES.DONT_SHOW_AGAIN) {
+            return ConfigurationUtils.setShowHeadlessPermissionWarning(false);
+          }
+          return undefined;
+        })
+        .catch((error) =>
+          Log.warn("Failed to handle headless permission warning choice:", error)
+        );
+      return;
+    }
+
+    this.platform.warn(message);
   }
 
   // ============================================================
@@ -1212,6 +1238,7 @@ export class CliIntegration extends HarnessIntegration {
     this.failureTracker.reset();
     this.activeSession = undefined;
     this.ptySessionEndedCallback = undefined;
+    this.headlessPermissionWarningShown = false;
   }
 
   /**

@@ -45,16 +45,10 @@ export class OpenCodeToolPermissionMapper
   }
 
   /**
-   * Full permissions are granted for dangerouslyAllowAll and allowAll modes.
-   * OpenCode's default behavior allows all operations, so both modes are effectively full.
-   *
-   * @param config Tool permission configuration
-   * @returns True for dangerouslyAllowAll and allowAll modes
+   * OpenCode does not currently expose an interactive permission mode through
+   * FlightPath, so headless execution should not warn for limited permissions.
    */
-  hasFullPermissions(config: ToolPermissionConfig): boolean {
-    return (
-      config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
-      config.mode === PERMISSION_MODES.ALLOW_ALL
-    );
+  hasFullPermissions(_config: ToolPermissionConfig): boolean {
+    return true;
   }
 }

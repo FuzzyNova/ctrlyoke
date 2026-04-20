@@ -99,6 +99,7 @@ export interface FlightPathGlobalSettings {
     showCliOutput: boolean;
     showCliCommand: boolean;
     logRawCliOutput: boolean;
+    showHeadlessPermissionWarning: boolean;
     openPromptsInSecondGroup: boolean;
     respectGitignoreForCompletions: boolean;
     confirmDeleteOperations: boolean;
@@ -248,6 +249,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     showCliOutput: true,
     showCliCommand: true,
     logRawCliOutput: false,
+    showHeadlessPermissionWarning: true,
     openPromptsInSecondGroup: false,
     respectGitignoreForCompletions: true,
     confirmDeleteOperations: true,
