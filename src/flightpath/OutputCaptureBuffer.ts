@@ -1,4 +1,4 @@
-import type { CliEvent } from "../types/WebviewMessageTypes";
+import type { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
 import type { WorkflowStep, PromptStep } from "../types/FlightPathTypes";
 import { isScriptStep } from "../types/FlightPathTypes";
 import { EXECUTION_STATES } from "../types/FlightPathTypes";
@@ -243,6 +243,11 @@ export class OutputCaptureBuffer {
     });
   }
 
+  getBufferedOutput(stepIndex: number): CliOutput | undefined {
+    const buffer = this.stepOutputBuffer.get(stepIndex);
+    return buffer ? this.createBufferedOutput(buffer) : undefined;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // FinalStep capture methods (mirror of regular-step methods, loopIndex key)
   // ─────────────────────────────────────────────────────────────────────────
@@ -293,6 +298,11 @@ export class OutputCaptureBuffer {
     this.finalStepOutputBuffer.delete(loopIndex);
   }
 
+  getFinalStepBufferedOutput(loopIndex: number): CliOutput | undefined {
+    const buffer = this.finalStepOutputBuffer.get(loopIndex);
+    return buffer ? this.createBufferedOutput(buffer) : undefined;
+  }
+
   onFinalStepStatusMessage(
     loopIndex: number,
     message: string,
@@ -316,6 +326,28 @@ export class OutputCaptureBuffer {
     retryState?: { currentRetry: number; maxRetries: number }
   ): void {
     this.completedStepOutputs.set(stepIndex, { outputs, retryState });
+  }
+
+  private createBufferedOutput(buffer: StepOutputBufferEntry): CliOutput {
+    return {
+      prompt: buffer.prompt,
+      response: buffer.accumulatedText,
+      structured:
+        buffer.accumulatedEvents.length > 0
+          ? {
+              events: [...buffer.accumulatedEvents],
+              metadata: {},
+            }
+          : undefined,
+      elapsed: 0,
+      tokens: undefined,
+      isStreaming: false,
+      cliCommand: buffer.cliCommand,
+      workingDirectory: buffer.workingDirectory,
+      timestampMs: buffer.timestampMs,
+      attemptIndex: buffer.attemptIndex,
+      rawTextOutput: buffer.rawTextOutput,
+    };
   }
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -87,6 +87,7 @@ function createRunner(options?: {
   ) => Promise<{ completed: boolean; error?: string; data?: unknown }>;
   discoverSessionLog?: () => Promise<string | null>;
   writeToCurrentPtySession?: (text: string) => boolean;
+  isCancelling?: boolean;
   collectedHeadlessResponse?: {
     success: boolean;
     error?: string;
@@ -146,7 +147,7 @@ function createRunner(options?: {
       getWorkspaceRoot: () => process.cwd(),
       getExtensionPath: () => process.cwd(),
       isVsCodeContext: () => true,
-      isCancelling: () => false,
+      isCancelling: () => options?.isCancelling ?? false,
       setFailureReason: (reason: string) => {
         failureReason = reason;
       },
@@ -266,5 +267,23 @@ suite("CliExecutionRunner", () => {
 
     assert.strictEqual(success, false);
     assert.strictEqual(getFailureReason(), "error: unknown option '--poop'");
+  });
+
+  test("should report stopped by user for cancelled headless execution", async () => {
+    const { runner, getFailureReason } = createRunner({
+      isCancelling: true,
+      collectedHeadlessResponse: {
+        success: false,
+        error: "Process exited with code 1",
+      },
+    });
+
+    const success = await runner.executeHeadless(
+      new CliExecutionSession({ prompt: { prompt: "just say hi" } }),
+      []
+    );
+
+    assert.strictEqual(success, false);
+    assert.strictEqual(getFailureReason(), "Stopped by user");
   });
 });

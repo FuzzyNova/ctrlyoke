@@ -363,6 +363,7 @@ export class CliTransportCoordinator {
 
       if (this.deps.runtimeState.isCancelling()) {
         Log.info("⏹️ Prompt execution cancelled by user");
+        await executeCallback(result);
         return false;
       }
 

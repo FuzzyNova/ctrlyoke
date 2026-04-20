@@ -67,6 +67,45 @@ suite("CliPromptRuntimeCoordinator", () => {
     ]);
   });
 
+  test("should persist partial cancelled output and parsed session metadata", async () => {
+    const prompt: PromptStep = {
+      prompt: "cancelled after output",
+    };
+    let updateCount = 0;
+
+    await createCoordinator({
+      nowValues: [9999],
+    }).persistCancelledPromptRuntime({
+      prompt,
+      executionStartTime: new Date(1234),
+      parsedOutput: createParsedOutput({
+        events: [
+          {
+            type: "text" as any,
+            data: { text: "partial answer" },
+          },
+        ],
+        metadata: {
+          sessionId: "session-from-partial-output",
+        },
+      }),
+      workingFilePersistence: {
+        async updateWorkingFile(): Promise<void> {
+          updateCount += 1;
+        },
+      },
+    });
+
+    assert.strictEqual(prompt._runtime?.startedAt, 1234);
+    assert.strictEqual(prompt._runtime?.completedAt, 9999);
+    assert.strictEqual(
+      prompt._runtime?.sessionId,
+      "session-from-partial-output"
+    );
+    assert.strictEqual(prompt._runtime?.responseText, "partial answer");
+    assert.strictEqual(updateCount, 1);
+  });
+
   test("should store successful runtime metadata and merge session ID into parsed output", async () => {
     const debugMessages: string[] = [];
     const prompt: PromptStep = {

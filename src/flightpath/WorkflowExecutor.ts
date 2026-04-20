@@ -40,7 +40,7 @@ import {
   DashboardOutput,
 } from "./harness/shared/CliOutputFormatter";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
-import { CliEvent } from "../types/WebviewMessageTypes";
+import { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
 import {
   WorkspaceSnapshotService,
   RawWorkspaceState,
@@ -94,6 +94,8 @@ export interface WorkflowExecutionContext {
   captureCompletedOutput?: (stepIndex: number, output: any) => void;
   /** Always-on structured event buffer for queue steps — enables replay on workflow switch. */
   captureEvents?: (stepIndex: number, events: CliEvent[]) => void;
+  /** Snapshot of in-flight queue output already sent to the dashboard. */
+  getBufferedOutput?: (stepIndex: number) => CliOutput | undefined;
   /** Mirror of captureOutputInit for finalStep loops, keyed by loopIndex. */
   captureFinalStepOutputInit?: (
     loopIndex: number,
@@ -107,6 +109,8 @@ export interface WorkflowExecutionContext {
   captureFinalStepChunk?: (loopIndex: number, chunk: string) => void;
   captureFinalStepEvents?: (loopIndex: number, events: CliEvent[]) => void;
   captureFinalStepCompletedOutput?: (loopIndex: number, output: any) => void;
+  /** Snapshot of in-flight finalStep output already sent to the dashboard. */
+  getFinalStepBufferedOutput?: (loopIndex: number) => CliOutput | undefined;
   onFinalStepStatusMessage?: (
     loopIndex: number,
     message: string,
@@ -1183,6 +1187,107 @@ export class WorkflowExecutor {
     }
   }
 
+  private getBufferedCliOutput(
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    signedStepIndex: number
+  ): CliOutput | undefined {
+    if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+      return context.getFinalStepBufferedOutput?.(target.loopIndex);
+    }
+
+    return signedStepIndex >= 0
+      ? context.getBufferedOutput?.(signedStepIndex)
+      : undefined;
+  }
+
+  private createFinalCliOutput(params: {
+    context: WorkflowExecutionContext;
+    integration: HarnessIntegration;
+    target: ExecutionTarget;
+    signedStepIndex: number;
+    prompt: PromptStep;
+    attemptIndex: number;
+    responseText?: string;
+    errorMessage?: string;
+  }): CliOutput {
+    const {
+      context,
+      integration,
+      target,
+      signedStepIndex,
+      prompt,
+      attemptIndex,
+      responseText,
+      errorMessage,
+    } = params;
+    const bufferedOutput = this.getBufferedCliOutput(
+      context,
+      target,
+      signedStepIndex
+    );
+    const parsedOutput = integration.getLastParsedOutput?.();
+    const parsedStructured = parsedOutput
+      ? CliOutputFormatter.toDashboardFormat(parsedOutput)
+      : undefined;
+    const bufferedStructured = bufferedOutput?.structured;
+    let structured: DashboardOutput | undefined = parsedStructured;
+
+    if (
+      parsedStructured &&
+      bufferedStructured?.events &&
+      bufferedStructured.events.length > parsedStructured.events.length
+    ) {
+      structured = {
+        ...parsedStructured,
+        events: bufferedStructured.events,
+      };
+    } else if (!parsedStructured && bufferedStructured) {
+      structured = bufferedStructured;
+    }
+
+    let tokens: CliOutput["tokens"];
+    if (parsedOutput?.metadata.usage) {
+      const u = parsedOutput.metadata.usage;
+      tokens = {
+        prompt: u.inputTokens,
+        completion: u.outputTokens,
+        cached: u.cachedInputTokens,
+        cacheCreated: u.cacheCreatedTokens,
+        contextWindowUsed: u.contextWindowUsedTokens,
+        contextWindowSize: u.contextWindowSize,
+      };
+    } else {
+      const lastResult = integration.getLastResult();
+      if (lastResult?.statistics) {
+        tokens = integration.parseTokenCounts(lastResult.statistics);
+      }
+    }
+
+    return {
+      prompt: prompt.prompt,
+      response: responseText ?? bufferedOutput?.response ?? "",
+      structured,
+      elapsed: bufferedOutput?.elapsed ?? 0,
+      tokens,
+      isStreaming: false,
+      cliCommand: context.shouldShowCliCommand
+        ? (integration.getLastCliCommand() ?? bufferedOutput?.cliCommand)
+        : undefined,
+      workingDirectory:
+        bufferedOutput?.workingDirectory ?? context.workspaceFolderPath,
+      timestampMs:
+        bufferedOutput?.timestampMs ??
+        this.getAttemptStartedAt(target) ??
+        Date.now(),
+      attemptIndex,
+      rawTextOutput:
+        bufferedOutput?.rawTextOutput ??
+        (integration.rawTextOutput || undefined),
+      errorMessage,
+    };
+  }
+
   private async evaluateEndCondition(
     prompt: PromptStep,
     integration: HarnessIntegration,
@@ -1795,26 +1900,20 @@ export class WorkflowExecutor {
       const failureOutput = integration.getLastFailureOutput?.();
       const failureReason =
         integration.getLastFailureReason() || "Workflow stopped by user";
-      const attemptTimestampMs = this.getAttemptStartedAt(target) ?? Date.now();
-
-      const stoppedOutput = {
-        prompt: prompt.prompt,
-        response: failureOutput ?? "",
-        isStreaming: false,
-        elapsed: 0,
-        tokens: undefined,
-        cliCommand: context.shouldShowCliCommand
-          ? integration.getLastCliCommand()
-          : undefined,
-        workingDirectory: context.workspaceFolderPath,
-        timestampMs: attemptTimestampMs,
+      const stoppedOutput = this.createFinalCliOutput({
+        context,
+        integration,
+        target,
+        signedStepIndex,
+        prompt,
         attemptIndex,
-        rawTextOutput:
-          failureOutput !== undefined
-            ? true
-            : integration.rawTextOutput || undefined,
+        responseText: failureOutput,
         errorMessage: failureReason,
-      };
+      });
+      const statusTimestampMs = Math.max(
+        Date.now(),
+        (stoppedOutput.timestampMs ?? Date.now()) + 1
+      );
 
       if (context.dashboardProvider && signedStepIndex >= 0) {
         context.dashboardProvider.updateCliOutput(
@@ -1851,6 +1950,33 @@ export class WorkflowExecutor {
             Log.warn("Failed to save stopped-by-user output to history:", err)
           );
       }
+
+      if (target.kind === FINAL_STEP_PHASES.QUEUE && stoppedOutput.response) {
+        await this.promptQueue
+          .persistRuntimeMetadata(target.stepIndex, {
+            responseText: stoppedOutput.response,
+          })
+          .catch((err) =>
+            Log.warn("Failed to persist stopped response text:", err)
+          );
+      } else if (
+        target.kind === FINAL_STEP_PHASES.FINAL_STEP &&
+        stoppedOutput.response
+      ) {
+        await this.promptQueue
+          .storeFinalStepResponseText(target.loopIndex, stoppedOutput.response)
+          .catch((err) =>
+            Log.warn("Failed to persist stopped finalStep response text:", err)
+          );
+      }
+
+      await this.trackStatusMessage(
+        context,
+        target,
+        "Stopped by user",
+        STATUS_MESSAGE_SEVERITY.WARNING,
+        statusTimestampMs
+      );
 
       return false;
     }
@@ -1889,24 +2015,16 @@ export class WorkflowExecutor {
         warningTimestampMs
       );
 
-      const processExitOutput = {
-        prompt: prompt.prompt,
-        response: failureOutput ?? "",
-        isStreaming: false,
-        elapsed: 0,
-        tokens: undefined,
-        cliCommand: context.shouldShowCliCommand
-          ? integration.getLastCliCommand()
-          : undefined,
-        workingDirectory: context.workspaceFolderPath,
-        timestampMs: attemptTimestampMs,
+      const processExitOutput = this.createFinalCliOutput({
+        context,
+        integration,
+        target,
+        signedStepIndex,
+        prompt,
         attemptIndex,
-        rawTextOutput:
-          failureOutput !== undefined
-            ? true
-            : integration.rawTextOutput || undefined,
+        responseText: failureOutput,
         errorMessage: failureReason,
-      };
+      });
 
       if (context.dashboardProvider && signedStepIndex >= 0) {
         context.dashboardProvider.updateCliOutput(

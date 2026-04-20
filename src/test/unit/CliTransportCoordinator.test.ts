@@ -101,6 +101,85 @@ suite("CliTransportCoordinator", () => {
     assert.deepStrictEqual(cleanedTempPaths, [["temp-a.md"]]);
   });
 
+  test("should parse partial headless output when cancellation is requested", async () => {
+    let callbackResult:
+      | { stdout: string; stderr: string; exitCode: number }
+      | undefined;
+    const cleanedTempPaths: string[][] = [];
+
+    const coordinator = new CliTransportCoordinator({
+      provider: {
+        config: {
+          name: "test-cli",
+          displayName: "Test CLI",
+          terminalName: "Test",
+          installHint: "",
+          shouldStreamHeadlessOutput: false,
+        },
+        responseParser: {
+          parse: () => ({ events: [], metadata: {} }),
+          parseTokenCounts: () => undefined,
+        },
+        notificationMonitor: {
+          supportsSessionIdInFilename: true,
+          supportsSessionStart: false,
+          monitorForCompletion: async () => ({ completed: false }),
+          buildHookConfig: () => ({ type: "none" as const }),
+          getNotificationDirectory: () => process.cwd(),
+        },
+        toolPermissionMapper: {},
+        buildCliArgs: async () => [],
+        buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
+          ...baseArgs,
+          prompt,
+        ],
+        buildInteractiveTuiCommand: () => "test-cli",
+        checkAvailability: async () => true,
+      } as unknown as ICliProvider,
+      processManager: {
+        spawn: async () => ({
+          stdout: "{\"partial\":true}\n",
+          stderr: "",
+          exitCode: 1,
+        }),
+        isActive: () => false,
+      } as any,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => true,
+      },
+      hostCallbacks: {
+        onBeforeInteractiveStart: () => {},
+        onCommandPrepared: () => {},
+        onStreamingChunk: () => {},
+        onStreamingEvents: () => {},
+        onResponseComplete: () => {},
+        onPtyExit: () => {},
+        cleanupTempFiles: async (tempFilePaths) => {
+          cleanedTempPaths.push(tempFilePaths);
+        },
+      },
+    });
+
+    const success = await coordinator.executeHeadless(
+      [],
+      "stop me",
+      ["temp-a.md"],
+      async (result) => {
+        callbackResult = result;
+        return false;
+      }
+    );
+
+    assert.strictEqual(success, false);
+    assert.deepStrictEqual(callbackResult, {
+      stdout: "{\"partial\":true}\n",
+      stderr: "",
+      exitCode: 1,
+    });
+    assert.deepStrictEqual(cleanedTempPaths, [["temp-a.md"]]);
+  });
+
   test("should log raw streaming chunks when raw CLI logging is enabled", async () => {
     const debugMessages: string[] = [];
     const originalShouldLogRawCliOutput =

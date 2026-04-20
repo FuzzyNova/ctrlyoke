@@ -882,6 +882,11 @@ export class CliIntegration extends HarnessIntegration {
         prompt,
         executionStartTime: session.executionStartTime,
         extractedSessionId: session.effectiveSessionId,
+        parsedOutput: session.parsedOutput,
+        responseText:
+          session.result?.response !== session.result?.error
+            ? session.result?.response
+            : undefined,
         resolvedProperties: session.resolvedProperties,
         workingFilePersistence: workflowContext.workingFilePersistence,
       });
@@ -897,6 +902,11 @@ export class CliIntegration extends HarnessIntegration {
         prompt,
         executionStartTime: session.executionStartTime,
         extractedSessionId: session.effectiveSessionId,
+        parsedOutput: session.parsedOutput,
+        responseText:
+          session.result?.response !== session.result?.error
+            ? session.result?.response
+            : undefined,
         resolvedProperties: session.resolvedProperties,
         workingFilePersistence: workflowContext.workingFilePersistence,
       });
@@ -1033,7 +1043,11 @@ export class CliIntegration extends HarnessIntegration {
     // The log monitor flushes accumulated events on cancel and stores them on the
     // session; applyExecutionSession() copies them to lastExecutionSnapshot before
     // sendPrompt() returns, so the partial text is available here.
-    const partialResponse = this.lastExecutionSnapshot?.result?.response;
+    const lastResult = this.lastExecutionSnapshot?.result;
+    const partialResponse =
+      lastResult?.response && lastResult.response !== lastResult.error
+        ? lastResult.response
+        : undefined;
     return partialResponse || undefined;
   }
 

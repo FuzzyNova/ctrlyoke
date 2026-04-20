@@ -3,6 +3,7 @@ import type { Harness, PromptStep } from "../../../types/FlightPathTypes";
 import type { WorkflowWorkingFilePersistence } from "../../../types/WorkflowContextTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { Log } from "../../../utils/Log";
+import { extractTextFromEvents } from "./CliResponseTextExtractor";
 
 export interface CliPromptRuntimeCoordinatorDeps {
   getIntegrationHarness: () => Harness;
@@ -20,6 +21,8 @@ export class CliPromptRuntimeCoordinator {
     prompt: PromptStep;
     executionStartTime: Date;
     extractedSessionId?: string;
+    parsedOutput?: UniversalCliOutput;
+    responseText?: string;
     resolvedProperties?: ResolvedProperties;
     workingFilePersistence?: WorkflowWorkingFilePersistence;
   }): Promise<void> {
@@ -46,13 +49,23 @@ export class CliPromptRuntimeCoordinator {
       params.prompt._runtime.agent = actualAgent;
     }
 
-    if (params.extractedSessionId && !params.prompt._runtime.sessionId) {
-      params.prompt._runtime.sessionId = params.extractedSessionId;
+    const sessionId =
+      params.extractedSessionId || params.parsedOutput?.metadata.sessionId;
+    if (sessionId && !params.prompt._runtime.sessionId) {
+      params.prompt._runtime.sessionId = sessionId;
     }
+
+    const responseText =
+      params.responseText ??
+      (params.parsedOutput ? extractTextFromEvents(params.parsedOutput) : "");
+    if (responseText) {
+      params.prompt._runtime.responseText = responseText;
+    }
+    params.prompt._runtime.completedAt = this.now();
 
     await params.workingFilePersistence.updateWorkingFile();
     Log.debug(
-      `💾 Saved cancelled-prompt runtime to working file (sessionId: ${params.extractedSessionId || "none"})`
+      `💾 Saved cancelled-prompt runtime to working file (sessionId: ${sessionId || "none"})`
     );
   }
 

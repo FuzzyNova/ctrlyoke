@@ -344,7 +344,11 @@ export class CliExecutionRunner {
     };
 
     try {
-      return await executeWithRecovery(baseArgs);
+      const success = await executeWithRecovery(baseArgs);
+      if (!success && this.deps.runtimeState.isCancelling()) {
+        this.deps.runtimeState.setFailureReason("Stopped by user");
+      }
+      return success;
     } catch (error) {
       Log.error("❌ Headless execution error", error);
       this.deps.runtimeState.setFailureReason(getErrorMessage(error));

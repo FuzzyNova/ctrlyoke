@@ -1901,6 +1901,9 @@ export class WorkflowInstance {
       captureEvents: (stepIndex, events) => {
         this.outputCaptureBuffer.captureEvents(stepIndex, events);
       },
+      getBufferedOutput: (stepIndex) => {
+        return this.outputCaptureBuffer.getBufferedOutput(stepIndex);
+      },
       captureCompletedOutput: (stepIndex, output) => {
         this.outputCaptureBuffer.captureCompletedOutput(stepIndex, output);
       },
@@ -1928,6 +1931,9 @@ export class WorkflowInstance {
       },
       captureFinalStepEvents: (loopIndex, events) => {
         this.outputCaptureBuffer.captureFinalStepEvents(loopIndex, events);
+      },
+      getFinalStepBufferedOutput: (loopIndex) => {
+        return this.outputCaptureBuffer.getFinalStepBufferedOutput(loopIndex);
       },
       captureFinalStepCompletedOutput: (loopIndex, output) => {
         this.outputCaptureBuffer.captureFinalStepCompletedOutput(

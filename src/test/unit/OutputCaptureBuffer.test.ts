@@ -253,6 +253,40 @@ suite("OutputCaptureBuffer", () => {
     });
   });
 
+  suite("getBufferedOutput", () => {
+    test("should materialize in-flight output for stop persistence", () => {
+      const { callbacks } = makeCallbacks();
+      const buffer = new OutputCaptureBuffer("tag", callbacks);
+      const event = {
+        type: "text",
+        data: { text: "structured partial" },
+      } as unknown as CliEvent;
+
+      buffer.captureOutputInit(
+        0,
+        "prompt",
+        "codex exec",
+        "/workspace",
+        100,
+        0,
+        false
+      );
+      buffer.captureChunk(0, "partial text");
+      buffer.captureEvents(0, [event]);
+
+      const output = buffer.getBufferedOutput(0);
+
+      assert.ok(output);
+      assert.strictEqual(output.prompt, "prompt");
+      assert.strictEqual(output.response, "partial text");
+      assert.strictEqual(output.isStreaming, false);
+      assert.strictEqual(output.cliCommand, "codex exec");
+      assert.strictEqual(output.workingDirectory, "/workspace");
+      assert.strictEqual(output.timestampMs, 100);
+      assert.deepStrictEqual(output.structured?.events, [event]);
+    });
+  });
+
   suite("captureCompletedOutput", () => {
     test("should store final output and fire onPromptComplete", () => {
       const { callbacks, promptCompletes } = makeCallbacks();
