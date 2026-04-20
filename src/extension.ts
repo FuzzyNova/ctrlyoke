@@ -903,7 +903,16 @@ function registerCommands(context: vscode.ExtensionContext) {
         );
         return;
       }
-      const url = hostedServer.listen();
+      let url: string;
+      try {
+        url = await hostedServer.listen();
+      } catch (err) {
+        hostedServer = undefined;
+        vscode.window.showErrorMessage(
+          `FlightPath: Failed to bind server — ${err instanceof Error ? err.message : String(err)}`
+        );
+        return;
+      }
       webviewProvider.setRunningServerUrl(url);
       webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STARTED, url });
       webviewProvider.setThemeVarsCapturedCallback((vars) =>

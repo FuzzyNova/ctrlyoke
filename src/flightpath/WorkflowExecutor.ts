@@ -1210,6 +1210,7 @@ export class WorkflowExecutor {
     attemptIndex: number;
     responseText?: string;
     errorMessage?: string;
+    rawTextOutput?: boolean;
   }): CliOutput {
     const {
       context,
@@ -1220,6 +1221,7 @@ export class WorkflowExecutor {
       attemptIndex,
       responseText,
       errorMessage,
+      rawTextOutput: rawTextOutputOverride,
     } = params;
     const bufferedOutput = this.getBufferedCliOutput(
       context,
@@ -1282,6 +1284,7 @@ export class WorkflowExecutor {
         Date.now(),
       attemptIndex,
       rawTextOutput:
+        rawTextOutputOverride ??
         bufferedOutput?.rawTextOutput ??
         (integration.rawTextOutput || undefined),
       errorMessage,
@@ -2024,6 +2027,7 @@ export class WorkflowExecutor {
         attemptIndex,
         responseText: failureOutput,
         errorMessage: failureReason,
+        rawTextOutput: true,
       });
 
       if (context.dashboardProvider && signedStepIndex >= 0) {

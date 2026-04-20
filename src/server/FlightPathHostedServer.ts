@@ -58,7 +58,16 @@ export class FlightPathHostedServer
       this.httpServer = createHttpServer(this.app);
       this.isTls = false;
     }
+    // Prevent unhandled 'error' crashes before listen() registers its handler.
+    // listen() adds its own once-handler on top of this permanent fallback.
+    this.httpServer.on("error", (err: NodeJS.ErrnoException) => {
+      Log.warn(`FlightPath server error: ${err.message}`);
+    });
     this.wss = new WebSocketServer({ server: this.httpServer, path: "/ws" });
+    // ws re-emits httpServer errors onto wss — add a handler to prevent crashes.
+    this.wss.on("error", (err: Error) => {
+      Log.warn(`FlightPath WebSocket server error: ${err.message}`);
+    });
     this.setupRoutes();
     this.setupWebSocket();
     hub.addClient(this);
@@ -547,12 +556,32 @@ export class FlightPathHostedServer
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-  listen(): string {
-    this.httpServer.listen(this.port, this.bindAddress);
-    const scheme = this.isTls ? "https" : "http";
-    const host =
-      this.bindAddress === "0.0.0.0" ? this.getLanIp() : "localhost";
-    return `${scheme}://${host}:${this.port}/?token=${this.token}`;
+  listen(): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const attemptListen = (port: number) => {
+        const onError = (err: NodeJS.ErrnoException) => {
+          this.httpServer.removeListener("listening", onListening);
+          if (err.code === "EADDRINUSE") {
+            setImmediate(() => attemptListen(0));
+          } else {
+            reject(err);
+          }
+        };
+        const onListening = () => {
+          this.httpServer.removeListener("error", onError);
+          const addr = this.httpServer.address() as import("net").AddressInfo;
+          this.port = addr.port;
+          const scheme = this.isTls ? "https" : "http";
+          const host =
+            this.bindAddress === "0.0.0.0" ? this.getLanIp() : "localhost";
+          resolve(`${scheme}://${host}:${this.port}/?token=${this.token}`);
+        };
+        this.httpServer.once("error", onError);
+        this.httpServer.once("listening", onListening);
+        this.httpServer.listen(port, this.bindAddress);
+      };
+      attemptListen(this.port);
+    });
   }
 
   private getLanIp(): string {
