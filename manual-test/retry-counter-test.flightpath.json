@@ -5,6 +5,7 @@
     "returns": "true",
     "maxRetries": 5,
     "timeout": 10000,
-    "retryPrompt": "The counter validation failed. read @manual-test/counter.txt and increment the number by 1. Remember to save ONLY the number, nothing else.\n\nRetry attempt {retryCount} of {maxRetries}."
+    "onFail": "retry",
+    "retryPrompt": "The counter validation failed. read @manual-test/counter.txt and increment the number by 1. Remember to save ONLY the number, nothing else."
   }
 }

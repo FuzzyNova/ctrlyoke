@@ -19,9 +19,10 @@ endCondition:
   returns: "true"
   timeout: 60000
   maxRetries: 2
+  onFail: "retry"
   retryPrompt: |
-    Tests failed with the following error:
-    {error}
+    Tests failed with the following output:
+    {stdout}
 
     Please fix the failing tests before moving to the next step.
     Focus on:
@@ -31,7 +32,7 @@ endCondition:
     - Test assertions
 
 # Prompts
-prompts:
+steps:
   # Step 1: Implement authentication feature
   - name: implement-auth
     prompt: |

@@ -6,7 +6,7 @@ harness: copilot-cli
 model: claude-sonnet-4.5
 resumeSession: true
 
-prompts:
+steps:
   - name: step1-inherit-all
     prompt: |
       Echo "Step 1: I should inherit all workflow properties"
@@ -39,7 +39,7 @@ prompts:
   - name: step4-multiple-overrides
     prompt: |
       Echo "Step 4: I override multiple properties"
-    model: gpt-5
+    model: gpt-5-mini
     resumeSession: false
     mcpServers: ["flightpath"]
     # Expected resolved properties:

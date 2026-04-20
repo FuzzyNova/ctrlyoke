@@ -1,7 +1,7 @@
 # YAML Multi-Step Test
 # Tests multi-step workflows with session continuity in YAML format
 
-prompts:
+steps:
   - name: step1
     prompt: |
       This is step 1. Remember the number: 42

@@ -1,0 +1,32 @@
+# End Condition onFail: "continue" Test
+#
+# Tests that when an endCondition fails with onFail: "continue",
+# the workflow advances to the next step instead of stopping or retrying.
+#
+# Expected behavior:
+#   - Step 1 runs; endCondition script returns "false" (fails)
+#   - Because onFail: "continue", the workflow DOES NOT stop or retry
+#   - Step 2 runs, proving the workflow continued past the failed end condition
+
+harness: copilot-cli
+model: claude-haiku-4.5
+
+steps:
+  - name: step-with-failing-condition
+    prompt: |
+      Step 1: This step has an end condition that will FAIL (always_false.py returns "false").
+      
+      Because the end condition has onFail: "continue", the workflow should NOT stop.
+      
+      Please respond with: "Step 1 complete."
+    endCondition:
+      script: manual-test/.flightpath/scripts/always_false.py
+      returns: "true"
+      onFail: "continue"
+
+  - name: confirm-workflow-continued
+    prompt: |
+      Step 2: If you are seeing this, the workflow correctly continued past the
+      failed end condition in step 1 (onFail: "continue" worked as expected).
+      
+      Please respond with: "Step 2 reached - onFail continue behavior verified."

@@ -13,7 +13,7 @@ harness: copilot-cli
 model: claude-sonnet-4.5
 resumeSession: true # Workflow default: Continue sessions
 
-prompts:
+steps:
   # ============================================================
   # TDD Workflow: Write Tests → Implement → Refactor
   # ============================================================

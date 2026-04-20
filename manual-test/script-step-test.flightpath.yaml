@@ -1,0 +1,24 @@
+# Script Step Test
+#
+# Tests that a scriptStep executes correctly as a first-class workflow step.
+# The script step runs without sending a prompt to an AI agent.
+#
+# Expected behavior:
+#   - Step 1 (scriptStep): Runs always_true.py, prints "true", exits 0
+#   - Step 2 (promptStep): Confirms the workflow continued past the script step
+
+harness: copilot-cli
+model: claude-haiku-4.5
+
+steps:
+  - name: run-script
+    type: script
+    script: manual-test/.flightpath/scripts/always_true.py
+    returns: "true"
+    timeout: 10000
+
+  - name: confirm-script-ran
+    prompt: |
+      A script step just ran before this prompt (it executed always_true.py and returned "true").
+      
+      Please respond with: "Script step completed and workflow continued as expected."

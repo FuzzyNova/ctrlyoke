@@ -13,7 +13,7 @@ hooks:
   - event: userPromptSubmit
     command: node manual-test/hooks/hook-test-script.js userPromptSubmit
 
-prompts:
+steps:
   - name: hook-test
     prompt: |
       Run the bash command `ls` to list files in the current working directory.

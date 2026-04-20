@@ -1,47 +1,281 @@
-prompts:
-  - name: test-all-properties
-    prompt: |
-      This is a test prompt to verify all properties sync correctly to the dashboard UI.
+# Property Sync Test
+#
+# PURPOSE: Visual verification that ALL FlightPath properties sync correctly
+# to the dashboard UI. Covers every property in the schema at both the
+# workflow level and individual step level.
+#
+# HOW TO USE:
+#   1. Run with FlightPath (right-click → "Run with FlightPath")
+#   2. Watch each step load in the dashboard
+#   3. Click each step's properties drawer and verify the values match the
+#      descriptions in each prompt
+#
+# STRUCTURE:
+#   Step 1 (test-all-step-properties):  Every single property set explicitly
+#   Step 2 (test-inherits-workflow):    No overrides — inherits ALL workflow defaults
+#   Step 3 (test-null-overrides):       Uses null to explicitly clear inherited properties
+#   finalStep:                          Script step — runs after all queue steps finish
 
-      When loading this workflow and clicking on this prompt to edit it, the properties drawer should show:
-      - Harness: copilot-cli
-      - Model: claude-sonnet-4.5
-      - Agent: test-agent
-      - Resume Session: Yes
-      - MCP Servers: FlightPath
-      - End Condition: Script, Returns, Timeout, Max Retries, Retry Prompt all filled in
-    harness: copilot-cli
-    model: claude-sonnet-4.5
-    agent: test-agent
+# ── Workflow-level defaults ─────────────────────────────────────────────────
+harness: copilot-cli
+model: claude-sonnet-4.5
+agent: test-agent
+resumeSession: false
+mcpServers:
+  - "flightpath"
+additionalArgs: "--max-turns 5"
+
+vars:
+  testEnv: "staging"
+  testVersion: "1.0.0"
+
+toolPermissions:
+  mode: custom
+  allowedTools:
+    - "read_file"
+    - "list_directory"
+  deniedTools:
+    - "execute_command"
+
+hooks:
+  - event: stop
+    command: "echo workflow-level stop hook"
+    timeoutSec: 5
+  - event: sessionStart
+    command: "echo workflow-level sessionStart hook"
+
+endCondition:
+  script: manual-test/.flightpath/scripts/always_true.py
+  returns: "true"
+  compareSource: auto
+  timeout: 30000
+  maxRetries: 2
+  resumeSessionOnRetry: true
+  onPass: continue
+  onFail: retry
+  retryPrompt: |
+    Workflow-level retry prompt.
+    Script output: {stdout}
+    Stderr: {stderr}
+    Exit code: {exitCode}
+    Expected: {expected}
+    Actual: {actual}
+    Compare source: {compareSource}
+    Please fix and try again.
+
+preCondition:
+  script: manual-test/.flightpath/scripts/always_true.py
+  returns: "true"
+  compareSource: auto
+  timeout: 10000
+  onPass: continue
+  onFail: skipPrompt
+
+# ── Steps ───────────────────────────────────────────────────────────────────
+steps:
+  # ──────────────────────────────────────────────────────────────────────────
+  # Step 1: Every possible step-level property explicitly overridden
+  # ──────────────────────────────────────────────────────────────────────────
+  - name: test-all-step-properties
+    prompt: |
+      PROPERTY SYNC TEST — Step 1: All properties explicitly set.
+
+      This step overrides EVERY possible property. Verify the dashboard shows:
+
+      EXECUTION
+        Harness:        claude-cli
+        Model:          claude-haiku-4.5
+        Agent:          test-agent-alpha
+        Resume Session: Yes (true)
+        Session ID:     my-test-session
+        Additional Args: --effort low
+
+      MCP SERVERS
+        mcpServers:     null (explicitly disabled — no MCP servers)
+
+      SKILLS
+        Skills:         commit
+
+      PRIOR CONTEXT
+        priorContext:   previous (inject prior step output)
+
+      TOOL PERMISSIONS
+        Mode:           dangerouslyAllowAll
+        Allowed Tools:  (none — mode overrides)
+        Denied Tools:   (none — mode overrides)
+
+      HOOKS (step-level, overrides workflow hooks for these events)
+        stop:           "echo step-level stop hook"  (timeoutSec: 10)
+        sessionStart:   "echo step-level sessionStart hook"
+        preToolUse:     "echo step-level preToolUse hook"
+        postToolUse:    "echo step-level postToolUse hook"
+        userPromptSubmit: "echo step-level userPromptSubmit hook"
+
+      PRE-CONDITION
+        Script:         always_true.py
+        Returns:        "true"
+        Compare Source: stdout
+        Timeout:        15000ms
+        On Pass:        continue
+        On Fail:        stopWorkflow
+
+      END CONDITION
+        Script:         always_true.py
+        Returns:        "true"
+        Compare Source: stdout
+        Timeout:        45000ms
+        Max Retries:    3
+        Resume On Retry: false
+        On Pass:        continue
+        On Fail:        retry
+        Retry Prompt:   (multi-line, uses all 6 placeholders)
+
+      Please respond with: "Step 1 complete — all properties verified."
+    harness: claude-cli
+    model: claude-haiku-4.5
+    agent: test-agent-alpha
     resumeSession: true
-    mcpServers: ["flightpath"]
-    endCondition:
-      script: .flightpath/scripts/always_true.py
+    sessionId: "my-test-session"
+    mcpServers: null
+    skills:
+      - commit
+    priorContext: previous
+    additionalArgs: "--effort low"
+
+    toolPermissions:
+      mode: dangerouslyAllowAll
+
+    hooks:
+      - event: stop
+        command: "echo step-level stop hook"
+        timeoutSec: 10
+      - event: sessionStart
+        command: "echo step-level sessionStart hook"
+      - event: preToolUse
+        command: "echo step-level preToolUse hook"
+      - event: postToolUse
+        command: "echo step-level postToolUse hook"
+      - event: userPromptSubmit
+        command: "echo step-level userPromptSubmit hook"
+
+    preCondition:
+      script: manual-test/.flightpath/scripts/always_true.py
       returns: "true"
+      compareSource: stdout
+      timeout: 15000
+      onPass: continue
+      onFail: stopWorkflow
+
+    endCondition:
+      script: manual-test/.flightpath/scripts/always_true.py
+      returns: "true"
+      compareSource: stdout
       timeout: 45000
       maxRetries: 3
+      resumeSessionOnRetry: false
+      onPass: continue
+      onFail: retry
       retryPrompt: |
-        Validation failed (exit {exitCode}, source: {compareSource})
-
-        Expected: {expected}
-        Actual: {actual}
-
+        Step-level retry prompt.
         Stdout: {stdout}
         Stderr: {stderr}
+        Exit code: {exitCode}
+        Expected: {expected}
+        Actual: {actual}
+        Compare source: {compareSource}
+        Please fix and try again.
 
-        Please fix the issues and try again.
-
-  - name: test-minimal-properties
+  # ──────────────────────────────────────────────────────────────────────────
+  # Step 2: No overrides — should inherit ALL workflow-level defaults
+  # ──────────────────────────────────────────────────────────────────────────
+  - name: test-inherits-workflow
     prompt: |
-      This is a test prompt with NO end condition properties.
+      PROPERTY SYNC TEST — Step 2: No step-level overrides.
 
-      When loading this workflow and clicking on this prompt to edit it, the properties drawer should show:
-      - Harness: claude-cli
-      - Model: sonnet
-      - Agent: (empty)
-      - Resume Session: No
-      - MCP Servers: None
-      - End Condition: All fields should be empty/default
-    harness: claude-cli
-    model: sonnet
-    resumeSession: false
+      This step sets ONLY name and prompt. Verify the dashboard shows ALL of the
+      workflow-level defaults inherited:
+
+      EXECUTION
+        Harness:        copilot-cli
+        Model:          claude-sonnet-4.5
+        Agent:          test-agent
+        Resume Session: No (false)
+        Additional Args: --max-turns 5
+
+      MCP SERVERS
+        mcpServers:     flightpath
+
+      TOOL PERMISSIONS
+        Mode:           custom
+        Allowed Tools:  read_file, list_directory
+        Denied Tools:   execute_command
+
+      HOOKS
+        stop + sessionStart inherited from workflow level
+
+      PRE-CONDITION
+        Script:         always_true.py  |  Returns: "true"
+        Compare Source: auto  |  Timeout: 10000ms
+        On Pass: continue  |  On Fail: skipPrompt
+
+      END CONDITION
+        Script:         always_true.py  |  Returns: "true"
+        Compare Source: auto  |  Timeout: 30000ms  |  Max Retries: 2
+        Resume On Retry: true  |  On Pass: continue  |  On Fail: retry
+        Retry Prompt:   (multi-line, all 6 placeholders)
+
+      Please respond with: "Step 2 complete — workflow defaults inherited."
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Step 3: Explicitly clears inherited properties using null
+  # ──────────────────────────────────────────────────────────────────────────
+  - name: test-null-overrides
+    prompt: |
+      PROPERTY SYNC TEST — Step 3: Null overrides disable inherited properties.
+
+      This step uses null to explicitly clear every nullable workflow property.
+      Verify the dashboard shows these cleared:
+
+      EXECUTION
+        Harness:        copilot-cli  (unchanged — not nullable)
+        Model:          claude-sonnet-4.5  (unchanged — not nullable)
+        Agent:          (empty — null clears inherited agent)
+        Resume Session: No (false)
+        Additional Args: (empty — null clears inherited additionalArgs)
+
+      MCP SERVERS
+        mcpServers:     (empty — null explicitly disables inherited servers)
+
+      TOOL PERMISSIONS
+        (empty — null clears inherited toolPermissions)
+
+      HOOKS
+        (empty — null clears inherited hooks)
+
+      PRE-CONDITION
+        (empty — null clears inherited preCondition)
+
+      END CONDITION
+        (empty — null clears inherited endCondition)
+
+      Please respond with: "Step 3 complete — null overrides verified."
+    agent: null
+    mcpServers: null
+    hooks: null
+    endCondition: null
+    preCondition: null
+    toolPermissions: null
+    additionalArgs: null
+
+# ── Final Step ───────────────────────────────────────────────────────────────
+# Runs as a script step after ALL queue steps complete.
+# Verify dashboard shows this as a script step (not a prompt step).
+finalStep:
+  type: script
+  name: final-cleanup-script
+  script: manual-test/.flightpath/scripts/always_true.py
+  returns: "true"
+  compareSource: auto
+  timeout: 10000
+  onPass: continue
+  onFail: continue

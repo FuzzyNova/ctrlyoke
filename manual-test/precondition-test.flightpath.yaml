@@ -1,0 +1,42 @@
+# Pre-Condition Test
+#
+# Tests that preCondition correctly gates prompt execution:
+#   Step 1: preCondition passes (always_true.py) → prompt RUNS
+#   Step 2: preCondition fails (always_false.py) → prompt SKIPPED
+#   Step 3: No preCondition → confirmation step always runs
+#
+# Expected behavior:
+#   - Step 1 runs because the condition is met
+#   - Step 2 is skipped (no AI call made, workflow advances)
+#   - Step 3 always runs and confirms steps 1 and 2 behavior
+
+harness: copilot-cli
+model: claude-haiku-4.5
+
+steps:
+  - name: precondition-passes
+    prompt: |
+      Step 1: The preCondition passed (always_true.py returned "true").
+      
+      Please respond with: "Step 1 executed - preCondition passed as expected."
+    preCondition:
+      script: manual-test/.flightpath/scripts/always_true.py
+      returns: "true"
+
+  - name: precondition-fails
+    prompt: |
+      Step 2: This prompt should NOT execute.
+      
+      If you are seeing this, the preCondition was not evaluated correctly.
+      Please respond with: "ERROR - this step should have been skipped."
+    preCondition:
+      script: manual-test/.flightpath/scripts/always_false.py
+      returns: "true"
+
+  - name: confirm-step
+    prompt: |
+      Step 3: This is the confirmation step (no preCondition).
+      
+      Step 1 should have run. Step 2 should have been skipped.
+      
+      Please respond with: "Step 3 complete - workflow finished correctly."

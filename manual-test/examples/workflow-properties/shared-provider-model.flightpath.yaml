@@ -14,11 +14,11 @@
 # These ensure the workflow behaves identically for all team members
 harness: claude-cli
 model: sonnet # Default: Powerful model for complex analysis
-agent: .github/agents/code-reviewer.agent.md
+agent: code-reviewer
 resumeSession: false # Fresh context for each review phase
 
 # Prompts
-prompts:
+steps:
   # Phase 1: Security Review
   - name: security-review
     prompt: |

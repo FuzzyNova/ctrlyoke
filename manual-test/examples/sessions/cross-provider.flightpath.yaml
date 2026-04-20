@@ -8,7 +8,7 @@
 # - FlightPath validates session references and warns about incompatibilities
 # - Each harness has different session ID formats
 
-prompts:
+steps:
   # ============================================================
   # Example 1: Cross-Harness Warning (Incompatible)
   # ============================================================
@@ -59,11 +59,11 @@ prompts:
 
   - name: copilot-step2
     harness: copilot-cli
-    model: gpt-5
+    model: gpt-5-mini
     prompt: "Second step with Copilot"
     sessionId: 3 # ✅ Valid: Both use copilot-cli harness
     # Successfully resumes Copilot session from step1
-    # Note: Different models (sonnet vs gpt-5) but same harness is OK
+    # Note: Different models (sonnet vs gpt-5-mini) but same harness is OK
 
   # Runtime Metadata After Execution:
   # - name: copilot-step1
@@ -75,14 +75,14 @@ prompts:
   # - name: copilot-step2
   #   _runtime:
   #     harness: copilot-cli
-  #     model: gpt-5
+  #     model: gpt-5-mini
   #     sessionId: "abc-123-copilot"  # ✅ Same session ID
   # ============================================================
   # Example 3: Harness-Specific Session Formats
   # ============================================================
   - name: codex-step
     harness: codex-cli
-    model: gpt-5.1-codex
+    model: gpt-5.1-codex-mini
     prompt: "Implement feature with Codex"
     # Creates Codex session (thread_xxx format)
     # Example sessionId: "thread_abc123xyz789"

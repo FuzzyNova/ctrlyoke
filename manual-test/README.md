@@ -102,13 +102,16 @@ When creating new files:
 
 ### Advanced Features
 
-| File                                          | Tests                                   | Duration |
-| --------------------------------------------- | --------------------------------------- | -------- |
-| `workflow-properties-test.flightpath.yaml`    | Property inheritance and precedence     | 15 sec   |
-| `test-property-sync.flightpath.yaml`          | Property sync to dashboard UI           | 10 sec   |
-| `dynamic-queue-basic-example.flightpath.json` | Dynamic queue extension via MCP tools   | 20 sec   |
-| `attachment-test.prompt.md`                   | All attachment types (@, #file, #sym)   | 10 sec   |
-| `prompt-links-test.flightpath.json`           | Clickable links (Ctrl+Click navigation) | UI Test  |
+| File                                          | Tests                                        | Duration |
+| --------------------------------------------- | -------------------------------------------- | -------- |
+| `workflow-properties-test.flightpath.yaml`    | Property inheritance and precedence          | 15 sec   |
+| `test-property-sync.flightpath.yaml`          | Property sync to dashboard UI                | 10 sec   |
+| `dynamic-queue-basic-example.flightpath.json` | Dynamic queue extension via MCP tools        | 20 sec   |
+| `attachment-test.prompt.md`                   | All attachment types (@, #file, #sym)        | 10 sec   |
+| `prompt-links-test.flightpath.json`           | Clickable links (Ctrl+Click navigation)      | UI Test  |
+| `precondition-test.flightpath.yaml`           | preCondition pass/skip/always-run gating     | 15 sec   |
+| `script-step-test.flightpath.yaml`            | scriptStep executes without AI               | 10 sec   |
+| `end-condition-continue-test.flightpath.yaml` | endCondition onFail: "continue" advances     | 10 sec   |
 
 ---
 
@@ -244,6 +247,45 @@ echo 0 > multi-step-counter.txt
   4. Symbol (#sym:src/extension.ts:activate:14)
 - LLM responds "All attachments received" if successful
 
+### 9. preCondition Gating
+
+**File:** `precondition-test.flightpath.yaml`
+
+**Test:** Right-click → "Run with FlightPath"
+
+**Expected:**
+
+- Step 1 has `preCondition` using `always_true.py` → runs normally
+- Step 2 has `preCondition` using `always_false.py` → **skipped** (no AI call)
+- Step 3 has no `preCondition` → always runs as confirmation step
+
+---
+
+### 10. Script Step Execution
+
+**File:** `script-step-test.flightpath.yaml`
+
+**Test:** Right-click → "Run with FlightPath"
+
+**Expected:**
+
+- Step 1 is a `scriptStep` (no AI call) — runs `always_true.py`, script returns "true"
+- Step 2 is a regular prompt step — confirms the workflow continued after the script step
+
+---
+
+### 11. End Condition `onFail: "continue"`
+
+**File:** `end-condition-continue-test.flightpath.yaml`
+
+**Test:** Right-click → "Run with FlightPath"
+
+**Expected:**
+
+- Step 1 runs; end condition script (`always_false.py`) returns "false" → fails
+- Because `onFail: "continue"`, the workflow **does NOT stop** — it advances
+- Step 2 runs, confirming the workflow continued past the failed end condition
+
 ---
 
 ## End Condition Scripts
@@ -269,9 +311,10 @@ Located in `.flightpath/scripts/`:
 ```json
 {
   "endCondition": {
-    "script": ".flightpath/scripts/check_counter.py",
+    "script": "manual-test/.flightpath/scripts/check_counter.py",
     "returns": "true",
     "maxRetries": 3,
+    "onFail": "retry",
     "retryPrompt": "Validation failed. Please increment @counter.txt."
   }
 }
@@ -409,7 +452,7 @@ What is 2 + 2?
 **YAML format** (multi-step):
 
 ```yaml
-prompts:
+steps:
   - prompt: Step 1 instructions
     model: claude-haiku-4.5
   - prompt: Step 2 instructions
@@ -421,8 +464,11 @@ prompts:
 {
   "prompt": "Instructions here",
   "endCondition": {
-    "script": ".flightpath/scripts/validate.py",
-    "returns": "true"
+    "script": "manual-test/.flightpath/scripts/validate.py",
+    "returns": "true",
+    "onFail": "retry",
+    "maxRetries": 3,
+    "retryPrompt": "Validation failed: {stdout}\n\nPlease fix and try again."
   }
 }
 ```
@@ -439,7 +485,7 @@ print('true' if valid else 'false')
 sys.exit(0)
 ```
 
-Test: `echo "test" | python .flightpath/scripts/validate.py`
+Test: `echo "test" | python manual-test/.flightpath/scripts/validate.py`
 
 ---
 

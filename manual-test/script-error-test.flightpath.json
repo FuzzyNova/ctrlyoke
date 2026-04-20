@@ -1,7 +1,7 @@
 {
   "prompt": "This is a test to verify script error handling.\n\nPlease respond with: 'I acknowledge this test will have a script error.'\n\nThis tests that script execution errors (non-zero exit codes) are properly displayed in the output.",
   "endCondition": {
-    "script": ".flightpath/scripts/throws_error.py",
+    "script": "manual-test/.flightpath/scripts/throws_error.py",
     "returns": "true",
     "maxRetries": 3,
     "timeout": 10000,

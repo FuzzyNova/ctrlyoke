@@ -1,10 +1,11 @@
 {
   "prompt": "This is a test to verify maxRetries exhaustion behavior.\n\nPlease respond with: 'I acknowledge this test will fail validation.'\n\nThis prompt is designed to fail validation repeatedly to test that FlightPath correctly stops after reaching maxRetries.",
   "endCondition": {
-    "script": ".flightpath/scripts/always_fails.py",
+    "script": "manual-test/.flightpath/scripts/always_fails.py",
     "returns": "true",
     "maxRetries": 2,
     "timeout": 5000,
-    "retryPrompt": "Validation failed (expected behavior for this test).\n\n{scriptOutput}\n\nRetry {retryCount} of {maxRetries}.\n\nPlease respond with: 'Retry attempt {retryCount} acknowledged.'"
+    "onFail": "retry",
+    "retryPrompt": "Validation failed (expected behavior for this test).\n\nScript output: {stdout}\n\nPlease respond with: 'Retry acknowledged.'"
   }
 }
