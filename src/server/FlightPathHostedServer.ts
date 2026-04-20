@@ -341,29 +341,32 @@ export class FlightPathHostedServer
 
   private setupRoutes(): void {
     const webviewDist = this.resolveWebviewDist();
-    this.app.use((req, res, next) => {
-      if (req.query["token"] === this.token) return next();
-      res.status(401).send("Unauthorized");
-    });
-    // Serve index.html through buildHtml so all placeholders are patched first.
-    this.app.get(["/", "/index.html"], (req, res) => {
-      this.setNoStore(res);
-      res.send(this.buildHtml(webviewDist, req.get("host")));
-    });
+    // Serve static assets (CSS/JS/fonts) without token — they are not sensitive and
+    // the browser fetches them without query params after loading the entry HTML.
     this.app.get("/standalone-shim.js", (_req, res) => {
       this.setNoStore(res);
       res.sendFile(path.join(__dirname, "server", "standalone-shim.js"));
     });
-    // Serve static assets (disable automatic index.html fallback).
     this.app.use(express.static(webviewDist, { index: false }));
-    this.app.get("/api/workflow-files", (_req, res) => {
+
+    // Token is required for the HTML entry point and all API routes.
+    const requireToken: express.RequestHandler = (req, res, next) => {
+      if (req.query["token"] === this.token) return next();
+      res.status(401).send("Unauthorized");
+    };
+    // Serve index.html through buildHtml so all placeholders are patched first.
+    this.app.get(["/", "/index.html"], requireToken, (req, res) => {
+      this.setNoStore(res);
+      res.send(this.buildHtml(webviewDist, req.get("host")));
+    });
+    this.app.get("/api/workflow-files", requireToken, (_req, res) => {
       res.json({
         workspaceRoot: this.workspaceRoot,
         files: findWorkflowFilesInWorkspace(this.workspaceRoot),
       });
     });
-    // SPA fallback: any unmatched route gets the patched index.html.
-    this.app.use((req, res) => {
+    // SPA fallback: any unmatched route gets the patched index.html (token required).
+    this.app.use(requireToken, (req, res) => {
       this.setNoStore(res);
       res.send(this.buildHtml(webviewDist, req.get("host")));
     });
@@ -408,7 +411,6 @@ export class FlightPathHostedServer
       `wss://${host}`,
       `ws://localhost:${this.port}`,
       `ws://127.0.0.1:${this.port}`,
-      `ws://[::1]:${this.port}`,
     ];
     const connectSources = Array.from(new Set(["'self'", ...websocketSources]));
     const csp = [
