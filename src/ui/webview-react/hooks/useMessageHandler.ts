@@ -1639,6 +1639,18 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // SERVER_TOKEN_REGENERATED - Token deleted; user must restart server
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SERVER_TOKEN_REGENERATED] = (_message) => {
+    useUiStore
+      .getState()
+      .showToast(
+        "Server token regenerated. Restart the server to apply the new token.",
+        "info"
+      );
+  };
+
+  // --------------------------------------------------------------------------
   // CAPTURE_THEME_VARS - Extension wants the webview to capture --vscode-* CSS vars
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CAPTURE_THEME_VARS] = (_message) => {

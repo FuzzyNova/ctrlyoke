@@ -729,6 +729,10 @@ export class WebviewMessageRouter {
       this.settingsSync.handleDisableServer(this.getCurrentPostMessage());
     });
 
+    table.set(MESSAGE_TYPES.REGENERATE_SERVER_TOKEN, () => {
+      this.settingsSync.handleRegenerateServerToken(this.getCurrentPostMessage());
+    });
+
     table.set(MESSAGE_TYPES.THEME_VARS_CAPTURED, (message) => {
       this.themeVarsCapturedCallback?.(message.vars);
     });

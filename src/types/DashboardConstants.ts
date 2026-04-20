@@ -155,6 +155,10 @@ export const MESSAGE_TYPES = {
   // VS Code-hosted server — Extension → Webview
   SERVER_STARTED: "serverStarted", // Server started: { url: string }
   SERVER_STOPPED: "serverStopped", // Server stopped
+  SERVER_TOKEN_REGENERATED: "serverTokenRegenerated", // Token deleted; restart server to apply new token
+
+  // VS Code-hosted server — Webview → Extension
+  REGENERATE_SERVER_TOKEN: "regenerateServerToken", // Request token regeneration
 
   // VS Code-hosted server — Extension → Webview (theme forwarding)
   CAPTURE_THEME_VARS: "captureThemeVars", // Request webview to capture --vscode-* CSS vars

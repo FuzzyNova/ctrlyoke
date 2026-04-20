@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import { randomBytes } from "crypto";
 import { WorkflowOrchestrator } from "./flightpath/WorkflowOrchestrator";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { PromptPropertyCompletionProvider } from "./completions/PromptPropertyCompletionProvider";
@@ -871,17 +872,23 @@ function registerCommands(context: vscode.ExtensionContext) {
   // Server commands
   const enableServerCommand = vscode.commands.registerCommand(
     "flightpath.enableServer",
-    () => {
+    async () => {
       if (hostedServer) return;
       const hub = workflowOrchestrator.getDashboardBroadcastHub();
       const port = configService.get("server")?.port ?? 3000;
       const workspaceRoot =
         vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+      const storedToken = await context.secrets.get("flightpath.server.token");
+      const token = storedToken ?? randomBytes(32).toString("hex");
+      if (!storedToken) await context.secrets.store("flightpath.server.token", token);
+      const bindAddress = configService.get("server")?.bindAddress ?? "127.0.0.1";
       hostedServer = new FlightPathHostedServer(
         hub,
         webviewProvider,
         port,
-        workspaceRoot
+        workspaceRoot,
+        token,
+        bindAddress
       );
       const url = hostedServer.listen();
       webviewProvider.setRunningServerUrl(url);
@@ -903,6 +910,18 @@ function registerCommands(context: vscode.ExtensionContext) {
       webviewProvider.setThemeVarsCapturedCallback(undefined);
       webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STOPPED });
       Log.info("FlightPath: Hosted server stopped");
+    }
+  );
+
+  const regenerateServerTokenCommand = vscode.commands.registerCommand(
+    "flightpath.regenerateServerToken",
+    async () => {
+      await context.secrets.delete("flightpath.server.token");
+      webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_TOKEN_REGENERATED });
+      vscode.window.showInformationMessage(
+        "FlightPath: Server token regenerated. Restart the server for the new token to take effect."
+      );
+      Log.info("FlightPath: Server token regenerated");
     }
   );
 
@@ -934,7 +953,8 @@ function registerCommands(context: vscode.ExtensionContext) {
     openGitChangeCommand,
     initWorkspaceCommand,
     enableServerCommand,
-    disableServerCommand
+    disableServerCommand,
+    regenerateServerTokenCommand
   );
 
   // Auto-start hosted server if enabled in config (must be after command registration)

@@ -918,4 +918,8 @@ export class WebviewSettingsSync {
     await configService.set("server.enabled", false, "user");
     await vscode.commands.executeCommand("flightpath.disableServer");
   }
+
+  async handleRegenerateServerToken(_postMessage: PostMessageFn): Promise<void> {
+    await vscode.commands.executeCommand("flightpath.regenerateServerToken");
+  }
 }

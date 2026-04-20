@@ -35,7 +35,8 @@
 
   function getWebSocketUrl() {
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${location.host}/ws`;
+    const token = new URLSearchParams(location.search).get("token") ?? "";
+    return `${protocol}//${location.host}/ws?token=${encodeURIComponent(token)}`;
   }
 
   function sendNow(socket, msg) {

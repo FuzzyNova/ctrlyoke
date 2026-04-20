@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { createServer, Server } from "http";
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 import type { IDashboardProvider } from "../ui/IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { WorkflowSummary, WorkflowStep } from "../types/FlightPathTypes";
@@ -40,7 +41,9 @@ export class FlightPathHostedServer
     private hub: DashboardBroadcastHub,
     private webviewProvider: FlightPathWebviewProvider,
     private port: number,
-    private workspaceRoot: string
+    private workspaceRoot: string,
+    private token: string,
+    private bindAddress: string = "127.0.0.1"
   ) {
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
     this.httpServer = createServer(this.app);
@@ -338,6 +341,10 @@ export class FlightPathHostedServer
 
   private setupRoutes(): void {
     const webviewDist = this.resolveWebviewDist();
+    this.app.use((req, res, next) => {
+      if (req.query["token"] === this.token) return next();
+      res.status(401).send("Unauthorized");
+    });
     // Serve index.html through buildHtml so all placeholders are patched first.
     this.app.get(["/", "/index.html"], (req, res) => {
       this.setNoStore(res);
@@ -440,6 +447,11 @@ export class FlightPathHostedServer
 
   private setupWebSocket(): void {
     this.wss.on("connection", (ws, req) => {
+      const url = new URL(req.url ?? "", `http://localhost`);
+      if (url.searchParams.get("token") !== this.token) {
+        ws.close(4401, "Unauthorized");
+        return;
+      }
       this.connections.add(ws);
       const clientTag = `${BROWSER_CLIENT_PREFIX}${this.nextConnectionId++}`;
       let sawReady = false;
@@ -523,8 +535,20 @@ export class FlightPathHostedServer
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   listen(): string {
-    this.httpServer.listen(this.port, "0.0.0.0");
-    return `http://localhost:${this.port}`;
+    this.httpServer.listen(this.port, this.bindAddress);
+    const host =
+      this.bindAddress === "0.0.0.0" ? this.getLanIp() : "localhost";
+    return `http://${host}:${this.port}/?token=${this.token}`;
+  }
+
+  private getLanIp(): string {
+    for (const ifaces of Object.values(os.networkInterfaces())) {
+      if (!ifaces) continue;
+      for (const iface of ifaces) {
+        if (iface.family === "IPv4" && !iface.internal) return iface.address;
+      }
+    }
+    return "localhost";
   }
 
   dispose(): void {

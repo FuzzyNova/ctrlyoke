@@ -111,6 +111,7 @@ export interface FlightPathGlobalSettings {
     port: number;
     standalonePort: number;
     theme: "auto" | "light" | "dark";
+    bindAddress: string; // "127.0.0.1" = localhost only; "0.0.0.0" = all interfaces
     tls?: {
       enabled: boolean;
       certPath?: string;
@@ -257,6 +258,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     port: 4747,
     standalonePort: 4748,
     theme: "auto",
+    bindAddress: "127.0.0.1",
   },
   enableDiagnosticLogs: false,
 };
