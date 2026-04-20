@@ -7,6 +7,24 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { PromptFile, EXECUTION_STATES } from "../../types/FlightPathTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 
+const WORKFLOW_PROPERTY_KEYS = [
+  "harness",
+  "model",
+  "agent",
+  "skills",
+  "resumeSession",
+  "sessionId",
+  "mcpServers",
+  "hooks",
+  "toolPermissions",
+  "endCondition",
+  "preCondition",
+  "priorContext",
+  "additionalArgs",
+  "vars",
+  "finalStep",
+] satisfies (keyof PromptFile)[];
+
 /**
  * PromptFileLoader
  *
@@ -260,34 +278,11 @@ export class PromptFileLoader {
   ): Record<string, unknown> {
     const updates: Record<string, unknown> = {};
 
-    // Type-safe access: PromptFile extends ExecutionProperties,
-    // so these keys are statically known on the interface.
-    if (promptFile.harness !== undefined) {
-      updates.harness = promptFile.harness;
-    }
-    if (promptFile.model !== undefined) {
-      updates.model = promptFile.model;
-    }
-    if (promptFile.agent !== undefined) {
-      updates.agent = promptFile.agent;
-    }
-    if (promptFile.skills !== undefined) {
-      updates.skills = promptFile.skills;
-    }
-    if (promptFile.resumeSession !== undefined) {
-      updates.resumeSession = promptFile.resumeSession;
-    }
-    if (promptFile.mcpServers !== undefined) {
-      updates.mcpServers = promptFile.mcpServers;
-    }
-    if (promptFile.hooks !== undefined) {
-      updates.hooks = promptFile.hooks;
-    }
-    if (promptFile.toolPermissions !== undefined) {
-      updates.toolPermissions = promptFile.toolPermissions;
-    }
-    if (promptFile.endCondition !== undefined) {
-      updates.endCondition = promptFile.endCondition;
+    for (const key of WORKFLOW_PROPERTY_KEYS) {
+      const value = promptFile[key];
+      if (value !== undefined) {
+        updates[key] = value;
+      }
     }
 
     return updates;

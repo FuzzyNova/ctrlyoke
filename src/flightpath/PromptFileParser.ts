@@ -330,6 +330,8 @@ export class PromptFileParser {
       promptStep.priorContext = source.priorContext;
     if (source.additionalArgs !== undefined)
       promptStep.additionalArgs = source.additionalArgs;
+    if (source.toolPermissions !== undefined)
+      promptStep.toolPermissions = source.toolPermissions;
 
     return promptStep;
   }
@@ -435,6 +437,9 @@ export class PromptFileParser {
       promptFile.priorContext = parsed.priorContext;
     if (parsed.additionalArgs !== undefined)
       promptFile.additionalArgs = parsed.additionalArgs;
+    if (parsed.toolPermissions !== undefined)
+      promptFile.toolPermissions = parsed.toolPermissions;
+    if (parsed.vars !== undefined) promptFile.vars = parsed.vars;
   }
 
   /**

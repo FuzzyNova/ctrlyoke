@@ -137,7 +137,8 @@ export class FlightPathHostedServer
       loopCount: number;
       phase: FinalStepPhase;
     },
-    workflowId?: string
+    workflowId?: string,
+    workflowProperties?: Record<string, unknown>
   ): Promise<void> {
     return this.sink.updateFileSelected(
       fileName,
@@ -145,7 +146,8 @@ export class FlightPathHostedServer
       workflowName,
       finalStep,
       finalStepRuntime,
-      workflowId
+      workflowId,
+      workflowProperties
     );
   }
   async updateSessionRestored(
@@ -161,7 +163,8 @@ export class FlightPathHostedServer
       loopCount: number;
       phase: FinalStepPhase;
     },
-    workflowId?: string
+    workflowId?: string,
+    workflowProperties?: Record<string, unknown>
   ): Promise<void> {
     return this.sink.updateSessionRestored(
       fileName,
@@ -172,7 +175,8 @@ export class FlightPathHostedServer
       workflowName,
       finalStep,
       finalStepRuntime,
-      workflowId
+      workflowId,
+      workflowProperties
     );
   }
   updateExecutionStarted(

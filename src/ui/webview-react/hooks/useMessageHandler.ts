@@ -150,6 +150,18 @@ function normalizeWorkflowProperties(
   };
 }
 
+function applyWorkflowPropertiesFromMessage(message: {
+  workflowProperties?: Partial<WorkflowProperties>;
+}): void {
+  if (!Object.prototype.hasOwnProperty.call(message, "workflowProperties")) {
+    return;
+  }
+
+  const normalized = normalizeWorkflowProperties(message.workflowProperties);
+  useSettingsStore.getState().setWorkflowProperties(normalized);
+  useWorkflowStore.getState().syncIncomingWorkflowProperties(normalized);
+}
+
 // ============================================================================
 // Shared Helpers
 // ============================================================================
@@ -182,13 +194,11 @@ function applyWorkflowChange(): void {
 
   editorStore.setHasActiveQueue(true);
 
-  // Do NOT clear workflowProperties here. The extension sends WORKFLOW_PROPERTIES_UPDATE
-  // in a separate message after SESSION_RESTORED, which means clearing here causes a
-  // visible flash: the panel renders once with global defaults (cleared state) before
-  // settling on the correct values. Instead, we leave the previous workflow's properties
-  // in place and let WORKFLOW_PROPERTIES_UPDATE do a full atomic replacement — its
-  // setWorkflowProperties() call replaces the entire object, so unset fields correctly
-  // fall through to global defaults without an intermediate "global defaults" render.
+  // Do NOT clear workflowProperties here. The extension may include workflowProperties
+  // on this same state message, or send WORKFLOW_PROPERTIES_UPDATE immediately after.
+  // Clearing here causes a visible flash with global defaults before the real values
+  // arrive. The property message path replaces the whole object, so unset fields still
+  // fall through to global defaults without an intermediate blank render.
   useSettingsStore.getState().setWorkflowLoaded(true);
 }
 
@@ -409,6 +419,7 @@ function createMessageHandlers(): MessageHandlerMap {
     });
     persistViewedWorkingFilePath(message.workingFilePath);
     applyWorkflowChange();
+    applyWorkflowPropertiesFromMessage(message);
   };
 
   // --------------------------------------------------------------------------
@@ -435,6 +446,7 @@ function createMessageHandlers(): MessageHandlerMap {
     });
     persistViewedWorkingFilePath(message.workingFilePath);
     applyWorkflowChange();
+    applyWorkflowPropertiesFromMessage(message);
   };
 
   // --------------------------------------------------------------------------

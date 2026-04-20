@@ -329,7 +329,8 @@ window.vscodeApi = acquireVsCodeApi();
       loopCount: number;
       phase: FinalStepPhase;
     },
-    workflowId?: string
+    workflowId?: string,
+    workflowProperties?: Record<string, unknown>
   ): Promise<void> {
     await this.sink.updateFileSelected(
       fileName,
@@ -337,7 +338,8 @@ window.vscodeApi = acquireVsCodeApi();
       workflowName,
       finalStep,
       finalStepRuntime,
-      workflowId
+      workflowId,
+      workflowProperties
     );
     await this.settingsSync.sendWorkflowPropertiesToSettings(
       undefined,
@@ -358,7 +360,8 @@ window.vscodeApi = acquireVsCodeApi();
       loopCount: number;
       phase: FinalStepPhase;
     },
-    workflowId?: string
+    workflowId?: string,
+    workflowProperties?: Record<string, unknown>
   ): Promise<void> {
     await this.sink.updateSessionRestored(
       fileName,
@@ -369,7 +372,8 @@ window.vscodeApi = acquireVsCodeApi();
       workflowName,
       finalStep,
       finalStepRuntime,
-      workflowId
+      workflowId,
+      workflowProperties
     );
     await this.settingsSync.sendWorkflowPropertiesToSettings(
       undefined,

@@ -28,7 +28,8 @@ export interface IDashboardSink {
       loopCount: number;
       phase: FinalStepPhase;
     },
-    workflowId?: string
+    workflowId?: string,
+    workflowProperties?: Record<string, unknown>
   ): Promise<void>;
 
   updateSessionRestored(
@@ -44,7 +45,8 @@ export interface IDashboardSink {
       loopCount: number;
       phase: FinalStepPhase;
     },
-    workflowId?: string
+    workflowId?: string,
+    workflowProperties?: Record<string, unknown>
   ): Promise<void>;
 
   loadOutputHistoryForWorkflow?(

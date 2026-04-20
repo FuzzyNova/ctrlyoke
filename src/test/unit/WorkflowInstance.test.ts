@@ -692,6 +692,201 @@ suite("WorkflowInstance eager working file creation", () => {
 });
 
 suite("WorkflowInstance append-and-continue", () => {
+  test("appendFromFile preserves the active workflow properties and appends only source steps", async () => {
+    const tempWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "fp-append-props-")
+    );
+
+    try {
+      const platform = new MockPlatform();
+      const instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempWorkspace
+      );
+
+      const baseSourcePath = path.join(
+        tempWorkspace,
+        "base-workflow.flightpath.yaml"
+      );
+      const workingFilePath = await instance.promptQueue.createWorkingFile(
+        "base-workflow.flightpath.yaml",
+        [{ prompt: "base prompt" }],
+        tempWorkspace,
+        baseSourcePath
+      );
+
+      const baseProperties = {
+        harness: Harness.ClaudeCli,
+        model: "base-model",
+        agent: "base-agent",
+        skills: ["base-skill"],
+        resumeSession: true,
+        mcpServers: ["base-mcp"],
+        sessionId: "base-session",
+        additionalArgs: "--base-workflow",
+        vars: { env: "base" },
+        toolPermissions: {
+          mode: "custom",
+          allowedTools: ["base_read"],
+          deniedTools: ["base_write"],
+        },
+        hooks: [{ event: "stop", command: "echo base" }],
+        preCondition: {
+          script: "base-pre.js",
+          returns: "true",
+          compareSource: "stdout",
+          onPass: "continue",
+          onFail: "skipPrompt",
+        },
+        endCondition: {
+          script: "base-end.js",
+          returns: "done",
+          compareSource: "stdout",
+          onPass: "continue",
+          onFail: "retry",
+          maxRetries: 1,
+        },
+        finalStep: { prompt: "base final" },
+      };
+      await instance.promptQueue.updateWorkingFileProperties(baseProperties);
+
+      const baseWorkingFile =
+        await instance.promptQueue.readWorkingFile(workingFilePath);
+      instance.promptQueue.loadPrompts(baseWorkingFile, workingFilePath);
+      instance.setCurrentPromptFile(baseSourcePath, baseWorkingFile);
+
+      const appendPath = path.join(
+        tempWorkspace,
+        "append-workflow.flightpath.yaml"
+      );
+      await fs.writeFile(
+        appendPath,
+        [
+          "harness: codex-cli",
+          "model: append-workflow-model",
+          "agent: append-agent",
+          "resumeSession: false",
+          "mcpServers:",
+          "  - append-mcp",
+          'additionalArgs: "--append-workflow"',
+          "vars:",
+          "  env: append",
+          "toolPermissions:",
+          "  mode: custom",
+          "  allowedTools:",
+          "    - append_workflow_read",
+          "  deniedTools:",
+          "    - append_workflow_write",
+          "preCondition:",
+          "  script: append-pre.js",
+          '  returns: "true"',
+          "  compareSource: stdout",
+          "  onPass: continue",
+          "  onFail: skipPrompt",
+          "endCondition:",
+          "  script: append-end.js",
+          "  returns: done",
+          "  compareSource: stdout",
+          "  onPass: continue",
+          "  onFail: retry",
+          "  maxRetries: 3",
+          "finalStep:",
+          "  prompt: append final",
+          "steps:",
+          "  - name: appended step",
+          "    prompt: appended prompt",
+          "    harness: gemini-cli",
+          "    model: append-step-model",
+          '    additionalArgs: "--append-step"',
+          "    toolPermissions:",
+          "      mode: custom",
+          "      allowedTools:",
+          "        - append_step_read",
+          "      deniedTools:",
+          "        - append_step_write",
+          "",
+        ].join("\n")
+      );
+
+      await instance.appendFromFile(appendPath);
+
+      const assertBaseWorkflowProperties = (workflow: any) => {
+        assert.strictEqual(workflow.harness, Harness.ClaudeCli);
+        assert.strictEqual(workflow.model, "base-model");
+        assert.strictEqual(workflow.agent, "base-agent");
+        assert.deepStrictEqual(workflow.skills, ["base-skill"]);
+        assert.strictEqual(workflow.resumeSession, true);
+        assert.deepStrictEqual(workflow.mcpServers, ["base-mcp"]);
+        assert.strictEqual(workflow.sessionId, "base-session");
+        assert.strictEqual(workflow.additionalArgs, "--base-workflow");
+        assert.deepStrictEqual(workflow.vars, { env: "base" });
+        assert.deepStrictEqual(workflow.toolPermissions, {
+          mode: "custom",
+          allowedTools: ["base_read"],
+          deniedTools: ["base_write"],
+        });
+        assert.deepStrictEqual(workflow.hooks, [
+          { event: "stop", command: "echo base" },
+        ]);
+        assert.deepStrictEqual(workflow.preCondition, {
+          script: "base-pre.js",
+          returns: "true",
+          compareSource: "stdout",
+          onPass: "continue",
+          onFail: "skipPrompt",
+        });
+        assert.deepStrictEqual(workflow.endCondition, {
+          script: "base-end.js",
+          returns: "done",
+          compareSource: "stdout",
+          onPass: "continue",
+          onFail: "retry",
+          maxRetries: 1,
+        });
+        assert.deepStrictEqual(workflow.finalStep, { prompt: "base final" });
+      };
+
+      const state = instance.promptQueue.getState();
+      const workflowFile = instance.promptQueue.getWorkflowFile();
+      const workingFile =
+        await instance.promptQueue.readWorkingFile(workingFilePath);
+      const appendedStep = state.steps[1] as PromptStep;
+      const persistedAppendedStep = workingFile.steps?.[1] as PromptStep;
+
+      assert.strictEqual(state.workingFilePath, workingFilePath);
+      assert.strictEqual(
+        (instance as any).currentPromptFile?.filePath,
+        baseSourcePath
+      );
+      assert.deepStrictEqual(
+        state.steps.map((step) => (step as PromptStep).prompt),
+        ["base prompt", "appended prompt"]
+      );
+      assertBaseWorkflowProperties(workflowFile);
+      assertBaseWorkflowProperties(workingFile);
+      assert.deepStrictEqual(appendedStep, {
+        name: "appended step",
+        prompt: "appended prompt",
+        harness: Harness.GeminiCli,
+        model: "append-step-model",
+        additionalArgs: "--append-step",
+        toolPermissions: {
+          mode: "custom",
+          allowedTools: ["append_step_read"],
+          deniedTools: ["append_step_write"],
+        },
+      });
+      assert.deepStrictEqual(persistedAppendedStep, appendedStep);
+    } finally {
+      await fs.rm(tempWorkspace, { recursive: true, force: true });
+    }
+  });
+
   test("syncs currentPromptFile before rerunning a completed ephemeral workflow", async () => {
     const platform = new MockPlatform();
 

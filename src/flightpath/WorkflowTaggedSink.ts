@@ -34,15 +34,22 @@ export class WorkflowTaggedSink implements IDashboardSink {
       status?: StepStatus;
       loopCount: number;
       phase: FinalStepPhase;
-    }
+    },
+    workflowIdOrProperties?: string | Record<string, unknown>,
+    workflowProperties?: Record<string, unknown>
   ): Promise<void> {
+    const properties =
+      typeof workflowIdOrProperties === "string"
+        ? workflowProperties
+        : workflowIdOrProperties;
     return this.inner.updateFileSelected(
       fileName,
       steps,
       workflowName,
       finalStep,
       finalStepRuntime,
-      this.workflowId
+      this.workflowId,
+      properties
     );
   }
 
@@ -58,8 +65,14 @@ export class WorkflowTaggedSink implements IDashboardSink {
       status?: StepStatus;
       loopCount: number;
       phase: FinalStepPhase;
-    }
+    },
+    workflowIdOrProperties?: string | Record<string, unknown>,
+    workflowProperties?: Record<string, unknown>
   ): Promise<void> {
+    const properties =
+      typeof workflowIdOrProperties === "string"
+        ? workflowProperties
+        : workflowIdOrProperties;
     return this.inner.updateSessionRestored(
       fileName,
       steps,
@@ -69,7 +82,8 @@ export class WorkflowTaggedSink implements IDashboardSink {
       workflowName,
       finalStep,
       finalStepRuntime,
-      this.workflowId
+      this.workflowId,
+      properties
     );
   }
 

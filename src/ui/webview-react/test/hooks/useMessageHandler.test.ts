@@ -116,6 +116,68 @@ describe("FILE_SELECTED", () => {
 
     expect(useUiStore.getState().isViewingHistory).toBe(false);
   });
+
+  it("loads workflow properties included with the file selection payload", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "test.flightpath.yaml",
+        steps: [makePrompt("Step 1")],
+        workflowProperties: {
+          harness: "claude-cli",
+          model: "claude-haiku-4.5",
+          preCondition: { script: "check.sh", returns: "true" },
+        },
+      });
+    });
+
+    const props = useSettingsStore.getState().workflowProperties;
+    expect(props.harness).toBe("claude-cli");
+    expect(props.model).toBe("claude-haiku-4.5");
+    expect(props.preCondition).toEqual({
+      script: "check.sh",
+      returns: "true",
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SESSION_RESTORED — restores workflow state and workflow-level properties
+// ---------------------------------------------------------------------------
+
+describe("SESSION_RESTORED", () => {
+  it("loads workflow properties included with the restored session payload", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.SESSION_RESTORED, {
+        fileName: "test.flightpath.yaml",
+        steps: [makePrompt("Step 1")],
+        results: [],
+        executionState: EXECUTION_STATES.IDLE,
+        currentIndex: 0,
+        workflowProperties: {
+          harness: "copilot-cli",
+          model: "claude-sonnet-4.5",
+          toolPermissions: {
+            mode: "custom",
+            allowedTools: ["read_file"],
+            deniedTools: ["execute_command"],
+          },
+        },
+      });
+    });
+
+    const props = useSettingsStore.getState().workflowProperties;
+    expect(props.harness).toBe("copilot-cli");
+    expect(props.model).toBe("claude-sonnet-4.5");
+    expect(props.toolPermissions).toEqual({
+      mode: "custom",
+      allowedTools: ["read_file"],
+      deniedTools: ["execute_command"],
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -388,6 +388,7 @@ export interface FileSelectedMessage {
   finalStepStatus?: StepStatus | null;
   finalStepLoopCount?: number;
   finalStepPhase?: FinalStepPhase | null;
+  workflowProperties?: Record<string, any>;
 }
 
 /**
@@ -406,6 +407,7 @@ export interface SessionRestoredMessage {
   finalStepStatus?: StepStatus | null;
   finalStepLoopCount?: number;
   finalStepPhase?: FinalStepPhase | null;
+  workflowProperties?: Record<string, any>;
 }
 
 /**

@@ -335,6 +335,15 @@ export class WorkflowInstance {
   // Lifecycle
   // ─────────────────────────────────────────────────────────────────────────
 
+  private getWorkflowPropertiesForDashboard(): Record<string, unknown> {
+    const { prompt, steps, finalStep, ...workflowProperties } =
+      this.promptQueue.getWorkflowFile();
+    void prompt;
+    void steps;
+    void finalStep;
+    return workflowProperties;
+  }
+
   /**
    * Send a full SESSION_RESTORED state sync to the dashboard.
    * Called by WorkflowOrchestrator when this workflow becomes the active view,
@@ -360,7 +369,9 @@ export class WorkflowInstance {
       state.currentIndex,
       state.workflowName || undefined,
       this.promptQueue.getWorkflowFile().finalStep ?? null,
-      this.promptQueue.getFinalStepRuntime()
+      this.promptQueue.getFinalStepRuntime(),
+      undefined,
+      this.getWorkflowPropertiesForDashboard()
     );
     this.outputCaptureBuffer.replayTo(
       this.dashboardSink,
@@ -390,7 +401,9 @@ export class WorkflowInstance {
       state.currentIndex,
       state.workflowName || undefined,
       this.promptQueue.getWorkflowFile().finalStep ?? null,
-      this.promptQueue.getFinalStepRuntime()
+      this.promptQueue.getFinalStepRuntime(),
+      undefined,
+      this.getWorkflowPropertiesForDashboard()
     );
     this.outputCaptureBuffer.replayTo(
       sink,
@@ -1327,7 +1340,7 @@ export class WorkflowInstance {
       const source = `User append (${position}): ${path.basename(filePath)}`;
       this.reopenRuntimeForContinuationIfNeeded(false);
       await this.promptQueue.appendSteps(parsed.steps, source, position);
-      this.syncCurrentPromptFileFromQueue(filePath);
+      this.syncCurrentPromptFileFromQueue();
 
       if (this.dashboardSink) {
         const updatedState = this.promptQueue.getState();

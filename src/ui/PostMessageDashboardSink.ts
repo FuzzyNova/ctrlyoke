@@ -37,7 +37,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
       loopCount: number;
       phase: FinalStepPhase;
     },
-    workflowId?: string
+    workflowId?: string,
+    workflowProperties?: Record<string, unknown>
   ): Promise<void> {
     this.send({
       type: MESSAGE_TYPES.FILE_SELECTED,
@@ -49,6 +50,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       finalStepLoopCount: finalStepRuntime?.loopCount ?? 0,
       finalStepPhase: finalStepRuntime?.phase ?? null,
       ...(workflowId !== undefined ? { workflowId } : {}),
+      ...(workflowProperties !== undefined ? { workflowProperties } : {}),
     });
   }
 
@@ -65,7 +67,8 @@ export class PostMessageDashboardSink implements IDashboardSink {
       loopCount: number;
       phase: FinalStepPhase;
     },
-    workflowId?: string
+    workflowId?: string,
+    workflowProperties?: Record<string, unknown>
   ): Promise<void> {
     this.send({
       type: MESSAGE_TYPES.SESSION_RESTORED,
@@ -80,6 +83,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
       finalStepLoopCount: finalStepRuntime?.loopCount ?? 0,
       finalStepPhase: finalStepRuntime?.phase ?? null,
       ...(workflowId !== undefined ? { workflowId } : {}),
+      ...(workflowProperties !== undefined ? { workflowProperties } : {}),
     });
   }
 
