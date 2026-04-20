@@ -176,7 +176,7 @@ export function ServerSection({ settings, onUpdate }: Props) {
           >
             <option value="127.0.0.1">Localhost only (127.0.0.1)</option>
             <option value="0.0.0.0">
-              All interfaces (0.0.0.0) — LAN / VPN access
+              All interfaces (0.0.0.0) — LAN access
             </option>
           </select>
         </div>
@@ -191,7 +191,9 @@ export function ServerSection({ settings, onUpdate }: Props) {
           <input
             type="checkbox"
             checked={server.tls?.enabled ?? false}
-            onChange={(e) => onUpdate("server.tls.enabled", e.target.checked, s)}
+            onChange={(e) =>
+              onUpdate("server.tls.enabled", e.target.checked, s)
+            }
             className="accent-btn-primary-bg"
           />
           <span className="text-sm text-foreground">Enable HTTPS</span>
