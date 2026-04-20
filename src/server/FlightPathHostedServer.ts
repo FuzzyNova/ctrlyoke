@@ -1,6 +1,7 @@
 import express from "express";
 import { WebSocketServer, WebSocket } from "ws";
-import { createServer, Server } from "http";
+import { createServer as createHttpServer, Server } from "http";
+import { createServer as createHttpsServer } from "https";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -36,6 +37,7 @@ export class FlightPathHostedServer
   private cachedThemeVars: Record<string, string> = {};
   private nextConnectionId = 1;
   private readonly sink: PostMessageDashboardSink;
+  private readonly isTls: boolean;
 
   constructor(
     private hub: DashboardBroadcastHub,
@@ -43,10 +45,19 @@ export class FlightPathHostedServer
     private port: number,
     private workspaceRoot: string,
     private token: string,
-    private bindAddress: string = "127.0.0.1"
+    private bindAddress: string = "127.0.0.1",
+    tlsConfig?: { certPath: string; keyPath: string }
   ) {
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
-    this.httpServer = createServer(this.app);
+    if (tlsConfig) {
+      const cert = fs.readFileSync(tlsConfig.certPath);
+      const key = fs.readFileSync(tlsConfig.keyPath);
+      this.httpServer = createHttpsServer({ cert, key }, this.app);
+      this.isTls = true;
+    } else {
+      this.httpServer = createHttpServer(this.app);
+      this.isTls = false;
+    }
     this.wss = new WebSocketServer({ server: this.httpServer, path: "/ws" });
     this.setupRoutes();
     this.setupWebSocket();
@@ -538,9 +549,10 @@ export class FlightPathHostedServer
 
   listen(): string {
     this.httpServer.listen(this.port, this.bindAddress);
+    const scheme = this.isTls ? "https" : "http";
     const host =
       this.bindAddress === "0.0.0.0" ? this.getLanIp() : "localhost";
-    return `http://${host}:${this.port}/?token=${this.token}`;
+    return `${scheme}://${host}:${this.port}/?token=${this.token}`;
   }
 
   private getLanIp(): string {

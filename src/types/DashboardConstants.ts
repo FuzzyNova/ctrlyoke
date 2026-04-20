@@ -159,6 +159,10 @@ export const MESSAGE_TYPES = {
 
   // VS Code-hosted server — Webview → Extension
   REGENERATE_SERVER_TOKEN: "regenerateServerToken", // Request token regeneration
+  GENERATE_SERVER_CERT: "generateServerCert", // Request self-signed cert generation → .flightpath/certs/
+
+  // VS Code-hosted server — Extension → Webview
+  SERVER_CERT_GENERATED: "serverCertGenerated", // Cert generated; settings updated with new paths
 
   // VS Code-hosted server — Extension → Webview (theme forwarding)
   CAPTURE_THEME_VARS: "captureThemeVars", // Request webview to capture --vscode-* CSS vars

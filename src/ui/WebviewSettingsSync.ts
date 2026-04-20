@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as fs from "fs/promises";
+import * as os from "os";
 import * as path from "path";
 import {
   MESSAGE_TYPES,
@@ -921,5 +922,62 @@ export class WebviewSettingsSync {
 
   async handleRegenerateServerToken(_postMessage: PostMessageFn): Promise<void> {
     await vscode.commands.executeCommand("flightpath.regenerateServerToken");
+  }
+
+  async handleGenerateServerCert(postMessage: PostMessageFn): Promise<void> {
+    const workspaceRoot =
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const certsDir = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CERTS_DIR
+    );
+    await fs.mkdir(certsDir, { recursive: true });
+
+    const bindAddress = configService.get("server")?.bindAddress ?? "127.0.0.1";
+    const lanIps: string[] =
+      bindAddress === "0.0.0.0"
+        ? Object.values(os.networkInterfaces())
+            .flat()
+            .filter(
+              (iface): iface is os.NetworkInterfaceInfo =>
+                !!iface && iface.family === "IPv4" && !iface.internal
+            )
+            .map((iface) => iface.address)
+        : [];
+
+    const { generate } = await import("selfsigned");
+    const pems = generate(
+      [{ name: "commonName", value: "localhost" }],
+      {
+        days: 365,
+        keySize: 2048,
+        algorithm: "sha256",
+        extensions: [
+          {
+            name: "subjectAltName",
+            altNames: [
+              { type: 2, value: "localhost" },
+              { type: 7, ip: "127.0.0.1" },
+              ...lanIps.map((ip) => ({ type: 7, ip })),
+            ],
+          },
+        ],
+      }
+    );
+
+    const certPath = path.join(certsDir, "cert.pem");
+    const keyPath = path.join(certsDir, "key.pem");
+    await fs.writeFile(certPath, pems.cert, "utf8");
+    await fs.writeFile(keyPath, pems.private, "utf8");
+
+    await configService.set("server.tls.certPath", certPath, "user");
+    await configService.set("server.tls.keyPath", keyPath, "user");
+    await this.handleGlobalSettingsLoadRequest(postMessage);
+
+    this.emitMessage(
+      { type: MESSAGE_TYPES.SERVER_CERT_GENERATED },
+      postMessage
+    );
   }
 }

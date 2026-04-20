@@ -882,14 +882,27 @@ function registerCommands(context: vscode.ExtensionContext) {
       const token = storedToken ?? randomBytes(32).toString("hex");
       if (!storedToken) await context.secrets.store("flightpath.server.token", token);
       const bindAddress = configService.get("server")?.bindAddress ?? "127.0.0.1";
-      hostedServer = new FlightPathHostedServer(
-        hub,
-        webviewProvider,
-        port,
-        workspaceRoot,
-        token,
-        bindAddress
-      );
+      const tlsCfg = configService.get("server")?.tls;
+      const tlsConfig =
+        tlsCfg?.enabled && tlsCfg.certPath && tlsCfg.keyPath
+          ? { certPath: tlsCfg.certPath, keyPath: tlsCfg.keyPath }
+          : undefined;
+      try {
+        hostedServer = new FlightPathHostedServer(
+          hub,
+          webviewProvider,
+          port,
+          workspaceRoot,
+          token,
+          bindAddress,
+          tlsConfig
+        );
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `FlightPath: Failed to start server — ${err instanceof Error ? err.message : String(err)}`
+        );
+        return;
+      }
       const url = hostedServer.listen();
       webviewProvider.setRunningServerUrl(url);
       webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STARTED, url });

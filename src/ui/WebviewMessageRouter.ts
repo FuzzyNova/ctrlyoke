@@ -733,6 +733,10 @@ export class WebviewMessageRouter {
       this.settingsSync.handleRegenerateServerToken(this.getCurrentPostMessage());
     });
 
+    table.set(MESSAGE_TYPES.GENERATE_SERVER_CERT, () => {
+      void this.settingsSync.handleGenerateServerCert(this.getCurrentPostMessage());
+    });
+
     table.set(MESSAGE_TYPES.THEME_VARS_CAPTURED, (message) => {
       this.themeVarsCapturedCallback?.(message.vars);
     });

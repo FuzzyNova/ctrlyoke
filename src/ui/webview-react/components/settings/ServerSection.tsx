@@ -183,12 +183,74 @@ export function ServerSection({ settings, onUpdate }: Props) {
       </div>
 
       <div className="pt-3 border-t border-panel-border mt-3">
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-2 tracking-wide">
+        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           HTTPS / TLS
         </h3>
-        <p className="text-xs text-description-fg italic">
-          HTTPS/TLS configuration is reserved for a future update.
-        </p>
+
+        <label className="flex items-center gap-2 cursor-pointer select-none mb-3">
+          <input
+            type="checkbox"
+            checked={server.tls?.enabled ?? false}
+            onChange={(e) => onUpdate("server.tls.enabled", e.target.checked, s)}
+            className="accent-btn-primary-bg"
+          />
+          <span className="text-sm text-foreground">Enable HTTPS</span>
+        </label>
+
+        {server.tls?.enabled && (
+          <div className="space-y-3">
+            <div>
+              <label
+                htmlFor="tls-cert-path"
+                className="block text-xs text-description-fg mb-1"
+              >
+                Certificate file (.pem)
+              </label>
+              <input
+                id="tls-cert-path"
+                type="text"
+                value={server.tls?.certPath ?? ""}
+                placeholder="/path/to/cert.pem"
+                onChange={(e) =>
+                  onUpdate("server.tls.certPath", e.target.value, s)
+                }
+                className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="tls-key-path"
+                className="block text-xs text-description-fg mb-1"
+              >
+                Private key file (.pem)
+              </label>
+              <input
+                id="tls-key-path"
+                type="text"
+                value={server.tls?.keyPath ?? ""}
+                placeholder="/path/to/key.pem"
+                onChange={(e) =>
+                  onUpdate("server.tls.keyPath", e.target.value, s)
+                }
+                className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                vscode.postMessage({ type: MESSAGE_TYPES.GENERATE_SERVER_CERT })
+              }
+              className="text-xs text-description-fg hover:text-foreground underline"
+            >
+              Generate self-signed certificate
+            </button>
+            <p className="text-xs text-description-fg italic">
+              The generated cert is saved to <code>.flightpath/certs/</code> and
+              gitignored. Browsers will show a warning on first visit — click
+              proceed to continue. Changes take effect on server restart.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
