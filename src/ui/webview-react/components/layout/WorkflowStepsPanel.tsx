@@ -275,12 +275,35 @@ export const WorkflowStepsPanel: React.FC<{
 
     // mcpServers — show whenever explicitly set
     if (step.mcpServers !== undefined) {
-      const hasFlightpath =
-        Array.isArray(step.mcpServers) &&
-        step.mcpServers.includes("flightpath");
-      result.push({
-        label: hasFlightpath ? "dynamic ext" : "no dynamic ext",
-      });
+      if (step.mcpServers === null) {
+        result.push({
+          label: "MCP: none",
+          title: "MCP servers explicitly disabled",
+        });
+      } else if (Array.isArray(step.mcpServers)) {
+        const count = step.mcpServers.length;
+        const hasFlightpath = step.mcpServers.some(
+          (s) => typeof s === "string" && s === "flightpath"
+        );
+        const serverIds = step.mcpServers.map((s) =>
+          typeof s === "string" ? s : (s as { id?: string }).id ?? "custom"
+        );
+        if (count === 0) {
+          result.push({
+            label: "MCP: 0",
+            title: "MCP servers explicitly set to empty",
+          });
+        } else if (hasFlightpath && count === 1) {
+          result.push({ label: "MCP[flightpath]", title: "MCP: flightpath" });
+        } else if (hasFlightpath) {
+          result.push({
+            label: `MCP[flightpath]+${count - 1}`,
+            title: serverIds.join(", "),
+          });
+        } else {
+          result.push({ label: `MCP: ${count}`, title: serverIds.join(", ") });
+        }
+      }
     }
 
     // hooks — show when explicitly set
@@ -340,6 +363,70 @@ export const WorkflowStepsPanel: React.FC<{
         result.push({
           label: `ec: ${short}`,
           title: `endCondition: ${script}`,
+        });
+      }
+    }
+
+    // preCondition — only show "pc: disabled" if the workflow has an active
+    // pre-condition to override. If the workflow has none, the chip is redundant.
+    if (step.preCondition !== undefined) {
+      if (step.preCondition === null) {
+        const workflowHasActivePreCondition =
+          workflowProperties.preCondition != null &&
+          Boolean(workflowProperties.preCondition.script);
+        if (workflowHasActivePreCondition) {
+          result.push({ label: "pc: disabled" });
+        }
+      } else if (step.preCondition.script) {
+        const script = step.preCondition.script;
+        const basename = script.replace(/.*[\\/]/, "");
+        const short =
+          basename.length > 30 ? basename.substring(0, 30) + "…" : basename;
+        result.push({
+          label: `pc: ${short}`,
+          title: `preCondition: ${script}`,
+        });
+      }
+    }
+
+    // additionalArgs — show when explicitly set or disabled
+    if (step.additionalArgs !== undefined) {
+      if (step.additionalArgs === null) {
+        result.push({
+          label: "args: none",
+          title: "additionalArgs explicitly disabled",
+        });
+      } else {
+        const short =
+          step.additionalArgs.length > 20
+            ? step.additionalArgs.substring(0, 20) + "…"
+            : step.additionalArgs;
+        result.push({
+          label: `args: ${short}`,
+          title: `additionalArgs: ${step.additionalArgs}`,
+        });
+      }
+    }
+
+    // toolPermissions — show when explicitly set or disabled
+    if (step.toolPermissions !== undefined) {
+      if (step.toolPermissions === null) {
+        result.push({
+          label: "perms: none",
+          title: "toolPermissions explicitly disabled",
+        });
+      } else if (step.toolPermissions.mode) {
+        const modeShort: Record<string, string> = {
+          dangerouslyAllowAll: "allow all!",
+          allowAll: "allow all",
+          custom: "custom",
+          passthrough: "pass-thru",
+        };
+        const short =
+          modeShort[step.toolPermissions.mode] ?? step.toolPermissions.mode;
+        result.push({
+          label: `perms: ${short}`,
+          title: `toolPermissions: ${step.toolPermissions.mode}`,
         });
       }
     }

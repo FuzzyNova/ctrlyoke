@@ -99,7 +99,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
               : "bg-transparent text-description-fg hover:text-fg"
           }`}
         >
-          {m === "default" ? "Default" : m === "none" ? "None" : "Custom"}
+          {m === "default" ? "Inherit" : m === "none" ? "None" : "Custom"}
         </button>
       ))}
     </div>

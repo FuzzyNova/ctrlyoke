@@ -375,6 +375,16 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         clearProperties.push("endCondition");
       }
 
+      // Pre-Condition — three-state:
+      //   object  → specific pre-condition
+      //   null    → explicitly none (overrides inherited)
+      //   key in clearProperties → inherit from workflow/settings
+      if (properties.preCondition !== undefined) {
+        result.preCondition = properties.preCondition;
+      } else if (includeNullsForDefaults) {
+        clearProperties.push("preCondition");
+      }
+
       // Tool Permissions — three-state:
       //   null   → "explicitly none" (inject no permission flags for this prompt)
       //   object → permission override (mode, allowedTools, deniedTools)
