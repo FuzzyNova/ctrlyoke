@@ -69,17 +69,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const { properties, setProperty, setEndCondition, clearEndCondition } =
     useEditorStore();
 
-  // Pre-condition toggle handler
-  const handlePreConditionToggle = () => {
-    if (properties.preCondition !== undefined) {
-      setProperty("preCondition", undefined);
-    } else {
-      setProperty("preCondition", {
-        script: "",
-        onFail: CONDITION_ACTIONS.SKIP_PROMPT,
-      } as import("../../../../types/FlightPathTypes").PreCondition);
-    }
-  };
   const {
     availableAgents,
     availableSkills,
@@ -315,14 +304,53 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     }
   };
 
-  // Handle end condition enable/disable
-  const handleEndConditionToggle = () => {
-    if (properties.endCondition) {
-      clearEndCondition();
-    } else {
-      setEndCondition({ ...END_CONDITION_DEFAULTS });
-    }
+  // ── Condition mode derivations ──────────────────────────────────────────────
+  const endConditionMode =
+    properties.endCondition === undefined
+      ? "inherit"
+      : properties.endCondition === null
+        ? "none"
+        : "custom";
+
+  const preConditionMode =
+    properties.preCondition === undefined
+      ? "inherit"
+      : properties.preCondition === null
+        ? "none"
+        : "custom";
+
+  const resolvedEndConditionForInherit =
+    workflowProperties.endCondition !== undefined
+      ? workflowProperties.endCondition
+      : globalSettings.defaultEndCondition;
+
+  const resolvedPreConditionForInherit =
+    workflowProperties.preCondition !== undefined
+      ? workflowProperties.preCondition
+      : globalSettings.defaultPreCondition;
+
+  const buildConditionInheritLabel = (
+    resolved: { script?: string } | null | undefined
+  ): string => {
+    if (!resolved?.script) return "Inherit (None)";
+    const words = resolved.script.trim().split(/\s+/);
+    return words.length <= 3
+      ? `Inherit (${resolved.script})`
+      : `Inherit (${words.slice(0, 3).join(" ")}…)`;
   };
+
+  const endConditionInheritLabel = buildConditionInheritLabel(
+    resolvedEndConditionForInherit
+  );
+  const preConditionInheritLabel = buildConditionInheritLabel(
+    resolvedPreConditionForInherit
+  );
+
+  const buildConditionOptions = (inheritLabel: string) => [
+    { value: "inherit", label: inheritLabel },
+    { value: "none", label: "None" },
+    { value: "custom", label: "Custom" },
+  ];
 
   return (
     <div
@@ -522,7 +550,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   }}
                   options={[
                     { value: "default", label: defaultAdditionalArgsLabel },
-                    { value: "none", label: "None (override to empty)" },
+                    { value: "none", label: "None" },
                     { value: "custom", label: "Custom" },
                   ]}
                 />
@@ -672,26 +700,32 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {activePage === DRAWER_PAGES.VALIDATION && (
           <div className="space-y-4">
             {/* Pre-Condition Section */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <input
-                  type="checkbox"
-                  id="prop-pre-enabled"
-                  checked={properties.preCondition !== undefined}
-                  onChange={handlePreConditionToggle}
-                  className="w-4 h-4 rounded border border-input-border"
-                />
-                <label
-                  htmlFor="prop-pre-enabled"
-                  className="text-xs font-medium text-foreground cursor-pointer"
-                  title="Runs a script before the prompt. Use to gate execution on a condition."
-                >
-                  Enable Pre-Condition
-                </label>
-              </div>
-
-              {/* Pre-condition fields — animated slide-down on show/hide */}
-              <AnimatedSection visible={properties.preCondition !== undefined}>
+            <div className="space-y-2">
+              <label
+                htmlFor="prop-pre-condition-mode"
+                className="text-[11px] font-semibold uppercase text-description-fg"
+                title="Runs a script before the prompt. Use to gate execution on a condition."
+              >
+                Pre-Condition
+              </label>
+              <CustomSelect
+                id="prop-pre-condition-mode"
+                value={preConditionMode}
+                onChange={(v) => {
+                  if (v === "inherit") {
+                    setProperty("preCondition", undefined);
+                  } else if (v === "none") {
+                    setProperty("preCondition", null);
+                  } else {
+                    setProperty("preCondition", {
+                      script: "",
+                      onFail: CONDITION_ACTIONS.SKIP_PROMPT,
+                    } as import("../../../../types/FlightPathTypes").PreCondition);
+                  }
+                }}
+                options={buildConditionOptions(preConditionInheritLabel)}
+              />
+              <AnimatedSection visible={preConditionMode === "custom"}>
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ScriptConditionEditor
                     variant="preCondition"
@@ -708,32 +742,37 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       )
                     }
                     narrow={isNarrow}
-                    disabled={properties.preCondition === undefined}
+                    disabled={false}
                     idPrefix="prop-pre"
                   />
                 </div>
               </AnimatedSection>
             </div>
-            {/* End Condition Section */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <input
-                  type="checkbox"
-                  id="prop-end-enabled"
-                  checked={!!properties.endCondition}
-                  onChange={handleEndConditionToggle}
-                  className="w-4 h-4 rounded border border-input-border"
-                />
-                <label
-                  htmlFor="prop-end-enabled"
-                  className="text-xs font-medium text-foreground cursor-pointer"
-                >
-                  Enable End Condition
-                </label>
-              </div>
 
-              {/* End condition fields — animated slide-down on show/hide */}
-              <AnimatedSection visible={!!properties.endCondition}>
+            {/* End Condition Section */}
+            <div className="space-y-2">
+              <label
+                htmlFor="prop-end-condition-mode"
+                className="text-[11px] font-semibold uppercase text-description-fg"
+                title="Validation runs after the prompt completes. Use to gate retries on a condition."
+              >
+                End Condition
+              </label>
+              <CustomSelect
+                id="prop-end-condition-mode"
+                value={endConditionMode}
+                onChange={(v) => {
+                  if (v === "inherit") {
+                    clearEndCondition();
+                  } else if (v === "none") {
+                    setEndCondition(null);
+                  } else {
+                    setEndCondition({ ...END_CONDITION_DEFAULTS });
+                  }
+                }}
+                options={buildConditionOptions(endConditionInheritLabel)}
+              />
+              <AnimatedSection visible={endConditionMode === "custom"}>
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ScriptConditionEditor
                     variant="endCondition"
@@ -749,7 +788,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       )
                     }
                     narrow={isNarrow}
-                    disabled={!properties.endCondition}
+                    disabled={false}
                     idPrefix="prop-end"
                   />
                 </div>
