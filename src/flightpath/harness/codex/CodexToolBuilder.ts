@@ -338,16 +338,18 @@ export class CodexToolBuilder {
    * Only bash commands arrive via function_call_output (other tools use
    * custom_tool_call_output). When isBash is false, falls back to TOOL_RESULT.
    *
-   * @param isBash    - Whether the tracked call was a BASH_COMMAND
-   * @param rawOutput - Raw output string from event.payload.output
-   * @param callId    - Original call ID (used in TOOL_RESULT fallback)
-   * @param timestamp - Event timestamp in milliseconds
+   * @param isBash         - Whether the tracked call was a BASH_COMMAND
+   * @param rawOutput      - Raw output string from event.payload.output
+   * @param callId         - Original call ID (used in TOOL_RESULT fallback)
+   * @param timestamp      - Event timestamp in milliseconds
+   * @param initiatedEvent - The matching INITIATED event (carries the command text)
    */
   static buildFunctionCallOutputCompletedEvent(
     isBash: boolean,
     rawOutput: string,
     callId: string | undefined,
-    timestamp: number
+    timestamp: number,
+    initiatedEvent?: CliEvent
   ): CliEvent {
     if (isBash) {
       const exitCodeMatch = rawOutput.match(/Exit code: (\d+)/);
@@ -355,11 +357,12 @@ export class CodexToolBuilder {
       const success = exitCode === 0;
       const outputMatch = rawOutput.match(/Output:\n([\s\S]*)$/);
       const stdout = outputMatch ? outputMatch[1] : rawOutput;
+      const initiatedData = initiatedEvent?.data as BashCommandData | undefined;
       return {
         type: CLI_EVENT_TYPES.BASH_COMMAND,
         timestamp,
         data: {
-          command: "",
+          command: initiatedData?.command ?? "",
           exitCode,
           output: stdout,
           error: success ? undefined : stdout,

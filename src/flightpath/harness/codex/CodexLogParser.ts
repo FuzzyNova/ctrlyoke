@@ -404,7 +404,8 @@ export class CodexLogParser extends BaseLogParser {
             isBash,
             event.payload.output || "",
             callId,
-            timestamp
+            timestamp,
+            toolInfo?.initiatedEvent
           )
         );
         if (callId) {
@@ -1076,7 +1077,8 @@ export class CodexLogParser extends BaseLogParser {
           isBash,
           e.payload.output || "",
           callId,
-          timestamp
+          timestamp,
+          toolInfo?.initiatedEvent
         )
       );
       if (callId) {

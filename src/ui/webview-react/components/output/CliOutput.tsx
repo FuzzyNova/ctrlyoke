@@ -173,6 +173,7 @@ interface SingleEventProps {
   attemptIndex?: number;
   fileUndoMode?: "undo" | "redo";
   hideDiff?: boolean;
+  hideRow?: boolean;
 }
 
 /**
@@ -189,7 +190,9 @@ const SingleEvent = memo<SingleEventProps>(
     attemptIndex = 0,
     fileUndoMode = "undo",
     hideDiff = false,
+    hideRow = false,
   }) => {
+    if (hideRow) return null;
     switch (event.type) {
       case CLI_EVENT_TYPES.TEXT: {
         const data = event.data as TextData;
@@ -416,31 +419,57 @@ const StructuredOutput = memo<StructuredOutputProps>(
     // When an edit FAILS the diff remains visible alongside the error.
     const visibleEvents = useMemo(() => {
       const indicesToHideDiff = new Set<number>();
+      const indicesToHideRow = new Set<number>();
+
       for (let i = 0; i < events.length; i++) {
         const event = events[i];
-        if (event.type !== CLI_EVENT_TYPES.FILE_EDIT) continue;
-        const data = event.data as FileEditData;
-        if (data.status !== OPERATION_STATUS.INITIATED) continue;
-        // Find the next FILE_EDIT event for the same path.
-        for (let j = i + 1; j < events.length; j++) {
-          const next = events[j];
-          if (next.type !== CLI_EVENT_TYPES.FILE_EDIT) continue;
-          const nextData = next.data as FileEditData;
-          if (nextData.path !== data.path) continue;
-          // Hide the diff on the INITIATED event only when a COMPLETED follows —
-          // the COMPLETED version has a structuredPatch and carries the undo
-          // button. When the edit FAILED we keep the diff so the attempted
-          // change remains visible alongside the error.
-          if (nextData.status === OPERATION_STATUS.COMPLETED) {
-            indicesToHideDiff.add(i);
+
+        // FILE_EDIT: hide diff on INITIATED when a COMPLETED follows for the same path.
+        if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
+          const data = event.data as FileEditData;
+          if (data.status === OPERATION_STATUS.INITIATED) {
+            for (let j = i + 1; j < events.length; j++) {
+              const next = events[j];
+              if (next.type !== CLI_EVENT_TYPES.FILE_EDIT) continue;
+              const nextData = next.data as FileEditData;
+              if (nextData.path !== data.path) continue;
+              if (nextData.status === OPERATION_STATUS.COMPLETED) {
+                indicesToHideDiff.add(i);
+              }
+              break;
+            }
           }
-          break;
+        }
+
+        // BASH_COMMAND: hide the INITIATED row entirely when a COMPLETED/FAILED
+        // follows for the same command. Codex emits all initiations first, then
+        // all outputs — the COMPLETED event carries the command text (after the
+        // backend fix), so the INITIATED "running" row is redundant.
+        if (event.type === CLI_EVENT_TYPES.BASH_COMMAND) {
+          const data = event.data as BashCommandData;
+          if (data.status === OPERATION_STATUS.INITIATED && data.command) {
+            for (let j = i + 1; j < events.length; j++) {
+              const next = events[j];
+              if (next.type !== CLI_EVENT_TYPES.BASH_COMMAND) continue;
+              const nextData = next.data as BashCommandData;
+              if (nextData.command !== data.command) continue;
+              if (
+                nextData.status === OPERATION_STATUS.COMPLETED ||
+                nextData.status === OPERATION_STATUS.FAILED
+              ) {
+                indicesToHideRow.add(i);
+              }
+              break;
+            }
+          }
         }
       }
+
       return events.map((event, i) => ({
         event,
         originalIndex: i,
         hideDiff: indicesToHideDiff.has(i),
+        hideRow: indicesToHideRow.has(i),
       }));
     }, [events]);
 
@@ -448,7 +477,7 @@ const StructuredOutput = memo<StructuredOutputProps>(
 
     return (
       <div className={`mt-[var(--spacing-sm)] ${className}`}>
-        {visibleEvents.map(({ event, originalIndex, hideDiff }) => {
+        {visibleEvents.map(({ event, originalIndex, hideDiff, hideRow }) => {
           // Use original index for stable keys — events are append-only during
           // streaming, so the original position never changes for existing items.
           const eventKey = `event-${originalIndex}`;
@@ -475,6 +504,7 @@ const StructuredOutput = memo<StructuredOutputProps>(
               attemptIndex={originalIndex}
               fileUndoMode={fileUndoMode}
               hideDiff={hideDiff}
+              hideRow={hideRow}
             />
           );
 
