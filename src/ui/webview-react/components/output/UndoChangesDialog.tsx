@@ -658,89 +658,92 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
         ))}
 
       {/* File list — single-step mode */}
-      {!isWorkflowMode && mode === DIALOG_MODE.REDO ? (
-        redoRows.length === 0 ? (
+      {!isWorkflowMode &&
+        (mode === DIALOG_MODE.REDO ? (
+          redoRows.length === 0 ? (
+            <p className="text-sm text-description-fg">
+              No redo instructions available.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-0.5">
+              {redoRows.map((row) => {
+                const hasDiff =
+                  (row.instruction.structuredPatch?.length ?? 0) > 0;
+                return (
+                  <div key={row.path} className="rounded">
+                    <div className="flex items-start gap-2 py-1.5 px-2 rounded text-sm hover:bg-list-hover-bg">
+                      <input
+                        type="checkbox"
+                        checked={checkedPaths.has(row.path)}
+                        onChange={(e) =>
+                          handleToggle(row.path, e.target.checked)
+                        }
+                        aria-label={`Select ${row.path}`}
+                        className="mt-0.5 w-3.5 h-3.5 accent-btn-bg cursor-pointer shrink-0"
+                      />
+                      <span className="flex-1 font-mono text-xs break-all text-foreground">
+                        {row.path}
+                      </span>
+                      <span
+                        className={`shrink-0 text-xs font-medium ${redoActionBadgeColor(row.instruction.action)}`}
+                      >
+                        {redoActionBadgeLabel(row.instruction.action)}
+                      </span>
+                    </div>
+                    {hasDiff && (
+                      <DiffView
+                        structuredPatch={row.instruction.structuredPatch}
+                        language={getLanguageFromPath(row.path)}
+                        globallyCollapsed={true}
+                        className="ml-5"
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )
+        ) : allUndoRows.length === 0 ? (
           <p className="text-sm text-description-fg">
-            No redo instructions available.
+            No file changes found for this prompt.
           </p>
         ) : (
           <div className="flex flex-col gap-0.5">
-            {redoRows.map((row) => {
-              const hasDiff =
-                (row.instruction.structuredPatch?.length ?? 0) > 0;
-              return (
-                <div key={row.path} className="rounded">
-                  <div className="flex items-start gap-2 py-1.5 px-2 rounded text-sm hover:bg-list-hover-bg">
-                    <input
-                      type="checkbox"
-                      checked={checkedPaths.has(row.path)}
-                      onChange={(e) => handleToggle(row.path, e.target.checked)}
-                      aria-label={`Select ${row.path}`}
-                      className="mt-0.5 w-3.5 h-3.5 accent-btn-bg cursor-pointer shrink-0"
-                    />
-                    <span className="flex-1 font-mono text-xs break-all text-foreground">
-                      {row.path}
-                    </span>
-                    <span
-                      className={`shrink-0 text-xs font-medium ${redoActionBadgeColor(row.instruction.action)}`}
-                    >
-                      {redoActionBadgeLabel(row.instruction.action)}
-                    </span>
-                  </div>
-                  {hasDiff && (
-                    <DiffView
-                      structuredPatch={row.instruction.structuredPatch}
-                      language={getLanguageFromPath(row.path)}
-                      globallyCollapsed={true}
-                      className="ml-5"
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )
-      ) : allUndoRows.length === 0 ? (
-        <p className="text-sm text-description-fg">
-          No file changes found for this prompt.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-0.5">
-          {/* Tier 1 section */}
-          {tier1Rows.length > 0 && (
-            <>
-              <p className="text-xs font-semibold text-description-fg uppercase tracking-wide mb-1 mt-1">
-                Event-attributed changes
-              </p>
-              {tier1Rows.map((row) => (
-                <FileRowItem
-                  key={row.path}
-                  row={row}
-                  checked={checkedPaths.has(row.path)}
-                  onChange={handleToggle}
-                />
-              ))}
-            </>
-          )}
+            {/* Tier 1 section */}
+            {tier1Rows.length > 0 && (
+              <>
+                <p className="text-xs font-semibold text-description-fg uppercase tracking-wide mb-1 mt-1">
+                  Event-attributed changes
+                </p>
+                {tier1Rows.map((row) => (
+                  <FileRowItem
+                    key={row.path}
+                    row={row}
+                    checked={checkedPaths.has(row.path)}
+                    onChange={handleToggle}
+                  />
+                ))}
+              </>
+            )}
 
-          {/* Tier 2 section */}
-          {tier2Rows.length > 0 && (
-            <>
-              <p className="text-xs font-semibold text-description-fg uppercase tracking-wide mb-1 mt-3">
-                Other snapshot changes
-              </p>
-              {tier2Rows.map((row) => (
-                <FileRowItem
-                  key={row.path}
-                  row={row}
-                  checked={checkedPaths.has(row.path)}
-                  onChange={handleToggle}
-                />
-              ))}
-            </>
-          )}
-        </div>
-      )}
+            {/* Tier 2 section */}
+            {tier2Rows.length > 0 && (
+              <>
+                <p className="text-xs font-semibold text-description-fg uppercase tracking-wide mb-1 mt-3">
+                  Other snapshot changes
+                </p>
+                {tier2Rows.map((row) => (
+                  <FileRowItem
+                    key={row.path}
+                    row={row}
+                    checked={checkedPaths.has(row.path)}
+                    onChange={handleToggle}
+                  />
+                ))}
+              </>
+            )}
+          </div>
+        ))}
     </Modal>
   );
 };

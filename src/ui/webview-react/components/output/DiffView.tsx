@@ -255,7 +255,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 return (
                   <div
                     key={index}
-                    className={`flex items-baseline whitespace-pre font-inherit leading-[1.4] py-px ${styles.bg}`}
+                    className={`flex w-max min-w-full items-baseline whitespace-pre font-inherit leading-[1.4] py-px ${styles.bg}`}
                   >
                     <span
                       className={`inline-block w-10 text-right px-1.5 select-none text-[length:var(--fp-output-font-size-xs)] opacity-60 shrink-0 text-diff-line-num ${styles.lineNumColor}`}
@@ -267,7 +267,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                     >
                       {line.type !== "removed" ? line.newLineNum : ""}
                     </span>
-                    <span className="flex-1 min-w-0 py-0.5 pr-2 overflow-visible whitespace-pre">
+                    <span className="inline-block py-0.5 pr-2 whitespace-pre">
                       <span className={`font-bold ${styles.contentColor}`}>
                         {styles.prefix}
                       </span>
