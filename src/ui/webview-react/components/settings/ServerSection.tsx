@@ -36,6 +36,18 @@ export function ServerSection({ settings, onUpdate }: Props) {
     }
   }, [serverUrl, selectedDisplayIp]);
 
+  const certDownloadUrl = useMemo(() => {
+    if (!server.tls?.enabled || !displayUrl) return null;
+    try {
+      const u = new URL(displayUrl);
+      u.pathname = "/cert";
+      u.search = "";
+      return u.toString();
+    } catch {
+      return null;
+    }
+  }, [server.tls?.enabled, displayUrl]);
+
   const [showQr, setShowQr] = useState(false);
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -278,19 +290,43 @@ export function ServerSection({ settings, onUpdate }: Props) {
                 className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono"
               />
             </div>
-            <button
-              type="button"
-              onClick={() =>
-                vscode.postMessage({ type: MESSAGE_TYPES.GENERATE_SERVER_CERT })
-              }
-              className="text-xs text-description-fg hover:text-foreground underline"
-            >
-              Generate self-signed certificate
-            </button>
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={() =>
+                  vscode.postMessage({
+                    type: MESSAGE_TYPES.GENERATE_SERVER_CERT,
+                  })
+                }
+                className="text-xs text-description-fg hover:text-foreground underline"
+              >
+                Generate self-signed certificate
+              </button>
+              {certDownloadUrl && (
+                <a
+                  href={certDownloadUrl}
+                  download="flightpath.cer"
+                  className="text-xs text-description-fg hover:text-foreground underline"
+                  title="Download the server certificate for manual installation on iOS"
+                >
+                  Download certificate
+                </a>
+              )}
+            </div>
             <p className="text-xs text-description-fg italic">
               The generated cert is saved to <code>.flightpath/certs/</code> and
               gitignored. Browsers will show a warning on first visit — click
               proceed to continue. Changes take effect on server restart.
+              <br />
+              <strong>iOS Safari:</strong> download the cert and install it via{" "}
+              <em>Settings → General → VPN &amp; Device Management</em>, then
+              enable full trust under{" "}
+              <em>
+                Settings → General → About → Certificate Trust Settings →
+                Enable Full Trust For Root Certificates
+              </em>
+              . Requires iOS 18.2+ (iOS 18.0–18.1 had a bug where this toggle
+              didn&apos;t appear).
             </p>
           </div>
         )}

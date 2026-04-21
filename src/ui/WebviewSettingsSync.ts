@@ -949,12 +949,28 @@ export class WebviewSettingsSync {
 
     const { generate } = await import("selfsigned");
     const pems = generate(
-      [{ name: "commonName", value: "localhost" }],
+      [{ name: "commonName", value: "FlightPath Local CA" }],
       {
         days: 365,
         keySize: 2048,
         algorithm: "sha256",
         extensions: [
+          // Must be CA:TRUE for iOS to show this cert under
+          // Settings > General > About > Certificate Trust Settings.
+          // Without this extension iOS treats it as a leaf cert and
+          // never offers the "Enable Full Trust" toggle.
+          { name: "basicConstraints", cA: true, critical: true },
+          {
+            name: "keyUsage",
+            keyCertSign: true,
+            digitalSignature: true,
+            nonRepudiation: true,
+            keyEncipherment: true,
+            dataEncipherment: true,
+            critical: true,
+          },
+          { name: "extKeyUsage", serverAuth: true },
+          { name: "subjectKeyIdentifier" },
           {
             name: "subjectAltName",
             altNames: [

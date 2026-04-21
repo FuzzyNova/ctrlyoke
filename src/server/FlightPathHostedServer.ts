@@ -50,6 +50,7 @@ export class FlightPathHostedServer
   private readonly sink: PostMessageDashboardSink;
   private readonly webPushService: WebPushService;
   private readonly isTls: boolean;
+  private readonly tlsCertPath: string | undefined;
   private publicUrl?: string;
   private availableIps: string[] = [];
 
@@ -70,6 +71,7 @@ export class FlightPathHostedServer
       const key = fs.readFileSync(tlsConfig.keyPath);
       this.httpServer = createHttpsServer({ cert, key }, this.app);
       this.isTls = true;
+      this.tlsCertPath = tlsConfig.certPath;
     } else {
       this.httpServer = createHttpServer(this.app);
       this.isTls = false;
@@ -427,6 +429,26 @@ export class FlightPathHostedServer
     this.app.get("/standalone-shim.js", (_req, res) => {
       this.setNoStore(res);
       res.sendFile(path.join(__dirname, "server", "standalone-shim.js"));
+    });
+    // Cert download — no token required so iOS users can fetch and install it
+    // before the WebSocket handshake can succeed. The cert is a public key only.
+    this.app.get("/cert", (_req, res) => {
+      if (!this.tlsCertPath) {
+        res.status(404).send("Not found");
+        return;
+      }
+      try {
+        const cert = fs.readFileSync(this.tlsCertPath);
+        this.setNoStore(res);
+        res.setHeader("Content-Type", "application/x-x509-ca-cert");
+        res.setHeader(
+          "Content-Disposition",
+          'attachment; filename="flightpath.cer"'
+        );
+        res.send(cert);
+      } catch {
+        res.status(404).send("Certificate not found");
+      }
     });
     this.app.get("/flightpath-service-worker.js", (_req, res) => {
       this.setNoStore(res);

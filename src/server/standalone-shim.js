@@ -31,6 +31,14 @@
   let lastSentReadyPreferredWorkingFilePath;
   let lastReadyMessage;
   const pendingOutbound = [];
+  // iOS Safari rejects WSS to self-signed certs even after the HTTPS warning is
+  // accepted. The cert rejection manifests identically to the "stuck CONNECTING"
+  // bug (watchdog fires, close event, immediate reconnect — repeat forever).
+  // Track consecutive sockets that never reach OPEN; once we hit the threshold
+  // stop reconnecting and show an actionable error banner.
+  let consecutiveConnectFailures = 0;
+  const MAX_CONNECT_FAILURES = 5;
+  let connectionBannerShown = false;
   const pendingInbound = [];
 
   function getWebSocketUrl() {
@@ -189,9 +197,12 @@
   }
 
   function connect() {
-    if (pageUnloading || isSocketActive()) return;
+    if (pageUnloading || isSocketActive() || connectionBannerShown) return;
     readySentForSocket = false;
     lastSentReadyPreferredWorkingFilePath = undefined;
+    // Track whether THIS socket instance ever reached OPEN. Closed without ever
+    // opening counts as a connection failure (cert rejection, server unreachable).
+    let socketOpened = false;
     const socket = new WebSocket(getWebSocketUrl());
     ws = socket;
 
@@ -214,6 +225,9 @@
 
     socket.addEventListener("open", () => {
       clearConnectWatchdog();
+      socketOpened = true;
+      consecutiveConnectFailures = 0;
+      hideConnectionErrorBanner();
       reconnectAttempt = 0;
       const hasQueuedReady = pendingOutbound.some(
         (msg) => msg && msg.type === "ready"
@@ -233,8 +247,30 @@
     // can fire WebSocket close during refresh/page cache teardown; reconnecting
     // from that stale document creates short-lived sockets that never send READY.
     socket.addEventListener("close", () => {
+      // clearConnectWatchdog() also cancels the watchdog for any socket that was
+      // created synchronously by the watchdog's own connect() call before this
+      // close event fired (the watchdog sets a new timer in connect()).
       clearConnectWatchdog();
       if (ws === socket) ws = undefined;
+      if (!socketOpened) {
+        consecutiveConnectFailures++;
+        if (consecutiveConnectFailures >= MAX_CONNECT_FAILURES) {
+          connectionBannerShown = true;
+          clearReconnectTimer();
+          // Close any socket that the watchdog's synchronous connect() may have
+          // already created before this close event fired.
+          if (ws && ws.readyState !== WebSocket.CLOSED) {
+            try {
+              ws.close();
+            } catch {
+              /* best-effort */
+            }
+            ws = undefined;
+          }
+          showConnectionErrorBanner();
+          return;
+        }
+      }
       scheduleReconnect();
     });
 
@@ -245,6 +281,60 @@
         /* already closing */
       }
     });
+  }
+
+  function showConnectionErrorBanner() {
+    const certUrl = location.protocol + "//" + location.host + "/cert";
+    const html =
+      "<strong>Cannot connect to FlightPath server.</strong> " +
+      "The server may be offline, or the certificate is not trusted.<br>" +
+      "<strong>iOS Safari fix (requires iOS 18.2+):</strong> " +
+      '<a href="' + certUrl + '" style="color:#fca5a5;text-decoration:underline">Download certificate</a>' +
+      ", then: (1) install via <em>Settings → General → VPN &amp; Device Management</em>" +
+      ", (2) go to <em>Settings → General → About → Certificate Trust Settings</em>" +
+      " and toggle on <em>Enable Full Trust For Root Certificates</em>." +
+      ' &nbsp;<a href="#" id="fp-conn-retry" style="color:#fca5a5;text-decoration:underline">Retry</a>';
+
+    function appendBanner() {
+      if (document.getElementById("fp-conn-error")) return;
+      const div = document.createElement("div");
+      div.id = "fp-conn-error";
+      div.setAttribute(
+        "style",
+        "position:fixed;top:0;left:0;right:0;z-index:99999;" +
+          "background:#7f1d1d;color:#fef2f2;" +
+          "padding:10px 16px;font-size:13px;line-height:1.7;text-align:center;" +
+          "font-family:system-ui,-apple-system,sans-serif;"
+      );
+      div.innerHTML = html;
+      const retryLink = div.querySelector("#fp-conn-retry");
+      if (retryLink) {
+        retryLink.addEventListener("click", function (e) {
+          e.preventDefault();
+          connectionBannerShown = false;
+          consecutiveConnectFailures = 0;
+          reconnectAttempt = 0;
+          var el = document.getElementById("fp-conn-error");
+          if (el) el.remove();
+          connect();
+        });
+      }
+      (document.body || document.documentElement).appendChild(div);
+    }
+
+    if (document.body) {
+      appendBanner();
+    } else {
+      document.addEventListener("DOMContentLoaded", appendBanner, {
+        once: true,
+      });
+    }
+  }
+
+  function hideConnectionErrorBanner() {
+    var el = document.getElementById("fp-conn-error");
+    if (el) el.remove();
+    connectionBannerShown = false;
   }
 
   function pauseForPageExit() {
