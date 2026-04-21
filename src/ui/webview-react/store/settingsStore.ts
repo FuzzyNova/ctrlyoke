@@ -169,6 +169,12 @@ interface SettingsState {
   // Server URL (set when server starts, cleared when stopped)
   serverUrl: string | null;
 
+  // Available LAN IPs when binding to 0.0.0.0 (empty when binding to localhost)
+  availableIps: string[];
+
+  // The IP currently selected for display in the URL/QR code (null = use serverUrl as-is)
+  selectedDisplayIp: string | null;
+
   // Developer dashboard controls (dev builds only)
   dev: DevStatus | null;
   devBuild: DevBuildState;
@@ -220,6 +226,10 @@ interface SettingsActions {
 
   // Server URL
   setServerUrl: (url: string | null) => void;
+
+  // Available IPs + selected display IP
+  setAvailableIps: (ips: string[]) => void;
+  setSelectedDisplayIp: (ip: string | null) => void;
 
   // Developer dashboard
   setDevStatus: (dev: DevStatus | null) => void;
@@ -340,6 +350,8 @@ const initialState: SettingsState = {
   fullGlobalSettings: null,
   serverRunning: false,
   serverUrl: null,
+  availableIps: [],
+  selectedDisplayIp: null,
   dev: null,
   devBuild: {
     isBuilding: false,
@@ -451,6 +463,10 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     setServerRunning: (running) => set({ serverRunning: running }),
 
     setServerUrl: (url) => set({ serverUrl: url }),
+
+    setAvailableIps: (ips) => set({ availableIps: ips }),
+
+    setSelectedDisplayIp: (ip) => set({ selectedDisplayIp: ip }),
 
     setDevStatus: (dev) => set({ dev }),
 

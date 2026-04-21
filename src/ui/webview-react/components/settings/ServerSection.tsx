@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
@@ -15,18 +15,37 @@ export function ServerSection({ settings, onUpdate }: Props) {
 
   const serverRunning = useSettingsStore((state) => state.serverRunning);
   const serverUrl = useSettingsStore((state) => state.serverUrl);
+  const availableIps = useSettingsStore((state) => state.availableIps);
+  const selectedDisplayIp = useSettingsStore((state) => state.selectedDisplayIp);
+  const setSelectedDisplayIp = useSettingsStore(
+    (state) => state.setSelectedDisplayIp
+  );
   const vscode = useVsCodeApi();
+
+  const showIpSelector =
+    server.bindAddress === "0.0.0.0" && availableIps.length > 1;
+
+  const displayUrl = useMemo(() => {
+    if (!serverUrl || !selectedDisplayIp) return serverUrl;
+    try {
+      const u = new URL(serverUrl);
+      u.hostname = selectedDisplayIp;
+      return u.toString();
+    } catch {
+      return serverUrl;
+    }
+  }, [serverUrl, selectedDisplayIp]);
 
   const [showQr, setShowQr] = useState(false);
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (showQr && qrCanvasRef.current && serverUrl) {
+    if (showQr && qrCanvasRef.current && displayUrl) {
       import("qrcode").then((QRCode) =>
-        QRCode.toCanvas(qrCanvasRef.current!, serverUrl, { width: 200 })
+        QRCode.toCanvas(qrCanvasRef.current!, displayUrl, { width: 200 })
       );
     }
-  }, [showQr, serverUrl]);
+  }, [showQr, displayUrl]);
 
   function toggleServer(enable: boolean) {
     vscode.postMessage({
@@ -58,24 +77,46 @@ export function ServerSection({ settings, onUpdate }: Props) {
         </label>
 
         {/* Clickable URL + copy + QR buttons — visible while server is running */}
-        {serverRunning && serverUrl && (
+        {serverRunning && displayUrl && (
           <div>
+            {showIpSelector && (
+              <div className="mb-1.5">
+                <label
+                  htmlFor="server-display-ip"
+                  className="block text-xs text-description-fg mb-1"
+                >
+                  Connect via
+                </label>
+                <select
+                  id="server-display-ip"
+                  value={selectedDisplayIp ?? ""}
+                  onChange={(e) => setSelectedDisplayIp(e.target.value)}
+                  className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground"
+                >
+                  {availableIps.map((ip) => (
+                    <option key={ip} value={ip}>
+                      {ip}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="flex items-center gap-2 p-2 bg-input-bg border border-input-border rounded">
               <span
                 className="w-2 h-2 rounded-full bg-green-500 shrink-0"
                 title="Server running"
               />
               <a
-                href={serverUrl}
+                href={displayUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="text-xs text-link truncate flex-1 hover:underline"
               >
-                {serverUrl}
+                {displayUrl}
               </a>
               <button
                 type="button"
-                onClick={() => navigator.clipboard.writeText(serverUrl)}
+                onClick={() => navigator.clipboard.writeText(displayUrl)}
                 title="Copy URL"
                 aria-label="Copy URL"
                 className="shrink-0 text-description-fg hover:text-foreground"

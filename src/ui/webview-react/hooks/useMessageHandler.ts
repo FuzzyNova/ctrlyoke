@@ -1658,6 +1658,11 @@ function createMessageHandlers(): MessageHandlerMap {
     const settingsStore = useSettingsStore.getState();
     settingsStore.setServerRunning(true);
     settingsStore.setServerUrl(message.url ?? null);
+    const ips: string[] = Array.isArray(message.availableIps)
+      ? message.availableIps
+      : [];
+    settingsStore.setAvailableIps(ips);
+    settingsStore.setSelectedDisplayIp(ips[0] ?? null);
   };
 
   // --------------------------------------------------------------------------
@@ -1667,6 +1672,8 @@ function createMessageHandlers(): MessageHandlerMap {
     const settingsStore = useSettingsStore.getState();
     settingsStore.setServerRunning(false);
     settingsStore.setServerUrl(null);
+    settingsStore.setAvailableIps([]);
+    settingsStore.setSelectedDisplayIp(null);
   };
 
   // --------------------------------------------------------------------------

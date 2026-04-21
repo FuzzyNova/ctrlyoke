@@ -922,8 +922,13 @@ function registerCommands(context: vscode.ExtensionContext) {
         );
         return;
       }
-      webviewProvider.setRunningServerUrl(url);
-      webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STARTED, url });
+      const availableIps = hostedServer.getAvailableIps();
+      webviewProvider.setRunningServerUrl(url, availableIps);
+      webviewProvider.postMessage({
+        type: MESSAGE_TYPES.SERVER_STARTED,
+        url,
+        availableIps,
+      });
       webviewProvider.setThemeVarsCapturedCallback((vars) =>
         hostedServer?.updateThemeVars(vars)
       );

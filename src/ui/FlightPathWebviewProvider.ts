@@ -76,6 +76,7 @@ export class FlightPathWebviewProvider
   private modelsLoadedDisposable?: vscode.Disposable;
   private configServiceUnsubscribe?: () => void;
   private runningServerUrl?: string;
+  private runningServerAvailableIps: string[] = [];
 
   // Delegate classes
   private readonly settingsSync: WebviewSettingsSync;
@@ -132,6 +133,7 @@ export class FlightPathWebviewProvider
         handleDevStatusRequest: (scopedPostMessage) =>
           this.sendDevStatus(scopedPostMessage),
         getServerUrl: () => this.runningServerUrl,
+        getAvailableIps: () => this.runningServerAvailableIps,
       }
     );
 
@@ -933,8 +935,9 @@ window.vscodeApi = acquireVsCodeApi();
    * Track the running server URL so READY reconnects the webview when it reloads
    * while the server is up. Pass undefined when the server stops.
    */
-  public setRunningServerUrl(url: string | undefined): void {
+  public setRunningServerUrl(url: string | undefined, availableIps?: string[]): void {
     this.runningServerUrl = url;
+    this.runningServerAvailableIps = availableIps ?? [];
   }
 
   /**

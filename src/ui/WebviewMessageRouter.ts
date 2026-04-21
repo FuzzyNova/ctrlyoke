@@ -249,9 +249,11 @@ export class WebviewMessageRouter {
         // Reconnect server running state (handles webview reload while server is up)
         const serverUrl = this.callbacks.getServerUrl?.();
         if (serverUrl) {
+          const availableIps = this.callbacks.getAvailableIps?.() ?? [];
           this.emitMessage({
             type: MESSAGE_TYPES.SERVER_STARTED,
             url: serverUrl,
+            availableIps,
           });
         }
         // Reconnect active PTY sessions to the fresh webview
@@ -2079,6 +2081,8 @@ export interface WebviewRouterCallbacks {
   handleDevStatusRequest?: (postMessage: PostMessageFn) => Promise<void>;
   /** Returns the hosted server URL if the server is currently running, undefined otherwise. */
   getServerUrl?: () => string | undefined;
+  /** Returns all available LAN IPs (populated when binding to 0.0.0.0). */
+  getAvailableIps?: () => string[];
 }
 
 export interface WebviewRouteOptions {

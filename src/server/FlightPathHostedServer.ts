@@ -51,6 +51,7 @@ export class FlightPathHostedServer
   private readonly webPushService: WebPushService;
   private readonly isTls: boolean;
   private publicUrl?: string;
+  private availableIps: string[] = [];
 
   constructor(
     private hub: DashboardBroadcastHub,
@@ -794,8 +795,9 @@ self.addEventListener("notificationclick", (event) => {
           const addr = this.httpServer.address() as import("net").AddressInfo;
           this.port = addr.port;
           const scheme = this.isTls ? "https" : "http";
-          const host =
-            this.bindAddress === "0.0.0.0" ? this.getLanIp() : "localhost";
+          this.availableIps =
+            this.bindAddress === "0.0.0.0" ? this.getLanIps() : [];
+          const host = this.availableIps[0] ?? "localhost";
           this.publicUrl = `${scheme}://${host}:${this.port}/?token=${this.token}`;
           resolve(this.publicUrl);
         };
@@ -807,14 +809,19 @@ self.addEventListener("notificationclick", (event) => {
     });
   }
 
-  private getLanIp(): string {
+  getAvailableIps(): string[] {
+    return this.availableIps;
+  }
+
+  private getLanIps(): string[] {
+    const ips: string[] = [];
     for (const ifaces of Object.values(os.networkInterfaces())) {
       if (!ifaces) continue;
       for (const iface of ifaces) {
-        if (iface.family === "IPv4" && !iface.internal) return iface.address;
+        if (iface.family === "IPv4" && !iface.internal) ips.push(iface.address);
       }
     }
-    return "localhost";
+    return ips;
   }
 
   dispose(): void {
