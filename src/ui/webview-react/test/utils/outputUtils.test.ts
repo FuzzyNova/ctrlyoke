@@ -282,7 +282,7 @@ describe("generateMarkdownExport", () => {
       },
     ];
     const md = generateMarkdownExport(outputs, metadata);
-    expect(md).toContain("## Prompt 1 - Initial Attempt");
+    expect(md).toContain("## Step 1: Analyze the codebase — Initial Attempt");
     expect(md).toContain("Analyze the codebase");
     expect(md).toContain("Here is my analysis...");
   });
@@ -385,7 +385,7 @@ describe("generateMarkdownExport", () => {
     ];
 
     const md = generateMarkdownExport(outputs, metadata);
-    const promptIdx = md.indexOf("## Prompt 1 - Initial Attempt");
+    const promptIdx = md.indexOf("## Step 1: just say hi — Initial Attempt");
     const statusIdx = md.indexOf(
       "Process exited unexpectedly — workflow stopped"
     );
@@ -418,9 +418,9 @@ describe("generateMarkdownExport", () => {
 
     const md = generateMarkdownExport(outputs, metadata);
     expect(md.indexOf("queued first")).toBeLessThan(
-      md.indexOf("## Final Step Loop 1 - Initial Attempt")
+      md.indexOf("## Final Step Loop 1 — Initial Attempt")
     );
-    expect(md).toContain("## Final Step Loop 1 - Initial Attempt");
+    expect(md).toContain("## Final Step Loop 1 — Initial Attempt");
   });
 
   it("prefers canonical ordered entries when provided for export", () => {
@@ -470,7 +470,7 @@ describe("generateMarkdownExport", () => {
 
     const md = generateMarkdownExport(outputs, metadata, { orderedEntries });
     expect(md.indexOf("canonical status")).toBeLessThan(
-      md.indexOf("## Final Step Loop 1 - Initial Attempt")
+      md.indexOf("## Final Step Loop 1 — Initial Attempt")
     );
     expect(md).toContain("canonical final");
   });

@@ -1,4 +1,6 @@
 import {
+  BROWSER_NOTIFICATION_MODES,
+  NOTIFICATION_EVENT_MODES,
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
   type HarnessId,
@@ -293,11 +295,11 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
       enabled: true,
     },
     browser: {
-      mode: "never",
+      mode: BROWSER_NOTIFICATION_MODES.NEVER,
     },
     events: {
-      workflowComplete: "all",
-      promptComplete: "never",
+      workflowComplete: NOTIFICATION_EVENT_MODES.ALL,
+      promptComplete: NOTIFICATION_EVENT_MODES.NEVER,
     },
     includeWorkflowName: true,
     includePromptName: true,

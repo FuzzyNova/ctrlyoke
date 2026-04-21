@@ -277,6 +277,8 @@ export const MESSAGE_TYPES = {
   BROWSER_NOTIFICATION_PERMISSION_REQUEST: "browserNotificationPermissionRequest",
   /** Extension -> Webview: result of browser notification permission request */
   BROWSER_NOTIFICATION_PERMISSION_RESULT: "browserNotificationPermissionResult",
+  /** Extension/Hosted server -> Webview: structured completion notification event */
+  NOTIFICATION_EVENT: "notificationEvent",
 } as const;
 
 // ============================================================================
@@ -302,6 +304,29 @@ export const BROWSER_NOTIFICATION_MODES = {
 
 export type BrowserNotificationMode =
   (typeof BROWSER_NOTIFICATION_MODES)[keyof typeof BROWSER_NOTIFICATION_MODES];
+
+// ============================================================================
+// COMPLETION NOTIFICATION KINDS - Structured completion event categories
+// ============================================================================
+export const COMPLETION_NOTIFICATION_KINDS = {
+  WORKFLOW: "workflow",
+  PROMPT: "prompt",
+} as const;
+
+export type CompletionNotificationKind =
+  (typeof COMPLETION_NOTIFICATION_KINDS)[keyof typeof COMPLETION_NOTIFICATION_KINDS];
+
+// ============================================================================
+// COMPLETION NOTIFICATION SEVERITY - Visual/system notification level
+// ============================================================================
+export const COMPLETION_NOTIFICATION_SEVERITY = {
+  INFO: "info",
+  WARNING: "warning",
+  ERROR: "error",
+} as const;
+
+export type CompletionNotificationSeverity =
+  (typeof COMPLETION_NOTIFICATION_SEVERITY)[keyof typeof COMPLETION_NOTIFICATION_SEVERITY];
 
 // ============================================================================
 // EXECUTION STATES - QueueState.status values

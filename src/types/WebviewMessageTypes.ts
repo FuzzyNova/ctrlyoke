@@ -25,6 +25,8 @@ import {
   EXECUTION_MODES,
   STEP_TYPES,
   type UndoFileAction,
+  type CompletionNotificationKind,
+  type CompletionNotificationSeverity,
 } from "./DashboardConstants";
 import type {
   WorkflowSummary,
@@ -800,6 +802,23 @@ export interface GlobalSettingUpdatedMessage {
   source: string;
 }
 
+export interface CompletionNotificationEventPayload {
+  id: string;
+  kind: CompletionNotificationKind;
+  severity: CompletionNotificationSeverity;
+  workflowId: string;
+  stepIndex?: number;
+  title: string;
+  body: string;
+  tag: string;
+  url?: string;
+}
+
+export interface NotificationEventMessage {
+  type: typeof MESSAGE_TYPES.NOTIFICATION_EVENT;
+  event: CompletionNotificationEventPayload;
+}
+
 /**
  * Reset workflow state message (extension -> webview, bidirectional)
  */
@@ -1181,6 +1200,7 @@ export type IncomingMessage =
   | McpWorkspaceServersResultMessage
   | GlobalSettingsLoadedMessage
   | GlobalSettingUpdatedMessage
+  | NotificationEventMessage
   | DevStatusMessage
   | DevBuildStartedMessage
   | DevBuildOutputMessage

@@ -29,7 +29,7 @@ import {
 import { mapOrderedHistoryEntriesToMessages } from "./outputProjection";
 import { truncate } from "./string";
 import { generateDiffLines } from "./diffUtils";
-import { extractKeyParameters } from "./outputUtils";
+import { extractKeyParameters, getFirstWords } from "./outputUtils";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
 
@@ -43,6 +43,8 @@ interface MarkdownExportItem {
   sequence?: number;
   data: unknown;
   attemptIndex?: number;
+  /** User-defined step name (undefined when none set) */
+  stepName?: string;
 }
 
 function formatToolCallForMarkdown(
@@ -309,9 +311,11 @@ export function generateMarkdownExport(
   lines.push("---");
   lines.push("");
 
-  const sortedOutputs =
+  const sortedOutputs: MarkdownExportItem[] =
     options?.orderedEntries && options.orderedEntries.length > 0
-      ? mapOrderedHistoryEntriesToMessages(options.orderedEntries)
+      ? (mapOrderedHistoryEntriesToMessages(
+          options.orderedEntries
+        ) as unknown as MarkdownExportItem[])
       : [...outputs].sort(
           (left, right) =>
             left.timestamp - right.timestamp ||
@@ -352,12 +356,22 @@ export function generateMarkdownExport(
         item.attemptIndex === 0
           ? "Initial Attempt"
           : `Retry ${item.attemptIndex}`;
-      const stepLabel =
-        item.target.kind === FINAL_STEP_PHASES.FINAL_STEP
-          ? `Final Step Loop ${item.target.index + 1}`
-          : `Prompt ${item.target.index + 1}`;
 
-      lines.push(`## ${stepLabel} - ${attemptLabel}`);
+      const isFinalStep = item.target.kind === FINAL_STEP_PHASES.FINAL_STEP;
+      const stepNum = item.target.index + 1;
+      const isScript = (output as { source?: string }).source === "script";
+
+      const stepDisplayName =
+        item.stepName ||
+        (isScript
+          ? getFirstWords(output.cliCommand, 3)
+          : getFirstWords(output.prompt, 4));
+
+      const stepLabel = isFinalStep
+        ? `Final Step Loop ${stepNum}${item.stepName ? `: ${item.stepName}` : ""}`
+        : `Step ${stepNum}${stepDisplayName ? `: ${stepDisplayName}` : ""}`;
+
+      lines.push(`## ${stepLabel} — ${attemptLabel}`);
       lines.push("");
 
       if (output.prompt) {

@@ -357,3 +357,25 @@ export type GeminiCliModel = (typeof GEMINI_CLI_MODELS)[number];
 export function getGeminiContextWindowSize(_modelId: string): number {
   return 1_000_000;
 }
+
+/**
+ * Returns a human-readable display name for a model, resolved against the
+ * correct label map for the given harness.
+ */
+export function getHarnessModelDisplayName(
+  harnessId: string,
+  modelId: string
+): string {
+  switch (harnessId) {
+    case "claude-cli":
+      return CLAUDE_CLI_MODEL_LABELS[modelId] ?? modelId;
+    case "codex-cli":
+      return CODEX_CLI_MODEL_LABELS[modelId] ?? modelId;
+    case "gemini-cli":
+      return GEMINI_CLI_MODEL_LABELS[modelId] ?? modelId;
+    case "qwen-cli":
+      return QWEN_CLI_MODEL_LABELS[modelId] ?? modelId;
+    default:
+      return COPILOT_MODELS[modelId] ?? modelId;
+  }
+}

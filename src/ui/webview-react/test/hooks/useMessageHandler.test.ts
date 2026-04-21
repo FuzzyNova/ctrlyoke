@@ -5,8 +5,24 @@
  * Strategy: dispatch real window MessageEvents, assert store state mutations.
  * Each test resets all stores to a clean state so tests are independent.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
+import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+
+const { handleCompletionNotificationEventMock } = vi.hoisted(() => ({
+  handleCompletionNotificationEventMock: vi.fn(),
+}));
+
+vi.mock("@utils/browserNotifications", () => ({
+  getNotificationSeverityColor: (severity: string) =>
+    severity === "error"
+      ? "error"
+      : severity === "warning"
+        ? "warning"
+        : "info",
+  handleCompletionNotificationEvent: handleCompletionNotificationEventMock,
+}));
+
 import { useMessageHandler } from "@hooks/useMessageHandler";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -50,6 +66,7 @@ beforeEach(() => {
   useUiStore.getState().resetUi();
   useEditorStore.getState().resetEditor();
   useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
+  handleCompletionNotificationEventMock.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -297,6 +314,64 @@ describe("EXECUTION_COMPLETED", () => {
 
     expect(useWorkflowStore.getState().executionState).toBe(
       EXECUTION_STATES.COMPLETED
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NOTIFICATION_EVENT
+// ---------------------------------------------------------------------------
+
+describe("NOTIFICATION_EVENT", () => {
+  it("shows an in-app toast and delegates browser delivery", () => {
+    renderHook(() => useMessageHandler());
+
+    const fullSettings: FullGlobalSettings = {
+      settings: {
+        notifications: {
+          vscode: { enabled: true },
+          browser: { mode: "connectedOnly" },
+          events: {
+            workflowComplete: "all",
+            promptComplete: "never",
+          },
+          includeWorkflowName: true,
+          includePromptName: true,
+          onlyWhenWindowUnfocused: true,
+        },
+      } as any,
+      sources: {
+        notifications: "user",
+      },
+    };
+    useSettingsStore.getState().setFullGlobalSettings(fullSettings);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.NOTIFICATION_EVENT, {
+        event: {
+          id: "workflow:wf-1:completed",
+          title: "FlightPath - Workflow Timed Out",
+          body: "refactor.flightpath.yaml - completed 2 of 4 prompts before timeout",
+          severity: "warning",
+          tag: "workflow:wf-1",
+          kind: "workflow",
+          url: "https://example.test/?token=abc",
+        },
+      });
+    });
+
+    expect(useUiStore.getState().toast).toEqual({
+      message:
+        "refactor.flightpath.yaml - completed 2 of 4 prompts before timeout",
+      type: "warning",
+      visible: true,
+    });
+    expect(handleCompletionNotificationEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "workflow:wf-1:completed",
+        severity: "warning",
+      }),
+      fullSettings
     );
   });
 });

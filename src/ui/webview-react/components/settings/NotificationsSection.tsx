@@ -1,11 +1,17 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
-  NOTIFICATION_EVENT_MODES,
   BROWSER_NOTIFICATION_MODES,
+  NOTIFICATION_EVENT_MODES,
 } from "@root/types/DashboardConstants";
-import { CustomSelect } from "../shared/CustomSelect";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import { isStandalone } from "@hooks/useVsCodeApi";
+import { CustomSelect } from "../shared/CustomSelect";
+import {
+  disablePushNotifications,
+  enableBrowserNotifications,
+  getBrowserNotificationStatus,
+  type BrowserNotificationStatus,
+} from "@utils/browserNotifications";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -17,26 +23,29 @@ interface ToggleRowProps {
   description?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
-  disabled?: boolean;
 }
 
-function ToggleRow({ label, description, checked, onChange, disabled }: ToggleRowProps) {
+function ToggleRow({
+  label,
+  description,
+  checked,
+  onChange,
+}: ToggleRowProps) {
   return (
-    <label
-      className={`flex items-start gap-3 py-2 group ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
-    >
+    <label className="flex items-start gap-3 py-2 cursor-pointer group">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        disabled={disabled}
-        className={`mt-0.5 w-4 h-4 accent-focus-border shrink-0 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+        className="mt-0.5 w-4 h-4 accent-focus-border shrink-0"
       />
       <span className="flex flex-col">
         <span className="text-sm text-foreground">{label}</span>
-        {description && (
-          <span className="text-xs text-description-fg mt-0.5">{description}</span>
-        )}
+        {description ? (
+          <span className="text-xs text-description-fg mt-0.5">
+            {description}
+          </span>
+        ) : null}
       </span>
     </label>
   );
@@ -50,68 +59,108 @@ const EVENT_MODE_OPTIONS = [
 
 const BROWSER_MODE_OPTIONS = [
   { value: BROWSER_NOTIFICATION_MODES.NEVER, label: "Off" },
-  { value: BROWSER_NOTIFICATION_MODES.CONNECTED_ONLY, label: "While dashboard is open" },
-  { value: BROWSER_NOTIFICATION_MODES.PUSH, label: "Push when backgrounded" },
+  {
+    value: BROWSER_NOTIFICATION_MODES.CONNECTED_ONLY,
+    label: "While dashboard is open",
+  },
+  {
+    value: BROWSER_NOTIFICATION_MODES.PUSH,
+    label: "Push when backgrounded",
+  },
 ];
-
-type BrowserPermission = "unsupported" | "blocked" | "needs-permission" | "granted" | "unknown";
-
-function getBrowserPermission(): BrowserPermission {
-  if (!("Notification" in window)) return "unsupported";
-  switch (Notification.permission) {
-    case "granted": return "granted";
-    case "denied": return "blocked";
-    default: return "needs-permission";
-  }
-}
 
 export function NotificationsSection({ settings, onUpdate }: Props) {
   const notif = settings.settings.notifications;
   const server = settings.settings.server;
-  const s = "user" as const;
+  const scope = "user" as const;
+  const [status, setStatus] = useState<BrowserNotificationStatus | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const [browserPermission, setBrowserPermission] = useState<BrowserPermission>("unknown");
-  const [requestingPermission, setRequestingPermission] = useState(false);
+  const browserModeEnabled =
+    notif.browser.mode !== BROWSER_NOTIFICATION_MODES.NEVER;
+  const needsHttps = browserModeEnabled && !server.tls.enabled;
+  const isIos = /iP(hone|ad)/.test(navigator.userAgent);
+  const isStandaloneIosHomeScreen =
+    isStandalone || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
 
   useEffect(() => {
-    setBrowserPermission(getBrowserPermission());
-  }, []);
+    if (!browserModeEnabled || !isStandalone) {
+      setStatus(null);
+      return;
+    }
 
-  async function handleRequestPermission() {
-    if (!("Notification" in window)) return;
-    setRequestingPermission(true);
+    void refreshStatus();
+  }, [browserModeEnabled, notif.browser.mode]);
+
+  async function refreshStatus() {
+    setStatus(await getBrowserNotificationStatus());
+  }
+
+  async function handleEnableBrowserNotifications() {
+    setBusy(true);
     try {
-      const result = await Notification.requestPermission();
-      setBrowserPermission(result === "granted" ? "granted" : result === "denied" ? "blocked" : "needs-permission");
+      setStatus(await enableBrowserNotifications(notif.browser.mode));
     } finally {
-      setRequestingPermission(false);
+      setBusy(false);
     }
   }
 
-  const browserModeNotNever = notif.browser.mode !== BROWSER_NOTIFICATION_MODES.NEVER;
-  const needsHttps = browserModeNotNever && !server.tls.enabled;
-  const isIos = /iP(hone|ad)/.test(navigator.userAgent);
-  const isStandaloneMode = isStandalone || (window.navigator as any).standalone === true;
-
-  function permissionLabel(): { text: string; cls: string } {
-    switch (browserPermission) {
-      case "unsupported": return { text: "Not supported in this browser", cls: "text-description-fg" };
-      case "blocked": return { text: "Blocked — allow in browser settings", cls: "text-error-fg" };
-      case "needs-permission": return { text: "Permission not yet granted", cls: "text-warning-fg" };
-      case "granted": return { text: "Allowed", cls: "text-bash-status-success" };
-      default: return { text: "Unknown", cls: "text-description-fg" };
+  async function handleDisablePush() {
+    setBusy(true);
+    try {
+      setStatus(await disablePushNotifications());
+    } finally {
+      setBusy(false);
     }
   }
 
-  const perm = permissionLabel();
+  function renderPermissionLabel() {
+    switch (status?.permission) {
+      case "unsupported":
+        return {
+          text: "Not supported in this browser",
+          className: "text-description-fg",
+        };
+      case "blocked":
+        return {
+          text: "Blocked - allow in browser settings",
+          className: "text-error-fg",
+        };
+      case "needs-permission":
+        return {
+          text: "Permission not yet granted",
+          className: "text-warning-fg",
+        };
+      case "granted":
+        return {
+          text: "Allowed",
+          className: "text-bash-status-success",
+        };
+      default:
+        return {
+          text: "Hosted dashboard only",
+          className: "text-description-fg",
+        };
+    }
+  }
+
+  const permission = renderPermissionLabel();
+  const canManagePush =
+    isStandalone &&
+    notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH &&
+    status?.pushSupported &&
+    status.secureContext;
+  const showEnableButton =
+    isStandalone &&
+    browserModeEnabled &&
+    (!status || status.permission !== "granted" || notif.browser.mode !== BROWSER_NOTIFICATION_MODES.PUSH || !status.subscribed);
 
   return (
     <div className="space-y-6">
-      <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+      <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
         Notifications
       </h3>
 
-      {/* ── Channels ──────────────────────────────────────────────────────── */}
       <div className="space-y-3">
         <h4 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
           Channels
@@ -121,117 +170,186 @@ export function NotificationsSection({ settings, onUpdate }: Props) {
           label="VS Code toasts"
           description="Show notification popups in the VS Code window when workflows complete."
           checked={notif.vscode.enabled}
-          onChange={(v) => onUpdate("notifications.vscode.enabled", v, s)}
+          onChange={(value) => onUpdate("notifications.vscode.enabled", value, scope)}
         />
 
         <div>
-          <label htmlFor="notif-browser-mode" className="block text-xs text-description-fg mb-1">
+          <label
+            htmlFor="notif-browser-mode"
+            className="block text-xs text-description-fg mb-1"
+          >
             Browser notifications
           </label>
           <CustomSelect
             id="notif-browser-mode"
             value={notif.browser.mode}
-            onChange={(v) => onUpdate("notifications.browser.mode", v, s)}
+            onChange={(value) =>
+              onUpdate("notifications.browser.mode", value, scope)
+            }
             options={BROWSER_MODE_OPTIONS}
           />
-          {isStandalone && (
+          {!isStandalone ? (
             <p className="text-xs text-description-fg mt-1">
-              Browser notifications apply to the hosted server dashboard, not the VS Code sidebar.
+              Browser notifications apply to the hosted server dashboard, not the
+              VS Code sidebar.
             </p>
-          )}
+          ) : null}
         </div>
 
-        {/* Browser permission status */}
-        {browserModeNotNever && (
-          <div className="space-y-2">
+        {browserModeEnabled ? (
+          <div className="space-y-2 rounded border border-panel-border p-3">
             <div className="flex items-center gap-2">
               <span className="text-xs text-description-fg">Permission:</span>
-              <span className={`text-xs ${perm.cls}`}>{perm.text}</span>
+              <span className={`text-xs ${permission.className}`}>
+                {permission.text}
+              </span>
             </div>
 
-            {browserPermission === "needs-permission" && (
-              <button
-                className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover disabled:opacity-50"
-                onClick={handleRequestPermission}
-                disabled={requestingPermission}
-              >
-                {requestingPermission ? "Requesting…" : "Enable browser notifications"}
-              </button>
-            )}
+            {notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH &&
+            isStandalone ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-description-fg">
+                  Push subscription:
+                </span>
+                <span
+                  className={`text-xs ${status?.subscribed ? "text-bash-status-success" : "text-warning-fg"}`}
+                >
+                  {status?.subscribed ? "Subscribed" : "Not subscribed"}
+                </span>
+              </div>
+            ) : null}
 
-            {needsHttps && (
-              <p className="text-xs text-warning-fg">
-                Phone notifications require HTTPS. Enable server TLS or use a secure tunnel.
-              </p>
-            )}
-
-            {isIos && !isStandaloneMode && (
+            {typeof status?.subscriptionCount === "number" ? (
               <p className="text-xs text-description-fg">
-                For iPhone/iPad push while backgrounded, add FlightPath to the Home Screen first.
+                Active subscriptions: {status.subscriptionCount}
+                {typeof status.staleSubscriptionCount === "number"
+                  ? `, stale: ${status.staleSubscriptionCount}`
+                  : ""}
               </p>
-            )}
+            ) : null}
+
+            {showEnableButton ? (
+              <button
+                type="button"
+                onClick={handleEnableBrowserNotifications}
+                disabled={busy}
+                className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover disabled:opacity-50"
+              >
+                {busy
+                  ? "Updating..."
+                  : notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH
+                    ? "Enable push notifications"
+                    : "Enable browser notifications"}
+              </button>
+            ) : null}
+
+            {canManagePush && status?.subscribed ? (
+              <button
+                type="button"
+                onClick={handleDisablePush}
+                disabled={busy}
+                className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover disabled:opacity-50"
+              >
+                {busy ? "Updating..." : "Disable push notifications"}
+              </button>
+            ) : null}
+
+            {needsHttps ? (
+              <p className="text-xs text-warning-fg">
+                Phone notifications require HTTPS. Enable server TLS or use a secure
+                tunnel.
+              </p>
+            ) : null}
+
+            {notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH &&
+            status &&
+            !status.secureContext ? (
+              <p className="text-xs text-warning-fg">
+                Push subscriptions require a secure context. Use HTTPS or localhost.
+              </p>
+            ) : null}
+
+            {isIos && notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH && !isStandaloneIosHomeScreen ? (
+              <p className="text-xs text-description-fg">
+                For iPhone/iPad push while backgrounded, add FlightPath to the Home
+                Screen first.
+              </p>
+            ) : null}
           </div>
-        )}
+        ) : null}
       </div>
 
-      {/* ── Events ────────────────────────────────────────────────────────── */}
       <div className="space-y-3">
         <h4 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
           Events
         </h4>
 
         <div>
-          <label htmlFor="notif-workflow-complete" className="block text-xs text-description-fg mb-1">
+          <label
+            htmlFor="notif-workflow-complete"
+            className="block text-xs text-description-fg mb-1"
+          >
             Workflow complete
           </label>
           <CustomSelect
             id="notif-workflow-complete"
             value={notif.events.workflowComplete}
-            onChange={(v) => onUpdate("notifications.events.workflowComplete", v, s)}
+            onChange={(value) =>
+              onUpdate("notifications.events.workflowComplete", value, scope)
+            }
             options={EVENT_MODE_OPTIONS}
           />
         </div>
 
         <div>
-          <label htmlFor="notif-prompt-complete" className="block text-xs text-description-fg mb-1">
+          <label
+            htmlFor="notif-prompt-complete"
+            className="block text-xs text-description-fg mb-1"
+          >
             Prompt complete
           </label>
           <CustomSelect
             id="notif-prompt-complete"
             value={notif.events.promptComplete}
-            onChange={(v) => onUpdate("notifications.events.promptComplete", v, s)}
+            onChange={(value) =>
+              onUpdate("notifications.events.promptComplete", value, scope)
+            }
             options={EVENT_MODE_OPTIONS}
           />
         </div>
       </div>
 
-      {/* ── Content ───────────────────────────────────────────────────────── */}
       <div className="space-y-1">
-        <h4 className="text-xs font-semibold uppercase text-description-fg tracking-wide mb-1">
+        <h4 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
           Content
         </h4>
         <ToggleRow
           label="Include workflow name"
           checked={notif.includeWorkflowName}
-          onChange={(v) => onUpdate("notifications.includeWorkflowName", v, s)}
+          onChange={(value) =>
+            onUpdate("notifications.includeWorkflowName", value, scope)
+          }
         />
         <ToggleRow
           label="Include prompt name"
           checked={notif.includePromptName}
-          onChange={(v) => onUpdate("notifications.includePromptName", v, s)}
+          onChange={(value) =>
+            onUpdate("notifications.includePromptName", value, scope)
+          }
         />
       </div>
 
-      {/* ── Noise control ─────────────────────────────────────────────────── */}
       <div className="space-y-1">
-        <h4 className="text-xs font-semibold uppercase text-description-fg tracking-wide mb-1">
+        <h4 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
           Noise control
         </h4>
         <ToggleRow
           label="Only notify when FlightPath is not focused"
-          description="Suppress notifications while the VS Code window or dashboard is in focus."
+          description="Suppress notifications while the VS Code window or hosted dashboard is focused."
           checked={notif.onlyWhenWindowUnfocused}
-          onChange={(v) => onUpdate("notifications.onlyWhenWindowUnfocused", v, s)}
+          onChange={(value) =>
+            onUpdate("notifications.onlyWhenWindowUnfocused", value, scope)
+          }
         />
       </div>
     </div>

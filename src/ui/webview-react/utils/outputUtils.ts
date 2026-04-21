@@ -19,6 +19,17 @@ export {
 } from "./diffUtils";
 
 /**
+ * Returns the first `count` whitespace-delimited words of `text`, appending
+ * "..." when the source has more words than the limit.
+ */
+export function getFirstWords(text: string | undefined, count: number): string {
+  if (!text?.trim()) return "";
+  const words = text.trim().split(/\s+/);
+  const snippet = words.slice(0, count).join(" ");
+  return words.length > count ? `${snippet}...` : snippet;
+}
+
+/**
  * Shorten a file path for display (shows "...parent/file.ext" when too long).
  */
 export function shortenPath(

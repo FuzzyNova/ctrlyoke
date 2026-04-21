@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState, memo } from "react";
-import { formatTime } from "@utils/outputUtils";
+import { formatTime, getFirstWords } from "@utils/outputUtils";
 import { calcContextPct } from "@utils/tokenUtils";
 import { generateId } from "@utils/string";
 import { BashOutput } from "./BashOutput";
@@ -52,6 +52,7 @@ import type {
   WorkspaceSnapshot,
   UndoRecord,
 } from "@root/types/OutputHistoryTypes";
+import { getHarnessModelDisplayName } from "@root/utils/ModelConstants";
 
 // ============================================================================
 // Text Output Component
@@ -686,6 +687,15 @@ export const CliOutput = memo<CliOutputProps>(
       ? (HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO]?.name ??
         harnessId)
       : undefined;
+    const harnessShortName = harnessId
+      ? (HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO]?.shortName ?? harnessId)
+      : undefined;
+    const modelId = structuredMetadata?.model;
+    const modelLabel =
+      harnessId && modelId
+        ? getHarnessModelDisplayName(harnessId, modelId)
+        : modelId;
+    const stepDisplayName = stepName?.trim() ?? getFirstWords(output.prompt, 4);
 
     const handleCopySessionId = useCallback(async () => {
       if (!sessionId) return;
@@ -984,7 +994,13 @@ export const CliOutput = memo<CliOutputProps>(
                 />
                 <span>{sequenceLabel}]</span>
               </span>
-              {displayName && <span className="ml-1">{displayName}</span>}
+              {(() => {
+                const scriptTitle =
+                  displayName || getFirstWords(output.cliCommand, 3);
+                return scriptTitle ? (
+                  <span className="ml-1 text-foreground">{scriptTitle}</span>
+                ) : null;
+              })()}
               {attemptLabel && <span className="ml-1">{attemptLabel}</span>}
             </span>
             {streamingIndicator}
@@ -1064,7 +1080,7 @@ export const CliOutput = memo<CliOutputProps>(
       >
         {/* Header */}
         <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex items-center gap-[var(--spacing-sm)]">
-          <span className="inline-flex items-center">
+          <span className="inline-flex items-center flex-wrap gap-x-1">
             {timestamp && (
               <span className="output-timestamp">[{timestamp}]</span>
             )}
@@ -1073,8 +1089,17 @@ export const CliOutput = memo<CliOutputProps>(
               <i className={`${headerIconClass} codicon-comment`} />
               <span>{sequenceLabel}]</span>
             </span>
-            {displayName && <span className="ml-1">{displayName}</span>}
-            {attemptLabel && <span className="ml-1">{attemptLabel}</span>}
+            {stepDisplayName && (
+              <span className="ml-1 text-foreground">{stepDisplayName}</span>
+            )}
+            {(harnessShortName || modelLabel) && (
+              <span className="text-description-fg font-normal text-[length:var(--fp-output-font-size-xs)]">
+                {[harnessShortName, modelLabel].filter(Boolean).join(" · ")}
+              </span>
+            )}
+            {attemptLabel && (
+              <span className="ml-1">{attemptLabel}</span>
+            )}
           </span>
           {streamingIndicator}
           {(promptUndoActions.undo || promptUndoActions.redo) && (

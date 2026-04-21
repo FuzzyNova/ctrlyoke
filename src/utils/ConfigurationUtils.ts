@@ -79,8 +79,17 @@ export const PATH_CONSTANTS = {
   /** Certs directory name (subdirectory of FLIGHTPATH_DIR) — gitignored */
   CERTS_DIR: "certs",
 
+  /** Notifications directory name (subdirectory of FLIGHTPATH_DIR) */
+  NOTIFICATIONS_DIR: "notifications",
+
   /** Capabilities file name (written by extension, read by MCP server) */
   CAPABILITIES_FILE: "capabilities.json",
+
+  /** Persisted push subscription registry file (inside NOTIFICATIONS_DIR) */
+  PUSH_SUBSCRIPTIONS_FILE: "push-subscriptions.json",
+
+  /** Persisted VAPID key pair file (inside NOTIFICATIONS_DIR) */
+  VAPID_KEYS_FILE: "vapid-keys.json",
 
   /** MCP directory name (subdirectory of FLIGHTPATH_DIR) */
   MCP_DIR: "mcp",

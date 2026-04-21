@@ -6,6 +6,8 @@ import { suite, test, afterEach } from "mocha";
 import { WebviewSettingsSync } from "../../ui/WebviewSettingsSync";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
 import { MESSAGE_TYPES } from "../../types/DashboardConstants";
+import { configService } from "../../config/FlightPathConfigService";
+import { FLIGHTPATH_SETTINGS_DEFAULTS } from "../../types/FlightPathSettings";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -37,6 +39,53 @@ suite("WebviewSettingsSync", () => {
         // best-effort cleanup
       }
     }
+  });
+
+  suite("handleGlobalSettingsLoadRequest", () => {
+    test("should include notifications settings and source metadata", async () => {
+      const originalGetAll = configService.getAll.bind(configService);
+      const originalResolve = configService.resolve.bind(configService);
+
+      try {
+        configService.getAll = (() => ({
+          ...FLIGHTPATH_SETTINGS_DEFAULTS,
+          notifications: {
+            ...FLIGHTPATH_SETTINGS_DEFAULTS.notifications,
+            browser: {
+              ...FLIGHTPATH_SETTINGS_DEFAULTS.notifications.browser,
+              mode: "push",
+            },
+          },
+        })) as typeof configService.getAll;
+
+        configService.resolve = ((key) => ({
+          value: (configService.getAll() as any)[key],
+          source: key === "notifications" ? "workspace" : "default",
+        })) as typeof configService.resolve;
+
+        const messages: any[] = [];
+        const postMessage = (msg: any) => messages.push(msg);
+        const sync = new WebviewSettingsSync(postMessage, () => undefined);
+
+        await sync.handleGlobalSettingsLoadRequest(postMessage);
+
+        const settingsMsg = messages.find(
+          (m) => m.type === MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED
+        );
+        assert.ok(settingsMsg, "GLOBAL_SETTINGS_LOADED should be sent");
+        assert.strictEqual(
+          settingsMsg.settings.settings.notifications.browser.mode,
+          "push"
+        );
+        assert.strictEqual(
+          settingsMsg.settings.sources.notifications,
+          "workspace"
+        );
+      } finally {
+        configService.getAll = originalGetAll;
+        configService.resolve = originalResolve;
+      }
+    });
   });
 
   // ────────────────────────────────────────────────────────────────────────────

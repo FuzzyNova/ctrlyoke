@@ -381,7 +381,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Register notification manager as a dashboard client so it observes
     // workflow state transitions and fires VS Code toasts as configured.
-    const notificationManager = new NotificationManager();
+    const notificationManager = new NotificationManager(
+      () => workflowOrchestrator
+    );
     workflowOrchestrator.getDashboardBroadcastHub().addClient(notificationManager);
 
     // Share OutputHistoryManager with webview provider (single instance)
@@ -897,6 +899,7 @@ function registerCommands(context: vscode.ExtensionContext) {
         hostedServer = new FlightPathHostedServer(
           hub,
           webviewProvider,
+          () => workflowOrchestrator,
           port,
           workspaceRoot,
           token,

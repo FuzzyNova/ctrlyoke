@@ -413,6 +413,12 @@ export const OutputSection: React.FC = () => {
         sequence: msg.sequence,
         data: msg.data,
         attemptIndex: msg.attemptIndex,
+        stepName:
+          msg.type === "cli"
+            ? (msg.target.kind === FINAL_STEP_PHASES.FINAL_STEP
+                ? finalStep?.name?.trim() || undefined
+                : steps[msg.target.index]?.name?.trim() || undefined)
+            : undefined,
       })),
       {
         fileName: fileName || "Unknown",
@@ -1466,13 +1472,7 @@ export const OutputSection: React.FC = () => {
                                 workflowStep,
                                 `Final Step Loop ${item.target.index + 1}`
                               )
-                            : getStepName(
-                                workflowStep,
-                                getQueueStepFallbackName(
-                                  workflowStep,
-                                  item.target.index
-                                )
-                              )
+                            : workflowStep?.name?.trim() || undefined
                         }
                         attemptIndex={item.attemptIndex || 0}
                         streamingChunk={streamingChunk}

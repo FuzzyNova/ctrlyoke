@@ -5,6 +5,7 @@ import { createServer as createHttpsServer } from "https";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
+import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import type { IDashboardProvider } from "../ui/IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { WorkflowSummary, WorkflowStep } from "../types/FlightPathTypes";
@@ -16,6 +17,7 @@ import type {
 import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
 import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import {
+  BROWSER_NOTIFICATION_MODES,
   MESSAGE_TYPES,
   BROWSER_CLIENT_PREFIX,
   type FinalStepPhase,
@@ -26,6 +28,13 @@ import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import { findWorkflowFilesInWorkspace } from "../utils/WorkflowFileDiscovery";
 import { Log } from "../utils/Log";
+import { configService } from "../config/FlightPathConfigService";
+import {
+  buildPromptCompletionNotification,
+  buildWorkflowCompletionNotification,
+  type CompletionNotificationEvent,
+} from "../ui/notifications/CompletionNotificationFactory";
+import { WebPushService, type WebPushSubscriptionPayload } from "./WebPushService";
 
 export class FlightPathHostedServer
   implements IDashboardProvider, IDashboardSink
@@ -34,14 +43,19 @@ export class FlightPathHostedServer
   private httpServer: Server;
   private wss: WebSocketServer;
   private connections = new Set<WebSocket>();
+  private readonly workflowSummaries = new Map<string, WorkflowSummary>();
+  private readonly notifiedEventIds = new Set<string>();
   private cachedThemeVars: Record<string, string> = {};
   private nextConnectionId = 1;
   private readonly sink: PostMessageDashboardSink;
+  private readonly webPushService: WebPushService;
   private readonly isTls: boolean;
+  private publicUrl?: string;
 
   constructor(
     private hub: DashboardBroadcastHub,
     private webviewProvider: FlightPathWebviewProvider,
+    private readonly getOrchestrator: () => WorkflowOrchestrator,
     private port: number,
     private workspaceRoot: string,
     private token: string,
@@ -49,6 +63,7 @@ export class FlightPathHostedServer
     tlsConfig?: { certPath: string; keyPath: string }
   ) {
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
+    this.webPushService = new WebPushService(workspaceRoot);
     if (tlsConfig) {
       const cert = fs.readFileSync(tlsConfig.certPath);
       const key = fs.readFileSync(tlsConfig.keyPath);
@@ -68,6 +83,7 @@ export class FlightPathHostedServer
     this.wss.on("error", (err: Error) => {
       Log.warn(`FlightPath WebSocket server error: ${err.message}`);
     });
+    this.app.use(express.json({ limit: "64kb" }));
     this.setupRoutes();
     this.setupWebSocket();
     hub.addClient(this);
@@ -80,15 +96,30 @@ export class FlightPathHostedServer
   }
 
   notifyWorkflowAdded(summary: WorkflowSummary): void {
+    this.workflowSummaries.set(summary.id, summary);
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary });
   }
 
   notifyWorkflowDismissed(workflowId: string): void {
+    this.workflowSummaries.delete(workflowId);
+    for (const key of [...this.notifiedEventIds]) {
+      if (key.startsWith(`${workflowId}:`)) {
+        this.notifiedEventIds.delete(key);
+      }
+    }
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId });
   }
 
   notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
+    this.workflowSummaries.set(summary.id, summary);
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
+    void this.dispatchCompletionNotification(
+      buildWorkflowCompletionNotification({
+        summary,
+        settings: configService.getAll().notifications,
+        url: this.publicUrl,
+      })
+    );
   }
 
   notifyActiveWorkflowChanged(_workflowId: string): void {
@@ -230,6 +261,31 @@ export class FlightPathHostedServer
     workflowId?: string
   ): void {
     this.sink.updateStepStatus(stepIndex, status, details, workflowId);
+    if (!workflowId) {
+      return;
+    }
+
+    const summary = this.workflowSummaries.get(workflowId);
+    if (!summary) {
+      return;
+    }
+
+    const steps = this.getOrchestrator().getWorkflow(workflowId)?.getQueueState()
+      .steps;
+    void this.dispatchCompletionNotification(
+      buildPromptCompletionNotification({
+        summary,
+        steps,
+        stepIndex,
+        stepStatus: {
+          state: status.state as StepStatus,
+          duration: status.duration,
+          message: status.message,
+        },
+        settings: configService.getAll().notifications,
+        url: this.publicUrl,
+      })
+    );
   }
   updateRetryAttempt(
     stepIndex: number,
@@ -371,13 +427,71 @@ export class FlightPathHostedServer
       this.setNoStore(res);
       res.sendFile(path.join(__dirname, "server", "standalone-shim.js"));
     });
+    this.app.get("/flightpath-service-worker.js", (_req, res) => {
+      this.setNoStore(res);
+      res.type("application/javascript").send(this.buildServiceWorkerScript());
+    });
     this.app.use(express.static(webviewDist, { index: false }));
 
     // Token is required for the HTML entry point and all API routes.
     const requireToken: express.RequestHandler = (req, res, next) => {
-      if (req.query["token"] === this.token) return next();
+      if (this.requestHasValidToken(req)) return next();
       res.status(401).send("Unauthorized");
     };
+    this.app.get("/manifest.webmanifest", requireToken, (_req, res) => {
+      this.setNoStore(res);
+      res
+        .type("application/manifest+json")
+        .send(JSON.stringify(this.buildManifest()));
+    });
+    this.app.get(
+      "/api/notifications/vapid-public-key",
+      requireToken,
+      async (_req, res) => {
+        res.json({ publicKey: await this.webPushService.getPublicKey() });
+      }
+    );
+    this.app.get(
+      "/api/notifications/subscriptions",
+      requireToken,
+      async (_req, res) => {
+        res.json(await this.webPushService.listSubscriptions());
+      }
+    );
+    this.app.post(
+      "/api/notifications/subscriptions",
+      requireToken,
+      async (req, res) => {
+        const body = req.body as {
+          subscription?: WebPushSubscriptionPayload;
+          label?: string;
+        };
+        if (!isValidPushSubscription(body?.subscription)) {
+          res.status(400).json({ error: "Invalid push subscription payload" });
+          return;
+        }
+        const subscription = await this.webPushService.upsertSubscription(
+          body.subscription,
+          {
+            userAgent: req.get("user-agent") ?? undefined,
+            label: body.label,
+          }
+        );
+        res.status(201).json({ id: subscription.id });
+      }
+    );
+    this.app.delete(
+      "/api/notifications/subscriptions/:id",
+      requireToken,
+      async (req, res) => {
+        const id =
+          typeof req.params.id === "string" ? req.params.id : req.params.id[0];
+        const removed = await this.webPushService.removeSubscription(
+          id
+        );
+        res.json({ removed });
+      }
+    );
     // Serve index.html through buildHtml so all placeholders are patched first.
     this.app.get(["/", "/index.html"], requireToken, (req, res) => {
       this.setNoStore(res);
@@ -443,6 +557,8 @@ export class FlightPathHostedServer
       "font-src 'self'",
       "img-src 'self' data: https:",
       "script-src 'self' 'unsafe-inline'",
+      "worker-src 'self'",
+      "manifest-src 'self'",
       `connect-src ${connectSources.join(" ")}`,
     ].join("; ");
     html = html.replace(
@@ -454,7 +570,7 @@ export class FlightPathHostedServer
     const themeBlock = this.buildThemeStyleBlock();
     return html.replace(
       "</head>",
-      `${themeBlock}<script src="/standalone-shim.js"></script></head>`
+      `${themeBlock}<link rel="manifest" href="/manifest.webmanifest?token=${encodeURIComponent(this.token)}" /><script src="/standalone-shim.js"></script></head>`
     );
   }
 
@@ -465,8 +581,110 @@ export class FlightPathHostedServer
     return vars ? `<style>:root {\n${vars}\n}</style>\n` : "";
   }
 
+  private requestHasValidToken(req: express.Request): boolean {
+    const headerToken = req.get("x-flightpath-token");
+    if (headerToken === this.token) {
+      return true;
+    }
+    return req.query["token"] === this.token;
+  }
+
+  private buildManifest(): Record<string, unknown> {
+    return {
+      name: "FlightPath",
+      short_name: "FlightPath",
+      display: "standalone",
+      start_url: `/?token=${this.token}`,
+      scope: "/",
+      icons: [
+        {
+          src: "/flightpath-icon.svg",
+          sizes: "any",
+          type: "image/svg+xml",
+          purpose: "any maskable",
+        },
+      ],
+      theme_color: "#1f1f1f",
+      background_color: "#1f1f1f",
+    };
+  }
+
+  private buildServiceWorkerScript(): string {
+    return `
+self.addEventListener("push", (event) => {
+  const payload = event.data ? event.data.json() : {};
+  event.waitUntil(
+    self.registration.showNotification(payload.title || "FlightPath", {
+      body: payload.body || "Workflow update available",
+      icon: "/flightpath-icon.svg",
+      badge: "/flightpath-icon.svg",
+      tag: payload.tag,
+      data: { url: payload.url || "/" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  const targetUrl = event.notification?.data?.url || "/";
+  event.notification?.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ("focus" in client) {
+          client.navigate(targetUrl);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(targetUrl);
+    })
+  );
+});
+`.trim();
+  }
+
   private isSafeRequestHost(host: string): boolean {
     return /^(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?$/.test(host);
+  }
+
+  private async dispatchCompletionNotification(
+    event: CompletionNotificationEvent | undefined
+  ): Promise<void> {
+    if (!event) {
+      return;
+    }
+
+    const notificationSettings = configService.getAll().notifications;
+    if (
+      notificationSettings.browser.mode === BROWSER_NOTIFICATION_MODES.NEVER
+    ) {
+      return;
+    }
+    if (this.notifiedEventIds.has(event.id)) {
+      return;
+    }
+    this.notifiedEventIds.add(event.id);
+
+    this.broadcast({
+      type: MESSAGE_TYPES.NOTIFICATION_EVENT,
+      event,
+    });
+
+    if (
+      notificationSettings.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH
+    ) {
+      try {
+        const result = await this.webPushService.sendNotification(event);
+        if (result.sent || result.removed || result.failed) {
+          Log.debug(
+            `[hosted-server] push notification ${event.id} sent=${result.sent} removed=${result.removed} failed=${result.failed}`
+          );
+        }
+      } catch (error) {
+        Log.warn(
+          `[hosted-server] push notification dispatch failed for ${event.id}: ${error}`
+        );
+      }
+    }
   }
 
   // ── WebSocket ─────────────────────────────────────────────────────────────
@@ -578,7 +796,8 @@ export class FlightPathHostedServer
           const scheme = this.isTls ? "https" : "http";
           const host =
             this.bindAddress === "0.0.0.0" ? this.getLanIp() : "localhost";
-          resolve(`${scheme}://${host}:${this.port}/?token=${this.token}`);
+          this.publicUrl = `${scheme}://${host}:${this.port}/?token=${this.token}`;
+          resolve(this.publicUrl);
         };
         this.httpServer.once("error", onError);
         this.httpServer.once("listening", onListening);
@@ -611,4 +830,20 @@ export class FlightPathHostedServer
     // __dirname at runtime = out/ (esbuild resolves __dirname to the output file's directory).
     return path.join(__dirname, "ui", "webview-react");
   }
+}
+
+function isValidPushSubscription(
+  value: unknown
+): value is WebPushSubscriptionPayload {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<WebPushSubscriptionPayload>;
+  return Boolean(
+    candidate.endpoint &&
+      candidate.keys &&
+      candidate.keys.auth &&
+      candidate.keys.p256dh
+  );
 }

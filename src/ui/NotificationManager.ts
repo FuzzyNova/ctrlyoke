@@ -1,29 +1,34 @@
 import * as vscode from "vscode";
-import * as path from "path";
-import {
-  EXECUTION_STATES,
-  NOTIFICATION_EVENT_MODES,
-  type ExecutionState,
-} from "../types/DashboardConstants";
 import { configService } from "../config/FlightPathConfigService";
-import { Log } from "../utils/Log";
-import type { WorkflowSummary } from "../types/FlightPathTypes";
+import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
+import type {
+  WorkflowStep,
+  WorkflowSummary,
+} from "../types/FlightPathTypes";
 import type { DashboardClient } from "./DashboardBroadcastHub";
+import {
+  COMPLETION_NOTIFICATION_SEVERITY,
+  type StepStatus,
+} from "../types/DashboardConstants";
+import {
+  buildPromptCompletionNotification,
+  buildWorkflowCompletionNotification,
+  type CompletionNotificationEvent,
+} from "./notifications/CompletionNotificationFactory";
+import { Log } from "../utils/Log";
 
 /**
  * NotificationManager
  *
- * Listens to workflow state transitions via the DashboardBroadcastHub client
- * protocol and fires VS Code toast notifications when workflows reach terminal
- * states, subject to the user's notification settings.
- *
- * Registered as a DashboardBroadcastHub client by extension.ts after startup.
+ * Observes workflow summary and step-status updates via DashboardBroadcastHub
+ * and emits VS Code toast notifications using the structured notification
+ * builders shared with the hosted browser server.
  */
 export class NotificationManager implements DashboardClient {
   private readonly notifiedKeys = new Set<string>();
   private readonly workflowSummaries = new Map<string, WorkflowSummary>();
 
-  // ── IDashboardProvider (no-ops — we only observe, never drive) ──────────
+  constructor(private readonly getOrchestrator: () => WorkflowOrchestrator) {}
 
   notifyWorkflowAdded(summary: WorkflowSummary): void {
     this.workflowSummaries.set(summary.id, summary);
@@ -31,7 +36,6 @@ export class NotificationManager implements DashboardClient {
 
   notifyWorkflowDismissed(workflowId: string): void {
     this.workflowSummaries.delete(workflowId);
-    // Prune notification keys for this workflow to prevent unbounded growth
     for (const key of [...this.notifiedKeys]) {
       if (key.startsWith(`${workflowId}:`)) {
         this.notifiedKeys.delete(key);
@@ -41,6 +45,11 @@ export class NotificationManager implements DashboardClient {
 
   notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
     this.workflowSummaries.set(summary.id, { ...summary });
+    const event = buildWorkflowCompletionNotification({
+      summary,
+      settings: configService.getAll().notifications,
+    });
+    this.showNotification(event);
   }
 
   notifyActiveWorkflowChanged(_workflowId: string): void {}
@@ -49,42 +58,60 @@ export class NotificationManager implements DashboardClient {
   notifyHarnessAvailability(): void {}
   postMessage(): void {}
   notifyStartupComplete(): void {}
+  updateExecutionState(): void {}
+  updateExecutionCompleted(): void {}
 
   async loadOutputHistoryForWorkflow(): Promise<void> {}
 
-  // ── IDashboardSink (only updateExecutionState matters here) ─────────────
-
-  updateExecutionState(state: string, workflowId?: string): void {
-    if (!workflowId) return;
-    if (
-      state !== EXECUTION_STATES.COMPLETED &&
-      state !== EXECUTION_STATES.ERROR
-    ) {
+  updateStepStatus(
+    stepIndex: number,
+    status: {
+      state: string;
+      duration?: number;
+      message?: string;
+      endConditionResult?: unknown;
+    },
+    _details?: Record<string, unknown>,
+    workflowId?: string
+  ): void {
+    if (!workflowId) {
       return;
     }
-    this.onWorkflowTerminal(workflowId, state as ExecutionState);
+
+    const summary = this.workflowSummaries.get(workflowId);
+    if (!summary) {
+      return;
+    }
+
+    const steps = this.getWorkflowSteps(workflowId);
+    const event = buildPromptCompletionNotification({
+      summary,
+      steps,
+      stepIndex,
+      stepStatus: {
+        state: status.state as StepStatus,
+        duration: status.duration,
+        message: status.message,
+      },
+      settings: configService.getAll().notifications,
+    });
+    this.showNotification(event);
   }
 
-  // ── Notification logic ────────────────────────────────────────────────────
+  private getWorkflowSteps(workflowId: string): WorkflowStep[] | undefined {
+    const workflow = this.getOrchestrator().getWorkflow(workflowId);
+    return workflow?.getQueueState().steps;
+  }
 
-  private onWorkflowTerminal(
-    workflowId: string,
-    state: ExecutionState
+  private showNotification(
+    event: CompletionNotificationEvent | undefined
   ): void {
-    const key = `${workflowId}:workflowComplete`;
-    if (this.notifiedKeys.has(key)) return;
-    this.notifiedKeys.add(key);
+    if (!event) {
+      return;
+    }
 
     const settings = configService.getAll().notifications;
-
-    if (!settings.vscode.enabled) return;
-
-    const mode = settings.events.workflowComplete;
-    if (mode === NOTIFICATION_EVENT_MODES.NEVER) return;
-    if (
-      mode === NOTIFICATION_EVENT_MODES.FAILURES_ONLY &&
-      state !== EXECUTION_STATES.ERROR
-    ) {
+    if (!settings.vscode.enabled) {
       return;
     }
 
@@ -92,67 +119,64 @@ export class NotificationManager implements DashboardClient {
       return;
     }
 
-    const summary = this.workflowSummaries.get(workflowId);
-    this.showWorkflowNotification(state, summary, settings);
-  }
-
-  private showWorkflowNotification(
-    state: ExecutionState,
-    summary: WorkflowSummary | undefined,
-    settings: ReturnType<typeof configService.getAll>["notifications"]
-  ): void {
-    const name =
-      settings.includeWorkflowName && summary
-        ? summary.workflowName ||
-          (summary.filePath ? path.basename(summary.filePath) : undefined)
-        : undefined;
-
-    const stepInfo =
-      summary && summary.totalSteps > 0
-        ? `${summary.currentStep} of ${summary.totalSteps} prompts`
-        : undefined;
-
-    const duration = buildDuration(summary);
-
-    if (state === EXECUTION_STATES.COMPLETED) {
-      const detail = [name, stepInfo, duration].filter(Boolean).join(" — ");
-      const title = "FlightPath — Workflow Complete";
-      const body = detail || "Workflow completed successfully.";
-      Log.debug(`[NotificationManager] Showing completion toast: ${body}`);
-      vscode.window
-        .showInformationMessage(title, { detail: body }, "Open Dashboard", "Dismiss")
-        .then((action) => {
-          if (action === "Open Dashboard") {
-            vscode.commands.executeCommand("flightpath.openPanel");
-          }
-        });
-    } else {
-      const detail = [name, stepInfo ? `stopped at ${stepInfo}` : undefined]
-        .filter(Boolean)
-        .join(" — ");
-      const title = "FlightPath — Workflow Failed";
-      const body = detail || "Workflow failed.";
-      Log.debug(`[NotificationManager] Showing failure toast: ${body}`);
-      vscode.window
-        .showErrorMessage(title, { detail: body }, "Open Dashboard", "View Output", "Dismiss")
-        .then((action) => {
-          if (action === "Open Dashboard") {
-            vscode.commands.executeCommand("flightpath.openPanel");
-          } else if (action === "View Output") {
-            vscode.commands.executeCommand("flightpath.showOutputPanel");
-          }
-        });
+    if (this.notifiedKeys.has(event.id)) {
+      return;
     }
-  }
-}
+    this.notifiedKeys.add(event.id);
 
-function buildDuration(summary: WorkflowSummary | undefined): string | undefined {
-  if (!summary?.startedAt) return undefined;
-  const endMs = summary.completedAt ?? Date.now();
-  const ms = endMs - summary.startedAt;
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
+    Log.debug(
+      `[NotificationManager] showing VS Code notification ${event.id} ${event.title}`
+    );
+
+    if (event.severity === COMPLETION_NOTIFICATION_SEVERITY.ERROR) {
+      void vscode.window
+        .showErrorMessage(
+          event.title,
+          { detail: event.body },
+          "Open Dashboard",
+          "View Output",
+          "Dismiss"
+        )
+        .then((action) => {
+          if (action === "Open Dashboard") {
+            void vscode.commands.executeCommand("flightpath.openPanel");
+          } else if (action === "View Output") {
+            void vscode.commands.executeCommand("flightpath.showOutputPanel");
+          }
+        });
+      return;
+    }
+
+    if (event.severity === COMPLETION_NOTIFICATION_SEVERITY.WARNING) {
+      void vscode.window
+        .showWarningMessage(
+          event.title,
+          { detail: event.body },
+          "Open Dashboard",
+          "View Output",
+          "Dismiss"
+        )
+        .then((action) => {
+          if (action === "Open Dashboard") {
+            void vscode.commands.executeCommand("flightpath.openPanel");
+          } else if (action === "View Output") {
+            void vscode.commands.executeCommand("flightpath.showOutputPanel");
+          }
+        });
+      return;
+    }
+
+    void vscode.window
+      .showInformationMessage(
+        event.title,
+        { detail: event.body },
+        "Open Dashboard",
+        "Dismiss"
+      )
+      .then((action) => {
+        if (action === "Open Dashboard") {
+          void vscode.commands.executeCommand("flightpath.openPanel");
+        }
+      });
+  }
 }
