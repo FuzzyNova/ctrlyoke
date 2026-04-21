@@ -267,7 +267,41 @@ export const MESSAGE_TYPES = {
   // Extension -> Webview: sent by resolveWebviewView() so a retained webview
   // re-sends READY after an extension host restart
   RECONNECT: "reconnect",
+
+  // Browser notification flow — bidirectional
+  /** Webview -> Extension: check current browser notification permission state */
+  BROWSER_NOTIFICATION_STATUS_REQUEST: "browserNotificationStatusRequest",
+  /** Extension -> Webview: current browser notification permission state */
+  BROWSER_NOTIFICATION_STATUS: "browserNotificationStatus",
+  /** Webview -> Extension: request browser notification permission */
+  BROWSER_NOTIFICATION_PERMISSION_REQUEST: "browserNotificationPermissionRequest",
+  /** Extension -> Webview: result of browser notification permission request */
+  BROWSER_NOTIFICATION_PERMISSION_RESULT: "browserNotificationPermissionResult",
 } as const;
+
+// ============================================================================
+// NOTIFICATION EVENT MODES - When to fire workflow/prompt completion notifications
+// ============================================================================
+export const NOTIFICATION_EVENT_MODES = {
+  ALL: "all",
+  FAILURES_ONLY: "failuresOnly",
+  NEVER: "never",
+} as const;
+
+export type NotificationEventMode =
+  (typeof NOTIFICATION_EVENT_MODES)[keyof typeof NOTIFICATION_EVENT_MODES];
+
+// ============================================================================
+// BROWSER NOTIFICATION MODES - Whether/how browser notifications are delivered
+// ============================================================================
+export const BROWSER_NOTIFICATION_MODES = {
+  CONNECTED_ONLY: "connectedOnly",
+  PUSH: "push",
+  NEVER: "never",
+} as const;
+
+export type BrowserNotificationMode =
+  (typeof BROWSER_NOTIFICATION_MODES)[keyof typeof BROWSER_NOTIFICATION_MODES];
 
 // ============================================================================
 // EXECUTION STATES - QueueState.status values

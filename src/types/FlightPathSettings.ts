@@ -4,6 +4,8 @@ import {
   type HarnessId,
   type TerminalCursorStyle,
   type TerminalMobileControlBar,
+  type NotificationEventMode,
+  type BrowserNotificationMode,
 } from "./DashboardConstants";
 import type {
   EndCondition,
@@ -120,8 +122,27 @@ export interface FlightPathGlobalSettings {
     };
   };
 
+  // Notifications
+  notifications: FlightPathNotificationSettings;
+
   // Advanced
   enableDiagnosticLogs: boolean;
+}
+
+export interface FlightPathNotificationSettings {
+  vscode: {
+    enabled: boolean;
+  };
+  browser: {
+    mode: BrowserNotificationMode;
+  };
+  events: {
+    workflowComplete: NotificationEventMode;
+    promptComplete: NotificationEventMode;
+  };
+  includeWorkflowName: boolean;
+  includePromptName: boolean;
+  onlyWhenWindowUnfocused: boolean;
 }
 
 export interface TerminalSettings {
@@ -266,6 +287,21 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
       certPath: "",
       keyPath: "",
     },
+  },
+  notifications: {
+    vscode: {
+      enabled: true,
+    },
+    browser: {
+      mode: "never",
+    },
+    events: {
+      workflowComplete: "all",
+      promptComplete: "never",
+    },
+    includeWorkflowName: true,
+    includePromptName: true,
+    onlyWhenWindowUnfocused: true,
   },
   enableDiagnosticLogs: false,
 };

@@ -876,6 +876,7 @@ export class WebviewSettingsSync {
       "terminal",
       "ui",
       "server",
+      "notifications",
       "enableDiagnosticLogs",
     ];
     const sources: Partial<Record<string, string>> = {};

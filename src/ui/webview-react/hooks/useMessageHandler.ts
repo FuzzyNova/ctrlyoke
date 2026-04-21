@@ -42,6 +42,7 @@ import { WebviewLog } from "@utils/logger";
 import { useTerminalStore } from "../store/terminalStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
+import { showBrowserWorkflowNotification } from "@utils/browserNotifications";
 
 // ============================================================================
 // Types
@@ -753,6 +754,16 @@ function createMessageHandlers(): MessageHandlerMap {
     }
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setExecutionState(message.state as ExecutionState);
+
+    if (message.state === EXECUTION_STATES.ERROR) {
+      const { fullGlobalSettings } = useSettingsStore.getState();
+      showBrowserWorkflowNotification(
+        EXECUTION_STATES.ERROR,
+        message.workflowId ?? "unknown",
+        fullGlobalSettings,
+        workflowStore.workflowName
+      );
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -843,6 +854,14 @@ function createMessageHandlers(): MessageHandlerMap {
     }
     const workflowStore = useWorkflowStore.getState();
     workflowStore.setExecutionState(EXECUTION_STATES.COMPLETED);
+
+    const { fullGlobalSettings } = useSettingsStore.getState();
+    showBrowserWorkflowNotification(
+      EXECUTION_STATES.COMPLETED,
+      message.workflowId ?? "unknown",
+      fullGlobalSettings,
+      workflowStore.workflowName
+    );
   };
 
   // --------------------------------------------------------------------------

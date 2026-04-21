@@ -47,6 +47,7 @@ import {
   createUserConfigBackend,
   createWorkspaceConfigBackend,
 } from "./config/FileConfigBackend";
+import { NotificationManager } from "./ui/NotificationManager";
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: FlightPathWebviewProvider;
@@ -377,6 +378,11 @@ export async function activate(context: vscode.ExtensionContext) {
     setPtyPostMessage((msg) =>
       workflowOrchestrator.getDashboardBroadcastHub().postMessage(msg)
     );
+
+    // Register notification manager as a dashboard client so it observes
+    // workflow state transitions and fires VS Code toasts as configured.
+    const notificationManager = new NotificationManager();
+    workflowOrchestrator.getDashboardBroadcastHub().addClient(notificationManager);
 
     // Share OutputHistoryManager with webview provider (single instance)
     webviewProvider.setOutputHistoryManager(
