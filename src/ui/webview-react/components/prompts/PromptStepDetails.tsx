@@ -184,7 +184,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
       {/* Property overrides — compact chips for prompt-level overrides */}
       {overrides && overrides.length > 0 && (
         <div
-          className={`mt-0.5 pl-5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[10px] opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+          className={`mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[10px] opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
         >
           {overrides.map((override, i) => (
             <span
