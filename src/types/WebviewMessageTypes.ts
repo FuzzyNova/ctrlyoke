@@ -336,7 +336,8 @@ export type DevDashboardAction =
   | "reloadWindow"
   | "restartExtensionHost"
   | "buildExtensionAndReload"
-  | "buildAllAndReload";
+  | "buildAllAndReload"
+  | "sendTestNotification";
 
 export interface DevStatusMessage {
   type: typeof MESSAGE_TYPES.DEV_STATUS;

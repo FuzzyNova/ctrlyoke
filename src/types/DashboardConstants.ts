@@ -254,6 +254,7 @@ export const MESSAGE_TYPES = {
   DEV_RESTART_EXTENSION_HOST: "dev:restartExtensionHost",
   DEV_BUILD_EXTENSION_AND_RELOAD: "dev:buildExtensionAndReload",
   DEV_BUILD_ALL_AND_RELOAD: "dev:buildAllAndReload",
+  DEV_SEND_TEST_NOTIFICATION: "dev:sendTestNotification",
   DEV_REQUEST_STATUS: "dev:requestStatus",
 
   // Developer dashboard events — Extension → Webview (dev builds only)

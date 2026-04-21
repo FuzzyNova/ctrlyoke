@@ -31,7 +31,9 @@ import { Log } from "../utils/Log";
 import { configService } from "../config/FlightPathConfigService";
 import {
   buildPromptCompletionNotification,
+  buildTestNotificationEvent,
   buildWorkflowCompletionNotification,
+  isWorkflowCompletionTransition,
   type CompletionNotificationEvent,
 } from "../ui/notifications/CompletionNotificationFactory";
 import { WebPushService, type WebPushSubscriptionPayload } from "./WebPushService";
@@ -114,8 +116,14 @@ export class FlightPathHostedServer
   }
 
   notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
+    const previousSummary = this.workflowSummaries.get(summary.id);
     this.workflowSummaries.set(summary.id, summary);
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
+
+    if (!isWorkflowCompletionTransition(previousSummary, summary)) {
+      return;
+    }
+
     void this.dispatchCompletionNotification(
       buildWorkflowCompletionNotification({
         summary,
@@ -390,6 +398,13 @@ export class FlightPathHostedServer
   notifyWorkflowStateReset(steps: any[], workflowId?: string): void {
     this.sink.notifyWorkflowStateReset(steps, workflowId);
   }
+
+  async sendTestNotification(): Promise<void> {
+    await this.dispatchCompletionNotification(
+      buildTestNotificationEvent(this.publicUrl)
+    );
+  }
+
   notifyStartPositionSet(
     steps: WorkflowStep[],
     currentIndex: number,

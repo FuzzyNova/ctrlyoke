@@ -12,7 +12,9 @@ import {
 } from "../types/DashboardConstants";
 import {
   buildPromptCompletionNotification,
+  buildTestNotificationEvent,
   buildWorkflowCompletionNotification,
+  isWorkflowCompletionTransition,
   type CompletionNotificationEvent,
 } from "./notifications/CompletionNotificationFactory";
 import { Log } from "../utils/Log";
@@ -44,7 +46,13 @@ export class NotificationManager implements DashboardClient {
   }
 
   notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
+    const previousSummary = this.workflowSummaries.get(summary.id);
     this.workflowSummaries.set(summary.id, { ...summary });
+
+    if (!isWorkflowCompletionTransition(previousSummary, summary)) {
+      return;
+    }
+
     const event = buildWorkflowCompletionNotification({
       summary,
       settings: configService.getAll().notifications,
@@ -62,6 +70,10 @@ export class NotificationManager implements DashboardClient {
   updateExecutionCompleted(): void {}
 
   async loadOutputHistoryForWorkflow(): Promise<void> {}
+
+  sendTestNotification(): void {
+    this.showNotification(buildTestNotificationEvent());
+  }
 
   updateStepStatus(
     stepIndex: number,

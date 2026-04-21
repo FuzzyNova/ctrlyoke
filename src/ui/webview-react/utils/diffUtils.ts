@@ -28,6 +28,95 @@ export interface SideBySideRow {
   right: { line: DiffLine; originalIndex: number } | null;
 }
 
+function getStructuredPatchSignature(hunk: UnifiedDiffHunk): string {
+  return [
+    hunk.oldStart,
+    hunk.oldLines,
+    hunk.newStart,
+    hunk.newLines,
+    hunk.lines.join("\u0000"),
+  ].join("|");
+}
+
+function isDisplayableDiffLine(line: string): boolean {
+  return !(
+    line === "\\ No newline at end of file" ||
+    line.startsWith("@@ ") ||
+    line.startsWith("diff --git ") ||
+    line.startsWith("index ")
+  );
+}
+
+function hasPatchOrderingRegression(hunks: UnifiedDiffHunk[]): boolean {
+  let prevOldStart: number | null = null;
+  let prevNewStart: number | null = null;
+
+  for (const hunk of hunks) {
+    if (
+      prevOldStart !== null &&
+      prevNewStart !== null &&
+      (hunk.oldStart < prevOldStart || hunk.newStart < prevNewStart)
+    ) {
+      return true;
+    }
+    prevOldStart = hunk.oldStart;
+    prevNewStart = hunk.newStart;
+  }
+
+  return false;
+}
+
+/**
+ * Deduplicate exact repeated hunks while preserving their original order.
+ */
+export function normalizeStructuredPatch(
+  hunks: UnifiedDiffHunk[] | undefined
+): UnifiedDiffHunk[] {
+  if (!hunks || hunks.length === 0) return [];
+
+  const seen = new Set<string>();
+  const normalized: UnifiedDiffHunk[] = [];
+
+  for (const hunk of hunks) {
+    if (!Array.isArray(hunk.lines) || hunk.lines.length === 0) continue;
+    const signature = getStructuredPatchSignature(hunk);
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+    normalized.push(hunk);
+  }
+
+  return normalized;
+}
+
+/**
+ * Detect patch sequences that are unlikely to belong to a single file diff.
+ */
+export function isStructuredPatchMalformed(
+  hunks: UnifiedDiffHunk[] | undefined
+): boolean {
+  if (!hunks || hunks.length === 0) return false;
+
+  const normalized = normalizeStructuredPatch(hunks);
+  return (
+    normalized.length !== hunks.length || hasPatchOrderingRegression(normalized)
+  );
+}
+
+export function countStructuredPatchDisplayLines(
+  hunks: UnifiedDiffHunk[] | undefined
+): number {
+  return normalizeStructuredPatch(hunks).reduce(
+    (count, hunk) =>
+      count +
+      hunk.lines.reduce(
+        (lineCount, line) =>
+          lineCount + (isDisplayableDiffLine(line) ? 1 : 0),
+        0
+      ),
+    0
+  );
+}
+
 /**
  * Convert a flat DiffLine array into SideBySideRow pairs.
  *
@@ -81,11 +170,13 @@ export function buildSideBySideRows(lines: DiffLine[]): SideBySideRow[] {
 export function parseUnifiedDiff(hunks: UnifiedDiffHunk[]): DiffLine[] {
   const lines: DiffLine[] = [];
 
-  hunks.forEach((hunk) => {
+  normalizeStructuredPatch(hunks).forEach((hunk) => {
     let oldLineNum = hunk.oldStart;
     let newLineNum = hunk.newStart;
 
     hunk.lines.forEach((line) => {
+      if (!isDisplayableDiffLine(line)) return;
+
       const prefix = line[0];
       const content = line.slice(1);
 
@@ -95,7 +186,7 @@ export function parseUnifiedDiff(hunks: UnifiedDiffHunk[]): DiffLine[] {
       } else if (prefix === "-") {
         lines.push({ type: "removed", oldLineNum, content });
         oldLineNum++;
-      } else {
+      } else if (prefix === " ") {
         lines.push({ type: "context", oldLineNum, newLineNum, content });
         oldLineNum++;
         newLineNum++;

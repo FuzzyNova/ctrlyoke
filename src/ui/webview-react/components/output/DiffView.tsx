@@ -25,6 +25,8 @@ import {
   parseUnifiedDiff,
   generateDiffLines,
   buildSideBySideRows,
+  normalizeStructuredPatch,
+  countStructuredPatchDisplayLines,
   type DiffLine,
   type SideBySideRow,
 } from "@utils/outputUtils";
@@ -133,8 +135,9 @@ export const DiffView: React.FC<DiffViewProps> = ({
   // every file edit at mount time.
   const diffLines = useMemo((): DiffLine[] => {
     if (!isExpanded) return [];
-    if (structuredPatch && structuredPatch.length > 0) {
-      return parseUnifiedDiff(structuredPatch);
+    const normalizedPatch = normalizeStructuredPatch(structuredPatch);
+    if (normalizedPatch.length > 0) {
+      return parseUnifiedDiff(normalizedPatch);
     }
     if (oldContent && newContent) {
       return generateDiffLines(oldContent, newContent);
@@ -148,47 +151,18 @@ export const DiffView: React.FC<DiffViewProps> = ({
     return buildSideBySideRows(diffLines);
   }, [isExpanded, isWide, diffLines]);
 
-  const leftDiffPaneRef = useRef<HTMLDivElement>(null);
-  const rightDiffPaneRef = useRef<HTMLDivElement>(null);
-  const isSyncingDiffScroll = useRef(false);
-
-  const syncDiffScroll = useCallback(
-    (source: HTMLDivElement, target: HTMLDivElement | null) => {
-      if (!target || isSyncingDiffScroll.current) return;
-      isSyncingDiffScroll.current = true;
-      target.scrollLeft = source.scrollLeft;
-      requestAnimationFrame(() => {
-        isSyncingDiffScroll.current = false;
-      });
-    },
-    []
-  );
-
-  const handleLeftDiffScroll = useCallback(
-    (event: React.UIEvent<HTMLDivElement>) => {
-      syncDiffScroll(event.currentTarget, rightDiffPaneRef.current);
-    },
-    [syncDiffScroll]
-  );
-
-  const handleRightDiffScroll = useCallback(
-    (event: React.UIEvent<HTMLDivElement>) => {
-      syncDiffScroll(event.currentTarget, leftDiffPaneRef.current);
-    },
-    [syncDiffScroll]
-  );
-
   // Derive a quick line-count estimate for the summary badge without computing
   // the full diff. For structured patches we count hunk lines; for full-file
   // pairs we just count the larger file.
   const estimatedLineCount = useMemo(() => {
-    if (structuredPatch && structuredPatch.length > 0) {
-      return structuredPatch.reduce((acc, h) => acc + h.lines.length, 0);
+    const normalizedPatch = normalizeStructuredPatch(structuredPatch);
+    if (normalizedPatch.length > 0) {
+      return countStructuredPatchDisplayLines(normalizedPatch);
     }
     if (oldContent || newContent) {
       const oldLines = oldContent ? oldContent.split("\n").length : 0;
       const newLines = newContent ? newContent.split("\n").length : 0;
-      return oldLines + newLines;
+      return Math.max(oldLines, newLines);
     }
     return 0;
   }, [structuredPatch, oldContent, newContent]);
@@ -263,29 +237,14 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
       {/* Diff lines — only mounted when expanded */}
       {isExpanded && diffLines.length > 0 && (
-        <div
-          className={`rounded-[3px] overflow-y-hidden border border-vscode-border bg-vscode-bg ${isWide ? "overflow-x-hidden" : "overflow-x-auto"}`}
-        >
+        <div className="rounded-[3px] overflow-x-auto overflow-y-hidden border border-vscode-border bg-vscode-bg">
           {isWide
             ? /* ── Side-by-side view ── */
               (
-                <div className="flex min-w-0">
-                  <SideBySideDiffPane
-                    ref={leftDiffPaneRef}
-                    side="left"
-                    rows={sideBySideRows}
-                    highlightedLines={highlightedLines}
-                    className="border-r border-diff-line-num"
-                    onScroll={handleLeftDiffScroll}
-                  />
-                  <SideBySideDiffPane
-                    ref={rightDiffPaneRef}
-                    side="right"
-                    rows={sideBySideRows}
-                    highlightedLines={highlightedLines}
-                    onScroll={handleRightDiffScroll}
-                  />
-                </div>
+                <SideBySideDiffTable
+                  rows={sideBySideRows}
+                  highlightedLines={highlightedLines}
+                />
               )
             : /* ── Inline unified view ── */
               diffLines.map((line, index) => {
@@ -330,51 +289,52 @@ export const DiffView: React.FC<DiffViewProps> = ({
 };
 
 // ---------------------------------------------------------------------------
-// Side-by-side panes — each side scrolls horizontally and is synchronized by
-// the parent so long lines cannot bleed into the opposite pane.
+// Side-by-side table — wide diffs share a single horizontal scroller so both
+// columns remain aligned even when one side is wider than the other.
 // ---------------------------------------------------------------------------
 
-interface SideBySideDiffPaneProps {
-  side: "left" | "right";
+interface SideBySideDiffTableProps {
   rows: SideBySideRow[];
   highlightedLines: string[];
-  className?: string;
-  onScroll: (event: React.UIEvent<HTMLDivElement>) => void;
 }
 
-const SideBySideDiffPane = React.forwardRef<
-  HTMLDivElement,
-  SideBySideDiffPaneProps
->(({ side, rows, highlightedLines, className = "", onScroll }, ref) => (
-  <div
-    ref={ref}
-    className={`flex-1 min-w-0 overflow-x-auto overflow-y-hidden ${className}`}
-    onScroll={onScroll}
-  >
-    <div className="min-w-full w-max">
+const SideBySideDiffTable: React.FC<SideBySideDiffTableProps> = ({
+  rows,
+  highlightedLines,
+}) => (
+  <table className="min-w-full w-max border-collapse">
+    <tbody>
       {rows.map((row, rowIndex) => (
-        <SideBySideDiffCell
-          key={rowIndex}
-          side={side}
-          row={row}
-          highlightedLines={highlightedLines}
-        />
+        <tr key={rowIndex} className="align-top">
+          <SideBySideDiffCell
+            side="left"
+            row={row}
+            highlightedLines={highlightedLines}
+            className="border-r border-diff-line-num"
+          />
+          <SideBySideDiffCell
+            side="right"
+            row={row}
+            highlightedLines={highlightedLines}
+          />
+        </tr>
       ))}
-    </div>
-  </div>
-));
-SideBySideDiffPane.displayName = "SideBySideDiffPane";
+    </tbody>
+  </table>
+);
 
 interface SideBySideDiffCellProps {
   side: "left" | "right";
   row: SideBySideRow;
   highlightedLines: string[];
+  className?: string;
 }
 
 const SideBySideDiffCell: React.FC<SideBySideDiffCellProps> = ({
   side,
   row,
   highlightedLines,
+  className = "",
 }) => {
   const cell = side === "left" ? row.left : row.right;
   const lineType = cell?.line.type ?? "context";
@@ -397,29 +357,31 @@ const SideBySideDiffCell: React.FC<SideBySideDiffCellProps> = ({
       : "";
 
   return (
-    <div
-      className={`flex items-baseline whitespace-pre font-inherit leading-[1.4] py-px ${bg}`}
+    <td
+      className={`align-top w-1/2 ${bg} ${className}`}
     >
-      <span
-        className={`inline-block w-10 text-right px-1.5 select-none text-[length:var(--fp-output-font-size-xs)] opacity-60 shrink-0 text-diff-line-num ${styles.lineNumColor}`}
-      >
-        {lineNumber}
-      </span>
-      <span className="inline-block py-0.5 pr-2 whitespace-pre">
-        {cell !== null && (
-          <>
-            <span className={`font-bold ${styles.contentColor}`}>
-              {styles.prefix}
-            </span>
-            {highlighted ? (
-              <span dangerouslySetInnerHTML={{ __html: highlighted }} />
-            ) : (
-              <span className={styles.contentColor}>{cell.line.content}</span>
-            )}
-          </>
-        )}
-      </span>
-    </div>
+      <div className="flex items-baseline whitespace-pre font-inherit leading-[1.4] py-px min-w-full">
+        <span
+          className={`inline-block w-10 text-right px-1.5 select-none text-[length:var(--fp-output-font-size-xs)] opacity-60 shrink-0 text-diff-line-num ${styles.lineNumColor}`}
+        >
+          {lineNumber}
+        </span>
+        <span className="inline-block py-0.5 pr-2 whitespace-pre min-w-0">
+          {cell !== null && (
+            <>
+              <span className={`font-bold ${styles.contentColor}`}>
+                {styles.prefix}
+              </span>
+              {highlighted ? (
+                <span dangerouslySetInnerHTML={{ __html: highlighted }} />
+              ) : (
+                <span className={styles.contentColor}>{cell.line.content}</span>
+              )}
+            </>
+          )}
+        </span>
+      </div>
+    </td>
   );
 };
 

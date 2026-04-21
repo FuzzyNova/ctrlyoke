@@ -13,6 +13,10 @@ const { handleCompletionNotificationEventMock } = vi.hoisted(() => ({
   handleCompletionNotificationEventMock: vi.fn(),
 }));
 
+const { webviewWarnMock } = vi.hoisted(() => ({
+  webviewWarnMock: vi.fn(),
+}));
+
 vi.mock("@utils/browserNotifications", () => ({
   getNotificationSeverityColor: (severity: string) =>
     severity === "error"
@@ -21,6 +25,15 @@ vi.mock("@utils/browserNotifications", () => ({
         ? "warning"
         : "info",
   handleCompletionNotificationEvent: handleCompletionNotificationEventMock,
+}));
+
+vi.mock("@utils/logger", () => ({
+  WebviewLog: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: webviewWarnMock,
+    error: vi.fn(),
+  },
 }));
 
 import { useMessageHandler } from "@hooks/useMessageHandler";
@@ -67,6 +80,7 @@ beforeEach(() => {
   useEditorStore.getState().resetEditor();
   useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
   handleCompletionNotificationEventMock.mockReset();
+  webviewWarnMock.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -785,6 +799,23 @@ describe("cleanup", () => {
     // State should remain IDLE since the listener was removed
     expect(useWorkflowStore.getState().executionState).toBe(
       EXECUTION_STATES.IDLE
+    );
+  });
+});
+
+describe("message passthroughs", () => {
+  it("does not warn for context reference validation replies handled by the editor", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.CONTEXT_REFS_VALIDATION, {
+        seq: 1,
+        results: [],
+      });
+    });
+
+    expect(webviewWarnMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("Unknown message type")
     );
   });
 });

@@ -6,6 +6,9 @@ import {
   extractKeyParameters,
   parseUnifiedDiff,
   generateDiffLines,
+  normalizeStructuredPatch,
+  isStructuredPatchMalformed,
+  countStructuredPatchDisplayLines,
 } from "@utils/outputUtils";
 import { generateMarkdownExport } from "@utils/markdownExport";
 import type { UnifiedDiffHunk } from "@/types/cliEvents";
@@ -193,6 +196,94 @@ describe("parseUnifiedDiff", () => {
 
   it("returns empty array for empty hunks", () => {
     expect(parseUnifiedDiff([])).toEqual([]);
+  });
+
+  it("deduplicates repeated hunks and skips non-display diff metadata", () => {
+    const duplicatedHunks: UnifiedDiffHunk[] = [
+      {
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 1,
+        lines: [
+          "-removed line",
+          "+added line",
+          "\\ No newline at end of file",
+        ],
+      },
+      {
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 1,
+        lines: [
+          "-removed line",
+          "+added line",
+          "\\ No newline at end of file",
+        ],
+      },
+    ];
+
+    const result = parseUnifiedDiff(duplicatedHunks);
+    expect(result).toHaveLength(2);
+    expect(result.map((line) => line.content)).toEqual([
+      "removed line",
+      "added line",
+    ]);
+  });
+});
+
+describe("structured patch helpers", () => {
+  it("removes exact duplicate hunks while preserving order", () => {
+    const hunk: UnifiedDiffHunk = {
+      oldStart: 5,
+      oldLines: 1,
+      newStart: 5,
+      newLines: 1,
+      lines: ["-before", "+after"],
+    };
+
+    expect(normalizeStructuredPatch([hunk, hunk])).toEqual([hunk]);
+  });
+
+  it("flags out-of-order hunk sequences as malformed", () => {
+    const malformedPatch: UnifiedDiffHunk[] = [
+      {
+        oldStart: 10,
+        oldLines: 1,
+        newStart: 10,
+        newLines: 1,
+        lines: ["-late", "+later"],
+      },
+      {
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 1,
+        lines: ["-early", "+earlier"],
+      },
+    ];
+
+    expect(isStructuredPatchMalformed(malformedPatch)).toBe(true);
+  });
+
+  it("counts only displayable diff lines", () => {
+    const patch: UnifiedDiffHunk[] = [
+      {
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 1,
+        lines: [
+          "-before",
+          "+after",
+          "\\ No newline at end of file",
+          "@@ skipped metadata @@",
+        ],
+      },
+    ];
+
+    expect(countStructuredPatchDisplayLines(patch)).toBe(2);
   });
 });
 

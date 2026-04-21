@@ -1058,6 +1058,11 @@ window.vscodeApi = acquireVsCodeApi();
     await handleDevDashboardAction(action, {
       context: this.context,
       postMessage,
+      sendTestNotification: async () => {
+        await vscode.commands.executeCommand(
+          "flightpath.dev.sendTestNotification"
+        );
+      },
     });
   }
 

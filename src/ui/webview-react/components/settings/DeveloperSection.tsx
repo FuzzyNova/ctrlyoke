@@ -44,6 +44,10 @@ export function DeveloperSection() {
   const buildDisabled = devBuild.isBuilding;
   const actions: DevAction[] = [
     {
+      label: "Send Test Notification",
+      messageType: MESSAGE_TYPES.DEV_SEND_TEST_NOTIFICATION,
+    },
+    {
       label: "Rebuild Extension",
       messageType: MESSAGE_TYPES.DEV_BUILD_EXTENSION,
     },

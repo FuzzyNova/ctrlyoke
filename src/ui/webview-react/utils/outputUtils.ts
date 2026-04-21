@@ -16,6 +16,9 @@ export {
   parseUnifiedDiff,
   generateDiffLines,
   buildSideBySideRows,
+  normalizeStructuredPatch,
+  isStructuredPatchMalformed,
+  countStructuredPatchDisplayLines,
 } from "./diffUtils";
 
 /**

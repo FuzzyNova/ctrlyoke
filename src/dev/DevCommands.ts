@@ -36,11 +36,17 @@ export type DevDashboardAction =
   | "reloadWindow"
   | "restartExtensionHost"
   | "buildExtensionAndReload"
-  | "buildAllAndReload";
+  | "buildAllAndReload"
+  | "sendTestNotification";
 
 export interface DevDashboardActionOptions {
   context: vscode.ExtensionContext;
   postMessage: (message: unknown) => void;
+  sendTestNotification?: () => Promise<void>;
+}
+
+export interface DevCommandHandlers {
+  sendTestNotification?: () => Promise<void>;
 }
 
 let isBuilding = false;
@@ -245,7 +251,21 @@ export async function handleDevDashboardAction(
   action: DevDashboardAction,
   options: DevDashboardActionOptions
 ): Promise<void> {
-  const { context, postMessage } = options;
+  const { context, postMessage, sendTestNotification } = options;
+
+  if (action === "sendTestNotification") {
+    if (!sendTestNotification) {
+      postMessage({
+        type: MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE,
+        command: action,
+        reason: "Test notifications are unavailable in this runtime.",
+      });
+      return;
+    }
+
+    await sendTestNotification();
+    return;
+  }
 
   if (action === "reloadWindow") {
     await executeRestartCommand(DEV_RELOAD_WINDOW_COMMAND, postMessage);
@@ -960,7 +980,10 @@ async function dumpVsCodeCssVariables(
  *
  * @param context Extension context for registering disposables
  */
-export function registerDevCommands(context: vscode.ExtensionContext): void {
+export function registerDevCommands(
+  context: vscode.ExtensionContext,
+  handlers: DevCommandHandlers = {}
+): void {
   Log.info("🔧 FlightPath: Registering development commands...");
 
   // Set context key so the devMenu command is visible in the command palette
@@ -1069,6 +1092,17 @@ export function registerDevCommands(context: vscode.ExtensionContext): void {
     })
   );
 
+  if (handlers.sendTestNotification) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(
+        "flightpath.dev.sendTestNotification",
+        async () => {
+          await handlers.sendTestNotification?.();
+        }
+      )
+    );
+  }
+
   // ── Dev menu (single palette-visible entry) ─────────────────────────────
   // Shows a QuickPick that dispatches to any of the individual dev commands.
   context.subscriptions.push(
@@ -1126,6 +1160,16 @@ export function registerDevCommands(context: vscode.ExtensionContext): void {
             "Write all --vscode-* CSS vars → dev/reference/vscode-css-vars.json",
           command: "flightpath.dumpCssVars",
         },
+        ...(handlers.sendTestNotification
+          ? [
+              {
+                label: "$(bell) Send Test Notification",
+                description:
+                  "Trigger a browser/push + VS Code notification test event",
+                command: "flightpath.dev.sendTestNotification",
+              },
+            ]
+          : []),
       ];
 
       const picked = await vscode.window.showQuickPick(items, {

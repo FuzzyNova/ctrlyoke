@@ -323,6 +323,10 @@ export class WebviewMessageRouter {
       MESSAGE_TYPES.DEV_BUILD_ALL_AND_RELOAD,
       routeDevAction("buildAllAndReload")
     );
+    table.set(
+      MESSAGE_TYPES.DEV_SEND_TEST_NOTIFICATION,
+      routeDevAction("sendTestNotification")
+    );
     table.set(MESSAGE_TYPES.DEV_REQUEST_STATUS, async () => {
       await this.callbacks.handleDevStatusRequest?.(
         this.getCurrentPostMessage()

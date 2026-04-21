@@ -52,6 +52,7 @@ import { NotificationManager } from "./ui/NotificationManager";
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: FlightPathWebviewProvider;
 let hostedServer: FlightPathHostedServer | undefined;
+let notificationManager: NotificationManager | undefined;
 
 /**
  * Register Language Model Tools for VS Code Chat integration
@@ -381,9 +382,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Register notification manager as a dashboard client so it observes
     // workflow state transitions and fires VS Code toasts as configured.
-    const notificationManager = new NotificationManager(
-      () => workflowOrchestrator
-    );
+    notificationManager = new NotificationManager(() => workflowOrchestrator);
     workflowOrchestrator.getDashboardBroadcastHub().addClient(notificationManager);
 
     // Share OutputHistoryManager with webview provider (single instance)
@@ -998,11 +997,16 @@ function registerCommands(context: vscode.ExtensionContext) {
     void vscode.commands.executeCommand("flightpath.enableServer");
   }
 
-  // Register development commands (only in dev mode)
-  if (IS_DEV_MODE) {
-    const { registerDevCommands } = require("./dev/DevCommands");
-    registerDevCommands(context);
-  }
+    // Register development commands (only in dev mode)
+    if (IS_DEV_MODE) {
+      const { registerDevCommands } = require("./dev/DevCommands");
+      registerDevCommands(context, {
+        sendTestNotification: async () => {
+          notificationManager?.sendTestNotification();
+          await hostedServer?.sendTestNotification();
+        },
+      });
+    }
 
   Log.debug("FlightPath: Commands registered successfully");
 }

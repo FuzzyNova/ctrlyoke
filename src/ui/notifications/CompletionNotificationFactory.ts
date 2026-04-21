@@ -47,6 +47,39 @@ interface PromptNotificationInput {
   url?: string;
 }
 
+export function buildTestNotificationEvent(
+  url?: string
+): CompletionNotificationEvent {
+  const eventId = `test:${Date.now()}`;
+
+  return {
+    id: eventId,
+    kind: COMPLETION_NOTIFICATION_KINDS.WORKFLOW,
+    severity: COMPLETION_NOTIFICATION_SEVERITY.INFO,
+    workflowId: "test",
+    title: "FlightPath - Test Notification",
+    body: "Developer test notification",
+    tag: `flightpath-${eventId}`,
+    url,
+  };
+}
+
+export function isWorkflowCompletionTransition(
+  previousSummary: WorkflowSummary | undefined,
+  nextSummary: WorkflowSummary
+): boolean {
+  const nextState = nextSummary.executionState;
+
+  if (
+    nextState !== EXECUTION_STATES.COMPLETED &&
+    nextState !== EXECUTION_STATES.ERROR
+  ) {
+    return false;
+  }
+
+  return previousSummary?.executionState === EXECUTION_STATES.RUNNING;
+}
+
 export function buildWorkflowCompletionNotification(
   input: WorkflowNotificationInput
 ): CompletionNotificationEvent | undefined {

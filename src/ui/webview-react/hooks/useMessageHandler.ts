@@ -1312,6 +1312,14 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.COMPLETIONS_RESPONSE] = () => {};
 
   // --------------------------------------------------------------------------
+  // CONTEXT_REFS_VALIDATION - Handled by CodeMirrorEditor.tsx
+  // --------------------------------------------------------------------------
+  // The editor listens for validation results directly so it can resolve the
+  // per-request promise. Register a no-op here so the central router doesn't
+  // misclassify this valid extension message as unknown.
+  handlers[MESSAGE_TYPES.CONTEXT_REFS_VALIDATION] = () => {};
+
+  // --------------------------------------------------------------------------
   // ATTACHMENT_TOKEN_COUNTS_RESPONSE - Handled by useAttachmentTokenCount.ts
   // --------------------------------------------------------------------------
   // This message is consumed by a module-level window listener in

@@ -1,5 +1,9 @@
 import React, { useCallback, useMemo, useState, memo } from "react";
-import { formatTime, getFirstWords } from "@utils/outputUtils";
+import {
+  formatTime,
+  getFirstWords,
+  isStructuredPatchMalformed,
+} from "@utils/outputUtils";
 import { calcContextPct } from "@utils/tokenUtils";
 import { generateId } from "@utils/string";
 import { BashOutput } from "./BashOutput";
@@ -162,6 +166,35 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
   );
 };
 
+function getSnapshotStructuredPatch(
+  path: string,
+  workspaceSnapshot?: WorkspaceSnapshot
+): FileEditData["structuredPatch"] | undefined {
+  return workspaceSnapshot?.changedFiles.find(
+    (change) =>
+      change.structuredPatch &&
+      change.structuredPatch.length > 0 &&
+      sameFilePath(path, change.path)
+  )?.structuredPatch;
+}
+
+function getDisplayStructuredPatch(
+  path: string,
+  eventPatch: FileEditData["structuredPatch"] | undefined,
+  workspaceSnapshot?: WorkspaceSnapshot
+): FileEditData["structuredPatch"] | undefined {
+  const snapshotPatch = getSnapshotStructuredPatch(path, workspaceSnapshot);
+  if (!snapshotPatch || snapshotPatch.length === 0) {
+    return eventPatch;
+  }
+
+  if (!eventPatch || eventPatch.length === 0) {
+    return snapshotPatch;
+  }
+
+  return isStructuredPatchMalformed(eventPatch) ? snapshotPatch : eventPatch;
+}
+
 // ============================================================================
 // Single event renderer — memoized to skip re-render when event hasn't changed
 // ============================================================================
@@ -175,6 +208,7 @@ interface SingleEventProps {
   fileUndoMode?: "undo" | "redo";
   hideDiff?: boolean;
   hideRow?: boolean;
+  workspaceSnapshot?: WorkspaceSnapshot;
 }
 
 /**
@@ -192,6 +226,7 @@ const SingleEvent = memo<SingleEventProps>(
     fileUndoMode = "undo",
     hideDiff = false,
     hideRow = false,
+    workspaceSnapshot,
   }) => {
     if (hideRow) return null;
     switch (event.type) {
@@ -228,6 +263,11 @@ const SingleEvent = memo<SingleEventProps>(
       case CLI_EVENT_TYPES.FILE_EDIT: {
         const data = event.data as FileEditData;
         if (!data.path) return null;
+        const displayStructuredPatch = getDisplayStructuredPatch(
+          data.path,
+          data.structuredPatch,
+          workspaceSnapshot
+        );
         return (
           <FileEditOutput
             key={eventKey}
@@ -235,7 +275,7 @@ const SingleEvent = memo<SingleEventProps>(
             status={data.status}
             oldContent={data.oldContent}
             newContent={data.newContent}
-            structuredPatch={data.structuredPatch}
+            structuredPatch={displayStructuredPatch}
             error={data.error}
             onUndoFile={onUndoFile}
             attemptIndex={attemptIndex}
@@ -381,6 +421,7 @@ interface StructuredOutputProps {
    * OutputSection can measure scroll fractions via querySelectorAll.
    */
   stepKey?: string;
+  workspaceSnapshot?: WorkspaceSnapshot;
 }
 
 /**
@@ -411,6 +452,7 @@ const StructuredOutput = memo<StructuredOutputProps>(
     fileUndoMode = "undo",
     className = "",
     stepKey,
+    workspaceSnapshot,
   }) => {
     // For FILE_EDIT INITIATED events that have a matching COMPLETED event later
     // in the list for the same path, hide the diff (but keep the tool line
@@ -433,7 +475,8 @@ const StructuredOutput = memo<StructuredOutputProps>(
               const next = events[j];
               if (next.type !== CLI_EVENT_TYPES.FILE_EDIT) continue;
               const nextData = next.data as FileEditData;
-              if (nextData.path !== data.path) continue;
+              if (!nextData.path || !data.path) continue;
+              if (!sameFilePath(nextData.path, data.path)) continue;
               if (nextData.status === OPERATION_STATUS.COMPLETED) {
                 indicesToHideDiff.add(i);
               }
@@ -506,6 +549,7 @@ const StructuredOutput = memo<StructuredOutputProps>(
               fileUndoMode={fileUndoMode}
               hideDiff={hideDiff}
               hideRow={hideRow}
+              workspaceSnapshot={workspaceSnapshot}
             />
           );
 
@@ -766,6 +810,7 @@ export const CliOutput = memo<CliOutputProps>(
               onUndoFile={allowUndoActions ? onUndoFile : undefined}
               fileUndoMode={fileUndoMode}
               stepKey={diffAnchorPrefix}
+              workspaceSnapshot={effectiveSnapshot}
             />
           </>
         );
@@ -780,6 +825,7 @@ export const CliOutput = memo<CliOutputProps>(
             onUndoFile={allowUndoActions ? onUndoFile : undefined}
             fileUndoMode={fileUndoMode}
             stepKey={diffAnchorPrefix}
+            workspaceSnapshot={effectiveSnapshot}
           />
         );
       }
@@ -828,6 +874,7 @@ export const CliOutput = memo<CliOutputProps>(
       onUndoFile,
       fileUndoMode,
       diffAnchorPrefix,
+      effectiveSnapshot,
     ]);
 
     // Token stats — memoized separately; only changes when the run completes
