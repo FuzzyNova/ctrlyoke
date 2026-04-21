@@ -7,11 +7,7 @@ import type { CompletionNotificationEvent } from "../ui/notifications/Completion
 
 type WebPushModule = {
   generateVAPIDKeys(): { publicKey: string; privateKey: string };
-  setVapidDetails(
-    subject: string,
-    publicKey: string,
-    privateKey: string
-  ): void;
+  setVapidDetails(subject: string, publicKey: string, privateKey: string): void;
   sendNotification(
     subscription: WebPushSubscriptionPayload,
     payload?: string,
@@ -19,7 +15,6 @@ type WebPushModule = {
   ): Promise<void>;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const webPush = require("web-push") as WebPushModule;
 
 export interface WebPushSubscriptionPayload {
@@ -79,7 +74,7 @@ export class WebPushService {
 
   constructor(
     workspaceRoot: string,
-    private readonly vapidSubject: string = "mailto:flightpath@local"
+    private readonly vapidSubject: string = "mailto:flightpath@example.com" //TODO: update this with a valid support email when we get one
   ) {
     this.notificationsDir = path.join(
       workspaceRoot,
@@ -306,7 +301,9 @@ export class WebPushService {
     }
   }
 
-  private async writeSubscriptions(registry: StoredPushRegistry): Promise<void> {
+  private async writeSubscriptions(
+    registry: StoredPushRegistry
+  ): Promise<void> {
     await atomicWriteJson(this.subscriptionsPath, registry);
   }
 }
@@ -325,10 +322,10 @@ function isValidStoredSubscription(
   const candidate = value as Partial<StoredPushSubscription>;
   return Boolean(
     candidate.id &&
-      candidate.endpoint &&
-      candidate.endpointHash &&
-      candidate.keys?.auth &&
-      candidate.keys?.p256dh
+    candidate.endpoint &&
+    candidate.endpointHash &&
+    candidate.keys?.auth &&
+    candidate.keys?.p256dh
   );
 }
 

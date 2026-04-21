@@ -1,4 +1,4 @@
-# FlightPath runtime directories — generated at runtime, do not commit
+# FlightPath runtime directories — generated at runtime, do not commit...unless you really want to
 .history/
 .queue/
 logs/
@@ -6,5 +6,5 @@ temp/
 .diagnostic-logs
 capabilities.json
 .gitignore
-# FlightPath runtime directories — generated at runtime, do not commit...unless you really want to
 certs/
+notifications/

@@ -80,8 +80,12 @@ export function NotificationsSection({ settings, onUpdate }: Props) {
     notif.browser.mode !== BROWSER_NOTIFICATION_MODES.NEVER;
   const needsHttps = browserModeEnabled && !server.tls.enabled;
   const isIos = /iP(hone|ad)/.test(navigator.userAgent);
-  const isStandaloneIosHomeScreen =
-    isStandalone || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+  const isIosHomeScreenApp =
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true ||
+    window.matchMedia("(display-mode: standalone)").matches;
+  // On iOS, Notification.requestPermission() is only available from a Home Screen app.
+  // In a regular browser tab it silently returns "denied" without showing a dialog.
+  const iosBlocksBrowserNotifications = isIos && !isIosHomeScreenApp;
 
   useEffect(() => {
     if (!browserModeEnabled || !isStandalone) {
@@ -198,61 +202,74 @@ export function NotificationsSection({ settings, onUpdate }: Props) {
 
         {browserModeEnabled ? (
           <div className="space-y-2 rounded border border-panel-border p-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-description-fg">Permission:</span>
-              <span className={`text-xs ${permission.className}`}>
-                {permission.text}
-              </span>
-            </div>
-
-            {notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH &&
-            isStandalone ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-description-fg">
-                  Push subscription:
-                </span>
-                <span
-                  className={`text-xs ${status?.subscribed ? "text-bash-status-success" : "text-warning-fg"}`}
-                >
-                  {status?.subscribed ? "Subscribed" : "Not subscribed"}
-                </span>
-              </div>
-            ) : null}
-
-            {typeof status?.subscriptionCount === "number" ? (
+            {iosBlocksBrowserNotifications ? (
               <p className="text-xs text-description-fg">
-                Active subscriptions: {status.subscriptionCount}
-                {typeof status.staleSubscriptionCount === "number"
-                  ? `, stale: ${status.staleSubscriptionCount}`
-                  : ""}
+                Browser notifications on iPhone and iPad require FlightPath to be
+                added to the Home Screen first. After adding, open FlightPath from
+                the Home Screen
+                {notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH
+                  ? " and then enable push notifications here."
+                  : " to enable notifications."}
               </p>
-            ) : null}
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-description-fg">Permission:</span>
+                  <span className={`text-xs ${permission.className}`}>
+                    {permission.text}
+                  </span>
+                </div>
 
-            {showEnableButton ? (
-              <button
-                type="button"
-                onClick={handleEnableBrowserNotifications}
-                disabled={busy}
-                className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover disabled:opacity-50"
-              >
-                {busy
-                  ? "Updating..."
-                  : notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH
-                    ? "Enable push notifications"
-                    : "Enable browser notifications"}
-              </button>
-            ) : null}
+                {notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH &&
+                isStandalone ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-description-fg">
+                      Push subscription:
+                    </span>
+                    <span
+                      className={`text-xs ${status?.subscribed ? "text-bash-status-success" : "text-warning-fg"}`}
+                    >
+                      {status?.subscribed ? "Subscribed" : "Not subscribed"}
+                    </span>
+                  </div>
+                ) : null}
 
-            {canManagePush && status?.subscribed ? (
-              <button
-                type="button"
-                onClick={handleDisablePush}
-                disabled={busy}
-                className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover disabled:opacity-50"
-              >
-                {busy ? "Updating..." : "Disable push notifications"}
-              </button>
-            ) : null}
+                {typeof status?.subscriptionCount === "number" ? (
+                  <p className="text-xs text-description-fg">
+                    Active subscriptions: {status.subscriptionCount}
+                    {typeof status.staleSubscriptionCount === "number"
+                      ? `, stale: ${status.staleSubscriptionCount}`
+                      : ""}
+                  </p>
+                ) : null}
+
+                {showEnableButton ? (
+                  <button
+                    type="button"
+                    onClick={handleEnableBrowserNotifications}
+                    disabled={busy}
+                    className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover disabled:opacity-50"
+                  >
+                    {busy
+                      ? "Updating..."
+                      : notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH
+                        ? "Enable push notifications"
+                        : "Enable browser notifications"}
+                  </button>
+                ) : null}
+
+                {canManagePush && status?.subscribed ? (
+                  <button
+                    type="button"
+                    onClick={handleDisablePush}
+                    disabled={busy}
+                    className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover disabled:opacity-50"
+                  >
+                    {busy ? "Updating..." : "Disable push notifications"}
+                  </button>
+                ) : null}
+              </>
+            )}
 
             {needsHttps ? (
               <p className="text-xs text-warning-fg">
@@ -266,13 +283,6 @@ export function NotificationsSection({ settings, onUpdate }: Props) {
             !status.secureContext ? (
               <p className="text-xs text-warning-fg">
                 Push subscriptions require a secure context. Use HTTPS or localhost.
-              </p>
-            ) : null}
-
-            {isIos && notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH && !isStandaloneIosHomeScreen ? (
-              <p className="text-xs text-description-fg">
-                For iPhone/iPad push while backgrounded, add FlightPath to the Home
-                Screen first.
               </p>
             ) : null}
           </div>
