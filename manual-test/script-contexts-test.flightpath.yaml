@@ -1,0 +1,122 @@
+# Script Contexts Test — full compareSource coverage
+#
+# Exercises all four compareSource options (auto, stdout, stderr, exitCode) across
+# all three script contexts: type:script step, preCondition, and endCondition.
+# Pre-conditions that fail use onFail:skipPrompt to advance without running the AI.
+#
+# Expected behavior:
+#   Steps 1-4  (scriptStep): one per compareSource — all pass
+#   Steps 5-8  (promptStep): preConditions intentionally fail on each compareSource — all skipped
+#   Step  9    (promptStep): only AI prompt that runs; priorContext [1,2,3,4] injects all four
+#                            script step outputs; endCondition uses compareSource:exitCode
+
+harness: copilot-cli
+model: gpt-5-mini
+
+steps:
+  # ── Script steps: one per compareSource ──────────────────────────────────────
+
+  # compareSource auto (default): returns:"true" maps to exit 0 → passes
+  # Writes to both stdout and stderr so all three fields appear in priorContext XML.
+  - name: script-auto
+    type: script
+    script: manual-test/.flightpath/scripts/forward.js auto-stdout auto-stderr 0
+    returns: "true"
+    timeout: 10000
+
+  # compareSource stdout: stdout must equal "stdout-match"; exit 0 required by stdout mode
+  - name: script-stdout
+    type: script
+    script: manual-test/.flightpath/scripts/forward.js stdout-match x 0
+    compareSource: stdout
+    returns: stdout-match
+    timeout: 10000
+
+  # compareSource stderr: stderr must equal "stderr-match"; exit code is ignored
+  # Intentionally exits 1 to prove exit code is not evaluated in stderr mode.
+  - name: script-stderr
+    type: script
+    script: manual-test/.flightpath/scripts/forward.js x stderr-match 1
+    compareSource: stderr
+    returns: stderr-match
+    onFail: continue
+    timeout: 10000
+
+  # compareSource exitCode: exit code must equal 42; stdout/stderr are ignored
+  - name: script-exitcode
+    type: script
+    script: manual-test/.flightpath/scripts/forward.js x x 42
+    compareSource: exitCode
+    returns: "42"
+    onFail: continue
+    timeout: 10000
+
+  # ── Prompts with failing preConditions → all skipped ─────────────────────────
+
+  # auto: exit 1 with returns:"true" → fails → skip
+  - name: skip-auto
+    prompt: >-
+      ERROR: This step should be skipped (preCondition auto exit 1).
+      Please respond with: "ERROR - step was not skipped."
+    preCondition:
+      script: manual-test/.flightpath/scripts/forward.js x x 1
+      returns: "true"
+      onFail: skipPrompt
+
+  # stdout: writes "wrong" but returns "right" → mismatch → fails → skip
+  - name: skip-stdout
+    prompt: >-
+      ERROR: This step should be skipped (preCondition stdout mismatch).
+      Please respond with: "ERROR - step was not skipped."
+    preCondition:
+      script: manual-test/.flightpath/scripts/forward.js wrong x 0
+      compareSource: stdout
+      returns: right
+      onFail: skipPrompt
+
+  # stderr: writes "wrong-err" to stderr but returns "right-err" → mismatch → fails → skip
+  - name: skip-stderr
+    prompt: >-
+      ERROR: This step should be skipped (preCondition stderr mismatch).
+      Please respond with: "ERROR - step was not skipped."
+    preCondition:
+      script: manual-test/.flightpath/scripts/forward.js x wrong-err 0
+      compareSource: stderr
+      returns: right-err
+      onFail: skipPrompt
+
+  # exitCode: exits 2 but returns "0" → mismatch → fails → skip
+  - name: skip-exitcode
+    prompt: >-
+      ERROR: This step should be skipped (preCondition exitCode mismatch).
+      Please respond with: "ERROR - step was not skipped."
+    preCondition:
+      script: manual-test/.flightpath/scripts/forward.js x x 2
+      compareSource: exitCode
+      returns: "0"
+      onFail: skipPrompt
+
+  # ── Final verification prompt ─────────────────────────────────────────────────
+
+  # preCondition passes (auto, exit 0).
+  # priorContext [1,2,3,4] injects all four script step outputs — each should include
+  # <stdout>, <stderr>, and <exitCode> tags (steps 3 and 4 have non-zero exit codes).
+  # endCondition uses compareSource:exitCode; forward.js exits 0, returns:"0" → passes.
+  - name: verify-all-compareSource
+    prompt: |
+      You have received prior context from four script steps, each using a different
+      compareSource option (auto, stdout, stderr, exitCode).
+
+      Look at the <priorContext> XML block in your input. For each <step>, note which
+      of <stdout>, <stderr>, and <exitCode> tags are present and quote their values.
+
+      Then confirm with:
+      "compareSource coverage verified. [list each step name with its output tag values]"
+    priorContext: [1, 2, 3, 4]
+    preCondition:
+      script: manual-test/.flightpath/scripts/forward.js pass x 0
+      returns: "true"
+    endCondition:
+      script: manual-test/.flightpath/scripts/forward.js x x 0
+      compareSource: exitCode
+      returns: "0"

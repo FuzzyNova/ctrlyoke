@@ -34,6 +34,7 @@ export interface FlightPathGlobalSettings {
     maxPromptTimeout: number; // seconds, -1 = unlimited
     scriptTimeout: number; // seconds
     closeTerminalOnComplete: boolean;
+    autoDeleteTempFiles: boolean;
   };
 
   // Tools
@@ -184,6 +185,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     maxPromptTimeout: 10800,
     scriptTimeout: 30,
     closeTerminalOnComplete: false,
+    autoDeleteTempFiles: true,
   },
   tools: {
     permissionMode: "allowAll",

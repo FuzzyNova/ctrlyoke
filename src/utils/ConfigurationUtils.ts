@@ -369,6 +369,14 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Check if categorized temp prompt files should be deleted after execution.
+   * Returns false when the user wants to inspect files in .flightpath/temp/ for debugging.
+   */
+  shouldAutoDeleteTempFiles(): boolean {
+    return configService.get("execution").autoDeleteTempFiles;
+  },
+
+  /**
    * Get maximum prompt execution timeout in milliseconds
    * User configures in seconds, this returns milliseconds
    * Returns undefined if set to -1 (unlimited)

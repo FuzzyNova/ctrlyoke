@@ -19,6 +19,7 @@ import { ContextExpander } from "../utils/ContextExpander";
 import type { SplitContext } from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
 import { TempFileManager } from "../utils/TempFileManager";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { SplitConfig } from "../utils/PromptFileSplitter";
 import {
   PRIOR_CONTEXT_KEYWORDS,
@@ -537,7 +538,11 @@ export abstract class HarnessIntegration {
           return {
             index: i,
             name: step.name,
-            text: [scriptOutput.stdout, scriptOutput.stderr]
+            text: [
+              scriptOutput.stdout,
+              scriptOutput.stderr,
+              scriptOutput.exitCode !== undefined ? String(scriptOutput.exitCode) : "",
+            ]
               .filter(Boolean)
               .join("\n")
               .trim(),
@@ -578,7 +583,11 @@ export abstract class HarnessIntegration {
           const stderrSection = item.scriptOutput.stderr.trim()
             ? `<stderr>\n${item.scriptOutput.stderr.trim()}\n</stderr>\n`
             : "";
-          return `<step index="${item.index + 1}" type="${STEP_TYPES.SCRIPT}"${nameAttr}>\n${commandSection}${stdoutSection}${stderrSection}</step>`;
+          const exitCodeSection =
+            item.scriptOutput.exitCode !== undefined
+              ? `<exitCode>${item.scriptOutput.exitCode}</exitCode>\n`
+              : "";
+          return `<step index="${item.index + 1}" type="${STEP_TYPES.SCRIPT}"${nameAttr}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}</step>`;
         }
         const typeAttr = item.type ? ` type="${item.type}"` : "";
         const promptSection = item.prompt
@@ -644,10 +653,17 @@ export abstract class HarnessIntegration {
 
   /**
    * Delete temp prompt files created during execution.
-   * No-op if the array is empty or no workspace root is available.
+   * No-op if the array is empty, no workspace root is available, or
+   * execution.autoDeleteTempFiles is false (user wants to inspect files).
    */
   protected async deleteTempFiles(tempFilePaths: string[]): Promise<void> {
     if (tempFilePaths.length === 0) {
+      return;
+    }
+    if (!ConfigurationUtils.shouldAutoDeleteTempFiles()) {
+      Log.debug(
+        `🗂️ Keeping ${tempFilePaths.length} temp file(s) (autoDeleteTempFiles=false)`
+      );
       return;
     }
     const workspaceRoot = this.getWorkspaceRoot();

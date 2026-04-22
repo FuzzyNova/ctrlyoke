@@ -329,13 +329,34 @@ suite("gatherPriorContextItems", () => {
     assert.ok(items[0].text.includes("Warning: deprecated API"));
   });
 
-  test("filters out script step with no output (no stdout or stderr)", () => {
+  test("filters out script step with no output and no exitCode", () => {
     const steps: WorkflowStep[] = [
       makeScriptStep("silent.sh", { command: "silent.sh", stdout: "", stderr: "" }),
       makePrompt("p2"),
     ];
     const items = harness.exposeGather("previous", steps, 1);
     assert.strictEqual(items.length, 0);
+  });
+
+  test("includes script step with only an exit code (no stdout or stderr)", () => {
+    const steps: WorkflowStep[] = [
+      makeScriptStep("exit-only.sh", { command: "exit-only.sh", stdout: "", stderr: "", exitCode: 1 }),
+      makePrompt("p2"),
+    ];
+    const items = harness.exposeGather("previous", steps, 1);
+    assert.strictEqual(items.length, 1);
+    assert.strictEqual(items[0].text, "1");
+  });
+
+  test("includes exit code in text when stdout is also present", () => {
+    const steps: WorkflowStep[] = [
+      makeScriptStep("check.sh", { command: "check.sh", stdout: "output", stderr: "", exitCode: 0 }),
+      makePrompt("p2"),
+    ];
+    const items = harness.exposeGather("previous", steps, 1);
+    assert.strictEqual(items.length, 1);
+    assert.ok(items[0].text.includes("output"));
+    assert.ok(items[0].text.includes("0"));
   });
 
   test("filters out script step with no _runtime.scriptOutput", () => {
@@ -538,6 +559,57 @@ suite("insertPriorContext", () => {
     const result = harness.exposeInsert("Task.", items);
     assert.ok(result.includes("<command>\nrun.sh\n</command>"));
     assert.ok(result.includes("<stdout>\ntrimmed\n</stdout>"));
+  });
+
+  test("renders exitCode tag when exitCode is defined", () => {
+    const items = [
+      {
+        index: 0,
+        text: "output",
+        scriptOutput: {
+          command: "check.sh",
+          stdout: "output",
+          stderr: "",
+          exitCode: 0,
+        },
+      },
+    ];
+    const result = harness.exposeInsert("Task.", items);
+    assert.ok(result.includes("<exitCode>0</exitCode>"));
+  });
+
+  test("renders exitCode for non-zero exit", () => {
+    const items = [
+      {
+        index: 0,
+        text: "1",
+        scriptOutput: {
+          command: "fail.sh",
+          stdout: "",
+          stderr: "error",
+          exitCode: 1,
+        },
+      },
+    ];
+    const result = harness.exposeInsert("Task.", items);
+    assert.ok(result.includes("<exitCode>1</exitCode>"));
+    assert.ok(result.includes("<stderr>\nerror\n</stderr>"));
+  });
+
+  test("omits exitCode tag when exitCode is undefined", () => {
+    const items = [
+      {
+        index: 0,
+        text: "output",
+        scriptOutput: {
+          command: "check.sh",
+          stdout: "output",
+          stderr: "",
+        },
+      },
+    ];
+    const result = harness.exposeInsert("Task.", items);
+    assert.ok(!result.includes("<exitCode>"));
   });
 
   test("script step does not include type attribute from item.type", () => {
