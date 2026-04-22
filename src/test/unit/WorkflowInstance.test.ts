@@ -15,8 +15,10 @@ import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   STEP_STATUS,
+  HARNESS_IDS,
+  type HarnessId,
 } from "../../types/DashboardConstants";
-import { Harness, PromptStep } from "../../types/FlightPathTypes";
+import { PromptStep } from "../../types/FlightPathTypes";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 
 class MockPlatform implements PlatformAdapter {
@@ -60,7 +62,7 @@ class MockHarnessIntegration extends HarnessIntegration {
   }
 
   getIntegrationMode(): string {
-    return Harness.CopilotCli;
+    return HARNESS_IDS.COPILOT_CLI;
   }
 
   getInitializationStatus(): HarnessStatus {
@@ -79,7 +81,7 @@ class MockIntegrationFactory extends IntegrationFactory {
     super(platform);
   }
 
-  override createForExecution(_harness: Harness): HarnessIntegration {
+  override createForExecution(_harness: HarnessId): HarnessIntegration {
     return new MockHarnessIntegration(undefined, false);
   }
 }
@@ -678,7 +680,7 @@ suite("WorkflowInstance eager working file creation", () => {
       null;
 
     const firstEnsure = instance.ensureEphemeralWorkingFile({
-      initialProperties: { harness: Harness.ClaudeCli },
+      initialProperties: { harness: HARNESS_IDS.CLAUDE_CLI },
     });
     const secondEnsure = instance.ensureEphemeralWorkingFile({
       initialProperties: { model: "sonnet" },
@@ -721,7 +723,7 @@ suite("WorkflowInstance append-and-continue", () => {
       );
 
       const baseProperties = {
-        harness: Harness.ClaudeCli,
+        harness: HARNESS_IDS.CLAUDE_CLI,
         model: "base-model",
         agent: "base-agent",
         skills: ["base-skill"],
@@ -816,7 +818,7 @@ suite("WorkflowInstance append-and-continue", () => {
       await instance.appendFromFile(appendPath);
 
       const assertBaseWorkflowProperties = (workflow: any) => {
-        assert.strictEqual(workflow.harness, Harness.ClaudeCli);
+        assert.strictEqual(workflow.harness, HARNESS_IDS.CLAUDE_CLI);
         assert.strictEqual(workflow.model, "base-model");
         assert.strictEqual(workflow.agent, "base-agent");
         assert.deepStrictEqual(workflow.skills, ["base-skill"]);
@@ -872,7 +874,7 @@ suite("WorkflowInstance append-and-continue", () => {
       assert.deepStrictEqual(appendedStep, {
         name: "appended step",
         prompt: "appended prompt",
-        harness: Harness.GeminiCli,
+        harness: HARNESS_IDS.GEMINI_CLI,
         model: "append-step-model",
         additionalArgs: "--append-step",
         toolPermissions: {

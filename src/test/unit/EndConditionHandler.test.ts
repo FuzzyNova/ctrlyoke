@@ -12,11 +12,12 @@ import {
   HarnessStatus,
 } from "../../flightpath/HarnessIntegration";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
-import { Harness, type PromptStep } from "../../types/FlightPathTypes";
+import { type PromptStep } from "../../types/FlightPathTypes";
 import {
   WORKFLOW_ATTEMPT_STATUS,
   FINAL_STEP_PHASES,
   WORKFLOW_ATTEMPT_COMMANDS,
+  HARNESS_IDS,
 } from "../../types/DashboardConstants";
 
 class MockPlatform implements PlatformAdapter {
@@ -63,7 +64,7 @@ class MockHarnessIntegration extends HarnessIntegration {
   }
 
   getIntegrationMode(): string {
-    return Harness.CopilotCli;
+    return HARNESS_IDS.COPILOT_CLI;
   }
 
   getInitializationStatus(): HarnessStatus {

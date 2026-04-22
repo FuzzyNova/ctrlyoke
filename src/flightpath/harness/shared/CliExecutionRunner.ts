@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import type { CliEvent } from "../../../types/CliOutputTypes";
-import { Harness } from "../../../types/FlightPathTypes";
+import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
@@ -308,9 +308,9 @@ export class CliExecutionRunner {
         ) {
           const currentHarness =
             session.resolvedProperties?.harness ??
-            (this.deps.provider.config.harnessId as Harness);
+            (this.deps.provider.config.harnessId);
 
-          if (currentHarness === Harness.ClaudeCli) {
+          if (currentHarness === HARNESS_IDS.CLAUDE_CLI) {
             Log.warn(
               `⚠️ Claude CLI rejected session ID "${session.resolvedSessionId}". ` +
                 `Retrying without resume flag.`

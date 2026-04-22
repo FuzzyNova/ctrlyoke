@@ -1,5 +1,5 @@
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
-import { Harness } from "../types/FlightPathTypes";
+import { HARNESS_IDS, type HarnessId } from "../types/DashboardConstants";
 import { HarnessIntegration } from "./HarnessIntegration";
 import { CopilotChatIntegration } from "./harness/chat/CopilotChatIntegration";
 import { IntegrationFactory } from "./IntegrationFactory";
@@ -32,10 +32,10 @@ export class VsCodeIntegrationFactory extends IntegrationFactory {
 
   /** Create a new integration for the given harness (all four harnesses) */
   override createForHarness(
-    harness: Harness,
+    harness: HarnessId,
     registerWithContext: boolean = true
   ): HarnessIntegration {
-    if (harness === Harness.CopilotChat) {
+    if (harness === HARNESS_IDS.COPILOT_CHAT) {
       return this.createCopilotChat(registerWithContext);
     }
     return super.createForHarness(harness, registerWithContext);
@@ -45,7 +45,7 @@ export class VsCodeIntegrationFactory extends IntegrationFactory {
    * Create a fresh execution integration for a single workflow run.
    * Overrides base to also handle copilot-chat.
    */
-  override createForExecution(harness: Harness): HarnessIntegration {
+  override createForExecution(harness: HarnessId): HarnessIntegration {
     const integration = this.createForHarness(harness, false);
     integration.markAsReady();
     return integration;

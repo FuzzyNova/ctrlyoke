@@ -1,4 +1,5 @@
-import type { Harness, PromptStep } from "../../../types/FlightPathTypes";
+import type { PromptStep } from "../../../types/FlightPathTypes";
+import type { HarnessId } from "../../../types/DashboardConstants";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import {
   PropertyResolver,
@@ -14,7 +15,7 @@ export interface CliSessionResolution {
 }
 
 export interface CliSessionResolverAdapterDeps {
-  getIntegrationHarness: () => Harness;
+  getIntegrationHarness: () => HarnessId;
 }
 
 export class CliSessionResolverAdapter {

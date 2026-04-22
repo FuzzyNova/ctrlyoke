@@ -1,12 +1,13 @@
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
-import type { Harness, PromptStep } from "../../../types/FlightPathTypes";
+import type { PromptStep } from "../../../types/FlightPathTypes";
+import type { HarnessId } from "../../../types/DashboardConstants";
 import type { WorkflowWorkingFilePersistence } from "../../../types/WorkflowContextTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { Log } from "../../../utils/Log";
 import { extractTextFromEvents } from "./CliResponseTextExtractor";
 
 export interface CliPromptRuntimeCoordinatorDeps {
-  getIntegrationHarness: () => Harness;
+  getIntegrationHarness: () => HarnessId;
   now?: () => number;
 }
 

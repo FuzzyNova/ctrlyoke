@@ -2,7 +2,8 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliPromptRuntimeCoordinator } from "../../flightpath/harness/shared/CliPromptRuntimeCoordinator";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
-import { Harness, type PromptStep } from "../../types/FlightPathTypes";
+import { type PromptStep } from "../../types/FlightPathTypes";
+import { HARNESS_IDS } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 
 function createCoordinator(options?: {
@@ -11,7 +12,7 @@ function createCoordinator(options?: {
   const nowValues = [...(options?.nowValues ?? [])];
 
   return new CliPromptRuntimeCoordinator({
-    getIntegrationHarness: () => Harness.CopilotCli,
+    getIntegrationHarness: () => HARNESS_IDS.COPILOT_CLI,
     now: () => {
       const nextValue = nowValues.shift();
       return nextValue ?? 0;
@@ -126,7 +127,7 @@ suite("CliPromptRuntimeCoordinator", () => {
       }).persistSuccessfulPromptRuntime({
         prompt,
         resolvedProperties: {
-          harness: Harness.ClaudeCli,
+          harness: HARNESS_IDS.CLAUDE_CLI,
           model: "sonnet",
           agent: "reviewer",
           resumeSession: true,
@@ -147,7 +148,7 @@ suite("CliPromptRuntimeCoordinator", () => {
         originalDebug;
     }
 
-    assert.strictEqual(prompt._runtime?.harness, Harness.ClaudeCli);
+    assert.strictEqual(prompt._runtime?.harness, HARNESS_IDS.CLAUDE_CLI);
     assert.strictEqual(prompt._runtime?.model, "sonnet");
     assert.strictEqual(prompt._runtime?.agent, "reviewer");
     assert.strictEqual(prompt._runtime?.startedAt, 2000);
@@ -164,7 +165,7 @@ suite("CliPromptRuntimeCoordinator", () => {
     const prompt: PromptStep = {
       prompt: "rerun",
       _runtime: {
-        harness: Harness.CopilotCli,
+        harness: HARNESS_IDS.COPILOT_CLI,
         model: "gpt-5",
         startedAt: 111,
       },
@@ -175,7 +176,7 @@ suite("CliPromptRuntimeCoordinator", () => {
     }).persistSuccessfulPromptRuntime({
       prompt,
       resolvedProperties: {
-        harness: Harness.CodexCli,
+        harness: HARNESS_IDS.CODEX_CLI,
         model: "gpt-5.2-codex",
         resumeSession: true,
         mcpServers: null,
@@ -190,7 +191,7 @@ suite("CliPromptRuntimeCoordinator", () => {
       }),
     });
 
-    assert.strictEqual(prompt._runtime?.harness, Harness.CodexCli);
+    assert.strictEqual(prompt._runtime?.harness, HARNESS_IDS.CODEX_CLI);
     assert.strictEqual(prompt._runtime?.model, "gpt-5.2-codex");
     assert.strictEqual(prompt._runtime?.startedAt, 111);
     assert.strictEqual(prompt._runtime?.completedAt, 4000);

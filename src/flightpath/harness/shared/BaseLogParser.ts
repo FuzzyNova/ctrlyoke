@@ -62,7 +62,7 @@ export abstract class BaseLogParser implements ILogParser {
   protected lastReadPosition = 0;
 
   // ========================================================================
-  // Abstract Methods (Harness-Specific Implementation Required)
+  // Abstract Methods (HarnessId-Specific Implementation Required)
   // ========================================================================
 
   /**

@@ -10,7 +10,7 @@ import {
   DynamicQueueConfig,
   FinalStepRuntimeState,
   EXECUTION_STATES,
-  Harness,
+  HarnessId,
   type WorkflowAttemptTarget,
   type PreConditionAction,
 } from "../types/FlightPathTypes";
@@ -24,6 +24,7 @@ import {
   STEP_TYPES,
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
+  HARNESS_IDS,
 } from "../types/DashboardConstants";
 import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
@@ -61,7 +62,7 @@ export interface WorkflowExecutionContext {
   dynamicQueueConfig: DynamicQueueConfig;
   getIntegrationForPrompt: (
     prompt: PromptStep,
-    harnessOverride?: Harness
+    harnessOverride?: HarnessId
   ) => HarnessIntegration;
   historyFilePath: string;
   workingFilePath?: string;
@@ -538,9 +539,9 @@ export class WorkflowExecutor {
     // Inject user-defined MCP servers for Copilot Chat prompts.
     // CLI harnesses handle this via --mcp-config flags in CliProviderUtils.
     const isChatHarness =
-      resolvedProperties.harness === Harness.CopilotChat ||
+      resolvedProperties.harness === HARNESS_IDS.COPILOT_CHAT ||
       (!resolvedProperties.harness &&
-        integration.getIntegrationMode() === Harness.CopilotChat);
+        integration.getIntegrationMode() === HARNESS_IDS.COPILOT_CHAT);
     let didSetMcpServers = false;
     if (isChatHarness && context.mcpServerProvider) {
       const mcpServers = resolvedProperties.mcpServers ?? [];

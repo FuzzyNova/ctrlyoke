@@ -292,7 +292,7 @@ export class WorkflowCommandHandler {
       harnessStatus.initializationStatus === HARNESS_STATUS_STRINGS.UNAVAILABLE
     ) {
       const action = await vscode.window.showWarningMessage(
-        "FlightPath: Harness automation is unavailable. Would you like to retry detection?",
+        "FlightPath: HarnessId automation is unavailable. Would you like to retry detection?",
         "Retry Detection",
         "Continue Anyway"
       );

@@ -13,7 +13,9 @@ import {
   PRIOR_CONTEXT_KEYWORDS,
   type ConditionAction,
   type CompareSource,
+  type HarnessId,
 } from "./DashboardConstants";
+export type { HarnessId };
 import { ToolPermissionMode } from "../flightpath/harness/shared/interfaces/IToolPermissionMapper";
 export type { ToolPermissionMode };
 
@@ -31,20 +33,6 @@ export type { ToolPermissionMode };
 export type PriorContext =
   | (typeof PRIOR_CONTEXT_KEYWORDS)[keyof typeof PRIOR_CONTEXT_KEYWORDS]
   | number[];
-
-/**
- * Harness/Agent framework selection
- * (The AI framework/tool used for execution, not the model provider)
- */
-export enum Harness {
-  CopilotCli = "copilot-cli", // Copilot CLI
-  CopilotChat = "copilot-chat", // Copilot Chat
-  ClaudeCli = "claude-cli", // Claude Code CLI
-  CodexCli = "codex-cli", // Codex CLI
-  OpenCodeCli = "opencode-cli", // OpenCode CLI
-  QwenCli = "qwen-cli", // Qwen Code CLI
-  GeminiCli = "gemini-cli", // Gemini CLI
-}
 
 /**
  * User-defined MCP server configuration for attaching external MCP servers to harness invocations.
@@ -127,7 +115,7 @@ export interface ToolPermissionsOverride {
  */
 export interface ExecutionProperties {
   /** Harness/framework for execution (Copilot CLI, Claude CLI, Codex CLI, Copilot Chat) */
-  harness?: Harness;
+  harness?: HarnessId;
 
   /** AI model to use */
   model?: string;

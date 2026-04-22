@@ -1,5 +1,6 @@
 import Ajv, { JSONSchemaType } from "ajv";
-import { PromptStep, Harness } from "../types/FlightPathTypes";
+import { PromptStep } from "../types/FlightPathTypes";
+import { HARNESS_IDS } from "../types/DashboardConstants";
 import { Log } from "./Log";
 import {
   COPILOT_CLI_MODEL_IDS,
@@ -57,10 +58,10 @@ export class ValidationUtils {
       harness: {
         type: "string",
         enum: [
-          Harness.CopilotCli,
-          Harness.CopilotChat,
-          Harness.ClaudeCli,
-          Harness.CodexCli,
+          HARNESS_IDS.COPILOT_CLI,
+          HARNESS_IDS.COPILOT_CHAT,
+          HARNESS_IDS.CLAUDE_CLI,
+          HARNESS_IDS.CODEX_CLI,
         ],
         nullable: true,
       },
@@ -129,10 +130,10 @@ export class ValidationUtils {
           harness: {
             type: "string",
             enum: [
-              Harness.CopilotCli,
-              Harness.CopilotChat,
-              Harness.ClaudeCli,
-              Harness.CodexCli,
+              HARNESS_IDS.COPILOT_CLI,
+              HARNESS_IDS.COPILOT_CHAT,
+              HARNESS_IDS.CLAUDE_CLI,
+              HARNESS_IDS.CODEX_CLI,
             ],
             nullable: true,
           },

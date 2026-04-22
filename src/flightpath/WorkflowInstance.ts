@@ -12,7 +12,7 @@ import {
   WorkflowStep,
   isScriptStep,
   QueueState,
-  Harness,
+  HarnessId,
   EndCondition,
   PriorContext,
   McpServerConfig,
@@ -256,7 +256,7 @@ export class WorkflowInstance {
      * Never used for execution — execution always goes through integrationFactory.createForExecution().
      */
     private readonly getDetectorIntegration: (
-      harnessOverride?: Harness
+      harnessOverride?: HarnessId
     ) => HarnessIntegration,
     /**
      * Callback to propagate workflow name to CLI detector singleton terminal tabs.
@@ -742,7 +742,7 @@ export class WorkflowInstance {
    * Execute the currently loaded prompt file.
    */
   async executeLoadedPromptFile(
-    modeOverride?: Harness,
+    modeOverride?: HarnessId,
     continueFromCurrent: boolean = false
   ): Promise<void> {
     if (!this.currentPromptFile) {
@@ -1884,7 +1884,7 @@ export class WorkflowInstance {
       mcpServerProvider: this.mcpServerProvider,
       getIntegrationForPrompt: (
         prompt: PromptStep,
-        harnessOverride?: Harness
+        harnessOverride?: HarnessId
       ) => {
         const currentIntegration = this.activeIntegration ?? activeIntegration;
         const resolvedHarness = harnessOverride;
@@ -2088,7 +2088,7 @@ export class WorkflowInstance {
   }
 
   private createIntegrationForMode(
-    harnessOverride?: Harness
+    harnessOverride?: HarnessId
   ): HarnessIntegration {
     const harness = harnessOverride ?? ConfigurationUtils.getIntegrationMode();
 
@@ -2772,7 +2772,7 @@ export class WorkflowInstance {
 
     return {
       ...(props?.harness !== undefined && {
-        harness: coerce<Harness>(props.harness),
+        harness: coerce<HarnessId>(props.harness),
       }),
       ...(props?.model !== undefined && { model: coerce<string>(props.model) }),
       ...(props?.agent !== undefined && {

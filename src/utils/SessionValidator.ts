@@ -1,4 +1,4 @@
-import { Harness } from "../types/FlightPathTypes";
+import { HARNESS_IDS, type HarnessId } from "../types/DashboardConstants";
 import { Log } from "./Log";
 
 /**
@@ -58,27 +58,27 @@ export class SessionValidator {
    * @param harness Harness to validate against
    * @returns True if valid format, false if invalid (with warning logged)
    */
-  static validate(sessionId: string, harness: Harness): boolean {
+  static validate(sessionId: string, harness: HarnessId): boolean {
     switch (harness) {
-      case Harness.CopilotCli:
+      case HARNESS_IDS.COPILOT_CLI:
         return this.validateUuid(sessionId, "Copilot CLI");
 
-      case Harness.ClaudeCli:
+      case HARNESS_IDS.CLAUDE_CLI:
         return this.validateUuid(sessionId, "Claude CLI");
 
-      case Harness.CodexCli:
+      case HARNESS_IDS.CODEX_CLI:
         return this.validateCodexThreadId(sessionId);
 
-      case Harness.OpenCodeCli:
+      case HARNESS_IDS.OPENCODE_CLI:
         return this.validateOpenCodeSessionId(sessionId);
 
-      case Harness.QwenCli:
+      case HARNESS_IDS.QWEN_CLI:
         return this.validateUuid(sessionId, "Qwen CLI");
 
-      case Harness.GeminiCli:
+      case HARNESS_IDS.GEMINI_CLI:
         return this.validateUuid(sessionId, "Gemini CLI");
 
-      case Harness.CopilotChat:
+      case HARNESS_IDS.COPILOT_CHAT:
         // Chat mode doesn't use session IDs
         Log.warn(
           `⚠️ Session ID validation not applicable for Copilot Chat mode. ` +

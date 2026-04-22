@@ -10,12 +10,8 @@ import { EndConditionHandler } from "../../flightpath/EndConditionHandler";
 import { HarnessIntegration } from "../../flightpath/HarnessIntegration";
 import { HarnessStatus } from "../../flightpath/HarnessIntegration";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
-import { PromptStep, PromptFile, Harness } from "../../types/FlightPathTypes";
-import {
-  EXECUTION_STATES,
-  FINAL_STEP_PHASES,
-  STEP_STATUS,
-} from "../../types/DashboardConstants";
+import { PromptStep, PromptFile } from "../../types/FlightPathTypes";
+import { HARNESS_IDS, EXECUTION_STATES, FINAL_STEP_PHASES, STEP_STATUS } from "../../types/DashboardConstants";
 import { CliEvent } from "../../types/WebviewMessageTypes";
 
 class MockPlatform implements PlatformAdapter {
@@ -106,7 +102,7 @@ class MockHarnessIntegration extends HarnessIntegration {
   }
 
   getIntegrationMode(): string {
-    return Harness.CopilotCli;
+    return HARNESS_IDS.COPILOT_CLI;
   }
 
   getInitializationStatus(): HarnessStatus {

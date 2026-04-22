@@ -16,7 +16,7 @@ import {
   RUNNER_IDS,
 } from "./types/DashboardConstants";
 import type { ExecutionMode, HarnessId } from "./types/DashboardConstants";
-import { Harness, isScriptStep } from "./types/FlightPathTypes";
+import { isScriptStep } from "./types/FlightPathTypes";
 import { configService } from "./config/FlightPathConfigService";
 import {
   createUserConfigBackend,
@@ -175,20 +175,6 @@ function getExecutionMode(
     : EXECUTION_MODES.HEADLESS;
 }
 
-// ---- Helper: map harness string to Harness enum ----
-
-function resolveHarness(harnessStr: string): Harness {
-  switch (harnessStr) {
-    case HARNESS_IDS.CLAUDE_CLI:
-      return Harness.ClaudeCli;
-    case HARNESS_IDS.CODEX_CLI:
-      return Harness.CodexCli;
-    case HARNESS_IDS.COPILOT_CLI:
-    default:
-      return Harness.CopilotCli;
-  }
-}
-
 // ---- Commands ----
 
 async function runCommand(
@@ -295,7 +281,7 @@ async function runCommand(
   // Register the adapter with the vscode-shim for backward compatibility.
   registerCliAdapter(platform);
   const factory = new IntegrationFactory(platform);
-  const harness = resolveHarness(config.harness);
+  const harness = config.harness as HarnessId;
 
   if (options.verbose) {
     console.log(
@@ -348,7 +334,7 @@ async function runCommand(
     platform,
     undefined, // no dashboard sink in CLI
     factory,
-    (_harnessOverride?: Harness) => detectorIntegration,
+    (_harnessOverride?: HarnessId) => detectorIntegration,
     (_name: string | undefined) => {}, // no tab management
     () => {}, // no status bar update
     workingDir

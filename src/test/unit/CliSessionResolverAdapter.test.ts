@@ -2,23 +2,23 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliSessionResolverAdapter } from "../../flightpath/harness/shared/CliSessionResolverAdapter";
 import {
-  Harness,
   type PromptFile,
   type PromptStep,
 } from "../../types/FlightPathTypes";
+import { HARNESS_IDS } from "../../types/DashboardConstants";
 import type { WorkflowContext } from "../../types/WorkflowContextTypes";
 import { Log } from "../../utils/Log";
 
 suite("CliSessionResolverAdapter", () => {
   test("should resolve workflow properties and auto-resumed session IDs", () => {
     const adapter = new CliSessionResolverAdapter({
-      getIntegrationHarness: () => Harness.CopilotCli,
+      getIntegrationHarness: () => HARNESS_IDS.COPILOT_CLI,
     });
 
     const previousPrompt: PromptStep = {
       prompt: "previous",
       _runtime: {
-        harness: Harness.CopilotCli,
+        harness: HARNESS_IDS.COPILOT_CLI,
         model: "gpt-5",
         sessionId: "550e8400-e29b-41d4-a716-446655440000",
         startedAt: Date.now(),
@@ -31,7 +31,7 @@ suite("CliSessionResolverAdapter", () => {
     };
     const workflowFile: PromptFile = {
       steps: [previousPrompt, currentPrompt],
-      harness: Harness.CopilotCli,
+      harness: HARNESS_IDS.COPILOT_CLI,
       model: "gpt-5",
       resumeSession: true,
     };
@@ -46,7 +46,7 @@ suite("CliSessionResolverAdapter", () => {
       result.resolvedSessionId,
       "550e8400-e29b-41d4-a716-446655440000"
     );
-    assert.strictEqual(result.resolvedProperties?.harness, Harness.CopilotCli);
+    assert.strictEqual(result.resolvedProperties?.harness, HARNESS_IDS.COPILOT_CLI);
     assert.strictEqual(result.resolvedProperties?.model, "gpt-5");
   });
 
@@ -61,7 +61,7 @@ suite("CliSessionResolverAdapter", () => {
 
     try {
       const adapter = new CliSessionResolverAdapter({
-        getIntegrationHarness: () => Harness.ClaudeCli,
+        getIntegrationHarness: () => HARNESS_IDS.CLAUDE_CLI,
       });
 
       const prompt: PromptStep = {
@@ -71,7 +71,7 @@ suite("CliSessionResolverAdapter", () => {
       };
       const workflowFile: PromptFile = {
         steps: [prompt],
-        harness: Harness.ClaudeCli,
+        harness: HARNESS_IDS.CLAUDE_CLI,
         model: "sonnet",
         resumeSession: true,
       };
@@ -93,7 +93,7 @@ suite("CliSessionResolverAdapter", () => {
 
   test("should return workflowContext resolved properties when no workflow file exists", () => {
     const adapter = new CliSessionResolverAdapter({
-      getIntegrationHarness: () => Harness.CodexCli,
+      getIntegrationHarness: () => HARNESS_IDS.CODEX_CLI,
     });
 
     const prompt: PromptStep = {
@@ -104,7 +104,7 @@ suite("CliSessionResolverAdapter", () => {
       promptIndex: 0,
       allPrompts: [prompt],
       resolvedProperties: {
-        harness: Harness.CodexCli,
+        harness: HARNESS_IDS.CODEX_CLI,
         model: "gpt-5.2-codex",
         resumeSession: true,
         mcpServers: null,
@@ -114,7 +114,7 @@ suite("CliSessionResolverAdapter", () => {
     } as WorkflowContext);
 
     assert.strictEqual(result.resolvedSessionId, undefined);
-    assert.strictEqual(result.resolvedProperties?.harness, Harness.CodexCli);
+    assert.strictEqual(result.resolvedProperties?.harness, HARNESS_IDS.CODEX_CLI);
     assert.strictEqual(result.resolvedProperties?.model, "gpt-5.2-codex");
   });
 });

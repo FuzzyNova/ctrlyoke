@@ -2,7 +2,7 @@ import {
   PromptFile,
   PromptStep,
   WorkflowStep,
-  Harness,
+  HarnessId,
 } from "../types/FlightPathTypes";
 import { SESSION_ID_SENTINELS } from "../types/DashboardConstants";
 import { PropertyResolver } from "./PropertyResolver";
@@ -67,8 +67,8 @@ export class SessionResolver {
    * @returns true if harnesses are compatible for session sharing
    */
   private static areHarnessesCompatible(
-    harness1: Harness | undefined,
-    harness2: Harness | undefined
+    harness1: HarnessId | undefined,
+    harness2: HarnessId | undefined
   ): boolean {
     // Strict equality check: Both must be defined and match
     // This prevents cross-harness session references (Copilot ↔ Claude ↔ Codex)
@@ -169,7 +169,7 @@ export class SessionResolver {
     refNumber: number,
     promptIndex: number,
     allPrompts: WorkflowStep[],
-    resolvedHarness?: Harness
+    resolvedHarness?: HarnessId
   ): string | undefined {
     const refIndex = refNumber - 1; // 1-based to 0-based
 
@@ -243,7 +243,7 @@ export class SessionResolver {
     prompt: PromptStep,
     promptIndex: number,
     allPrompts: WorkflowStep[],
-    resolvedHarness?: Harness
+    resolvedHarness?: HarnessId
   ): string | undefined {
     if (promptIndex === 0) {
       return undefined; // First prompt, no previous

@@ -13,6 +13,7 @@ import {
   PERMISSION_MODES,
   MODEL_OPTION_VALUES,
   PANEL_CLIENT_ID,
+  type HarnessId,
   type HarnessStatusString,
 } from "../types/DashboardConstants";
 import {
@@ -33,7 +34,6 @@ import {
   GEMINI_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import {
-  Harness,
   McpServerConfig,
   ToolPermissionsOverride,
 } from "../types/FlightPathTypes";
@@ -423,7 +423,7 @@ export class WebviewSettingsSync {
       return;
     }
 
-    await ConfigurationUtils.setIntegrationMode(harness as Harness);
+    await ConfigurationUtils.setIntegrationMode(harness as HarnessId);
   }
 
   async handleModelChange(model: string): Promise<void> {
@@ -519,10 +519,10 @@ export class WebviewSettingsSync {
     harness?: string
   ): Promise<void> {
     if (property === "model" && harness) {
-      await ConfigurationUtils.setModelForHarness(harness as Harness, value);
+      await ConfigurationUtils.setModelForHarness(harness as HarnessId, value);
     } else if (property === "additionalArgs" && harness) {
       await ConfigurationUtils.setAdditionalArgsForHarness(
-        harness as Harness,
+        harness as HarnessId,
         value ?? ""
       );
     } else if (property === "agent") {
@@ -660,33 +660,33 @@ export class WebviewSettingsSync {
       ConfigurationUtils.shouldRespectGitignoreForCompletions();
 
     const harnessDefaultModels = {
-      [HARNESS_IDS.COPILOT_CLI]: this.getModelForHarness(Harness.CopilotCli),
-      [HARNESS_IDS.COPILOT_CHAT]: this.getModelForHarness(Harness.CopilotChat),
-      [HARNESS_IDS.CLAUDE_CLI]: this.getModelForHarness(Harness.ClaudeCli),
-      [HARNESS_IDS.CODEX_CLI]: this.getModelForHarness(Harness.CodexCli),
-      [HARNESS_IDS.OPENCODE_CLI]: this.getModelForHarness(Harness.OpenCodeCli),
-      [HARNESS_IDS.QWEN_CLI]: this.getModelForHarness(Harness.QwenCli),
-      [HARNESS_IDS.GEMINI_CLI]: this.getModelForHarness(Harness.GeminiCli),
+      [HARNESS_IDS.COPILOT_CLI]: this.getModelForHarness(HARNESS_IDS.COPILOT_CLI),
+      [HARNESS_IDS.COPILOT_CHAT]: this.getModelForHarness(HARNESS_IDS.COPILOT_CHAT),
+      [HARNESS_IDS.CLAUDE_CLI]: this.getModelForHarness(HARNESS_IDS.CLAUDE_CLI),
+      [HARNESS_IDS.CODEX_CLI]: this.getModelForHarness(HARNESS_IDS.CODEX_CLI),
+      [HARNESS_IDS.OPENCODE_CLI]: this.getModelForHarness(HARNESS_IDS.OPENCODE_CLI),
+      [HARNESS_IDS.QWEN_CLI]: this.getModelForHarness(HARNESS_IDS.QWEN_CLI),
+      [HARNESS_IDS.GEMINI_CLI]: this.getModelForHarness(HARNESS_IDS.GEMINI_CLI),
     };
 
     const harnessDefaultAdditionalArgs = {
       [HARNESS_IDS.COPILOT_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
-        Harness.CopilotCli
+        HARNESS_IDS.COPILOT_CLI
       ),
       [HARNESS_IDS.COPILOT_CHAT]: "",
       [HARNESS_IDS.CLAUDE_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
-        Harness.ClaudeCli
+        HARNESS_IDS.CLAUDE_CLI
       ),
       [HARNESS_IDS.CODEX_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
-        Harness.CodexCli
+        HARNESS_IDS.CODEX_CLI
       ),
       [HARNESS_IDS.OPENCODE_CLI]:
-        ConfigurationUtils.getAdditionalArgsForHarness(Harness.OpenCodeCli),
+        ConfigurationUtils.getAdditionalArgsForHarness(HARNESS_IDS.OPENCODE_CLI),
       [HARNESS_IDS.QWEN_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
-        Harness.QwenCli
+        HARNESS_IDS.QWEN_CLI
       ),
       [HARNESS_IDS.GEMINI_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
-        Harness.GeminiCli
+        HARNESS_IDS.GEMINI_CLI
       ),
     };
 
@@ -847,7 +847,7 @@ export class WebviewSettingsSync {
    */
   getModelForHarness(harness: string): string {
     return (
-      ConfigurationUtils.getModelForHarness(harness as Harness) ||
+      ConfigurationUtils.getModelForHarness(harness as HarnessId) ||
       (DEFAULT_MODELS as Record<string, string>)[harness] ||
       DEFAULT_MODELS[HARNESS_IDS.COPILOT_CLI]
     );

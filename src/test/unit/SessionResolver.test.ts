@@ -1,8 +1,8 @@
 import * as assert from "assert";
 import { SessionResolver } from "../../utils/SessionResolver";
-import { PromptFile, PromptStep, Harness } from "../../types/FlightPathTypes";
+import { PromptFile, PromptStep } from "../../types/FlightPathTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { SESSION_ID_SENTINELS } from "../../types/DashboardConstants";
+import { SESSION_ID_SENTINELS, HARNESS_IDS } from "../../types/DashboardConstants";
 
 suite("SessionResolver Tests", () => {
   suite("resolve - workflow-level sessionId inheritance", () => {
@@ -24,7 +24,7 @@ suite("SessionResolver Tests", () => {
     test("should use workflow-level sessionId when prompt-level not specified (numeric)", () => {
       const workflow: PromptFile = {
         steps: [],
-        harness: Harness.CopilotCli,
+        harness: HARNESS_IDS.COPILOT_CLI,
         sessionId: 1,
         resumeSession: true,
       };
@@ -33,7 +33,7 @@ suite("SessionResolver Tests", () => {
       const completedPrompt: PromptStep = {
         prompt: "first prompt",
         _runtime: {
-          harness: Harness.CopilotCli,
+          harness: HARNESS_IDS.COPILOT_CLI,
           model: "claude-sonnet-4.5",
           sessionId: "abc-123-from-prompt-1",
           startedAt: Date.now(),
@@ -73,7 +73,7 @@ suite("SessionResolver Tests", () => {
     test("should use prompt-level sessionId over workflow-level (numeric)", () => {
       const workflow: PromptFile = {
         steps: [],
-        harness: Harness.CopilotCli,
+        harness: HARNESS_IDS.COPILOT_CLI,
         sessionId: 2,
         resumeSession: true,
       };
@@ -81,7 +81,7 @@ suite("SessionResolver Tests", () => {
       const completedPrompt: PromptStep = {
         prompt: "first prompt",
         _runtime: {
-          harness: Harness.CopilotCli,
+          harness: HARNESS_IDS.COPILOT_CLI,
           model: "claude-sonnet-4.5",
           sessionId: "abc-123",
           startedAt: Date.now(),
@@ -147,7 +147,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "first",
           _runtime: {
-            harness: Harness.CopilotCli,
+            harness: HARNESS_IDS.COPILOT_CLI,
             model: "claude-sonnet-4.5",
             sessionId: "session-from-prompt-1",
             startedAt: Date.now(),
@@ -156,7 +156,7 @@ suite("SessionResolver Tests", () => {
         },
         {
           prompt: "second",
-          harness: Harness.CopilotCli,
+          harness: HARNESS_IDS.COPILOT_CLI,
           sessionId: 1, // Reference prompt 1
         },
       ];
@@ -175,7 +175,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "first",
           _runtime: {
-            harness: Harness.CopilotCli,
+            harness: HARNESS_IDS.COPILOT_CLI,
             model: "claude-sonnet-4.5",
             startedAt: Date.now(),
             completedAt: Date.now(),
@@ -196,9 +196,9 @@ suite("SessionResolver Tests", () => {
       const prompts: PromptStep[] = [
         {
           prompt: "first",
-          harness: Harness.ClaudeCli,
+          harness: HARNESS_IDS.CLAUDE_CLI,
           _runtime: {
-            harness: Harness.ClaudeCli,
+            harness: HARNESS_IDS.CLAUDE_CLI,
             model: "sonnet",
             sessionId: "claude-session",
             startedAt: Date.now(),
@@ -207,7 +207,7 @@ suite("SessionResolver Tests", () => {
         },
         {
           prompt: "second",
-          harness: Harness.CopilotCli,
+          harness: HARNESS_IDS.COPILOT_CLI,
           sessionId: 1, // Cross-harness reference
         },
       ];
@@ -222,14 +222,14 @@ suite("SessionResolver Tests", () => {
     test("should auto-resume from previous prompt when resumeSession=true", () => {
       const workflow: PromptFile = {
         steps: [],
-        harness: Harness.CopilotCli,
+        harness: HARNESS_IDS.COPILOT_CLI,
       };
 
       const prompts: PromptStep[] = [
         {
           prompt: "first",
           _runtime: {
-            harness: Harness.CopilotCli,
+            harness: HARNESS_IDS.COPILOT_CLI,
             model: "claude-sonnet-4.5",
             sessionId: "auto-resume-session",
             startedAt: Date.now(),
@@ -256,7 +256,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "first",
           _runtime: {
-            harness: Harness.ClaudeCli,
+            harness: HARNESS_IDS.CLAUDE_CLI,
             model: "sonnet",
             sessionId: "claude-session",
             startedAt: Date.now(),
@@ -266,7 +266,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "second",
           _runtime: {
-            harness: Harness.CopilotCli,
+            harness: HARNESS_IDS.COPILOT_CLI,
             model: "claude-sonnet-4.5",
             sessionId: "copilot-session",
             startedAt: Date.now(),
@@ -275,7 +275,7 @@ suite("SessionResolver Tests", () => {
         },
         {
           prompt: "third",
-          harness: Harness.CopilotCli,
+          harness: HARNESS_IDS.COPILOT_CLI,
           resumeSession: true,
         },
       ];
@@ -290,7 +290,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "first",
           _runtime: {
-            harness: Harness.ClaudeCli,
+            harness: HARNESS_IDS.CLAUDE_CLI,
             model: "sonnet",
             sessionId: "claude-session",
             startedAt: Date.now(),
@@ -299,7 +299,7 @@ suite("SessionResolver Tests", () => {
         },
         {
           prompt: "second",
-          harness: Harness.CopilotCli,
+          harness: HARNESS_IDS.COPILOT_CLI,
           resumeSession: true,
         },
       ];
@@ -483,7 +483,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "first",
           _runtime: {
-            harness: Harness.CopilotCli,
+            harness: HARNESS_IDS.COPILOT_CLI,
             model: "claude-sonnet-4.5",
             sessionId: "session-1",
             startedAt: Date.now(),

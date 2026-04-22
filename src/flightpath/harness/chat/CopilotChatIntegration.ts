@@ -3,10 +3,9 @@ import * as path from "path";
 import * as fs from "fs/promises";
 import {
   PromptStep,
-  Harness,
   type UserHookConfig,
 } from "../../../types/FlightPathTypes";
-import { TEMP_FILE_CATEGORIES } from "../../../types/DashboardConstants";
+import { HARNESS_IDS, TEMP_FILE_CATEGORIES } from "../../../types/DashboardConstants";
 import { HarnessIntegration, HarnessStatus } from "../../HarnessIntegration";
 import { isModelAvailable } from "../../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
@@ -1231,14 +1230,14 @@ export class CopilotChatIntegration extends HarnessIntegration {
         available: true,
         message:
           "✅ Direct automation available (PROVEN zero-interaction strategy)",
-        strategy: Harness.CopilotChat,
+        strategy: HARNESS_IDS.COPILOT_CHAT,
       };
     } else {
       return {
         available: false,
         message:
           "❌ Direct automation unavailable - required commands not found",
-        strategy: Harness.CopilotChat,
+        strategy: HARNESS_IDS.COPILOT_CHAT,
       };
     }
   }
@@ -1249,7 +1248,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
   }
   /** Get integration mode identifier */
   getIntegrationMode(): string {
-    return Harness.CopilotChat;
+    return HARNESS_IDS.COPILOT_CHAT;
   }
   /** Get initialization status */
   getInitializationStatus(): HarnessStatus {

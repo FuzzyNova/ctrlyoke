@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import { VarSubstitutor } from "../../utils/VarSubstitutor";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
-import { Harness } from "../../types/FlightPathTypes";
+import { HARNESS_IDS } from "../../types/DashboardConstants";
 
 suite("VarSubstitutor Tests", () => {
   suite("substitute", () => {
@@ -113,7 +113,7 @@ suite("VarSubstitutor Tests", () => {
       overrides: Partial<ResolvedProperties> = {}
     ): ResolvedProperties {
       return {
-        harness: Harness.ClaudeCli,
+        harness: HARNESS_IDS.CLAUDE_CLI,
         model: "claude-sonnet-4.6",
         resumeSession: false,
         mcpServers: null,

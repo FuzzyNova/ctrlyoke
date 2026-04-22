@@ -11,10 +11,9 @@ import {
   PromptFile,
   PriorContext,
   ScriptRuntimeOutput,
-  Harness,
 } from "../../types/FlightPathTypes";
 import { PropertyResolver } from "../../utils/PropertyResolver";
-import { PRIOR_CONTEXT_ITEM_TYPES } from "../../types/DashboardConstants";
+import { PRIOR_CONTEXT_ITEM_TYPES, HARNESS_IDS } from "../../types/DashboardConstants";
 
 // ---------------------------------------------------------------------------
 // Test subclass that exposes the private prior-context helpers
@@ -36,7 +35,7 @@ class TestHarness extends HarnessIntegration {
   }
 
   getIntegrationMode(): string {
-    return Harness.CopilotCli;
+    return HARNESS_IDS.COPILOT_CLI;
   }
 
   getInitializationStatus(): HarnessStatus {

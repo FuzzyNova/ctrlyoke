@@ -1,7 +1,6 @@
 import {
   DynamicQueueConfig,
   EndCondition,
-  Harness,
   McpServerConfig,
   PreCondition,
   UserHookConfig,
@@ -16,28 +15,48 @@ import {
 import { configService } from "../config/FlightPathConfigService";
 
 /**
- * Map a Harness enum value to the HarnessId string used in config keys
+ * Configuration key constants (single source of truth for configService.get/set key strings)
  */
-function harnessToId(harness: Harness): HarnessId {
-  switch (harness) {
-    case Harness.CopilotCli:
-      return "copilot-cli";
-    case Harness.CopilotChat:
-      return "copilot-chat";
-    case Harness.ClaudeCli:
-      return "claude-cli";
-    case Harness.CodexCli:
-      return "codex-cli";
-    case Harness.OpenCodeCli:
-      return "opencode-cli";
-    case Harness.QwenCli:
-      return "qwen-cli";
-    case Harness.GeminiCli:
-      return "gemini-cli";
-    default:
-      return "copilot-cli";
-  }
-}
+export const CONFIG_KEYS = {
+  // Top-level section keys (used with configService.get())
+  HARNESS: "harness",
+  MODELS: "models",
+  ADDITIONAL_ARGS: "additionalArgs",
+  EXECUTION: "execution",
+  TOOLS: "tools",
+  WORKFLOW: "workflow",
+  CHAT: "chat",
+  MCP: "mcp",
+  HOOKS: "hooks",
+  QUEUE: "queue",
+  HISTORY: "history",
+  TERMINAL: "terminal",
+  UI: "ui",
+  SERVER: "server",
+  NOTIFICATIONS: "notifications",
+  ENABLE_DIAGNOSTIC_LOGS: "enableDiagnosticLogs",
+
+  // Dot-notation paths (used with configService.set())
+  WORKFLOW_DEFAULT_END_CONDITION: "workflow.defaultEndCondition",
+  WORKFLOW_DEFAULT_PRE_CONDITION: "workflow.defaultPreCondition",
+  WORKFLOW_DEFAULT_AGENT: "workflow.defaultAgent",
+  WORKFLOW_DEFAULT_SKILLS: "workflow.defaultSkills",
+  WORKFLOW_DEFAULT_TEMPLATE: "workflow.defaultTemplate",
+  WORKFLOW_RESUME_EXISTING_SESSION: "workflow.resumeExistingSession",
+  EXECUTION_MODE: "execution.mode",
+  UI_CONFIRM_DELETE_OPERATIONS: "ui.confirmDeleteOperations",
+  UI_CONFIRM_RESET_OPERATIONS: "ui.confirmResetOperations",
+  UI_SHOW_HEADLESS_PERMISSION_WARNING: "ui.showHeadlessPermissionWarning",
+  MCP_DEFAULT_SERVERS: "mcp.defaultServers",
+} as const;
+
+/**
+ * Configuration scope constants (single source of truth for configService.set scope strings)
+ */
+export const CONFIG_SCOPE = {
+  USER: "user",
+  WORKSPACE: "workspace",
+} as const;
 
 /**
  * Path constants (single source of truth for directory names)
@@ -107,28 +126,28 @@ export const ConfigurationUtils = {
    * Check if CLI command should be shown in dashboard output
    */
   shouldShowCliCommand(): boolean {
-    return configService.get("ui").showCliCommand;
+    return configService.get(CONFIG_KEYS.UI).showCliCommand;
   },
 
   /**
    * Check if CLI output should be shown in output panel
    */
   shouldShowCliOutput(): boolean {
-    return configService.get("ui").showCliOutput;
+    return configService.get(CONFIG_KEYS.UI).showCliOutput;
   },
 
   /**
    * Check if raw CLI output should be logged for debugging
    */
   shouldLogRawCliOutput(): boolean {
-    return configService.get("ui").logRawCliOutput;
+    return configService.get(CONFIG_KEYS.UI).logRawCliOutput;
   },
 
   /**
    * Check if the headless limited-permissions warning should be shown.
    */
   shouldShowHeadlessPermissionWarning(): boolean {
-    return configService.get("ui").showHeadlessPermissionWarning;
+    return configService.get(CONFIG_KEYS.UI).showHeadlessPermissionWarning;
   },
 
   /**
@@ -137,47 +156,31 @@ export const ConfigurationUtils = {
    * Dev builds always write log files regardless of this setting.
    */
   isDiagnosticLogsEnabled(): boolean {
-    return configService.get("enableDiagnosticLogs");
+    return configService.get(CONFIG_KEYS.ENABLE_DIAGNOSTIC_LOGS);
   },
 
   /**
    * Check if prompt files should open in the second editor group
    */
   shouldOpenPromptsInSecondGroup(): boolean {
-    return configService.get("ui").openPromptsInSecondGroup;
+    return configService.get(CONFIG_KEYS.UI).openPromptsInSecondGroup;
   },
 
   /**
    * Get the default harness from settings
    * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI), codex-cli (Codex CLI)
    */
-  getIntegrationMode(): Harness {
-    const mode = configService.get("harness");
-
-    switch (mode) {
-      case HARNESS_IDS.COPILOT_CHAT:
-        return Harness.CopilotChat;
-      case HARNESS_IDS.CLAUDE_CLI:
-        return Harness.ClaudeCli;
-      case HARNESS_IDS.CODEX_CLI:
-        return Harness.CodexCli;
-      case HARNESS_IDS.OPENCODE_CLI:
-        return Harness.OpenCodeCli;
-      case HARNESS_IDS.GEMINI_CLI:
-        return Harness.GeminiCli;
-      case HARNESS_IDS.QWEN_CLI:
-        return Harness.QwenCli;
-      case HARNESS_IDS.COPILOT_CLI:
-      default:
-        return Harness.CopilotCli;
-    }
+  getIntegrationMode(): HarnessId {
+    const mode = configService.get(CONFIG_KEYS.HARNESS) as HarnessId;
+    const validIds = Object.values(HARNESS_IDS) as HarnessId[];
+    return validIds.includes(mode) ? mode : HARNESS_IDS.COPILOT_CLI;
   },
 
   /**
    * Get dynamic queue configuration from settings
    */
   getDynamicQueueConfig(): DynamicQueueConfig {
-    const queue = configService.get("queue");
+    const queue = configService.get(CONFIG_KEYS.QUEUE);
     return {
       maxQueueSize: queue.maxSize,
       maxWorkflowExecutionTime: queue.maxWorkflowExecutionTime,
@@ -190,7 +193,7 @@ export const ConfigurationUtils = {
    * Get embedded terminal settings.
    */
   getTerminalSettings(): TerminalSettings {
-    return configService.get("terminal");
+    return configService.get(CONFIG_KEYS.TERMINAL);
   },
 
   /**
@@ -198,63 +201,77 @@ export const ConfigurationUtils = {
    * User configures in seconds, this returns milliseconds
    */
   getScriptTimeoutMs(): number {
-    return configService.get("execution").scriptTimeout * 1000;
+    return configService.get(CONFIG_KEYS.EXECUTION).scriptTimeout * 1000;
   },
 
   /**
    * Get the default end condition for new workflows (null/undefined = disabled)
    */
   getDefaultEndCondition(): EndCondition | null | undefined {
-    return configService.get("workflow").defaultEndCondition;
+    return configService.get(CONFIG_KEYS.WORKFLOW).defaultEndCondition;
   },
 
   /**
    * Get the default pre-condition for new workflows (null/undefined = disabled)
    */
   getDefaultPreCondition(): PreCondition | null | undefined {
-    return configService.get("workflow").defaultPreCondition;
+    return configService.get(CONFIG_KEYS.WORKFLOW).defaultPreCondition;
   },
 
   /**
    * Get default max retries for end conditions (reads from defaultEndCondition)
    */
   getDefaultMaxRetries(): number {
-    return configService.get("workflow").defaultEndCondition?.maxRetries ?? 0;
+    return (
+      configService.get(CONFIG_KEYS.WORKFLOW).defaultEndCondition?.maxRetries ??
+      0
+    );
   },
 
   /**
    * Get default retry prompt template (reads from defaultEndCondition)
    */
   getDefaultRetryPrompt(): string {
-    return configService.get("workflow").defaultEndCondition?.retryPrompt ?? "";
+    return (
+      configService.get(CONFIG_KEYS.WORKFLOW).defaultEndCondition
+        ?.retryPrompt ?? ""
+    );
   },
 
   /**
    * Set the default end condition in settings
    */
   async setDefaultEndCondition(value: EndCondition | null): Promise<void> {
-    await configService.set("workflow.defaultEndCondition", value, "user");
+    await configService.set(
+      CONFIG_KEYS.WORKFLOW_DEFAULT_END_CONDITION,
+      value,
+      CONFIG_SCOPE.USER
+    );
   },
 
   /**
    * Set the default pre-condition in settings
    */
   async setDefaultPreCondition(value: PreCondition | null): Promise<void> {
-    await configService.set("workflow.defaultPreCondition", value, "user");
+    await configService.set(
+      CONFIG_KEYS.WORKFLOW_DEFAULT_PRE_CONDITION,
+      value,
+      CONFIG_SCOPE.USER
+    );
   },
 
   /**
    * Get default workflow format (yaml or json)
    */
   getDefaultWorkflowFormat(): "yaml" | "json" {
-    return configService.get("workflow").defaultFormat;
+    return configService.get(CONFIG_KEYS.WORKFLOW).defaultFormat;
   },
 
   /**
    * Check if .gitignore should be respected for completions
    */
   shouldRespectGitignoreForCompletions(): boolean {
-    return configService.get("ui").respectGitignoreForCompletions;
+    return configService.get(CONFIG_KEYS.UI).respectGitignoreForCompletions;
   },
 
   /**
@@ -262,8 +279,8 @@ export const ConfigurationUtils = {
    */
   getCliModel(): string {
     return (
-      configService.get("models")["copilot-cli"] ??
-      DEFAULT_MODELS["copilot-cli"]
+      configService.get(CONFIG_KEYS.MODELS)[HARNESS_IDS.COPILOT_CLI] ??
+      DEFAULT_MODELS[HARNESS_IDS.COPILOT_CLI]
     );
   },
 
@@ -271,21 +288,21 @@ export const ConfigurationUtils = {
    * Get model for a specific harness
    * Maps harness enum to the appropriate model setting
    */
-  getModelForHarness(harness: Harness): string {
+  getModelForHarness(harness: HarnessId): string {
     switch (harness) {
-      case Harness.CopilotCli:
+      case HARNESS_IDS.COPILOT_CLI:
         return ConfigurationUtils.getCliModel();
-      case Harness.CopilotChat:
+      case HARNESS_IDS.COPILOT_CHAT:
         return ConfigurationUtils.getCopilotChatModel();
-      case Harness.ClaudeCli:
+      case HARNESS_IDS.CLAUDE_CLI:
         return ConfigurationUtils.getClaudeCliModel();
-      case Harness.CodexCli:
+      case HARNESS_IDS.CODEX_CLI:
         return ConfigurationUtils.getCodexCliModel();
-      case Harness.OpenCodeCli:
+      case HARNESS_IDS.OPENCODE_CLI:
         return ConfigurationUtils.getOpenCodeCliModel();
-      case Harness.GeminiCli:
+      case HARNESS_IDS.GEMINI_CLI:
         return ConfigurationUtils.getGeminiCliModel();
-      case Harness.QwenCli:
+      case HARNESS_IDS.QWEN_CLI:
         return ConfigurationUtils.getQwenCliModel();
       default:
         // Fallback to Copilot CLI model
@@ -298,14 +315,14 @@ export const ConfigurationUtils = {
    * Not supported by gemini-cli, opencode-cli, or copilot-chat.
    */
   getCliAllowedDirs(): string[] {
-    return configService.get("tools").allowedDirs;
+    return configService.get(CONFIG_KEYS.TOOLS).allowedDirs;
   },
 
   /**
    * Get CLI tool permissions mode (shared between Copilot and Claude)
    */
   getCliToolPermissions(): Exclude<PermissionMode, "none"> {
-    return configService.get("tools").permissionMode as Exclude<
+    return configService.get(CONFIG_KEYS.TOOLS).permissionMode as Exclude<
       PermissionMode,
       "none"
     >;
@@ -315,7 +332,7 @@ export const ConfigurationUtils = {
    * Get chat window location preference
    */
   getChatWindowLocation(): "chatPanel" | "newTab" | "newWindow" {
-    return configService.get("chat").windowLocation;
+    return configService.get(CONFIG_KEYS.CHAT).windowLocation;
   },
 
   /**
@@ -323,7 +340,7 @@ export const ConfigurationUtils = {
    * User configures in seconds, this returns milliseconds
    */
   getChatInactivityTimeoutMs(): number {
-    return configService.get("chat").inactivityTimeout * 1000;
+    return configService.get(CONFIG_KEYS.CHAT).inactivityTimeout * 1000;
   },
 
   /**
@@ -331,7 +348,7 @@ export const ConfigurationUtils = {
    * When true, inactivity timeouts are treated as successful completions
    */
   shouldTreatChatTimeoutAsSuccess(): boolean {
-    return configService.get("chat").treatTimeoutAsSuccess;
+    return configService.get(CONFIG_KEYS.CHAT).treatTimeoutAsSuccess;
   },
 
   // ============================================================
@@ -342,7 +359,7 @@ export const ConfigurationUtils = {
    * Get CLI execution mode (interactive terminal or headless)
    */
   getCliExecutionMode(): string {
-    return configService.get("execution").mode;
+    return configService.get(CONFIG_KEYS.EXECUTION).mode;
   },
 
   /**
@@ -354,7 +371,7 @@ export const ConfigurationUtils = {
    * completion, injection is impossible regardless of the injectMode setting.
    */
   isInjectModeEnabled(): boolean {
-    const exec = configService.get("execution");
+    const exec = configService.get(CONFIG_KEYS.EXECUTION);
     if (exec.closeTerminalOnComplete) {
       return false;
     }
@@ -365,7 +382,7 @@ export const ConfigurationUtils = {
    * Check if terminal should be closed when each interactive prompt completes
    */
   shouldCloseTerminalWhenPromptCompletes(): boolean {
-    return configService.get("execution").closeTerminalOnComplete;
+    return configService.get(CONFIG_KEYS.EXECUTION).closeTerminalOnComplete;
   },
 
   /**
@@ -373,7 +390,7 @@ export const ConfigurationUtils = {
    * Returns false when the user wants to inspect files in .flightpath/temp/ for debugging.
    */
   shouldAutoDeleteTempFiles(): boolean {
-    return configService.get("execution").autoDeleteTempFiles;
+    return configService.get(CONFIG_KEYS.EXECUTION).autoDeleteTempFiles;
   },
 
   /**
@@ -382,7 +399,9 @@ export const ConfigurationUtils = {
    * Returns undefined if set to -1 (unlimited)
    */
   getMaxPromptExecutionTimeMs(): number | undefined {
-    const timeoutSeconds = configService.get("execution").maxPromptTimeout;
+    const timeoutSeconds = configService.get(
+      CONFIG_KEYS.EXECUTION
+    ).maxPromptTimeout;
     return timeoutSeconds === -1 ? undefined : timeoutSeconds * 1000;
   },
 
@@ -390,7 +409,7 @@ export const ConfigurationUtils = {
    * Check if all paths should be allowed for Copilot CLI
    */
   shouldAllowAllPaths(): boolean {
-    return configService.get("tools").copilotAllowAllPaths;
+    return configService.get(CONFIG_KEYS.TOOLS).copilotAllowAllPaths;
   },
 
   // ============================================================
@@ -402,7 +421,8 @@ export const ConfigurationUtils = {
    */
   getClaudeCliModel(): string {
     return (
-      configService.get("models")["claude-cli"] ?? DEFAULT_MODELS["claude-cli"]
+      configService.get(CONFIG_KEYS.MODELS)[HARNESS_IDS.CLAUDE_CLI] ??
+      DEFAULT_MODELS[HARNESS_IDS.CLAUDE_CLI]
     );
   },
 
@@ -415,8 +435,8 @@ export const ConfigurationUtils = {
    */
   getOpenCodeCliModel(): string {
     return (
-      configService.get("models")["opencode-cli"] ??
-      DEFAULT_MODELS["opencode-cli"]
+      configService.get(CONFIG_KEYS.MODELS)[HARNESS_IDS.OPENCODE_CLI] ??
+      DEFAULT_MODELS[HARNESS_IDS.OPENCODE_CLI]
     );
   },
 
@@ -429,7 +449,8 @@ export const ConfigurationUtils = {
    */
   getQwenCliModel(): string {
     return (
-      configService.get("models")["qwen-cli"] ?? DEFAULT_MODELS["qwen-cli"]
+      configService.get(CONFIG_KEYS.MODELS)[HARNESS_IDS.QWEN_CLI] ??
+      DEFAULT_MODELS[HARNESS_IDS.QWEN_CLI]
     );
   },
 
@@ -442,7 +463,8 @@ export const ConfigurationUtils = {
    */
   getGeminiCliModel(): string {
     return (
-      configService.get("models")["gemini-cli"] ?? DEFAULT_MODELS["gemini-cli"]
+      configService.get(CONFIG_KEYS.MODELS)[HARNESS_IDS.GEMINI_CLI] ??
+      DEFAULT_MODELS[HARNESS_IDS.GEMINI_CLI]
     );
   },
 
@@ -455,7 +477,8 @@ export const ConfigurationUtils = {
    */
   getCodexCliModel(): string {
     return (
-      configService.get("models")["codex-cli"] ?? DEFAULT_MODELS["codex-cli"]
+      configService.get(CONFIG_KEYS.MODELS)[HARNESS_IDS.CODEX_CLI] ??
+      DEFAULT_MODELS[HARNESS_IDS.CODEX_CLI]
     );
   },
 
@@ -464,7 +487,7 @@ export const ConfigurationUtils = {
    * Options: read-only, workspace-write, danger-full-access
    */
   getCodexSandboxMode(): string {
-    return configService.get("tools").codexSandboxMode;
+    return configService.get(CONFIG_KEYS.TOOLS).codexSandboxMode;
   },
 
   /**
@@ -472,7 +495,7 @@ export const ConfigurationUtils = {
    * Options: untrusted, on-request, never
    */
   getCodexApprovalPolicy(): string {
-    return configService.get("tools").codexApprovalPolicy;
+    return configService.get(CONFIG_KEYS.TOOLS).codexApprovalPolicy;
   },
 
   // ============================================================
@@ -484,25 +507,27 @@ export const ConfigurationUtils = {
    * Prompt-level and workflow-level additionalArgs take precedence via PropertyResolver.
    * copilot-chat is not a CLI harness and returns "".
    */
-  getAdditionalArgsForHarness(harness: Harness): string {
-    if (harness === Harness.CopilotChat) {
+  getAdditionalArgsForHarness(harness: HarnessId): string {
+    if (harness === HARNESS_IDS.COPILOT_CHAT) {
       return "";
     }
-    return configService.get("additionalArgs")[harnessToId(harness)] ?? "";
+    return (
+      configService.get(CONFIG_KEYS.ADDITIONAL_ARGS)[harness] ?? ""
+    );
   },
 
   /**
    * Get allowed tools for CLI operations (shared between Copilot and Claude)
    */
   getCliAllowedTools(): string[] {
-    return configService.get("tools").allowed;
+    return configService.get(CONFIG_KEYS.TOOLS).allowed;
   },
 
   /**
    * Get denied tools for CLI operations (shared between Copilot and Claude)
    */
   getCliDeniedTools(): string[] {
-    return configService.get("tools").denied;
+    return configService.get(CONFIG_KEYS.TOOLS).denied;
   },
 
   // ============================================================
@@ -513,14 +538,14 @@ export const ConfigurationUtils = {
    * Get the default prior context injection mode for workflow prompts.
    */
   getPriorContext(): string {
-    return configService.get("workflow").priorContext;
+    return configService.get(CONFIG_KEYS.WORKFLOW).priorContext;
   },
 
   /**
    * Check if existing chat session should be resumed per prompt
    */
   shouldResumeExistingSession(): boolean {
-    return configService.get("workflow").resumeExistingSession;
+    return configService.get(CONFIG_KEYS.WORKFLOW).resumeExistingSession;
   },
 
   /**
@@ -542,14 +567,14 @@ export const ConfigurationUtils = {
    * Get default workflow template ID
    */
   getDefaultWorkflowTemplate(): string {
-    return configService.get("workflow").defaultTemplate;
+    return configService.get(CONFIG_KEYS.WORKFLOW).defaultTemplate;
   },
 
   /**
    * Check if recent session should be auto-loaded on startup
    */
   shouldAutoLoadRecentSession(): boolean {
-    return configService.get("workflow").autoLoadRecentSession;
+    return configService.get(CONFIG_KEYS.WORKFLOW).autoLoadRecentSession;
   },
 
   // ============================================================
@@ -561,8 +586,8 @@ export const ConfigurationUtils = {
    */
   getCopilotChatModel(): string {
     return (
-      configService.get("models")["copilot-chat"] ??
-      DEFAULT_MODELS["copilot-chat"]
+      configService.get(CONFIG_KEYS.MODELS)[HARNESS_IDS.COPILOT_CHAT] ??
+      DEFAULT_MODELS[HARNESS_IDS.COPILOT_CHAT]
     );
   },
 
@@ -571,7 +596,7 @@ export const ConfigurationUtils = {
    * Returns empty string if no default agent is selected
    */
   getDefaultAgent(): string {
-    return configService.get("workflow").defaultAgent;
+    return configService.get(CONFIG_KEYS.WORKFLOW).defaultAgent;
   },
 
   /**
@@ -579,14 +604,14 @@ export const ConfigurationUtils = {
    * Returns empty array if no default skills are selected
    */
   getDefaultSkills(): string[] {
-    return configService.get("workflow").defaultSkills ?? [];
+    return configService.get(CONFIG_KEYS.WORKFLOW).defaultSkills ?? [];
   },
 
   /**
    * Check if agent mode should be forced for chat
    */
   shouldForceAgentModeForChat(): boolean {
-    return configService.get("chat").forceAgentMode;
+    return configService.get(CONFIG_KEYS.CHAT).forceAgentMode;
   },
 
   /**
@@ -595,7 +620,7 @@ export const ConfigurationUtils = {
    * When true, uses VS Code's native attachFile commands and agent-specific chat windows.
    */
   shouldUseChatNativeAttachments(): boolean {
-    return configService.get("chat").useNativeAttachments;
+    return configService.get(CONFIG_KEYS.CHAT).useNativeAttachments;
   },
 
   /**
@@ -605,7 +630,7 @@ export const ConfigurationUtils = {
    * in the first message of that session.
    */
   shouldOmitAgentsAndSkillsOnResume(): boolean {
-    return configService.get("workflow").omitAgentsSkillsOnResume;
+    return configService.get(CONFIG_KEYS.WORKFLOW).omitAgentsSkillsOnResume;
   },
 
   // ============================================================
@@ -637,7 +662,7 @@ export const ConfigurationUtils = {
     value: T,
     _target?: unknown
   ): Promise<void> {
-    await configService.set(key, value, "user");
+    await configService.set(key, value, CONFIG_SCOPE.USER);
   },
 
   // ============================================================
@@ -647,30 +672,34 @@ export const ConfigurationUtils = {
   /**
    * Set the default harness integration mode
    */
-  async setIntegrationMode(harness: Harness): Promise<void> {
-    await configService.set("harness", harness, "user");
+  async setIntegrationMode(harness: HarnessId): Promise<void> {
+    await configService.set(CONFIG_KEYS.HARNESS, harness, CONFIG_SCOPE.USER);
   },
 
   /**
    * Set the model for a specific harness
    */
-  async setModelForHarness(harness: Harness, model: string): Promise<void> {
-    await configService.set(`models.${harnessToId(harness)}`, model, "user");
+  async setModelForHarness(harness: HarnessId, model: string): Promise<void> {
+    await configService.set(
+      `${CONFIG_KEYS.MODELS}.${harness}`,
+      model,
+      CONFIG_SCOPE.USER
+    );
   },
 
   /**
    * Set the default additional args for a specific harness
    */
   async setAdditionalArgsForHarness(
-    harness: Harness,
+    harness: HarnessId,
     args: string
   ): Promise<void> {
     // Pass undefined to remove the setting entirely when args is empty —
     // avoids leaving a "" entry in settings.json.
     await configService.set(
-      `additionalArgs.${harnessToId(harness)}`,
+      `${CONFIG_KEYS.ADDITIONAL_ARGS}.${harness}`,
       args || undefined,
-      "user"
+      CONFIG_SCOPE.USER
     );
   },
 
@@ -678,35 +707,51 @@ export const ConfigurationUtils = {
    * Set the default agent for new workflows
    */
   async setDefaultAgent(agent: string): Promise<void> {
-    await configService.set("workflow.defaultAgent", agent, "user");
+    await configService.set(
+      CONFIG_KEYS.WORKFLOW_DEFAULT_AGENT,
+      agent,
+      CONFIG_SCOPE.USER
+    );
   },
 
   /**
    * Set the default skills for new workflows
    */
   async setDefaultSkills(skills: string[]): Promise<void> {
-    await configService.set("workflow.defaultSkills", skills, "user");
+    await configService.set(
+      CONFIG_KEYS.WORKFLOW_DEFAULT_SKILLS,
+      skills,
+      CONFIG_SCOPE.USER
+    );
   },
 
   /**
    * Set CLI execution mode
    */
   async setCliExecutionMode(mode: string): Promise<void> {
-    await configService.set("execution.mode", mode, "user");
+    await configService.set(
+      CONFIG_KEYS.EXECUTION_MODE,
+      mode,
+      CONFIG_SCOPE.USER
+    );
   },
 
   /**
    * Set whether to resume existing session
    */
   async setResumeExistingSession(enabled: boolean): Promise<void> {
-    await configService.set("workflow.resumeExistingSession", enabled, "user");
+    await configService.set(
+      CONFIG_KEYS.WORKFLOW_RESUME_EXISTING_SESSION,
+      enabled,
+      CONFIG_SCOPE.USER
+    );
   },
 
   /**
    * Get the default MCP servers from settings
    */
   getDefaultMcpServers(): (string | McpServerConfig)[] {
-    return configService.get("mcp").defaultServers;
+    return configService.get(CONFIG_KEYS.MCP).defaultServers;
   },
 
   /**
@@ -715,28 +760,36 @@ export const ConfigurationUtils = {
   async setDefaultMcpServers(
     servers: (string | McpServerConfig)[]
   ): Promise<void> {
-    await configService.set("mcp.defaultServers", servers, "user");
+    await configService.set(
+      CONFIG_KEYS.MCP_DEFAULT_SERVERS,
+      servers,
+      CONFIG_SCOPE.USER
+    );
   },
 
   /**
    * Get the default hooks from settings
    */
   getDefaultHooks(): UserHookConfig[] {
-    return configService.get("hooks");
+    return configService.get(CONFIG_KEYS.HOOKS);
   },
 
   /**
    * Set the default hooks in settings
    */
   async setDefaultHooks(hooks: UserHookConfig[]): Promise<void> {
-    await configService.set("hooks", hooks, "user");
+    await configService.set(CONFIG_KEYS.HOOKS, hooks, CONFIG_SCOPE.USER);
   },
 
   /**
    * Set the default workflow template
    */
   async setDefaultWorkflowTemplate(templateId: string): Promise<void> {
-    await configService.set("workflow.defaultTemplate", templateId, "user");
+    await configService.set(
+      CONFIG_KEYS.WORKFLOW_DEFAULT_TEMPLATE,
+      templateId,
+      CONFIG_SCOPE.USER
+    );
   },
 
   // ============================================================
@@ -747,14 +800,14 @@ export const ConfigurationUtils = {
    * Check if output history saving is enabled
    */
   isSaveOutputHistoryEnabled(): boolean {
-    return configService.get("history").saveOutput;
+    return configService.get(CONFIG_KEYS.HISTORY).saveOutput;
   },
 
   /**
    * Get the maximum number of history runs to retain per workflow
    */
   getMaxHistoryRuns(): number {
-    return configService.get("history").maxRuns;
+    return configService.get(CONFIG_KEYS.HISTORY).maxRuns;
   },
 
   /**
@@ -762,29 +815,37 @@ export const ConfigurationUtils = {
    * When true (default), shows a modal before destructive delete operations.
    */
   shouldConfirmDeleteOperations(): boolean {
-    return configService.get("ui").confirmDeleteOperations;
+    return configService.get(CONFIG_KEYS.UI).confirmDeleteOperations;
   },
 
   /**
    * Set whether to show confirmation dialogs before delete operations
    */
   async setConfirmDeleteOperations(enabled: boolean): Promise<void> {
-    await configService.set("ui.confirmDeleteOperations", enabled, "user");
+    await configService.set(
+      CONFIG_KEYS.UI_CONFIRM_DELETE_OPERATIONS,
+      enabled,
+      CONFIG_SCOPE.USER
+    );
   },
 
   shouldConfirmResetOperations(): boolean {
-    return configService.get("ui").confirmResetOperations;
+    return configService.get(CONFIG_KEYS.UI).confirmResetOperations;
   },
 
   async setConfirmResetOperations(enabled: boolean): Promise<void> {
-    await configService.set("ui.confirmResetOperations", enabled, "user");
+    await configService.set(
+      CONFIG_KEYS.UI_CONFIRM_RESET_OPERATIONS,
+      enabled,
+      CONFIG_SCOPE.USER
+    );
   },
 
   async setShowHeadlessPermissionWarning(enabled: boolean): Promise<void> {
     await configService.set(
-      "ui.showHeadlessPermissionWarning",
+      CONFIG_KEYS.UI_SHOW_HEADLESS_PERMISSION_WARNING,
       enabled,
-      "user"
+      CONFIG_SCOPE.USER
     );
   },
 };

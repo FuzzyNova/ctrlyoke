@@ -7,7 +7,7 @@ import {
   CliResult,
   UniversalCliOutput,
 } from "../../types/CliOutputTypes";
-import { PromptStep, Harness } from "../../types/FlightPathTypes";
+import { PromptStep } from "../../types/FlightPathTypes";
 import { WorkflowContext } from "../../types/WorkflowContextTypes";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -17,6 +17,7 @@ import { Log } from "../../utils/Log";
 import {
   EXECUTION_MODES,
   type ExecutionMode,
+  type HarnessId,
 } from "../../types/DashboardConstants";
 import type { ICliProvider } from "./shared/interfaces/ICliProvider";
 import type { ToolPermissionConfig } from "./shared/interfaces/IToolPermissionMapper";
@@ -231,8 +232,8 @@ export class CliIntegration extends HarnessIntegration {
   /**
    * Get the CLI-specific integration mode string (e.g., "copilot-cli", "claude-cli")
    */
-  public getIntegrationMode(): string {
-    return this.provider.config.harnessId;
+  public getIntegrationMode(): HarnessId {
+    return this.provider.config.harnessId as HarnessId;
   }
 
   /**
@@ -604,11 +605,11 @@ export class CliIntegration extends HarnessIntegration {
     });
 
     const sessionResolverAdapter = new CliSessionResolverAdapter({
-      getIntegrationHarness: () => this.getIntegrationMode() as Harness,
+      getIntegrationHarness: () => this.getIntegrationMode(),
     });
 
     const promptRuntimeCoordinator = new CliPromptRuntimeCoordinator({
-      getIntegrationHarness: () => this.getIntegrationMode() as Harness,
+      getIntegrationHarness: () => this.getIntegrationMode(),
     });
 
     const transportCoordinator = new CliTransportCoordinator({

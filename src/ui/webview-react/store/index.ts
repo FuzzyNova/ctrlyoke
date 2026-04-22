@@ -5,7 +5,7 @@
  * - workflowStore: Core workflow execution data (steps, state, outputs)
  * - uiStore: UI layout and modal states (persisted to localStorage)
  * - editorStore: Prompt editor state (persisted to VS Code webview state)
- * - settingsStore: Harness/model configuration and global settings
+ * - settingsStore: HarnessId/model configuration and global settings
  */
 
 // Store hooks

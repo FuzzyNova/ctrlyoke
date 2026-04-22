@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { SessionValidator } from "../utils/SessionValidator";
-import { Harness } from "../types/FlightPathTypes";
+import { HARNESS_IDS } from "../types/DashboardConstants";
 
 suite("SessionValidator Tests", () => {
   suite("UUID Validation (Copilot and Claude CLI)", () => {
@@ -8,13 +8,13 @@ suite("SessionValidator Tests", () => {
       const validUuid = "550e8400-e29b-41d4-a716-446655440000";
 
       assert.strictEqual(
-        SessionValidator.validate(validUuid, Harness.CopilotCli),
+        SessionValidator.validate(validUuid, HARNESS_IDS.COPILOT_CLI),
         true,
         "Valid UUID should pass for Copilot CLI"
       );
 
       assert.strictEqual(
-        SessionValidator.validate(validUuid, Harness.ClaudeCli),
+        SessionValidator.validate(validUuid, HARNESS_IDS.CLAUDE_CLI),
         true,
         "Valid UUID should pass for Claude CLI"
       );
@@ -24,7 +24,7 @@ suite("SessionValidator Tests", () => {
       const uppercaseUuid = "550E8400-E29B-41D4-A716-446655440000";
 
       assert.strictEqual(
-        SessionValidator.validate(uppercaseUuid, Harness.CopilotCli),
+        SessionValidator.validate(uppercaseUuid, HARNESS_IDS.COPILOT_CLI),
         true,
         "Uppercase UUID should pass"
       );
@@ -42,13 +42,13 @@ suite("SessionValidator Tests", () => {
 
       invalidFormats.forEach((invalid) => {
         assert.strictEqual(
-          SessionValidator.validate(invalid, Harness.CopilotCli),
+          SessionValidator.validate(invalid, HARNESS_IDS.COPILOT_CLI),
           false,
           `Invalid UUID "${invalid}" should fail for Copilot CLI`
         );
 
         assert.strictEqual(
-          SessionValidator.validate(invalid, Harness.ClaudeCli),
+          SessionValidator.validate(invalid, HARNESS_IDS.CLAUDE_CLI),
           false,
           `Invalid UUID "${invalid}" should fail for Claude CLI`
         );
@@ -67,7 +67,7 @@ suite("SessionValidator Tests", () => {
 
       validThreadIds.forEach((threadId) => {
         assert.strictEqual(
-          SessionValidator.validate(threadId, Harness.CodexCli),
+          SessionValidator.validate(threadId, HARNESS_IDS.CODEX_CLI),
           true,
           `Thread ID "${threadId}" should pass for Codex CLI`
         );
@@ -76,13 +76,13 @@ suite("SessionValidator Tests", () => {
 
     test("Empty thread ID should fail", () => {
       assert.strictEqual(
-        SessionValidator.validate("", Harness.CodexCli),
+        SessionValidator.validate("", HARNESS_IDS.CODEX_CLI),
         false,
         "Empty string should fail"
       );
 
       assert.strictEqual(
-        SessionValidator.validate("   ", Harness.CodexCli),
+        SessionValidator.validate("   ", HARNESS_IDS.CODEX_CLI),
         false,
         "Whitespace-only string should fail"
       );
@@ -100,7 +100,7 @@ suite("SessionValidator Tests", () => {
 
       validIds.forEach((id) => {
         assert.strictEqual(
-          SessionValidator.validate(id, Harness.OpenCodeCli),
+          SessionValidator.validate(id, HARNESS_IDS.OPENCODE_CLI),
           true,
           `OpenCode session ID "${id}" should pass`
         );
@@ -120,7 +120,7 @@ suite("SessionValidator Tests", () => {
 
       invalidIds.forEach((id) => {
         assert.strictEqual(
-          SessionValidator.validate(id, Harness.OpenCodeCli),
+          SessionValidator.validate(id, HARNESS_IDS.OPENCODE_CLI),
           false,
           `Invalid OpenCode session ID "${id}" should fail`
         );
@@ -133,7 +133,7 @@ suite("SessionValidator Tests", () => {
       const sessionId = "any-session-id";
 
       assert.strictEqual(
-        SessionValidator.validate(sessionId, Harness.CopilotChat),
+        SessionValidator.validate(sessionId, HARNESS_IDS.COPILOT_CHAT),
         false,
         "Copilot Chat should not use session IDs"
       );

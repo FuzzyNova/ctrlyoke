@@ -1,5 +1,5 @@
 import { PlatformAdapter } from "../platform/PlatformAdapter";
-import { Harness } from "../types/FlightPathTypes";
+import { HARNESS_IDS, type HarnessId } from "../types/DashboardConstants";
 import { HarnessIntegration } from "./HarnessIntegration";
 import { CliIntegration } from "./harness/CliIntegration";
 import { CopilotCliProvider } from "./harness/copilot/CopilotCliProvider";
@@ -68,21 +68,21 @@ export class IntegrationFactory {
 
   /** Create a new integration for the given harness (CLI harnesses only) */
   createForHarness(
-    harness: Harness,
+    harness: HarnessId,
     registerWithContext: boolean = true
   ): HarnessIntegration {
     switch (harness) {
-      case Harness.ClaudeCli:
+      case HARNESS_IDS.CLAUDE_CLI:
         return this.createClaudeCli(registerWithContext);
-      case Harness.CodexCli:
+      case HARNESS_IDS.CODEX_CLI:
         return this.createCodexCli(registerWithContext);
-      case Harness.OpenCodeCli:
+      case HARNESS_IDS.OPENCODE_CLI:
         return this.createOpenCodeCli(registerWithContext);
-      case Harness.QwenCli:
+      case HARNESS_IDS.QWEN_CLI:
         return this.createQwenCli(registerWithContext);
-      case Harness.GeminiCli:
+      case HARNESS_IDS.GEMINI_CLI:
         return this.createGeminiCli(registerWithContext);
-      case Harness.CopilotCli:
+      case HARNESS_IDS.COPILOT_CLI:
       default:
         return this.createCopilotCli(registerWithContext);
     }
@@ -100,7 +100,7 @@ export class IntegrationFactory {
    *   confirmed the harness is available, so the PATH/version check is redundant.
    * - Must be disposed by the caller (WorkflowInstance.startWorkflowExecution finally block).
    */
-  createForExecution(harness: Harness): HarnessIntegration {
+  createForExecution(harness: HarnessId): HarnessIntegration {
     const integration = this.createForHarness(harness, false);
     integration.markAsReady();
     return integration;

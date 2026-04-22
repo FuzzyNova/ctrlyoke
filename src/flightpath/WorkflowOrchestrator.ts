@@ -9,7 +9,6 @@ import { WorkflowInstance } from "./WorkflowInstance";
 import type { FlightPathMcpServerProvider } from "../ui/FlightPathMcpServerProvider";
 import { PromptQueue } from "./PromptQueue";
 import {
-  Harness,
   QueueState,
   WorkingFile,
   WorkflowSummary,
@@ -30,6 +29,7 @@ import {
   PANEL_CLIENT_ID,
   RUNNER_IDS,
   TERMINAL_SESSION_STATUS,
+  type HarnessId,
   type QueuePosition,
   type ActionType,
   type StepStatus,
@@ -714,13 +714,13 @@ export class WorkflowOrchestrator {
       const integrationMode = ConfigurationUtils.getIntegrationMode();
       const modeLabel =
         {
-          [Harness.CopilotChat]: "Copilot Chat",
-          [Harness.ClaudeCli]: "Claude Code CLI",
-          [Harness.CodexCli]: "Codex CLI",
-          [Harness.CopilotCli]: "Copilot CLI",
-          [Harness.OpenCodeCli]: "OpenCode CLI",
-          [Harness.QwenCli]: "Qwen Code CLI",
-          [Harness.GeminiCli]: "Gemini CLI",
+          [HARNESS_IDS.COPILOT_CHAT]: "Copilot Chat",
+          [HARNESS_IDS.CLAUDE_CLI]: "Claude Code CLI",
+          [HARNESS_IDS.CODEX_CLI]: "Codex CLI",
+          [HARNESS_IDS.COPILOT_CLI]: "Copilot CLI",
+          [HARNESS_IDS.OPENCODE_CLI]: "OpenCode CLI",
+          [HARNESS_IDS.QWEN_CLI]: "Qwen Code CLI",
+          [HARNESS_IDS.GEMINI_CLI]: "Gemini CLI",
         }[integrationMode] || "Copilot CLI";
       Log.info(`🔄 Default integration: ${modeLabel}`);
 
@@ -949,7 +949,7 @@ export class WorkflowOrchestrator {
    */
   async executeWorkflow(
     workflowId?: string,
-    modeOverride?: Harness,
+    modeOverride?: HarnessId,
     continueFromCurrent?: boolean
   ): Promise<void> {
     const panelViewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
@@ -982,7 +982,7 @@ export class WorkflowOrchestrator {
     // Warn (but don't block) if trying to run a second Chat-harness workflow
     const effectiveHarness =
       modeOverride ?? ConfigurationUtils.getIntegrationMode();
-    if (effectiveHarness === Harness.CopilotChat) {
+    if (effectiveHarness === HARNESS_IDS.COPILOT_CHAT) {
       const alreadyRunning = this.getRunningWorkflows().filter(
         (w) => w !== instance
       );
@@ -998,7 +998,7 @@ export class WorkflowOrchestrator {
   }
 
   async executeLoadedPromptFile(
-    modeOverride?: Harness,
+    modeOverride?: HarnessId,
     continueFromCurrent?: boolean
   ): Promise<void> {
     return this.executeWorkflow(undefined, modeOverride, continueFromCurrent);
@@ -1006,7 +1006,7 @@ export class WorkflowOrchestrator {
 
   async executePromptFile(
     filePath: string,
-    modeOverride?: Harness
+    modeOverride?: HarnessId
   ): Promise<void> {
     // Phase 2: load into a new instance (same as loadPromptFile), then execute.
     Log.debug(
@@ -1800,7 +1800,7 @@ export class WorkflowOrchestrator {
       new VsCodeAdapter(this.context),
       this.dashboardBroadcastHub as IDashboardSink,
       this.integrationFactory,
-      (harnessOverride?: Harness) =>
+      (harnessOverride?: HarnessId) =>
         this.resolveDetectorIntegration(harnessOverride),
       (name: string | undefined) =>
         this.propagateWorkflowNameToIntegrations(name),
@@ -1908,23 +1908,23 @@ export class WorkflowOrchestrator {
    * Never used for execution — execution integrations are created per-run via IntegrationFactory.
    */
   private resolveDetectorIntegration(
-    harnessOverride?: Harness
+    harnessOverride?: HarnessId
   ): HarnessIntegration {
     const harness = harnessOverride ?? ConfigurationUtils.getIntegrationMode();
     switch (harness) {
-      case Harness.CopilotChat:
+      case HARNESS_IDS.COPILOT_CHAT:
         return this.chatIntegration;
-      case Harness.ClaudeCli:
+      case HARNESS_IDS.CLAUDE_CLI:
         return this.claudeCliIntegration;
-      case Harness.CodexCli:
+      case HARNESS_IDS.CODEX_CLI:
         return this.codexCliIntegration;
-      case Harness.OpenCodeCli:
+      case HARNESS_IDS.OPENCODE_CLI:
         return this.openCodeCliIntegration;
-      case Harness.QwenCli:
+      case HARNESS_IDS.QWEN_CLI:
         return this.qwenCliIntegration;
-      case Harness.GeminiCli:
+      case HARNESS_IDS.GEMINI_CLI:
         return this.geminiCliIntegration;
-      case Harness.CopilotCli:
+      case HARNESS_IDS.COPILOT_CLI:
       default:
         return this.copilotCliIntegration;
     }

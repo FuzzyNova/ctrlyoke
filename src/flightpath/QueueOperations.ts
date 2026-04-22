@@ -11,13 +11,13 @@ import { PromptQueue } from "./PromptQueue";
 import {
   PromptStep,
   EndCondition,
-  type Harness,
   isScriptStep,
 } from "../types/FlightPathTypes";
 import {
   EXECUTION_STATES,
   QUEUE_POSITION,
   STEP_STATUS,
+  type HarnessId,
   type QueuePosition,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -228,7 +228,7 @@ export async function appendToQueue(
   const promptItems: PromptStep[] = request.steps.map((p) => ({
     prompt: p.prompt,
     model: p.model,
-    harness: p.harness as Harness | undefined,
+    harness: p.harness as HarnessId | undefined,
     resumeSession: p.resumeSession,
     sessionId: p.sessionId,
     endCondition: p.endCondition,

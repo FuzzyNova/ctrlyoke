@@ -1,22 +1,22 @@
 import * as assert from "assert";
 import { PropertyResolver } from "../../utils/PropertyResolver";
-import { Harness, PromptFile, PromptStep } from "../../types/FlightPathTypes";
-import { PERMISSION_MODES } from "../../types/DashboardConstants";
+import { PromptFile, PromptStep } from "../../types/FlightPathTypes";
+import { PERMISSION_MODES, HARNESS_IDS } from "../../types/DashboardConstants";
 
 suite("PropertyResolver Tests", () => {
   suite("resolveHarness", () => {
     test("should use prompt-level harness when specified", () => {
       const prompt: PromptStep = {
         prompt: "test",
-        harness: Harness.ClaudeCli,
+        harness: HARNESS_IDS.CLAUDE_CLI,
       };
       const workflow: PromptFile = {
         steps: [],
-        harness: Harness.CopilotCli, // Should be ignored
+        harness: HARNESS_IDS.COPILOT_CLI, // Should be ignored
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      assert.strictEqual(resolved.harness, Harness.ClaudeCli);
+      assert.strictEqual(resolved.harness, HARNESS_IDS.CLAUDE_CLI);
     });
 
     test("should use workflow-level harness when prompt-level not specified", () => {
@@ -25,11 +25,11 @@ suite("PropertyResolver Tests", () => {
       };
       const workflow: PromptFile = {
         steps: [],
-        harness: Harness.ClaudeCli,
+        harness: HARNESS_IDS.CLAUDE_CLI,
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      assert.strictEqual(resolved.harness, Harness.ClaudeCli);
+      assert.strictEqual(resolved.harness, HARNESS_IDS.CLAUDE_CLI);
     });
 
     test("should fall back to VS Code setting when neither prompt nor workflow specify harness", () => {
@@ -77,7 +77,7 @@ suite("PropertyResolver Tests", () => {
     test("should fall back to harness-specific model when neither prompt nor workflow specify model", () => {
       const prompt: PromptStep = {
         prompt: "test",
-        harness: Harness.CopilotCli,
+        harness: HARNESS_IDS.COPILOT_CLI,
       };
       const workflow: PromptFile = {
         steps: [],
@@ -697,7 +697,7 @@ suite("PropertyResolver Tests", () => {
     test("should correctly apply three-tier precedence for all properties", () => {
       const prompt: PromptStep = {
         prompt: "test",
-        harness: Harness.ClaudeCli, // Override
+        harness: HARNESS_IDS.CLAUDE_CLI, // Override
         // model: not specified - should use workflow
         agent: "code-reviewer", // Override
         // resumeSession: not specified - should use workflow
@@ -720,7 +720,7 @@ suite("PropertyResolver Tests", () => {
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
 
-      assert.strictEqual(resolved.harness, Harness.ClaudeCli); // From prompt
+      assert.strictEqual(resolved.harness, HARNESS_IDS.CLAUDE_CLI); // From prompt
       assert.strictEqual(resolved.model, "opus"); // From workflow
       assert.strictEqual(resolved.agent, "code-reviewer"); // From prompt
       assert.strictEqual(resolved.resumeSession, true); // From workflow

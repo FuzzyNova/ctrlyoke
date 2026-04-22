@@ -1,7 +1,7 @@
 import {
   PromptFile,
   PromptStep,
-  Harness,
+  HarnessId,
   EndCondition,
   PriorContext,
   McpServerConfig,
@@ -22,7 +22,7 @@ import {
  */
 export interface ResolvedProperties {
   /** Harness/framework for execution (always resolved) */
-  harness: Harness;
+  harness: HarnessId;
 
   /** AI model to use (always resolved) */
   model: string;
@@ -126,9 +126,9 @@ export class PropertyResolver {
    * 3. VS Code setting (flightpath.harness)
    */
   static resolveHarnessValue(
-    promptHarness?: Harness,
-    workflowHarness?: Harness
-  ): Harness {
+    promptHarness?: HarnessId,
+    workflowHarness?: HarnessId
+  ): HarnessId {
     return (
       promptHarness ?? workflowHarness ?? ConfigurationUtils.getIntegrationMode()
     );
@@ -149,7 +149,7 @@ export class PropertyResolver {
   private static resolveHarness(
     prompt: PromptStep,
     workflow: PromptFile
-  ): Harness {
+  ): HarnessId {
     return this.resolveHarnessValue(prompt.harness, workflow.harness);
   }
 
@@ -169,7 +169,7 @@ export class PropertyResolver {
   private static resolveModel(
     prompt: PromptStep,
     workflow: PromptFile,
-    harness: Harness
+    harness: HarnessId
   ): string {
     // 1. Prompt-level override (highest priority)
     if (prompt.model !== undefined) {
@@ -514,7 +514,7 @@ export class PropertyResolver {
   private static resolveAdditionalArgs(
     prompt: PromptStep,
     workflow: PromptFile,
-    harness: Harness
+    harness: HarnessId
   ): string | undefined {
     // 1. Prompt-level override (highest priority)
     if (prompt.additionalArgs !== undefined) {
@@ -591,7 +591,7 @@ export class PropertyResolver {
    * @param harness The harness to get the default model for
    * @returns Harness-specific default model
    */
-  private static getModelForHarness(harness: Harness): string {
+  private static getModelForHarness(harness: HarnessId): string {
     return ConfigurationUtils.getModelForHarness(harness);
   }
 }

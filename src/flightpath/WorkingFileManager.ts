@@ -2,8 +2,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import type { WorkflowStep, WorkingFile } from "../types/FlightPathTypes";
 import type { FinalStepRuntimeState } from "../types/FlightPathTypes";
-import { Harness } from "../types/FlightPathTypes";
-import { EXECUTION_STATES } from "../types/DashboardConstants";
+import { EXECUTION_STATES, HARNESS_IDS, type HarnessId } from "../types/DashboardConstants";
 import type { ExecutionState } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -419,15 +418,15 @@ export class WorkingFileManager {
   /**
    * Get default model for a given harness from settings
    */
-  private getDefaultModelForHarness(harness: Harness): string {
+  private getDefaultModelForHarness(harness: HarnessId): string {
     switch (harness) {
-      case Harness.CopilotCli:
+      case HARNESS_IDS.COPILOT_CLI:
         return ConfigurationUtils.getCliModel();
-      case Harness.CopilotChat:
+      case HARNESS_IDS.COPILOT_CHAT:
         return ConfigurationUtils.getCopilotChatModel();
-      case Harness.ClaudeCli:
+      case HARNESS_IDS.CLAUDE_CLI:
         return ConfigurationUtils.getClaudeCliModel();
-      case Harness.CodexCli:
+      case HARNESS_IDS.CODEX_CLI:
         return ConfigurationUtils.getCodexCliModel();
       default:
         return ConfigurationUtils.getCliModel();
