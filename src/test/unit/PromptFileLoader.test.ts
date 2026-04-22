@@ -244,7 +244,7 @@ suite("PromptFileLoader Tests", () => {
       assert.strictEqual(stepWithAllProperties.sessionId, "my-test-session");
       assert.strictEqual(stepWithAllProperties.mcpServers, null);
       assert.deepStrictEqual(stepWithAllProperties.skills, ["commit"]);
-      assert.strictEqual(stepWithAllProperties.priorContext, "previous");
+      assert.deepStrictEqual(stepWithAllProperties.priorContext, [1, 2, 4, 5, 6]);
       assert.strictEqual(stepWithAllProperties.additionalArgs, "--effort low");
       assert.deepStrictEqual(stepWithAllProperties.toolPermissions, {
         mode: "dangerouslyAllowAll",

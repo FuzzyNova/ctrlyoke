@@ -236,4 +236,141 @@ suite("ContextExpander.expandContextSplit", () => {
       assert.ok(result.excerptBlocks.includes("    2→lineB"));
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("triple-backtick fenced block suppression", () => {
+    test("does not expand @, #selection, #sym, or ~ refs inside fenced blocks", async () => {
+      const root = freshWorkspace();
+      const filePath = path.join(root, "inside.ts");
+      fs.writeFileSync(filePath, "export function inside() {}\n");
+
+      const expander = new ContextExpander(root);
+      const result = await expander.expandContextSplit(
+        [
+          "```ts",
+          "@inside.ts",
+          "#selection:inside.ts:1-1",
+          "#sym:inside.ts:inside:1",
+          "~diff",
+          "```",
+        ].join("\n")
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, []);
+      assert.strictEqual(result.excerptBlocks, "");
+    });
+
+    test("expands only references outside fenced blocks", async () => {
+      const root = freshWorkspace();
+      const outsideFile = path.join(root, "outside.ts");
+      const insideFile = path.join(root, "inside.ts");
+      const rangeFile = path.join(root, "range.ts");
+      fs.writeFileSync(outsideFile, "export const outside = true;\n");
+      fs.writeFileSync(insideFile, "export const inside = true;\n");
+      fs.writeFileSync(rangeFile, ["one", "two", "three", "four"].join("\n"));
+
+      const expander = new ContextExpander(root);
+      const result = await expander.expandContextSplit(
+        [
+          "Use @outside.ts and #selection:range.ts:1-2.",
+          "```",
+          "@inside.ts",
+          "#selection:range.ts:3-4",
+          "```",
+        ].join("\n")
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, [outsideFile]);
+      assert.ok(result.excerptBlocks.includes("    1→one"));
+      assert.ok(result.excerptBlocks.includes("    2→two"));
+      assert.ok(!result.excerptBlocks.includes("    3→three"));
+      assert.ok(!result.excerptBlocks.includes("    4→four"));
+    });
+
+    test("suppresses references across multiple fenced blocks", async () => {
+      const root = freshWorkspace();
+      fs.writeFileSync(path.join(root, "a.ts"), "export const a = 1;\n");
+      fs.writeFileSync(path.join(root, "b.ts"), "export const b = 2;\n");
+
+      const expander = new ContextExpander(root);
+      const result = await expander.expandContextSplit(
+        [
+          "```",
+          "@a.ts",
+          "```",
+          "plain text",
+          "```js",
+          "@b.ts",
+          "#selection:b.ts:1-1",
+          "```",
+        ].join("\n")
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, []);
+      assert.strictEqual(result.excerptBlocks, "");
+    });
+
+    test("treats unclosed fenced blocks as normal text and still expands references", async () => {
+      const root = freshWorkspace();
+      const filePath = path.join(root, "unclosed.ts");
+      fs.writeFileSync(filePath, "export const value = 1;\n");
+
+      const expander = new ContextExpander(root);
+      const result = await expander.expandContextSplit(
+        ["Here is an unclosed fence:", "```ts", "@unclosed.ts"].join("\n")
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, [filePath]);
+      assert.strictEqual(result.excerptBlocks, "");
+    });
+
+    test("does not suppress references inside single-backtick inline code", async () => {
+      const root = freshWorkspace();
+      const filePath = path.join(root, "inline.ts");
+      fs.writeFileSync(filePath, "export const inline = true;\n");
+
+      const expander = new ContextExpander(root);
+      const result = await expander.expandContextSplit(
+        "Check `@inline.ts` while reviewing this change."
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, [filePath]);
+      assert.strictEqual(result.excerptBlocks, "");
+    });
+  });
+});
+
+suite("ContextExpander.expandContext", () => {
+  let workspaceRoot: string;
+
+  function freshWorkspace(): string {
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-"));
+    return workspaceRoot;
+  }
+
+  afterEach(() => {
+    try {
+      if (workspaceRoot) {
+        fs.rmSync(workspaceRoot, { recursive: true, force: true });
+      }
+    } catch {
+      // best-effort
+    }
+  });
+
+  test("keeps fenced references literal while expanding outside references", async () => {
+    const root = freshWorkspace();
+    fs.writeFileSync(path.join(root, "outside.ts"), "export const outside = 1;\n");
+    fs.writeFileSync(path.join(root, "inside.ts"), "export const inside = 2;\n");
+
+    const expander = new ContextExpander(root);
+    const result = await expander.expandContext(
+      ["Review @outside.ts carefully.", "```", "@inside.ts", "```"].join("\n")
+    );
+
+    assert.ok(result.includes('<attachment id="file:outside.ts">'));
+    assert.ok(!result.includes('<attachment id="file:inside.ts">'));
+    assert.ok(result.includes("```"));
+    assert.ok(result.includes("@inside.ts"));
+  });
 });

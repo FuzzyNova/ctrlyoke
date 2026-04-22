@@ -61,6 +61,12 @@ suite("FileReferenceParser", () => {
       assert.strictEqual(refs[0].path, "src/file.ts");
     });
 
+    test("strips trailing backticks from inline-code @path references", () => {
+      const refs = parseAtReferences("Check `@src/file.ts` in the prompt");
+      assert.strictEqual(refs.length, 1);
+      assert.strictEqual(refs[0].path, "src/file.ts");
+    });
+
     test("parses multiple file references", () => {
       const refs = parseAtReferences(
         "See @src/a.ts and @src/b.ts for details."

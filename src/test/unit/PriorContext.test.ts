@@ -6,8 +6,11 @@ import {
 } from "../../flightpath/HarnessIntegration";
 import {
   PromptStep,
+  ScriptStep,
+  WorkflowStep,
   PromptFile,
   PriorContext,
+  ScriptRuntimeOutput,
   Harness,
 } from "../../types/FlightPathTypes";
 import { PropertyResolver } from "../../utils/PropertyResolver";
@@ -49,7 +52,7 @@ class TestHarness extends HarnessIntegration {
   // Expose private methods for testing
   public exposeGather(
     priorContext: PriorContext,
-    allPrompts: PromptStep[],
+    allPrompts: WorkflowStep[],
     currentIndex: number,
     finalStepResponseTexts: string[] = []
   ) {
@@ -69,6 +72,7 @@ class TestHarness extends HarnessIntegration {
       prompt?: string;
       text: string;
       type?: (typeof PRIOR_CONTEXT_ITEM_TYPES)[keyof typeof PRIOR_CONTEXT_ITEM_TYPES];
+      scriptOutput?: ScriptRuntimeOutput;
     }[]
   ) {
     if (contextItems.length === 0) {
@@ -96,6 +100,21 @@ function makePrompt(
     p._runtime = { startedAt: 0, responseText };
   }
   return p;
+}
+
+function makeScriptStep(
+  script: string,
+  scriptOutput?: ScriptRuntimeOutput,
+  name?: string
+): ScriptStep {
+  const s: ScriptStep = { type: "script", script };
+  if (name) {
+    s.name = name;
+  }
+  if (scriptOutput !== undefined) {
+    s._runtime = { startedAt: 0, scriptOutput };
+  }
+  return s;
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +286,96 @@ suite("gatherPriorContextItems", () => {
     assert.strictEqual(items[0].text, "orchestrator decided X");
     assert.strictEqual(items[0].type, PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP);
   });
+
+  // --- Script step prior context ---
+
+  test("includes script step with stdout output for 'previous'", () => {
+    const steps: WorkflowStep[] = [
+      makeScriptStep("npm test", { command: "npm test", stdout: "All tests passed", stderr: "" }),
+      makePrompt("p2"),
+    ];
+    const items = harness.exposeGather("previous", steps, 1);
+    assert.strictEqual(items.length, 1);
+    assert.strictEqual(items[0].index, 0);
+    assert.strictEqual(items[0].text, "All tests passed");
+    assert.ok(items[0].scriptOutput);
+    assert.strictEqual(items[0].scriptOutput!.command, "npm test");
+    assert.strictEqual(items[0].scriptOutput!.stdout, "All tests passed");
+    assert.strictEqual(items[0].scriptOutput!.stderr, "");
+  });
+
+  test("includes script step with stderr output for 'previous'", () => {
+    const steps: WorkflowStep[] = [
+      makeScriptStep("npm test", { command: "npm test", stdout: "", stderr: "2 tests failed" }),
+      makePrompt("p2"),
+    ];
+    const items = harness.exposeGather("previous", steps, 1);
+    assert.strictEqual(items.length, 1);
+    assert.strictEqual(items[0].text, "2 tests failed");
+  });
+
+  test("combines stdout and stderr when both are present", () => {
+    const steps: WorkflowStep[] = [
+      makeScriptStep("build.sh", {
+        command: "build.sh",
+        stdout: "Building...",
+        stderr: "Warning: deprecated API",
+      }),
+      makePrompt("p2"),
+    ];
+    const items = harness.exposeGather("previous", steps, 1);
+    assert.strictEqual(items.length, 1);
+    assert.ok(items[0].text.includes("Building..."));
+    assert.ok(items[0].text.includes("Warning: deprecated API"));
+  });
+
+  test("filters out script step with no output (no stdout or stderr)", () => {
+    const steps: WorkflowStep[] = [
+      makeScriptStep("silent.sh", { command: "silent.sh", stdout: "", stderr: "" }),
+      makePrompt("p2"),
+    ];
+    const items = harness.exposeGather("previous", steps, 1);
+    assert.strictEqual(items.length, 0);
+  });
+
+  test("filters out script step with no _runtime.scriptOutput", () => {
+    const steps: WorkflowStep[] = [
+      makeScriptStep("not-run.sh"),
+      makePrompt("p2"),
+    ];
+    const items = harness.exposeGather("previous", steps, 1);
+    assert.strictEqual(items.length, 0);
+  });
+
+  test("includes script name when present", () => {
+    const steps: WorkflowStep[] = [
+      makeScriptStep(
+        "npm test",
+        { command: "npm test", stdout: "pass", stderr: "" },
+        "Run Tests"
+      ),
+      makePrompt("p2"),
+    ];
+    const items = harness.exposeGather("previous", steps, 1);
+    assert.strictEqual(items.length, 1);
+    assert.strictEqual(items[0].name, "Run Tests");
+  });
+
+  test("'all' includes mixed prompt and script steps", () => {
+    const steps: WorkflowStep[] = [
+      makePrompt("p1", "r1", "Analyze"),
+      makeScriptStep("npm test", { command: "npm test", stdout: "pass", stderr: "" }, "Tests"),
+      makePrompt("p3"),
+    ];
+    const items = harness.exposeGather("all", steps, 2);
+    assert.strictEqual(items.length, 2);
+    assert.strictEqual(items[0].index, 0);
+    assert.strictEqual(items[0].text, "r1");
+    assert.ok(!items[0].scriptOutput);
+    assert.strictEqual(items[1].index, 1);
+    assert.strictEqual(items[1].text, "pass");
+    assert.ok(items[1].scriptOutput);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -372,6 +481,80 @@ suite("insertPriorContext", () => {
     const result = harness.exposeInsert("Task.", items);
     assert.ok(result.includes("<prompt>\nhello\n</prompt>"));
     assert.ok(!result.includes("  hello  "));
+  });
+
+  test("renders script step with type='script' and command/stdout/stderr tags", () => {
+    const items = [
+      {
+        index: 0,
+        name: "Run Tests",
+        text: "All tests passed",
+        scriptOutput: {
+          command: "npm test",
+          stdout: "All tests passed",
+          stderr: "",
+        },
+      },
+    ];
+    const result = harness.exposeInsert("Now fix issues.", items);
+    assert.ok(result.includes('type="script"'));
+    assert.ok(result.includes('name="Run Tests"'));
+    assert.ok(result.includes("<command>\nnpm test\n</command>"));
+    assert.ok(result.includes("<stdout>\nAll tests passed\n</stdout>"));
+    assert.ok(!result.includes("<stderr>"));
+    assert.ok(!result.includes("<prompt>"));
+    assert.ok(!result.includes("<response>"));
+  });
+
+  test("omits empty stdout/stderr sections for script steps", () => {
+    const items = [
+      {
+        index: 1,
+        text: "error output",
+        scriptOutput: {
+          command: "build.sh",
+          stdout: "",
+          stderr: "Build failed",
+        },
+      },
+    ];
+    const result = harness.exposeInsert("Fix it.", items);
+    assert.ok(!result.includes("<stdout>"));
+    assert.ok(result.includes("<stderr>\nBuild failed\n</stderr>"));
+  });
+
+  test("trims whitespace from script output sections", () => {
+    const items = [
+      {
+        index: 0,
+        text: "output",
+        scriptOutput: {
+          command: "  run.sh  ",
+          stdout: "  trimmed  ",
+          stderr: "",
+        },
+      },
+    ];
+    const result = harness.exposeInsert("Task.", items);
+    assert.ok(result.includes("<command>\nrun.sh\n</command>"));
+    assert.ok(result.includes("<stdout>\ntrimmed\n</stdout>"));
+  });
+
+  test("script step does not include type attribute from item.type", () => {
+    const items = [
+      {
+        index: 0,
+        text: "output",
+        scriptOutput: {
+          command: "check.sh",
+          stdout: "ok",
+          stderr: "",
+        },
+      },
+    ];
+    const result = harness.exposeInsert("Task.", items);
+    assert.ok(result.includes('type="script"'));
+    assert.ok(!result.includes('type="finalStep"'));
   });
 });
 

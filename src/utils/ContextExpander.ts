@@ -66,6 +66,16 @@ export class ContextExpander {
   }
 
   /**
+   * Mask trigger characters inside triple-backtick fenced blocks so reference
+   * parsers treat block contents as literal text.
+   */
+  private maskBacktickBlocks(text: string): string {
+    return text.replace(/```[\s\S]*?```/g, (block) =>
+      block.replace(/[@#~]/g, "\x00")
+    );
+  }
+
+  /**
    * Expand all context references in prompt text.
    * Returns fully-expanded prompt with all files/symbols inlined as attachments.
    *
@@ -74,9 +84,11 @@ export class ContextExpander {
    */
   async expandContext(promptText: string): Promise<string> {
     try {
+      const maskedPromptText = this.maskBacktickBlocks(promptText);
+
       // Parse all file references from prompt
-      let fileReferences = parseAllFileReferences(promptText);
-      const gitRefs = parseGitChangeReferences(promptText);
+      const fileReferences = parseAllFileReferences(maskedPromptText);
+      const gitRefs = parseGitChangeReferences(maskedPromptText);
 
       if (fileReferences.length === 0 && gitRefs.length === 0) {
         return promptText; // No attachments needed
@@ -158,8 +170,9 @@ export class ContextExpander {
     const excerptParts: string[] = [];
 
     try {
-      const fileReferences = parseAllFileReferences(promptText);
-      const gitRefs = parseGitChangeReferences(promptText);
+      const maskedPromptText = this.maskBacktickBlocks(promptText);
+      const fileReferences = parseAllFileReferences(maskedPromptText);
+      const gitRefs = parseGitChangeReferences(maskedPromptText);
 
       if (fileReferences.length === 0 && gitRefs.length === 0) {
         return { directFileRefs: [], excerptBlocks: "" };

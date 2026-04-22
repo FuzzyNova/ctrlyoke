@@ -353,6 +353,18 @@ export function isScriptStep(step: WorkflowStep): step is ScriptStep {
 }
 
 /**
+ * Script execution output captured from a ScriptStep run.
+ * Stored in PromptRuntimeMetadata to enable priorContext injection for script steps.
+ */
+export interface ScriptRuntimeOutput {
+  /** The script command that was run */
+  command: string;
+  stdout: string;
+  stderr: string;
+  exitCode?: number;
+}
+
+/**
  * Per-prompt runtime execution metadata.
  * Tracks execution state for individual prompts within a workflow.
  */
@@ -376,6 +388,10 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
    *  Stored here to enable priorContext injection in subsequent prompts.
    *  Also persists across pause/resume cycles via the working file. */
   responseText?: string;
+
+  /** Captured stdout/stderr from a ScriptStep execution.
+   *  Stored here to enable priorContext injection for script steps. */
+  scriptOutput?: ScriptRuntimeOutput;
 }
 
 /**

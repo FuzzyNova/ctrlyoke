@@ -63,9 +63,9 @@ export function parseAtReferences(prompt: string): FileReference[] {
       // Strategy: File paths end with alphanumeric or dot+alphanumeric (extensions)
       // Sentence punctuation (?!,;)]}") appears after the last alphanumeric
 
-      // Strip common sentence-ending punctuation: ?!,;)]}
+      // Strip common sentence-ending punctuation: ?!,;)]}`
       // But NOT periods yet (they might be part of extensions or relative paths)
-      filePath = filePath.replace(/[?!,;)\]}"]+$/, "");
+      filePath = filePath.replace(/[?!,;)\]}`"]+$/, "");
 
       // For trailing periods: only strip if they come AFTER the extension/filename
       // i.e., the path already has alphanumeric at the end before the period(s)

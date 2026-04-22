@@ -4,6 +4,7 @@ import {
   PriorContext,
   WorkflowStep,
   isScriptStep,
+  ScriptRuntimeOutput,
 } from "../types/FlightPathTypes";
 import { WorkflowContext } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
@@ -22,6 +23,7 @@ import { SplitConfig } from "../utils/PromptFileSplitter";
 import {
   PRIOR_CONTEXT_KEYWORDS,
   PRIOR_CONTEXT_ITEM_TYPES,
+  STEP_TYPES,
   PriorContextItemType,
 } from "../types/DashboardConstants";
 
@@ -38,11 +40,13 @@ interface SubscriptionContainer {
 type PriorContextItem = {
   index: number;
   name?: string;
-  /** The prompt text that was sent for this step. Absent for finalStep loop items. */
+  /** The prompt text that was sent for this step. Absent for finalStep loop items and script steps. */
   prompt?: string;
   text: string;
   /** Discriminant set when the item originates from a finalStep/finalStep loop (not a queue prompt). */
   type?: PriorContextItemType;
+  /** Structured script output. Present only for ScriptStep items; triggers script-specific XML rendering. */
+  scriptOutput?: ScriptRuntimeOutput;
 };
 
 /**
@@ -524,19 +528,30 @@ export abstract class HarnessIntegration {
     }
 
     const items = targetIndices
-      .map((i) => {
+      .map((i): PriorContextItem | null => {
         const step = allPrompts[i];
+        if (!step) return null;
+        if (isScriptStep(step)) {
+          const scriptOutput = step._runtime?.scriptOutput;
+          if (!scriptOutput) return null;
+          return {
+            index: i,
+            name: step.name,
+            text: [scriptOutput.stdout, scriptOutput.stderr]
+              .filter(Boolean)
+              .join("\n")
+              .trim(),
+            scriptOutput,
+          };
+        }
         return {
           index: i,
-          name: step?.name,
-          prompt:
-            step && !isScriptStep(step)
-              ? step.prompt
-              : (step?.name ?? `(script: ${(step as any)?.script ?? ""})`),
-          text: step?._runtime?.responseText ?? "",
+          name: step.name,
+          prompt: step.prompt,
+          text: step._runtime?.responseText ?? "",
         };
       })
-      .filter((item) => item.text.length > 0);
+      .filter((item): item is PriorContextItem => item !== null && item.text.length > 0);
 
     if (items.length === 0 && targetIndices.length > 0) {
       Log.debug(
@@ -554,8 +569,18 @@ export abstract class HarnessIntegration {
   protected buildPriorContextXml(contextItems: PriorContextItem[]): string {
     const steps = contextItems
       .map((item) => {
-        const typeAttr = item.type ? ` type="${item.type}"` : "";
         const nameAttr = item.name ? ` name="${item.name}"` : "";
+        if (item.scriptOutput) {
+          const commandSection = `<command>\n${item.scriptOutput.command.trim()}\n</command>\n`;
+          const stdoutSection = item.scriptOutput.stdout.trim()
+            ? `<stdout>\n${item.scriptOutput.stdout.trim()}\n</stdout>\n`
+            : "";
+          const stderrSection = item.scriptOutput.stderr.trim()
+            ? `<stderr>\n${item.scriptOutput.stderr.trim()}\n</stderr>\n`
+            : "";
+          return `<step index="${item.index + 1}" type="${STEP_TYPES.SCRIPT}"${nameAttr}>\n${commandSection}${stdoutSection}${stderrSection}</step>`;
+        }
+        const typeAttr = item.type ? ` type="${item.type}"` : "";
         const promptSection = item.prompt
           ? `<prompt>\n${item.prompt.trim()}\n</prompt>\n`
           : "";

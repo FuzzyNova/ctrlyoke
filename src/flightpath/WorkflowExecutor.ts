@@ -3,6 +3,7 @@ import { PlatformAdapter } from "../platform/PlatformAdapter";
 import {
   PromptStep,
   ScriptStep,
+  ScriptRuntimeOutput,
   WorkflowStep,
   isScriptStep,
   McpServerConfig,
@@ -915,6 +916,18 @@ export class WorkflowExecutor {
     }
 
     const succeeded = evalResult.passed;
+
+    // Persist script output to _runtime so subsequent steps can include it via priorContext.
+    const scriptRuntimeOutput: ScriptRuntimeOutput = {
+      command: step.script,
+      stdout: evalResult.stdout,
+      stderr: evalResult.stderr,
+      exitCode: evalResult.exitCode,
+    };
+    await this.promptQueue.persistRuntimeMetadata(
+      stepIndex >= 0 ? stepIndex : this.promptQueue.getState().currentIndex,
+      { scriptOutput: scriptRuntimeOutput }
+    );
 
     // Build final output text (headless: from evalResult; interactive: empty since xterm shows it)
     const rawOutput = [evalResult.stdout, evalResult.stderr]
