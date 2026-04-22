@@ -766,6 +766,39 @@ export const WorkflowPropertiesPanel: React.FC<{
     globalSettings
   );
 
+  const handleResetAllToDefault = useCallback(() => {
+    const globalHarness = globalSettings.harness as string;
+    const updates: Partial<WorkflowProperties> = {
+      harness: globalHarness,
+      model: globalSettings.harnessDefaultModels[globalHarness],
+      agent: globalSettings.agent,
+      skills: globalSettings.skills ?? [],
+      additionalArgs:
+        globalSettings.harnessDefaultAdditionalArgs[globalHarness] ?? "",
+      resumeSession: globalSettings.resumeSession,
+      sessionId: "",
+      priorContext: globalSettings.priorContext as WorkflowProperties["priorContext"],
+      mcpServers: globalSettings.mcpServers as WorkflowProperties["mcpServers"],
+      toolPermissions:
+        globalSettings.toolPermissions as WorkflowProperties["toolPermissions"],
+      hooks: globalSettings.hooks as WorkflowProperties["hooks"],
+      endCondition:
+        globalSettings.defaultEndCondition as WorkflowProperties["endCondition"],
+      preCondition:
+        globalSettings.defaultPreCondition as WorkflowProperties["preCondition"],
+    };
+    setSessionIdInput("");
+    setEndConditionEnabled(
+      globalSettings.defaultEndCondition !== null &&
+        globalSettings.defaultEndCondition !== undefined
+    );
+    setPreConditionEnabled(
+      globalSettings.defaultPreCondition !== null &&
+        globalSettings.defaultPreCondition !== undefined
+    );
+    postWorkflowPropertiesUpdate(updates);
+  }, [globalSettings, postWorkflowPropertiesUpdate]);
+
   // ============================================================================
   // RENDER
   // ============================================================================
@@ -827,6 +860,18 @@ export const WorkflowPropertiesPanel: React.FC<{
           <span className="text-[11px] font-semibold uppercase tracking-wide ml-0.5">
             Workflow Properties
           </span>
+          <button
+            type="button"
+            className="ml-1 w-5 h-5 flex items-center justify-center rounded opacity-60 hover:opacity-100 hover:bg-toolbar-hover-bg transition-all"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleResetAllToDefault();
+            }}
+            title="Reset all to defaults"
+            aria-label="Reset all to defaults"
+          >
+            <i className="codicon codicon-debug-restart text-[12px]" />
+          </button>
         </div>
         {onRequestClose && (
           <button

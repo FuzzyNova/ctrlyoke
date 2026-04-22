@@ -129,6 +129,22 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     },
     [vscode, setMcpWorkspaceServers]
   );
+  const handleResetAllToInherit = useCallback(() => {
+    setProperty("harness", undefined);
+    setProperty("model", undefined);
+    setProperty("agent", undefined);
+    setProperty("skills", undefined);
+    setProperty("additionalArgs", undefined);
+    setProperty("resumeSession", undefined);
+    setProperty("sessionId", "");
+    setProperty("priorContext", undefined);
+    setProperty("mcpServers", undefined);
+    setProperty("toolPermissions", undefined);
+    setProperty("hooks", undefined);
+    setProperty("preCondition", undefined);
+    clearEndCondition();
+  }, [setProperty, clearEndCondition]);
+
   const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(576);
 
   // ── Resolved "Default (X)" labels ────────────────────────────────────────
@@ -361,9 +377,20 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     >
       {/* Header */}
       <div className="drawer-header shrink-0 flex items-center justify-between px-4 py-0 border-b border-panel-border bg-sidebar-drop-bg z-10">
-        <h3 className="text-xs font-semibold text-foreground uppercase">
-          Prompt Properties
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-xs font-semibold text-foreground uppercase">
+            Prompt Properties
+          </h3>
+          <button
+            type="button"
+            className="w-5 h-5 flex items-center justify-center rounded opacity-60 hover:opacity-100 hover:bg-toolbar-hover-bg transition-all"
+            onClick={handleResetAllToInherit}
+            title="Reset all to inherit"
+            aria-label="Reset all to inherit"
+          >
+            <i className="codicon codicon-debug-restart text-[12px]" />
+          </button>
+        </div>
         <button
           type="button"
           className="btn-close-drawer w-6 h-6 flex items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-toolbar-hover-bg transition-all"
