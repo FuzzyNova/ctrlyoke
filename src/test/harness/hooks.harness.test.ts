@@ -64,7 +64,7 @@ const HARNESS_MODELS: Record<HarnessId, string | undefined> = {
   "claude-cli": "haiku",
   "codex-cli": "gpt-5.1-codex-mini",
   "opencode-cli": "opencode/big-pickle",
-  "qwen-cli": "coder-model",
+  "qwen-cli": "qwen3.5-plus",
   "gemini-cli": "gemini-3-flash-preview",
 };
 

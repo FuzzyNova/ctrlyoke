@@ -132,7 +132,7 @@ suite("ModelConstants", () => {
 
   suite("getQwenModelName", () => {
     test("returns model name for known Qwen model", () => {
-      assert.strictEqual(getQwenModelName("coder-model"), "coder-model");
+      assert.strictEqual(getQwenModelName("qwen3.5-plus"), "qwen3.5-plus");
     });
 
     test("returns arbitrary model string as-is", () => {
@@ -146,7 +146,7 @@ suite("ModelConstants", () => {
 
   suite("getQwenContextWindowSize", () => {
     test("returns 1M for any model", () => {
-      assert.strictEqual(getQwenContextWindowSize("coder-model"), 1_000_000);
+      assert.strictEqual(getQwenContextWindowSize("qwen3.5-plus"), 1_000_000);
     });
   });
 
@@ -189,8 +189,8 @@ suite("ModelConstants", () => {
       assert.ok(GEMINI_CLI_MODELS.includes("gemini-2.5-pro"));
     });
 
-    test("QWEN_CLI_MODELS includes coder-model", () => {
-      assert.ok(QWEN_CLI_MODELS.includes("coder-model"));
+    test("QWEN_CLI_MODELS includes qwen3.5-plus", () => {
+      assert.ok(QWEN_CLI_MODELS.includes("qwen3.5-plus"));
     });
 
     test("MODEL_NONE is 'none'", () => {

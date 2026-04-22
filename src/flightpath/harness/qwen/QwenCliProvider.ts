@@ -14,6 +14,7 @@ import { QwenNotificationMonitor } from "./QwenNotificationMonitor";
 import { QwenToolPermissionMapper } from "./QwenToolPermissionMapper";
 import { QwenLogParser } from "./QwenLogParser";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import { getQwenModelIdsSync } from "../../../utils/ModelRegistry";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
@@ -428,7 +429,15 @@ export class QwenCliProvider implements ICliProvider {
   }
 
   /**
-   * Validate model is supported by Qwen CLI, fallback to default if not
+   * Return available Qwen model IDs discovered from ~/.qwen/settings.json.
+   * Populated at extension startup by ModelRegistry; falls back to ["qwen3.5-plus"].
+   */
+  getAvailableModels(): string[] {
+    return getQwenModelIdsSync();
+  }
+
+  /**
+   * Validate model is supported by Qwen CLI, fallback to configured default if not
    */
   private validateAndGetModel(requestedModel?: string): string | undefined {
     const defaultModel = ConfigurationUtils.getQwenCliModel();
@@ -442,8 +451,7 @@ export class QwenCliProvider implements ICliProvider {
       return undefined;
     }
 
-    // For now, accept any model string - Qwen CLI will validate
-    // Future enhancement: maintain a list of known Qwen models
+    // Accept any model string — Qwen CLI validates it against the configured API key
     return requestedModel;
   }
 

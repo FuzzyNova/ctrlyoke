@@ -206,15 +206,15 @@ export const OPENCODE_CLI_FALLBACK_MODELS = [
 
 // ============================================================================
 // QWEN CLI MODELS
-// Qwen Code CLI supported models (from Qwen documentation)
+// Fallback only — runtime list comes from ~/.qwen/settings.json modelProviders
 // ============================================================================
-export const QWEN_CLI_MODELS = ["coder-model"] as const;
+export const QWEN_CLI_MODELS = ["qwen3.5-plus"] as const;
 
 /**
- * Qwen CLI model display names
+ * Qwen CLI model display names (fallback — runtime list is from settings.json)
  */
 export const QWEN_CLI_MODEL_LABELS: Record<string, string> = {
-  "coder-model": "Qwen Coder (Qwen 3.5 Plus)",
+  "qwen3.5-plus": "Qwen 3.5 Plus",
 } as const;
 
 /**

@@ -19,8 +19,11 @@
  */
 
 import * as vscode from "vscode";
+import * as os from "os";
+import * as path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { promises as fsPromises } from "fs";
 import {
   COPILOT_CHAT_MODEL_IDS,
   COPILOT_CLI_MODEL_IDS,
@@ -56,10 +59,13 @@ export interface CopilotModel {
   cliSupported: boolean;
 }
 
+const QWEN_CLI_FALLBACK_MODEL = "qwen3.5-plus";
+
 // In-memory cache of discovered models
 let cachedModels: CopilotModel[] = [];
 let cachedCopilotCliModelIds: string[] = [];
 let cachedOpenCodeModelIds: string[] = [];
+let cachedQwenModelIds: string[] = [];
 /** Context window size (tokens) keyed by fully-qualified OpenCode model ID */
 const cachedOpenCodeContextWindows = new Map<string, number>();
 let isInitialized = false;
@@ -92,6 +98,7 @@ export async function initializeModelRegistry(): Promise<void> {
     await queryCopilotCliModels();
     await queryChatModels();
     await queryOpenCodeModels();
+    await queryQwenModels();
     isInitialized = true;
     // Notify subscribers that models are now available
     modelsLoadedEmitter.fire();
@@ -310,6 +317,49 @@ function parseOpenCodeVerboseOutput(stdout: string): string[] {
 }
 
 /**
+ * Query available models from `~/.qwen/settings.json`.
+ *
+ * Reads the `modelProviders` section and collects all provider model IDs.
+ * Falls back to `["qwen3.5-plus"]` when the file is absent or malformed.
+ */
+async function queryQwenModels(): Promise<void> {
+  const settingsPath = path.join(os.homedir(), ".qwen", "settings.json");
+  try {
+    const content = await fsPromises.readFile(settingsPath, "utf-8");
+    const settings = JSON.parse(content) as {
+      modelProviders?: Record<string, Array<{ id?: string }>>;
+    };
+    const providers = settings?.modelProviders ?? {};
+    const ids: string[] = [];
+    for (const providerModels of Object.values(providers)) {
+      if (Array.isArray(providerModels)) {
+        for (const model of providerModels) {
+          if (model && typeof model.id === "string" && model.id) {
+            ids.push(model.id);
+          }
+        }
+      }
+    }
+    if (ids.length > 0) {
+      cachedQwenModelIds = ids;
+      Log.debug(
+        `Discovered ${ids.length} Qwen models from ~/.qwen/settings.json: ${ids.join(", ")}`
+      );
+    } else {
+      Log.debug(
+        "No models found in ~/.qwen/settings.json, using fallback model"
+      );
+      cachedQwenModelIds = [QWEN_CLI_FALLBACK_MODEL];
+    }
+  } catch {
+    Log.debug(
+      "Could not read ~/.qwen/settings.json, using fallback Qwen model"
+    );
+    cachedQwenModelIds = [QWEN_CLI_FALLBACK_MODEL];
+  }
+}
+
+/**
  * Populate cache with static fallback models
  */
 function useFallbackModels(): void {
@@ -395,6 +445,13 @@ export function getOpenCodeModelIdsSync(): string[] {
 }
 
 /**
+ * Get Qwen model IDs synchronously (from cache, populated at startup via ~/.qwen/settings.json)
+ */
+export function getQwenModelIdsSync(): string[] {
+  return cachedQwenModelIds;
+}
+
+/**
  * Get the context window size (in tokens) for a fully-qualified OpenCode model ID.
  * Populated at startup by `queryOpenCodeModels` via `opencode models --verbose`.
  *
@@ -416,6 +473,7 @@ export async function refreshModelRegistry(): Promise<void> {
   cachedModels = [];
   cachedCopilotCliModelIds = [];
   cachedOpenCodeModelIds = [];
+  cachedQwenModelIds = [];
   cachedOpenCodeContextWindows.clear();
   await initializeModelRegistry();
 }

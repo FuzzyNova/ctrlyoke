@@ -449,7 +449,7 @@ export const DEFAULT_MODELS = {
   [HARNESS_IDS.CLAUDE_CLI]: "sonnet",
   [HARNESS_IDS.CODEX_CLI]: "gpt-5.4",
   [HARNESS_IDS.OPENCODE_CLI]: "anthropic/claude-sonnet-4-6",
-  [HARNESS_IDS.QWEN_CLI]: "coder-model",
+  [HARNESS_IDS.QWEN_CLI]: "qwen3.5-plus",
   [HARNESS_IDS.GEMINI_CLI]: "gemini-2.5-pro",
 } as const;
 
@@ -487,11 +487,11 @@ export const CODEX_CLI_MODELS = [
 ] as const;
 
 // ============================================================================
-// QWEN CLI MODELS - Static options (from Qwen Code CLI documentation)
+// QWEN CLI MODELS - Fallback only; runtime list comes from ~/.qwen/settings.json
 // ============================================================================
 export const QWEN_CLI_MODELS = [
   { value: MODEL_OPTION_VALUES.NONE, label: "None" },
-  { value: "coder-model", label: "Qwen Coder (Qwen 3.5 Plus)" },
+  { value: "qwen3.5-plus", label: "Qwen 3.5 Plus" },
 ] as const;
 
 // ============================================================================

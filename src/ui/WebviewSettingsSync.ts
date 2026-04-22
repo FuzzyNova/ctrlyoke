@@ -24,12 +24,12 @@ import {
   getAvailableModelsSync,
   getCliSupportedModelIdsSync,
   getOpenCodeModelIdsSync,
+  getQwenModelIdsSync,
 } from "../utils/ModelRegistry";
 import {
   getModelDisplayName,
   CLAUDE_CLI_MODEL_LABELS,
   CODEX_CLI_MODEL_LABELS,
-  QWEN_CLI_MODEL_LABELS,
   GEMINI_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import {
@@ -817,9 +817,9 @@ export class WebviewSettingsSync {
 
     const qwenCliOptions = [
       noneOption,
-      ...Object.entries(QWEN_CLI_MODEL_LABELS).map(([value, label]) => ({
-        value,
-        label,
+      ...getQwenModelIdsSync().map((id) => ({
+        value: id,
+        label: id,
       })),
     ];
 
