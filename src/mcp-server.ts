@@ -210,7 +210,7 @@ class FlightPathMCPServer {
                     'Source identifier (e.g., "copilot-cli", "claude-cli", "AI-generated testing tasks")',
                 },
               },
-              required: ["prompts", "position"],
+              required: ["steps", "position"],
             },
           },
           {
@@ -423,7 +423,7 @@ class FlightPathMCPServer {
     // Validate inputs
     if (!Array.isArray(steps) || steps.length === 0) {
       log("ERROR: Invalid steps array", steps);
-      throw new Error("prompts must be a non-empty array");
+      throw new Error("steps must be a non-empty array");
     }
 
     if (position !== QUEUE_POSITION.NEXT && position !== QUEUE_POSITION.END) {
@@ -484,7 +484,7 @@ class FlightPathMCPServer {
       workingFile: string;
       rejectionDetails?: Array<{
         prompt: string;
-        id?: string;
+        name?: string;
         reason?: string;
       }>;
     } | null = null;
