@@ -179,6 +179,11 @@ function applyWorkflowPropertiesFromMessage(message: {
  * - If editing an existing prompt (edit mode), cancels the edit and restores
  *   the saved new-prompt state so typed content is not lost.
  * - If already in new-prompt mode, leaves the editor content untouched.
+ *
+ * Pending edit caches for existing prompts are workflow-local. They are keyed
+ * only by prompt target (`queue:index` / `finalStep`), so they must be cleared
+ * when switching workflows to prevent drafts from one workflow appearing in
+ * another workflow that has the same step index.
  */
 function applyWorkflowChange(): void {
   useWorkflowStore.getState().clearHistoryOutputs();
@@ -187,6 +192,7 @@ function applyWorkflowChange(): void {
   useUiStore.setState({ availableRuns: 0, runTimestamps: [], runStates: [] });
 
   const editorStore = useEditorStore.getState();
+  editorStore.clearAllPendingEdits();
   if (editorStore.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
     // Was editing an existing prompt from the old workflow — cancel the edit so
     // the savedNewPromptState (what the user had typed before clicking edit) is

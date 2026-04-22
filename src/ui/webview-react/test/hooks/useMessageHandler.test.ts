@@ -171,6 +171,40 @@ describe("FILE_SELECTED", () => {
       returns: "true",
     });
   });
+
+  it("clears cached edit drafts for the previous workflow while preserving the new-prompt draft", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      const editor = useEditorStore.getState();
+      editor.setPromptText("Unsaved new prompt draft");
+      editor.enterEditMode(0, makePrompt("Workflow A Step 1"));
+      editor.setPromptText("Workflow A unsaved edit");
+      editor.deselect();
+    });
+
+    expect(useEditorStore.getState().pendingEdits["queue:0"]).toBeDefined();
+    expect(useEditorStore.getState().promptText).toBe(
+      "Unsaved new prompt draft"
+    );
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "workflow-b.flightpath.yaml",
+        steps: [makePrompt("Workflow B Step 1")],
+      });
+    });
+
+    const editor = useEditorStore.getState();
+    expect(editor.pendingEdits).toEqual({});
+    expect(editor.promptText).toBe("Unsaved new prompt draft");
+
+    act(() => {
+      editor.enterEditMode(0, makePrompt("Workflow B Step 1"));
+    });
+
+    expect(useEditorStore.getState().promptText).toBe("Workflow B Step 1");
+  });
 });
 
 // ---------------------------------------------------------------------------
