@@ -82,11 +82,12 @@ export const Header: React.FC<{
 }> = ({ onToggleMobilePrompts, onToggleMobileSettings }) => {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
-  const { fileName, executionState } = useWorkflowStore();
+  const { fileName, executionState, currentStep } = useWorkflowStore();
   const hasPrompts = useWorkflowStore((s) => s.steps.length > 0);
   const {
     loadedWorkflows,
     activeWorkflowId,
+    activeWorkflowWorkingFilePath,
     newWorkflowModalOpen,
     closeNewWorkflowModal,
     mobilePromptsOpen,
@@ -107,6 +108,9 @@ export const Header: React.FC<{
   const isError = executionState === EXECUTION_STATES.ERROR;
   const isStopped = executionState === EXECUTION_STATES.STOPPED;
   const isCancelling = executionState === EXECUTION_STATES.CANCELLING;
+  const isIdle = executionState === EXECUTION_STATES.IDLE;
+  // True when user stopped then used "set start position" — idle but not at step 0
+  const isIdleWithOffset = isIdle && currentStep > 0;
   const hasFile = fileName !== null;
 
   // Button enable states
@@ -118,12 +122,14 @@ export const Header: React.FC<{
     !isCancelling &&
     !(isRunning && !isCompleted && !isPaused && !isStopped);
 
-  // Pause button becomes resume button when paused or stopped
-  // Disable during cancellation
+  // Pause button becomes resume button when paused, stopped, errored, or idle-with-offset.
+  // Disable during cancellation.
   // PAUSED: Resumes to next prompt (current one completed normally)
   // STOPPED: Resumes to next prompt (cancelled prompt already advanced past)
+  // ERROR: Retries the current prompt from the beginning
+  // IDLE+offset: User stopped then set start position — resume from the repositioned step
   const canPause = isRunning && !isCancelling;
-  const canResume = isPaused || isStopped;
+  const canResume = isPaused || isStopped || isError || isIdleWithOffset;
 
   // Stop button enabled when running, paused, or cancelling (allow re-pressing Stop to see status)
   // Disable when stopped (already stopped)
@@ -162,11 +168,12 @@ export const Header: React.FC<{
   }, [vscode, canRun, activeWorkflowId]);
 
   const handlePauseResume = useCallback(() => {
-    if (isPaused || isStopped) {
+    if (isPaused || isStopped || isError || isIdleWithOffset) {
       if (activeWorkflowId) {
         vscode.postMessage({
           type: MESSAGE_TYPES.RESUME_WORKFLOW,
           workflowId: activeWorkflowId,
+          workingFilePath: activeWorkflowWorkingFilePath ?? undefined,
         });
       } else {
         vscode.postMessage({ type: MESSAGE_TYPES.RESUME });
@@ -181,7 +188,7 @@ export const Header: React.FC<{
         vscode.postMessage({ type: MESSAGE_TYPES.PAUSE });
       }
     }
-  }, [vscode, isPaused, isStopped, canPause, activeWorkflowId]);
+  }, [vscode, isPaused, isStopped, isError, isIdleWithOffset, canPause, activeWorkflowId, activeWorkflowWorkingFilePath]);
 
   const handleStop = useCallback(() => {
     if (!canStop) return;
@@ -355,12 +362,16 @@ export const Header: React.FC<{
                   ? "Resume"
                   : isStopped
                     ? "Resume"
-                    : "Pause"
+                    : isError
+                      ? "Continue (retry current prompt)"
+                      : isIdleWithOffset
+                        ? "Resume from start position"
+                        : "Pause"
             }
-            aria-label={isPaused || isStopped ? "Resume" : "Pause"}
+            aria-label={isPaused || isStopped || isError || isIdleWithOffset ? "Resume" : "Pause"}
           >
             <i
-              className={`codicon ${isPaused || isStopped ? "codicon-debug-continue" : "codicon-debug-pause"}`}
+              className={`codicon ${isPaused || isStopped || isError || isIdleWithOffset ? "codicon-debug-continue" : "codicon-debug-pause"}`}
             />
           </button>
 

@@ -1068,20 +1068,50 @@ export class WorkflowOrchestrator {
   /**
    * Resume a specific workflow by ID.
    * Used by per-workflow controls in the dropdown; allows resuming non-active instances.
+   *
+   * @param workingFilePath - Working file path forwarded from the webview. Used as a
+   *   fallback when the instance has been evicted from retiredInstances (e.g. after a
+   *   panel hide/show cycle disposed it). Reloads from disk so the resume can proceed.
    */
-  async resumeWorkflow(workflowId: string): Promise<void> {
-    const instance = this.findInstance(workflowId);
+  async resumeWorkflow(
+    workflowId: string,
+    workingFilePath?: string
+  ): Promise<void> {
+    let instance = this.findInstance(workflowId);
     if (!instance) {
-      Log.warn(
-        `resumeWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
-      );
-      return;
+      if (workingFilePath && this.storedPanelSend) {
+        // Instance was evicted from retiredInstances. Reload from the working file so
+        // the resume can proceed. loadWorkflowForClient handles deduplication (reuses
+        // any existing retired instance by file path) and replays state to the panel.
+        Log.debug(
+          `resumeWorkflow: inst:${workflowId.slice(0, 8)} not found — reloading from ${path.basename(workingFilePath)}`
+        );
+        await this.loadWorkflowForClient(
+          workingFilePath,
+          this.storedPanelSend,
+          this.PANEL_CLIENT_ID
+        );
+        instance = [...this.retiredInstances.values()].find(
+          (w) => w.getSummary().workingFilePath === workingFilePath
+        );
+        if (!instance) {
+          Log.warn(
+            `resumeWorkflow: inst:${workflowId.slice(0, 8)} reload from working file produced no instance`
+          );
+          return;
+        }
+      } else {
+        Log.warn(
+          `resumeWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
+        );
+        return;
+      }
     }
     // If the instance is retired (terminal state reached but still alive),
     // remove it from retiredInstances so it can re-register in this.instances
     // when it transitions to RUNNING/PAUSED via the onDidChangeState listener.
-    if (this.retiredInstances.has(workflowId)) {
-      this.retiredInstances.delete(workflowId);
+    if (this.retiredInstances.has(instance.id)) {
+      this.retiredInstances.delete(instance.id);
     }
     return instance.resume();
   }

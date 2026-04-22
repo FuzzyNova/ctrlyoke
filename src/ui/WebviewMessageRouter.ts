@@ -871,13 +871,16 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.RESUME_WORKFLOW, (message) => {
-      const { workflowId } = message;
+      const { workflowId, workingFilePath } = message;
       if (workflowId) {
         // Fire-and-forget: resumeWorkflow can call executeLoadedPromptFile which
         // awaits the entire workflow execution loop. Awaiting here would block
         // routeQueue for the full run duration, preventing stop/pause/switch-workflow
         // messages from being processed — same reason RUN_WORKFLOW uses void.
-        void this.getOrchestrator()?.resumeWorkflow(workflowId);
+        void this.getOrchestrator()?.resumeWorkflow(
+          workflowId,
+          workingFilePath as string | undefined
+        );
       }
     });
 

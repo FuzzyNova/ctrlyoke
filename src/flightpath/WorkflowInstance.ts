@@ -1121,10 +1121,24 @@ export class WorkflowInstance {
    * Resume execution from paused state.
    */
   async resume(): Promise<void> {
+    // IDLE with currentIndex > 0 = user stopped, then used "set start position" to reposition.
+    // Treat as a continuation from the set position so existing outputs are preserved.
+    if (
+      this.workflowRuntime.status === EXECUTION_STATES.IDLE &&
+      this.promptQueue.getState().currentIndex > 0
+    ) {
+      await this.executeLoadedPromptFile(undefined, true);
+      return;
+    }
+
     // STOPPED = a step was appended to a completed workflow via reopenForContinuation().
-    // Use executeLoadedPromptFile so EXECUTION_STARTED is sent to the webview and the
-    // history file is properly initialised for the new step's output.
-    if (this.workflowRuntime.status === EXECUTION_STATES.STOPPED) {
+    // ERROR = the current step failed; retry it from the current (failed) position.
+    // Both use executeLoadedPromptFile so EXECUTION_STARTED is sent to the webview and
+    // the history file is properly initialised for the new step's output.
+    if (
+      this.workflowRuntime.status === EXECUTION_STATES.STOPPED ||
+      this.workflowRuntime.status === EXECUTION_STATES.ERROR
+    ) {
       await this.executeLoadedPromptFile(undefined, true);
       return;
     }
